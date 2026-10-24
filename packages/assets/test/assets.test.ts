@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { demoToReel, durationSeconds, OG_HEIGHT, OG_WIDTH, renderOgImage } from '../src/index.ts';
+import { demoToReel, durationSeconds, OG_HEIGHT, OG_WIDTH, projectLook, renderOgImage } from '../src/index.ts';
 
 function pngSize(png: Uint8Array): { width: number; height: number } {
   const view = new DataView(png.buffer, png.byteOffset);
@@ -14,6 +14,7 @@ function pngSize(png: Uint8Array): { width: number; height: number } {
 test('the OG image renders at 1200x630, as PNG and as JPEG', async () => {
   const { png, jpeg } = await renderOgImage({
     project: 'claudio',
+    title: 'claudio 0.8.2: Claude Code, now as a service',
     pitch: 'Claude Code as a service: a REST API, a web UI and a desktop app.',
     version: 'v0.8.2',
     author: 'José Antonio Garrido',
@@ -23,6 +24,14 @@ test('the OG image renders at 1200x630, as PNG and as JPEG', async () => {
   assert.deepEqual(pngSize(png), { width: OG_WIDTH, height: OG_HEIGHT });
   assert.deepEqual([...jpeg.slice(0, 3)], [0xff, 0xd8, 0xff], 'a JPEG');
   assert.ok(jpeg.length > 10_000 && jpeg.length < 1_000_000, 'a real image under Bluesky’s 1 MB blob limit');
+});
+
+test('each project wears the colour the blog gives it', () => {
+  assert.deepEqual(projectLook('claudio'), { colour: '#2FD7A0', motif: 'phone' });
+  assert.equal(projectLook('Shipcast').colour, '#FFD43B');
+  // An unknown project gets a spare colour from its name, the same on every launch
+  assert.equal(projectLook('orca').colour, projectLook('orca').colour);
+  assert.ok(['#FF6FAE', '#FF7A2F', '#7C8CFF', '#FF5A4A'].includes(projectLook('orca').colour));
 });
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;

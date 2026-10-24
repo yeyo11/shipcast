@@ -50,6 +50,7 @@ export async function buildAssets(options: AssetOptions): Promise<BuiltAssets> {
   const og = await renderOgImage(
     {
       project: pack.project.name,
+      title: pack.article?.en?.title ?? pack.project.name,
       pitch: pack.article?.en?.description ?? pack.analysis.summary,
       version: pack.project.version,
       author: brand.displayName,
