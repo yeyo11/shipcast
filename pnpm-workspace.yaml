@@ -3,3 +3,4 @@ packages:
   - "apps/*"
 onlyBuiltDependencies:
   - esbuild
+useNodeVersion: 24.22.1

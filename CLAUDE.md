@@ -2,9 +2,10 @@
 
 Automates the launch of GitHub projects: on a release (or a manual launch) it analyses the repo with
 Claude, generates a content pack for every channel and publishes it after the owner approves it.
-pnpm monorepo, TypeScript, Node >= 22 — the same stack as [claudio](https://github.com/yeyo11/claudio),
-which is also Shipcast's AI provider. The design and the roadmap are in
-[docs/plans/shipcast.md](docs/plans/shipcast.md); where the project stands is in
+pnpm monorepo, TypeScript, Node 24 LTS (24.22.1, pinned in `.nvmrc` and in pnpm's `useNodeVersion`,
+so every `pnpm` script runs on it whatever is on `PATH`) — the same stack as
+[claudio](https://github.com/yeyo11/claudio), which is also Shipcast's AI provider. The design and
+the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md); where the project stands is in
 [docs/status.md](docs/status.md).
 
 ## Principles

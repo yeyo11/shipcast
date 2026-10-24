@@ -18,7 +18,8 @@ pnpm install
 cp .env.example .env   # only the tokens the phase you run needs
 ```
 
-Node 22 or newer.
+Node 24.22.1, the current LTS, pinned in `.nvmrc` (`nvm use`); pnpm runs the scripts with that
+version whatever is on your `PATH`.
 
 ## Checks
 

@@ -74,7 +74,7 @@ design, with every decision and the reasoning behind it, is in
 
 ## Built with
 
-TypeScript on Node 22 in a pnpm monorepo. The AI provider is
+TypeScript on Node 24 LTS in a pnpm monorepo. The AI provider is
 [claudio](https://github.com/yeyo11/claudio), which runs Claude Code as a service; the Anthropic API
 and the Claude Code GitHub Action join it in phase 6.
 
