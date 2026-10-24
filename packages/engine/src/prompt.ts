@@ -32,6 +32,10 @@ function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): str
       const target = subs.length > 0 ? `one draft for each of r/${subs.join(', r/')}` : 'one or two drafts, suggesting fitting subreddits';
       return `reddit: ${target}. Write each for that community: what was built and why, honest about limits, never an ad. Link the article with ?ref=reddit. The owner posts these by hand.`;
     }
+    case 'newsletter': {
+      const langs = Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and ');
+      return `newsletter: one issue per language (${langs}), each with a subject (at most ${LIMITS.newsletterSubject} characters), a preview text (at most ${LIMITS.newsletterPreview}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language (${brand.site}/<lang>/<slug>/?ref=newsletter). Not the article itself; no images.`;
+    }
     default:
       return undefined;
   }

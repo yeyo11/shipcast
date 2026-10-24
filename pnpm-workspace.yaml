@@ -4,3 +4,7 @@ packages:
 onlyBuiltDependencies:
   - esbuild
 useNodeVersion: 24.22.1
+
+# satori pins a fflate with GHSA-px8p-9vwx-vf98 (an infinite loop on malformed ZIP64); the fix is a patch release
+overrides:
+  fflate: ^0.7.5

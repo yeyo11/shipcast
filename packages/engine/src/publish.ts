@@ -1,10 +1,11 @@
-import type { Published } from '@shipcast/connectors';
+import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
 import { ContentPack, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { mediaPath } from './launch-assets.ts';
+import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
 import type { Launch, Registry } from './registry.ts';
 
 /**
@@ -29,10 +30,11 @@ export interface Publishers {
     }): Promise<Published>;
   };
   instagram?: { publish(p: { caption: string; media: { kind: 'image' | 'reel'; url: string } }): Promise<Published> };
+  newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign): Promise<Published> };
 }
 
 /** Channels the engine publishes to itself; the blog is published by the merge, Reddit by hand. */
-const PUBLISHED_BY_ENGINE = ['devto', 'bluesky', 'mastodon', 'instagram'] as const;
+const PUBLISHED_BY_ENGINE = ['devto', 'bluesky', 'mastodon', 'instagram', 'newsletter'] as const;
 type EngineChannel = (typeof PUBLISHED_BY_ENGINE)[number];
 
 export interface PublishDeps {
@@ -66,6 +68,8 @@ function splitFrontMatter(markdown: string): { data: Record<string, unknown>; bo
 }
 
 const failureKey = (launch: Launch, channel: Channel) => `publish-failed:${launch.id}:${channel}`;
+/** One campaign per language: each language is sent once, even if another one fails and is retried */
+const issueKey = (launch: Launch, lang: string) => `newsletter-sent:${launch.id}:${lang}`;
 
 /**
  * Publishes a drafted launch once its pull request is merged and the site is deployed. Every text
@@ -164,6 +168,55 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             const demoUrl = `${brand.site}${mediaPath(launch, 'demo.mp4')}`;
             const reel = pack.instagram!.media === 'demo-video' && (await http(demoUrl, { method: 'HEAD' }).then((r) => r.ok, () => false));
             return deps.publishers.instagram!.publish({ caption, media: reel ? { kind: 'reel', url: demoUrl } : { kind: 'image', url: ogJpegUrl } });
+          }
+        : undefined,
+    newsletter:
+      deps.publishers.newsletter && pack.newsletter && brand.newsletter
+        ? async () => {
+            const sender = deps.publishers.newsletter!;
+            const settings = brand.newsletter!;
+            const sent: Published[] = [];
+            const empty: string[] = [];
+            for (const lang of ['en', 'es'] as const) {
+              const listId = settings.lists[lang];
+              const fromPack = pack.newsletter![lang];
+              if (!listId || !fromPack) continue;
+              const done = registry.cursor(issueKey(launch, lang));
+              if (done) {
+                sent.push(JSON.parse(done) as Published);
+                continue;
+              }
+              if ((await sender.subscribers(listId)) === 0) {
+                empty.push(lang);
+                continue;
+              }
+              const issue = parseIssueDraft(draftBody((await read(`${dir}/newsletter-${lang}.md`)) ?? ''), fromPack);
+              const langArticle = slug ? await read(`src/content/posts/${lang}/${slug}.md`) : undefined;
+              const langTitle = langArticle ? splitFrontMatter(langArticle).data.title : undefined;
+              const result = await sender.send({
+                name: `${pack.project.name} ${pack.project.version ?? ''} (${lang})`.replace(/\s+/g, ' ').trim(),
+                subject: issue.subject,
+                previewText: issue.previewText,
+                html: renderIssueHtml(issue, {
+                  brand,
+                  project: pack.project.name,
+                  title: typeof langTitle === 'string' ? langTitle : title,
+                  articleUrl: slug ? `${brand.site}/${lang}/${slug}/?ref=newsletter` : brand.site,
+                  // No launch image: it carries the English headline, which the issue already sets on colour
+                  lang,
+                }),
+                sender: settings.sender,
+                listId,
+                tag: 'launch',
+              });
+              registry.setCursor(issueKey(launch, lang), JSON.stringify(result));
+              sent.push(result);
+            }
+            if (sent.length === 0) {
+              // Nobody to write to yet is not worth retrying every round; the next launch will have readers
+              throw new ConnectorError('Brevo', `no subscribers yet in the ${empty.join(' and ')} list`, undefined, false);
+            }
+            return { externalId: sent.map((p) => p.externalId).join(','), url: sent[0]!.url };
           }
         : undefined,
   };

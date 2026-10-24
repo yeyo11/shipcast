@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Bluesky, ConnectorError, Devto, Instagram, linkFacets, Mastodon } from '../src/index.ts';
+import { Bluesky, Brevo, ConnectorError, Devto, Instagram, linkFacets, Mastodon } from '../src/index.ts';
 import { fakeFetch, sequence, type Call } from './fake.ts';
 
 test('dev.to publishes the article as published, tagged, with the blog as canonical URL', async () => {
@@ -196,4 +196,46 @@ test('Instagram insights become plain numbers, and the token refreshes', async (
   });
   assert.deepEqual(await instagram.metrics('media-9'), { reach: 120, likes: 14 });
   assert.deepEqual(await instagram.refreshToken(), { accessToken: 'new', expiresIn: 5184000 });
+});
+
+test('Brevo creates the campaign for the list and sends it now; its numbers add up across languages', async () => {
+  const calls: Call[] = [];
+  const brevo = new Brevo({
+    apiKey: 'k',
+    fetch: fakeFetch(
+      [
+        ['GET https://api.brevo.com/v3/contacts/lists/3', () => Response.json({ uniqueSubscribers: 10, totalBlacklisted: 2 })],
+        ['POST https://api.brevo.com/v3/emailCampaigns/77/sendNow', () => new Response(null, { status: 204 })],
+        ['POST https://api.brevo.com/v3/emailCampaigns', () => Response.json({ id: 77 }, { status: 201 })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/77?statistics=globalStats', () => Response.json({ statistics: { globalStats: { sent: 8, delivered: 8, uniqueViews: 5, uniqueClicks: 2, unsubscriptions: 0, hardBounces: 0, softBounces: 1, complaints: 0 } } })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/78?statistics=globalStats', () => Response.json({ statistics: { globalStats: { sent: 4, delivered: 4, uniqueViews: 1, uniqueClicks: 1, unsubscriptions: 1, hardBounces: 0, softBounces: 0, complaints: 0 } } })],
+      ],
+      calls,
+    ),
+  });
+  assert.equal(await brevo.subscribers(3), 8);
+  const sent = await brevo.send({ name: 'claudio v0.8.2 (en)', subject: 's', previewText: 'p', html: '<p>hi</p>', sender: { name: 'Me', email: 'hola@josegarrido.dev' }, listId: 3 });
+  assert.deepEqual(sent, { externalId: '77', url: 'https://app.brevo.com/marketing-campaign/report/77' });
+  const created = JSON.parse(String(calls.find((c) => c.method === 'POST' && c.url.endsWith('/emailCampaigns'))!.body));
+  assert.deepEqual(created.recipients, { listIds: [3] });
+  assert.equal(created.htmlContent, '<p>hi</p>');
+  assert.equal(calls[0]!.headers['api-key'], 'k');
+  assert.deepEqual(await brevo.metrics('77,78'), { sent: 12, delivered: 12, opens: 6, clicks: 3, unsubscribes: 1, bounces: 1, complaints: 0 });
+});
+
+test('Brevo refusing to send leaves a draft and says not to retry, so no second campaign is made', async () => {
+  const brevo = new Brevo({
+    apiKey: 'k',
+    fetch: fakeFetch(
+      [
+        ['POST https://api.brevo.com/v3/emailCampaigns/5/sendNow', () => Response.json({ code: 'not_enough_credits' }, { status: 503 })],
+        ['POST https://api.brevo.com/v3/emailCampaigns', () => Response.json({ id: 5 }, { status: 201 })],
+      ],
+      [],
+    ),
+  });
+  await assert.rejects(
+    brevo.send({ name: 'n', subject: 's', previewText: 'p', html: '<p>hi</p>', sender: { name: 'Me', email: 'a@b.dev' }, listId: 1 }),
+    (e: unknown) => e instanceof ConnectorError && !e.retryable && /left as a draft/.test(e.message),
+  );
 });

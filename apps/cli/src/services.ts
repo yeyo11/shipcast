@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { Bluesky, CloudflareAnalytics, Devto, Instagram, Mastodon, SearchConsole, type ServiceAccount } from '@shipcast/connectors';
+import { Bluesky, Brevo, CloudflareAnalytics, Devto, Instagram, Mastodon, SearchConsole, type ServiceAccount } from '@shipcast/connectors';
 import type { GitHubRest, MetricSources, Publishers, Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 
@@ -61,6 +61,13 @@ export function buildServices(env: NodeJS.ProcessEnv, brand: Brand, registry: Re
     publishers.instagram = instagram;
     posts.instagram = instagram;
     configured.push('instagram');
+  }
+
+  if (env.BREVO_API_KEY && brand.newsletter) {
+    const brevo = new Brevo({ apiKey: env.BREVO_API_KEY });
+    publishers.newsletter = brevo;
+    posts.newsletter = brevo;
+    configured.push('newsletter');
   }
 
   const sources: MetricSources = { posts, github };

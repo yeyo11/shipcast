@@ -39,6 +39,18 @@ export const Brand = z.strictObject({
   tone: z.string().default(''),
   /** Where readers can support the author */
   support: z.url().optional(),
+  /**
+   * The brand's newsletter, sent through Brevo: who it comes from and the list of each language.
+   * List ids are not secret; the API key lives in Shipcast's .env.
+   */
+  newsletter: z
+    .strictObject({
+      sender: z.strictObject({ name: z.string().min(1), email: z.email() }),
+      lists: z.partialRecord(Language, z.int().positive()).refine((l) => Object.keys(l).length > 0, 'at least one list'),
+      /** Where the blog's subscription form posts: the action URL of the Brevo form */
+      form: z.url({ protocol: /^https$/ }).optional(),
+    })
+    .optional(),
   /** Visit counting on the brand's site; tokens here are public, they ship in every page */
   analytics: z
     .strictObject({

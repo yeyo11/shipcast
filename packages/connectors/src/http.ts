@@ -2,16 +2,19 @@
 export class ConnectorError extends Error {
   readonly network: string;
   readonly status: number | undefined;
+  readonly #retryable: boolean | undefined;
 
-  constructor(network: string, message: string, status?: number) {
+  /** `retryable` overrides the status, for a failure whose retry would repeat what already happened */
+  constructor(network: string, message: string, status?: number, retryable?: boolean) {
     super(`${network}: ${message}`);
     this.network = network;
     this.status = status;
+    this.#retryable = retryable;
   }
 
   /** Rate limits and server errors pass; a refused request will be refused again */
   get retryable(): boolean {
-    return this.status === undefined || this.status === 429 || this.status >= 500;
+    return this.#retryable ?? (this.status === undefined || this.status === 429 || this.status >= 500);
   }
 }
 

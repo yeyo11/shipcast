@@ -1,4 +1,5 @@
 import type { Brand, Channel, ContentPack, LaunchConfig, PublishMode } from '@shipcast/schema';
+import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
 
 /** A file of the drafts pull request, as a path in the launches repo and its text. */
@@ -100,6 +101,14 @@ export function renderDrafts(
         content: draft(`Reddit, ${name}`, mode('reddit'), `**${post.title}**\n\n${post.body}`),
       });
     });
+  }
+  if (pack.newsletter && mode('newsletter') !== 'off') {
+    for (const lang of ['en', 'es'] as const) {
+      const issue = pack.newsletter[lang];
+      if (issue) {
+        files.push({ path: `${dir}/newsletter-${lang}.md`, content: draft(`Newsletter (${lang})`, mode('newsletter'), issueDraftBody(issue)) });
+      }
+    }
   }
   if (pack.releaseNotes) {
     files.push({ path: `${dir}/release-notes.md`, content: `# Release notes\n\n${pack.releaseNotes.trim()}\n` });

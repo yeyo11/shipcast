@@ -103,3 +103,21 @@ test('the JSON Schema for Claude is an object schema that keeps the field descri
   assert.ok(schema.required.includes('analysis'));
   assert.match(schema.properties.analysis?.description ?? '', /implemented list/);
 });
+
+test('the newsletter needs a list in brand.yml and an issue for each list', () => {
+  const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { newsletter: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
+  const issue = { subject: 'claudio is out', previewText: 'Claude Code as a service', markdown: 'It shipped.' };
+  const plain = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+  const withLists = Brand.parse({
+    id: 'personal',
+    displayName: 'Me',
+    site: 'https://josegarrido.dev',
+    github: 'yeyo11',
+    newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3, es: 4 } },
+  });
+  const pack = ContentPack.parse({ ...fullPack, newsletter: { en: issue } });
+  assert.ok(missingPieces(pack, config, plain).includes('newsletter: brand.yml has no newsletter'));
+  assert.ok(missingPieces(pack, config, withLists).includes('newsletter: the issue has no es version'));
+  assert.ok(!ContentPack.safeParse({ ...fullPack, newsletter: {} }).success, 'at least one language');
+  assert.ok(!Brand.safeParse({ ...withLists, newsletter: { sender: { name: 'Me', email: 'nope' }, lists: { en: 3 } } }).success);
+});

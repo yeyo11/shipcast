@@ -13,9 +13,10 @@
     "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
-    "@shipcast/schema": "workspace:*",
     "@shipcast/assets": "workspace:*",
     "@shipcast/connectors": "workspace:*",
+    "@shipcast/schema": "workspace:*",
+    "marked": "^16.4.2",
     "yaml": "^2.9.1"
   }
 }

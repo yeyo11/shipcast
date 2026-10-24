@@ -23,6 +23,8 @@ export const LIMITS = {
   instagramCaption: 2200,
   instagramHashtags: 30,
   redditTitle: 300,
+  newsletterSubject: 90,
+  newsletterPreview: 140,
 } as const;
 
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
@@ -40,6 +42,15 @@ const ArticleVersion = z.strictObject({
     .describe(
       'The article body in Markdown, without front matter and without a top-level heading. For a launch: the problem, the solution, how it works, a quick start, limitations and next steps.',
     ),
+});
+
+const NewsletterIssue = z.strictObject({
+  subject: z.string().min(1).max(LIMITS.newsletterSubject),
+  previewText: z.string().min(1).max(LIMITS.newsletterPreview).describe('The preheader inbox apps show after the subject'),
+  markdown: z
+    .string()
+    .min(1)
+    .describe('The email body in Markdown: a short, personal note on what shipped and why it matters, linking the article; not the article itself'),
 });
 
 const Analysis = z
@@ -130,6 +141,11 @@ export const ContentPack = z
       )
       .optional()
       .describe('Drafts the owner posts by hand, one per subreddit'),
+    newsletter: z
+      .strictObject({ en: NewsletterIssue.optional(), es: NewsletterIssue.optional() })
+      .refine((n) => n.en || n.es, 'the issue needs at least one language')
+      .optional()
+      .describe("The newsletter issue, one per language the brand's newsletter has a list for"),
     releaseNotes: z.string().optional().describe('Improved release notes in Markdown, for the minor pack'),
   })
   .describe('Everything one launch publishes, written from the code of the project');
@@ -144,6 +160,7 @@ const PIECE_OF: Partial<Record<Channel, keyof ContentPack>> = {
   mastodon: 'mastodon',
   instagram: 'instagram',
   reddit: 'reddit',
+  newsletter: 'newsletter',
 };
 
 /**
@@ -174,6 +191,15 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
     const drafted = new Set(pack.reddit.map((d) => d.subreddit?.toLowerCase()));
     for (const sub of config.reddit.subreddits) {
       if (!drafted.has(sub.toLowerCase())) missing.push(`reddit: no draft for r/${sub}`);
+    }
+  }
+
+  if (config.publishing.newsletter !== 'off') {
+    if (!brand.newsletter) missing.push('newsletter: brand.yml has no newsletter');
+    else if (pack.newsletter) {
+      for (const lang of Object.keys(brand.newsletter.lists) as Array<'en' | 'es'>) {
+        if (!pack.newsletter[lang]) missing.push(`newsletter: the issue has no ${lang} version`);
+      }
     }
   }
 

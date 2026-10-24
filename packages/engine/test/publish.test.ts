@@ -162,3 +162,68 @@ test('a temporary failure leaves the launch partial and is retried; a permanent 
   assert.equal(mastodonTries, 2);
   assert.equal(calls.filter((c) => c.channel === 'devto').length, 1);
 });
+
+test('the newsletter sends one campaign per language with the edited issue, and skips an empty list', async () => {
+  const withNewsletter = Brand.parse({
+    id: 'personal',
+    displayName: 'Me',
+    site: 'https://josegarrido.dev',
+    github: 'yeyo11',
+    newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3, es: 4 } },
+  });
+  const issue = (s: string) => ({ subject: `${s} subject`, previewText: `${s} preview`, markdown: `${s} body` });
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, newsletter: { en: issue('AI en'), es: issue('AI es') } }),
+    [`yeyo11/launches/${D}/newsletter-en.md@HEAD`]: '# Newsletter (en)\n\n> **Approval:** x\n\nSubject: Edited subject\nPreview: Edited preview\n\nEdited **issue**.\n',
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  newsletter: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
+  };
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const sends: Array<{ listId: number; subject: string; previewText: string; html: string }> = [];
+  const publishers: Publishers = {
+    newsletter: {
+      subscribers: async (listId) => (listId === 3 ? 12 : 0),
+      send: async (c) => (sends.push(c), { externalId: '901', url: 'https://app.brevo.com/marketing-campaign/report/901' }),
+    },
+  };
+  const result = await publishLaunch(launch, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+
+  assert.equal(sends.length, 1, 'the Spanish list has nobody yet');
+  assert.equal(sends[0]!.listId, 3);
+  assert.equal(sends[0]!.subject, 'Edited subject');
+  assert.equal(sends[0]!.previewText, 'Edited preview');
+  assert.match(sends[0]!.html, /Edited <strong>issue<\/strong>\./);
+  assert.match(sends[0]!.html, /https:\/\/josegarrido\.dev\/en\/claudio\/\?ref=newsletter/);
+  assert.match(sends[0]!.html, /\{\{ unsubscribe \}\}/);
+  assert.ok(result.state === 'partial' || result.state === 'published');
+  assert.equal(registry.posts(launch.id).find((p) => p.channel === 'newsletter')?.externalId, '901');
+
+  await publishLaunch(registry.get(launch.id)!, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  assert.equal(sends.length, 1, 'never sent twice');
+});
+
+test('a newsletter with nobody subscribed is recorded once and not retried', async () => {
+  const withNewsletter = Brand.parse({
+    id: 'personal',
+    displayName: 'Me',
+    site: 'https://josegarrido.dev',
+    github: 'yeyo11',
+    newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3 } },
+  });
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, newsletter: { en: { subject: 's', previewText: 'p', markdown: 'm' } } }),
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  newsletter: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
+  };
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  let reads = 0;
+  const publishers: Publishers = { newsletter: { subscribers: async () => (reads++, 0), send: async () => assert.fail('nothing to send') } };
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const first = await publishLaunch(launch, withNewsletter, deps);
+  assert.ok(first.state !== 'waiting' && first.state !== 'skipped');
+  assert.match(first.state === 'published' || first.state === 'partial' ? first.problems.join() : '', /no subscribers yet in the en list/);
+  await publishLaunch(registry.get(launch.id)!, withNewsletter, deps);
+  assert.equal(reads, 1);
+});
