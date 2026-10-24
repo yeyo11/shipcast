@@ -2,7 +2,7 @@
   "name": "@shipcast/cli",
   "version": "0.0.0",
   "private": true,
-  "description": "The shipcast command: launch a release by hand, watch for releases, see the launches",
+  "description": "The shipcast command: launch a release by hand, watch for releases and publish them, see the launches and their numbers",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
+    "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
     "@shipcast/schema": "workspace:*"
   }
