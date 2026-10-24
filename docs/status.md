@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T17:39:14.643745926Z
-updated_at: 2026-10-24T17:43:30.88489524Z
+created_at: 2026-10-24T17:43:32.421383054Z
+updated_at: 2026-10-24T17:55:13.080339511Z
 tags:
     - status
     - roadmap
@@ -29,8 +29,9 @@ offer APIs Node 24 lacks.
 The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, the
 repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages at `josegarrido.dev`. The
 technical stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog,
-dev.to, Bluesky, Mastodon and Instagram and drafts Reddit, through Shipcast's own connectors; Postiz
-is discarded. Metrics are in the MVP too.
+dev.to, Bluesky, Mastodon and Instagram and drafts Reddit (for claudio: r/ClaudeAI, r/selfhosted,
+r/SideProject, r/opensource), through Shipcast's own connectors; Postiz is discarded. Metrics are in
+the MVP too.
 
 Services, set up on 2026-10-24:
 
@@ -48,7 +49,7 @@ Services, set up on 2026-10-24:
 **Code:** `packages/schema` exists (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)),
 `Brand` ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4,
 YAML errors with their line, `missingPieces`, pack inference from semver, and the JSON Schema for
-Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the package template
+Claude. 27 tests on `node:test`, run by Node's native type stripping; it set the package template
 (`tsconfig.json` extending the base with `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`).
 
 **Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
@@ -62,9 +63,8 @@ Waiting on the owner:
 
 - The new design for `josegarrido.dev`, handed by the owner to an external agent; and a second opinion
   on Shipcast's design system, which the owner is not convinced by.
-- The subreddits for Reddit drafts.
 - Reserve `shipcast` on npm (free on 2026-10-24).
-- Upload the social preview.
+- Upload the social preview, once Shipcast's design system is settled.
 
 Next in code:
 
@@ -73,6 +73,7 @@ Next in code:
   Reddit drafts; and the OG image and demo video Instagram needs.
 - Metrics, now in the MVP: one connector per source (blog analytics, Search Console, GitHub, dev.to,
   Bluesky, Mastodon, Instagram), stored per launch and channel, and a dashboard.
+- claudio's `.github/launch.yml`, in the claudio repo, with the owner's permission.
 
 ## Related
 

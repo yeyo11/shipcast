@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:56:39.174697583Z
-updated_at: 2026-10-24T17:39:36.679805484Z
+created_at: 2026-10-24T17:39:38.711934531Z
+updated_at: 2026-10-24T17:54:51.089506487Z
 tags:
     - decision
     - mvp
@@ -24,7 +24,7 @@ drafts ready to paste, and Shipcast showing what each channel brought.**
 | Bluesky | Yes | Free API (AT Protocol, app password) |
 | Mastodon | Yes | Free API (access token on mastodon.social) |
 | Instagram | Yes | Free API (Instagram API with Instagram Login); needs a professional account and the owner's Meta app |
-| Reddit | Yes, as `manual` | Shipcast writes one draft per subreddit and the owner posts it. The plan already keeps Reddit as drafts (self-promotion is judged by each subreddit's rules and a post that reads automated gets removed), and since November 2025 Reddit's API needs a manual approval under its Responsible Builder Policy, which a personal script is unlikely to get. Account: [u/josegarridodev](https://www.reddit.com/user/josegarridodev/). The subreddits are still to be chosen |
+| Reddit | Yes, as `manual` | Shipcast writes one draft per subreddit and the owner posts it. The plan already keeps Reddit as drafts (self-promotion is judged by each subreddit's rules and a post that reads automated gets removed), and since November 2025 Reddit's API needs a manual approval under its Responsible Builder Policy, which a personal script is unlikely to get. Account: [u/josegarridodev](https://www.reddit.com/user/josegarridodev/). Subreddits are set per project in its `launch.yml`; for claudio, chosen by the owner on 2026-10-24: r/ClaudeAI, r/selfhosted, r/SideProject and r/opensource (read each one's self-promotion rules before posting) |
 | LinkedIn | **No, not at all** | The owner will not publish on LinkedIn, in the MVP or after (2026-10-24) |
 | X | **No, not at all** | The owner will not publish on X, in the MVP or after (2026-10-24); its API is paid besides |
 
