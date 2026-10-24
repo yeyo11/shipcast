@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T14:26:51.443324997Z
-updated_at: 2026-10-24T14:44:41.261823835Z
+created_at: 2026-10-24T14:44:45.904030104Z
+updated_at: 2026-10-24T15:02:39.11321841Z
 tags:
     - brands
     - config
@@ -33,6 +33,8 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `handles.bluesky` | <https://bsky.app/profile/yeyo11.bsky.social> |
 | `handles.mastodon` | <https://mastodon.social/@yeyo11> |
 | `handles.devto` | <https://dev.to/yeyo11> |
+| `handles.reddit` | <https://www.reddit.com/user/josegarridodev/> |
+| `handles.instagram` | pending: the owner has not given it yet |
 | `languages.blog` | `[en, es]` |
 | `languages.x` | `en` — provisional, not yet confirmed by the owner |
 | `languages.linkedin` | `es` — provisional, not yet confirmed by the owner |
