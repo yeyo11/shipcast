@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:56:01.643765874Z
-updated_at: 2026-10-24T17:09:40.331832417Z
+created_at: 2026-10-24T17:09:41.922777203Z
+updated_at: 2026-10-24T17:20:05.794985518Z
 tags:
     - launches-repo
     - blog
@@ -8,6 +8,7 @@ tags:
     - github-pages
     - privacy
     - domain
+    - analytics
 ---
 # The launches repo
 
@@ -39,22 +40,30 @@ means *publish*.
   once (a page of its own with a zero-second refresh) and stays out of the sitemap. Each page links its
   translation (`hreflang`) when it exists.
 - **RSS per language** (`/<lang>/rss.xml`) and a sitemap.
-- **The owner's own identity, "the blackboard"** ([personal-identity.md](personal-identity.md)),
-  approved and live since 2026-10-24: green slate and chalk with one yellow accent, Recursive and
-  Literata, the `jg` mark. It replaced Shipcast's tokens, which the site wore while it was only the
-  launches blog. Night theme by default, day (a paper page) on a toggle, stored in `localStorage` and
-  applied by an inline script before the first paint. Code blocks carry both Shiki themes as CSS
-  variables and follow the page. The home page is titled with the owner's name, every other page
-  `<page> | José Antonio Garrido`. Checked at 1280 and 375 px wide, in both themes.
+- **The owner's own identity**: the "blackboard" ([personal-identity.md](personal-identity.md)) is
+  live since 2026-10-24 but was rejected by the owner the same day, and a new identity is being
+  designed; it stays until the replacement is validated running. It replaced Shipcast's tokens,
+  which the site wore while it was only the launches blog. Night theme by default, day on a toggle,
+  stored in `localStorage` and applied by an inline script before the first paint. Code blocks carry
+  both Shiki themes as CSS variables and follow the page. The home page is titled with the owner's
+  name, every other page `<page> | José Antonio Garrido`.
 - **The brand** is described in `brand.yml` at the root ([brands.md](brands.md)); the site reads it
-  for the author, the profile links (with `rel="me"`) and the support link in the footer.
+  for the author, the profile links (with `rel="me"`), the support link in the footer and the
+  analytics token.
+- **Visits are counted with Cloudflare Web Analytics** since 2026-10-24: cookieless, no local
+  storage, no fingerprinting; the beacon loads only in production builds, with the site token from
+  `brand.yml` (`analytics.cloudflareWebAnalytics`; public, it ships in every page). The site was
+  created through the Cloudflare API as a host-based site (`josegarrido.dev`, no auto-install, since
+  the DNS is not proxied). Shipcast reads these numbers back for its metrics
+  ([decisions/mvp-scope.md](decisions/mvp-scope.md)).
 - **Privacy policy** at `/<lang>/privacy/` (`src/pages/[lang]/privacy.astro`), added on 2026-10-24
   because Meta requires its URL to create the Instagram app: what Shipcast accesses (the owner's own
   accounts, `instagram_business_basic` and `instagram_business_content_publish`), that it stores
-  tokens only locally and collects nothing about anyone else, that the blog has no cookies or
-  analytics, and how to delete data (`#data-deletion`, also the URL for Meta's data deletion field).
-  Contact: `yeyochico@gmail.com`, as the owner asked. Linked from the footer. Update it, and its
-  date, whenever a connector starts accessing something new.
+  tokens only locally and collects nothing about anyone else, that the blog sets no cookies and counts
+  visits with Cloudflare Web Analytics (what it records and why, updated 2026-10-24), and how to
+  delete data (`#data-deletion`, also the URL for Meta's data deletion field). Contact:
+  `yeyochico@gmail.com`, as the owner asked. Linked from the footer. Update it, and its date, whenever
+  a connector starts accessing something new.
 
 ## The contract with Shipcast
 
