@@ -1,10 +1,11 @@
 ---
-created_at: 2026-10-24T15:37:49.986512581Z
-updated_at: 2026-10-24T16:21:25.740646055Z
+created_at: 2026-10-24T16:26:13.807005215Z
+updated_at: 2026-10-24T16:28:36.043469588Z
 tags:
     - brands
     - config
     - decision
+    - tone
 ---
 # Brands
 
@@ -37,7 +38,7 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `handles.instagram` | <https://www.instagram.com/josegarridodev> |
 | `languages.blog` | `[en, es]` |
 | `languages.x`, `languages.linkedin` | not set: the owner does not publish on X or LinkedIn (2026-10-24); the schema keeps both optional for brands that do |
-| `tone` | empty: defined from examples in phase 5 |
+| `tone` | First person, didactic and direct; problem first, then evidence (command, config, output); honest about what does not work yet; no hype. Calm articles without emojis; short social posts with a hook and a few emojis as markers. Spanish from Spain. Set by the owner on 2026-10-24, to refine with real launches (phase 5) |
 | `support` | <https://buymeacoffee.com/yeyo11>, linked from the blog's footer |
 
 Handles are full profile URLs, as the owner gave them; a connector derives the account name from the
@@ -46,6 +47,9 @@ Mastodon verify the blog once the profile links back to it. The support link sit
 own in the footer, apart from the profiles, and only in the blog: the launches repo's README does not
 carry the Buy Me a Coffee badge, which belongs to Shipcast's README. `packages/schema` keeps a copy of
 this file as a test fixture (`test/fixtures/brand.yml`), refreshed when the brand changes.
+
+`brand.yml` and these documents are public. What a tone was drawn from, or any other internal
+reference behind a brand decision, is not written in either.
 
 ## What the schema has to enforce
 

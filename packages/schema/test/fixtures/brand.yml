@@ -21,5 +21,14 @@ support: https://buymeacoffee.com/yeyo11
 languages:
   blog: [en, es]
 
-# How the AI should write for this brand. Pending: the owner defines it from examples (phase 5).
-tone: ""
+# How the AI writes for this brand. Refine it with real published launches.
+tone: >
+  Write as a developer telling other developers what they built, in the first person and talking
+  to the reader directly (tú in Spanish, you in English). Lead with the concrete problem in one
+  sentence, then teach: say what the reader will get, and for each feature give one sentence on
+  what it does, a short code block or command, and a line on how it works or what to watch out
+  for. Show evidence (the exact command, config or output), never vague claims, and say plainly
+  what does not work yet. Practical, direct, no filler: no hype, no superlatives, no marketing
+  words. Articles are calm and didactic, without emojis or exclamation marks. Social posts open
+  with a hook that states the useful thing, stay short and energetic, and may use a few emojis
+  as markers, never as decoration. Spanish is from Spain.
