@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:52:47.046194694Z
-updated_at: 2026-10-24T21:32:37.943240974Z
+created_at: 2026-10-24T21:32:42.432559994Z
+updated_at: 2026-10-24T22:43:07.544382267Z
 tags:
     - launches-repo
     - blog
@@ -44,19 +44,31 @@ means *publish*.
   translation when it exists.
 - **RSS per language** (`/<lang>/rss.xml`) and a sitemap.
 - **Paths in each language's words** since 2026-10-24, as Google advises for multilingual sites:
-  `/en/privacy/` and `/es/privacidad/`, `/en/subscribed/` and `/es/suscrito/` (`pagePath` in
-  `src/site.ts`; the pages render shared components under `src/components/pages/`), and one slug per
-  language for articles. `/es/privacy/`, published before, redirects. Every language version lists
-  itself, the other one and English as `x-default` in `hreflang`.
-- **The newsletter form** (`src/components/Subscribe.astro`), on the home page's blue band and after
-  each article: the blog's own form, posting to the language's Brevo form (double opt-in) from
-  `brand.yml`'s `newsletter.forms`, with Brevo's hidden trap field for bots and the answer shown in
-  place; without JavaScript it is a plain form post. The confirmation link lands on `/subscribed/`,
-  kept out of search and the sitemap ([publishing.md](publishing.md#the-newsletter)).
+  `/en/privacy/` and `/es/privacidad/`, `/en/subscribed/` and `/es/suscrito/`, `/en/about/` and
+  `/es/sobre-mi/` (`pagePath` in `src/site.ts`; the pages render shared components under
+  `src/components/pages/`), and one slug per language for articles. `/es/privacy/`, published before,
+  redirects. Every language version lists itself, the other one and English as `x-default` in
+  `hreflang`.
+- **The newsletter form** (`src/components/Subscribe.astro`), on the home page's blue band, after
+  each article and on the about page: the blog's own form, posting to the language's Brevo form
+  (double opt-in) from `brand.yml`'s `newsletter.forms`, with Brevo's hidden trap field for bots and
+  the answer shown in place; without JavaScript it is a plain form post. The confirmation link lands
+  on `/subscribed/`, kept out of search and the sitemap ([publishing.md](publishing.md#the-newsletter)).
 - **Its own 404** (`src/pages/404.astro`), which GitHub Pages serves for every missing path: both
   languages in one page, showing the one the URL asks for before the first paint, with the house
   illustration (a shipping label, "Return to sender") and the latest launches. A static site has no
   other error page.
+- **An about page** at `/en/about/` and `/es/sobre-mi/` (`src/components/pages/AboutPage.astro`,
+  2026-10-25), written from the owner's own GitHub profile and approved by them: who they are, the
+  projects (claudio, Shipcast and Sluice, the one project of their work account they chose to show),
+  their stack with Simple Icons logos, a few facts, their quote kept in English, and how to reach them
+  (`me@josegarrido.dev`). Linked from the header, the blue band and the footer. The site's copy is
+  short and talks to the reader; at the owner's request it does not promise "what does not work yet",
+  nor mention that it is written in two languages.
+- **The footer** shows the profiles as their logos (`src/components/Profiles.astro`, shared with the
+  about page), small links to RSS, the about page and the privacy policy, and `© <year of the build>
+  <author>`. RSS is only there and in the head's `alternate` link, which feed readers discover on their
+  own: the newsletter is how a person follows the blog.
 - **Marks:** the favicon (the italic J over the green rule) and the `jg` monogram are Fraunces
   outlines in SVG, so they render the same without the font, with PNGs at 16, 32 and 180 px.
 - **Drawn covers:** a project (`cover` in `src/projects.ts`) or an article (`cover` in its front
