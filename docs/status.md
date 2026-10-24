@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T21:34:39.818346951Z
-updated_at: 2026-10-24T23:14:35.799864845Z
+created_at: 2026-10-24T23:14:39.740485805Z
+updated_at: 2026-10-24T23:31:20.360951464Z
 tags:
     - status
     - roadmap
@@ -90,7 +90,10 @@ mail server. claudio turned it on (claudio pull request #62).
 the owner in the pull request (out went every "what does not work yet" part, now also out of the
 brand's tone), merged, and published by `shipcast publish`: the article in both languages on the
 blog, dev.to, Bluesky, Mastodon, Instagram (the demo as a Reel) and the newsletter in both languages;
-the Reddit drafts are for the owner to post. Every metrics source answered but Mastodon's.
+the Reddit drafts are for the owner to post. Every metrics source answered (Mastodon once the owner
+widened its token's scopes). The owner judged the test a success, with Instagram as the weakest
+result. `watch` runs only when the owner starts it: running it as a service was declined on
+2026-10-25.
 
 What the first run found, each fixed and tested:
 
@@ -105,18 +108,14 @@ What the first run found, each fixed and tested:
 
 Waiting on the owner:
 
-- Mastodon metrics: the access token has only write scopes; reading a post's numbers needs
-  `read:statuses` (Preferencias → Desarrollo → the `shipcast` app → add the scope, regenerate the
-  token, update `MASTODON_ACCESS_TOKEN`).
-- Post the Reddit drafts by hand, after reading each subreddit's self-promotion rules.
+- Post the Reddit drafts by hand, after reading each subreddit's self-promotion rules (r/opensource
+  wants the Promotional flair).
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 
 Next in code:
 
-- `shipcast watch` as a service that outlives a session (a systemd user unit), so the metrics keep
-  coming every 6 hours.
-- Later: one source for the project colours, generated covers per article, and the dashboard in
-  Cartel.
+- Later: one source for the project colours, generated covers per article, the subreddits' flairs in
+  `launch.yml`, and the dashboard in Cartel.
 
 ## Related
 
