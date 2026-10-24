@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:13:55.258617734Z
-updated_at: 2026-10-24T19:16:42.744826785Z
+created_at: 2026-10-24T19:16:44.800151215Z
+updated_at: 2026-10-24T19:21:03.944853116Z
 tags:
     - status
     - roadmap
@@ -19,8 +19,8 @@ pando as the knowledge base and code index ([knowledge-base.md](knowledge-base.m
 `write-knowledge-doc` skill, and Sluice gates for `typecheck` and `test`. CI
 (`.github/workflows/ci.yml`) runs install, audit, typecheck and test on every pull request and on
 main. Work goes straight to `main` until the MVP
-([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The design direction and the briefs
-for the design system are in [plans/design-system.md](plans/design-system.md).
+([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The design system is in
+[plans/design-system.md](plans/design-system.md).
 
 Node is pinned to **24.22.1**, the LTS current on 2026-10-24: in `.nvmrc` (which CI reads through
 `node-version-file`), in pnpm's `useNodeVersion` (so every `pnpm` script runs on it, whatever Node
@@ -66,7 +66,7 @@ Services, set up on 2026-10-24:
 - `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon and
   Instagram (publish and metrics), Cloudflare Web Analytics and Search Console readers. 15 tests.
 - `packages/assets` (2026-10-24): the 1200×630 launch image (Satori and resvg; its theme is a
-  placeholder until the blog's design system lands) and the demo GIF turned into an Instagram Reel
+  placeholder until it takes the blog's identity) and the demo GIF turned into an Instagram Reel
   with ffmpeg. 2 tests.
 - `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch` (detect, draft, publish,
   metrics every 6 h, Instagram token refresh), `publish`, `metrics`, `dashboard`, `status`, configured
@@ -74,18 +74,16 @@ Services, set up on 2026-10-24:
   owner's `.env` (dev.to, Bluesky, Mastodon, Instagram, GitHub with traffic, Cloudflare Web Analytics,
   Search Console), and each metrics source answered live; nothing has been published yet.
 
-**Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
-rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
-external agent. Shipcast's design system assets (tokens, logo, channel icons, social preview,
-specimen under `design/`) are ready on a local branch; the owner is not convinced by them and is
-getting a second opinion from another agent. Nothing visual reaches `main` until the owner has seen
-it running.
+**Design** (2026-10-24, both merged after the owner tried them running):
+
+- **josegarrido.dev** wears the editorial identity ([personal-identity.md](personal-identity.md)),
+  live since 2026-10-24; the blackboard identity it replaced was rejected.
+- **Shipcast** has its design system, Cartel ([plans/design-system.md](plans/design-system.md),
+  [`design/`](../design/README.md)); the first direction, the signal path, was rejected.
 
 Waiting on the owner:
 
-- The new design for `josegarrido.dev`, handed by the owner to an external agent, which also gives the
-  launch image its final theme; and a second opinion on Shipcast's design system.
-- Upload the social preview, once Shipcast's design system is settled.
+- Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 - Merge claudio's release pull request (#59, v0.8.2), the first release with its `launch.yml`, and
   give the go-ahead for the first real launch.
 
@@ -93,7 +91,9 @@ Next in code:
 
 - The first real launch: claudio v0.8.2, end to end, with the owner reviewing the drafts pull request
   before anything is published.
-- The blog's new design in the launch image and the article's `og:image`.
+- The launch image in the blog's editorial identity, and the article's `og:image`.
+- Later: generated covers (an optional `cover` field in the blog's post schema), and the dashboard
+  in Cartel.
 
 ## Related
 

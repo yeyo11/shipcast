@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T17:09:41.922777203Z
-updated_at: 2026-10-24T17:20:05.794985518Z
+created_at: 2026-10-24T19:13:47.270673238Z
+updated_at: 2026-10-24T19:21:52.969547429Z
 tags:
     - launches-repo
     - blog
@@ -40,10 +40,9 @@ means *publish*.
   once (a page of its own with a zero-second refresh) and stays out of the sitemap. Each page links its
   translation (`hreflang`) when it exists.
 - **RSS per language** (`/<lang>/rss.xml`) and a sitemap.
-- **The owner's own identity**: the "blackboard" ([personal-identity.md](personal-identity.md)) is
-  live since 2026-10-24 but was rejected by the owner the same day, and a new identity is being
-  designed; it stays until the replacement is validated running. It replaced Shipcast's tokens,
-  which the site wore while it was only the launches blog. Night theme by default, day on a toggle,
+- **The owner's own identity**: the editorial one ([personal-identity.md](personal-identity.md)),
+  live since 2026-10-24, after the rejected "blackboard"; before both, the site wore Shipcast's tokens
+  while it was only the launches blog. Night theme by default, day on a toggle,
   stored in `localStorage` and applied by an inline script before the first paint. Code blocks carry
   both Shiki themes as CSS variables and follow the page. The home page is titled with the owner's
   name, every other page `<page> | José Antonio Garrido`.
@@ -72,12 +71,14 @@ What Shipcast writes there, and the content pack has to produce:
 - **Articles** at `src/content/posts/<en|es>/<slug>.md`. Front matter, validated at build time by
   `src/content.config.ts`: `title`, `description` (at most 200 characters), `pubDate`, optional
   `updatedDate`, `lang` (`en` or `es`), `translationKey` (shared by both language versions), `repo`
-  (the project's URL), optional `version`, `tags`, `draft`.
-- **The other channels' pieces** at `launches/<project>/<version>/`, in a format still to be defined
-  by the content pack schema.
-- **Images for Instagram** (the OG image as JPEG, a demo as MP4) must end up public on this site,
-  since Instagram fetches media from a public URL at publishing time
-  ([decisions/mvp-scope.md](decisions/mvp-scope.md)).
+  (the project's URL), optional `version`, `tags`, `draft`. Shipcast also writes `image:` (the launch
+  image's path); the schema does not declare it yet, so Astro drops it until the blog uses it for
+  `og:image`.
+- **The other channels' pieces** at `launches/<project>/<ref>/`: one readable draft per channel and
+  `pack.json` ([engine.md](engine.md)).
+- **The launch's media** at `public/launches/<project>/<ref>/` (`og.png`, `og.jpg`, `demo.mp4`), served
+  by the site once merged, since Instagram fetches media from a public URL at publishing time
+  ([publishing.md](publishing.md)).
 
 ## Checks
 
@@ -86,4 +87,4 @@ while Shipcast uses 7) and `pnpm build`.
 
 ## Related
 
-[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[plans/design-system.md]] · [[plans/stack.md]] · [[brands.md]] · [[personal-identity.md]] · [[content-pack.md]]
+[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[plans/design-system.md]] · [[plans/stack.md]] · [[brands.md]] · [[personal-identity.md]] · [[content-pack.md]] · [[engine.md]] · [[publishing.md]]
