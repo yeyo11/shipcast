@@ -1,0 +1,32 @@
+# claudio, Shipcast's AI provider (https://github.com/yeyo11/claudio), as an instance of its own:
+#
+#   docker compose up -d
+#
+# Then open http://localhost:8798, sign in with CLAUDIO_AUTH_TOKEN and sign in to Claude in the setup
+# assistant (docs/claudio.md). The engine runs on the host and reaches it at CLAUDIO_API_URL.
+name: shipcast # volumes are shipcast_*, whatever folder this is started from
+
+services:
+  claudio:
+    # Pinned: the engine is written against this API. Move it on purpose, and check docs/claudio.md
+    image: ghcr.io/yeyo11/claudio:0.8.1
+    init: true # reaps the claude child processes
+    # Only what claudio needs: an env_file would hand it every Shipcast secret (GitHub, networks)
+    environment:
+      CLAUDIO_AUTH_MODE: token
+      CLAUDIO_AUTH_TOKEN: ${CLAUDIO_API_TOKEN:?set CLAUDIO_API_TOKEN in .env (openssl rand -hex 32)}
+    ports:
+      # Loopback only. 8798, not claudio's 8797, so it can run beside a desktop or dev claudio
+      - "127.0.0.1:${CLAUDIO_PORT:-8798}:8797"
+    volumes:
+      - claude-config:/home/node/.claude # Claude Code's account and settings
+      - claudio-data:/data # claudio's store, credential and sign-ins
+      # The repos Shipcast clones to analyse: the engine writes them here, claudio reads them in
+      # /workspace. Gitignored
+      - ./workspace:/workspace
+    restart: unless-stopped
+    stop_grace_period: 30s # time for SIGTERM to stop the chats and close the store
+
+volumes:
+  claude-config:
+  claudio-data:

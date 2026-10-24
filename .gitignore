@@ -8,3 +8,5 @@ dist
 .claude/settings.local.json
 # pando's knowledge base and code index: derived from docs/ and the source (docs/knowledge-base.md)
 .pando
+# The repos the engine clones for claudio to analyse (docker-compose.yml)
+workspace/
