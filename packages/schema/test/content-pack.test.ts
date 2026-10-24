@@ -23,7 +23,7 @@ const fullPack = {
     documentedOnly: [],
     limitations: ['One provider'],
   },
-  article: { slug: 'claudio-0-8', en: article, es: article },
+  article: { en: { slug: 'claudio-0-8', ...article }, es: { slug: 'claudio-0-8-como-servicio', ...article } },
   devto: { tags: ['claude', 'ai', 'typescript'] },
   bluesky: { lang: 'en', text: 'claudio runs Claude Code as a service.' },
   mastodon: { lang: 'en', text: 'claudio runs Claude Code as a service.' },
@@ -72,14 +72,15 @@ test('dev.to takes at most four lowercase tags', () => {
   assert.ok(!parse({ devto: { tags: ['TypeScript'] } }).success);
 });
 
-test('the article needs a slug and at least one language', () => {
-  assert.ok(!parse({ article: { slug: 'Not A Slug', en: article } }).success);
-  assert.ok(!parse({ article: { slug: 'ok' } }).success);
+test('each language of the article needs its own slug, and there is at least one language', () => {
+  assert.ok(!parse({ article: { en: { slug: 'Not A Slug', ...article } } }).success);
+  assert.ok(!parse({ article: { en: article } }).success);
+  assert.ok(!parse({ article: {} }).success);
 });
 
 test('missingPieces names what the enabled channels still need', () => {
   const { bluesky: _b, ...rest } = fullPack;
-  const pack: Pack = ContentPack.parse({ ...rest, article: { slug: 'claudio-0-8', es: article }, reddit: [] });
+  const pack: Pack = ContentPack.parse({ ...rest, article: { es: { slug: 'claudio-0-8', ...article } }, reddit: [] });
   assert.deepEqual(missingPieces(pack, config, brand), [
     'bluesky: the pack has no bluesky',
     'blog: the article has no en version',

@@ -9,7 +9,7 @@ const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://jo
 function published(registry: Registry) {
   const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
   registry.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
-  registry.recordPost({ launchId: launch.id, channel: 'blog', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
+  registry.recordPost({ launchId: launch.id, channel: 'blog', url: 'https://josegarrido.dev/en/claudio/', externalId: 'en:claudio,es:claudio-como-servicio' });
   registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
   registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://bsky.app/x', externalId: 'at://x' });
   return launch;
@@ -36,7 +36,7 @@ test('every source of a published launch is read and recorded under its name', a
 
   const result = await collectMetrics(registry, brand, sources, new Date('2026-10-30T12:00:00Z'));
   assert.deepEqual(result.problems, []);
-  assert.ok(asked.includes('blog /en/claudio/') && asked.includes('blog /es/claudio/'), 'both languages of the article');
+  assert.ok(asked.includes('blog /en/claudio/') && asked.includes('blog /es/claudio-como-servicio/'), 'both languages of the article');
 
   const latest = Object.fromEntries(registry.latestMetrics(launch.id).map((m) => [`${m.source}.${m.name}`, m.value]));
   assert.deepEqual(latest, {

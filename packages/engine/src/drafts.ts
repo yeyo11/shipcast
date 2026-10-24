@@ -1,4 +1,4 @@
-import type { Brand, Channel, ContentPack, LaunchConfig, PublishMode } from '@shipcast/schema';
+import { articleUrl as urlOf, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
 
@@ -47,7 +47,9 @@ export function renderDrafts(
   const files: DraftFile[] = [];
   const dir = launchDir(launch);
   const mode = (c: Channel) => config.publishing[c];
-  const articleUrl = (lang: string) => `${brand.site}/${lang}/${pack.article?.slug ?? ''}/`;
+  const articleUrl = (lang: 'en' | 'es') => urlOf(pack, brand.site, lang) ?? brand.site;
+  // Each language has its own slug; the key the blog pairs translations by is the first of them
+  const translationKey = pack.article?.en?.slug ?? pack.article?.es?.slug ?? '';
 
   if (pack.article && mode('blog') !== 'off') {
     for (const lang of ['en', 'es'] as const) {
@@ -59,14 +61,14 @@ export function renderDrafts(
         `description: ${q(version.description)}`,
         `pubDate: ${date.toISOString().slice(0, 10)}`,
         `lang: ${lang}`,
-        `translationKey: ${q(pack.article.slug)}`,
+        `translationKey: ${q(translationKey)}`,
         `repo: ${q(pack.project.repo)}`,
         ...(pack.project.version ? [`version: ${q(pack.project.version)}`] : []),
         `tags: [${pack.article.tags.map(q).join(', ')}]`,
         ...(image ? [`image: ${q(image)}`] : []),
         '---',
       ].join('\n');
-      files.push({ path: `src/content/posts/${lang}/${pack.article.slug}.md`, content: `${frontMatter}\n\n${version.markdown.trim()}\n` });
+      files.push({ path: `src/content/posts/${lang}/${version.slug}.md`, content: `${frontMatter}\n\n${version.markdown.trim()}\n` });
     }
   }
 

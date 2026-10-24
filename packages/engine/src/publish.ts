@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { ContentPack, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleUrl as urlOf, ContentPack, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { launchDir } from './drafts.ts';
@@ -98,17 +98,21 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   if (!parsed?.ok) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
   const config: LaunchConfig = parsed.value;
 
-  const slug = pack.article?.slug;
-  const articleUrl = slug ? `${brand.site}/en/${slug}/` : brand.site;
+  // English is the canonical version every channel links to; Spanish only where that is the only one
+  const lead: 'en' | 'es' = pack.article?.en ? 'en' : 'es';
+  const slug = pack.article?.[lead]?.slug;
+  const articleUrl = urlOf(pack, brand.site, lead) ?? brand.site;
   // The merge starts the deploy: wait until the article (and so the media) is live
   if (slug && config.publishing.blog !== 'off') {
     const live = await http(articleUrl, { method: 'HEAD' }).then((r) => r.ok, () => false);
     if (!live) return { state: 'waiting', launch, reason: `${articleUrl} is not live yet` };
-    registry.recordPost({ launchId: launch.id, channel: 'blog', url: articleUrl, externalId: slug });
+    // Both languages' slugs, so the metrics can read each article's visits
+    const slugs = (['en', 'es'] as const).filter((l) => pack.article?.[l]).map((l) => `${l}:${pack.article![l]!.slug}`).join(',');
+    registry.recordPost({ launchId: launch.id, channel: 'blog', url: articleUrl, externalId: slugs });
   }
 
   const read = (path: string) => github.fileAt(deps.launchesRepo, path, 'HEAD');
-  const article = slug ? await read(`src/content/posts/en/${slug}.md`) : undefined;
+  const article = slug ? await read(`src/content/posts/${lead}/${slug}.md`) : undefined;
   const { data: front, body: articleBody } = article ? splitFrontMatter(article) : { data: {}, body: '' };
   const title = typeof front.title === 'string' ? front.title : pack.article?.en?.title ?? pack.project.name;
   const description = typeof front.description === 'string' ? front.description : pack.article?.en?.description ?? pack.analysis.summary;
@@ -191,7 +195,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 continue;
               }
               const issue = parseIssueDraft(draftBody((await read(`${dir}/newsletter-${lang}.md`)) ?? ''), fromPack);
-              const langArticle = slug ? await read(`src/content/posts/${lang}/${slug}.md`) : undefined;
+              const langSlug = pack.article?.[lang]?.slug;
+              const langArticle = langSlug ? await read(`src/content/posts/${lang}/${langSlug}.md`) : undefined;
               const langTitle = langArticle ? splitFrontMatter(langArticle).data.title : undefined;
               const result = await sender.send({
                 name: `${pack.project.name} ${pack.project.version ?? ''} (${lang})`.replace(/\s+/g, ' ').trim(),
@@ -201,7 +206,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                   brand,
                   project: pack.project.name,
                   title: typeof langTitle === 'string' ? langTitle : title,
-                  articleUrl: slug ? `${brand.site}/${lang}/${slug}/?ref=newsletter` : brand.site,
+                  articleUrl: `${urlOf(pack, brand.site, lang) ?? articleUrl}?ref=newsletter`,
                   // No launch image: it carries the English headline, which the issue already sets on colour
                   lang,
                 }),

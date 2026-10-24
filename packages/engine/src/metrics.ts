@@ -23,6 +23,19 @@ export interface CollectResult {
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
+ * The article's URL in each language. The blog post records both slugs (`en:a-slug,es:un-slug`),
+ * since each language has its own; an older record with one slug shared by both is read too.
+ */
+function articleUrls(externalId: string | null | undefined, url: string, site: string): Array<{ lang: string; url: string }> {
+  const pairs = (externalId ?? '').split(',').map((p) => /^(en|es):(.+)$/.exec(p)).filter((m): m is RegExpExecArray => m !== null);
+  if (pairs.length > 0) return pairs.map(([, lang, slug]) => ({ lang: lang!, url: `${site}/${lang}/${slug}/` }));
+  return [
+    { lang: 'en', url },
+    { lang: 'es', url: url.replace(`${site}/en/`, `${site}/es/`) },
+  ];
+}
+
+/**
  * Reads every source for every published launch and records the numbers, as of `now`. One source
  * failing never stops the others: its problem is reported and the rest are still recorded.
  */
@@ -53,25 +66,26 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
         await attempt(`${launch.repo} ${launch.ref} ${post.channel}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!)));
       }
       if (post.channel === 'blog' && post.url) {
-        const path = new URL(post.url).pathname;
-        const spanish = post.url.replace(`${brand.site}/en/`, `${brand.site}/es/`);
+        const urls = articleUrls(post.externalId, post.url, brand.site);
         if (sources.blog) {
           await attempt(`${launch.repo} ${launch.ref} blog visits`, async () => {
-            const [en, es] = await Promise.all([
-              sources.blog!.pageVisits(path, since, until),
-              sources.blog!.pageVisits(new URL(spanish).pathname, since, until),
-            ]);
-            const values: Record<string, number> = { views: en.views + es.views, views_en: en.views, views_es: es.views };
-            for (const visits of [en, es]) {
-              for (const [source, count] of Object.entries(visits.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
+            const visits = await Promise.all(urls.map(async ({ lang, url }) => ({ lang, ...(await sources.blog!.pageVisits(new URL(url).pathname, since, until)) })));
+            const values: Record<string, number> = { views: 0 };
+            for (const v of visits) {
+              values.views! += v.views;
+              values[`views_${v.lang}`] = (values[`views_${v.lang}`] ?? 0) + v.views;
+              for (const [source, count] of Object.entries(v.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
             }
             record(launch.id, 'blog', values);
           });
         }
         if (sources.search) {
           await attempt(`${launch.repo} ${launch.ref} search`, async () => {
-            const [en, es] = await Promise.all([sources.search!.pageMetrics(post.url!, since, until), sources.search!.pageMetrics(spanish, since, until)]);
-            record(launch.id, 'search', { clicks: (en.clicks ?? 0) + (es.clicks ?? 0), impressions: (en.impressions ?? 0) + (es.impressions ?? 0) });
+            const found = await Promise.all(urls.map(({ url }) => sources.search!.pageMetrics(url, since, until)));
+            record(launch.id, 'search', {
+              clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
+              impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
+            });
           });
         }
       }

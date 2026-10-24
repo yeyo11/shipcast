@@ -15,10 +15,9 @@ const pack = ContentPack.parse({
   project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.9.0' },
   analysis: { summary: 'Claude Code as a service.', implemented: ['REST API', 'Web UI'], planned: ['macOS app'], documentedOnly: [], limitations: ['One provider'] },
   article: {
-    slug: 'claudio',
     tags: ['claude', 'self-hosted'],
-    en: { title: 'claudio: "Claude Code" as a service', description: 'Run Claude Code from anywhere.', markdown: 'Body in English.\n' },
-    es: { title: 'claudio: Claude Code como servicio', description: 'Claude Code desde cualquier sitio.', markdown: 'Cuerpo en español.' },
+    en: { slug: 'claudio', title: 'claudio: "Claude Code" as a service', description: 'Run Claude Code from anywhere.', markdown: 'Body in English.\n' },
+    es: { slug: 'claudio-como-servicio', title: 'claudio: Claude Code como servicio', description: 'Claude Code desde cualquier sitio.', markdown: 'Cuerpo en español.' },
   },
   devto: { tags: ['claude', 'ai'] },
   bluesky: { lang: 'en', text: 'Bluesky post' },
@@ -49,7 +48,7 @@ test('the drafts put each article where the blog reads it, with front matter the
       '',
     ].join('\n'),
   );
-  assert.ok(files.some((f) => f.path === 'src/content/posts/es/claudio.md'));
+  assert.ok(files.some((f) => f.path === 'src/content/posts/es/claudio-como-servicio.md'), 'each language under its own slug');
 });
 
 test('every channel gets a readable draft that says its mode, and the pack travels with them', () => {

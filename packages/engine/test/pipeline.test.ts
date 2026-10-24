@@ -48,7 +48,7 @@ const pack = {
   kind: 'launch',
   project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.9.0' },
   analysis: { summary: 's', implemented: ['x'], planned: [], documentedOnly: [], limitations: [] },
-  article: { slug: 'claudio', en: article, es: article },
+  article: { en: { slug: 'claudio', ...article }, es: { slug: 'claudio-como-servicio', ...article } },
   devto: { tags: ['ai'] },
   bluesky: { lang: 'en', text: 'b' },
   mastodon: { lang: 'en', text: 'm' },

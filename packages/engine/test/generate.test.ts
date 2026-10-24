@@ -28,7 +28,7 @@ const goodPack = {
   kind: 'launch',
   project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.9.0' },
   analysis: { summary: 's', implemented: ['REST API'], planned: [], documentedOnly: [], limitations: [] },
-  article: { slug: 'claudio', en: article, es: article },
+  article: { en: { slug: 'claudio', ...article }, es: { slug: 'claudio-como-servicio', ...article } },
   devto: { tags: ['claude', 'ai'] },
   bluesky: { lang: 'en', text: 'claudio https://josegarrido.dev/en/claudio/?ref=bluesky' },
   mastodon: { lang: 'en', text: 'claudio #claude https://josegarrido.dev/en/claudio/?ref=mastodon' },
@@ -61,7 +61,7 @@ test('the prompt carries the brand, the truth rule, the pack and one brief per a
   assert.match(system, /The code is the source of truth/);
   assert.match(prompt, /yeyo11\/claudio at v0\.9\.0/);
   assert.match(prompt, /first launch/);
-  assert.match(prompt, /https:\/\/josegarrido\.dev\/<lang>\/<slug>\//);
+  assert.match(prompt, /https:\/\/josegarrido\.dev\/<lang>\/<that slug>\//);
   assert.match(prompt, /r\/ClaudeAI, r\/selfhosted/);
   assert.match(prompt, /media "demo-video"/, 'a repo with a demo gets a Reel');
   assert.match(prompt, /no URL/);

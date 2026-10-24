@@ -12,7 +12,7 @@ const pack = {
   kind: 'launch',
   project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.8.2' },
   analysis: { summary: 's', implemented: ['x'], planned: [], documentedOnly: [], limitations: [] },
-  article: { slug: 'claudio', en: { title: 'AI title', description: 'AI description', markdown: 'AI body' } },
+  article: { en: { slug: 'claudio', title: 'AI title', description: 'AI description', markdown: 'AI body' } },
   devto: { tags: ['ai'] },
   bluesky: { lang: 'en', text: 'AI bluesky' },
   mastodon: { lang: 'en', text: 'AI mastodon' },

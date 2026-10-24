@@ -18,13 +18,13 @@ function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): str
   const blogLangs = brand.languages.blog.join(' and ');
   switch (channel) {
     case 'blog':
-      return `article: the canonical post, one version per language (${blogLangs}). It will live at ${brand.site}/<lang>/<slug>/. Markdown body without front matter and without a top-level heading. Description at most ${LIMITS.articleDescription} characters.`;
+      return `article: the canonical post, one version per language (${blogLangs}). Each version has its own slug, written in its language's words (the English one in English, the Spanish one in Spanish), and lives at ${brand.site}/<lang>/<that slug>/. Markdown body without front matter and without a top-level heading. Description at most ${LIMITS.articleDescription} characters.`;
     case 'devto':
       return `devto: 1 to ${LIMITS.devtoTags} lowercase tags. dev.to republishes the English article with the blog as canonical URL, so write nothing else for it.`;
     case 'bluesky':
-      return `bluesky: one post in English, at most ${LIMITS.blueskyGraphemes} characters, ending with the article link ${brand.site}/en/<slug>/?ref=bluesky.`;
+      return `bluesky: one post in English, at most ${LIMITS.blueskyGraphemes} characters, ending with the English article's link ${brand.site}/en/<English slug>/?ref=bluesky.`;
     case 'mastodon':
-      return `mastodon: one post in English, at most ${LIMITS.mastodonCharacters} characters, ending with the article link ${brand.site}/en/<slug>/?ref=mastodon, and a few hashtags (Mastodon search relies on them).`;
+      return `mastodon: one post in English, at most ${LIMITS.mastodonCharacters} characters, ending with the English article's link ${brand.site}/en/<English slug>/?ref=mastodon, and a few hashtags (Mastodon search relies on them).`;
     case 'instagram':
       return `instagram: a caption in English, at most ${LIMITS.instagramCaption} characters and ${LIMITS.instagramHashtags} hashtags, with no URL (links are not clickable there; say "link in bio"), and media "${config.assets.demo ? 'demo-video' : 'og-image'}".`;
     case 'reddit': {
@@ -34,7 +34,7 @@ function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): str
     }
     case 'newsletter': {
       const langs = Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and ');
-      return `newsletter: one issue per language (${langs}), each with a subject (at most ${LIMITS.newsletterSubject} characters), a preview text (at most ${LIMITS.newsletterPreview}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language (${brand.site}/<lang>/<slug>/?ref=newsletter). Not the article itself; no images.`;
+      return `newsletter: one issue per language (${langs}), each with a subject (at most ${LIMITS.newsletterSubject} characters), a preview text (at most ${LIMITS.newsletterPreview}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language (${brand.site}/<lang>/<that language's slug>/?ref=newsletter). Not the article itself; no images.`;
     }
     default:
       return undefined;
@@ -75,7 +75,7 @@ export function buildPrompt(launch: Launch, config: LaunchConfig, brand: Brand):
     'Then write these pieces:',
     pieces,
     '',
-    `Set kind to "${launch.kind}", project.repo to "https://github.com/${launch.repo}", project.version to "${launch.ref}" if it is a version, and choose a short, lasting slug (no version number unless the article is about that version).`,
+    `Set kind to "${launch.kind}", project.repo to "https://github.com/${launch.repo}", project.version to "${launch.ref}" if it is a version, and choose short, lasting slugs, one per language in its own words (no version number unless the article is about that version).`,
     'Answer only through the structured output.',
   ].join('\n');
 

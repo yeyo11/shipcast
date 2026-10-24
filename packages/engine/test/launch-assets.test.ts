@@ -14,7 +14,7 @@ const pack = ContentPack.parse({
   kind: 'launch',
   project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.8.2' },
   analysis: { summary: 'Claude Code as a service.', implemented: ['x'], planned: [], documentedOnly: [], limitations: [] },
-  article: { slug: 'claudio', en: { title: 't', description: 'Run Claude Code from anywhere.', markdown: 'b' } },
+  article: { en: { slug: 'claudio', title: 't', description: 'Run Claude Code from anywhere.', markdown: 'b' } },
 });
 
 function withRepo(fn: (repo: string) => Promise<void>): () => Promise<void> {

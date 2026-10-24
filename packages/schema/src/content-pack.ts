@@ -30,6 +30,7 @@ export const LIMITS = {
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
 
 const ArticleVersion = z.strictObject({
+  slug: slug.describe("The article's path in this language, in this language's words: claudio-claude-code-as-a-service, claudio-claude-code-como-servicio"),
   title: z.string().min(1).max(120),
   description: z
     .string()
@@ -80,7 +81,6 @@ export const ContentPack = z
     analysis: Analysis,
     article: z
       .strictObject({
-        slug,
         tags: z.array(z.string().min(1)).max(8).default([]),
         en: ArticleVersion.optional(),
         es: ArticleVersion.optional(),
@@ -151,6 +151,12 @@ export const ContentPack = z
   .describe('Everything one launch publishes, written from the code of the project');
 
 export type ContentPack = z.infer<typeof ContentPack>;
+
+/** The URL of the article in one language, or undefined when the pack has no version in it */
+export function articleUrl(pack: ContentPack, site: string, lang: 'en' | 'es'): string | undefined {
+  const version = pack.article?.[lang];
+  return version ? `${site}/${lang}/${version.slug}/` : undefined;
+}
 
 /** The pieces the pack schema can carry today, by channel. */
 const PIECE_OF: Partial<Record<Channel, keyof ContentPack>> = {
