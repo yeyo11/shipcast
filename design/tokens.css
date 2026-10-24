@@ -1,0 +1,106 @@
+/*
+ * Shipcast design tokens, direction Cartel: a dark page broken by yellow bands, poster headlines in
+ * Phudu, chunky pills and cards with hard black outlines and offset "stamp" shadows instead of soft
+ * ones. Night is the default; set data-theme="day" on any element for the day theme.
+ * Values mirror tokens.json; scripts/contrast.mjs checks both agree and that every pair passes AA.
+ * Font URLs are relative to this file, so keep fonts/ next to it or rewrite them.
+ */
+
+@font-face {
+  font-family: "Phudu";
+  src: url("fonts/phudu-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 300 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter Tight";
+  src: url("fonts/inter-tight-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter Tight";
+  src: url("fonts/inter-tight-latin-wght-italic.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+:root,
+[data-theme="night"] {
+  color-scheme: dark;
+  --sc-ground: #141413;    /* the page */
+  --sc-raised: #1F1F1D;    /* neutral cards and bands */
+  --sc-black: #000000;     /* the inverted band, the launch card */
+  --sc-on-black: #F4F2EC;  /* text on black, in both themes */
+  --sc-hairline: #33322F;  /* dividers, decorative only */
+  --sc-rail: #76746D;      /* control borders, 3:1 on ground and raised */
+  --sc-text: #F4F2EC;
+  --sc-muted: #A9A69E;
+  --sc-yellow: #FFD43B;    /* the brand: the primary action, what waits for you, the bands */
+  --sc-on-yellow: #000000;
+  --sc-cream: #FFF8DC;     /* cards that sit on a yellow band */
+  --sc-failure: #FF6B5B;   /* failure only, always with a word */
+  --sc-stamp: var(--sc-text); /* colour of the offset shadow under yellow things */
+}
+
+[data-theme="day"] {
+  color-scheme: light;
+  --sc-ground: #FFFFFF;
+  --sc-raised: #EDEEF0;
+  --sc-black: #000000;
+  --sc-on-black: #F4F2EC;
+  --sc-hairline: #D6D5D1;
+  --sc-rail: #7A7872;
+  --sc-text: #0D0D0D;
+  --sc-muted: #5A5852;
+  --sc-yellow: #FFD43B;
+  --sc-on-yellow: #000000;
+  --sc-cream: #FFF8DC;
+  --sc-failure: #B42318;
+  --sc-stamp: #000000;
+}
+
+:root {
+  --sc-font-display: "Phudu", "Archivo Black", system-ui, sans-serif;
+  --sc-font-text: "Inter Tight", system-ui, sans-serif;
+  --sc-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Display type is always uppercase, tight and heavy; text is sentence case */
+  --sc-display-xl: 900 150px/0.9 var(--sc-font-display);
+  --sc-display: 900 96px/0.9 var(--sc-font-display);
+  --sc-heading: 900 48px/0.92 var(--sc-font-display);
+  --sc-title: 700 30px/0.95 var(--sc-font-display);
+  --sc-tracking-display: -0.035em;
+  --sc-tracking-title: -0.02em;
+  --sc-body-lg: 400 20px/1.5 var(--sc-font-text);
+  --sc-body: 400 16px/1.5 var(--sc-font-text);
+  --sc-label: 600 14px/1.3 var(--sc-font-text);
+
+  --sc-radius-pill: 160px;
+  --sc-radius-band: 30px;
+  --sc-radius-card: 24px;
+  --sc-radius-chip: 12px;
+  --sc-border-card: 2.5px;
+  --sc-border-control: 1.5px;
+  --sc-stamp-sm: 4px 4px 0;
+  --sc-stamp-lg: 10px 10px 0;
+
+  --sc-space: 8px;
+  --sc-section: 120px;
+  --sc-band-padding: 64px;
+
+  --sc-press: 80ms;
+  --sc-fade: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --sc-press: 0ms; --sc-fade: 0ms; }
+}
