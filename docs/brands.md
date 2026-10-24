@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:26:13.807005215Z
-updated_at: 2026-10-24T16:28:36.043469588Z
+created_at: 2026-10-24T16:41:31.996653705Z
+updated_at: 2026-10-24T17:01:48.02537293Z
 tags:
     - brands
     - config
@@ -29,15 +29,13 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `id` | `personal` |
 | `displayName` | José Antonio Garrido |
 | `github` | `yeyo11` |
-| `handles.x` | <https://x.com/joseagg112> (linked from the footer; nothing is published there) |
-| `handles.linkedin` | <https://www.linkedin.com/in/jagg97/> (linked from the footer; nothing is published there) |
 | `handles.bluesky` | <https://bsky.app/profile/yeyo11.bsky.social> |
 | `handles.mastodon` | <https://mastodon.social/@yeyo11> |
 | `handles.devto` | <https://dev.to/yeyo11> |
 | `handles.reddit` | <https://www.reddit.com/user/josegarridodev/> |
 | `handles.instagram` | <https://www.instagram.com/josegarridodev> |
 | `languages.blog` | `[en, es]` |
-| `languages.x`, `languages.linkedin` | not set: the owner does not publish on X or LinkedIn (2026-10-24); the schema keeps both optional for brands that do |
+| `handles.x`, `handles.linkedin`, `languages.x`, `languages.linkedin` | not set: the owner does not publish on X or LinkedIn and does not link those profiles from the site (removed on 2026-10-24); the schema keeps them optional for brands that do |
 | `tone` | First person, didactic and direct; problem first, then evidence (command, config, output); honest about what does not work yet; no hype. Calm articles without emojis; short social posts with a hook and a few emojis as markers. Spanish from Spain. Set by the owner on 2026-10-24, to refine with real launches (phase 5) |
 | `support` | <https://buymeacoffee.com/yeyo11>, linked from the blog's footer |
 
