@@ -1,15 +1,16 @@
 ---
-created_at: 2026-10-24T17:43:32.421383054Z
-updated_at: 2026-10-24T17:55:13.080339511Z
+created_at: 2026-10-24T17:55:14.670717497Z
+updated_at: 2026-10-24T17:57:02.22093567Z
 tags:
     - status
     - roadmap
 ---
 # Status
 
-**Phase 0, foundations, done** except reserving the name on npm; **phase 1, the local MVP, starts**
-([plan](plans/shipcast.md#roadmap)). Of phase 0: the repo, the `launch.yml` and content pack schemas,
-the launches repo with its blog and the dev.to account are in place; Hashnode left the MVP.
+**Phase 0, foundations, done**; **phase 1, the local MVP, starts** ([plan](plans/shipcast.md#roadmap)).
+Of phase 0: the repo, the `launch.yml` and content pack schemas, the launches repo with its blog and
+the dev.to account are in place, and the name is reserved on npm (`shipcast@0.0.0`, published by the
+owner on 2026-10-24); Hashnode left the MVP.
 
 Done on 2026-10-24: the repository exists and is public at
 [github.com/yeyo11/shipcast](https://github.com/yeyo11/shipcast) — MIT, pnpm monorepo on TypeScript
@@ -63,7 +64,6 @@ Waiting on the owner:
 
 - The new design for `josegarrido.dev`, handed by the owner to an external agent; and a second opinion
   on Shipcast's design system, which the owner is not convinced by.
-- Reserve `shipcast` on npm (free on 2026-10-24).
 - Upload the social preview, once Shipcast's design system is settled.
 
 Next in code:

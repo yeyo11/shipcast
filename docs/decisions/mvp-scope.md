@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T17:39:38.711934531Z
-updated_at: 2026-10-24T17:54:51.089506487Z
+created_at: 2026-10-24T17:54:54.792555034Z
+updated_at: 2026-10-24T17:57:25.76735439Z
 tags:
     - decision
     - mvp
@@ -70,8 +70,8 @@ official one, only small third-party projects.
   metrics source above has a free API, and the AI runs through claudio, which costs nothing per
   launch.
 - **The repository stays at `yeyo11/shipcast`.** The `shipcast` GitHub organisation has been taken
-  since 2020 (and `launchloop`, the fallback name, is taken too). The name is free on npm, and the
-  owner reserves it there.
+  since 2020 (and `launchloop`, the fallback name, is taken too). The name is reserved on npm: the
+  owner published a placeholder `shipcast@0.0.0` on 2026-10-24.
 - **No domain for Shipcast.** `shipcast.dev`, `.io` and `.app` are taken; none is bought for now.
 - **The blog lives in `yeyo11/launches`**, on GitHub Pages at **`https://josegarrido.dev`**, the
   owner's personal domain bought on 2026-10-24: the blog is the personal brand's home, at the root of
