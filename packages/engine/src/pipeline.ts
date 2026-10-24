@@ -117,5 +117,11 @@ export async function claimManual(
   if (!parsed.ok) return { error: formatIssues(LAUNCH_CONFIG_PATH, parsed.issues) };
   if (!parsed.value.triggers.manual) return { error: `manual launches are turned off in ${repo}'s launch.yml` };
   const kind = resolvePack(parsed.value, tag, deps.registry.lastPublishedRef(repo));
-  return deps.registry.claim({ repo, ref: tag, trigger: 'manual', kind, brand: brand.id });
+  const claim = deps.registry.claim({ repo, ref: tag, trigger: 'manual', kind, brand: brand.id });
+  // A failed launch published nothing, so asking for it again by hand retries it; one that is drafted,
+  // published or skipped stays claimed, which is what keeps a campaign from happening twice
+  if (!claim.claimed && claim.launch.status === 'failed') {
+    return { claimed: true, launch: deps.registry.setStatus(claim.launch.id, 'detected', `retried after: ${claim.launch.detail?.split('\n')[0] ?? 'a failure'}`) };
+  }
+  return claim;
 }

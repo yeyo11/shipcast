@@ -136,6 +136,16 @@ test('a manual launch takes the latest release and is claimed like any other', a
   assert.equal(first.launch.ref, 'v0.9.0');
   const again = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in again && !again.claimed, 'never twice, by hand or by the watcher');
+
+  registry.setStatus(first.launch.id, 'failed', 'could not clone');
+  const retry = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
+  assert.ok('claimed' in retry && retry.claimed, 'a failed launch published nothing: by hand, it is retried');
+  assert.equal(retry.launch.id, first.launch.id);
+  assert.equal(retry.launch.status, 'detected');
+
+  registry.setStatus(first.launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/1');
+  const drafted = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
+  assert.ok('claimed' in drafted && !drafted.claimed, 'a drafted launch is never drafted again');
 });
 
 test('a manual launch explains why it cannot start', async () => {
