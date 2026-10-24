@@ -156,6 +156,12 @@ export class Registry {
     return row ? toLaunch(row as unknown as LaunchRow) : undefined;
   }
 
+  /** The newest launches first, for `shipcast status`. */
+  recent(limit = 20): Launch[] {
+    const rows = this.#db.prepare('SELECT * FROM launches ORDER BY created_at DESC, id DESC LIMIT ?').all(limit);
+    return (rows as unknown as LaunchRow[]).map(toLaunch);
+  }
+
   setStatus(id: number, status: LaunchStatus, detail: string | null = null): Launch {
     const result = this.#db
       .prepare(

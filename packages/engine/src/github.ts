@@ -19,6 +19,8 @@ export interface GitHubSource {
   userEvents(owner: string, etag?: string): Promise<EventsPage>;
   /** A file's text at a ref, or undefined when it does not exist there. */
   fileAt(repo: string, path: string, ref: string): Promise<string | undefined>;
+  /** The repo's latest published release (not a draft or pre-release), for manual launches */
+  latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined>;
 }
 
 interface RawEvent {
@@ -95,11 +97,21 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   }
 
   async fileAt(repo: string, path: string, ref: string): Promise<string | undefined> {
-    const url = `${this.#base}/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
+    // HEAD means the default branch, which is what the API reads when no ref is given
+    const query = ref === 'HEAD' ? '' : `?ref=${encodeURIComponent(ref)}`;
+    const url = `${this.#base}/repos/${repo}/contents/${path}${query}`;
     const response = await this.#fetch(url, { headers: this.#headers({ accept: 'application/vnd.github.raw+json' }) });
     if (response.status === 404) return undefined;
     if (!response.ok) throw new GitHubError(`GitHub ${repo}/${path}@${ref}: ${response.status}`, response.status);
     return response.text();
+  }
+
+  async latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined> {
+    const { status, data } = await this.#json('GET', `/repos/${repo}/releases/latest`);
+    if (status === 404) return undefined;
+    if (status >= 300) throw new GitHubError(`GitHub latest release of ${repo}: ${status}`, status);
+    const release = data as { tag_name: string; html_url: string };
+    return { tag: release.tag_name, url: release.html_url };
   }
 
   async #json(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> {

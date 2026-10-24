@@ -1,0 +1,16 @@
+{
+  "name": "@shipcast/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The shipcast command: launch a release by hand, watch for releases, see the launches",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@shipcast/engine": "workspace:*",
+    "@shipcast/schema": "workspace:*"
+  }
+}

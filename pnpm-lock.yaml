@@ -18,6 +18,15 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  apps/cli:
+    dependencies:
+      '@shipcast/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@shipcast/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+
   packages/engine:
     dependencies:
       '@shipcast/schema':

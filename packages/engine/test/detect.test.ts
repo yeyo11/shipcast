@@ -28,6 +28,9 @@ class FakeGitHub implements GitHubSource {
     this.calls.push(`file ${repo} ${path} ${ref}`);
     return this.files[`${repo}@${ref}`];
   }
+  async latestRelease(): Promise<undefined> {
+    return undefined;
+  }
 }
 
 test('a published release of an enabled repo is claimed, with the pack inferred from the version', async () => {

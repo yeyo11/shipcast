@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "shipcast": "node apps/cli/src/main.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

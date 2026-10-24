@@ -17,3 +17,5 @@ workspace/
 .playwright-mcp/
 # Owner-specific notes (machine, accounts, credential status): indexed by pando, never published
 docs/internal/
+# The launch registry and other local state of the engine (SHIPCAST_DATA_DIR)
+data/
