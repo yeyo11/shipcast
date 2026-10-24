@@ -1,13 +1,13 @@
 ---
-created_at: 2026-10-24T17:57:03.790695254Z
-updated_at: 2026-10-24T18:09:52.910374413Z
+created_at: 2026-10-24T18:09:54.605888861Z
+updated_at: 2026-10-24T18:21:45.248422631Z
 tags:
     - status
     - roadmap
 ---
 # Status
 
-**Phase 0, foundations, done**; **phase 1, the local MVP, starts** ([plan](plans/shipcast.md#roadmap)).
+**Phase 0, foundations, done**; **phase 1, the local MVP, in progress** ([plan](plans/shipcast.md#roadmap)).
 Of phase 0: the repo, the `launch.yml` and content pack schemas, the launches repo with its blog and
 the dev.to account are in place, and the name is reserved on npm (`shipcast@0.0.0`, published by the
 owner on 2026-10-24); Hashnode left the MVP.
@@ -38,7 +38,8 @@ Services, set up on 2026-10-24:
 
 - **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches) exists, with the Astro
   blog live at <https://josegarrido.dev> (empty until the first launch, HTTPS enforced) and deployed
-  on every push to `main` ([launches-repo.md](launches-repo.md)).
+  on every push to `main` ([launches-repo.md](launches-repo.md)). Its `brand.yml` names the brand's
+  site, where articles live.
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), signed in to Claude.
 - **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
   submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
@@ -55,10 +56,14 @@ Services, set up on 2026-10-24:
   tests. It set the package template (`tsconfig.json` extending the base with `erasableSyntaxOnly`,
   `exports` pointing at `src/index.ts`, tests on `node:test` run by Node's type stripping).
 - `packages/engine` (2026-10-24, [engine.md](engine.md)): the launch registry on `node:sqlite`, launch
-  detection from the account's public GitHub events (conditional requests, `launch.yml` read at the
-  tag), and claudio as the AI provider (structured output through `StructuredOutput`, chat stopped
-  afterwards). 22 tests; the GitHub reads and a claudio generation were also run against the real
-  services.
+  detection from the account's public GitHub events, claudio as the AI provider, and the pipeline from
+  a claimed launch to its drafts pull request (fresh clone, prompt with the brand and the truth rule,
+  read-only tools, pack validated and complete, articles and per-channel drafts, one-commit pull
+  request). 42 tests; the GitHub reads, a claudio generation and the rendered articles (in a real
+  build of the blog) were also checked for real.
+- `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch`, `status`, configured from
+  `.env`. 3 tests. Checked live up to the point where claudio's latest release, `v0.8.1`, has no
+  `launch.yml`.
 
 **Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
 rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
@@ -72,16 +77,17 @@ Waiting on the owner:
 - The new design for `josegarrido.dev`, handed by the owner to an external agent; and a second opinion
   on Shipcast's design system, which the owner is not convinced by.
 - Upload the social preview, once Shipcast's design system is settled.
+- Merge claudio pull request #60 (its `launch.yml`), and cut a claudio release after it.
 
 Next in code:
 
-- The launch pipeline in `packages/engine`: clone the release, prompt, generate, validate the pack,
-  write the drafts pull request; then `apps/cli` (`shipcast launch`, `shipcast watch`).
-- `packages/connectors`: launches repo (drafts pull request), dev.to, Bluesky, Mastodon, Instagram,
-  Reddit drafts; and the OG image and demo video Instagram needs.
+- The first real launch: claudio once its `launch.yml` (claudio pull request #60) is merged and a
+  release includes it.
+- Publishing after the merge of a drafts pull request.
+- `packages/connectors`: dev.to, Bluesky, Mastodon, Instagram (the drafts pull request is already in
+  the engine); and the OG image and demo video Instagram needs.
 - Metrics, now in the MVP: one connector per source (blog analytics, Search Console, GitHub, dev.to,
   Bluesky, Mastodon, Instagram), stored per launch and channel, and a dashboard.
-- claudio's `.github/launch.yml`, in the claudio repo, with the owner's permission.
 
 ## Related
 

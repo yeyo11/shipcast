@@ -28,10 +28,11 @@ the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md); where the p
 - `packages/schema` — `launch.yml`, `brand.yml` and the content pack: Zod schemas, line-aware YAML
   errors, the pack's JSON Schema for Claude ([docs/launch-yml.md](docs/launch-yml.md),
   [docs/content-pack.md](docs/content-pack.md))
-- `packages/engine` — the launch registry (SQLite), launch detection from GitHub events, and claudio as
-  the AI provider ([docs/engine.md](docs/engine.md))
+- `packages/engine` — the launch registry (SQLite), launch detection from GitHub events, claudio as the
+  AI provider, and the pipeline to the drafts pull request ([docs/engine.md](docs/engine.md))
 - `packages/` — the other libraries as they arrive: connectors
-- `apps/` — runnable apps (CLI, dashboard)
+- `apps/cli` — the `shipcast` command: `pnpm shipcast launch <repo>`, `watch`, `status`
+- `apps/` — the other runnable apps as they arrive (dashboard)
 - `docs/` — the knowledge base: plans in `docs/plans/`, decisions in `docs/decisions/`
 
 ## Checks

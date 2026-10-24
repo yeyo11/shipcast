@@ -1,84 +1,115 @@
 ---
-created_at: 2026-10-24T18:09:20.135462979Z
-updated_at: 2026-10-24T18:09:20.135462979Z
+created_at: 2026-10-24T18:09:22.78658523Z
+updated_at: 2026-10-24T18:21:09.242185143Z
 tags:
     - engine
     - registry
     - github
     - claudio
+    - pipeline
+    - cli
     - architecture
 ---
 # The engine
 
-`packages/engine` ([source](../packages/engine/src/)) decides what gets launched and talks to the AI
-provider. Written on 2026-10-24, in three pieces, each tested with fakes and checked once against the
-real service. It depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md),
-[content-pack.md](content-pack.md)).
+`packages/engine` ([source](../packages/engine/src/)) decides what gets launched, asks the AI for the
+content and opens the drafts pull request; `apps/cli` ([source](../apps/cli/src/)) is the `shipcast`
+command around it. Written on 2026-10-24, each piece tested with fakes and checked against the real
+service where it is safe to. It depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md),
+[content-pack.md](content-pack.md), [brands.md](brands.md)).
 
 ## The launch registry
 
-`Registry` (`registry.ts`) is a `node:sqlite` database with numbered migrations (`PRAGMA
-user_version`; append only, never edit one). It is what makes the plan's "a launch happens once"
-hold:
+`Registry` (`registry.ts`) is a `node:sqlite` database (`data/shipcast.db`, gitignored) with numbered
+migrations (`PRAGMA user_version`; append only, never edit one). It is what makes "a launch happens
+once" hold:
 
 - **`claim(launch)`** inserts a row unique on `(repo, ref)` and reports whether this call made it. A
-  release is claimed *before* anything is generated, so a second poll, a re-run or a crash halfway
-  through never starts the same campaign twice; the first claim's kind and trigger are the ones that
-  count.
-- **Statuses**: `detected`, `generating`, `drafted`, `published`, `skipped`, `failed`. A skipped or
-  failed launch keeps its row, so it is not picked up again.
-- **`lastPublishedRef(repo)`** feeds the pack inference: only `published` launches count, so a
-  project whose drafts were never merged still gets the `launch` pack.
+  launch is claimed *before* anything is generated, so a second poll, a re-run, a manual launch of
+  the same release or a crash halfway through never starts the same campaign twice.
+- **Statuses**: `detected`, `generating`, `drafted` (the detail is the pull request), `published`,
+  `skipped`, `failed` (the detail says why). Skipped and failed launches keep their row.
+- **`lastPublishedRef(repo)`** feeds the pack inference: only `published` launches count.
 - **`recordPost`** is unique on `(launch, channel)`: the same piece is never published twice.
-- **`cursor` / `setCursor`** keep small polling state (the events ETag, the last event id).
+- **`cursor` / `setCursor`** keep polling state; **`recent()`** lists launches for `shipcast status`.
 
 ## Detecting launches
 
-`detect({ github, registry, brand })` (`detect.ts`) reads the brand's GitHub account's **public
-events** (`GET /users/{login}/events/public`) instead of walking every repo:
+`detect({ github, registry, brand })` (`detect.ts`) reads the brand's account's **public events**
+(`GET /users/{login}/events/public`):
 
-- The request is **conditional**: it sends the last ETag, and a `304` costs no rate limit, so polling
-  is free while nothing happens. GitHub answers `x-poll-interval: 60`, so `shipcast watch` polls at
-  most once a minute. A conditional request can still come back `200` when the timeline changed.
-- Events newer than the last seen id are considered oldest first; the cursor advances per event, so
-  a crash resumes where it stopped.
-- **Triggers read**: `ReleaseEvent` with action `published` (drafts never appear, and are dropped if
-  they did) and `PublicEvent` (a repo made public).
-- For each, `.github/launch.yml` is read **at that tag** (the default branch for a repo made public)
-  and decides: no file, `enabled: false`, a pre-release, a trigger turned off, or another brand's
-  `brand:` → ignored, with no row; an **invalid file** → claimed and recorded `failed` with the
-  line-numbered issues, so the owner hears about it once; otherwise **claimed**, with the pack from
-  `resolvePack` (a repo made public gets `launch`). A repo made public is keyed `public:<event id>`.
-
-`GitHubRest` (`github.ts`) makes those two reads over `fetch` (events, and a file through the raw
-media type). Octokit, in the [stack](plans/stack.md), comes with the drafts pull request, where its
-tree and commit helpers pay off; two reads did not need it.
+- **Conditional** requests (ETag): a `304` costs no rate limit. GitHub answers `x-poll-interval: 60`,
+  so `shipcast watch` polls at most once a minute. A conditional request can still come back `200`
+  when the timeline changed.
+- Events newer than the last seen id, oldest first; the cursor advances per event.
+- **Triggers**: `ReleaseEvent` with action `published`, and `PublicEvent` (a repo made public).
+- `.github/launch.yml` is read **at that tag** (the default branch for a repo made public): no file,
+  `enabled: false`, a pre-release, a trigger turned off, or another brand → ignored, no row; an
+  invalid file → claimed and recorded `failed` with the line-numbered issues; otherwise **claimed**,
+  with the pack from `resolvePack`.
 
 ## The AI provider: claudio
 
-`Claudio` (`claudio.ts`) implements `AiProvider.generate({ prompt, cwd, jsonSchema, allowedTools,
-… })` against claudio's REST API ([claudio.md](claudio.md)):
+`Claudio` (`claudio.ts`) implements `AiProvider.generate()` against claudio's REST API
+([claudio.md](claudio.md)): `POST /api/chats` with the prompt, the `cwd` (a path under claudio's
+`/workspace`), `jsonSchema`, `allowedTools` and `permissionMode: 'dontAsk'` (tools not allowed are
+denied, never asked about); poll until the main agent calls **`StructuredOutput`**, whose `input` is
+the answer (verified on 2026-10-24); then **stop the chat**, since claudio keeps a finished chat alive
+for a follow-up. Failures, a turn without `StructuredOutput` and the timeout raise `ClaudioError` with
+the chat id.
 
-1. `POST /api/chats` with the prompt, the working directory (a path under claudio's `/workspace`),
-   `jsonSchema`, `allowedTools`, and `permissionMode: 'dontAsk'`, which denies any tool not allowed
-   instead of waiting for a person who is not there.
-2. Poll `GET /api/chats/:id` until the chat is idle and the main agent (not a subagent) has called
-   **`StructuredOutput`**: Claude Code returns the schema's answer as that tool call's `input`, which
-   is where claudio exposes it (verified on 2026-10-24).
-3. **Stop the chat** (`POST /api/chats/:id/stop`) in every case: claudio keeps a finished chat's
-   process alive for a follow-up, and a launch never has one.
+## From a claimed launch to its pull request
 
-A failed or interrupted execution, a turn that ends without `StructuredOutput`, or the timeout (30
-minutes by default) raises `ClaudioError` with the chat id, so the conversation can be read in
-claudio. The answer comes back unvalidated: the caller checks it against `ContentPack`.
+`draftLaunch(launch, brand, deps)` (`pipeline.ts`) records each step in the registry:
 
-## Next
+1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's.
+2. **A fresh shallow clone** of the release (`workspace.ts`): `workspace/<owner>__<repo>@<ref>`, which
+   claudio sees as `/workspace/...`; recreated every time so no run leaks into the next.
+3. **The content pack** (`generate.ts`, `prompt.ts`): a system prompt with the brand's name and tone
+   and the truth rule (only what the code implements is presented as working; no invented commands
+   or numbers; a different text per channel), and a prompt with the pack's brief (`launch`, `major`,
+   `minor`) and one brief per active channel, with its limits and links
+   (`<site>/<lang>/<slug>/?ref=<channel>`; none on Instagram). Tools are read-only (`Read`, `Grep`,
+   `Glob`, `ls`, `git log/tag/show`). The answer is accepted only when it validates, matches the launch
+   (kind, repo) and `missingPieces` is empty.
+4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md` with front matter
+   the blog's content schema accepts (checked with a real build of the launches repo), a readable
+   draft per channel at `launches/<project>/<ref>/<channel>.md` saying its mode (`approval`: merged =
+   published; `manual`: the owner posts it), and `pack.json` to publish from after the merge.
+5. **The pull request** in the launches repo (`GitHubRest.openPullRequest`): branch
+   `launch/<project>-<ref>` off `main`, one commit with every file through the Git data API, a body
+   with what the code analysis found and the channels' modes. An open pull request for the branch is
+   returned instead of a second one; a leftover branch is moved.
 
-The pipeline that ties these together: clone the claimed release into `workspace/`, build the prompt
-from the brand, the `launch.yml` and the pack's JSON Schema, generate, validate, check
-`missingPieces`, and write the drafts pull request in the launches repo; then the CLI
-(`shipcast launch`, `shipcast watch`).
+`claimManual(repo, ref?)` starts a launch by hand: the given tag or the latest release, refused when
+there is no release, no `launch.yml` at it, or `triggers.manual` is off.
+
+`loadBrand` reads `brand.yml` from the launches repo's default branch, so the brand always comes from
+where the blog reads it.
+
+## The shipcast command
+
+`pnpm shipcast <command>` from the repo root (`apps/cli`, run by Node's type stripping):
+
+| Command | Does |
+| --- | --- |
+| `launch <owner/repo> [--ref <tag>]` | Claims and drafts the launch of a release (the latest without `--ref`) |
+| `watch [--interval <s>]` | Polls the events (default every 300 s, never under 60) and drafts each claimed launch |
+| `status` | The latest launches, their pack and status |
+
+Configuration comes from `.env` (`GITHUB_TOKEN_PERSONAL`, `CLAUDIO_API_URL`, `CLAUDIO_API_TOKEN`,
+`SHIPCAST_LAUNCHES_REPO`, optional `SHIPCAST_DATA_DIR` and `SHIPCAST_MAX_BUDGET_USD`); every missing
+variable is reported at once.
+
+**`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
+its `launch.yml` reached the default branch (or `--ref` to a tag that has it). On 2026-10-24 claudio's
+latest release, `v0.8.1`, predates its `launch.yml` (claudio pull request #60).
+
+## Still to build
+
+Publishing after the merge (dev.to, Bluesky, Mastodon, Instagram, the OG image and demo video
+Instagram needs), the metrics connectors and dashboard ([decisions/mvp-scope.md](decisions/mvp-scope.md)).
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]]
