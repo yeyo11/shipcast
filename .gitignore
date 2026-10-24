@@ -10,3 +10,5 @@ dist
 .pando
 # The repos the engine clones for claudio to analyse (docker-compose.yml)
 workspace/
+# Screenshots and snapshots of the Playwright MCP
+.playwright-mcp/

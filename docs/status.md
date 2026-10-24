@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T13:31:51.643785111Z
-updated_at: 2026-10-24T13:47:35.610356582Z
+created_at: 2026-10-24T13:47:38.42677389Z
+updated_at: 2026-10-24T14:00:50.485944281Z
 tags:
     - status
     - roadmap
@@ -30,6 +30,9 @@ stack is proposed in [plans/stack.md](plans/stack.md), waiting for the owner's c
 
 Services, checked on 2026-10-24:
 
+- **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches) exists, with the Astro
+  blog live at <https://yeyo11.github.io/launches/> (empty until the first launch) and deployed on
+  every push to `main` ([launches-repo.md](launches-repo.md)).
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)): container healthy, Claude
   Code 2.1.302 signed in with a claude.ai Max account, and the API answers `200` to
   `CLAUDIO_API_TOKEN`.
@@ -50,8 +53,7 @@ Next in code:
 
 - `packages/schema`: `launch.yml`, brand config and content pack, once the stack is confirmed.
 - `packages/engine`: release polling, launch registry, claudio client; then `apps/cli`.
-- The `yeyo11/launches` repo with the Astro blog.
 
 ## Related
 
-[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launch-yml]] · [[content-pack]]
+[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml]] · [[content-pack]]
