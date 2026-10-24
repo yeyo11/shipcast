@@ -35,6 +35,15 @@ export const Brand = z.strictObject({
   tone: z.string().default(''),
   /** Where readers can support the author */
   support: z.url().optional(),
+  /** Visit counting on the brand's site; tokens here are public, they ship in every page */
+  analytics: z
+    .strictObject({
+      cloudflareWebAnalytics: z
+        .string()
+        .regex(/^[0-9a-f]{32}$/, 'a Cloudflare Web Analytics site token: 32 hexadecimal characters')
+        .optional(),
+    })
+    .prefault({}),
 });
 
 export type Brand = z.infer<typeof Brand>;

@@ -15,6 +15,10 @@ handles:
 # Where readers can support the author; linked from the blog's footer. Optional.
 support: https://buymeacoffee.com/yeyo11
 
+# Cookieless visit counting for the site. The token is public: it ships in every page.
+analytics:
+  cloudflareWebAnalytics: 92f225058e744da9ac04fe51a7cab5a5
+
 # The blog is written in both; the other channels default to English.
 languages:
   blog: [en, es]
