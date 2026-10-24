@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:21:05.992656577Z
-updated_at: 2026-10-24T19:33:21.646610172Z
+created_at: 2026-10-24T19:52:49.06779029Z
+updated_at: 2026-10-24T20:21:27.495385421Z
 tags:
     - status
     - roadmap
@@ -30,9 +30,9 @@ offer APIs Node 24 lacks.
 The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, the
 repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages at `josegarrido.dev`. The
 technical stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog,
-dev.to, Bluesky, Mastodon and Instagram and drafts Reddit (for claudio: r/ClaudeAI, r/selfhosted,
-r/SideProject, r/opensource), through Shipcast's own connectors; Postiz is discarded. Metrics are in
-the MVP too.
+dev.to, Bluesky, Mastodon, Instagram and a newsletter (through Brevo, added on 2026-10-24), and drafts
+Reddit (for claudio: r/ClaudeAI, r/selfhosted, r/SideProject, r/opensource), through Shipcast's own
+connectors; Postiz is discarded. Metrics are in the MVP too.
 
 Services, set up on 2026-10-24:
 
@@ -44,27 +44,28 @@ Services, set up on 2026-10-24:
 - **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
   submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
   Meta app's privacy policy URL points to `https://josegarrido.dev/en/privacy/`.
-- **Every credential of the MVP** — GitHub (with repo traffic), claudio, dev.to, Instagram (with
-  insights), Bluesky, Mastodon, Cloudflare's analytics API and a Search Console service account — is
-  in the owner's `.env` and answered when tested. Accounts, expiry dates and machine details are in
-  the owner's local notes, not in the public docs.
+- **Every credential of the MVP but the newsletter's** — GitHub (with repo traffic), claudio, dev.to,
+  Instagram (with insights), Bluesky, Mastodon, Cloudflare's analytics API and a Search Console service
+  account — is in the owner's `.env` and answered when tested. Accounts, expiry dates and machine
+  details are in the owner's local notes, not in the public docs.
 
 **Code:**
 
 - `packages/schema` (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)), `Brand`
   ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4, YAML errors
-  with their line, `missingPieces`, pack inference from semver, and the JSON Schema for Claude. 26
+  with their line, `missingPieces`, pack inference from semver, and the JSON Schema for Claude. 27
   tests. It set the package template (`tsconfig.json` extending the base with `erasableSyntaxOnly`,
   `exports` pointing at `src/index.ts`, tests on `node:test` run by Node's type stripping).
 - `packages/engine` (2026-10-24, [engine.md](engine.md)): the launch registry on `node:sqlite`, launch
   detection from the account's public GitHub events, claudio as the AI provider, and the pipeline from
   a claimed launch to its drafts pull request (fresh clone, prompt with the brand and the truth rule,
   read-only tools, pack validated and complete, articles and per-channel drafts, the launch's media,
-  one-commit pull request); then publishing once the pull request is merged and metrics collection
-  ([publishing.md](publishing.md)). 56 tests; the GitHub reads, a claudio generation and the rendered
-  articles (in a real build of the blog) were also checked for real.
-- `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon and
-  Instagram (publish and metrics), Cloudflare Web Analytics and Search Console readers. 15 tests.
+  one-commit pull request); then publishing once the pull request is merged, the newsletter, and
+  metrics collection ([publishing.md](publishing.md)). 58 tests; the GitHub reads, a claudio
+  generation and the rendered articles (in a real build of the blog) were also checked for real.
+- `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon,
+  Instagram and Brevo (publish and metrics), Cloudflare Web Analytics and Search Console readers.
+  17 tests. The newsletter is built and tested with fakes; Brevo is not set up yet.
 - `packages/assets` (2026-10-24): the 1200×630 launch image in the blog's editorial identity
   (Satori and resvg) and the demo GIF turned into an Instagram Reel with ffmpeg. 3 tests.
 - `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch` (detect, draft, publish,
@@ -83,12 +84,18 @@ Services, set up on 2026-10-24:
 
 Waiting on the owner:
 
+- Try the blog's `design/assets-v2` branch running (the jg monogram, the favicon redrawn from the
+  font's outlines, claudio's drawn cover) and approve it.
+- The newsletter: a Brevo account and its API key in `.env`, and a double opt-in subscription form
+  created in Brevo; then the sender domain is verified (DNS in Cloudflare), the lists created, the
+  form added to the blog with an updated privacy policy, and a test issue sent.
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 - Merge claudio's release pull request (#59, v0.8.2), the first release with its `launch.yml`, and
   give the go-ahead for the first real launch.
 
 Next in code:
 
+- claudio's `launch.yml` with `newsletter: approval`, before the v0.8.2 release is cut.
 - The first real launch: claudio v0.8.2, end to end, with the owner reviewing the drafts pull request
   before anything is published.
 - Later: generated covers (an optional `cover` field in the blog's post schema), one source for the
