@@ -212,7 +212,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 }),
                 sender: settings.sender,
                 listId,
-                tag: 'launch',
+                // No tag: Brevo's free plan refuses a campaign that carries one
               });
               registry.setCursor(issueKey(launch, lang), JSON.stringify(result));
               sent.push(result);

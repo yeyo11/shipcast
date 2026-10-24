@@ -16,7 +16,7 @@ import {
   type PipelineDeps,
   type PublishResult,
 } from '@shipcast/engine';
-import type { Brand } from '@shipcast/schema';
+import { Channel, type Brand } from '@shipcast/schema';
 import { ConfigError, loadConfig } from './config.ts';
 import { serveDashboard } from './dashboard.ts';
 import { buildServices, refreshInstagramToken, type Services } from './services.ts';
@@ -26,7 +26,8 @@ const USAGE = `Usage: shipcast <command>
   launch <owner/repo> [--ref <tag>]   Draft the launch of a release (the latest one without --ref)
   watch [--interval <seconds>]        Watch the account's releases, draft each launch and publish it once
                                       its drafts are merged; read the numbers every 6 h (default 300 s)
-  publish                             Publish every drafted launch whose pull request is merged, once
+  publish [--retry <channel>]         Publish every drafted launch whose pull request is merged, once;
+                                      --retry gives a channel that failed for good another chance
   metrics                             Read the numbers of every published launch now
   dashboard [--port <port>] [--host <address>]
                                       The launches and their numbers on http://127.0.0.1:<port> (default 4321);
@@ -86,7 +87,7 @@ async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { ref: { type: 'string' }, interval: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+    options: { ref: { type: 'string' }, interval: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
   });
   const [command, ...rest] = positionals;
   if (values.help || !command) {
@@ -121,6 +122,14 @@ async function main(argv: string[]): Promise<number> {
       }
 
       case 'publish': {
+        if (values.retry) {
+          const channel = Channel.safeParse(values.retry);
+          if (!channel.success) {
+            console.error(`--retry needs a channel, not "${values.retry}"`);
+            return 2;
+          }
+          for (const l of registry.retryChannel(channel.data)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
+        }
         const brand = await loadBrand(github, config.launchesRepo);
         await publishReady(brand, buildServices(process.env, brand, registry, github), deps);
         return 0;

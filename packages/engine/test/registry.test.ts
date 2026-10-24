@@ -83,3 +83,19 @@ test('cursors keep polling state across restarts, and the schema survives reopen
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a channel that failed for good can be retried, without posting the others again', () => {
+  const registry = new Registry(':memory:');
+  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  registry.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/1');
+  registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
+  registry.setCursor(`publish-failed:${launch.id}:newsletter`, 'Brevo: 405');
+  registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
+
+  const reopened = registry.retryChannel('newsletter');
+  assert.deepEqual(reopened.map((l) => l.status), ['drafted']);
+  assert.equal(reopened[0]!.detail, 'https://github.com/yeyo11/launches/pull/1', 'the pull request stays recorded');
+  assert.equal(registry.cursor(`publish-failed:${launch.id}:newsletter`), undefined);
+  assert.equal(registry.cursor(`publish-failed:${launch.id}:devto`), 'stale', 'other channels untouched');
+  assert.deepEqual(registry.retryChannel('newsletter'), [], 'nothing left to retry');
+});

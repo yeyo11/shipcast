@@ -277,6 +277,23 @@ export class Registry {
       .run(key, value);
   }
 
+  /**
+   * Gives a channel whose publishing failed for good another chance, once its cause is fixed: the
+   * failure is forgotten and its launch goes back to `drafted`, so the next publish round tries that
+   * channel again. Channels already posted stay posted; the registry never posts one twice.
+   */
+  retryChannel(channel: Channel): Launch[] {
+    const keys = this.#db.prepare("SELECT key FROM cursors WHERE key LIKE 'publish-failed:%:' || ?").all(channel) as Array<{ key: string }>;
+    const reopened: Launch[] = [];
+    for (const { key } of keys) {
+      const id = Number(key.split(':')[1]);
+      this.#db.prepare('DELETE FROM cursors WHERE key = ?').run(key);
+      const launch = this.get(id);
+      if (launch && !this.posts(id).some((p) => p.channel === channel)) reopened.push(this.setStatus(id, 'drafted', launch.detail));
+    }
+    return reopened;
+  }
+
   close(): void {
     this.#db.close();
   }
