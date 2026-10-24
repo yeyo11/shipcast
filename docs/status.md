@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T14:27:01.415195373Z
-updated_at: 2026-10-24T15:21:26.058527389Z
+created_at: 2026-10-24T15:21:27.361293629Z
+updated_at: 2026-10-24T16:05:58.836979951Z
 tags:
     - status
     - roadmap
@@ -41,6 +41,12 @@ Services, checked on 2026-10-24:
   `CLAUDIO_API_TOKEN`.
 - **dev.to**: the account `yeyo11` exists and `DEVTO_API_KEY` authenticates against
   `GET /api/users/me`.
+- **Instagram**: the Meta app (`INSTAGRAM_APP_ID` 1461361715882703, Instagram API with Instagram
+  Login) has a token for `josegarridodev`, a Creator account (`MEDIA_CREATOR`), user id
+  `17841416971174400`; `content_publishing_limit` answers with a quota of 100 posts per 24 hours, so
+  the publish permission is granted. The token was generated in the app dashboard on 2026-10-24 and
+  lasts 60 days: the connector must refresh it before about 2026-12-23. The privacy policy Meta asked
+  for is on the blog ([launches-repo.md](launches-repo.md)).
 
 **Code:** `packages/schema` exists (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)),
 `Brand` ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4,
@@ -50,8 +56,6 @@ Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the
 
 Waiting on the owner:
 
-- Instagram: the handle, a professional account, and a Meta app for `INSTAGRAM_USER_ID` and
-  `INSTAGRAM_ACCESS_TOKEN`.
 - `BLUESKY_APP_PASSWORD` and `MASTODON_ACCESS_TOKEN` in `.env`.
 - The subreddits for Reddit drafts.
 - Confirm the languages of X and LinkedIn, and the tone (phase 5).
