@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-24T14:26:52.375894545Z
-updated_at: 2026-10-24T14:59:20.919023045Z
+created_at: 2026-10-24T14:59:22.176629314Z
+updated_at: 2026-10-24T15:27:40.223476906Z
 tags:
     - launches-repo
     - blog
     - astro
     - github-pages
+    - privacy
 ---
 # The launches repo
 
@@ -40,6 +41,13 @@ MVP, [decisions/main-until-mvp.md](decisions/main-until-mvp.md)), and a merge th
   375 px wide, in both themes.
 - **The brand** is described in `brand.yml` at the root ([brands.md](brands.md)); the site reads it
   for the author, the profile links (with `rel="me"`) and the support link in the footer.
+- **Privacy policy** at `/<lang>/privacy/` (`src/pages/[lang]/privacy.astro`), added on 2026-10-24
+  because Meta requires its URL to create the Instagram app: what Shipcast accesses (the owner's own
+  accounts, `instagram_business_basic` and `instagram_business_content_publish`), that it stores
+  tokens only locally and collects nothing about anyone else, that the blog has no cookies or
+  analytics, and how to delete data (`#data-deletion`, also the URL for Meta's data deletion field).
+  Contact: `yeyo@inmoseo.net`, the address already public in the code of conduct. Linked from the
+  footer. Update it, and its date, whenever a connector starts accessing something new.
 
 ## The contract with Shipcast
 
@@ -62,4 +70,4 @@ while Shipcast uses 7) and `pnpm build`.
 
 ## Related
 
-[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[plans/design-system.md]] · [[plans/stack.md]] · [[brands.md]] · [[content-pack]]
+[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[plans/design-system.md]] · [[plans/stack.md]] · [[brands.md]] · [[content-pack.md]]
