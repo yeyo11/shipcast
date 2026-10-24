@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T17:55:14.670717497Z
-updated_at: 2026-10-24T17:57:02.22093567Z
+created_at: 2026-10-24T17:57:03.790695254Z
+updated_at: 2026-10-24T18:09:52.910374413Z
 tags:
     - status
     - roadmap
@@ -47,11 +47,18 @@ Services, set up on 2026-10-24:
   Mastodon — is in the owner's `.env` and answered when tested. Accounts, expiry dates and machine
   details are in the owner's local notes, not in the public docs.
 
-**Code:** `packages/schema` exists (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)),
-`Brand` ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4,
-YAML errors with their line, `missingPieces`, pack inference from semver, and the JSON Schema for
-Claude. 27 tests on `node:test`, run by Node's native type stripping; it set the package template
-(`tsconfig.json` extending the base with `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`).
+**Code:**
+
+- `packages/schema` (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)), `Brand`
+  ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4, YAML errors
+  with their line, `missingPieces`, pack inference from semver, and the JSON Schema for Claude. 26
+  tests. It set the package template (`tsconfig.json` extending the base with `erasableSyntaxOnly`,
+  `exports` pointing at `src/index.ts`, tests on `node:test` run by Node's type stripping).
+- `packages/engine` (2026-10-24, [engine.md](engine.md)): the launch registry on `node:sqlite`, launch
+  detection from the account's public GitHub events (conditional requests, `launch.yml` read at the
+  tag), and claudio as the AI provider (structured output through `StructuredOutput`, chat stopped
+  afterwards). 22 tests; the GitHub reads and a claudio generation were also run against the real
+  services.
 
 **Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
 rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
@@ -68,7 +75,8 @@ Waiting on the owner:
 
 Next in code:
 
-- `packages/engine`: release polling, launch registry, claudio client; then `apps/cli`.
+- The launch pipeline in `packages/engine`: clone the release, prompt, generate, validate the pack,
+  write the drafts pull request; then `apps/cli` (`shipcast launch`, `shipcast watch`).
 - `packages/connectors`: launches repo (drafts pull request), dev.to, Bluesky, Mastodon, Instagram,
   Reddit drafts; and the OG image and demo video Instagram needs.
 - Metrics, now in the MVP: one connector per source (blog analytics, Search Console, GitHub, dev.to,
@@ -77,4 +85,4 @@ Next in code:
 
 ## Related
 
-[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[personal-identity.md]]
+[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[personal-identity.md]] · [[engine.md]]
