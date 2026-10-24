@@ -17,9 +17,25 @@ handles:
 # Where readers can support the author; linked from the blog's footer. Optional.
 support: https://buymeacoffee.com/yeyo11
 
+# The author's photo, on the generated assets that show a face (the Instagram carousel's last slide)
+avatar: https://josegarrido.dev/author.jpg
+
 # Cookieless visit counting for the site. The token is public: it ships in every page.
 analytics:
   cloudflareWebAnalytics: 92f225058e744da9ac04fe51a7cab5a5
+
+# The newsletter, sent through Brevo with double opt-in. List ids and form URLs are not secret: the
+# forms are public, and the API key stays in Shipcast's .env.
+newsletter:
+  sender:
+    name: José Garrido
+    email: me@josegarrido.dev
+  lists:
+    en: 4
+    es: 5
+  forms:
+    en: https://a56b87e9.sibforms.com/v2/serve/MUIFAFmQ6P4Vov3aDirRFDAMQUsRobVp8gJ8BWVAKBeSbWrx3SvokmsRMhtzAM561YzqXFeI3454byIkCIIKbHVXX3XMln1winJpmUsUqeaje1vqiL-PnULPJSs3vga-zudj_cc2k4aikyHv4hZmU-L_UcLoQyoCRmO-QIL-LJvjxWeiHzDZn2tV_whIw4P0CY5BlHC0D8V2O8WBdQ==
+    es: https://a56b87e9.sibforms.com/v2/serve/MUIFAMaRTv3tRyYmQZyfvts1iSOl3mBU_C28kVW63YyC7_O8-28Ex4F3Z5PuHGu7mvBSP8EFgDKZmkSyd81gDIUA3j1mwl3JwmKLzCbnDK0G0hIjQBEwSH_XcmA1wlK5J_MWPnI3BZxwwwVe7G31EeGgtkuDqEATbDqQAOMCZ8n8HrlnyaWdsPTebKrSybT3t8HaD8oYOB03lnALtw==
 
 # The blog is written in both; the other channels default to English.
 languages:

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T20:20:50.496305064Z
-updated_at: 2026-10-24T21:33:54.199538516Z
+created_at: 2026-10-24T21:33:57.473488826Z
+updated_at: 2026-10-24T23:48:46.173826043Z
 tags:
     - publishing
     - connectors
@@ -9,6 +9,7 @@ tags:
     - dashboard
     - cli
     - newsletter
+    - instagram
 ---
 # Publishing, media and metrics
 
@@ -27,9 +28,9 @@ Postiz was dropped).
 - **`og.png` and `og.jpg`**, the 1200×630 launch image, rendered by `renderOgImage`
   (`packages/assets/src/og.ts`) with Satori, resvg and jpeg-js: no browser, no native build. The PNG
   is the article's `image:` (the blog's `og:image`) and dev.to's cover; the JPEG is for Bluesky's card
-  thumbnail, Mastodon and Instagram, which want JPEG. A theme (`OgTheme`) brings its fonts and its
-  layout, so each brand draws its own. The personal brand's, `EDITORIAL_THEME` (merged on
-  2026-10-24 after the owner saw it running), follows the site's editorial identity
+  thumbnail and Mastodon, which want JPEG. A theme (`OgTheme`) brings its fonts and its layout, so
+  each brand draws its own. The personal brand's, `EDITORIAL_THEME` (merged on 2026-10-24 after the
+  owner saw it running), follows the site's editorial identity
   ([personal-identity.md](personal-identity.md)): the author's name, the article's headline on the
   project's flat colour in Fraunces with each word's first letter in its wonky italic, the pitch and
   the version on black, and beside them the house halftone illustration with the project's motif.
@@ -37,11 +38,24 @@ Postiz was dropped).
   with `fonttools varLib.instancer`, live in `packages/assets/fonts/` (OFL). The colours and motifs
   per project are copied from the blog's `src/projects.ts`, hash included: a project added there has
   to be added in `og.ts` too, until both read them from one place.
-- **`demo.mp4`**, when `launch.yml` names `assets.demo`: the GIF or video in the launched repo turned
-  into an Instagram Reel by `demoToReel` (`video.ts`) through **ffmpeg** — 1080×1920, H.264 yuv420p,
-  30 fps, a silent AAC track, at least 3 s (Meta rejects Reels without audio or shorter). A demo that
-  is missing or points outside the repo fails the launch rather than publishing without it. ffmpeg
-  must be on `PATH` (a static build in `~/.local/bin` on the owner's machine).
+- **The Instagram carousel and its story**, when the pack has an Instagram piece (decided on
+  2026-10-25, after the single Reel did worst in the first launch; the owner approved the slides seen
+  running). Every piece is 4:5 (1080×1350, the tallest feed format; Instagram crops a carousel to its
+  first piece), drawn by `packages/assets/src/carousel.ts` in the blog's identity and named in order
+  by `carouselPieces`:
+  1. `instagram-01.jpg`, the cover: the project's drawn cover when the site has one
+     (`<site>/covers/<project>.jpg`), otherwise the house illustration (`renderIllustration`), with
+     the article's headline on the project's colour and the pack's one-line summary.
+  2. `instagram-02.mp4`, the demo, when `launch.yml` names `assets.demo`: the GIF laid over a backdrop
+     ("See it run" on the project's colour) by `demoOnBackdrop` through **ffmpeg** — H.264 yuv420p at
+     30 fps with a silent AAC track, between 3 and 60 seconds. A demo that is named but missing, or
+     that points outside the repo, fails the launch. ffmpeg must be on `PATH`.
+  3. One slide per feature (2 or 3, written by Claude: a short title and one sentence).
+  4. The closing slide, "The full write-up is in my bio", with the brand's `avatar` from `brand.yml`.
+
+  `instagram-story.jpg` (1080×1920) is the cover with "Link in bio": the API cannot add a link
+  sticker, so the owner chose a story without one over posting it by hand. The slides' texts are
+  drawn into the images; only the caption and the comment are edited in the drafts pull request.
 
 Binary files go into the pull request as base64 blobs through the Git data API.
 
@@ -63,15 +77,23 @@ Binary files go into the pull request as base64 blobs through the Git data API.
      card with `og.jpg` as its thumbnail.
    - **Mastodon** (`mastodon.ts`): `og.jpg` uploaded through `/api/v2/media`, and an
      `Idempotency-Key` of `shipcast-<launch>-mastodon`, so a retry after a timeout does not post twice.
-   - **Instagram** (`instagram.ts`, Graph API v25.0): a container, polled until its `status_code` is
-     `FINISHED`, then `media_publish`; a Reel from `demo.mp4` when it is live, otherwise `og.jpg`.
+   - **Instagram** (`instagram.ts`, Graph API v25.0): the carousel, one container per piece
+     (`is_carousel_item`, videos as `media_type=VIDEO`) polled until `FINISHED`, then a `CAROUSEL`
+     container with the children in order and the caption, then `media_publish` (a launch drafted
+     before the carousel existed falls back to `og.jpg`). Then, each once and never reposting the
+     carousel when it fails: the story (`media_type=STORIES`) and a comment under the post with the
+     article's address and a question (`POST /{media}/comments`, which needs the app's
+     `instagram_business_manage_comments` permission). The draft `instagram.md` lists the slides, the
+     comment on its `Comment:` line, and the caption (a hook, two or three lines, at most five
+     specific hashtags) after a `---` line.
    - **The newsletter** (`brevo.ts`): one Brevo campaign per language, described below.
    - **Reddit** is never published: its drafts are for the owner to post by hand.
 5. A temporary failure (`ConnectorError.retryable`: 429, 5xx, no answer) is retried on the next
    round; a permanent one is recorded in the cursor `publish-failed:<launch>:<channel>` and not
-   retried. A connector can mark a failure as not retryable whatever its status, when a retry would
-   repeat what already happened. The launch is `published` when nothing is pending, otherwise it
-   stays `drafted` (reported as `partial`) and the next round picks it up.
+   retried until `shipcast publish --retry <channel>`. A connector can mark a failure as not retryable
+   whatever its status, when a retry would repeat what already happened. The launch is `published`
+   when nothing is pending, otherwise it stays `drafted` (reported as `partial`) and the next round
+   picks it up.
 
 ## The newsletter
 
@@ -94,12 +116,12 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
   (`{{ unsubscribe }}`, which Brevo fills in). The launch image is left out, since it carries the
   English headline the issue already sets on colour.
 - **Sending:** for each language, the list's size is read first; an empty list is skipped. Otherwise a
-  campaign is created and sent at once (`sendNow`); its id is kept in the cursor
-  `newsletter-sent:<launch>:<lang>`, so a language is never sent twice even when another one fails and
-  is retried. A refused `sendNow` leaves a draft in Brevo and is not retried, since a retry would
-  create a second campaign. With nobody subscribed in any list, the channel is recorded as failed
-  once ("no subscribers yet") and not retried. The post's external id joins the campaign ids
-  (`12,13`), and the metrics add them up.
+  campaign is created, untagged (Brevo's free plan refuses tags), and sent at once (`sendNow`); its id
+  is kept in the cursor `newsletter-sent:<launch>:<lang>`, so a language is never sent twice even when
+  another one fails and is retried. A refused `sendNow` leaves a draft in Brevo and is not retried,
+  since a retry would create a second campaign. With nobody subscribed in any list, the channel is
+  recorded as failed once ("no subscribers yet") and not retried. The post's external id joins the
+  campaign ids (`12,13`), and the metrics add them up. Replies go to the sender's address.
 - **Set up on 2026-10-24:** `josegarrido.dev` verified in Brevo (its code, DKIM and DMARC are in
   Cloudflare); the senders `me@` and `noreply@josegarrido.dev`; the lists `Newsletter (en)` (4) and
   `Newsletter (es)` (5) in the folder `josegarrido.dev`; one Brevo form per language with double
@@ -107,9 +129,8 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
   `/en/subscribed/` and `/es/suscrito/`, and the confirmation templates in the blog's editorial style,
   created through the API (`tag: optin`, the link is `{{ doubleoptin }}`), signed "José Garrido". The
   blog posts its own form to Brevo's (Brevo answers CORS for the calling origin, and JSON with
-  `?isAjax=1`), keeping Brevo's hidden trap field for bots ([launches-repo.md](launches-repo.md)); the
-  owner's own subscription went through end to end. The remaining check is a test issue
-  (`Brevo.sendTest`), to see the unsubscribe placeholder render.
+  `?isAjax=1`), keeping Brevo's hidden trap field for bots ([launches-repo.md](launches-repo.md)). The
+  first issue went out with claudio's launch on 2026-10-25.
 - **Spam:** double opt-in keeps bots off the list; what is left is list bombing (bots typing other
   people's addresses, which costs sends and reputation). If it shows up, the answer is a Cloudflare
   Worker with Turnstile in front of Brevo's double opt-in API.
@@ -123,10 +144,10 @@ a history and the dashboard shows the latest. One source failing never stops the
 | Source | What | From |
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue (all languages added up); opens are inflated by Apple's privacy protection, clicks are the number to trust | Brevo's campaign statistics |
-| `devto`, `bluesky`, `mastodon`, `instagram` | views, reactions, comments, likes, reposts, reach… per post | each connector's `metrics(externalId)`; Bluesky through the public AppView, Instagram through insights |
+| `devto`, `bluesky`, `mastodon`, `instagram` | views, reactions, comments, likes, reposts, reach… per post | each connector's `metrics(externalId)`; Bluesky through the public AppView, Mastodon needs `read:statuses`, Instagram through insights |
 | `blog` | each language's article visits (by its own slug) and their sum, and by referrer (`views_bluesky`, `views_devto`, …) | Cloudflare Web Analytics' GraphQL API (`cloudflare.ts`) |
-| `search` | clicks and impressions of both articles | Search Console, with a service account's JWT signed by `node:crypto` (`search-console.ts`) |
-| `github` | stars, forks, watchers; views and unique visitors of the last 14 days | GitHub REST (`repoStats`) |
+| `search` | clicks and impressions of both articles; Google takes two or three days to report a new page | Search Console, with a service account's JWT signed by `node:crypto` (`search-console.ts`) |
+| `github` | stars, forks, watchers; views and unique visitors of the repo's last 14 days (not only since the launch) | GitHub REST (`repoStats`) |
 
 Two limits found while building it:
 
@@ -148,10 +169,10 @@ wins over `.env`.
 
 | Command | Does |
 | --- | --- |
-| `watch` | Each round: detect and draft, publish what is ready, refresh the Instagram token when due, and read the metrics every 6 hours |
-| `publish` | Publishes every drafted launch that is ready, once |
+| `watch` | Each round: detect and draft, publish what is ready, refresh the Instagram token when due, and read the metrics every 6 hours. Run by hand: the owner declined running it as a service |
+| `publish [--retry <channel>]` | Publishes every drafted launch that is ready, once; `--retry` gives a channel that failed for good another chance |
 | `metrics` | Reads every source now |
-| `dashboard [--port]` | Serves the launches, their posts and latest numbers on `127.0.0.1` (default port 4321), and the same as JSON at `/api/launches`; reach it from elsewhere through Tailscale Serve |
+| `dashboard [--port] [--host]` | Serves the launches, their posts and latest numbers on `127.0.0.1` (default port 4321), and the same as JSON at `/api/launches`; `--host 0.0.0.0` opens it to the local network, which it trusts (no login) |
 
 The dashboard is plain server-rendered HTML with a neutral dark style until it is rebuilt in Cartel
 from `design/specimen.html` ([plans/design-system.md](plans/design-system.md)).
