@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T12:54:19.625954275Z
-updated_at: 2026-10-24T12:54:19.625954275Z
+created_at: 2026-10-24T12:54:20.293141151Z
+updated_at: 2026-10-24T13:19:29.081054127Z
 tags:
     - decision
     - workflow
@@ -32,10 +32,14 @@ What still guards `main` without pull requests:
 
 - **Small commits in Conventional Commits.** Without pull requests the history of `main` is the only
   record of what changed and why, and the changelog will be built from it.
+- **Agents on `main` push without asking.** Once a commit passes the gates (Sluice runs `test` on
+  pre-push), the agent pushes it, and checks the CI run when the change could break it. Changed on
+  2026-10-24, the same day: the first version said agents push only when the owner asks, and the owner
+  lifted it for this repository, since asking before every push was the round trip this decision
+  exists to remove.
 - **Parallel agents do not push to `main`.** An agent in its own worktree works on its own branch; the
   maintainer integrates it into `main` (or it goes through Sluice's merge queue), so two agents never
   race each other on the same branch.
-- **Agents push only when the owner asks.**
 
 ## When it ends
 

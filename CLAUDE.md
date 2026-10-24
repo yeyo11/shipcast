@@ -51,7 +51,8 @@ Both run as [Sluice](.sluice.toml) gates (`typecheck` on pre-commit, `test` on p
 - Commits follow Conventional Commits.
 - **Until the MVP, work goes straight to `main`**: no feature branches, no pull requests, small
   commits that pass the Sluice gates. Agents running in parallel worktrees keep to their own branch
-  and leave the integration into `main` to the maintainer. Push only when the owner asks. After the
+  and leave the integration into `main` to the maintainer. An agent working on `main` pushes without
+  asking, once the commit passes the gates (Sluice runs `test` on pre-push). After the
   MVP, pull requests come back, squash-merged ([docs/decisions/main-until-mvp.md](docs/decisions/main-until-mvp.md)).
 - Secrets (API keys, tokens for each network) live in `.env`, never in the repo.
 
