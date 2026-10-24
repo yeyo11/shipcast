@@ -1,44 +1,51 @@
 ---
-created_at: 2026-10-24T15:27:44.064771231Z
-updated_at: 2026-10-24T15:31:48.968377771Z
+created_at: 2026-10-24T16:41:28.203763717Z
+updated_at: 2026-10-24T16:55:59.966947158Z
 tags:
     - launches-repo
     - blog
     - astro
     - github-pages
     - privacy
+    - domain
 ---
 # The launches repo
 
 [`yeyo11/launches`](https://github.com/yeyo11/launches), created on 2026-10-24, is the personal
-brand's launch blog, live at **<https://yeyo11.github.io/launches/>**. It is the second repository of
-the [approval flow](plans/shipcast.md#approval): Shipcast opens a pull request there with a launch's
-drafts, and merging it publishes the article and lets Shipcast distribute the rest. It is a repo of
-its own, not a folder of `yeyo11/shipcast`, because Shipcast is a product other developers install
-with their own launches repo, approvals need pull requests (which `shipcast` does without until the
-MVP, [decisions/main-until-mvp.md](decisions/main-until-mvp.md)), and a merge there means *publish*.
+brand's launch blog and the owner's personal site, live at **<https://josegarrido.dev>**. It is the
+second repository of the [approval flow](plans/shipcast.md#approval): Shipcast opens a pull request
+there with a launch's drafts, and merging it publishes the article and lets Shipcast distribute the
+rest. It is a repo of its own, not a folder of `yeyo11/shipcast`, because Shipcast is a product other
+developers install with their own launches repo, approvals need pull requests (which `shipcast` does
+without until the MVP, [decisions/main-until-mvp.md](decisions/main-until-mvp.md)), and a merge there
+means *publish*.
 
 ## What it is
 
 - **Astro 7, static**, deployed to GitHub Pages by `.github/workflows/deploy.yml` (the official
   `withastro/action` and `actions/deploy-pages`) on every push to `main`. Pages is set to build from
   workflows. Node 24.22.1 through `.nvmrc` and pnpm's `useNodeVersion`, as in Shipcast.
-- **`site: https://yeyo11.github.io`, `base: /launches`, trailing slashes.** Every canonical URL is
-  `https://yeyo11.github.io/launches/<lang>/<slug>/`, and the dev.to copies point to it, so `site`,
-  `base` and published slugs never change without a redirect.
-- **Bilingual**: Astro i18n with `en` (default) and `es`, both prefixed; `/` redirects to `/en/`.
-  Each page links its translation (`hreflang`) when it exists.
+- **Served at `https://josegarrido.dev`**, the owner's domain, since 2026-10-24: `site:
+  'https://josegarrido.dev'`, no `base`, trailing slashes. Every canonical URL is
+  `https://josegarrido.dev/<lang>/<slug>/`, and the dev.to copies point to it, so `site` and published
+  slugs never change without a redirect. The move was made before the first article, so no canonical
+  URL had to be redirected. The custom domain is set in the repo's Pages settings, HTTPS is enforced
+  (certificate for the apex and `www`), `www` and the old `yeyo11.github.io/launches/` answer `301` to
+  the domain, and the DNS lives in Cloudflare: four `A` and four `AAAA` records to GitHub Pages and a
+  `CNAME` for `www`, all DNS-only (not proxied), because GitHub must issue the certificate and `.dev`
+  requires HTTPS. The first deploy after setting the domain was cancelled, likely by the Pages build
+  GitHub starts when a domain is set; a manual `workflow_dispatch` re-ran it.
+- **Bilingual**: Astro i18n with `en` (default) and `es`, both prefixed; `/` redirects to `/en/` at
+  once (a page of its own with a zero-second refresh) and stays out of the sitemap. Each page links its
+  translation (`hreflang`) when it exists.
 - **RSS per language** (`/<lang>/rss.xml`) and a sitemap.
-- **Night theme by default, day on a toggle**, from the [design system](plans/design-system.md): the
-  night tokens (abyss background, ice text, ignition and signal accents, a `#4A6C94` rule at 3.4:1),
-  and the day tokens behind `[data-theme='day']`. The choice is stored in `localStorage` and applied by
+- **Night theme by default, day on a toggle.** The choice is stored in `localStorage` and applied by
   an inline script before the first paint, so a reader who picked day never sees a flash of night.
   Code blocks carry both Shiki themes (`github-dark`, `github-light`) as CSS variables and follow the
-  page; at night they sit on the deck colour instead of github-dark's grey. Night became the default
-  on 2026-10-24 at the owner's request; the first version was day only. Saira for display, Atkinson
-  Hyperlegible Next for text, an 18 px root because it is a reading surface, a 37 rem measure. The
-  index draws the launches as a signal line with a release node per article. Checked at 1280 and
-  375 px wide, in both themes.
+  page. The site still wears Shipcast's tokens ([design system](plans/design-system.md): Saira,
+  Atkinson Hyperlegible Next, abyss and ignition); now that it is the owner's personal home, its own
+  visual identity is being proposed on a branch, and replaces Shipcast's once the owner approves it.
+  Checked at 1280 and 375 px wide, in both themes.
 - **The brand** is described in `brand.yml` at the root ([brands.md](brands.md)); the site reads it
   for the author, the profile links (with `rel="me"`) and the support link in the footer.
 - **Privacy policy** at `/<lang>/privacy/` (`src/pages/[lang]/privacy.astro`), added on 2026-10-24

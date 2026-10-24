@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:14:33.728039472Z
-updated_at: 2026-10-24T16:36:36.502198676Z
+created_at: 2026-10-24T16:41:30.950321489Z
+updated_at: 2026-10-24T16:56:17.703629885Z
 tags:
     - status
     - roadmap
@@ -27,15 +27,16 @@ is on `PATH`), in `engines` as `>=24.22.1`, and with `@types/node` on the 24 lin
 offer APIs Node 24 lacks.
 
 The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, the
-repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages. The technical stack is
-confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog, dev.to, Bluesky, Mastodon
-and Instagram and drafts Reddit, through Shipcast's own connectors; Postiz is discarded.
+repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages at `josegarrido.dev`. The
+technical stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog,
+dev.to, Bluesky, Mastodon and Instagram and drafts Reddit, through Shipcast's own connectors; Postiz
+is discarded.
 
 Services, set up on 2026-10-24:
 
 - **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches) exists, with the Astro
-  blog live at <https://yeyo11.github.io/launches/> (empty until the first launch) and deployed on
-  every push to `main` ([launches-repo.md](launches-repo.md)).
+  blog live at <https://josegarrido.dev> (empty until the first launch, HTTPS enforced) and deployed
+  on every push to `main` ([launches-repo.md](launches-repo.md)).
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), signed in to Claude.
 - **Every credential of the MVP** — GitHub, claudio, dev.to, Instagram, Bluesky and Mastodon — is in
   the owner's `.env` and answered when tested. Accounts, expiry dates and machine details are in the
@@ -47,12 +48,18 @@ YAML errors with their line, `missingPieces`, pack inference from semver, and th
 Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the package template
 (`tsconfig.json` extending the base with `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`).
 
+**Design, in progress on branches** (2026-10-24): the owner's personal visual identity for
+`josegarrido.dev`, and Shipcast's design system assets under `design/` (tokens, logo, channel icons,
+social preview, specimen). Both are proposals: nothing reaches `main` or goes live until the owner
+validates it.
+
 Waiting on the owner:
 
+- Validate the two design proposals once they are ready.
 - The subreddits for Reddit drafts.
-- How the domain `josegarrido.dev`, bought on 2026-10-24, is used for the blog, and its DNS records.
+- Point the Meta app's privacy policy URL to `https://josegarrido.dev/en/privacy/`.
 - Reserve `shipcast` on npm (free on 2026-10-24).
-- Upload the social preview; hand the design briefs on.
+- Upload the social preview.
 
 Next in code:
 

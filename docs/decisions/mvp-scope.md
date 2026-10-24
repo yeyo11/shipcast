@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:21:40.656881834Z
-updated_at: 2026-10-24T16:37:57.017845674Z
+created_at: 2026-10-24T16:41:33.506150012Z
+updated_at: 2026-10-24T16:56:37.459895085Z
 tags:
     - decision
     - mvp
@@ -47,11 +47,11 @@ into an MP4 for a Reel. The launches repo's GitHub Pages site serves them public
 - **The repository stays at `yeyo11/shipcast`.** The `shipcast` GitHub organisation has been taken
   since 2020 (and `launchloop`, the fallback name, is taken too). The name is free on npm, and the
   owner reserves it there.
-- **No domain for Shipcast.** `shipcast.dev`, `.io` and `.app` are taken; none is bought for now. The
-  owner did buy a personal domain on 2026-10-24, `josegarrido.dev`; how the blog uses it is being
-  decided.
-- **The blog lives in `yeyo11/launches`**, on GitHub Pages at `https://yeyo11.github.io/launches/`
-  ([launches-repo.md](../launches-repo.md)), dark theme by default.
+- **No domain for Shipcast.** `shipcast.dev`, `.io` and `.app` are taken; none is bought for now.
+- **The blog lives in `yeyo11/launches`**, on GitHub Pages at **`https://josegarrido.dev`**, the
+  owner's personal domain bought on 2026-10-24: the blog is the personal brand's home, at the root of
+  the domain, chosen by the owner over a `blog.` or `launches.` subdomain
+  ([launches-repo.md](../launches-repo.md)). Dark theme by default.
 - **claudio runs from this repo's `docker-compose.yml`**, configured by the owner
   ([claudio.md](../claudio.md)).
 
