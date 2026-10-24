@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T13:12:36.696491442Z
-updated_at: 2026-10-24T13:31:50.818416797Z
+created_at: 2026-10-24T13:31:51.643785111Z
+updated_at: 2026-10-24T13:47:35.610356582Z
 tags:
     - status
     - roadmap
@@ -25,19 +25,25 @@ is on `PATH` — the owner's nvm default is still 22 for other projects), in `en
 `>=24.22.1`, and with `@types/node` on the 24 line so the types do not offer APIs Node 24 lacks.
 
 The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, no
-domain, the repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages. claudio runs
-as an instance of its own from `docker-compose.yml` ([claudio.md](claudio.md)). The technical stack
-is proposed in [plans/stack.md](plans/stack.md), waiting for the owner's confirmation.
+domain, the repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages. The technical
+stack is proposed in [plans/stack.md](plans/stack.md), waiting for the owner's confirmation.
+
+Services, checked on 2026-10-24:
+
+- **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)): container healthy, Claude
+  Code 2.1.302 signed in with a claude.ai Max account, and the API answers `200` to
+  `CLAUDIO_API_TOKEN`.
+- **dev.to**: the account `yeyo11` exists and `DEVTO_API_KEY` authenticates against
+  `GET /api/users/me`.
 
 There is no code yet, so the gates pass without checking anything.
 
 Waiting on the owner:
 
-- Reserve `shipcast` on npm (free on 2026-10-24).
-- Fill `.env`: `CLAUDIO_API_TOKEN`, `GITHUB_TOKEN_PERSONAL`, `DEVTO_API_KEY`; start claudio and sign it
-  in to Claude.
+- Confirm the stack.
+- `GITHUB_TOKEN_PERSONAL` in `.env` (still empty).
 - The personal brand's details: display name, handles per network, default languages, tone.
-- Create the dev.to account; Hashnode can wait for phase 2.
+- Reserve `shipcast` on npm (free on 2026-10-24).
 - Upload the social preview; hand the design briefs on.
 
 Next in code:
