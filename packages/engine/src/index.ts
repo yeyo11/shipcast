@@ -9,3 +9,4 @@ export * from './drafts.ts';
 export * from './launch-assets.ts';
 export * from './pipeline.ts';
 export * from './publish.ts';
+export * from './metrics.ts';

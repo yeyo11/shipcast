@@ -25,6 +25,16 @@ export interface GitHubSource {
   pullRequestState(repo: string, number: number): Promise<'open' | 'merged' | 'closed'>;
 }
 
+/** A repo's public numbers, and its traffic when the token may read it. */
+export interface RepoStats {
+  stars: number;
+  forks: number;
+  watchers: number;
+  /** Views and unique visitors of the last 14 days (GitHub keeps no more); absent without access */
+  views?: number;
+  uniqueVisitors?: number;
+}
+
 interface RawEvent {
   id: string;
   type: string;
@@ -115,6 +125,19 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     if (status >= 300) throw new GitHubError(`GitHub latest release of ${repo}: ${status}`, status);
     const release = data as { tag_name: string; html_url: string };
     return { tag: release.tag_name, url: release.html_url };
+  }
+
+  /** Traffic needs push access to the repo; without it the public numbers still come back. */
+  async repoStats(repo: string): Promise<RepoStats> {
+    const info = (await this.#ok('GET', `/repos/${repo}`)) as { stargazers_count: number; forks_count: number; subscribers_count: number };
+    const stats: RepoStats = { stars: info.stargazers_count, forks: info.forks_count, watchers: info.subscribers_count };
+    const traffic = await this.#json('GET', `/repos/${repo}/traffic/views`);
+    if (traffic.status === 200) {
+      const views = traffic.data as { count: number; uniques: number };
+      stats.views = views.count;
+      stats.uniqueVisitors = views.uniques;
+    }
+    return stats;
   }
 
   async pullRequestState(repo: string, number: number): Promise<'open' | 'merged' | 'closed'> {

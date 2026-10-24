@@ -72,7 +72,26 @@ const MIGRATIONS = [
      key TEXT PRIMARY KEY,
      value TEXT NOT NULL
    );`,
+  // Every reading is kept, so the dashboard shows how a launch grew, not only where it stands
+  `CREATE TABLE metrics (
+     launch_id INTEGER NOT NULL REFERENCES launches (id),
+     source TEXT NOT NULL,
+     name TEXT NOT NULL,
+     value REAL NOT NULL,
+     taken_at TEXT NOT NULL
+   );
+   CREATE INDEX metrics_by_launch ON metrics (launch_id, source, name, taken_at);`,
 ];
+
+/** One number read from one source for one launch, at one moment. */
+export interface MetricReading {
+  launchId: number;
+  /** A channel (`devto`, `bluesky`…), or a site-level source (`blog`, `search`, `github`) */
+  source: string;
+  name: string;
+  value: number;
+  takenAt: string;
+}
 
 interface LaunchRow {
   id: number;
@@ -215,6 +234,35 @@ export class Registry {
       externalId: r.external_id,
       publishedAt: r.published_at,
     }));
+  }
+
+  recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date): void {
+    const insert = this.#db.prepare('INSERT INTO metrics (launch_id, source, name, value, taken_at) VALUES (?, ?, ?, ?, ?)');
+    const at = takenAt.toISOString();
+    for (const [name, value] of Object.entries(values)) {
+      if (Number.isFinite(value)) insert.run(launchId, source, name, value, at);
+    }
+  }
+
+  /** The newest reading of every metric of a launch. */
+  latestMetrics(launchId: number): MetricReading[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT m.launch_id, m.source, m.name, m.value, m.taken_at FROM metrics m
+         JOIN (SELECT source, name, MAX(taken_at) AS at FROM metrics WHERE launch_id = ? GROUP BY source, name) last
+           ON last.source = m.source AND last.name = m.name AND last.at = m.taken_at
+         WHERE m.launch_id = ? ORDER BY m.source, m.name`,
+      )
+      .all(launchId, launchId) as unknown as Array<{ launch_id: number; source: string; name: string; value: number; taken_at: string }>;
+    return rows.map((r) => ({ launchId: r.launch_id, source: r.source, name: r.name, value: r.value, takenAt: r.taken_at }));
+  }
+
+  /** Every reading of one metric of a launch, oldest first: its curve. */
+  metricHistory(launchId: number, source: string, name: string): MetricReading[] {
+    const rows = this.#db
+      .prepare('SELECT launch_id, source, name, value, taken_at FROM metrics WHERE launch_id = ? AND source = ? AND name = ? ORDER BY taken_at')
+      .all(launchId, source, name) as unknown as Array<{ launch_id: number; source: string; name: string; value: number; taken_at: string }>;
+    return rows.map((r) => ({ launchId: r.launch_id, source: r.source, name: r.name, value: r.value, takenAt: r.taken_at }));
   }
 
   /** Small pieces of polling state, such as the ETag of the last events page. */
