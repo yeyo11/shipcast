@@ -32,7 +32,7 @@ const goodPack = {
   devto: { tags: ['claude', 'ai'] },
   bluesky: { lang: 'en', text: 'claudio https://josegarrido.dev/en/claudio/?ref=bluesky' },
   mastodon: { lang: 'en', text: 'claudio #claude https://josegarrido.dev/en/claudio/?ref=mastodon' },
-  instagram: { caption: 'claudio. Link in bio. #claude', media: 'demo-video' },
+  instagram: { caption: 'claudio. Link in bio. #claude', summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] },
   reddit: [
     { subreddit: 'ClaudeAI', title: 'claudio', body: 'b' },
     { subreddit: 'selfhosted', title: 'claudio', body: 'b' },
@@ -63,7 +63,7 @@ test('the prompt carries the brand, the truth rule, the pack and one brief per a
   assert.match(prompt, /first launch/);
   assert.match(prompt, /https:\/\/josegarrido\.dev\/<lang>\/<that slug>\//);
   assert.match(prompt, /r\/ClaudeAI, r\/selfhosted/);
-  assert.match(prompt, /media "demo-video"/, 'a repo with a demo gets a Reel');
+  assert.match(prompt, /the demo plays as its second slide/, "a repo with a demo gets it in the carousel");
   assert.match(prompt, /no URL/);
   assert.doesNotMatch(prompt, /linkedin|\bx:/i, 'channels that are off get no brief');
 });

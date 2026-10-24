@@ -2,9 +2,9 @@ import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/co
 import { articleUrl as urlOf, ContentPack, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { launchDir } from './drafts.ts';
+import { launchDir, parseInstagramDraft } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
-import { mediaPath } from './launch-assets.ts';
+import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
 import type { Launch, Registry } from './registry.ts';
 
@@ -29,7 +29,11 @@ export interface Publishers {
       idempotencyKey: string;
     }): Promise<Published>;
   };
-  instagram?: { publish(p: { caption: string; media: { kind: 'image' | 'reel'; url: string } }): Promise<Published> };
+  instagram?: {
+    publish(p: { caption: string; media: Array<{ kind: 'image' | 'video'; url: string }> }): Promise<Published>;
+    publishStory?(m: { kind: 'image' | 'video'; url: string }): Promise<Published>;
+    comment?(mediaId: string, message: string): Promise<{ id: string }>;
+  };
   newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign): Promise<Published> };
 }
 
@@ -68,6 +72,8 @@ function splitFrontMatter(markdown: string): { data: Record<string, unknown>; bo
 }
 
 const failureKey = (launch: Launch, channel: Channel) => `publish-failed:${launch.id}:${channel}`;
+/** The story and the comment that follow an Instagram post, each done once */
+const extraKey = (launch: Launch, what: 'story' | 'comment') => `instagram-${what}:${launch.id}`;
 /** One campaign per language: each language is sent once, even if another one fails and is retried */
 const issueKey = (launch: Launch, lang: string) => `newsletter-sent:${launch.id}:${lang}`;
 
@@ -168,10 +174,31 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     instagram:
       deps.publishers.instagram && pack.instagram
         ? async () => {
-            const caption = draftBody((await read(`${dir}/instagram.md`)) ?? pack.instagram!.caption).replace(/^Media: [^\n]*\n+/, '');
-            const demoUrl = `${brand.site}${mediaPath(launch, 'demo.mp4')}`;
-            const reel = pack.instagram!.media === 'demo-video' && (await http(demoUrl, { method: 'HEAD' }).then((r) => r.ok, () => false));
-            return deps.publishers.instagram!.publish({ caption, media: reel ? { kind: 'reel', url: demoUrl } : { kind: 'image', url: ogJpegUrl } });
+            const ig = deps.publishers.instagram!;
+            const live = (url: string) => http(url, { method: 'HEAD' }).then((r) => r.ok, () => false);
+            const { caption, comment } = parseInstagramDraft(draftBody((await read(`${dir}/instagram.md`)) ?? pack.instagram!.caption));
+            const pieces = carouselPieces(pack, config).map((p) => ({ kind: p.kind, url: `${brand.site}${mediaPath(launch, p.file)}` }));
+            const ready = [];
+            for (const piece of pieces) if (await live(piece.url)) ready.push(piece);
+            // A launch drafted before the carousel existed still has its launch image
+            const media = ready.length > 0 ? ready : [{ kind: 'image' as const, url: ogJpegUrl }];
+            const published = await ig.publish({ caption, media });
+
+            // The post is out: the story and the comment are extras, reported but never worth posting it twice
+            const storyUrl = `${brand.site}${mediaPath(launch, STORY_FILE)}`;
+            if (ig.publishStory && !registry.cursor(extraKey(launch, 'story')) && (await live(storyUrl))) {
+              await ig.publishStory({ kind: 'image', url: storyUrl }).then(
+                (story) => registry.setCursor(extraKey(launch, 'story'), story.externalId),
+                (error: unknown) => problems.push(`instagram story: ${error instanceof Error ? error.message : String(error)}`),
+              );
+            }
+            if (ig.comment && comment && !registry.cursor(extraKey(launch, 'comment'))) {
+              await ig.comment(published.externalId, comment).then(
+                (made) => registry.setCursor(extraKey(launch, 'comment'), made.id),
+                (error: unknown) => problems.push(`instagram comment: ${error instanceof Error ? error.message : String(error)}`),
+              );
+            }
+            return published;
           }
         : undefined,
     newsletter:

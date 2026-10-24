@@ -139,7 +139,7 @@ test('Mastodon metrics read favourites, boosts and replies', async () => {
 
 const G = 'https://graph.instagram.com/v25.0';
 
-test('Instagram creates a Reel container, waits until it is processed, publishes and reads the permalink', async () => {
+test('Instagram publishes a single video as a Reel: a container, waited on until processed, then published, waits until it is processed, publishes and reads the permalink', async () => {
   const calls: Call[] = [];
   const instagram = new Instagram({
     userId: '1784',
@@ -156,7 +156,7 @@ test('Instagram creates a Reel container, waits until it is processed, publishes
       calls,
     ),
   });
-  const published = await instagram.publish({ caption: 'claudio. Link in bio.', media: { kind: 'reel', url: 'https://josegarrido.dev/launches/claudio/v0.8.2/demo.mp4' } });
+  const published = await instagram.publish({ caption: 'claudio. Link in bio.', media: [{ kind: 'video', url: 'https://josegarrido.dev/launches/claudio/v0.8.2/demo.mp4' }] });
   assert.deepEqual(published, { externalId: 'media-9', url: 'https://www.instagram.com/reel/abc/' });
   const created = new URLSearchParams(String(calls[0]!.body));
   assert.equal(created.get('media_type'), 'REELS');
@@ -179,7 +179,51 @@ test('Instagram stops on a media it could not fetch, instead of publishing nothi
       [],
     ),
   });
-  await assert.rejects(instagram.publish({ caption: 'c', media: { kind: 'image', url: 'https://x.dev/og.jpg' } }), /could not be processed \(ERROR\); check that its URL is public/);
+  await assert.rejects(instagram.publish({ caption: 'c', media: [{ kind: 'image', url: 'https://x.dev/og.jpg' }] }), /could not be processed \(ERROR\); check that its URL is public/);
+});
+
+test('Instagram publishes a carousel: one container per piece in order, then the carousel; a story and a comment after', async () => {
+  const calls: Call[] = [];
+  let n = 0;
+  const instagram = new Instagram({
+    userId: '1784',
+    accessToken: 'tok',
+    pollMs: 1,
+    sleep: async () => {},
+    fetch: fakeFetch(
+      [
+        [`POST ${G}/1784/media_publish`, () => Response.json({ id: 'post-1' })],
+        [`POST ${G}/1784/media`, () => Response.json({ id: `c${++n}` })],
+        [`POST ${G}/post-1/comments`, () => Response.json({ id: 'comment-1' })],
+        [`GET ${G}/c`, () => Response.json({ status_code: 'FINISHED' })],
+        [`GET ${G}/post-1`, () => Response.json({ permalink: 'https://www.instagram.com/p/xyz/' })],
+      ],
+      calls,
+    ),
+  });
+  const published = await instagram.publish({
+    caption: 'claudio. Link in bio.',
+    media: [
+      { kind: 'image', url: 'https://x.dev/instagram-01.jpg' },
+      { kind: 'video', url: 'https://x.dev/instagram-02.mp4' },
+      { kind: 'image', url: 'https://x.dev/instagram-03.jpg' },
+    ],
+  });
+  assert.deepEqual(published, { externalId: 'post-1', url: 'https://www.instagram.com/p/xyz/' });
+  const created = calls.filter((c) => c.url === `${G}/1784/media`).map((c) => new URLSearchParams(String(c.body)));
+  assert.deepEqual(created.slice(0, 3).map((p) => [p.get('is_carousel_item'), p.get('image_url') ?? p.get('video_url'), p.get('media_type')]), [
+    ['true', 'https://x.dev/instagram-01.jpg', null],
+    ['true', 'https://x.dev/instagram-02.mp4', 'VIDEO'],
+    ['true', 'https://x.dev/instagram-03.jpg', null],
+  ]);
+  assert.equal(created[3]!.get('media_type'), 'CAROUSEL');
+  assert.equal(created[3]!.get('children'), 'c1,c2,c3');
+  assert.equal(created[3]!.get('caption'), 'claudio. Link in bio.');
+
+  await instagram.publishStory({ kind: 'image', url: 'https://x.dev/instagram-story.jpg' });
+  assert.equal(new URLSearchParams(String(calls.filter((c) => c.url === `${G}/1784/media`).at(-1)!.body)).get('media_type'), 'STORIES');
+  assert.deepEqual(await instagram.comment('post-1', 'Full write-up in my bio'), { id: 'comment-1' });
+  assert.equal(new URLSearchParams(String(calls.at(-1)!.body)).get('message'), 'Full write-up in my bio');
 });
 
 test('Instagram insights become plain numbers, and the token refreshes', async () => {

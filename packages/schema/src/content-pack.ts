@@ -21,7 +21,10 @@ export const LIMITS = {
   blueskyGraphemes: 300,
   mastodonCharacters: 500,
   instagramCaption: 2200,
-  instagramHashtags: 30,
+  instagramHashtags: 5,
+  instagramSummary: 140,
+  instagramSlideTitle: 40,
+  instagramSlideText: 140,
   redditTitle: 300,
   newsletterSubject: 90,
   newsletterPreview: 140,
@@ -123,10 +126,23 @@ export const ContentPack = z
             (c) => (c.match(/#[\p{L}\p{N}_]+/gu) ?? []).length <= LIMITS.instagramHashtags,
             `at most ${LIMITS.instagramHashtags} hashtags`,
           ),
-        media: z
-          .enum(['og-image', 'demo-video'])
-          .describe('og-image: the generated launch image; demo-video: the demo GIF converted to a Reel'),
+        summary: z
+          .string()
+          .min(1)
+          .max(LIMITS.instagramSummary)
+          .describe("One line under the cover's headline: what the project is, for someone scrolling past"),
+        slides: z
+          .array(
+            z.strictObject({
+              title: z.string().min(1).max(LIMITS.instagramSlideTitle).describe('A few words: one thing the project does'),
+              text: z.string().min(1).max(LIMITS.instagramSlideText).describe('One sentence on it, concrete'),
+            }),
+          )
+          .min(2)
+          .max(3)
+          .describe('The carousel slides between the cover (and demo) and the closing one: one implemented feature each'),
       })
+      .describe('A carousel: the cover, the demo as a video when there is one, these slides, and a closing slide pointing to the link in bio')
       .optional(),
     reddit: z
       .array(

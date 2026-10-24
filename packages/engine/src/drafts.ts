@@ -8,6 +8,22 @@ export type DraftFile = { path: string; content: string } | { path: string; byte
 /** A YAML scalar that needs no escaping thought: JSON strings are valid double-quoted YAML. */
 const q = (value: string): string => JSON.stringify(value);
 
+/**
+ * The comment that goes under the Instagram post: the article's address, which a caption cannot link,
+ * and a question that invites an answer. Links in comments are not clickable either, hence the bio.
+ */
+export function instagramComment(pack: ContentPack, brand: Brand): string {
+  const url = (urlOf(pack, brand.site, 'en') ?? urlOf(pack, brand.site, 'es') ?? brand.site).replace(/^https:\/\//, '');
+  return `Full write-up: ${url} (link in bio). What would you use it for?`;
+}
+
+/** Splits an Instagram draft as edited: the caption after the `---` line, the comment on its line. */
+export function parseInstagramDraft(body: string): { caption: string; comment: string | undefined } {
+  const [head, ...rest] = body.split(/^---$/m);
+  const caption = rest.length > 0 ? rest.join('---').trim() : body.trim();
+  return { caption, comment: /^Comment: (.+)$/m.exec(head ?? '')?.[1]?.trim() };
+}
+
 /** `yeyo11/claudio` → `claudio` */
 export function projectSlug(repo: string): string {
   return repo.split('/').at(-1)!.toLowerCase();
@@ -89,10 +105,32 @@ export function renderDrafts(
     files.push({ path: `${dir}/mastodon.md`, content: draft('Mastodon', mode('mastodon'), pack.mastodon.text) });
   }
   if (pack.instagram && mode('instagram') !== 'off') {
-    const media = pack.instagram.media === 'demo-video' ? 'the demo, as a Reel' : 'the launch image';
+    const ig = pack.instagram;
+    const slides = [
+      `Cover: ${pack.article?.en?.title ?? pack.project.name}. ${ig.summary}`,
+      ...(config.assets.demo ? ['The demo, as a video'] : []),
+      ...ig.slides.map((s) => `${s.title}: ${s.text}`),
+      'Closing: the full write-up is in my bio',
+    ];
     files.push({
       path: `${dir}/instagram.md`,
-      content: draft('Instagram', mode('instagram'), `Media: ${media}.\n\n${pack.instagram.caption}`),
+      content: draft(
+        'Instagram',
+        mode('instagram'),
+        [
+          `Carousel, from the images in \`public/${dir}/\` (their texts are drawn into them; only the caption and the comment below can be edited here):`,
+          '',
+          ...slides.map((s, i) => `${i + 1}. ${s}`),
+          '',
+          'Story: the cover with "Link in bio" (the API cannot add a link sticker).',
+          '',
+          `Comment: ${instagramComment(pack, brand)}`,
+          '',
+          '---',
+          '',
+          ig.caption,
+        ].join('\n'),
+      ),
     });
   }
   if (pack.reddit && mode('reddit') !== 'off') {

@@ -1,9 +1,12 @@
 import { ConnectorError, json, type Metrics, type Published } from './http.ts';
 
+/** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
+export type InstagramMedia = { kind: 'image' | 'video'; url: string };
+
 export interface InstagramPost {
   caption: string;
-  /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 for a Reel */
-  media: { kind: 'image'; url: string } | { kind: 'reel'; url: string };
+  /** One piece is a single post (a video becomes a Reel); two to twenty make a carousel */
+  media: InstagramMedia[];
 }
 
 export interface InstagramOptions {
@@ -56,29 +59,62 @@ export class Instagram {
     return json<T>('Instagram', await this.#fetch(`${this.#base}${path}?${query}`), what);
   }
 
-  async publish(post: InstagramPost): Promise<Published> {
-    const media: Record<string, string> =
-      post.media.kind === 'image'
-        ? { image_url: post.media.url }
-        : { media_type: 'REELS', video_url: post.media.url, share_to_feed: 'true' };
-    const container = await this.#post<{ id: string }>(`/${this.#user}/media`, { ...media, caption: post.caption }, 'create the media');
-
-    // A container is invisible until it is published, and publishing before Instagram has
-    // processed the media fails; images are usually ready at once, Reels take a minute or more
+  /**
+   * A container is invisible until it is published, and publishing before Instagram has processed
+   * its media fails; images are usually ready at once, videos take a minute or more.
+   */
+  async #ready(containerId: string): Promise<void> {
     const deadline = Date.now() + this.#timeoutMs;
     for (;;) {
-      const { status_code: status } = await this.#get<{ status_code: string }>(`/${container.id}`, { fields: 'status_code' }, 'check the media');
-      if (status === 'FINISHED') break;
+      const { status_code: status } = await this.#get<{ status_code: string }>(`/${containerId}`, { fields: 'status_code' }, 'check the media');
+      if (status === 'FINISHED') return;
       if (status === 'ERROR' || status === 'EXPIRED') {
         throw new ConnectorError('Instagram', `the media could not be processed (${status}); check that its URL is public`);
       }
       if (Date.now() > deadline) throw new ConnectorError('Instagram', `the media was still ${status} after ${this.#timeoutMs} ms`);
       await this.#sleep(this.#pollMs);
     }
+  }
 
-    const published = await this.#post<{ id: string }>(`/${this.#user}/media_publish`, { creation_id: container.id }, 'publish');
+  async #container(params: Record<string, string>, what: string): Promise<string> {
+    const { id } = await this.#post<{ id: string }>(`/${this.#user}/media`, params, what);
+    await this.#ready(id);
+    return id;
+  }
+
+  async #publishContainer(containerId: string): Promise<Published> {
+    const published = await this.#post<{ id: string }>(`/${this.#user}/media_publish`, { creation_id: containerId }, 'publish');
     const { permalink } = await this.#get<{ permalink: string }>(`/${published.id}`, { fields: 'permalink' }, 'read the permalink');
     return { externalId: published.id, url: permalink };
+  }
+
+  async publish(post: InstagramPost): Promise<Published> {
+    const [first, ...rest] = post.media;
+    if (!first) throw new ConnectorError('Instagram', 'a post needs at least one image or video');
+    if (rest.length === 0) {
+      const media: Record<string, string> = first.kind === 'image' ? { image_url: first.url } : { media_type: 'REELS', video_url: first.url, share_to_feed: 'true' };
+      return this.#publishContainer(await this.#container({ ...media, caption: post.caption }, 'create the media'));
+    }
+    if (post.media.length > 20) throw new ConnectorError('Instagram', 'a carousel takes at most 20 pieces');
+    // Each piece is a container of its own, then one carousel container lists them in order
+    const children: string[] = [];
+    for (const item of post.media) {
+      const media: Record<string, string> = item.kind === 'image' ? { image_url: item.url } : { media_type: 'VIDEO', video_url: item.url };
+      children.push(await this.#container({ ...media, is_carousel_item: 'true' }, `create carousel piece ${children.length + 1}`));
+    }
+    const carousel = await this.#container({ media_type: 'CAROUSEL', children: children.join(','), caption: post.caption }, 'create the carousel');
+    return this.#publishContainer(carousel);
+  }
+
+  /** A story: one image or video, shown for 24 hours. The API cannot add stickers, so no link. */
+  async publishStory(media: InstagramMedia): Promise<Published> {
+    const params: Record<string, string> = media.kind === 'image' ? { image_url: media.url } : { video_url: media.url };
+    return this.#publishContainer(await this.#container({ ...params, media_type: 'STORIES' }, 'create the story'));
+  }
+
+  /** A comment on one of the account's own posts; needs `instagram_business_manage_comments`. */
+  async comment(mediaId: string, message: string): Promise<{ id: string }> {
+    return this.#post<{ id: string }>(`/${mediaId}/comments`, { message }, 'comment');
   }
 
   /** The metrics Meta offers on a post; `views` replaced impressions in 2025. */

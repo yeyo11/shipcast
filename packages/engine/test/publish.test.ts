@@ -16,7 +16,7 @@ const pack = {
   devto: { tags: ['ai'] },
   bluesky: { lang: 'en', text: 'AI bluesky' },
   mastodon: { lang: 'en', text: 'AI mastodon' },
-  instagram: { caption: 'AI caption', media: 'demo-video' },
+  instagram: { caption: 'AI caption', summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] },
   reddit: [{ subreddit: 'ClaudeAI', title: 't', body: 'b' }],
 };
 
@@ -27,7 +27,7 @@ const merged: Record<string, string> = {
   [`yeyo11/launches/${D}/devto.md@HEAD`]: '# dev.to\n\n> **Approval:** x\n\nRepublishes…\n\nTags: `claude`, `selfhosted`\n',
   [`yeyo11/launches/${D}/bluesky.md@HEAD`]: '# Bluesky\n\n> **Approval:** x\n\nEdited bluesky https://josegarrido.dev/en/claudio/?ref=bluesky\n',
   [`yeyo11/launches/${D}/mastodon.md@HEAD`]: '# Mastodon\n\n> **Approval:** x\n\nEdited mastodon #claude\n',
-  [`yeyo11/launches/${D}/instagram.md@HEAD`]: '# Instagram\n\n> **Approval:** x\n\nMedia: the demo, as a Reel.\n\nEdited caption. Link in bio.\n',
+  [`yeyo11/launches/${D}/instagram.md@HEAD`]: '# Instagram\n\n> **Approval:** x\n\nCarousel:\n\n1. Cover\n\nComment: Edited comment\n\n---\n\nEdited caption. Link in bio.\n',
   'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\nreddit:\n  subreddits: [ClaudeAI]\n',
 };
 
@@ -123,7 +123,7 @@ test('after the merge every approval channel is published with the edited texts,
   assert.equal(input('mastodon').idempotencyKey, `shipcast-${launch.id}-mastodon`);
   assert.deepEqual(input('instagram'), {
     caption: 'Edited caption. Link in bio.',
-    media: { kind: 'reel', url: 'https://josegarrido.dev/launches/claudio/v0.8.2/demo.mp4' },
+    media: ['01', '02', '03', '04'].map((n) => ({ kind: 'image', url: `https://josegarrido.dev/launches/claudio/v0.8.2/instagram-${n}.jpg` })),
   });
 
   assert.equal(registry.get(launch.id)!.status, 'published');
@@ -226,4 +226,28 @@ test('a newsletter with nobody subscribed is recorded once and not retried', asy
   assert.match(first.state === 'published' || first.state === 'partial' ? first.problems.join() : '', /no subscribers yet in the en list/);
   await publishLaunch(registry.get(launch.id)!, withNewsletter, deps);
   assert.equal(reads, 1);
+});
+
+test('after the Instagram carousel, its story and the edited comment go out once; their failures never repost it', async () => {
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const done: string[] = [];
+  let commentTries = 0;
+  const publishers: Publishers = {
+    instagram: {
+      publish: async () => (done.push('post'), { externalId: 'post-1', url: 'https://www.instagram.com/p/1/' }),
+      publishStory: async (m) => (done.push(`story ${m.url.split('/').at(-1)}`), { externalId: 'story-1', url: 'https://www.instagram.com/s/1/' }),
+      comment: async (id, message) => {
+        commentTries++;
+        if (commentTries === 1) throw new ConnectorError('Instagram', 'comment: 403 missing permission', 403);
+        done.push(`comment ${id}: ${message}`);
+        return { id: 'c-1' };
+      },
+    },
+  };
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const first = await publishLaunch(launch, brand, deps);
+  assert.ok(first.state === 'published' && first.problems.some((p) => p.startsWith('instagram comment: Instagram: comment: 403')));
+  assert.deepEqual(done, ['post', 'story instagram-story.jpg']);
+  assert.equal(registry.posts(launch.id).filter((p) => p.channel === 'instagram').length, 1);
 });

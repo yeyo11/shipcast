@@ -40,21 +40,21 @@ export interface OgTheme {
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 
-const el = (type: string, style: Record<string, unknown>, children?: unknown): OgNode => ({
+export const el = (type: string, style: Record<string, unknown>, children?: unknown): OgNode => ({
   type,
   props: { style, ...(children === undefined ? {} : { children }) },
 });
 // Border-box everywhere: Satori adds padding to the width otherwise, and the drawings drift
-const box = (style: Record<string, unknown>, children?: unknown) => el('div', { display: 'flex', boxSizing: 'border-box', ...style }, children);
+export const box = (style: Record<string, unknown>, children?: unknown) => el('div', { display: 'flex', boxSizing: 'border-box', ...style }, children);
 
 const font = (file: string) => new URL(`../fonts/${file}`, import.meta.url).pathname;
 
 // The personal site's editorial identity (docs/personal-identity.md): its values are the blog's
 // (`src/styles/global.css` and `src/projects.ts` in the launches repo) and must move with them.
-const INK = '#000000';
-const TEXT = '#F5F2EA';
-const MUTED = '#B8B4AA';
-const PAPER = '#F7F5EF';
+export const INK = '#000000';
+export const TEXT = '#F5F2EA';
+export const MUTED = '#B8B4AA';
+export const PAPER = '#F7F5EF';
 
 export type Motif = 'phone' | 'terminal' | 'label' | 'wave' | 'orb' | 'stack';
 const KNOWN: Record<string, { colour: string; motif: Motif }> = {
@@ -82,7 +82,7 @@ export function projectLook(project: string): { colour: string; motif: Motif } {
 }
 
 /** A headline in the house style: every word's first letter in Fraunces' wonky italic. */
-function headline(text: string, style: Record<string, unknown>): OgNode {
+export function headline(text: string, style: Record<string, unknown>): OgNode {
   const words = text.split(/\s+/).filter(Boolean);
   return box(
     { flexWrap: 'wrap', fontFamily: 'Fraunces', ...style },
@@ -95,7 +95,7 @@ function headline(text: string, style: Record<string, unknown>): OgNode {
   );
 }
 
-const dots = (colour: string, size = 9, dot = 1.6) => ({
+export const dots = (colour: string, size = 9, dot = 1.6) => ({
   backgroundImage: `radial-gradient(circle, ${colour} ${dot}px, transparent ${dot + 0.6}px)`,
   backgroundSize: `${size}px ${size}px`,
 });
@@ -186,14 +186,28 @@ function illustration(colour: string, kind: Motif): OgNode {
   ]);
 }
 
+/**
+ * The house illustration alone, as a PNG twice its drawn size: the cover of a project that has no
+ * drawn one. Drawn at 560 × 630 and rendered at `scale`, so it stays sharp when cropped to a slide.
+ */
+export async function renderIllustration(project: string, scale = 2): Promise<Uint8Array> {
+  const { colour, motif: kind } = projectLook(project);
+  const fonts = await Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
+  const svg = await satori(illustration(colour, kind) as never, { width: 560, height: OG_HEIGHT, fonts });
+  return new Uint8Array(new Resvg(svg, { fitTo: { mode: 'width', value: 560 * scale } }).render().asPng());
+}
+
 /** The personal brand's launch image: the headline on the project's colour, beside its drawing. */
+/** The personal site's fonts, as static instances Satori can read */
+export const EDITORIAL_FONTS: OgFont[] = [
+  { name: 'Fraunces', path: font('Fraunces-Roman.ttf'), weight: 400, style: 'normal' },
+  { name: 'Fraunces Wonk', path: font('Fraunces-WonkItalic.ttf'), weight: 400, style: 'italic' },
+  { name: 'Instrument Sans', path: font('InstrumentSans-Regular.ttf'), weight: 400, style: 'normal' },
+  { name: 'Instrument Sans', path: font('InstrumentSans-SemiBold.ttf'), weight: 600, style: 'normal' },
+];
+
 export const EDITORIAL_THEME: OgTheme = {
-  fonts: [
-    { name: 'Fraunces', path: font('Fraunces-Roman.ttf'), weight: 400, style: 'normal' },
-    { name: 'Fraunces Wonk', path: font('Fraunces-WonkItalic.ttf'), weight: 400, style: 'italic' },
-    { name: 'Instrument Sans', path: font('InstrumentSans-Regular.ttf'), weight: 400, style: 'normal' },
-    { name: 'Instrument Sans', path: font('InstrumentSans-SemiBold.ttf'), weight: 600, style: 'normal' },
-  ],
+  fonts: EDITORIAL_FONTS,
   layout(content) {
     const { colour, motif: kind } = projectLook(content.project);
     const long = content.title.length > 48;

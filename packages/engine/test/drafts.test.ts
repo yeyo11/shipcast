@@ -22,7 +22,7 @@ const pack = ContentPack.parse({
   devto: { tags: ['claude', 'ai'] },
   bluesky: { lang: 'en', text: 'Bluesky post' },
   mastodon: { lang: 'en', text: 'Mastodon post #claude' },
-  instagram: { caption: 'Caption. Link in bio.', media: 'demo-video' },
+  instagram: { caption: 'Caption. Link in bio.', summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] },
   reddit: [{ subreddit: 'ClaudeAI', title: 'I built claudio', body: 'What and why.' }],
 });
 
@@ -64,7 +64,10 @@ test('every channel gets a readable draft that says its mode, and the pack trave
   assert.match(reddit, /# Reddit, r\/ClaudeAI/);
   assert.match(text(files.find((f) => f.path.endsWith('bluesky.md'))), /\*\*Approval:\*\* published when this pull request is merged/);
   assert.match(text(files.find((f) => f.path.endsWith('devto.md'))), /canonical URL set to https:\/\/josegarrido\.dev\/en\/claudio\//);
-  assert.match(text(files.find((f) => f.path.endsWith('instagram.md'))), /the demo, as a Reel/);
+  const instagram = text(files.find((f) => f.path.endsWith('instagram.md')));
+  assert.match(instagram, /^1\. Cover: claudio: "Claude Code" as a service\. Claude Code as a service\.$/m);
+  assert.match(instagram, /^Comment: Full write-up: josegarrido\.dev\/en\/claudio\/ \(link in bio\)\. What would you use it for\?$/m);
+  assert.match(instagram, /^---\n\nCaption\. Link in bio\.$/m);
   assert.deepEqual(JSON.parse(text(files.find((f) => f.path.endsWith('pack.json')))), pack);
 });
 

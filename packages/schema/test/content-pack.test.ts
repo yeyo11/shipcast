@@ -27,7 +27,7 @@ const fullPack = {
   devto: { tags: ['claude', 'ai', 'typescript'] },
   bluesky: { lang: 'en', text: 'claudio runs Claude Code as a service.' },
   mastodon: { lang: 'en', text: 'claudio runs Claude Code as a service.' },
-  instagram: { caption: 'Claude Code as a service. Link in bio. #claude #ai', media: 'og-image' },
+  instagram: { caption: 'Claude Code as a service. Link in bio. #claude #ai', summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] },
   reddit: [{ subreddit: 'ClaudeAI', title: 'I built claudio', body: 'What and why.' }],
 } as const;
 
@@ -59,12 +59,12 @@ test('Mastodon stops at 500 characters', () => {
   assert.ok(!parse({ mastodon: { lang: 'en', text: 'a'.repeat(501) } }).success);
 });
 
-test('an Instagram caption carries no link and at most 30 hashtags', () => {
-  const withLink = parse({ instagram: { caption: 'See https://example.com', media: 'og-image' } });
+test('an Instagram caption carries no link and at most 5 hashtags', () => {
+  const withLink = parse({ instagram: { caption: 'See https://example.com', summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] } });
   assert.ok(!withLink.success);
   assert.match(withLink.error.issues[0]!.message, /link in bio/);
-  const tags = Array.from({ length: 31 }, (_, i) => `#t${i}`).join(' ');
-  assert.ok(!parse({ instagram: { caption: tags, media: 'og-image' } }).success);
+  const tags = Array.from({ length: 6 }, (_, i) => `#t${i}`).join(' ');
+  assert.ok(!parse({ instagram: { caption: tags, summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] } }).success);
 });
 
 test('dev.to takes at most four lowercase tags', () => {

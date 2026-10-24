@@ -39,6 +39,8 @@ export const Brand = z.strictObject({
   tone: z.string().default(''),
   /** Where readers can support the author */
   support: z.url().optional(),
+  /** The author's photo, a public https URL; it signs the generated assets that show a face */
+  avatar: z.url({ protocol: /^https$/ }).optional(),
   /**
    * The brand's newsletter, sent through Brevo: who it comes from and the list of each language.
    * List ids are not secret; the API key lives in Shipcast's .env.

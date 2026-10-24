@@ -26,7 +26,7 @@ function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): str
     case 'mastodon':
       return `mastodon: one post in English, at most ${LIMITS.mastodonCharacters} characters, ending with the English article's link ${brand.site}/en/<English slug>/?ref=mastodon, and a few hashtags (Mastodon search relies on them).`;
     case 'instagram':
-      return `instagram: a caption in English, at most ${LIMITS.instagramCaption} characters and ${LIMITS.instagramHashtags} hashtags, with no URL (links are not clickable there; say "link in bio"), and media "${config.assets.demo ? 'demo-video' : 'og-image'}".`;
+      return `instagram: a carousel in English${config.assets.demo ? ' (the demo plays as its second slide)' : ''}. A summary of one line for the cover (at most ${LIMITS.instagramSummary} characters); 2 or 3 slides, each one implemented feature with a short title (at most ${LIMITS.instagramSlideTitle} characters) and one concrete sentence (at most ${LIMITS.instagramSlideText}); and a short caption: a one-line hook, two or three lines on what it is, "link in bio" (links are not clickable there, so no URL), and at most ${LIMITS.instagramHashtags} specific hashtags, never generic ones.`;
     case 'reddit': {
       const subs = config.reddit.subreddits;
       const target = subs.length > 0 ? `one draft for each of r/${subs.join(', r/')}` : 'one or two drafts, suggesting fitting subreddits';
