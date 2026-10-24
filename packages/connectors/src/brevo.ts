@@ -8,6 +8,8 @@ export interface BrevoCampaign {
   /** The finished email: Brevo sends this HTML as it is */
   html: string;
   sender: { name: string; email: string };
+  /** Where replies go; the sender's own address unless said otherwise, never the account's default */
+  replyTo?: string;
   listId: number;
   tag?: string;
 }
@@ -61,6 +63,7 @@ export class Brevo {
         subject: campaign.subject,
         previewText: campaign.previewText,
         sender: campaign.sender,
+        replyTo: campaign.replyTo ?? campaign.sender.email,
         htmlContent: campaign.html,
         recipients: { listIds: [campaign.listId] },
         ...(campaign.tag ? { tag: campaign.tag } : {}),

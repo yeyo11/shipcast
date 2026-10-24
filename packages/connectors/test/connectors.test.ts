@@ -219,6 +219,7 @@ test('Brevo creates the campaign for the list and sends it now; its numbers add 
   const created = JSON.parse(String(calls.find((c) => c.method === 'POST' && c.url.endsWith('/emailCampaigns'))!.body));
   assert.deepEqual(created.recipients, { listIds: [3] });
   assert.equal(created.htmlContent, '<p>hi</p>');
+  assert.equal(created.replyTo, 'hola@josegarrido.dev', 'replies go to the sender, not to the account default');
   assert.equal(calls[0]!.headers['api-key'], 'k');
   assert.deepEqual(await brevo.metrics('77,78'), { sent: 12, delivered: 12, opens: 6, clicks: 3, unsubscribes: 1, bounces: 1, complaints: 0 });
 });
