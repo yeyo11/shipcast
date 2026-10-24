@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+# Created by `claude --worktree`; the shareable parts of .claude/ stay tracked
+.claude/worktrees/
+.claude/settings.local.json
+# pando's knowledge base and code index: derived from docs/ and the source (docs/knowledge-base.md)
+.pando

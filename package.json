@@ -1,0 +1,21 @@
+{
+  "name": "shipcast",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Launch your GitHub projects: on each release, analyse the repo with Claude, generate the launch content and publish it per channel after your approval",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
