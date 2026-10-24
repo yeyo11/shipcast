@@ -31,8 +31,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   };
   const config: Config = {
     githubToken: need('GITHUB_TOKEN_PERSONAL'),
-    claudioUrl: need('CLAUDIO_API_URL'),
-    claudioToken: need('CLAUDIO_API_TOKEN'),
+    claudioUrl: need('SHIPCAST_CLAUDIO_URL'),
+    claudioToken: need('SHIPCAST_CLAUDIO_TOKEN'),
     launchesRepo: need('SHIPCAST_LAUNCHES_REPO'),
     dataDir: resolve(cwd, env.SHIPCAST_DATA_DIR?.trim() || 'data'),
     // claudio mounts the repo's ./workspace as /workspace (docker-compose.yml)

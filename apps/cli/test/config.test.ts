@@ -4,8 +4,8 @@ import { ConfigError, loadConfig } from '../src/config.ts';
 
 const complete = {
   GITHUB_TOKEN_PERSONAL: 'g',
-  CLAUDIO_API_URL: 'http://localhost:8798',
-  CLAUDIO_API_TOKEN: 'c',
+  SHIPCAST_CLAUDIO_URL: 'http://localhost:8798',
+  SHIPCAST_CLAUDIO_TOKEN: 'c',
   SHIPCAST_LAUNCHES_REPO: 'yeyo11/launches',
 };
 
@@ -20,8 +20,8 @@ test('a complete environment gives the config, with the data and workspace under
 
 test('every missing variable is reported at once', () => {
   assert.throws(
-    () => loadConfig({ CLAUDIO_API_URL: 'x' }, '/repo'),
-    (e) => e instanceof ConfigError && e.message === 'missing in .env: GITHUB_TOKEN_PERSONAL, CLAUDIO_API_TOKEN, SHIPCAST_LAUNCHES_REPO (see .env.example)',
+    () => loadConfig({ SHIPCAST_CLAUDIO_URL: 'x' }, '/repo'),
+    (e) => e instanceof ConfigError && e.message === 'missing in .env: GITHUB_TOKEN_PERSONAL, SHIPCAST_CLAUDIO_TOKEN, SHIPCAST_LAUNCHES_REPO (see .env.example)',
   );
 });
 
