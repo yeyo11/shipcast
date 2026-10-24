@@ -15,6 +15,7 @@
   "dependencies": {
     "@shipcast/schema": "workspace:*",
     "@shipcast/assets": "workspace:*",
-    "@shipcast/connectors": "workspace:*"
+    "@shipcast/connectors": "workspace:*",
+    "yaml": "^2.9.1"
   }
 }

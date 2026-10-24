@@ -31,6 +31,9 @@ class FakeGitHub implements GitHubSource {
   async latestRelease(): Promise<undefined> {
     return undefined;
   }
+  async pullRequestState(): Promise<'open'> {
+    return 'open';
+  }
 }
 
 test('a published release of an enabled repo is claimed, with the pack inferred from the version', async () => {

@@ -33,6 +33,9 @@ class FakeGitHub implements GitHubSource, GitHubWriter {
   async latestRelease() {
     return this.latest ? { tag: this.latest, url: 'u' } : undefined;
   }
+  async pullRequestState(): Promise<'open'> {
+    return 'open';
+  }
   async openPullRequest(draft: PullRequestDraft) {
     this.opened.push(draft);
     return { number: 1, url: 'https://github.com/yeyo11/launches/pull/1', created: true };

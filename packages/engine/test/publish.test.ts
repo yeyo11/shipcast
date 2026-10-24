@@ -1,0 +1,164 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { ConnectorError } from '@shipcast/connectors';
+import { Brand } from '@shipcast/schema';
+import { draftBody, publishLaunch, Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const D = 'launches/claudio/v0.8.2';
+
+const pack = {
+  schemaVersion: 1,
+  kind: 'launch',
+  project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.8.2' },
+  analysis: { summary: 's', implemented: ['x'], planned: [], documentedOnly: [], limitations: [] },
+  article: { slug: 'claudio', en: { title: 'AI title', description: 'AI description', markdown: 'AI body' } },
+  devto: { tags: ['ai'] },
+  bluesky: { lang: 'en', text: 'AI bluesky' },
+  mastodon: { lang: 'en', text: 'AI mastodon' },
+  instagram: { caption: 'AI caption', media: 'demo-video' },
+  reddit: [{ subreddit: 'ClaudeAI', title: 't', body: 'b' }],
+};
+
+/** The launches repo after the merge, with the owner's edits in the drafts. */
+const merged: Record<string, string> = {
+  [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify(pack),
+  'yeyo11/launches/src/content/posts/en/claudio.md@HEAD': '---\ntitle: "Edited title"\ndescription: "Edited description"\n---\n\nEdited body.\n',
+  [`yeyo11/launches/${D}/devto.md@HEAD`]: '# dev.to\n\n> **Approval:** x\n\nRepublishes…\n\nTags: `claude`, `selfhosted`\n',
+  [`yeyo11/launches/${D}/bluesky.md@HEAD`]: '# Bluesky\n\n> **Approval:** x\n\nEdited bluesky https://josegarrido.dev/en/claudio/?ref=bluesky\n',
+  [`yeyo11/launches/${D}/mastodon.md@HEAD`]: '# Mastodon\n\n> **Approval:** x\n\nEdited mastodon #claude\n',
+  [`yeyo11/launches/${D}/instagram.md@HEAD`]: '# Instagram\n\n> **Approval:** x\n\nMedia: the demo, as a Reel.\n\nEdited caption. Link in bio.\n',
+  'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\nreddit:\n  subreddits: [ClaudeAI]\n',
+};
+
+class FakeGitHub implements GitHubSource {
+  state: 'open' | 'merged' | 'closed';
+  files: Record<string, string>;
+  constructor(state: 'open' | 'merged' | 'closed', files = merged) {
+    this.state = state;
+    this.files = files;
+  }
+  async userEvents(): Promise<EventsPage> {
+    return { notModified: true };
+  }
+  async fileAt(repo: string, path: string, ref: string) {
+    return this.files[`${repo}/${path}@${ref}`];
+  }
+  async latestRelease() {
+    return undefined;
+  }
+  async pullRequestState() {
+    return this.state;
+  }
+}
+
+/** The deployed site: which URLs answer, and the image bytes. */
+function site(live: boolean): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (!live) return new Response(null, { status: 404 });
+    if (url.endsWith('/og.jpg')) return new Response(new Uint8Array([0xff, 0xd8, 0xff]));
+    return new Response(null, { status: 200 });
+  }) as typeof fetch;
+}
+
+function recorder() {
+  const calls: Array<{ channel: string; input: unknown }> = [];
+  const ok = (channel: string) => async (input: unknown) => {
+    calls.push({ channel, input });
+    return { externalId: `${channel}-1`, url: `https://${channel}.example/1` };
+  };
+  const publishers: Publishers = { devto: { publish: ok('devto') }, bluesky: { publish: ok('bluesky') }, mastodon: { publish: ok('mastodon') }, instagram: { publish: ok('instagram') } };
+  return { calls, publishers };
+}
+
+function drafted(registry: Registry) {
+  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
+  return registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/3');
+}
+
+test('a draft body is what follows its mode line', () => {
+  assert.equal(draftBody('# Bluesky\n\n> **Approval:** published when merged.\n\nThe post.\n'), 'The post.');
+});
+
+test('nothing is published while the drafts pull request is open, nor before the site is live', async () => {
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const { calls, publishers } = recorder();
+  const open = await publishLaunch(launch, brand, { github: new FakeGitHub('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  assert.equal(open.state, 'waiting');
+  const notLive = await publishLaunch(launch, brand, { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(false) });
+  assert.deepEqual(notLive.state === 'waiting' && notLive.reason, 'https://josegarrido.dev/en/claudio/ is not live yet');
+  assert.equal(calls.length, 0);
+});
+
+test('a drafts pull request closed without merging skips the launch', async () => {
+  const registry = new Registry(':memory:');
+  const result = await publishLaunch(drafted(registry), brand, { github: new FakeGitHub('closed'), registry, launchesRepo: 'yeyo11/launches', publishers: {}, fetch: site(true) });
+  assert.equal(result.state, 'skipped');
+  assert.match(result.launch.detail ?? '', /closed without merging/);
+});
+
+test('after the merge every approval channel is published with the edited texts, once', async () => {
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const { calls, publishers } = recorder();
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+
+  const result = await publishLaunch(launch, brand, deps);
+  assert.equal(result.state, 'published');
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit is manual: never posted');
+
+  const input = (channel: string) => calls.find((c) => c.channel === channel)!.input as Record<string, unknown>;
+  assert.deepEqual(input('devto'), {
+    title: 'Edited title',
+    markdown: 'Edited body.',
+    tags: ['claude', 'selfhosted'],
+    canonicalUrl: 'https://josegarrido.dev/en/claudio/',
+    mainImage: 'https://josegarrido.dev/launches/claudio/v0.8.2/og.png',
+  });
+  assert.equal(input('bluesky').text, 'Edited bluesky https://josegarrido.dev/en/claudio/?ref=bluesky');
+  assert.equal((input('bluesky').link as { title: string }).title, 'Edited title');
+  assert.equal(input('mastodon').text, 'Edited mastodon #claude');
+  assert.equal(input('mastodon').idempotencyKey, `shipcast-${launch.id}-mastodon`);
+  assert.deepEqual(input('instagram'), {
+    caption: 'Edited caption. Link in bio.',
+    media: { kind: 'reel', url: 'https://josegarrido.dev/launches/claudio/v0.8.2/demo.mp4' },
+  });
+
+  assert.equal(registry.get(launch.id)!.status, 'published');
+  assert.deepEqual(registry.posts(launch.id).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'instagram', 'mastodon']);
+
+  await publishLaunch(registry.get(launch.id)!, brand, deps);
+  assert.equal(calls.length, 4, 'a second round publishes nothing again');
+});
+
+test('a temporary failure leaves the launch partial and is retried; a permanent one is recorded and not retried', async () => {
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const { calls, publishers } = recorder();
+  let mastodonTries = 0;
+  publishers.mastodon = {
+    publish: async () => {
+      mastodonTries++;
+      if (mastodonTries === 1) throw new ConnectorError('Mastodon', 'publish: 503', 503);
+      return { externalId: 'm', url: 'https://mastodon.example/m' };
+    },
+  };
+  publishers.instagram = {
+    publish: async () => {
+      throw new ConnectorError('Instagram', 'publish: 400 invalid token', 400);
+    },
+  };
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+
+  const first = await publishLaunch(launch, brand, deps);
+  assert.equal(first.state, 'partial');
+  assert.ok(first.state === 'partial' && first.problems.some((p) => p.startsWith('mastodon:') && p.endsWith('(will retry)')));
+  assert.ok(first.state === 'partial' && first.problems.some((p) => p.startsWith('instagram:') && !p.endsWith('(will retry)')));
+
+  const second = await publishLaunch(registry.get(launch.id)!, brand, deps);
+  assert.equal(second.state, 'published', 'Mastodon went through; Instagram is not retried');
+  assert.equal(mastodonTries, 2);
+  assert.equal(calls.filter((c) => c.channel === 'devto').length, 1);
+});

@@ -21,6 +21,8 @@ export interface GitHubSource {
   fileAt(repo: string, path: string, ref: string): Promise<string | undefined>;
   /** The repo's latest published release (not a draft or pre-release), for manual launches */
   latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined>;
+  /** Whether a pull request is still open, was merged, or was closed without merging */
+  pullRequestState(repo: string, number: number): Promise<'open' | 'merged' | 'closed'>;
 }
 
 interface RawEvent {
@@ -113,6 +115,11 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     if (status >= 300) throw new GitHubError(`GitHub latest release of ${repo}: ${status}`, status);
     const release = data as { tag_name: string; html_url: string };
     return { tag: release.tag_name, url: release.html_url };
+  }
+
+  async pullRequestState(repo: string, number: number): Promise<'open' | 'merged' | 'closed'> {
+    const pr = (await this.#ok('GET', `/repos/${repo}/pulls/${number}`)) as { state: 'open' | 'closed'; merged: boolean };
+    return pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed';
   }
 
   async #json(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> {
