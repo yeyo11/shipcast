@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T15:02:40.278364471Z
-updated_at: 2026-10-24T15:37:45.544929882Z
+created_at: 2026-10-24T15:37:49.986512581Z
+updated_at: 2026-10-24T16:21:25.740646055Z
 tags:
     - brands
     - config
@@ -28,16 +28,15 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `id` | `personal` |
 | `displayName` | José Antonio Garrido |
 | `github` | `yeyo11` |
-| `handles.x` | <https://x.com/joseagg112> |
-| `handles.linkedin` | <https://www.linkedin.com/in/jagg97/> |
+| `handles.x` | <https://x.com/joseagg112> (linked from the footer; nothing is published there) |
+| `handles.linkedin` | <https://www.linkedin.com/in/jagg97/> (linked from the footer; nothing is published there) |
 | `handles.bluesky` | <https://bsky.app/profile/yeyo11.bsky.social> |
 | `handles.mastodon` | <https://mastodon.social/@yeyo11> |
 | `handles.devto` | <https://dev.to/yeyo11> |
 | `handles.reddit` | <https://www.reddit.com/user/josegarridodev/> |
 | `handles.instagram` | <https://www.instagram.com/josegarridodev> |
 | `languages.blog` | `[en, es]` |
-| `languages.x` | `en` — provisional, not yet confirmed by the owner |
-| `languages.linkedin` | `es` — provisional, not yet confirmed by the owner |
+| `languages.x`, `languages.linkedin` | not set: the owner does not publish on X or LinkedIn (2026-10-24); the schema keeps both optional for brands that do |
 | `tone` | empty: defined from examples in phase 5 |
 | `support` | <https://buymeacoffee.com/yeyo11>, linked from the blog's footer |
 
@@ -52,9 +51,9 @@ this file as a test fixture (`test/fixtures/brand.yml`), refreshed when the bran
 
 The brand schema in `packages/schema` validates this file: `id` and `displayName` required, handles
 and `support` optional (a channel without a handle cannot publish), languages from `en` and `es`, the
-blog in at least one. A launch's `launch.yml` names its brand by `id`, and the engine refuses a launch
-whose brand does not match the launches repo it would write to — the mechanical form of "brands
-never mix".
+blog in at least one, X and LinkedIn optional. A launch's `launch.yml` names its brand by `id`, and
+the engine refuses a launch whose brand does not match the launches repo it would write to — the
+mechanical form of "brands never mix".
 
 ## Related
 

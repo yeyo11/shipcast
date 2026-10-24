@@ -10,6 +10,7 @@ test("the personal brand's brand.yml, as it is in yeyo11/launches, is valid", ()
   assert.equal(result.value.id, 'personal');
   assert.equal(result.value.handles.reddit, 'https://www.reddit.com/user/josegarridodev/');
   assert.deepEqual(result.value.languages.blog, ['en', 'es']);
+  assert.equal(result.value.languages.x, undefined, 'the personal brand does not publish on X');
 });
 
 test('a handle is a full https URL', () => {

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T14:58:55.288152065Z
-updated_at: 2026-10-24T15:02:31.383303227Z
+created_at: 2026-10-24T15:02:35.021346133Z
+updated_at: 2026-10-24T16:21:38.984875214Z
 tags:
     - decision
     - mvp
@@ -24,11 +24,12 @@ Reddit drafts ready to paste.**
 | Mastodon | Yes | Free API (access token on mastodon.social) |
 | Instagram | Yes | Free API (Instagram API with Instagram Login); needs a professional account and the owner's Meta app |
 | Reddit | Yes, as `manual` | Shipcast writes one draft per subreddit and the owner posts it. The plan already keeps Reddit as drafts (self-promotion is judged by each subreddit's rules and a post that reads automated gets removed), and since November 2025 Reddit's API needs a manual approval under its Responsible Builder Policy, which a personal script is unlikely to get. Account: [u/josegarridodev](https://www.reddit.com/user/josegarridodev/). The subreddits are still to be chosen |
-| LinkedIn | **No** | The owner does not want the MVP to use the LinkedIn account |
-| X | **No** | The owner does not want the MVP to use the X account; its API is paid besides |
+| LinkedIn | **No, not at all** | The owner will not publish on LinkedIn, in the MVP or after (2026-10-24) |
+| X | **No, not at all** | The owner will not publish on X, in the MVP or after (2026-10-24); its API is paid besides |
 
 Widened on 2026-10-24: the first version covered only the blog and dev.to; the owner asked for every
-network they already have an account on, then excluded LinkedIn and X and added Reddit.
+network they already have an account on, then excluded LinkedIn and X — first from the MVP, then for
+good — and added Reddit.
 
 **Instagram brings assets forward.** An Instagram post is an image, a carousel or a video, never text
 alone; JPEG is the only image format, GIFs are not accepted, links in captions are not clickable, and
@@ -57,8 +58,9 @@ into an MP4 for a Reel. The launches repo's GitHub Pages site serves them public
 Decided on 2026-10-24 by the owner: **Postiz is discarded.** Shipcast talks to every network the owner
 has an account on through its own connectors — one module per network over `fetch`, in
 `packages/connectors` ([plans/stack.md](../plans/stack.md)). For the MVP that is dev.to, Bluesky,
-Mastodon and Instagram, plus Reddit as drafts; LinkedIn and X get theirs when they enter. Reddit's
-connector writes drafts until the account obtains API approval, if it ever does.
+Mastodon and Instagram, plus Reddit as drafts. LinkedIn and X get no connector for the owner;
+Shipcast keeps both as channels (off by default) for other brands that want them. Reddit's connector
+writes drafts until the account obtains API approval, if it ever does.
 
 Why: Postiz needs Postgres, Redis, Temporal and Elasticsearch (6–7 GB on disk, about 2 GB of RAM), too
 much for a laptop tool and a hard requirement to put on the developers Shipcast is for in phase 6;

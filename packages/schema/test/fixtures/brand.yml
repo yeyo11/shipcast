@@ -17,12 +17,9 @@ handles:
 # Where readers can support the author; linked from the blog's footer. Optional.
 support: https://buymeacoffee.com/yeyo11
 
-# The blog is written in both; dev.to, Hacker News, Reddit and Mastodon default to English. X and
-# LinkedIn are per brand: provisional until the owner confirms them.
+# The blog is written in both; the other channels default to English.
 languages:
   blog: [en, es]
-  x: en
-  linkedin: es
 
 # How the AI should write for this brand. Pending: the owner defines it from examples (phase 5).
 tone: ""

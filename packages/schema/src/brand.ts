@@ -26,8 +26,9 @@ export const Brand = z.strictObject({
   languages: z
     .strictObject({
       blog: z.array(Language).min(1).default(['en', 'es']),
-      x: Language.default('en'),
-      linkedin: Language.default('en'),
+      // Only for brands that publish there; the personal brand does not use X or LinkedIn
+      x: Language.optional(),
+      linkedin: Language.optional(),
     })
     .prefault({}),
   /** How the AI writes for this brand; empty until it is defined from examples (phase 5) */
