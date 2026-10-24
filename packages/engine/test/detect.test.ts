@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
 import { detect, Registry, type EventsPage, type GitHubEvent, type GitHubSource } from '../src/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
 
 const VALID = 'enabled: true\nbrand: personal\n';
 

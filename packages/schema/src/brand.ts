@@ -19,6 +19,10 @@ const handlesShape = Object.fromEntries(NETWORKS.map((network) => [network, prof
 export const Brand = z.strictObject({
   id: z.string().regex(/^[a-z0-9-]+$/, 'a brand id is lowercase letters, digits and hyphens'),
   displayName: z.string().min(1),
+  /** The brand's site, where launch articles live and every post links to: https://… without a trailing slash */
+  site: z
+    .url({ protocol: /^https$/, error: 'the site is its full https:// URL' })
+    .transform((url) => url.replace(/\/+$/, '')),
   /** The GitHub account whose repos speak for this brand */
   github: z.string().regex(/^[A-Za-z0-9-]+$/, 'a GitHub login, without the URL'),
   /** A channel without a handle cannot publish */

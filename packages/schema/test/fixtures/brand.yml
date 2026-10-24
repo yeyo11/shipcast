@@ -3,6 +3,8 @@
 # link the profiles. Public information only: tokens stay in Shipcast's .env.
 id: personal
 displayName: José Antonio Garrido
+# Where the launch articles live; every post links here
+site: https://josegarrido.dev
 github: yeyo11
 
 handles:

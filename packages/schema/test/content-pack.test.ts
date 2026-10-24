@@ -32,7 +32,7 @@ const fullPack = {
 } as const;
 
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal', reddit: { subreddits: ['ClaudeAI'] } });
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
 
 function parse(overrides: Record<string, unknown>) {
   return ContentPack.safeParse({ ...fullPack, ...overrides });
