@@ -101,6 +101,7 @@ test('the JSON Schema for Claude is an object schema that keeps the field descri
     required: string[];
   };
   assert.equal(schema.type, 'object');
+  assert.equal((schema as { $schema?: string }).$schema, 'http://json-schema.org/draft-07/schema#', 'Claude Code refuses draft 2020-12');
   assert.ok(schema.required.includes('analysis'));
   assert.match(schema.properties.analysis?.description ?? '', /implemented list/);
 });

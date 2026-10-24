@@ -212,7 +212,10 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
   return missing;
 }
 
-/** The JSON Schema handed to Claude, so the pack comes back in this shape. */
+/**
+ * The JSON Schema handed to Claude, so the pack comes back in this shape. Draft-07, because Claude
+ * Code's `--json-schema` validator refuses a schema that declares draft 2020-12.
+ */
 export function contentPackJsonSchema(): Record<string, unknown> {
-  return z.toJSONSchema(ContentPack, { target: 'draft-2020-12', io: 'input' }) as Record<string, unknown>;
+  return z.toJSONSchema(ContentPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
 }
