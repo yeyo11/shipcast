@@ -1,0 +1,27 @@
+# The brand this launches repo publishes for. Shipcast reads it (its brand schema lives in
+# yeyo11/shipcast, packages/schema) to sign the content, pick each channel's language and tone, and
+# link the profiles. Public information only: tokens stay in Shipcast's .env.
+id: personal
+displayName: José Antonio Garrido
+github: yeyo11
+
+handles:
+  x: https://x.com/joseagg112
+  linkedin: https://www.linkedin.com/in/jagg97/
+  bluesky: https://bsky.app/profile/yeyo11.bsky.social
+  mastodon: https://mastodon.social/@yeyo11
+  devto: https://dev.to/yeyo11
+  reddit: https://www.reddit.com/user/josegarridodev/
+
+# Where readers can support the author; linked from the blog's footer. Optional.
+support: https://buymeacoffee.com/yeyo11
+
+# The blog is written in both; dev.to, Hacker News, Reddit and Mastodon default to English. X and
+# LinkedIn are per brand: provisional until the owner confirms them.
+languages:
+  blog: [en, es]
+  x: en
+  linkedin: es
+
+# How the AI should write for this brand. Pending: the owner defines it from examples (phase 5).
+tone: ""

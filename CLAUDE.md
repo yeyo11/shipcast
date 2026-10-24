@@ -25,7 +25,10 @@ the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md); where the p
 
 ## Layout
 
-- `packages/` — libraries (engine, schemas, connectors), once phase 1 starts
+- `packages/schema` — `launch.yml`, `brand.yml` and the content pack: Zod schemas, line-aware YAML
+  errors, the pack's JSON Schema for Claude ([docs/launch-yml.md](docs/launch-yml.md),
+  [docs/content-pack.md](docs/content-pack.md))
+- `packages/` — the other libraries as they arrive: engine, connectors
 - `apps/` — runnable apps (CLI, dashboard)
 - `docs/` — the knowledge base: plans in `docs/plans/`, decisions in `docs/decisions/`
 

@@ -1,0 +1,19 @@
+{
+  "name": "@shipcast/schema",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The shapes Shipcast agrees on: launch.yml, a brand's brand.yml and the content pack the AI returns",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  }
+}

@@ -1,13 +1,15 @@
 ---
-created_at: 2026-10-24T13:47:38.42677389Z
-updated_at: 2026-10-24T14:00:50.485944281Z
+created_at: 2026-10-24T14:27:01.415195373Z
+updated_at: 2026-10-24T15:21:26.058527389Z
 tags:
     - status
     - roadmap
 ---
 # Status
 
-**Phase 0, foundations** ([plan](plans/shipcast.md#phase-0-foundations)).
+**Phase 0, foundations, done** except reserving the name on npm; **phase 1, the local MVP, starts**
+([plan](plans/shipcast.md#roadmap)). Of phase 0: the repo, the `launch.yml` and content pack schemas,
+the launches repo with its blog and the dev.to account are in place; Hashnode left the MVP.
 
 Done on 2026-10-24: the repository exists and is public at
 [github.com/yeyo11/shipcast](https://github.com/yeyo11/shipcast) — MIT, pnpm monorepo on TypeScript
@@ -26,7 +28,8 @@ is on `PATH` — the owner's nvm default is still 22 for other projects), in `en
 
 The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, no
 domain, the repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages. The technical
-stack is proposed in [plans/stack.md](plans/stack.md), waiting for the owner's confirmation.
+stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog, dev.to, Bluesky,
+Mastodon and Instagram and drafts Reddit, through Shipcast's own connectors; Postiz is discarded.
 
 Services, checked on 2026-10-24:
 
@@ -39,21 +42,28 @@ Services, checked on 2026-10-24:
 - **dev.to**: the account `yeyo11` exists and `DEVTO_API_KEY` authenticates against
   `GET /api/users/me`.
 
-There is no code yet, so the gates pass without checking anything.
+**Code:** `packages/schema` exists (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)),
+`Brand` ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4,
+YAML errors with their line, `missingPieces`, pack inference from semver, and the JSON Schema for
+Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the package template
+(`tsconfig.json` extending the base with `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`).
 
 Waiting on the owner:
 
-- Confirm the stack.
-- `GITHUB_TOKEN_PERSONAL` in `.env` (still empty).
-- The personal brand's details: display name, handles per network, default languages, tone.
+- Instagram: the handle, a professional account, and a Meta app for `INSTAGRAM_USER_ID` and
+  `INSTAGRAM_ACCESS_TOKEN`.
+- `BLUESKY_APP_PASSWORD` and `MASTODON_ACCESS_TOKEN` in `.env`.
+- The subreddits for Reddit drafts.
+- Confirm the languages of X and LinkedIn, and the tone (phase 5).
 - Reserve `shipcast` on npm (free on 2026-10-24).
 - Upload the social preview; hand the design briefs on.
 
 Next in code:
 
-- `packages/schema`: `launch.yml`, brand config and content pack, once the stack is confirmed.
 - `packages/engine`: release polling, launch registry, claudio client; then `apps/cli`.
+- `packages/connectors`: launches repo (drafts pull request), dev.to, Bluesky, Mastodon, Instagram,
+  Reddit drafts; and the OG image and demo video Instagram needs.
 
 ## Related
 
-[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml]] · [[content-pack]]
+[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]]
