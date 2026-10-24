@@ -1,13 +1,13 @@
 ---
-created_at: 2026-10-24T18:09:54.605888861Z
-updated_at: 2026-10-24T18:21:45.248422631Z
+created_at: 2026-10-24T18:21:47.073490906Z
+updated_at: 2026-10-24T18:52:44.798320413Z
 tags:
     - status
     - roadmap
 ---
 # Status
 
-**Phase 0, foundations, done**; **phase 1, the local MVP, in progress** ([plan](plans/shipcast.md#roadmap)).
+**Phase 0, foundations, done**; **phase 1, the local MVP, built and waiting for its first real launch** ([plan](plans/shipcast.md#roadmap)).
 Of phase 0: the repo, the `launch.yml` and content pack schemas, the launches repo with its blog and
 the dev.to account are in place, and the name is reserved on npm (`shipcast@0.0.0`, published by the
 owner on 2026-10-24); Hashnode left the MVP.
@@ -58,12 +58,19 @@ Services, set up on 2026-10-24:
 - `packages/engine` (2026-10-24, [engine.md](engine.md)): the launch registry on `node:sqlite`, launch
   detection from the account's public GitHub events, claudio as the AI provider, and the pipeline from
   a claimed launch to its drafts pull request (fresh clone, prompt with the brand and the truth rule,
-  read-only tools, pack validated and complete, articles and per-channel drafts, one-commit pull
-  request). 42 tests; the GitHub reads, a claudio generation and the rendered articles (in a real
-  build of the blog) were also checked for real.
-- `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch`, `status`, configured from
-  `.env`. 3 tests. Checked live up to the point where claudio's latest release, `v0.8.1`, has no
-  `launch.yml`.
+  read-only tools, pack validated and complete, articles and per-channel drafts, the launch's media,
+  one-commit pull request); then publishing once the pull request is merged and metrics collection
+  ([publishing.md](publishing.md)). 56 tests; the GitHub reads, a claudio generation and the rendered
+  articles (in a real build of the blog) were also checked for real.
+- `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon and
+  Instagram (publish and metrics), Cloudflare Web Analytics and Search Console readers. 15 tests.
+- `packages/assets` (2026-10-24): the 1200×630 launch image (Satori and resvg; its theme is a
+  placeholder until the blog's design system lands) and the demo GIF turned into an Instagram Reel
+  with ffmpeg. 2 tests.
+- `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch` (detect, draft, publish,
+  metrics every 6 h, Instagram token refresh), `publish`, `metrics`, `dashboard`, `status`, configured
+  from `.env`. 10 tests. On 2026-10-24 `status` reports dev.to, Bluesky, Mastodon, Instagram and
+  GitHub configured with the owner's `.env`; nothing has been published yet.
 
 **Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
 rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
@@ -74,21 +81,21 @@ it running.
 
 Waiting on the owner:
 
-- The new design for `josegarrido.dev`, handed by the owner to an external agent; and a second opinion
-  on Shipcast's design system, which the owner is not convinced by.
+- The new design for `josegarrido.dev`, handed by the owner to an external agent, which also gives the
+  launch image its final theme; and a second opinion on Shipcast's design system.
 - Upload the social preview, once Shipcast's design system is settled.
-- Merge claudio pull request #60 (its `launch.yml`), and cut a claudio release after it.
+- For the metrics: a Cloudflare API token with Account Analytics read (blog visits), a Google service
+  account added to the Search Console property (search numbers), and "Administration: read" on the
+  GitHub token (repo traffic). Without them those sources are skipped.
+- Merge claudio's release pull request (#59, v0.8.2), the first release with its `launch.yml`, and
+  give the go-ahead for the first real launch.
 
 Next in code:
 
-- The first real launch: claudio once its `launch.yml` (claudio pull request #60) is merged and a
-  release includes it.
-- Publishing after the merge of a drafts pull request.
-- `packages/connectors`: dev.to, Bluesky, Mastodon, Instagram (the drafts pull request is already in
-  the engine); and the OG image and demo video Instagram needs.
-- Metrics, now in the MVP: one connector per source (blog analytics, Search Console, GitHub, dev.to,
-  Bluesky, Mastodon, Instagram), stored per launch and channel, and a dashboard.
+- The first real launch: claudio v0.8.2, end to end, with the owner reviewing the drafts pull request
+  before anything is published.
+- The blog's new design in the launch image and the article's `og:image`.
 
 ## Related
 
-[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[personal-identity.md]] · [[engine.md]]
+[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[personal-identity.md]] · [[engine.md]] · [[publishing.md]]

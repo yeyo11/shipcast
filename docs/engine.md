@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T18:09:22.78658523Z
-updated_at: 2026-10-24T18:21:09.242185143Z
+created_at: 2026-10-24T18:21:12.490884014Z
+updated_at: 2026-10-24T18:52:03.584967508Z
 tags:
     - engine
     - registry
@@ -31,6 +31,8 @@ once" hold:
   `skipped`, `failed` (the detail says why). Skipped and failed launches keep their row.
 - **`lastPublishedRef(repo)`** feeds the pack inference: only `published` launches count.
 - **`recordPost`** is unique on `(launch, channel)`: the same piece is never published twice.
+- **`recordMetrics`**, **`latestMetrics`** and **`metricHistory`** keep every metric reading
+  ([publishing.md](publishing.md#metrics)).
 - **`cursor` / `setCursor`** keep polling state; **`recent()`** lists launches for `shipcast status`.
 
 ## Detecting launches
@@ -75,11 +77,12 @@ the chat id.
 4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md` with front matter
    the blog's content schema accepts (checked with a real build of the launches repo), a readable
    draft per channel at `launches/<project>/<ref>/<channel>.md` saying its mode (`approval`: merged =
-   published; `manual`: the owner posts it), and `pack.json` to publish from after the merge.
+   published; `manual`: the owner posts it), and `pack.json` to publish from after the merge. The
+   launch image and the demo Reel go with them ([publishing.md](publishing.md#the-launchs-media)).
 5. **The pull request** in the launches repo (`GitHubRest.openPullRequest`): branch
-   `launch/<project>-<ref>` off `main`, one commit with every file through the Git data API, a body
-   with what the code analysis found and the channels' modes. An open pull request for the branch is
-   returned instead of a second one; a leftover branch is moved.
+   `launch/<project>-<ref>` off `main`, one commit with every file through the Git data API (binary
+   files as base64 blobs), a body with what the code analysis found and the channels' modes. An open
+   pull request for the branch is returned instead of a second one; a leftover branch is moved.
 
 `claimManual(repo, ref?)` starts a launch by hand: the given tag or the latest release, refused when
 there is no release, no `launch.yml` at it, or `triggers.manual` is off.
@@ -94,22 +97,24 @@ where the blog reads it.
 | Command | Does |
 | --- | --- |
 | `launch <owner/repo> [--ref <tag>]` | Claims and drafts the launch of a release (the latest without `--ref`) |
-| `watch [--interval <s>]` | Polls the events (default every 300 s, never under 60) and drafts each claimed launch |
-| `status` | The latest launches, their pack and status |
+| `watch [--interval <s>]` | Polls the events (default every 300 s, never under 60), drafts each claimed launch, then publishes and reads the metrics ([publishing.md](publishing.md)) |
+| `publish`, `metrics`, `dashboard` | Publishing, metrics and the dashboard, one at a time ([publishing.md](publishing.md)) |
+| `status` | The latest launches, their pack and status, and which networks and sources are configured |
 
 Configuration comes from `.env` (`GITHUB_TOKEN_PERSONAL`, `CLAUDIO_API_URL`, `CLAUDIO_API_TOKEN`,
 `SHIPCAST_LAUNCHES_REPO`, optional `SHIPCAST_DATA_DIR` and `SHIPCAST_MAX_BUDGET_USD`); every missing
-variable is reported at once.
+variable is reported at once. The networks' and the analytics' variables are optional: each one
+without them is left out ([publishing.md](publishing.md)).
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
 its `launch.yml` reached the default branch (or `--ref` to a tag that has it). On 2026-10-24 claudio's
 latest release, `v0.8.1`, predates its `launch.yml` (claudio pull request #60).
 
-## Still to build
+## After the drafts
 
-Publishing after the merge (dev.to, Bluesky, Mastodon, Instagram, the OG image and demo video
-Instagram needs), the metrics connectors and dashboard ([decisions/mvp-scope.md](decisions/mvp-scope.md)).
+The launch's media, publishing after the merge, metrics and the dashboard are in
+[publishing.md](publishing.md).
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]]
