@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Design and roadmap
+    url: https://github.com/yeyo11/shipcast/blob/main/docs/plans/shipcast.md
+    about: How Shipcast is meant to work, the decisions taken and what each phase delivers.
+  - name: Security vulnerability
+    url: https://github.com/yeyo11/shipcast/security/advisories/new
+    about: Report privately. Please do not open a public issue.

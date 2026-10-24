@@ -47,7 +47,11 @@ Both run as [Sluice](.sluice.toml) gates (`typecheck` on pre-commit, `test` on p
   stay as written.
 - Settings-shaped documents (`launch.yml`, brand config) are files; accumulating records (launches,
   metrics) are rows in a database.
-- Commits follow Conventional Commits. Pull requests are squash-merged.
+- Commits follow Conventional Commits.
+- **Until the MVP, work goes straight to `main`**: no feature branches, no pull requests, small
+  commits that pass the Sluice gates. Agents running in parallel worktrees keep to their own branch
+  and leave the integration into `main` to the maintainer. Push only when the owner asks. After the
+  MVP, pull requests come back, squash-merged ([docs/decisions/main-until-mvp.md](docs/decisions/main-until-mvp.md)).
 - Secrets (API keys, tokens for each network) live in `.env`, never in the repo.
 
 ## Knowledge

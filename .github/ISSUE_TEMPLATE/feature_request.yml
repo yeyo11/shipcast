@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a channel, a content piece or anything else Shipcast should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What part of launching a project do you still do by hand, or cannot do at all?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checked-roadmap
+    attributes:
+      label: Before you file
+      options:
+        - label: I checked the [roadmap](https://github.com/yeyo11/shipcast/blob/main/docs/plans/shipcast.md#roadmap) and this is not already planned.
+          required: true
