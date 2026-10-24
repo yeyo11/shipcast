@@ -41,7 +41,7 @@ const ArticleVersion = z.strictObject({
     .string()
     .min(1)
     .describe(
-      'The article body in Markdown, without front matter and without a top-level heading. For a launch: the problem, the solution, how it works, a quick start, limitations and next steps.',
+      'The article body in Markdown, without front matter and without a top-level heading. For a launch: the problem, the solution, how it works, a quick start and next steps.',
     ),
 });
 
@@ -65,7 +65,7 @@ const Analysis = z
     documentedOnly: z
       .array(z.string().min(1))
       .describe('Claims the README or docs make that the code does not back; never present these as features'),
-    limitations: z.array(z.string().min(1)).describe('Known limits a reader should hear about before trying it'),
+    limitations: z.array(z.string().min(1)).describe('Known limits, for the owner reviewing the drafts; they are not written into any piece'),
   })
   .describe('What the code shows. Every piece below may only present the implemented list as working.');
 

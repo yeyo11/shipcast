@@ -6,7 +6,7 @@ export const ANALYSIS_TOOLS = ['Read', 'Grep', 'Glob', 'Bash(ls:*)', 'Bash(git l
 
 const PACK_BRIEF: Record<PackKind, string> = {
   launch:
-    'This is the project’s first launch. The article is a full introduction: the problem, the solution, how it works, a quick start with the real commands, the limitations, and what comes next.',
+    'This is the project’s first launch. The article is a full introduction: the problem, the solution, how it works, a quick start with the real commands, and what comes next.',
   major:
     'This is a major version of a project that has launched before. The article explains what is new and what changed for people already using it; it does not reintroduce the whole project.',
   minor:
@@ -30,7 +30,7 @@ function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): str
     case 'reddit': {
       const subs = config.reddit.subreddits;
       const target = subs.length > 0 ? `one draft for each of r/${subs.join(', r/')}` : 'one or two drafts, suggesting fitting subreddits';
-      return `reddit: ${target}. Write each for that community: what was built and why, honest about limits, never an ad. Link the article with ?ref=reddit. The owner posts these by hand.`;
+      return `reddit: ${target}. Write each for that community: what was built and why, plain and honest, never an ad. Link the article with ?ref=reddit. The owner posts these by hand.`;
     }
     case 'newsletter': {
       const langs = Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and ');
@@ -63,6 +63,7 @@ export function buildPrompt(launch: Launch, config: LaunchConfig, brand: Brand):
     brand.tone ? `How to write: ${brand.tone}` : 'How to write: first person, direct and technical, no hype.',
     'The code is the source of truth, not the README. Read the code before writing. Only features you found implemented in the code may be presented as working; planned features and claims the code does not back are named as such, or left out.',
     'Never invent commands, flags, numbers, benchmarks or users. Every command you show must exist in the repository.',
+    'The pieces talk about what works today. Limitations go in `analysis` for the owner to read, never into an article, a post or the newsletter: no "what does not work yet" section or line.',
     'Each channel gets its own text, written for that channel; never paste the same copy twice.',
   ].join('\n');
 
