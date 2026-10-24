@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T12:32:02.02174124Z
-updated_at: 2026-10-24T12:34:50.427679951Z
+created_at: 2026-10-24T12:53:42.880919339Z
+updated_at: 2026-10-24T16:37:30.406037509Z
 tags:
     - knowledge-base
     - pando
@@ -20,6 +20,19 @@ Neither is a second source of truth. The documents are the markdown files in thi
 git and reviewed like code; the indexes are derived and disposable. They live in
 `.pando/data/pando.db`, which is gitignored, so nothing here is committed and a lost database is one
 re-index away.
+
+## Public and internal documents
+
+The repository is public, and so is everything under `docs/` — except **`docs/internal/`**, which is
+gitignored. Pando indexes it like the rest, so a search on the owner's machine still finds it, but it
+never reaches GitHub. It holds what is specific to the owner: accounts and the state of their
+credentials, the machine (servers, global configuration), private context behind a decision. Write it
+with `kb_add_document` under `internal/` (`internal/setup.md`), and never link to it from a public
+document, where the link would only break. Decided on 2026-10-24.
+
+What never goes into a tracked file or a commit message, internal or not: the people or creators the
+owner takes as references, the owner's private projects, analyses of the owner, other people's
+messages, and secrets. A public document records the decision, not its private sources.
 
 ## The rule
 
@@ -149,17 +162,17 @@ and front matter is rebuilt from the tags on every update.
 
 ## The embedding server has to be up
 
-Every embedding — documents through `qwen3-embedding:0.6b`, code symbols through
-`jina-embeddings-v2-base-code` — is computed locally by an ollama-compatible server on
-`127.0.0.1:11435` (on this machine, `alkahest`), as set by the `DocumentEmbedding*` and
-`CodeEmbedding*` keys of `~/.pando.toml`:
+Every embedding — documents and code symbols alike — is computed locally by an ollama-compatible
+server, the one the `DocumentEmbedding*` and `CodeEmbedding*` keys of `~/.pando.toml` point to. Check
+it answers before indexing or searching:
 
 ```bash
-curl -s 127.0.0.1:11435/api/tags     # lists the models when it is up
+curl -s "$EMBEDDINGS_URL/api/tags"     # lists the models when it is up
 ```
 
 With it down, `kb_add_document` and every semantic search fail or come back empty, and an index job
-started without it produces nothing. Being local, embedding costs time and never money.
+started without it produces nothing. Being local, embedding costs time and never money. Which server
+and models a given machine uses is machine-specific, so it is not recorded here.
 
 ## The code index
 

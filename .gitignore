@@ -15,3 +15,5 @@ dist
 workspace/
 # Screenshots and snapshots of the Playwright MCP
 .playwright-mcp/
+# Owner-specific notes (machine, accounts, credential status): indexed by pando, never published
+docs/internal/

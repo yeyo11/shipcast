@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T15:02:35.021346133Z
-updated_at: 2026-10-24T16:21:38.984875214Z
+created_at: 2026-10-24T16:21:40.656881834Z
+updated_at: 2026-10-24T16:37:57.017845674Z
 tags:
     - decision
     - mvp
@@ -43,11 +43,13 @@ into an MP4 for a Reel. The launches repo's GitHub Pages site serves them public
   schemas keep brands as a concept ([brands.md](../brands.md)), so adding the second one is
   configuration, not a redesign. One GitHub token (`GITHUB_TOKEN_PERSONAL`).
 - **No paid APIs.** Nothing in the MVP calls an API that charges per use. Every MVP channel above has
-  a free API, and the AI runs through claudio on the owner's existing Claude subscription.
+  a free API, and the AI runs through claudio, which costs nothing per launch.
 - **The repository stays at `yeyo11/shipcast`.** The `shipcast` GitHub organisation has been taken
   since 2020 (and `launchloop`, the fallback name, is taken too). The name is free on npm, and the
   owner reserves it there.
-- **No domain.** `shipcast.dev`, `.io` and `.app` are taken; none is bought for now.
+- **No domain for Shipcast.** `shipcast.dev`, `.io` and `.app` are taken; none is bought for now. The
+  owner did buy a personal domain on 2026-10-24, `josegarrido.dev`; how the blog uses it is being
+  decided.
 - **The blog lives in `yeyo11/launches`**, on GitHub Pages at `https://yeyo11.github.io/launches/`
   ([launches-repo.md](../launches-repo.md)), dark theme by default.
 - **claudio runs from this repo's `docker-compose.yml`**, configured by the owner
@@ -67,9 +69,9 @@ much for a laptop tool and a hard requirement to put on the developers Shipcast 
 and the networks of the MVP all have free, documented APIs that a small module covers.
 
 Postiz stays useful as **reference code**: when a connector needs to know how an API behaves in
-practice (media upload, token refresh, limits), read Postiz's provider for that network. A shallow
-clone lives at `~/Escritorio/postiz-app`; the providers are in
-`libraries/nestjs-libraries/src/integrations/social/` (`dev.to.provider.ts`, `bluesky.provider.ts`,
+practice (media upload, token refresh, limits), read Postiz's provider for that network
+([gitroomhq/postiz-app](https://github.com/gitroomhq/postiz-app), under
+`libraries/nestjs-libraries/src/integrations/social/`: `dev.to.provider.ts`, `bluesky.provider.ts`,
 `mastodon.provider.ts`, `instagram.standalone.provider.ts`, `reddit.provider.ts`). Postiz is
 AGPL-3.0 and Shipcast is MIT: read it to learn how an API behaves, then write the connector from the
 API's own documentation; never copy its code.
