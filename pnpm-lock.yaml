@@ -18,6 +18,12 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/engine:
+    dependencies:
+      '@shipcast/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/schema:
     dependencies:
       yaml:
