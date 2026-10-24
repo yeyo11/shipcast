@@ -1,13 +1,13 @@
 ---
-created_at: 2026-10-24T20:21:29.95450937Z
-updated_at: 2026-10-24T21:34:37.530976549Z
+created_at: 2026-10-24T21:34:39.818346951Z
+updated_at: 2026-10-24T23:14:35.799864845Z
 tags:
     - status
     - roadmap
 ---
 # Status
 
-**Phase 0, foundations, done**; **phase 1, the local MVP, built and waiting for its first real launch** ([plan](plans/shipcast.md#roadmap)).
+**Phase 0, foundations, done**; **phase 1, the local MVP: its first real launch went out on 2026-10-25** ([plan](plans/shipcast.md#roadmap)).
 Of phase 0: the repo, the `launch.yml` and content pack schemas, the launches repo with its blog and
 the dev.to account are in place, and the name is reserved on npm (`shipcast@0.0.0`, published by the
 owner on 2026-10-24); Hashnode left the MVP.
@@ -37,9 +37,8 @@ connectors; Postiz is discarded. Metrics are in the MVP too.
 Services, set up on 2026-10-24:
 
 - **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches) exists, with the Astro
-  blog live at <https://josegarrido.dev> (empty until the first launch, HTTPS enforced) and deployed
-  on every push to `main` ([launches-repo.md](launches-repo.md)). Its `brand.yml` names the brand's
-  site, where articles live.
+  blog live at <https://josegarrido.dev> and deployed on every push to `main`
+  ([launches-repo.md](launches-repo.md)). Its `brand.yml` names the brand's site, where articles live.
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), signed in to Claude.
 - **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
   submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
@@ -54,7 +53,7 @@ Services, set up on 2026-10-24:
 - `packages/schema` (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)), `Brand`
   ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4, YAML errors
   with their line, `missingPieces`, pack inference from semver, one slug per language, and the JSON
-  Schema for Claude. 27 tests. It set the package template (`tsconfig.json` extending the base with
+  Schema for Claude (draft-07). It set the package template (`tsconfig.json` extending the base with
   `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`, tests on `node:test` run by Node's type
   stripping).
 - `packages/engine` (2026-10-24, [engine.md](engine.md)): the launch registry on `node:sqlite`, launch
@@ -62,44 +61,60 @@ Services, set up on 2026-10-24:
   a claimed launch to its drafts pull request (fresh clone, prompt with the brand and the truth rule,
   read-only tools, pack validated and complete, articles and per-channel drafts, the launch's media,
   one-commit pull request); then publishing once the pull request is merged, the newsletter, and
-  metrics collection ([publishing.md](publishing.md)). 58 tests; the GitHub reads, a claudio
-  generation and the rendered articles (in a real build of the blog) were also checked for real.
+  metrics collection ([publishing.md](publishing.md)).
 - `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon,
   Instagram and Brevo (publish and metrics), Cloudflare Web Analytics and Search Console readers.
-  17 tests; Brevo answered live (lists, templates, the blog's form).
 - `packages/assets` (2026-10-24): the 1200×630 launch image in the blog's editorial identity
-  (Satori and resvg) and the demo GIF turned into an Instagram Reel with ffmpeg. 3 tests.
-- `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch` (detect, draft, publish,
-  metrics every 6 h, Instagram token refresh), `publish`, `metrics`, `dashboard`, `status`, configured
-  from `.env`. 10 tests. On 2026-10-24 `status` reports every network and source configured with the
-  owner's `.env`, and each metrics source answered live; nothing has been published yet.
+  (Satori and resvg) and the demo GIF turned into an Instagram Reel with ffmpeg.
+- `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]` (which retries a failed launch),
+  `watch` (detect, draft, publish, metrics every 6 h, Instagram token refresh), `publish [--retry
+  <channel>]`, `metrics`, `dashboard [--port] [--host]`, `status`, configured from `.env`.
 
 **Design** (2026-10-24, everything merged after the owner tried it running):
 
 - **josegarrido.dev** wears the editorial identity ([personal-identity.md](personal-identity.md)),
   with the author's photo, `og:image` from each launch's image, the `jg` monogram and favicon drawn
-  from Fraunces' outlines, claudio's drawn cover, its own 404, the newsletter form and each page's path
-  in its own language ([launches-repo.md](launches-repo.md)); the blackboard identity was rejected.
+  from Fraunces' outlines, claudio's drawn cover, its own 404, the newsletter form, an about page and
+  each page's path in its own language ([launches-repo.md](launches-repo.md)); the blackboard identity
+  was rejected.
 - **Shipcast** has its design system, Cartel ([plans/design-system.md](plans/design-system.md),
   [`design/`](../design/README.md)); the first direction, the signal path, was rejected.
 
 **The newsletter** (2026-10-24) is set up in Brevo and live on the blog: domain verified, lists and
-forms per language, confirmation emails in the blog's style, the owner subscribed as a first test
-([publishing.md](publishing.md#the-newsletter)). claudio turned it on (claudio pull request #62).
+forms per language, confirmation emails in the blog's style
+([publishing.md](publishing.md#the-newsletter)). Replies to `me@josegarrido.dev` reach the owner's own
+mail server. claudio turned it on (claudio pull request #62).
+
+**The first real launch** (2026-10-25): claudio v0.9.0, drafted by `shipcast launch yeyo11/claudio
+--ref v0.9.0` into [launches#1](https://github.com/yeyo11/launches/pull/1) (AI cost $0.45), edited by
+the owner in the pull request (out went every "what does not work yet" part, now also out of the
+brand's tone), merged, and published by `shipcast publish`: the article in both languages on the
+blog, dev.to, Bluesky, Mastodon, Instagram (the demo as a Reel) and the newsletter in both languages;
+the Reddit drafts are for the owner to post. Every metrics source answered but Mastodon's.
+
+What the first run found, each fixed and tested:
+
+- `workspace/` was created by Docker as root, so the clone failed; it now belongs to the owner's user.
+- claudio exports `CLAUDIO_API_URL` and `CLAUDIO_API_TOKEN` to the sessions it runs, and `.env` does
+  not override the environment, so a Shipcast started from claudio reached the desktop app: Shipcast
+  now reads `SHIPCAST_CLAUDIO_URL` and `SHIPCAST_CLAUDIO_TOKEN`.
+- Claude Code's `--json-schema` refuses draft 2020-12: the pack's schema is draft-07.
+- Brevo's free plan refuses a tagged campaign: the newsletter goes untagged.
+- A failed launch could not be retried: a manual `launch` now retries it, and
+  `publish --retry <channel>` retries a channel that failed for good.
 
 Waiting on the owner:
 
-- Replies to `me@josegarrido.dev`: the owner's own mail server receives them; it needs the domain and
-  mailbox there, its DKIM key and the server's hostname, then the DNS records in Cloudflare.
+- Mastodon metrics: the access token has only write scopes; reading a post's numbers needs
+  `read:statuses` (Preferencias → Desarrollo → the `shipcast` app → add the scope, regenerate the
+  token, update `MASTODON_ACCESS_TOKEN`).
+- Post the Reddit drafts by hand, after reading each subreddit's self-promotion rules.
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
-- Merge claudio's release pull request (#59, v0.8.2), the first release with its `launch.yml`, and
-  give the go-ahead for the first real launch.
 
 Next in code:
 
-- A test issue of the newsletter to the owner (`Brevo.sendTest`), to see the unsubscribe link render.
-- The first real launch: claudio v0.8.2, end to end, with the owner reviewing the drafts pull request
-  before anything is published.
+- `shipcast watch` as a service that outlives a session (a systemd user unit), so the metrics keep
+  coming every 6 hours.
 - Later: one source for the project colours, generated covers per article, and the dashboard in
   Cartel.
 
