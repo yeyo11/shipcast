@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T18:21:12.490884014Z
-updated_at: 2026-10-24T18:52:03.584967508Z
+created_at: 2026-10-24T19:13:49.217534335Z
+updated_at: 2026-10-24T21:33:11.156661032Z
 tags:
     - engine
     - registry
@@ -71,14 +71,15 @@ the chat id.
    and the truth rule (only what the code implements is presented as working; no invented commands
    or numbers; a different text per channel), and a prompt with the pack's brief (`launch`, `major`,
    `minor`) and one brief per active channel, with its limits and links
-   (`<site>/<lang>/<slug>/?ref=<channel>`; none on Instagram). Tools are read-only (`Read`, `Grep`,
-   `Glob`, `ls`, `git log/tag/show`). The answer is accepted only when it validates, matches the launch
-   (kind, repo) and `missingPieces` is empty.
-4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md` with front matter
-   the blog's content schema accepts (checked with a real build of the launches repo), a readable
-   draft per channel at `launches/<project>/<ref>/<channel>.md` saying its mode (`approval`: merged =
-   published; `manual`: the owner posts it), and `pack.json` to publish from after the merge. The
-   launch image and the demo Reel go with them ([publishing.md](publishing.md#the-launchs-media)).
+   (`<site>/<lang>/<that language's slug>/?ref=<channel>`; none on Instagram). Tools are read-only
+   (`Read`, `Grep`, `Glob`, `ls`, `git log/tag/show`). The answer is accepted only when it validates,
+   matches the launch (kind, repo) and `missingPieces` is empty.
+4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, one slug per
+   language ([content-pack.md](content-pack.md#one-slug-per-language)), with front matter the blog's
+   content schema accepts (checked with a real build of the launches repo), a readable draft per
+   channel at `launches/<project>/<ref>/<channel>.md` saying its mode (`approval`: merged = published;
+   `manual`: the owner posts it), and `pack.json` to publish from after the merge. The launch image and
+   the demo Reel go with them ([publishing.md](publishing.md#the-launchs-media)).
 5. **The pull request** in the launches repo (`GitHubRest.openPullRequest`): branch
    `launch/<project>-<ref>` off `main`, one commit with every file through the Git data API (binary
    files as base64 blobs), a body with what the code analysis found and the channels' modes. An open
@@ -108,11 +109,12 @@ without them is left out ([publishing.md](publishing.md)).
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
 its `launch.yml` reached the default branch (or `--ref` to a tag that has it). On 2026-10-24 claudio's
-latest release, `v0.8.1`, predates its `launch.yml` (claudio pull request #60).
+latest release, `v0.8.1`, predates its `launch.yml` (claudio pull requests #60 and #62, the second
+turning the newsletter on).
 
 ## After the drafts
 
-The launch's media, publishing after the merge, metrics and the dashboard are in
+The launch's media, publishing after the merge, the newsletter, metrics and the dashboard are in
 [publishing.md](publishing.md).
 
 ## Related

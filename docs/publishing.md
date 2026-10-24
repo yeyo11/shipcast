@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:52:52.086566015Z
-updated_at: 2026-10-24T20:20:47.452908487Z
+created_at: 2026-10-24T20:20:50.496305064Z
+updated_at: 2026-10-24T21:33:54.199538516Z
 tags:
     - publishing
     - connectors
@@ -51,13 +51,14 @@ Binary files go into the pull request as base64 blobs through the Git data API.
 
 1. Pull request **open** → wait; **closed without merging** → the launch is `skipped`.
 2. **Merged** → wait until the article answers a `HEAD` on the site (the merge starts the deploy,
-   and the media live there), then record the blog post.
+   and the media live there), then record the blog post, with both languages' slugs.
 3. Every text is read **from the launches repo as merged**, so the owner's edits in the pull request
    are what goes out: each channel's draft after its mode line, the article's front matter, dev.to's
    tags.
 4. Each channel whose mode is `auto` or `approval` and that has a connector is published once (the
    registry refuses a second post on the same channel):
-   - **dev.to** (`devto.ts`): the article with `canonical_url` to the blog, `og.png` as the cover.
+   - **dev.to** (`devto.ts`): the English article with `canonical_url` to the blog, `og.png` as the
+     cover.
    - **Bluesky** (`bluesky.ts`): app password session, link facets counted in UTF-8 bytes, an external
      card with `og.jpg` as its thumbnail.
    - **Mastodon** (`mastodon.ts`): `og.jpg` uploaded through `/api/v2/media`, and an
@@ -77,13 +78,14 @@ Binary files go into the pull request as base64 blobs through the Git data API.
 Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newsletter-brevo)).
 
 - **Configuration:** `brand.yml` has a `newsletter` block with the sender (`name`, `email`), the Brevo
-  list of each language (`lists: { en: <id>, es: <id> }`) and, optionally, the action URL of the
-  Brevo subscription form the blog posts to. `BREVO_API_KEY` goes in `.env`. A project turns it on
-  with `publishing.newsletter: approval` in its `launch.yml` (off by default).
+  list of each language (`lists: { en: <id>, es: <id> }`) and the action URL of each language's Brevo
+  subscription form the blog posts to (`forms: { en: <url>, es: <url> }`). `BREVO_API_KEY` goes in
+  `.env`. A project turns it on with `publishing.newsletter: approval` in its `launch.yml` (off by
+  default); claudio does since its pull request #62.
 - **The issue:** the content pack's `newsletter` piece carries one issue per language with a list:
   a subject (at most 90 characters), a preview text (at most 140) and a short Markdown note to
-  subscribers linking the article with `?ref=newsletter`, not the article itself. `missingPieces`
-  refuses a pack without an issue for each list. The drafts pull request has
+  subscribers linking the article in that language with `?ref=newsletter`, not the article itself.
+  `missingPieces` refuses a pack without an issue for each list. The drafts pull request has
   `launches/<project>/<ref>/newsletter-<lang>.md`, with `Subject:` and `Preview:` lines above the
   body; what is merged is what is sent.
 - **The email** (`newsletter.ts`, `renderIssueHtml`): tables and inline styles, so every mail client
@@ -98,9 +100,19 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
   create a second campaign. With nobody subscribed in any list, the channel is recorded as failed
   once ("no subscribers yet") and not retried. The post's external id joins the campaign ids
   (`12,13`), and the metrics add them up.
-- **Still to do before the first issue:** verify `josegarrido.dev` in Brevo (DKIM and DMARC in
-  Cloudflare), create the lists and the double opt-in form, add the form to the blog and update its
-  privacy policy, and send a test (`Brevo.sendTest`) to check the unsubscribe placeholder renders.
+- **Set up on 2026-10-24:** `josegarrido.dev` verified in Brevo (its code, DKIM and DMARC are in
+  Cloudflare); the senders `me@` and `noreply@josegarrido.dev`; the lists `Newsletter (en)` (4) and
+  `Newsletter (es)` (5) in the folder `josegarrido.dev`; one Brevo form per language with double
+  opt-in and no captcha (a captcha would only work inside Brevo's own page), redirecting to
+  `/en/subscribed/` and `/es/suscrito/`, and the confirmation templates in the blog's editorial style,
+  created through the API (`tag: optin`, the link is `{{ doubleoptin }}`), signed "José Garrido". The
+  blog posts its own form to Brevo's (Brevo answers CORS for the calling origin, and JSON with
+  `?isAjax=1`), keeping Brevo's hidden trap field for bots ([launches-repo.md](launches-repo.md)); the
+  owner's own subscription went through end to end. The remaining check is a test issue
+  (`Brevo.sendTest`), to see the unsubscribe placeholder render.
+- **Spam:** double opt-in keeps bots off the list; what is left is list bombing (bots typing other
+  people's addresses, which costs sends and reputation). If it shows up, the answer is a Cloudflare
+  Worker with Turnstile in front of Brevo's double opt-in API.
 
 ## Metrics
 
@@ -112,7 +124,7 @@ a history and the dashboard shows the latest. One source failing never stops the
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue (all languages added up); opens are inflated by Apple's privacy protection, clicks are the number to trust | Brevo's campaign statistics |
 | `devto`, `bluesky`, `mastodon`, `instagram` | views, reactions, comments, likes, reposts, reach… per post | each connector's `metrics(externalId)`; Bluesky through the public AppView, Instagram through insights |
-| `blog` | the article's visits in both languages, and by referrer (`views_bluesky`, `views_devto`, …) | Cloudflare Web Analytics' GraphQL API (`cloudflare.ts`) |
+| `blog` | each language's article visits (by its own slug) and their sum, and by referrer (`views_bluesky`, `views_devto`, …) | Cloudflare Web Analytics' GraphQL API (`cloudflare.ts`) |
 | `search` | clicks and impressions of both articles | Search Console, with a service account's JWT signed by `node:crypto` (`search-console.ts`) |
 | `github` | stars, forks, watchers; views and unique visitors of the last 14 days | GitHub REST (`repoStats`) |
 
