@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:56:19.135373968Z
-updated_at: 2026-10-24T17:39:11.565453081Z
+created_at: 2026-10-24T17:39:14.643745926Z
+updated_at: 2026-10-24T17:43:30.88489524Z
 tags:
     - status
     - roadmap
@@ -39,7 +39,8 @@ Services, set up on 2026-10-24:
   on every push to `main` ([launches-repo.md](launches-repo.md)).
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), signed in to Claude.
 - **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
-  submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog.
+  submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
+  Meta app's privacy policy URL points to `https://josegarrido.dev/en/privacy/`.
 - **Every credential of the MVP** — GitHub, claudio, dev.to, Instagram (with insights), Bluesky and
   Mastodon — is in the owner's `.env` and answered when tested. Accounts, expiry dates and machine
   details are in the owner's local notes, not in the public docs.
@@ -53,15 +54,15 @@ Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the
 **Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
 rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
 external agent. Shipcast's design system assets (tokens, logo, channel icons, social preview,
-specimen under `design/`) are ready on a branch, waiting for the owner to try them. Nothing visual
-reaches `main` until the owner has seen it running.
+specimen under `design/`) are ready on a local branch; the owner is not convinced by them and is
+getting a second opinion from another agent. Nothing visual reaches `main` until the owner has seen
+it running.
 
 Waiting on the owner:
 
-- The new design for `josegarrido.dev`, handed by the owner to an external agent; and the review of
-  Shipcast's design system assets, ready on a branch.
+- The new design for `josegarrido.dev`, handed by the owner to an external agent; and a second opinion
+  on Shipcast's design system, which the owner is not convinced by.
 - The subreddits for Reddit drafts.
-- Point the Meta app's privacy policy URL to `https://josegarrido.dev/en/privacy/`.
 - Reserve `shipcast` on npm (free on 2026-10-24).
 - Upload the social preview.
 
