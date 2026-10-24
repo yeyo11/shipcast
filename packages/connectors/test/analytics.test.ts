@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict';
+import { createVerify, generateKeyPairSync } from 'node:crypto';
+import { test } from 'node:test';
+import { CloudflareAnalytics, SearchConsole, sourceOfReferrer, visitsToMetrics } from '../src/index.ts';
+import { fakeFetch, type Call } from './fake.ts';
+
+test('a referrer host maps to the channel that sent the visit', () => {
+  assert.equal(sourceOfReferrer(null), 'direct');
+  assert.equal(sourceOfReferrer('bsky.app'), 'bluesky');
+  assert.equal(sourceOfReferrer('go.bsky.app'), 'bluesky');
+  assert.equal(sourceOfReferrer('dev.to'), 'devto');
+  assert.equal(sourceOfReferrer('l.instagram.com'), 'instagram');
+  assert.equal(sourceOfReferrer('out.reddit.com'), 'reddit');
+  assert.equal(sourceOfReferrer('www.google.es'), 'search');
+  assert.equal(sourceOfReferrer('fosstodon.org'), 'other', 'a Mastodon instance cannot be told apart from any site');
+});
+
+test('Cloudflare page visits are summed by source for one path', async () => {
+  const calls: Call[] = [];
+  const cf = new CloudflareAnalytics({
+    apiToken: 'cf',
+    accountId: 'acc',
+    siteTag: 'site',
+    fetch: fakeFetch(
+      [
+        [
+          'POST https://api.cloudflare.com/client/v4/graphql',
+          () =>
+            Response.json({
+              data: {
+                viewer: {
+                  accounts: [
+                    {
+                      rumPageloadEventsAdaptiveGroups: [
+                        { count: 30, dimensions: { refererHost: 'bsky.app' } },
+                        { count: 12, dimensions: { refererHost: '' } },
+                        { count: 5, dimensions: { refererHost: 'dev.to' } },
+                        { count: 3, dimensions: { refererHost: 'go.bsky.app' } },
+                      ],
+                    },
+                  ],
+                },
+              },
+              errors: null,
+            }),
+        ],
+      ],
+      calls,
+    ),
+  });
+  const visits = await cf.pageVisits('/en/claudio/', '2026-10-25', '2026-10-31');
+  assert.deepEqual(visits, { views: 50, bySource: { bluesky: 33, direct: 12, devto: 5 } });
+  assert.deepEqual(visitsToMetrics(visits), { views: 50, views_bluesky: 33, views_direct: 12, views_devto: 5 });
+  const body = JSON.parse(String(calls[0]!.body)) as { variables: { account: string; filter: Record<string, string> } };
+  assert.equal(calls[0]!.headers.authorization, 'Bearer cf');
+  assert.deepEqual(body.variables, { account: 'acc', filter: { siteTag: 'site', requestPath: '/en/claudio/', date_geq: '2026-10-25', date_leq: '2026-10-31' } });
+});
+
+test('a GraphQL error from Cloudflare is raised, not read as zero visits', async () => {
+  const cf = new CloudflareAnalytics({
+    apiToken: 'cf',
+    accountId: 'acc',
+    siteTag: 's',
+    fetch: fakeFetch([['POST', () => Response.json({ data: null, errors: [{ message: 'not authorized for that account' }] })]], []),
+  });
+  await assert.rejects(cf.pageVisits('/', '2026-10-25', '2026-10-25'), /Cloudflare: not authorized/);
+});
+
+test('Search Console signs a service-account JWT, exchanges it once, and reads one page', async () => {
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const calls: Call[] = [];
+  const sc = new SearchConsole({
+    serviceAccount: { client_email: 'shipcast@project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() },
+    property: 'sc-domain:josegarrido.dev',
+    fetch: fakeFetch(
+      [
+        ['POST https://oauth2.googleapis.com/token', () => Response.json({ access_token: 'goog', expires_in: 3600 })],
+        [
+          'POST https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Ajosegarrido.dev/searchAnalytics/query',
+          () => Response.json({ rows: [{ keys: ['https://josegarrido.dev/en/claudio/'], clicks: 7, impressions: 140, ctr: 0.05, position: 11.2 }] }),
+        ],
+      ],
+      calls,
+    ),
+  });
+
+  assert.deepEqual(await sc.pageMetrics('https://josegarrido.dev/en/claudio/', '2026-10-25', '2026-10-31'), { clicks: 7, impressions: 140, ctr: 0.05, position: 11.2 });
+  await sc.pageMetrics('https://josegarrido.dev/es/claudio/', '2026-10-25', '2026-10-31');
+  assert.equal(calls.filter((c) => c.url.includes('oauth2')).length, 1, 'the access token is reused until it expires');
+
+  const assertion = new URLSearchParams(String(calls[0]!.body)).get('assertion')!;
+  const [header, payload, signature] = assertion.split('.');
+  const verified = createVerify('RSA-SHA256').update(`${header}.${payload}`).verify(publicKey, Buffer.from(signature!, 'base64url'));
+  assert.ok(verified, 'the JWT is signed with the service account key');
+  const claims = JSON.parse(Buffer.from(payload!, 'base64url').toString()) as { iss: string; scope: string; aud: string };
+  assert.equal(claims.iss, 'shipcast@project.iam.gserviceaccount.com');
+  assert.equal(claims.scope, 'https://www.googleapis.com/auth/webmasters.readonly', 'read-only');
+  assert.equal(calls[1]!.headers.authorization, 'Bearer goog');
+});
