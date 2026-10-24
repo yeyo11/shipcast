@@ -47,8 +47,8 @@ export const Brand = z.strictObject({
     .strictObject({
       sender: z.strictObject({ name: z.string().min(1), email: z.email() }),
       lists: z.partialRecord(Language, z.int().positive()).refine((l) => Object.keys(l).length > 0, 'at least one list'),
-      /** Where the blog's subscription form posts: the action URL of the Brevo form */
-      form: z.url({ protocol: /^https$/ }).optional(),
+      /** Where the blog's subscription form posts in each language: the action URL of its Brevo form */
+      forms: z.partialRecord(Language, z.url({ protocol: /^https$/ })).optional(),
     })
     .optional(),
   /** Visit counting on the brand's site; tokens here are public, they ship in every page */
