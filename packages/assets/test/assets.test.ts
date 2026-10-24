@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { demoToReel, durationSeconds, OG_HEIGHT, OG_WIDTH, renderOgImage } from '../src/index.ts';
+
+function pngSize(png: Uint8Array): { width: number; height: number } {
+  const view = new DataView(png.buffer, png.byteOffset);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+test('the OG image renders at 1200x630, as PNG and as JPEG', async () => {
+  const { png, jpeg } = await renderOgImage({
+    project: 'claudio',
+    pitch: 'Claude Code as a service: a REST API, a web UI and a desktop app.',
+    version: 'v0.8.2',
+    author: 'José Antonio Garrido',
+    site: 'josegarrido.dev',
+  });
+  assert.deepEqual([...png.slice(0, 4)], [0x89, 0x50, 0x4e, 0x47], 'a PNG');
+  assert.deepEqual(pngSize(png), { width: OG_WIDTH, height: OG_HEIGHT });
+  assert.deepEqual([...jpeg.slice(0, 3)], [0xff, 0xd8, 0xff], 'a JPEG');
+  assert.ok(jpeg.length > 10_000 && jpeg.length < 1_000_000, 'a real image under Bluesky’s 1 MB blob limit');
+});
+
+const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+
+test('a short demo GIF becomes a 3 s, 1080x1920 H.264 Reel with an audio track', { skip: !hasFfmpeg && 'ffmpeg not installed' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'shipcast-reel-'));
+  try {
+    const gif = join(dir, 'demo.gif');
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=10', '-t', '1.2', gif]);
+    const mp4 = join(dir, 'demo.mp4');
+    await demoToReel(gif, mp4);
+
+    const probe = JSON.parse(
+      execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', mp4], { encoding: 'utf8' }),
+    ) as { streams: Array<{ codec_type: string; codec_name: string; width?: number; height?: number; pix_fmt?: string }> };
+    const video = probe.streams.find((s) => s.codec_type === 'video')!;
+    assert.equal(video.codec_name, 'h264');
+    assert.equal(video.width, 1080);
+    assert.equal(video.height, 1920);
+    assert.equal(video.pix_fmt, 'yuv420p');
+    assert.ok(probe.streams.some((s) => s.codec_type === 'audio' && s.codec_name === 'aac'));
+    const seconds = await durationSeconds(mp4);
+    assert.ok(seconds >= 2.9 && seconds <= 3.3, `looped up to about 3 s, got ${seconds}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

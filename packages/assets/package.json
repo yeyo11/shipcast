@@ -1,0 +1,21 @@
+{
+  "name": "@shipcast/assets",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A launch's images and video: the OG image and the demo as a vertical MP4",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "jpeg-js": "^0.4.4",
+    "satori": "^0.63.2"
+  }
+}
