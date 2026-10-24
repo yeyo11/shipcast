@@ -1,6 +1,9 @@
 node_modules
 dist
+# Secrets: .env and every copy an editor or a person makes of it (.env.save, .env.bak, .env.local…)
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
 # Created by `claude --worktree`; the shareable parts of .claude/ stay tracked

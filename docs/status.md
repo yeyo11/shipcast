@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T15:21:27.361293629Z
-updated_at: 2026-10-24T16:05:58.836979951Z
+created_at: 2026-10-24T16:06:01.965618408Z
+updated_at: 2026-10-24T16:14:30.382129094Z
 tags:
     - status
     - roadmap
@@ -47,6 +47,15 @@ Services, checked on 2026-10-24:
   the publish permission is granted. The token was generated in the app dashboard on 2026-10-24 and
   lasts 60 days: the connector must refresh it before about 2026-12-23. The privacy policy Meta asked
   for is on the blog ([launches-repo.md](launches-repo.md)).
+- **Bluesky**: `BLUESKY_APP_PASSWORD` opens a session for `yeyo11.bsky.social`
+  (`did:plc:vpgn4ohaml234vdh7ayg6iza`, active).
+- **Mastodon**: `MASTODON_ACCESS_TOKEN` belongs to `@yeyo11` on mastodon.social, through an app named
+  `shipcast` with the scopes `profile`, `write:media` and `write:statuses`.
+- **GitHub**: `GITHUB_TOKEN_PERSONAL` authenticates as `yeyo11` (fine-grained, expires on 2026-11-23).
+
+Every credential of the MVP is in `.env` and answers. `INSTAGRAM_APP_ID`, `BLUESKY_HANDLE` and
+`MASTODON_INSTANCE` are not in it: they are public, and the code takes them from `brand.yml` or
+defaults (`mastodon.social`) rather than requiring them.
 
 **Code:** `packages/schema` exists (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)),
 `Brand` ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4,
@@ -56,7 +65,6 @@ Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the
 
 Waiting on the owner:
 
-- `BLUESKY_APP_PASSWORD` and `MASTODON_ACCESS_TOKEN` in `.env`.
 - The subreddits for Reddit drafts.
 - Confirm the languages of X and LinkedIn, and the tone (phase 5).
 - Reserve `shipcast` on npm (free on 2026-10-24).
