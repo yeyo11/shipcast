@@ -53,8 +53,11 @@ export function renderDashboard(registry: Registry): string {
 </body></html>`;
 }
 
-/** Serves the dashboard on the loopback interface only: reach it from elsewhere through Tailscale Serve. */
-export function serveDashboard(registry: Registry, port: number): Server {
+/**
+ * Serves the dashboard, on the loopback interface unless told otherwise: reach it from elsewhere through
+ * Tailscale Serve, or open it to the local network on purpose with `--host 0.0.0.0` (it has no login).
+ */
+export function serveDashboard(registry: Registry, port: number, host = '127.0.0.1'): Server {
   const server = createServer((request, response) => {
     if (request.url === '/api/launches') {
       response.writeHead(200, { 'content-type': 'application/json' });
@@ -68,6 +71,6 @@ export function serveDashboard(registry: Registry, port: number): Server {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(renderDashboard(registry));
   });
-  server.listen(port, '127.0.0.1');
+  server.listen(port, host);
   return server;
 }
