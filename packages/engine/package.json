@@ -13,6 +13,8 @@
     "test": "node --test \"test/**/*.test.ts\""
   },
   "dependencies": {
-    "@shipcast/schema": "workspace:*"
+    "@shipcast/schema": "workspace:*",
+    "@shipcast/assets": "workspace:*",
+    "@shipcast/connectors": "workspace:*"
   }
 }

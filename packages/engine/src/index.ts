@@ -6,4 +6,5 @@ export * from './workspace.ts';
 export * from './prompt.ts';
 export * from './generate.ts';
 export * from './drafts.ts';
+export * from './launch-assets.ts';
 export * from './pipeline.ts';

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, ContentPack, LaunchConfig } from '@shipcast/schema';
-import { GitHubRest, launchDir, pullRequestBody, Registry, renderDrafts } from '../src/index.ts';
+import { GitHubRest, launchDir, pullRequestBody, Registry, renderDrafts, type DraftFile } from '../src/index.ts';
+
+const text = (file: DraftFile | undefined): string => (file && 'content' in file ? file.content : '');
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal', reddit: { subreddits: ['ClaudeAI'] } });
@@ -30,7 +32,7 @@ test('the drafts put each article where the blog reads it, with front matter the
   const en = files.find((f) => f.path === 'src/content/posts/en/claudio.md');
   assert.ok(en);
   assert.equal(
-    en.content,
+    text(en),
     [
       '---',
       'title: "claudio: \\"Claude Code\\" as a service"',
@@ -58,13 +60,13 @@ test('every channel gets a readable draft that says its mode, and the pack trave
     files.map((f) => f.path).filter((p) => p.startsWith(dir)),
     [`${dir}/devto.md`, `${dir}/bluesky.md`, `${dir}/mastodon.md`, `${dir}/instagram.md`, `${dir}/reddit-claudeai.md`, `${dir}/pack.json`],
   );
-  const reddit = files.find((f) => f.path.endsWith('reddit-claudeai.md'))!.content;
+  const reddit = text(files.find((f) => f.path.endsWith('reddit-claudeai.md')));
   assert.match(reddit, /\*\*Manual:\*\* Shipcast never posts this/);
   assert.match(reddit, /# Reddit, r\/ClaudeAI/);
-  assert.match(files.find((f) => f.path.endsWith('bluesky.md'))!.content, /\*\*Approval:\*\* published when this pull request is merged/);
-  assert.match(files.find((f) => f.path.endsWith('devto.md'))!.content, /canonical URL set to https:\/\/josegarrido\.dev\/en\/claudio\//);
-  assert.match(files.find((f) => f.path.endsWith('instagram.md'))!.content, /the demo, as a Reel/);
-  assert.deepEqual(JSON.parse(files.find((f) => f.path.endsWith('pack.json'))!.content), pack);
+  assert.match(text(files.find((f) => f.path.endsWith('bluesky.md'))), /\*\*Approval:\*\* published when this pull request is merged/);
+  assert.match(text(files.find((f) => f.path.endsWith('devto.md'))), /canonical URL set to https:\/\/josegarrido\.dev\/en\/claudio\//);
+  assert.match(text(files.find((f) => f.path.endsWith('instagram.md'))), /the demo, as a Reel/);
+  assert.deepEqual(JSON.parse(text(files.find((f) => f.path.endsWith('pack.json')))), pack);
 });
 
 test('a channel set to off gets no draft', () => {
@@ -134,6 +136,35 @@ test('a pull request is opened from one commit with every file, on a fresh branc
   });
   assert.deepEqual(calls.find((c) => c.path.endsWith('/git/commits'))?.body, { message: 'launch: claudio v0.9.0', tree: 'new-tree', parents: ['base-sha'] });
   assert.deepEqual(calls.find((c) => c.path.endsWith('/git/refs'))?.body, { ref: 'refs/heads/launch/claudio-v0.9.0', sha: 'new-commit' });
+});
+
+test('binary files are uploaded as base64 blobs and referenced by sha in the tree', async () => {
+  const calls: Call[] = [];
+  const github = new GitHubRest({
+    token: 't',
+    fetch: fakeGitHub(
+      {
+        'GET /repos/yeyo11/launches/pulls': () => Response.json([]),
+        'GET /repos/yeyo11/launches/git/ref/heads/main': () => Response.json({ object: { sha: 'b' } }),
+        'GET /repos/yeyo11/launches/git/commits/b': () => Response.json({ tree: { sha: 't' } }),
+        'POST /repos/yeyo11/launches/git/blobs': () => Response.json({ sha: 'blob-1' }, { status: 201 }),
+        'POST /repos/yeyo11/launches/git/trees': () => Response.json({ sha: 'nt' }),
+        'POST /repos/yeyo11/launches/git/commits': () => Response.json({ sha: 'nc' }),
+        'POST /repos/yeyo11/launches/git/refs': () => Response.json({}, { status: 201 }),
+        'POST /repos/yeyo11/launches/pulls': () => Response.json({ number: 9, html_url: 'u9' }),
+      },
+      calls,
+    ),
+  });
+  await github.openPullRequest({ ...draft, files: [{ path: 'a.md', content: 'A' }, { path: 'public/og.png', bytes: new Uint8Array([137, 80, 78, 71]) }] });
+  assert.deepEqual(calls.find((c) => c.path.endsWith('/git/blobs'))?.body, { content: 'iVBORw==', encoding: 'base64' });
+  assert.deepEqual(calls.find((c) => c.path.endsWith('/git/trees'))?.body, {
+    base_tree: 't',
+    tree: [
+      { path: 'a.md', mode: '100644', type: 'blob', content: 'A' },
+      { path: 'public/og.png', mode: '100644', type: 'blob', sha: 'blob-1' },
+    ],
+  });
 });
 
 test('an open pull request for the branch is returned instead of a second one', async () => {

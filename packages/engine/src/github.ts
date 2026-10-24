@@ -42,7 +42,8 @@ export interface PullRequestDraft {
   title: string;
   body: string;
   message: string;
-  files: Array<{ path: string; content: string }>;
+  /** Text files go inline; binary ones (images, video) are uploaded as blobs first */
+  files: Array<{ path: string; content: string } | { path: string; bytes: Uint8Array }>;
 }
 
 /** The writes the engine makes on GitHub; a fake stands in for it in tests. */
@@ -145,10 +146,21 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
 
     const base = (await this.#ok('GET', `/repos/${draft.repo}/git/ref/heads/${encodeURIComponent(draft.base)}`)) as { object: { sha: string } };
     const baseCommit = (await this.#ok('GET', `/repos/${draft.repo}/git/commits/${base.object.sha}`)) as { tree: { sha: string } };
-    const tree = (await this.#ok('POST', `/repos/${draft.repo}/git/trees`, {
-      base_tree: baseCommit.tree.sha,
-      tree: draft.files.map((f) => ({ path: f.path, mode: '100644', type: 'blob', content: f.content })),
-    })) as { sha: string };
+    const entries = [];
+    for (const file of draft.files) {
+      if ('content' in file) {
+        entries.push({ path: file.path, mode: '100644', type: 'blob', content: file.content });
+      } else {
+        const blob = (await this.#ok('POST', `/repos/${draft.repo}/git/blobs`, {
+          content: Buffer.from(file.bytes).toString('base64'),
+          encoding: 'base64',
+        })) as { sha: string };
+        entries.push({ path: file.path, mode: '100644', type: 'blob', sha: blob.sha });
+      }
+    }
+    const tree = (await this.#ok('POST', `/repos/${draft.repo}/git/trees`, { base_tree: baseCommit.tree.sha, tree: entries })) as {
+      sha: string;
+    };
     const commit = (await this.#ok('POST', `/repos/${draft.repo}/git/commits`, {
       message: draft.message,
       tree: tree.sha,

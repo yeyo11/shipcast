@@ -3,6 +3,7 @@ import type { AiProvider } from './claudio.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { launchDir, projectSlug, pullRequestBody, renderDrafts } from './drafts.ts';
 import { generatePack } from './generate.ts';
+import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Registry } from './registry.ts';
 import type { Checkout } from './workspace.ts';
@@ -67,7 +68,13 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }
 
-  const files = renderDrafts(generated.pack, launch, config, brand, (deps.now ?? (() => new Date()))());
+  const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout });
+  if (!assets.ok) return fail([assets.problem]);
+
+  const files = [
+    ...renderDrafts(generated.pack, launch, config, brand, (deps.now ?? (() => new Date()))(), assets.media.ogPng),
+    ...assets.files,
+  ];
   const name = `${projectSlug(launch.repo)} ${launch.ref}`;
   let pr;
   try {

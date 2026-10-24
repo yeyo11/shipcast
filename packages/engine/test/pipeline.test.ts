@@ -104,6 +104,9 @@ test('a claimed launch becomes a drafts pull request and is recorded as drafted'
   assert.equal(pr.branch, 'launch/claudio-v0.9.0');
   assert.equal(pr.title, 'Launch claudio v0.9.0');
   assert.ok(pr.files.some((f) => f.path === 'src/content/posts/en/claudio.md'));
+  assert.ok(pr.files.some((f) => f.path === 'public/launches/claudio/v0.9.0/og.png' && 'bytes' in f), 'the launch image travels as a binary');
+  const article = pr.files.find((f) => f.path === 'src/content/posts/en/claudio.md');
+  assert.match(article && 'content' in article ? article.content : '', /^image: "\/launches\/claudio\/v0\.9\.0\/og\.png"$/m);
   assert.ok(!pr.files.some((f) => f.path.includes('instagram')), 'channels off in launch.yml get nothing');
   const after = registry.get(launch.id)!;
   assert.equal(after.status, 'drafted');

@@ -46,6 +46,12 @@ importers:
 
   packages/engine:
     dependencies:
+      '@shipcast/assets':
+        specifier: workspace:*
+        version: link:../assets
+      '@shipcast/connectors':
+        specifier: workspace:*
+        version: link:../connectors
       '@shipcast/schema':
         specifier: workspace:*
         version: link:../schema

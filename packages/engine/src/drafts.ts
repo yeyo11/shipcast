@@ -2,10 +2,7 @@ import type { Brand, Channel, ContentPack, LaunchConfig, PublishMode } from '@sh
 import type { Launch } from './registry.ts';
 
 /** A file of the drafts pull request, as a path in the launches repo and its text. */
-export interface DraftFile {
-  path: string;
-  content: string;
-}
+export type DraftFile = { path: string; content: string } | { path: string; bytes: Uint8Array };
 
 /** A YAML scalar that needs no escaping thought: JSON strings are valid double-quoted YAML. */
 const q = (value: string): string => JSON.stringify(value);
@@ -37,7 +34,15 @@ function draft(title: string, mode: PublishMode, body: string): string {
  * them, a readable draft per channel for review, and the pack itself for the engine to publish from
  * once the pull request is merged. Edits made in the pull request are what gets published.
  */
-export function renderDrafts(pack: ContentPack, launch: Launch, config: LaunchConfig, brand: Brand, date: Date): DraftFile[] {
+export function renderDrafts(
+  pack: ContentPack,
+  launch: Launch,
+  config: LaunchConfig,
+  brand: Brand,
+  date: Date,
+  /** The launch image's site path, for the article's front matter */
+  image?: string,
+): DraftFile[] {
   const files: DraftFile[] = [];
   const dir = launchDir(launch);
   const mode = (c: Channel) => config.publishing[c];
@@ -57,6 +62,7 @@ export function renderDrafts(pack: ContentPack, launch: Launch, config: LaunchCo
         `repo: ${q(pack.project.repo)}`,
         ...(pack.project.version ? [`version: ${q(pack.project.version)}`] : []),
         `tags: [${pack.article.tags.map(q).join(', ')}]`,
+        ...(image ? [`image: ${q(image)}`] : []),
         '---',
       ].join('\n');
       files.push({ path: `src/content/posts/${lang}/${pack.article.slug}.md`, content: `${frontMatter}\n\n${version.markdown.trim()}\n` });
