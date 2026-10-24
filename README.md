@@ -5,6 +5,7 @@
 [![CI](https://github.com/yeyo11/shipcast/actions/workflows/ci.yml/badge.svg)](https://github.com/yeyo11/shipcast/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/yeyo11)
 
 You publish a release. Shipcast reads the project's **code**, not just its README, writes a launch
 post tailored to every channel, and publishes each one after you approve it: the article on your
