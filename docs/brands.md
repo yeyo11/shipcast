@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T14:21:43.07742302Z
-updated_at: 2026-10-24T14:21:43.07742302Z
+created_at: 2026-10-24T14:26:51.443324997Z
+updated_at: 2026-10-24T14:44:41.261823835Z
 tags:
     - brands
     - config
@@ -37,17 +37,21 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `languages.x` | `en` — provisional, not yet confirmed by the owner |
 | `languages.linkedin` | `es` — provisional, not yet confirmed by the owner |
 | `tone` | empty: defined from examples in phase 5 |
+| `support` | <https://buymeacoffee.com/yeyo11>, linked from the blog's footer |
 
 Handles are full profile URLs, as the owner gave them; a connector derives the account name from the
 URL when an API needs it. The blog's footer links every profile with `rel="me"`, which also lets
-Mastodon verify the blog once the profile links back to it.
+Mastodon verify the blog once the profile links back to it. The support link sits on a line of its
+own in the footer, apart from the profiles, and only in the blog: the launches repo's README does not
+carry the Buy Me a Coffee badge, which belongs to Shipcast's README.
 
 ## What the schema has to enforce
 
 The brand schema in `packages/schema` validates this file: `id` and `displayName` required, handles
-optional (a channel without a handle cannot publish), languages from `en` and `es`, the blog in at
-least one. A launch's `launch.yml` names its brand by `id`, and the engine refuses a launch whose brand
-does not match the launches repo it would write to — the mechanical form of "brands never mix".
+and `support` optional (a channel without a handle cannot publish), languages from `en` and `es`, the
+blog in at least one. A launch's `launch.yml` names its brand by `id`, and the engine refuses a launch
+whose brand does not match the launches repo it would write to — the mechanical form of "brands
+never mix".
 
 ## Related
 
