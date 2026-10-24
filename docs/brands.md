@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T14:44:45.904030104Z
-updated_at: 2026-10-24T15:02:39.11321841Z
+created_at: 2026-10-24T15:02:40.278364471Z
+updated_at: 2026-10-24T15:37:45.544929882Z
 tags:
     - brands
     - config
@@ -34,7 +34,7 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `handles.mastodon` | <https://mastodon.social/@yeyo11> |
 | `handles.devto` | <https://dev.to/yeyo11> |
 | `handles.reddit` | <https://www.reddit.com/user/josegarridodev/> |
-| `handles.instagram` | pending: the owner has not given it yet |
+| `handles.instagram` | <https://www.instagram.com/josegarridodev> |
 | `languages.blog` | `[en, es]` |
 | `languages.x` | `en` — provisional, not yet confirmed by the owner |
 | `languages.linkedin` | `es` — provisional, not yet confirmed by the owner |
@@ -45,7 +45,8 @@ Handles are full profile URLs, as the owner gave them; a connector derives the a
 URL when an API needs it. The blog's footer links every profile with `rel="me"`, which also lets
 Mastodon verify the blog once the profile links back to it. The support link sits on a line of its
 own in the footer, apart from the profiles, and only in the blog: the launches repo's README does not
-carry the Buy Me a Coffee badge, which belongs to Shipcast's README.
+carry the Buy Me a Coffee badge, which belongs to Shipcast's README. `packages/schema` keeps a copy of
+this file as a test fixture (`test/fixtures/brand.yml`), refreshed when the brand changes.
 
 ## What the schema has to enforce
 
@@ -57,4 +58,4 @@ never mix".
 
 ## Related
 
-[[decisions/mvp-scope.md]] · [[launches-repo.md]] · [[plans/shipcast.md]] · [[launch-yml]] · [[content-pack]]
+[[decisions/mvp-scope.md]] · [[launches-repo.md]] · [[plans/shipcast.md]] · [[launch-yml.md]] · [[content-pack.md]]
