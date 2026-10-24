@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T18:51:28.699807047Z
-updated_at: 2026-10-24T18:51:28.699807047Z
+created_at: 2026-10-24T19:13:53.284940095Z
+updated_at: 2026-10-24T19:32:39.893658428Z
 tags:
     - publishing
     - connectors
@@ -25,9 +25,17 @@ dropped).
 
 - **`og.png` and `og.jpg`**, the 1200×630 launch image, rendered by `renderOgImage`
   (`packages/assets/src/og.ts`) with Satori, resvg and jpeg-js: no browser, no native build. The PNG
-  is the article's `image:` and dev.to's cover; the JPEG is for Bluesky's card thumbnail, Mastodon and
-  Instagram, which want JPEG. Its theme (`DEFAULT_THEME`) is a **placeholder** until the blog's new
-  design system lands; the owner validates the final look.
+  is the article's `image:` (the blog's `og:image`) and dev.to's cover; the JPEG is for Bluesky's card
+  thumbnail, Mastodon and Instagram, which want JPEG. A theme (`OgTheme`) brings its fonts and its
+  layout, so each brand draws its own. The personal brand's, `EDITORIAL_THEME` (merged on
+  2026-10-24 after the owner saw it running), follows the site's editorial identity
+  ([personal-identity.md](personal-identity.md)): the author's name, the article's headline on the
+  project's flat colour in Fraunces with each word's first letter in its wonky italic, the pitch and
+  the version on black, and beside them the house halftone illustration with the project's motif.
+  Satori reads no variable fonts, so static instances of Fraunces and Instrument Sans, cut with
+  `fonttools varLib.instancer`, live in `packages/assets/fonts/` (OFL). The colours and motifs per
+  project are copied from the blog's `src/projects.ts`, hash included: a project added there has to
+  be added in `og.ts` too, until both read them from one place.
 - **`demo.mp4`**, when `launch.yml` names `assets.demo`: the GIF or video in the launched repo turned
   into an Instagram Reel by `demoToReel` (`video.ts`) through **ffmpeg** — 1080×1920, H.264 yuv420p,
   30 fps, a silent AAC track, at least 3 s (Meta rejects Reels without audio or shorter). A demo that
@@ -98,9 +106,9 @@ where it wins over `.env`.
 | `metrics` | Reads every source now |
 | `dashboard [--port]` | Serves the launches, their posts and latest numbers on `127.0.0.1` (default port 4321), and the same as JSON at `/api/launches`; reach it from elsewhere through Tailscale Serve |
 
-The dashboard is plain server-rendered HTML with a neutral dark style until Shipcast's design system
-is settled and validated by the owner.
+The dashboard is plain server-rendered HTML with a neutral dark style until it is rebuilt in Cartel
+from `design/specimen.html` ([plans/design-system.md](plans/design-system.md)).
 
 ## Related
 
-[[engine.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]]
+[[engine.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]]

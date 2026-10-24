@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:16:44.800151215Z
-updated_at: 2026-10-24T19:21:03.944853116Z
+created_at: 2026-10-24T19:21:05.992656577Z
+updated_at: 2026-10-24T19:33:21.646610172Z
 tags:
     - status
     - roadmap
@@ -65,9 +65,8 @@ Services, set up on 2026-10-24:
   articles (in a real build of the blog) were also checked for real.
 - `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon and
   Instagram (publish and metrics), Cloudflare Web Analytics and Search Console readers. 15 tests.
-- `packages/assets` (2026-10-24): the 1200×630 launch image (Satori and resvg; its theme is a
-  placeholder until it takes the blog's identity) and the demo GIF turned into an Instagram Reel
-  with ffmpeg. 2 tests.
+- `packages/assets` (2026-10-24): the 1200×630 launch image in the blog's editorial identity
+  (Satori and resvg) and the demo GIF turned into an Instagram Reel with ffmpeg. 3 tests.
 - `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch` (detect, draft, publish,
   metrics every 6 h, Instagram token refresh), `publish`, `metrics`, `dashboard`, `status`, configured
   from `.env`. 10 tests. On 2026-10-24 `status` reports every network and source configured with the
@@ -77,7 +76,8 @@ Services, set up on 2026-10-24:
 **Design** (2026-10-24, both merged after the owner tried them running):
 
 - **josegarrido.dev** wears the editorial identity ([personal-identity.md](personal-identity.md)),
-  live since 2026-10-24; the blackboard identity it replaced was rejected.
+  live since 2026-10-24, with the author's photo and `og:image` from each launch's image; the
+  blackboard identity it replaced was rejected.
 - **Shipcast** has its design system, Cartel ([plans/design-system.md](plans/design-system.md),
   [`design/`](../design/README.md)); the first direction, the signal path, was rejected.
 
@@ -91,9 +91,8 @@ Next in code:
 
 - The first real launch: claudio v0.8.2, end to end, with the owner reviewing the drafts pull request
   before anything is published.
-- The launch image in the blog's editorial identity, and the article's `og:image`.
-- Later: generated covers (an optional `cover` field in the blog's post schema), and the dashboard
-  in Cartel.
+- Later: generated covers (an optional `cover` field in the blog's post schema), one source for the
+  project colours, and the dashboard in Cartel.
 
 ## Related
 

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:13:50.163373988Z
-updated_at: 2026-10-24T19:19:55.17241949Z
+created_at: 2026-10-24T19:19:56.414684498Z
+updated_at: 2026-10-24T19:32:59.258990289Z
 tags:
     - brands
     - design-system
@@ -32,12 +32,17 @@ Geist, blue-to-violet, cyan).
   colour field, a dot texture, one bold object with a hard black offset shadow. Motifs: phone,
   terminal, label, wave, orb, stack; the project keeps its colour, the motif varies per article.
 - **Pages:** the home page is a front page (the newest launch as the lead, two side stories, recent
-  launches, more launches, "The workshop" with one card per project, the first-person intro band, an
-  empty state); the article carries the illustration, the headline on a slab of the project's colour,
-  byline, reading time and a serif body.
+  launches, more launches, "The workshop" with one card per project, the first-person intro band with
+  the author's photo, an empty state); the article carries the illustration, the headline on a slab
+  of the project's colour, a byline with the author's photo, reading time and a serif body.
+- **The author's photo** (`public/author.jpg`, added on 2026-10-24): round in the byline; in the
+  intro band, with the house's black outline and hard offset shadow.
+- **Sharing:** each article's `og:image` is its launch image, from the post's optional `image` field,
+  which Shipcast writes; the image itself is drawn in this identity by Shipcast
+  ([publishing.md](publishing.md#the-launchs-media)).
 - **Contrast:** `scripts/contrast.mjs` in the launches repo checks 23 pairs; all pass AA.
 
-Routes and URLs, the content schema, RSS, the sitemap and `brand.yml` were left unchanged on purpose.
+Routes and URLs, RSS, the sitemap and `brand.yml` were left unchanged by the redesign.
 
 ### Next for it
 
@@ -48,8 +53,8 @@ Routes and URLs, the content schema, RSS, the sitemap and `brand.yml` were left 
   offset shadow, parts in coarse black halftone dots like an old engraving, on a single flat
   background of {project colour}. Off-white and black only besides that colour. Slight playful tilt,
   generous empty space, no text, no logos, no faces, no gradients, no glow. Wide 3:2."
-- **The launch image** (OG, 1200 × 630, `packages/assets`) in this identity, and `og:image` in the
-  blog's head.
+- **One source for the project colours.** They live in the blog's `src/projects.ts` and are copied
+  into Shipcast's `packages/assets/src/og.ts`; both could read them from `brand.yml`.
 
 ## What stays, whatever the design
 
