@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T16:41:30.950321489Z
-updated_at: 2026-10-24T16:56:17.703629885Z
+created_at: 2026-10-24T16:56:19.135373968Z
+updated_at: 2026-10-24T17:39:11.565453081Z
 tags:
     - status
     - roadmap
@@ -30,7 +30,7 @@ The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): perso
 repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages at `josegarrido.dev`. The
 technical stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog,
 dev.to, Bluesky, Mastodon and Instagram and drafts Reddit, through Shipcast's own connectors; Postiz
-is discarded.
+is discarded. Metrics are in the MVP too.
 
 Services, set up on 2026-10-24:
 
@@ -38,9 +38,11 @@ Services, set up on 2026-10-24:
   blog live at <https://josegarrido.dev> (empty until the first launch, HTTPS enforced) and deployed
   on every push to `main` ([launches-repo.md](launches-repo.md)).
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), signed in to Claude.
-- **Every credential of the MVP** — GitHub, claudio, dev.to, Instagram, Bluesky and Mastodon — is in
-  the owner's `.env` and answered when tested. Accounts, expiry dates and machine details are in the
-  owner's local notes, not in the public docs.
+- **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
+  submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog.
+- **Every credential of the MVP** — GitHub, claudio, dev.to, Instagram (with insights), Bluesky and
+  Mastodon — is in the owner's `.env` and answered when tested. Accounts, expiry dates and machine
+  details are in the owner's local notes, not in the public docs.
 
 **Code:** `packages/schema` exists (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)),
 `Brand` ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4,
@@ -48,14 +50,16 @@ YAML errors with their line, `missingPieces`, pack inference from semver, and th
 Claude. 26 tests on `node:test`, run by Node's native type stripping; it set the package template
 (`tsconfig.json` extending the base with `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`).
 
-**Design, in progress on branches** (2026-10-24): the owner's personal visual identity for
-`josegarrido.dev`, and Shipcast's design system assets under `design/` (tokens, logo, channel icons,
-social preview, specimen). Both are proposals: nothing reaches `main` or goes live until the owner
-validates it.
+**Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
+rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
+external agent. Shipcast's design system assets (tokens, logo, channel icons, social preview,
+specimen under `design/`) are ready on a branch, waiting for the owner to try them. Nothing visual
+reaches `main` until the owner has seen it running.
 
 Waiting on the owner:
 
-- Validate the two design proposals once they are ready.
+- The new design for `josegarrido.dev`, handed by the owner to an external agent; and the review of
+  Shipcast's design system assets, ready on a branch.
 - The subreddits for Reddit drafts.
 - Point the Meta app's privacy policy URL to `https://josegarrido.dev/en/privacy/`.
 - Reserve `shipcast` on npm (free on 2026-10-24).
@@ -66,7 +70,9 @@ Next in code:
 - `packages/engine`: release polling, launch registry, claudio client; then `apps/cli`.
 - `packages/connectors`: launches repo (drafts pull request), dev.to, Bluesky, Mastodon, Instagram,
   Reddit drafts; and the OG image and demo video Instagram needs.
+- Metrics, now in the MVP: one connector per source (blog analytics, Search Console, GitHub, dev.to,
+  Bluesky, Mastodon, Instagram), stored per launch and channel, and a dashboard.
 
 ## Related
 
-[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]]
+[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[personal-identity.md]]

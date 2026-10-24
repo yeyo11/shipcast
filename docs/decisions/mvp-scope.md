@@ -1,18 +1,19 @@
 ---
-created_at: 2026-10-24T16:41:33.506150012Z
-updated_at: 2026-10-24T16:56:37.459895085Z
+created_at: 2026-10-24T16:56:39.174697583Z
+updated_at: 2026-10-24T17:39:36.679805484Z
 tags:
     - decision
     - mvp
     - scope
     - connectors
+    - metrics
 ---
 # Scope of the MVP
 
 Decided on 2026-10-24 by the owner, at the start of the work, and widened the same day. The MVP is
 the test that closes phase 1 of the [roadmap](../plans/shipcast.md#roadmap): **claudio announced on
-the blog, dev.to, Bluesky, Mastodon and Instagram with no intervention beyond the merge, and its
-Reddit drafts ready to paste.**
+the blog, dev.to, Bluesky, Mastodon and Instagram with no intervention beyond the merge, its Reddit
+drafts ready to paste, and Shipcast showing what each channel brought.**
 
 ## Channels
 
@@ -37,13 +38,37 @@ the media must sit at a public URL when it is published. So the MVP needs, from 
 generated image per launch (the OG image, as JPEG) and, where the project has one, its demo GIF turned
 into an MP4 for a Reel. The launches repo's GitHub Pages site serves them publicly after the merge.
 
+## Metrics are in the MVP
+
+Decided on 2026-10-24 by the owner: **all the metrics move into the MVP**, not phase 4. Data not
+collected is lost for good, and the first launch is the first data point that matters. Shipcast gets
+one metrics connector per source, stores the readings in SQLite and ties each to the launch and the
+channel that produced it, so it can say which channel worked.
+
+| Source | What it measures | Access |
+| --- | --- | --- |
+| Blog | Visits per article and where they came from | Cloudflare Web Analytics, live on the blog since 2026-10-24 (cookieless; the privacy policy says so) |
+| Google Search Console | Searches, impressions and clicks | Property `josegarrido.dev` verified by DNS on 2026-10-24, sitemap submitted; Shipcast reads it with read-only credentials, to be created |
+| GitHub | Stars, forks and repo traffic | The traffic API keeps 14 days, so Shipcast copies it daily |
+| dev.to | Views and reactions per article | Its API |
+| Bluesky, Mastodon | Likes, reposts, replies per post | Their APIs |
+| Instagram | Reach and interactions | `instagram_business_manage_insights`, granted 2026-10-24 |
+| Reddit | Score and comments | No API: recorded by hand, if at all |
+
+Every link Shipcast publishes carries a per-channel marker (`?ref=<channel>`) so the blog's analytics
+attribute visits even where a network strips the referrer. A dashboard to look at them is part of the
+MVP too; its form is decided when it is built. An uptime check of the blog runs in `shipcast watch`.
+A Search Console MCP connector for Claude Code was considered and set aside for now: there is no
+official one, only small third-party projects.
+
 ## Other decisions
 
 - **Personal brand only.** The company brand (josegarridodigio) is left out until after the MVP. The
   schemas keep brands as a concept ([brands.md](../brands.md)), so adding the second one is
   configuration, not a redesign. One GitHub token (`GITHUB_TOKEN_PERSONAL`).
-- **No paid APIs.** Nothing in the MVP calls an API that charges per use. Every MVP channel above has
-  a free API, and the AI runs through claudio, which costs nothing per launch.
+- **No paid APIs.** Nothing in the MVP calls an API that charges per use. Every MVP channel and
+  metrics source above has a free API, and the AI runs through claudio, which costs nothing per
+  launch.
 - **The repository stays at `yeyo11/shipcast`.** The `shipcast` GitHub organisation has been taken
   since 2020 (and `launchloop`, the fallback name, is taken too). The name is free on npm, and the
   owner reserves it there.
