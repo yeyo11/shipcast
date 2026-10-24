@@ -1,0 +1,15 @@
+{
+  "name": "@shipcast/connectors",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One module per network: publish a launch's piece, and read back how it did",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  }
+}

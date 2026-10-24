@@ -27,6 +27,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/schema
 
+  packages/connectors: {}
+
   packages/engine:
     dependencies:
       '@shipcast/schema':
