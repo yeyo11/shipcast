@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T18:21:47.073490906Z
-updated_at: 2026-10-24T18:52:44.798320413Z
+created_at: 2026-10-24T19:13:55.258617734Z
+updated_at: 2026-10-24T19:16:42.744826785Z
 tags:
     - status
     - roadmap
@@ -44,9 +44,10 @@ Services, set up on 2026-10-24:
 - **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
   submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
   Meta app's privacy policy URL points to `https://josegarrido.dev/en/privacy/`.
-- **Every credential of the MVP** — GitHub, claudio, dev.to, Instagram (with insights), Bluesky and
-  Mastodon — is in the owner's `.env` and answered when tested. Accounts, expiry dates and machine
-  details are in the owner's local notes, not in the public docs.
+- **Every credential of the MVP** — GitHub (with repo traffic), claudio, dev.to, Instagram (with
+  insights), Bluesky, Mastodon, Cloudflare's analytics API and a Search Console service account — is
+  in the owner's `.env` and answered when tested. Accounts, expiry dates and machine details are in
+  the owner's local notes, not in the public docs.
 
 **Code:**
 
@@ -69,8 +70,9 @@ Services, set up on 2026-10-24:
   with ffmpeg. 2 tests.
 - `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]`, `watch` (detect, draft, publish,
   metrics every 6 h, Instagram token refresh), `publish`, `metrics`, `dashboard`, `status`, configured
-  from `.env`. 10 tests. On 2026-10-24 `status` reports dev.to, Bluesky, Mastodon, Instagram and
-  GitHub configured with the owner's `.env`; nothing has been published yet.
+  from `.env`. 10 tests. On 2026-10-24 `status` reports every network and source configured with the
+  owner's `.env` (dev.to, Bluesky, Mastodon, Instagram, GitHub with traffic, Cloudflare Web Analytics,
+  Search Console), and each metrics source answered live; nothing has been published yet.
 
 **Design** (2026-10-24): the "blackboard" identity went live on `josegarrido.dev` and the owner
 rejected it ([personal-identity.md](personal-identity.md)); a replacement is being designed by an
@@ -84,9 +86,6 @@ Waiting on the owner:
 - The new design for `josegarrido.dev`, handed by the owner to an external agent, which also gives the
   launch image its final theme; and a second opinion on Shipcast's design system.
 - Upload the social preview, once Shipcast's design system is settled.
-- For the metrics: a Cloudflare API token with Account Analytics read (blog visits), a Google service
-  account added to the Search Console property (search numbers), and "Administration: read" on the
-  GitHub token (repo traffic). Without them those sources are skipped.
 - Merge claudio's release pull request (#59, v0.8.2), the first release with its `launch.yml`, and
   give the go-ahead for the first real launch.
 
