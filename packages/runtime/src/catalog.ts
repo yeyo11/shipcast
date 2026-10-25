@@ -78,9 +78,18 @@ export const NETWORKS: readonly Network[] = [
     channel: 'mastodon',
     metrics: true,
     auth: 'oauth',
-    fields: [{ key: 'instance', label: 'Instance', secret: false, placeholder: 'https://mastodon.social' }],
+    fields: [
+      { key: 'instance', label: 'Instance', secret: false, placeholder: 'https://mastodon.social' },
+      {
+        key: 'accessToken',
+        label: 'Access token',
+        secret: true,
+        optional: true,
+        help: 'Only to paste one instead of authorising: Preferences → Development → an app with read and write scopes',
+      },
+    ],
     permissions: ['Posts a public status with an image (write:statuses, write:media)', 'Reads its favourites, boosts and replies (read:statuses)'],
-    howTo: 'Name your instance: Shipcast registers itself there and sends you to authorise it.',
+    howTo: 'Name your instance: Shipcast registers itself there and sends you to authorise it. Or paste an access token.',
   },
   {
     id: 'instagram',

@@ -52,7 +52,8 @@ function Connect() {
           className="form"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (network.auth === 'oauth') {
+            // An OAuth network can also take a pasted token, for when the authorisation cannot come back here
+            if (network.auth === 'oauth' && !values.accessToken?.trim()) {
               window.location.href = oauthUrl;
               return;
             }
@@ -123,7 +124,7 @@ function Connect() {
           ) : (
             <div className="row">
               <button className="btn btn-primary" type="submit" disabled={busy}>
-                {network.auth === 'oauth' ? `Continue to ${network.name}` : busy ? 'Checking the credential…' : `Connect ${network.name}`}
+                {network.auth === 'oauth' && !values.accessToken?.trim() ? `Continue to ${network.name}` : busy ? 'Checking the credential…' : `Connect ${network.name}`}
               </button>
               <span className="muted" style={{ fontSize: 14 }}>
                 {network.auth === 'oauth' ? 'You authorise Shipcast there and come back here.' : `Checked before it is saved; kept in ${secretsKind}.`}
