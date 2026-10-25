@@ -108,3 +108,16 @@ export const settings = pgTable('settings', {
   value: jsonb('value').notNull(),
   updatedAt: text('updated_at').notNull().default(nowIso),
 });
+
+// Tokens for the REST API (/api/v1), one per client the owner named. Only a keyed hash of each
+// secret is kept, never the token; a revoked token keeps its row, so the list still shows what once
+// had access. See docs/decisions/api-tokens.md
+export const apiTokens = pgTable('api_tokens', {
+  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  name: text('name').notNull(),
+  hash: text('hash').notNull(),
+  scopes: text('scopes').array().notNull(),
+  createdAt: text('created_at').notNull().default(nowIso),
+  lastUsedAt: text('last_used_at'),
+  revokedAt: text('revoked_at'),
+});

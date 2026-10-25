@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T08:11:32.642536429Z
-updated_at: 2026-10-25T09:54:41.582497375Z
+created_at: 2026-10-25T10:29:18.377863921Z
+updated_at: 2026-10-25T14:58:58.613292179Z
 tags:
     - web-app
     - dashboard
@@ -10,6 +10,7 @@ tags:
     - decision
     - automation
     - webhooks
+    - api
 ---
 # The web app
 
@@ -63,12 +64,16 @@ move to a VPS or server; until then it runs on the owner's machine.
   `Sec-Fetch-Site`, `Origin` or `Referer` is not the app's own. Server functions check the shape of
   their input (`src/server/input.ts`) before using it. Two paths are public on purpose: `/api/health`
   (it answers `ok` and nothing else) and the GitHub webhook, which carries its own proof.
+- **The REST API checks its own tokens.** `/api/v1/*` takes only `Authorization: Bearer <token>`, never
+  the session cookie, so it is left out of the session and same-origin checks and cannot be forged
+  from another site ([api.md](api.md), [decisions/api-tokens.md](decisions/api-tokens.md)).
 
 ## Sections
 
 - **Launches** (`/`): every launch as the specimen's launch card (state pill, one row per channel
   with its post), what is waiting for the owner on a yellow band, and the work running in the
-  background, refreshed while something runs. `/api/launches` gives the same as JSON.
+  background, refreshed while something runs. `/api/launches` gives the same as JSON behind the
+  session; scripts and the MCP server use the [REST API](api.md) instead.
 - **A launch** (`/launches/<id>`): its drafts read from the pull request's branch, each article and
   channel text editable (a save is a commit on that branch), the media, **Approve and publish**
   (merges the pull request with a squash, then publishes in the background, waiting for the site to
@@ -82,6 +87,8 @@ move to a VPS or server; until then it runs on the owner's machine.
 - **Channels** (`/channels`): see [accounts.md](accounts.md). A newly connected account lands on the
   list, scrolled to and focused.
 - **Automation** (`/automation`): below.
+- **API** (`/tokens`): the REST API's tokens, created with a name and scopes (`read`, `write`), shown
+  once, listed with when each was last used, and revoked. See [api.md](api.md).
 
 Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Waiting for you on
 yellow), and every error is explained for a person, with the original text folded under Details
@@ -136,7 +143,11 @@ nothing depends on a terminal running `watch`; `server.ts` warms the app's conte
   drafting (minutes of AI work) and publishing (waiting for the deploy, up to 20 minutes, then the
   next round picks it up). The registry holds what matters, so a restart loses only the progress
   lines.
+- **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
+  `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
+  OpenAPI document is built from it. Requests that start work are checked by the same functions as
+  the pages' (`src/server/requests.ts`).
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[status.md]]

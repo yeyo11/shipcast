@@ -18,10 +18,13 @@ import { Channel, type Brand } from '@shipcast/schema';
 import {
   buildServices,
   ConfigError,
+  createApiToken,
+  InvalidScopes,
   KeychainStore,
   loadConfig,
   METRICS_AT_KEY,
   MIN_INTERVAL_SECONDS,
+  parseScopes,
   publishOne,
   runRound,
   type RoundDeps,
@@ -42,6 +45,10 @@ const USAGE = `Usage: shipcast <command>
                                       --retry gives a channel that failed for good another chance
   metrics                             Read the numbers of every published launch now
   status                              The latest launches and where they stand, and what is configured
+  token create <name> --scopes <list> A token for the REST API (/api/v1), scopes read, write or both
+                                      (read,write); printed once, only its hash is kept
+  token list                          The API tokens, revoked ones too
+  token revoke <id>                   Revoke an API token at once
 
 The launches, their channels and numbers, drafts to review and articles to write are in the web
 app: pnpm app (see docs/web-app.md).
@@ -88,7 +95,7 @@ async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { ref: { type: 'string' }, interval: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+    options: { ref: { type: 'string' }, interval: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, scopes: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
   });
   const [command, ...rest] = positionals;
   if (values.help || !command) {
@@ -207,6 +214,37 @@ async function main(argv: string[]): Promise<number> {
         return 0;
       }
 
+      case 'token': {
+        const [action, arg] = rest;
+        if (action === 'create' && arg) {
+          const scopes = parseScopes(values.scopes ?? '');
+          const { token, record } = await createApiToken({ registry, secrets }, arg, scopes);
+          console.error(`Token #${record.id} "${record.name}" (${record.scopes.join(', ')}). It is shown only now:`);
+          console.log(token);
+          return 0;
+        }
+        if (action === 'list') {
+          const tokens = await registry.apiTokens();
+          if (tokens.length === 0) console.log('No API tokens yet.');
+          for (const t of tokens) {
+            const state = t.revokedAt ? `revoked ${t.revokedAt.slice(0, 16)}` : t.lastUsedAt ? `last used ${t.lastUsedAt.slice(0, 16)}` : 'never used';
+            console.log(`#${t.id}  ${t.name}  ${t.scopes.join(',')}  ${state}`);
+          }
+          return 0;
+        }
+        if (action === 'revoke' && arg && /^\d+$/.test(arg)) {
+          const revoked = await registry.revokeApiToken(Number(arg));
+          if (!revoked) {
+            console.error(`no token #${arg}`);
+            return 1;
+          }
+          console.log(`Revoked #${revoked.id} ${revoked.name}`);
+          return 0;
+        }
+        console.error('token create <name> --scopes read,write | token list | token revoke <id>');
+        return 2;
+      }
+
       default:
         console.error(`unknown command "${command}"\n\n${USAGE}`);
         return 2;
@@ -219,7 +257,7 @@ async function main(argv: string[]): Promise<number> {
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
   (error: unknown) => {
-    console.error(error instanceof ConfigError ? error.message : error);
+    console.error(error instanceof ConfigError || error instanceof InvalidScopes ? error.message : error);
     process.exit(1);
   },
 );

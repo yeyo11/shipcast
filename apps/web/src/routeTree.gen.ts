@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
+import { Route as AppTokensRouteImport } from './routes/_app/tokens'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLaunchesRouteImport } from './routes/api/launches'
@@ -26,6 +27,7 @@ import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/ind
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
 import { Route as AppLaunchesIdRouteImport } from './routes/_app/launches/$id'
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
+import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.callback'
 import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagram.callback'
 import { Route as AuthMastodonCallbackRouteImport } from './routes/auth/mastodon.callback'
@@ -52,6 +54,11 @@ const AppAutomationRoute = AppAutomationRouteImport.update({
 const AppLaunchRoute = AppLaunchRouteImport.update({
   id: '/launch',
   path: '/launch',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTokensRoute = AppTokensRouteImport.update({
+  id: '/tokens',
+  path: '/tokens',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWriteRoute = AppWriteRouteImport.update({
@@ -114,6 +121,11 @@ const ApiGithubWebhookRoute = ApiGithubWebhookRouteImport.update({
   path: '/api/github/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
+  id: '/api/v1/$',
+  path: '/api/v1/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -135,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
+  '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
@@ -146,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
@@ -155,6 +169,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
+  '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
@@ -167,6 +182,7 @@ export interface FileRoutesByTo {
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
@@ -178,6 +194,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/launch': typeof AppLaunchRoute
+  '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
@@ -190,6 +207,7 @@ export interface FileRoutesById {
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
   '/_app/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
+  '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
@@ -202,6 +220,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/automation'
     | '/launch'
+    | '/tokens'
     | '/write'
     | '/api/health'
     | '/api/launches'
@@ -213,6 +232,7 @@ export interface FileRouteTypes {
     | '/channels/$network'
     | '/launches/$id'
     | '/api/github/webhook'
+    | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/mastodon/callback'
@@ -222,6 +242,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/automation'
     | '/launch'
+    | '/tokens'
     | '/write'
     | '/api/health'
     | '/api/launches'
@@ -234,6 +255,7 @@ export interface FileRouteTypes {
     | '/channels/$network'
     | '/launches/$id'
     | '/api/github/webhook'
+    | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/mastodon/callback'
@@ -244,6 +266,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/automation'
     | '/_app/launch'
+    | '/_app/tokens'
     | '/_app/write'
     | '/api/health'
     | '/api/launches'
@@ -256,6 +279,7 @@ export interface FileRouteTypes {
     | '/_app/channels/$network'
     | '/_app/launches/$id'
     | '/api/github/webhook'
+    | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/mastodon/callback'
@@ -273,6 +297,7 @@ export interface RootRouteChildren {
   AuthLogoutRoute: typeof AuthLogoutRoute
   AuthMastodonRoute: typeof AuthMastodonRouteWithChildren
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
+  ApiV1SplatRoute: typeof ApiV1SplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -310,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/launch'
       fullPath: '/launch'
       preLoaderRoute: typeof AppLaunchRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tokens': {
+      id: '/_app/tokens'
+      path: '/tokens'
+      fullPath: '/tokens'
+      preLoaderRoute: typeof AppTokensRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/write': {
@@ -396,6 +428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGithubWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/$': {
+      id: '/api/v1/$'
+      path: '/api/v1/$'
+      fullPath: '/api/v1/$'
+      preLoaderRoute: typeof ApiV1SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/github/callback': {
       id: '/auth/github/callback'
       path: '/callback'
@@ -423,6 +462,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAutomationRoute: typeof AppAutomationRoute
   AppLaunchRoute: typeof AppLaunchRoute
+  AppTokensRoute: typeof AppTokensRoute
   AppWriteRoute: typeof AppWriteRoute
   AppIndexRoute: typeof AppIndexRoute
   AppChannelsNetworkRoute: typeof AppChannelsNetworkRoute
@@ -433,6 +473,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAutomationRoute: AppAutomationRoute,
   AppLaunchRoute: AppLaunchRoute,
+  AppTokensRoute: AppTokensRoute,
   AppWriteRoute: AppWriteRoute,
   AppIndexRoute: AppIndexRoute,
   AppChannelsNetworkRoute: AppChannelsNetworkRoute,
@@ -489,6 +530,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLogoutRoute: AuthLogoutRoute,
   AuthMastodonRoute: AuthMastodonRouteWithChildren,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
+  ApiV1SplatRoute: ApiV1SplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

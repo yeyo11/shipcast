@@ -3,8 +3,16 @@ import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/r
 /** GitHub's deliveries: no session and no same-origin, since GitHub sends them; their signature is checked instead */
 const WEBHOOK = '/api/github/webhook';
 
+/**
+ * The REST API checks its own bearer tokens and never reads the session cookie (server/api.ts), so
+ * neither the session nor the same-origin check applies: a request without the token is refused
+ * there, and a page on another site cannot set an Authorization header without a CORS preflight the
+ * app never answers. See docs/decisions/api-tokens.md
+ */
+const API = /^\/api\/v1\//;
+
 /** Paths anyone may open: signing in, the static files the sign-in page needs, the health check and GitHub's webhook */
-const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/];
+const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/, API];
 
 /**
  * Every other request needs a session. A page without one goes to the sign-in page; anything else
@@ -21,6 +29,6 @@ const requireSession = createMiddleware().server(async ({ request, pathname, nex
 });
 
 /** Anything that changes something must come from the app's own pages */
-const sameOrigin = createCsrfMiddleware({ filter: ({ request, pathname }) => request.method !== 'GET' && request.method !== 'HEAD' && pathname !== WEBHOOK });
+const sameOrigin = createCsrfMiddleware({ filter: ({ request, pathname }) => request.method !== 'GET' && request.method !== 'HEAD' && pathname !== WEBHOOK && !API.test(pathname) });
 
 export const startInstance = createStart(() => ({ requestMiddleware: [sameOrigin, requireSession] }));

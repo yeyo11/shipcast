@@ -1,9 +1,9 @@
-import { articleUrls, editDraft, indexStatus, preflight, readReview } from '@shipcast/engine';
-import { CHANNELS, type Channel } from '@shipcast/schema';
+import { editDraft, preflight } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
-import { id, InvalidInput, list, object, text } from './input';
-import { launchView } from './launches.server';
+import { id, object, text } from './input';
+import { launchDetail, launchView, publishAgain as publishAgainFor } from './launches.server';
+import { articleRequest, channelName, launchRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing } from './work.server';
 
 const jobsView = async () =>
@@ -23,21 +23,7 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = await appContext();
     const launch = await registry.get(data);
     if (!launch) return null;
-    // Each search engine's view of each language's article, as of the last metrics reading. Google
-    // is always listed, as the engine that matters most; Bing once it has been read at all
-    const urls = articleUrls(await registry.posts(launch.id, { channel: 'blog' }));
-    const views = await Promise.all(
-      urls.flatMap(({ lang, url }) =>
-        (['google', 'bing'] as const).map(async (engine) => {
-          const status = await indexStatus(registry, url, engine);
-          return { engine, lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
-        }),
-      ),
-    );
-    const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
-    const review = await readReview(launch, { github, launchesRepo: deps.launchesRepo }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-    const metrics = (await registry.latestMetrics(launch.id)).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
-    return { launch: await launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index, jobs: await jobsView() };
+    return { ...(await launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo })), jobs: await jobsView() };
   });
 
 export const saveDraft = createServerFn({ method: 'POST' })
@@ -65,22 +51,13 @@ export const approveDrafts = createServerFn({ method: 'POST' })
 export const publishAgain = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
-    const channel = o.channel === undefined ? undefined : text(o.channel, 'channel', 40);
-    if (channel !== undefined && !(CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput('unknown channel');
-    return { id: id(o.id), channel: channel as Channel | undefined };
+    return { id: id(o.id), channel: o.channel === undefined ? undefined : channelName(o.channel) };
   })
   .handler(async ({ data }) => {
     const { registry } = await appContext();
     const launch = await registry.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
-    if (data.channel) {
-      // Only this launch's failure is forgotten; the channel stays failed for any other launch
-      await registry.deleteCursor(`publish-failed:${launch.id}:${data.channel}`);
-      if (launch.status === 'published') await registry.setStatus(launch.id, 'drafted', launch.detail);
-    } else if (launch.status !== 'drafted') {
-      return { ok: false as const, problem: `the launch is ${launch.status}` };
-    }
-    return { ok: true as const, job: await startPublishing((await registry.get(launch.id))!) };
+    return publishAgainFor(registry, launch, data.channel, startPublishing);
   });
 
 export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
@@ -101,23 +78,9 @@ export const checkRepo = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => preflight(data.repo, data.ref, { github: (await appContext()).github }));
 
 export const launchRepo = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const o = object(input, 'input');
-    const repo = text(o.repo, 'repo', 140);
-    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new InvalidInput('a repo is owner/name');
-    return { repo, ref: o.ref === undefined || o.ref === '' ? undefined : text(o.ref, 'ref', 140), direct: o.direct === true };
-  })
+  .validator((input: unknown) => launchRequest(input))
   .handler(({ data }) => startLaunch(data.repo, data.ref, data.direct));
 
 export const writeArticle = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const o = object(input, 'input');
-    const lang = text(o.lang, 'lang', 2);
-    if (lang !== 'en' && lang !== 'es') throw new InvalidInput('lang is en or es');
-    const channels = list(o.channels, 'channels').filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
-    const title = text(o.title, 'title', 200).trim();
-    const markdown = text(o.markdown, 'markdown', 200_000);
-    if (!title || !markdown.trim()) throw new InvalidInput('an article needs a title and a body');
-    return { input: { title, markdown, lang: lang as 'en' | 'es', channels }, direct: o.direct === true };
-  })
+  .validator((input: unknown) => articleRequest(input))
   .handler(({ data }) => startArticle(data.input, data.direct));
