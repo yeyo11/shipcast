@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { checkAccount, connectAccount, disconnectAccount, importFromEnv, MissingField, splitFields } from '@shipcast/runtime';
+import { checkAccount, connectAccount, disconnectAccount, importFromEnv, MissingField, splitFields, syncNow } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, object, text, texts } from './input';
@@ -29,7 +29,24 @@ export const recheckAccount = createServerFn({ method: 'POST' })
     return { status: account.status, problem: account.problem, identity: account.identity };
   });
 
-export const renameAccount = createServerFn({ method: 'POST' })
+/**
+ * Sync now: a snapshots job for this account, which checks it again and records today's numbers.
+ * The request waits a little for it, since a sync takes a second or two; a slower one is left
+ * running and the page says so.
+ */
+export const syncAccountNow = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => id(input))
+  .handler(async ({ data }) => {
+    const { queue, registry } = await appContext();
+    const account = await registry.account(data);
+    if (!account) return { state: 'failed' as const, lines: ['That account is no longer connected'] };
+    const job = await syncNow(queue, account);
+    if (!job) return { state: 'failed' as const, lines: ['The sync could not be queued'] };
+    const done = await queue.wait(job, 20_000, 500);
+    return { state: done?.state ?? ('queued' as const), lines: done?.log ?? [] };
+  });
+
+export const renameAccount =createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
     return { id: id(o.id), label: text(o.label, 'label', 200) };

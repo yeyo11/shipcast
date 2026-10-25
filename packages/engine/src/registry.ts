@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gte, inArray, like, lt, sql, type SQL } from 'drizzle-orm';
 import type { Channel, Language, PackKind } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
-import { accounts, apiTokens, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
+import { accounts, accountSnapshots, apiTokens, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
 /** A job's state, as pg-boss names them; `retry` waits for its next attempt */
 export type JobState = 'created' | 'active' | 'retry' | 'completed' | 'failed';
@@ -143,6 +143,28 @@ export interface Account {
   problem: string | null;
   checkedAt: string | null;
   createdAt: string;
+  /** The profile picture the last working check found; an https address on the network's CDN */
+  avatarUrl: string | null;
+}
+
+/** What a snapshot counts; each is left out where the network does not give it */
+export interface SnapshotStats {
+  followers?: number;
+  following?: number;
+  posts?: number;
+  extra?: Record<string, number>;
+}
+
+/** An account's numbers on one UTC day: the latest reading of that day */
+export interface AccountSnapshot {
+  accountId: number;
+  /** YYYY-MM-DD, UTC */
+  day: string;
+  takenAt: string;
+  followers: number | null;
+  following: number | null;
+  posts: number | null;
+  extra: Record<string, number>;
 }
 
 /**
@@ -196,6 +218,19 @@ function toAccount(row: typeof accounts.$inferSelect): Account {
     problem: row.problem,
     checkedAt: row.checkedAt,
     createdAt: row.createdAt,
+    avatarUrl: row.avatarUrl,
+  };
+}
+
+function toSnapshot(row: typeof accountSnapshots.$inferSelect): AccountSnapshot {
+  return {
+    accountId: row.accountId,
+    day: row.day,
+    takenAt: row.takenAt,
+    followers: row.followers,
+    following: row.following,
+    posts: row.posts,
+    extra: row.extra,
   };
 }
 
@@ -570,7 +605,11 @@ export class Registry {
     return toAccount(row);
   }
 
-  async recordCheck(id: number, check: { ok: true; account: string } | { ok: false; problem: string }, at = new Date()): Promise<Account> {
+  /**
+   * Records a check's answer. A working one that found a picture keeps it; a failed one, or one whose
+   * network gave no picture this time, leaves the last one in place rather than blanking the page.
+   */
+  async recordCheck(id: number, check: { ok: true; account: string; avatarUrl?: string } | { ok: false; problem: string }, at = new Date()): Promise<Account> {
     const [row] = await this.#db
       .update(accounts)
       .set({
@@ -578,6 +617,7 @@ export class Registry {
         identity: check.ok ? check.account : null,
         problem: check.ok ? null : check.problem,
         checkedAt: at.toISOString(),
+        ...(check.ok && check.avatarUrl ? { avatarUrl: check.avatarUrl } : {}),
       })
       .where(eq(accounts.id, id))
       .returning();
@@ -614,6 +654,63 @@ export class Registry {
         if (next) await tx.makePrimary(next.id);
       }
     });
+  }
+
+  /**
+   * Records an account's numbers for the UTC day of `at`. A day keeps one row, the latest reading:
+   * a Sync now in the afternoon replaces the night's, so the history has one point a day.
+   */
+  async recordSnapshot(accountId: number, stats: SnapshotStats, at = new Date()): Promise<AccountSnapshot> {
+    const values = {
+      accountId,
+      day: at.toISOString().slice(0, 10),
+      takenAt: at.toISOString(),
+      followers: stats.followers ?? null,
+      following: stats.following ?? null,
+      posts: stats.posts ?? null,
+      extra: stats.extra ?? {},
+    };
+    const [row] = await this.#db
+      .insert(accountSnapshots)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [accountSnapshots.accountId, accountSnapshots.day],
+        set: { takenAt: values.takenAt, followers: values.followers, following: values.following, posts: values.posts, extra: values.extra },
+        // A reading that arrives late (a retried job) never replaces a newer one of the same day
+        setWhere: sql`${accountSnapshots.takenAt} <= ${values.takenAt}`,
+      })
+      .returning();
+    if (row) return toSnapshot(row);
+    const [kept] = await this.#db.select().from(accountSnapshots).where(and(eq(accountSnapshots.accountId, accountId), eq(accountSnapshots.day, values.day)));
+    return toSnapshot(kept!);
+  }
+
+  /** An account's history, oldest first: one point a day, from `since` (a YYYY-MM-DD) when given */
+  async accountSnapshots(accountId: number, filter: { since?: string; limit?: number } = {}): Promise<AccountSnapshot[]> {
+    const where = [eq(accountSnapshots.accountId, accountId)];
+    if (filter.since !== undefined) where.push(gte(accountSnapshots.day, filter.since));
+    const rows = await this.#db
+      .select()
+      .from(accountSnapshots)
+      .where(and(...where))
+      .orderBy(asc(accountSnapshots.day))
+      .limit(filter.limit ?? 1000);
+    return rows.map(toSnapshot);
+  }
+
+  /** The newest snapshot of an account, if it has any */
+  async lastSnapshot(accountId: number): Promise<AccountSnapshot | undefined> {
+    const [row] = await this.#db.select().from(accountSnapshots).where(eq(accountSnapshots.accountId, accountId)).orderBy(desc(accountSnapshots.day)).limit(1);
+    return row ? toSnapshot(row) : undefined;
+  }
+
+  /** The newest snapshot of every account that has one, by account: what the Channels page shows */
+  async lastSnapshots(): Promise<Map<number, AccountSnapshot>> {
+    const rows = await this.#db
+      .selectDistinctOn([accountSnapshots.accountId])
+      .from(accountSnapshots)
+      .orderBy(asc(accountSnapshots.accountId), desc(accountSnapshots.day));
+    return new Map(rows.map((row) => [row.accountId, toSnapshot(row)]));
   }
 
   /** A token for the REST API, by its hash; the token itself is shown once and never stored */

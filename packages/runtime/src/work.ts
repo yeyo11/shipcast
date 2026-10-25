@@ -1,10 +1,11 @@
-import { draftArticle, draftLaunch, publishLaunch, UNFINISHED_JOB_STATES, type GitHubRest, type Launch, type PipelineDeps, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, publishLaunch, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
 import { notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
 import { buildServices, type Services } from './services.ts';
+import { takeSnapshots } from './snapshots.ts';
 import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
 
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
@@ -17,6 +18,8 @@ export interface WorkDeps {
   brand(): Promise<Brand>;
   /** The connectors for a brand; built from the keychain and `.env` unless a test gives its own */
   services?: (brand: Brand) => Promise<Services>;
+  /** What the accounts' syncs reach the networks with; fetch unless a test gives its own */
+  fetch?: typeof fetch;
 }
 
 /** The one key of the round queue: whichever process sends a round, there is one queued and one running at most */
@@ -242,12 +245,46 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       for (const line of lines) job.log(line);
       if (lines.length === 0) job.log('No token is due');
     },
+
+    async snapshots({ reason, accountId }, job) {
+      if (await off(reason)) {
+        job.log('Automation is off: the accounts are synced by hand');
+        return;
+      }
+      const brand = await d.brand();
+      const results = await takeSnapshots(
+        { registry, secrets: d.secrets, brands: new Map([[brand.id, brand]]), ...(d.fetch && { fetch: d.fetch }) },
+        accountId === undefined ? {} : { accountId },
+      );
+      for (const result of results) job.log(result.line);
+      if (results.length === 0) job.log('No account is connected');
+      if (accountId !== undefined) job.link('/channels');
+      const failed = results.filter((r) => r.outcome === 'failed').length;
+      // A Sync now that failed says so on the job; the daily run fails only when nothing at all could be read
+      if (failed > 0 && (accountId !== undefined || failed === results.length)) throw new Error(`${failed} of ${results.length} could not be synced`);
+    },
   };
 }
 
-/** When the scheduled jobs are sent, in UTC: the numbers every six hours, the tokens once a day */
+/** The key of one account's Sync now: a second click while one is queued is the same job */
+const syncKey = (accountId: number) => `account:${accountId}`;
+
+/**
+ * Queues the sync of one account: its check, then its numbers. The job already queued for that
+ * account, if any, is the one that answers, so clicking twice never syncs twice.
+ */
+export async function syncNow(queue: WorkQueue, account: Pick<Account, 'id' | 'label'>): Promise<string | undefined> {
+  const id = await queue.send('snapshots', { reason: BY_HAND, accountId: account.id }, { title: `Syncing ${account.label}`, singletonKey: syncKey(account.id) });
+  if (id) return id;
+  const [waiting] = await queue.queued('snapshots', syncKey(account.id));
+  return waiting;
+}
+
+/** When the scheduled jobs are sent, in UTC: the numbers every six hours, the tokens and the accounts once a day */
 export const METRICS_CRON = '0 */6 * * *';
 export const TOKENS_CRON = '30 3 * * *';
+// After the token refresh, so an Instagram token renewed that night is the one that reads
+export const SNAPSHOTS_CRON = '0 4 * * *';
 /** A round every ten minutes at most if the chain of rounds broke (a crash between two links) */
 export const ROUND_WATCHDOG_CRON = '*/10 * * * *';
 
@@ -260,6 +297,7 @@ export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { fir
   await queue.work(workHandlers(queue, d));
   await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
+  await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });
   // The round's key: a watchdog round is dropped while the chain has one queued
   await queue.schedule('round', ROUND_WATCHDOG_CRON, { reason: 'watchdog' }, { singletonKey: ROUND_KEY });
   if ((await readAutomation(d.registry)).mode !== 'off') await scheduleRound(queue, 'after a start', options.firstRoundInSeconds ?? 15);

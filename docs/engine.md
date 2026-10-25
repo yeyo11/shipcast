@@ -13,6 +13,7 @@ tags:
     - post-model
     - job-queue
     - ai
+    - snapshots
 ---
 # The engine
 
@@ -70,7 +71,15 @@ makes "a launch happens once" hold:
   `retryChannel` reopens a launch unless that channel already has its post.
 - **Accounts**: the accounts connected per brand ([accounts.md](accounts.md)); adding, making
   primary and removing one run in a transaction locked per network and brand, so each has one
-  primary.
+  primary. `recordCheck` keeps the picture a working check found (`avatar_url`, migration
+  `0004_account_snapshots`) and leaves the last one when a check finds none.
+- **Account snapshots** (`account_snapshots`, migration `0004_account_snapshots`): an account's
+  followers, following and posts (each nullable: not every network counts them) and a `jsonb` `extra`,
+  keyed by `(account_id, day)` with the day in UTC, so an account has one row a day, the latest
+  reading of it; removing the account removes its rows. `recordSnapshot` upserts the day's row (a
+  late reading never replaces a newer one), `accountSnapshots(id, { since? })` reads the history
+  oldest first, `lastSnapshot(id)` and `lastSnapshots()` the newest
+  ([decisions/account-snapshots.md](decisions/account-snapshots.md)).
 - **Jobs** (`jobs`, migration `0003_jobs`): one row per job of the queue, keyed by pg-boss's id, with
   its title, launch, state, attempts, last 40 log lines, link and times; what the app shows of the
   work after it ends and across restarts (`recordJob`, `updateJob`, `logJob`, `jobs`, `pruneJobs`).
@@ -192,9 +201,10 @@ open), and `approveLaunch` merges it with a squash, after which publishing follo
 | --- | --- |
 | `launch <owner/repo> [--ref <tag>]` | Runs the pre-flight check, then claims and drafts the launch of a release (the latest without `--ref`) |
 | `preflight <owner/repo> [--ref <tag>]` | The pre-flight check alone |
-| `watch [--interval <s>]` | A worker of the job queue, as the app is: rounds in the Automation settings' mode (detect, draft, publish), the metrics every 6 hours and the token refreshes; `--interval` sets the seconds between rounds (never under 60). Stops on Ctrl+C or SIGTERM ([publishing.md](publishing.md)) |
+| `watch [--interval <s>]` | A worker of the job queue, as the app is: rounds in the Automation settings' mode (detect, draft, publish), the metrics every 6 hours, the token refreshes and the daily account snapshots; `--interval` sets the seconds between rounds (never under 60). Stops on Ctrl+C or SIGTERM ([publishing.md](publishing.md)) |
 | `publish [--retry <channel>]` | Publishing, once ([publishing.md](publishing.md)) |
 | `metrics` | Reads every source now, as a job of the queue, so the app lists it |
+| `sync [<account id>]` | Checks every connected account (or one) and records today's snapshot where its network counts, as a `snapshots` job ([accounts.md](accounts.md#pictures-numbers-and-freshness)) |
 | `status` | The latest launches, their pack and status, and which networks and sources are configured |
 
 The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. Configuration comes from
@@ -216,4 +226,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]]

@@ -16,7 +16,16 @@ export function ChannelName({ channel }: { channel: string }) {
   );
 }
 
-export const when = (iso: string) => iso.slice(0, 16).replace('T', ' ');
+/**
+ * A profile picture from a network's CDN. No referrer, so the network does not learn the app's
+ * address from every page view; lazy, since a long list of accounts would load them all at once.
+ */
+export function Avatar({ src, alt, size = 32 }: { src: string | null; alt: string; size?: number }) {
+  if (!src) return null;
+  return <img className="avatar" src={src} alt={alt} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
+}
+
+export const when =(iso: string) => iso.slice(0, 16).replace('T', ' ');
 
 export const number = (n: number) => (Number.isInteger(n) ? n.toLocaleString('en') : n.toFixed(2));
 

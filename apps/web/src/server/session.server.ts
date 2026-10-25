@@ -18,6 +18,15 @@ async function sessionKey(secrets: SecretStore): Promise<Buffer> {
 export interface Session {
   login: string;
   expires: number;
+  /** The GitHub profile's name and picture, read at sign-in; a console link's session has neither */
+  name?: string;
+  avatarUrl?: string;
+}
+
+/** What GitHub said about the user at sign-in, beside the login */
+export interface Profile {
+  name?: string;
+  avatarUrl?: string;
 }
 
 const sign = (key: Buffer, payload: string) => createHmac('sha256', key).update(payload).digest('base64url');
@@ -26,8 +35,9 @@ const sign = (key: Buffer, payload: string) => createHmac('sha256', key).update(
  * A session is the GitHub login and an expiry, signed: no session table to keep, and nothing in
  * the cookie a person could change without breaking the signature.
  */
-export async function createSession(secrets: SecretStore, login: string, now = Date.now()): Promise<{ value: string; maxAge: number }> {
-  const payload = Buffer.from(JSON.stringify({ login, expires: now + SESSION_DAYS * 86_400_000 } satisfies Session)).toString('base64url');
+export async function createSession(secrets: SecretStore, login: string, now = Date.now(), profile: Profile = {}): Promise<{ value: string; maxAge: number }> {
+  const session: Session = { login, expires: now + SESSION_DAYS * 86_400_000, ...profile };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
   return { value: `${payload}.${sign(await sessionKey(secrets), payload)}`, maxAge: SESSION_DAYS * 86_400 };
 }
 

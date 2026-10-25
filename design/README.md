@@ -22,7 +22,7 @@ Add `#day` to the URL, or use the switch, for the day theme.
 | `logo/wordmark.svg`, `logo/lockup.svg`, `logo/lockup-day.svg` | Wordmark and lockups; Phudu is embedded, so they render without the font installed |
 | `icons/*.svg` | Channel glyphs in `currentColor`: the networks' own marks from [Simple Icons](https://simpleicons.org) (CC0), plus Blog, LinkedIn and Newsletter drawn here |
 | `social-preview.svg`, `social-preview.png` | GitHub social preview, 1280 × 640 |
-| `specimen.html` | The living specimen |
+| `specimen.html` | The living specimen, with the illustrations copied in as static SVG |
 
 ## Colour
 
@@ -80,6 +80,25 @@ Reddit and Hacker News are always Manual.
 its state pill first (Done, Failed, Waiting for you), a short title, what to do, and any technical
 text folded under Details in the mono face. A failure is the failed card (red outline, diamond);
 waiting is the yellow card. Successes leave after six seconds; failures stay until closed.
+
+## Illustrations
+
+Postal, with humour: parcels, stamps, postmarks and mailboxes, each with a wink ("Return to
+sender", "Damaged"), flat, with the black outline and the stamp shadow. They are React components in
+[`apps/web/src/components/illustrations/`](../apps/web/src/components/illustrations/), one per scene,
+drawn on a 320 × 240 frame for 160–320 px.
+
+- Colours are role tokens only (`--sc-black` ink, `--sc-cream` and `--sc-on-black` paper,
+  `--sc-yellow`, `--sc-stamp` for the shadow) and `currentColor` for lines on the page, so the day
+  theme needs nothing; `--sc-failure` only in the failure scenes, with its word.
+- The shadow is the same shape offset in `--sc-stamp`, never a filter or a blur; texture is a halftone
+  pattern.
+- Decorative by default; pass `title` when the drawing says something the page does not. Motion, if
+  any, only without `prefers-reduced-motion`.
+- No generated images, no rockets.
+
+Review them running at `/design/illustrations` in the app (both themes, two sizes) or in the
+specimen. After changing a scene, run `pnpm illustrations:specimen` to refresh the specimen's copy.
 
 ## Rules
 
