@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T09:38:38.404911126Z
-updated_at: 2026-10-25T09:38:38.404911126Z
+created_at: 2026-10-25T09:38:40.782079868Z
+updated_at: 2026-10-25T10:02:11.390460415Z
 tags:
     - plan
     - mvp
@@ -54,6 +54,21 @@ Decided on 2026-10-25 by the owner, after the [goal](goal-finish.md) and its che
 
 - `status.md`, the roadmap and the goal's outcome brought up to date.
 - The rule to work on `main` ends; pull requests, squash-merged, come back.
+
+## Outcome (2026-10-25)
+
+All three were done the same day, and the owner closed the MVP:
+
+1. Rounds and webhooks: the app runs its own round from its start, and the Automation page sets the
+   mode. Signed deliveries were tested against the running app: a ping, an ignored event, a bad
+   signature refused with 401, and a merge with no launch. Real webhooks wait on the VPS, so GitHub
+   can reach the app.
+2. Phase 3: `@shipcast/capture` records the demo GIF (800 px wide, 10 fps, 12 seconds at most) and
+   the screenshots from `assets.site`.
+3. The docs were brought up to date. Pull requests are back from 2026-10-25, with `main` protected on
+   CI's `test` check ([decisions/main-until-mvp.md](../decisions/main-until-mvp.md#after-the-mvp)).
+
+Next: the app on a VPS, then phase 6.
 
 ## Related
 

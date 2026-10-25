@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:01:53.433354998Z
-updated_at: 2026-10-25T01:39:48.131645181Z
+created_at: 2026-10-25T06:55:52.422435726Z
+updated_at: 2026-10-25T10:02:54.53545942Z
 tags:
     - launches-repo
     - blog
@@ -19,9 +19,9 @@ brand's launch blog and the owner's personal site, live at **<https://josegarrid
 second repository of the [approval flow](plans/shipcast.md#approval): Shipcast opens a pull request
 there with a launch's drafts, and merging it publishes the article and lets Shipcast distribute the
 rest. It is a repo of its own, not a folder of `yeyo11/shipcast`, because Shipcast is a product other
-developers install with their own launches repo, approvals need pull requests (which `shipcast` does
-without until the MVP, [decisions/main-until-mvp.md](decisions/main-until-mvp.md)), and a merge there
-means *publish*.
+developers install with their own launches repo, approvals need pull requests, and a merge there means
+*publish*, while a merge in `shipcast` ([decisions/main-until-mvp.md](decisions/main-until-mvp.md))
+means a change to the code.
 
 ## What it is
 

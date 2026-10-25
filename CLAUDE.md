@@ -55,11 +55,11 @@ Both run as [Sluice](.sluice.toml) gates (`typecheck` on pre-commit, `test` on p
 - Settings-shaped documents (`launch.yml`, brand config) are files; accumulating records (launches,
   metrics) are rows in a database.
 - Commits follow Conventional Commits.
-- **Until the MVP, work goes straight to `main`**: no feature branches, no pull requests, small
-  commits that pass the Sluice gates. Agents running in parallel worktrees keep to their own branch
-  and leave the integration into `main` to the maintainer. An agent working on `main` pushes without
-  asking, once the commit passes the gates (Sluice runs `test` on pre-push). After the
-  MVP, pull requests come back, squash-merged ([docs/decisions/main-until-mvp.md](docs/decisions/main-until-mvp.md)).
+- **Every change goes through a pull request**, squash-merged, since the MVP closed on 2026-10-25
+  ([docs/decisions/main-until-mvp.md](docs/decisions/main-until-mvp.md)). `main` is protected: no
+  direct pushes, and CI's `test` check must pass. An agent branches from `main`, commits through the
+  Sluice gates, pushes its branch and opens the pull request (titled in Conventional Commits) without
+  asking; the owner merges it, unless they ask the agent to.
 - Secrets (API keys, tokens for each network) live in `.env`, never in the repo.
 
 ## Knowledge

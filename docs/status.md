@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T09:19:55.287756457Z
-updated_at: 2026-10-25T09:57:35.270856707Z
+created_at: 2026-10-25T09:57:37.470820711Z
+updated_at: 2026-10-25T10:02:30.35494427Z
 tags:
     - status
     - roadmap
@@ -9,7 +9,8 @@ tags:
 ---
 # Status
 
-**Phases 0 to 5 done; Shipcast v0.1.0 was launched with Shipcast, from its app, on 2026-10-25.** The
+**The MVP is closed (2026-10-25): phases 0 to 5 done, and Shipcast v0.1.0 was launched with Shipcast,
+from its app.** The
 same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in
 the keychain, the phase 5 channels and what the MVP had left ([its outcome](plans/goal-finish.md#outcome-2026-10-25)).
 The app is live at its address, signed in with GitHub, with Instagram connected through its OAuth;
@@ -21,8 +22,8 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 - **The repository** [github.com/yeyo11/shipcast](https://github.com/yeyo11/shipcast): MIT, pnpm
   monorepo on TypeScript and Node 24.22.1 (pinned in `.nvmrc`, pnpm's `useNodeVersion` and `engines`),
   CI on every pull request and on main, Sluice gates for `typecheck` and `test`, pando as the
-  knowledge base ([knowledge-base.md](knowledge-base.md)). Work goes straight to `main` until the MVP
-  ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The README says what Shipcast does
+  knowledge base ([knowledge-base.md](knowledge-base.md)). Since the MVP every change is a pull request,
+  squash-merged, on a protected `main` ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The README says what Shipcast does
   today, with a demo of the app (`docs/media/tour.gif`). Release v0.1.0 on GitHub.
 - **`packages/schema`**: `launch.yml` ([launch-yml.md](launch-yml.md)), `brand.yml`
   ([brands.md](brands.md)), `projects.yml` (the project looks) and the content pack
@@ -96,8 +97,6 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 
 ## Next
 
-- Closing the MVP ([plans/mvp-close.md](plans/mvp-close.md)): what is left is the switch to pull
-  requests ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)).
 - The app on a VPS or server, which also lets GitHub's webhooks reach it.
 - Phase 6, after the MVP, as steps of a setup wizard: the AI providers through the Vercel AI SDK
   (claudio through its OpenAI-compatible API), the GitHub Action mode, documentation, a blog template
