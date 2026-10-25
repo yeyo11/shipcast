@@ -1,54 +1,31 @@
-import { randomUUID } from 'node:crypto';
-
-export type JobState = 'running' | 'done' | 'failed';
-
-export interface Job {
-  id: string;
-  /** What it is, in words: "Drafting yeyo11/claudio v0.9.0" */
-  title: string;
-  state: JobState;
-  /** Lines worth showing while it runs, and its outcome */
-  log: string[];
-  /** Where to go once it is done: a pull request, a launch */
-  link?: string;
-  startedAt: string;
-  endedAt?: string;
-}
+import type { JobRecord, Registry } from '@shipcast/engine';
+import type { JobView } from '../components/Jobs';
 
 /**
- * Work that outlives a request: drafting a launch takes minutes, publishing waits for the site to
- * deploy. Jobs run in the app's process and are kept in memory; the registry holds what matters.
+ * The queue's work as the app shows it, from the registry's `jobs` rows, so a job started before a
+ * restart is still listed after it. Rounds run all day and the Automation page has the last one, so
+ * a round is listed only while running or when it failed; nor is a job that found automation off.
  */
-export class Jobs {
-  readonly #jobs = new Map<string, Job>();
+const shown = (job: JobRecord) =>
+  (job.queue !== 'round' || job.state === 'active' || job.state === 'failed') && !(job.state === 'completed' && job.log[0]?.startsWith('Automation is off'));
 
-  start(title: string, work: (log: (line: string) => void, job: Job) => Promise<string | undefined | void>): Job {
-    const job: Job = { id: randomUUID(), title, state: 'running', log: [], startedAt: new Date().toISOString() };
-    this.#jobs.set(job.id, job);
-    const log = (line: string) => job.log.push(line);
-    work(log, job).then(
-      (link) => {
-        job.state = 'done';
-        if (link) job.link = link;
-        job.endedAt = new Date().toISOString();
-      },
-      (error: unknown) => {
-        job.state = 'failed';
-        job.log.push(error instanceof Error ? error.message : String(error));
-        job.endedAt = new Date().toISOString();
-      },
-    );
-    return job;
-  }
+export function jobView(job: JobRecord): JobView {
+  return {
+    id: job.id,
+    title: job.title,
+    // Waiting for its next attempt is still running, to the owner; the last line says what it waits for
+    state: job.state === 'completed' ? 'done' : job.state === 'failed' ? 'failed' : 'running',
+    log: job.log.slice(-8),
+    link: job.link,
+    startedAt: job.startedAt ?? job.createdAt,
+  };
+}
 
-  get(id: string): Job | undefined {
-    return this.#jobs.get(id);
-  }
-
-  /** The newest first; finished jobs older than a day are forgotten */
-  list(): Job[] {
-    const day = Date.now() - 86_400_000;
-    for (const [id, job] of this.#jobs) if (job.endedAt && Date.parse(job.endedAt) < day) this.#jobs.delete(id);
-    return [...this.#jobs.values()].reverse();
-  }
+/** The last day's jobs, the newest first; or a launch's, whenever they ran */
+export async function jobsView(registry: Registry, filter: { launchId?: number } = {}): Promise<JobView[]> {
+  const jobs =
+    filter.launchId === undefined
+      ? await registry.jobs({ since: new Date(Date.now() - 86_400_000).toISOString(), limit: 200 })
+      : await registry.jobs({ launchId: filter.launchId, limit: 20 });
+  return jobs.filter(shown).slice(0, 30).map(jobView);
 }

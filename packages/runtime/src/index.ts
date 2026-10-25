@@ -7,3 +7,5 @@ export * from './rounds.ts';
 export * from './webhooks.ts';
 export * from './automation.ts';
 export * from './api-tokens.ts';
+export * from './queue.ts';
+export * from './work.ts';

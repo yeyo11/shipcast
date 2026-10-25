@@ -121,3 +121,27 @@ export const apiTokens = pgTable('api_tokens', {
   lastUsedAt: text('last_used_at'),
   revokedAt: text('revoked_at'),
 });
+
+// The work the queue ran, one row per pg-boss job (keyed by its id): what the app shows of a job
+// while it runs, once it has ended and after a restart. pg-boss's tables are its own, change with
+// its versions and are emptied by its retention; this row keeps the title, the launch, the log
+// lines and the link. See docs/decisions/job-queue.md
+export const jobs = pgTable(
+  'jobs',
+  {
+    id: text('id').primaryKey(),
+    queue: text('queue').notNull(),
+    title: text('title').notNull(),
+    launchId: integer('launch_id').references(() => launches.id, { onDelete: 'set null' }),
+    // created, active, retry, completed or failed, as pg-boss names them
+    state: text('state').notNull().default('created'),
+    attempts: integer('attempts').notNull().default(0),
+    // The last lines worth showing, oldest first; the registry keeps a bounded number
+    log: jsonb('log').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    link: text('link'),
+    createdAt: text('created_at').notNull().default(nowIso),
+    startedAt: text('started_at'),
+    endedAt: text('ended_at'),
+  },
+  (t) => [index('jobs_by_created').on(t.createdAt), index('jobs_by_launch').on(t.launchId)],
+);

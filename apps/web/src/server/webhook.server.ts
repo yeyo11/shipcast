@@ -1,18 +1,5 @@
-import {
-  buildServices,
-  claimFromWebhook,
-  draftClaimed,
-  LAST_DELIVERY_KEY,
-  launchOfPullRequest,
-  readAutomation,
-  record,
-  verifySignature,
-  WEBHOOK_SECRET_KEY,
-  webhookAction,
-} from '@shipcast/runtime';
-import { roundDeps } from './automation.server';
+import { LAST_DELIVERY_KEY, readAutomation, record, verifySignature, WEBHOOK_SECRET_KEY, webhookAction } from '@shipcast/runtime';
 import { appContext } from './context.server';
-import { startPublishing } from './work.server';
 
 const answer = (status: number, message: string) => Response.json({ message }, { status });
 
@@ -46,19 +33,9 @@ export async function receiveWebhook(request: Request): Promise<Response> {
   if ((await readAutomation(ctx.registry)).mode !== 'webhook') return done(200, 'received, but webhooks are turned off in Automation');
   if (action.kind === 'ignore') return done(200, `ignored: ${action.reason}`);
 
-  const d = await roundDeps(ctx, () => {});
-  if (action.kind === 'claim') {
-    const outcome = await claimFromWebhook(d, action.event);
-    if (outcome.result !== 'claimed') return done(200, outcome.result === 'ignored' ? `ignored: ${outcome.reason}` : outcome.result);
-    const services = await buildServices({ env: process.env, brand: d.brand, registry: d.registry, github: d.github, secrets: d.secrets });
-    ctx.jobs.start(`Drafting ${outcome.launch.repo} ${outcome.launch.ref}`, async (log) => {
-      await draftClaimed(outcome.launch, { ...d, log }, services);
-      return `/launches/${outcome.launch.id}`;
-    });
-    return done(202, `claimed ${outcome.launch.repo} ${outcome.launch.ref}: drafting`);
-  }
-  const launch = await launchOfPullRequest(d, action.pullRequestUrl);
-  if (!launch) return done(200, 'a merge Shipcast has no drafted launch for');
-  await startPublishing(launch);
-  return done(202, `publishing ${launch.repo} ${launch.ref}`);
+  // The claim reads launch.yml from GitHub and the draft takes minutes: both are a job of the
+  // queue, so the answer is immediate and a restart in between loses nothing
+  const what = action.kind === 'claim' ? `${action.event.repo} ${action.event.type === 'release' ? action.event.tag : 'made public'}` : action.pullRequestUrl;
+  const job = await ctx.queue.send('delivery', { action, delivery }, { title: action.kind === 'claim' ? `Claiming ${what}` : `Publishing the merge of ${what}` });
+  return done(202, `queued: ${action.kind === 'claim' ? `claiming ${what}` : `publishing ${what}`}${job ? '' : ' (already queued)'}`);
 }

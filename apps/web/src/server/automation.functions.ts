@@ -1,6 +1,6 @@
 import { newWebhookSecret, WEBHOOK_SECRET_KEY, writeAutomation, type AutomationMode } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
-import { automationView, roundNow } from './automation.server';
+import { automationChanged, automationView, roundNow } from './automation.server';
 import { appContext } from './context.server';
 import { InvalidInput, object } from './input';
 
@@ -22,7 +22,12 @@ export const saveAutomation = createServerFn({ method: 'POST' })
     if (typeof o.intervalSeconds !== 'number' || !Number.isFinite(o.intervalSeconds)) throw new InvalidInput('the interval is a number of seconds');
     return { mode: o.mode as AutomationMode, intervalSeconds: o.intervalSeconds };
   })
-  .handler(async ({ data }) => writeAutomation((await appContext()).registry, data));
+  .handler(async ({ data }) => {
+    const ctx = await appContext();
+    const saved = await writeAutomation(ctx.registry, data);
+    await automationChanged(ctx);
+    return saved;
+  });
 
 /** A new secret replaces the old one at once: GitHub's webhooks must be given the new one */
 export const rotateWebhookSecret = createServerFn({ method: 'POST' }).handler(async () => {
@@ -32,8 +37,5 @@ export const rotateWebhookSecret = createServerFn({ method: 'POST' }).handler(as
 });
 
 export const runRoundNow = createServerFn({ method: 'POST' }).handler(async () => {
-  const ctx = await appContext();
-  const started = !(await automationView(ctx)).running;
-  if (started) void roundNow(ctx, 'by hand');
-  return { started };
+  return { started: await roundNow(await appContext()) };
 });

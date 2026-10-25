@@ -2,19 +2,15 @@ import { editDraft, preflight } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
+import { jobsView } from './jobs.server';
 import { launchDetail, launchView, publishAgain as publishAgainFor } from './launches.server';
 import { articleRequest, channelName, launchRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing } from './work.server';
 
-const jobsView = async () =>
-  (await appContext()).jobs
-    .list()
-    .map((j) => ({ id: j.id, title: j.title, state: j.state, log: j.log.slice(-8), link: j.link ?? null, startedAt: j.startedAt }));
-
 export const listLaunches = createServerFn({ method: 'GET' }).handler(async () => {
   const { registry } = await appContext();
   const launches = await registry.recent(60);
-  return { launches: await Promise.all(launches.map((l) => launchView(registry, l))), jobs: await jobsView() };
+  return { launches: await Promise.all(launches.map((l) => launchView(registry, l))), jobs: await jobsView(registry) };
 });
 
 export const getLaunch = createServerFn({ method: 'GET' })
@@ -23,7 +19,7 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = await appContext();
     const launch = await registry.get(data);
     if (!launch) return null;
-    return { ...(await launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo })), jobs: await jobsView() };
+    return { ...(await launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo })), jobs: await jobsView(registry, { launchId: launch.id }) };
   });
 
 export const saveDraft = createServerFn({ method: 'POST' })

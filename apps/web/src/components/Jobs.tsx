@@ -9,7 +9,7 @@ export interface JobView {
   startedAt: string;
 }
 
-/** What is running in the app's process: drafting, publishing */
+/** The queue's work of the last day: drafting, publishing, GitHub's deliveries; kept across restarts */
 export function Jobs({ jobs }: { jobs: JobView[] }) {
   if (jobs.length === 0) return null;
   return (

@@ -1,7 +1,49 @@
-import { and, asc, count, desc, eq, like, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, like, lt, sql, type SQL } from 'drizzle-orm';
 import type { Channel, Language, PackKind } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
-import { accounts, apiTokens, cursors, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
+import { accounts, apiTokens, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
+
+/** A job's state, as pg-boss names them; `retry` waits for its next attempt */
+export type JobState = 'created' | 'active' | 'retry' | 'completed' | 'failed';
+
+export const UNFINISHED_JOB_STATES: readonly JobState[] = ['created', 'active', 'retry'];
+
+/** How many log lines a job keeps: enough to tell what happened, never a growing table */
+export const JOB_LOG_LINES = 40;
+
+/** What the app shows of one job of the queue, kept after it ends and across restarts */
+export interface JobRecord {
+  /** pg-boss's id of the job */
+  id: string;
+  queue: string;
+  /** What it is, in words: "Drafting yeyo11/claudio v0.9.0" */
+  title: string;
+  launchId: number | null;
+  state: JobState;
+  /** Attempts started so far; a job waiting for a deploy takes several */
+  attempts: number;
+  log: string[];
+  /** Where to go once it is done: a pull request, a launch */
+  link: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+}
+
+export interface JobChange {
+  title?: string;
+  state?: JobState;
+  attempts?: number;
+  link?: string | null;
+  /** Sets the start to now, unless it was set by an earlier attempt */
+  started?: boolean;
+  /** Sets the end to now, or clears it when a job goes back to waiting */
+  ended?: boolean;
+}
+
+function toJob(row: typeof jobs.$inferSelect): JobRecord {
+  return { ...row, state: row.state as JobState, log: Array.isArray(row.log) ? row.log : [] };
+}
 
 /** What started a launch; the launch.yml `triggers` decide which of these are honoured. An `article` is written in the app, not released. */
 export type Trigger = 'release' | 'manual' | 'public' | 'enabled' | 'article';
@@ -623,6 +665,65 @@ export class Registry {
     const page = rows.slice(0, options.limit).map(toLaunch);
     const last = page.at(-1);
     return rows.length > options.limit && last ? { launches: page, next: { createdAt: last.createdAt, id: last.id } } : { launches: page };
+  }
+
+  /** Records a job of the queue; a second record of the same id keeps the first and returns it */
+  async recordJob(job: { id: string; queue: string; title: string; launchId?: number | null }): Promise<JobRecord> {
+    const [inserted] = await this.#db
+      .insert(jobs)
+      .values({ id: job.id, queue: job.queue, title: job.title, launchId: job.launchId ?? null })
+      .onConflictDoNothing({ target: jobs.id })
+      .returning();
+    return inserted ? toJob(inserted) : (await this.job(job.id))!;
+  }
+
+  async updateJob(id: string, change: JobChange): Promise<void> {
+    const set: Partial<{ [K in keyof typeof jobs.$inferInsert]: (typeof jobs.$inferInsert)[K] | SQL }> = {};
+    if (change.title !== undefined) set.title = change.title;
+    if (change.state !== undefined) set.state = change.state;
+    if (change.attempts !== undefined) set.attempts = change.attempts;
+    if (change.link !== undefined) set.link = change.link;
+    if (change.started) set.startedAt = sql`coalesce(${jobs.startedAt}, ${nowIso})`;
+    if (change.ended !== undefined) set.endedAt = change.ended ? nowIso : null;
+    if (Object.keys(set).length === 0) return;
+    await this.#db.update(jobs).set(set).where(eq(jobs.id, id));
+  }
+
+  /** Adds a line to a job's log, dropping the oldest once it holds JOB_LOG_LINES */
+  async logJob(id: string, line: string): Promise<void> {
+    const appended = sql`${jobs.log} || to_jsonb(${line}::text)`;
+    await this.#db
+      .update(jobs)
+      // `jsonb - 0` drops the first element; one line in, one out keeps the log bounded
+      .set({ log: sql`CASE WHEN jsonb_array_length(${jobs.log}) >= ${JOB_LOG_LINES} THEN (${appended}) - 0 ELSE ${appended} END` })
+      .where(eq(jobs.id, id));
+  }
+
+  async job(id: string): Promise<JobRecord | undefined> {
+    const [row] = await this.#db.select().from(jobs).where(eq(jobs.id, id));
+    return row ? toJob(row) : undefined;
+  }
+
+  /** The newest first: a launch's, those created since a moment, those in some states */
+  async jobs(filter: { launchId?: number; since?: string; states?: readonly JobState[]; queues?: readonly string[]; limit?: number } = {}): Promise<JobRecord[]> {
+    const where: SQL[] = [];
+    if (filter.launchId !== undefined) where.push(eq(jobs.launchId, filter.launchId));
+    if (filter.since !== undefined) where.push(gte(jobs.createdAt, filter.since));
+    if (filter.states) where.push(inArray(jobs.state, [...filter.states]));
+    if (filter.queues) where.push(inArray(jobs.queue, [...filter.queues]));
+    const rows = await this.#db
+      .select()
+      .from(jobs)
+      .where(and(...where))
+      .orderBy(desc(jobs.createdAt), desc(jobs.id))
+      .limit(filter.limit ?? 100);
+    return rows.map(toJob);
+  }
+
+  /** Forgets the jobs that ended before a moment; returns how many */
+  async pruneJobs(endedBefore: string): Promise<number> {
+    const deleted = await this.#db.delete(jobs).where(lt(jobs.endedAt, endedBefore)).returning({ id: jobs.id });
+    return deleted.length;
   }
 
   async close(): Promise<void> {
