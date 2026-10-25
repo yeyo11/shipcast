@@ -496,6 +496,17 @@ export class Registry {
       .orderBy(asc(metrics.name));
   }
 
+  /**
+   * The rows of a read-only query the query builder cannot say (window functions, FILTER, VALUES),
+   * for the stats in stats.ts. Each driver shapes `execute`'s answer its own way: postgres.js gives
+   * the rows as an array, PGlite an object holding them.
+   */
+  async selectRows<T extends Record<string, unknown>>(query: SQL): Promise<T[]> {
+    const result: unknown = await this.#db.execute(query);
+    if (Array.isArray(result)) return result as T[];
+    return (result as { rows: T[] }).rows;
+  }
+
   /** Something the owner chose (automation today), as it was stored; undefined until it is first set */
   async setting<T>(key: string): Promise<T | undefined> {
     const [row] = await this.#db.select({ value: settings.value }).from(settings).where(eq(settings.key, key));

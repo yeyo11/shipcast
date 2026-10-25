@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:02:34.493768408Z
-updated_at: 2026-10-25T16:28:02.223373625Z
+created_at: 2026-10-25T16:54:47.43048597Z
+updated_at: 2026-10-25T19:31:50.665507999Z
 tags:
     - engine
     - registry
@@ -16,6 +16,7 @@ tags:
     - snapshots
     - github-app
     - settings
+    - stats
 ---
 # The engine
 
@@ -64,7 +65,10 @@ makes "a launch happens once" hold:
   ([publishing.md](publishing.md#metrics)). A reading of one piece points at it (`post_id`, read back
   with `postMetrics`); the site-level sources (blog visits, search, Bing, GitHub) stay the launch's.
   A launch's numbers add up its pieces' read at the same moment, so two newsletter issues are one
-  newsletter reading.
+  newsletter reading. The stats section's queries over them (totals with a comparison period, time
+  series, a ranking by popularity normalised per network, an account's growth) are `stats.ts`, run
+  through **`selectRows`**, the registry's raw read for SQL the query builder cannot say
+  ([stats.md](stats.md)).
 - **Settings** (`settings`: `key`, a `jsonb` value, `updated_at`) hold what the owner chose, read
   typed with `setting<T>(key)` and written with `setSetting(key, value)`: the automation mode and
   interval, the AI settings (`ai`) and the prompts' versions (`prompts`), and since the configuration
@@ -242,8 +246,9 @@ its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
 ## After the drafts
 
 The launch's media, publishing after the merge, the newsletter and metrics are in
-[publishing.md](publishing.md).
+[publishing.md](publishing.md); what the stats section reads from the metrics and the snapshots, and
+how popularity is normalised per network, in [stats.md](stats.md).
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[stats.md]]
