@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { imageUrl } from '@shipcast/connectors';
+import { exchangeCode, GitHubSignInError } from '@shipcast/runtime';
 import { consoleLinks } from './console-links';
 import { appContext } from './context.server';
 import { cookieOf, createSession, SESSION_COOKIE, setCookie, STATE_COOKIE } from './session.server';
@@ -16,6 +17,8 @@ const page = (status: number, message: string) =>
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });
 
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 const callbackUrl = (app: { publicUrl: string }) => `${app.publicUrl}/auth/github/callback`;
 
 /** Sends the browser to GitHub with a fresh state, remembered in a short-lived cookie */
@@ -28,33 +31,37 @@ export async function startGitHubSignIn(): Promise<Response> {
 
 /**
  * GitHub's way back: the state must match the cookie (or it is someone else's sign-in replayed
- * here), the code becomes a token for one call that names the user, and only allowed logins get a
- * session. The token itself is not kept: the app needs to know who, not to act as them.
+ * here), the code becomes a token that names the user, and only allowed logins get a session.
+ * Through the GitHub App the token and its refresh token are kept in the keychain, refreshed on
+ * their own, for what Shipcast does as the owner; through the old OAuth App it is used once and
+ * dropped, as before.
  */
 export async function finishGitHubSignIn(request: Request): Promise<Response> {
-  const { app, secrets } = await appContext();
+  const { app, secrets, userTokens } = await appContext();
   const url = new URL(request.url);
   const state = url.searchParams.get('state');
   const code = url.searchParams.get('code');
   const expected = cookieOf(request, STATE_COOKIE);
   const clearState = setCookie(STATE_COOKIE, '', 0);
-  if (url.searchParams.get('error')) return page(400, `GitHub did not sign you in: ${url.searchParams.get('error_description') ?? url.searchParams.get('error')}.`);
+  if (url.searchParams.get('error')) return page(400, `GitHub did not sign you in: ${escapeHtml(url.searchParams.get('error_description') ?? url.searchParams.get('error') ?? '')}.`);
   if (!state || !code || !expected || state !== expected) return page(400, 'This sign-in link is stale or was not started here.');
 
-  const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify({ client_id: app.github.clientId, client_secret: app.github.clientSecret, code, redirect_uri: callbackUrl(app) }),
-  });
-  const token = (await tokenResponse.json()) as { access_token?: string; error_description?: string };
-  if (!token.access_token) return page(502, `GitHub refused the sign-in: ${token.error_description ?? tokenResponse.status}.`);
+  let token: Awaited<ReturnType<typeof exchangeCode>>;
+  try {
+    token = await exchangeCode(app.github, code, callbackUrl(app));
+  } catch (error) {
+    if (error instanceof GitHubSignInError) return page(502, `GitHub refused the sign-in: ${escapeHtml(error.message)}.`);
+    throw error;
+  }
   const userResponse = await fetch('https://api.github.com/user', {
     headers: { authorization: `Bearer ${token.access_token}`, accept: 'application/vnd.github+json', 'user-agent': 'shipcast' },
   });
   const user = (await userResponse.json()) as { login?: string; name?: string | null; avatar_url?: string };
   const login = user.login?.toLowerCase();
   if (!login) return page(502, 'GitHub did not say who you are.');
-  if (!app.allowedLogins.includes(login)) return page(403, `@${user.login} is not allowed into this Shipcast.`);
+  if (!app.allowedLogins.includes(login)) return page(403, `@${escapeHtml(user.login ?? '')} is not allowed into this Shipcast.`);
+  // Only the owner's token is kept, and only once the login is known to be allowed
+  if (app.github.kind === 'app' && userTokens) await userTokens.save(login, token);
 
   // The name and picture ride in the signed cookie, so the header shows them without asking GitHub again
   const avatarUrl = imageUrl(user.avatar_url);

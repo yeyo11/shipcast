@@ -12,3 +12,6 @@ export * from './work.ts';
 export * from './ai.ts';
 export * from './snapshots.ts';
 export * from './edits.ts';
+export * from './settings.ts';
+export * from './github-user.ts';
+export * from './runtime.ts';

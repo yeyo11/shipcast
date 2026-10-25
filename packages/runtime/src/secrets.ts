@@ -29,8 +29,6 @@ function run(command: string, args: string[], input?: string): Promise<{ code: n
   });
 }
 
-const SERVICE = 'shipcast';
-
 /**
  * The desktop keychain through its own command-line tools, so there is no native module to build:
  * `secret-tool` (libsecret: GNOME Keyring, KWallet) on Linux, `security` on macOS. On Linux the value
@@ -39,18 +37,21 @@ const SERVICE = 'shipcast';
 export class KeychainStore implements SecretStore {
   readonly kind: string;
   readonly #platform: NodeJS.Platform;
+  readonly #service: string;
 
-  constructor(platform: NodeJS.Platform = process.platform) {
+  /** `service` is the bootstrap's SHIPCAST_KEYCHAIN_SERVICE: a second install (or a test copy) keeps its own entries */
+  constructor(service = 'shipcast', platform: NodeJS.Platform = process.platform) {
     if (platform !== 'linux' && platform !== 'darwin') throw new SecretStoreError(`no keychain support on ${platform}`);
     this.#platform = platform;
+    this.#service = service;
     this.kind = platform === 'linux' ? 'the desktop keyring (libsecret)' : 'the macOS keychain';
   }
 
   async get(key: string): Promise<string | undefined> {
     const result =
       this.#platform === 'linux'
-        ? await run('secret-tool', ['lookup', 'service', SERVICE, 'key', key])
-        : await run('security', ['find-generic-password', '-s', SERVICE, '-a', key, '-w']);
+        ? await run('secret-tool', ['lookup', 'service', this.#service, 'key', key])
+        : await run('security', ['find-generic-password', '-s', this.#service, '-a', key, '-w']);
     if (result.code !== 0) return undefined;
     // `security` ends the value with a newline; secret-tool returns it as stored
     return this.#platform === 'darwin' ? result.stdout.replace(/\n$/, '') : result.stdout;
@@ -59,14 +60,14 @@ export class KeychainStore implements SecretStore {
   async set(key: string, value: string, label: string): Promise<void> {
     const result =
       this.#platform === 'linux'
-        ? await run('secret-tool', ['store', `--label=Shipcast: ${label}`, 'service', SERVICE, 'key', key], value)
-        : await run('security', ['add-generic-password', '-U', '-s', SERVICE, '-a', key, '-l', `Shipcast: ${label}`, '-w', value]);
+        ? await run('secret-tool', ['store', `--label=Shipcast: ${label}`, 'service', this.#service, 'key', key], value)
+        : await run('security', ['add-generic-password', '-U', '-s', this.#service, '-a', key, '-l', `Shipcast: ${label}`, '-w', value]);
     if (result.code !== 0) throw new SecretStoreError(`could not save ${key} in ${this.kind}: ${result.stderr.trim() || `exit ${result.code}`}`);
   }
 
   async delete(key: string): Promise<void> {
-    if (this.#platform === 'linux') await run('secret-tool', ['clear', 'service', SERVICE, 'key', key]);
-    else await run('security', ['delete-generic-password', '-s', SERVICE, '-a', key]);
+    if (this.#platform === 'linux') await run('secret-tool', ['clear', 'service', this.#service, 'key', key]);
+    else await run('security', ['delete-generic-password', '-s', this.#service, '-a', key]);
   }
 }
 

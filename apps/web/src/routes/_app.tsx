@@ -17,6 +17,7 @@ const SECTIONS = [
   { to: '/automation', label: 'Automation' },
   { to: '/ai', label: 'AI' },
   { to: '/tokens', label: 'API' },
+  { to: '/settings', label: 'Settings' },
 ] as const;
 
 function Shell() {

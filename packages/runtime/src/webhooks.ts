@@ -21,9 +21,19 @@ export function verifySignature(secret: string, body: string, header: string | n
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
+/**
+ * Whether a delivery is signed with any of the secrets Shipcast accepts: the GitHub App's (one for
+ * every repo it is installed on) or the per-repo secret made in the Automation page before the App
+ */
+export function verifyAnySignature(secrets: Array<string | undefined>, body: string, header: string | null): boolean {
+  return secrets.some((secret) => secret !== undefined && secret !== '' && verifySignature(secret, body, header));
+}
+
 /** What a delivery asks Shipcast to do, decided from its event and payload alone */
 export type WebhookAction =
   | { kind: 'ping' }
+  /** The App was installed, changed, suspended or removed, or its repos changed: its cached installation is stale */
+  | { kind: 'installation'; summary: string }
   | { kind: 'claim'; event: GitHubEvent }
   | { kind: 'publish'; pullRequestUrl: string }
   | { kind: 'ignore'; reason: string };
@@ -34,12 +44,23 @@ interface Payload {
   repository?: { full_name?: string };
   release?: { id?: number; tag_name?: string; prerelease?: boolean; draft?: boolean; html_url?: string; published_at?: string };
   pull_request?: { html_url?: string; merged?: boolean };
+  installation?: { id?: number; account?: { login?: string } };
+  repositories_added?: unknown[];
+  repositories_removed?: unknown[];
 }
 
 /** Maps a delivery to an action. Only what Shipcast acts on is read; anything else is ignored with a reason. */
 export function webhookAction(event: string | null, payload: Payload, launchesRepo: string): WebhookAction {
   const repo = payload.repository?.full_name;
   if (event === 'ping') return { kind: 'ping' };
+  if (event === 'installation' || event === 'installation_repositories') {
+    const account = payload.installation?.account?.login ?? 'an account';
+    const changed =
+      event === 'installation'
+        ? `${payload.action ?? 'changed'} on ${account}`
+        : `on ${account}: ${payload.repositories_added?.length ?? 0} repos added, ${payload.repositories_removed?.length ?? 0} removed`;
+    return { kind: 'installation', summary: `the GitHub App's installation ${changed}` };
+  }
   if (event === 'release') {
     const release = payload.release;
     if (payload.action !== 'published' || !release?.tag_name || !repo) return { kind: 'ignore', reason: `release ${payload.action ?? ''} is not a publication` };

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:47:19.702052489Z
-updated_at: 2026-10-25T15:52:28.845545328Z
+created_at: 2026-10-25T16:02:34.493768408Z
+updated_at: 2026-10-25T16:28:02.223373625Z
 tags:
     - engine
     - registry
@@ -14,14 +14,17 @@ tags:
     - job-queue
     - ai
     - snapshots
+    - github-app
+    - settings
 ---
 # The engine
 
 `packages/engine` ([source](../packages/engine/src/)) decides what gets launched, asks the AI for the
 content and opens the drafts pull request; `apps/cli` ([source](../apps/cli/src/)) is the `shipcast`
 command around it and `apps/web` the [web app](web-app.md). What both share (configuration, the
-keychain, connected accounts, the connectors built from them, and the job queue with its handlers)
-is `@shipcast/runtime` ([accounts.md](accounts.md), [decisions/job-queue.md](decisions/job-queue.md)).
+settings, the keychain, connected accounts, the connectors built from them, and the job queue with
+its handlers) is `@shipcast/runtime` ([accounts.md](accounts.md),
+[decisions/job-queue.md](decisions/job-queue.md), [decisions/github-app.md](decisions/github-app.md)).
 Written on 2026-10-24, extended on 2026-10-25, each piece tested with fakes and checked against the
 real service where it is safe to. It depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md),
 [content-pack.md](content-pack.md), [brands.md](brands.md)).
@@ -64,7 +67,9 @@ makes "a launch happens once" hold:
   newsletter reading.
 - **Settings** (`settings`: `key`, a `jsonb` value, `updated_at`) hold what the owner chose, read
   typed with `setting<T>(key)` and written with `setSetting(key, value)`: the automation mode and
-  interval, the AI settings (`ai`) and the prompts' versions (`prompts`) today, the onboarding next.
+  interval, the AI settings (`ai`) and the prompts' versions (`prompts`), and since the configuration
+  split the launches repo, claudio's URL, the AI budget and the Instagram app id
+  ([decisions/github-app.md](decisions/github-app.md)); the onboarding next.
 - **Cursors** keep positions and state only: polling, a channel's permanent failure
   (`publish-failed:<launch>:<channel>`), each article's index status, the last round and delivery.
   `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
@@ -89,6 +94,18 @@ An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-t
 ([decisions/postgres.md](decisions/postgres.md#moving-an-install)): the rows land in the first
 migration's schema, SQLite's column for column, and the later migrations convert them like any
 install's.
+
+## GitHub access
+
+`GitHubRest` (`github.ts`) is every read and write the engine makes on GitHub. It takes a token or a
+`GitHubAuth`, asked for a token on each request; since 2026-10-25 that is **`GitHubApp`**
+(`github-app.ts`): installation tokens minted from the App's private key (a JWT signed RS256, then
+`POST /app/installations/{id}/access_tokens`), kept until five minutes before they expire, for the
+installation on the launches repo's owner. A `401` makes it forget the token and try once more. The
+commits and pull requests it makes are by the App's bot, `<slug>[bot]`. Without an App in `.env`, the
+old `GITHUB_TOKEN_PERSONAL` is the token. A repo's traffic needs Administration: read, which the App
+does not have: `repoStats` then returns the public numbers only, and traffic comes from a connected
+GitHub account ([decisions/github-app.md](decisions/github-app.md)).
 
 ## Detecting launches
 
@@ -126,7 +143,8 @@ runs it alone.
   `allowedTools` and `permissionMode: 'dontAsk'`; poll until the main agent calls
   **`StructuredOutput`**, whose `input` is the answer; then **stop the chat**. Failures, a turn without
   `StructuredOutput` and the timeout raise `ClaudioError` with the chat id. `streamText` goes through
-  claudio's OpenAI-compatible `/api/v1` with `@ai-sdk/openai-compatible`.
+  claudio's OpenAI-compatible `/api/v1` with `@ai-sdk/openai-compatible`. Its URL and token are
+  settings, read when a call is made.
 - **`SdkProvider`** on the Vercel AI SDK: `anthropicProvider` (`@ai-sdk/anthropic`, default
   `claude-opus-5-5`) and `openAiCompatibleProvider` (any chat-completions server). `generateObject` is
   `generateText` with `Output.object` over the pack's JSON Schema; with a checkout on this machine
@@ -205,16 +223,18 @@ open), and `approveLaunch` merges it with a squash, after which publishing follo
 | `publish [--retry <channel>]` | Publishing, once ([publishing.md](publishing.md)) |
 | `metrics` | Reads every source now, as a job of the queue, so the app lists it |
 | `sync [<account id>]` | Checks every connected account (or one) and records today's snapshot where its network counts, as a `snapshots` job ([accounts.md](accounts.md#pictures-numbers-and-freshness)) |
-| `status` | The latest launches, their pack and status, and which networks and sources are configured |
+| `status` | The latest launches, their pack and status, how the engine reaches GitHub (the App's installation, the owner's user token), the settings still to set, and which networks and sources are configured |
 
-The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. Configuration comes from
-`.env` (`GITHUB_TOKEN_PERSONAL`, `SHIPCAST_CLAUDIO_URL`, `SHIPCAST_CLAUDIO_TOKEN`,
-`SHIPCAST_LAUNCHES_REPO`, `SHIPCAST_DATABASE_URL`, optional `SHIPCAST_DATA_DIR` and
-`SHIPCAST_MAX_BUDGET_USD`); every missing variable is reported at once. The networks' credentials, and
-the Anthropic and OpenAI-compatible providers', come from connected accounts, with `.env` as a
-fallback for the networks ([accounts.md](accounts.md)). The command uses the AI settings like the app,
-and prints no AI cost. Every command connects to Postgres first, so it must be running
-(`docker compose up -d postgres`).
+The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. The command builds the
+same runtime as the app (`createRuntime`): the **bootstrap** from `.env` (the database URL, the
+GitHub App or the old `GITHUB_TOKEN_PERSONAL`, optional `SHIPCAST_DATA_DIR`), the one-time import of
+old `.env` settings, and the **settings** (the launches repo, claudio, the AI budget) from the
+database and the keychain, set in the app's Settings page; a command that needs a missing one says
+which ([decisions/github-app.md](decisions/github-app.md)). `watch` reads the settings again before
+every round. The networks' credentials, and the Anthropic and OpenAI-compatible providers', come
+from connected accounts, with `.env` as a fallback for the networks ([accounts.md](accounts.md)). The
+command uses the AI settings like the app, and prints no AI cost. Every command connects to Postgres
+first, so it must be running (`docker compose up -d postgres`).
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
 its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
@@ -226,4 +246,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]]

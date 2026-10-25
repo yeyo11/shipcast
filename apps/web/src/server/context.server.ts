@@ -1,7 +1,19 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { checkout, Claudio, GitHubRest, loadBrand, Registry, type PipelineDeps } from '@shipcast/engine';
-import { aiSetup, KeychainStore, loadAppConfig, loadConfig, startWorking, WorkQueue, type AppConfig, type Config, type SecretStore, type WorkDeps } from '@shipcast/runtime';
+import type { GitHubApp, GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
+import {
+  createRuntime,
+  loadAppConfig,
+  startWorking,
+  WorkQueue,
+  type AppConfig,
+  type Config,
+  type GitHubAccess,
+  type GitHubUserTokens,
+  type RuntimeSettings,
+  type SecretStore,
+  type WorkDeps,
+} from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
 
 /**
@@ -19,12 +31,20 @@ function findRoot(from: string): string {
 export const ROOT = process.env.SHIPCAST_ROOT ?? findRoot(process.cwd());
 
 export interface AppContext {
+  /** The bootstrap, from `.env` */
   config: Config;
   app: AppConfig;
+  /** Everything else: the launches repo, claudio, the AI budget… read when needed */
+  settings: RuntimeSettings;
   registry: Registry;
   github: GitHubRest;
+  githubApp: GitHubApp | undefined;
+  access: GitHubAccess;
+  userTokens: GitHubUserTokens | undefined;
   secrets: SecretStore;
   deps: PipelineDeps;
+  /** Reads the settings again, after the Settings page saved them */
+  refresh(): Promise<void>;
   /** The durable work: pg-boss on the registry's Postgres, worked by this process */
   queue: WorkQueue;
   /** The brand the launches repo speaks for, read again every few minutes */
@@ -49,41 +69,23 @@ export function appContext(): Promise<AppContext> {
 }
 
 async function createContext(): Promise<AppContext> {
-  const config = loadConfig(process.env, ROOT);
   const app = loadAppConfig(process.env);
-  const registry = await Registry.connect(config.databaseUrl);
-  const github = new GitHubRest({ token: config.githubToken });
-  const secrets = new KeychainStore();
-  const deps: PipelineDeps = {
-    github,
-    ai: new Claudio({ url: config.claudioUrl, token: config.claudioToken }),
-    aiSetup: aiSetup({
-      env: process.env,
-      registry,
-      secrets,
-      claudio: { url: config.claudioUrl, token: config.claudioToken },
-      // Read when an AI call is made, by then `brand` below exists
-      brand: () => brand(),
-    }),
-    registry,
-    launchesRepo: config.launchesRepo,
-    checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir }, repo, ref),
-    maxBudgetUsd: config.maxBudgetUsd,
-  };
-  let cached: { brand: Brand; at: number } | undefined;
-  const brand = async () => {
-    if (!cached || Date.now() - cached.at > 5 * 60_000) cached = { brand: await loadBrand(github, config.launchesRepo), at: Date.now() };
-    return cached.brand;
-  };
+  const runtime = await createRuntime({ root: ROOT, log: console.log });
+  const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app' });
-  const work: WorkDeps = { env: process.env, registry, github, secrets, pipeline: deps, brand };
+  const work: WorkDeps = { env: process.env, registry, github, secrets, pipeline: deps, brand, refresh: runtime.refresh };
   const ctx: AppContext = {
     config,
     app,
+    settings: runtime.settings,
     registry,
     github,
+    githubApp: runtime.githubApp,
+    access: runtime.access,
+    userTokens: runtime.userTokens,
     secrets,
     deps,
+    refresh: runtime.refresh,
     queue,
     brand,
     brands: async () => {

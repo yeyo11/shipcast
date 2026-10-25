@@ -10,7 +10,9 @@ export const getAutomation = createServerFn({ method: 'GET' }).handler(async () 
     ...(await automationView(ctx)),
     webhookUrl: `${ctx.app.publicUrl}/api/github/webhook`,
     hasSecret: Boolean(await ctx.secrets.get(WEBHOOK_SECRET_KEY)),
-    launchesRepo: ctx.config.launchesRepo,
+    // The App delivers for every repo it is installed on, signed with its own secret
+    appWebhooks: Boolean(ctx.config.githubApp?.webhookSecret),
+    launchesRepo: ctx.settings.launchesRepo(),
     owner: (await ctx.brand()).github,
   };
 });

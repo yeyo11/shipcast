@@ -21,16 +21,20 @@ const DAY = 24 * 3600 * 1000;
 async function main(): Promise<void> {
   const config = loadConfig(process.env, ROOT);
   const app = loadAppConfig(process.env);
-  const secrets = new KeychainStore();
+  // The bootstrap's keychain service: the TLS key lives there, so a second install or a test copy never touches another's
+  const secrets = new KeychainStore(config.keychainService);
   const domain = new URL(app.publicUrl).hostname;
-  const token = app.tlsCloudflareToken;
+  // A preview copy (SHIPCAST_APP_TLS=off) never reads, issues or writes certificate material
+  const tls = process.env.SHIPCAST_APP_TLS !== 'off';
+  const token = tls ? app.tlsCloudflareToken : undefined;
   const options = { domain, secrets, dataDir: config.dataDir, log: console.log };
 
-  const certificate = token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
+  const certificate = !tls ? undefined : token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
   if (!certificate || certificate.expires.getTime() < Date.now()) {
     const port = app.port;
     await serve({ host: '127.0.0.1', port, origin: `http://127.0.0.1:${port}` });
-    console.log(`Shipcast on http://127.0.0.1:${port} (no certificate and no SHIPCAST_TLS_CLOUDFLARE_TOKEN: plain HTTP, this machine only; GitHub sign-in needs ${app.publicUrl})`);
+    const why = tls ? 'no certificate and no SHIPCAST_TLS_CLOUDFLARE_TOKEN' : 'SHIPCAST_APP_TLS=off';
+    console.log(`Shipcast on http://127.0.0.1:${port} (${why}: plain HTTP, this machine only; GitHub sign-in needs ${app.publicUrl})`);
     console.log(`Sign in: http://127.0.0.1:${port}${signInPath(consoleLinks().create())}`);
     return;
   }

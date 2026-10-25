@@ -87,6 +87,6 @@ export const previewAiPrompt = createServerFn({ method: 'POST' })
       const launch = await ctx.registry.get(data);
       if (!launch) throw new InvalidInput(`no launch ${data}`);
       const settings = await readAiSettings(ctx.registry);
-      return previewPrompt(launch, await ctx.brand(), { github: ctx.github, launchesRepo: ctx.config.launchesRepo }, { prompts: await currentPrompts(ctx.registry), tone: settings.tone });
+      return previewPrompt(launch, await ctx.brand(), { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }, { prompts: await currentPrompts(ctx.registry), tone: settings.tone });
     }),
   );

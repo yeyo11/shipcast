@@ -8,7 +8,7 @@ import {
   registerMastodonApp,
 } from '@shipcast/connectors';
 import { connectAccount, credentialsFor, getJson, isStale, lastSynced, NETWORKS, type AccountDeps } from '@shipcast/runtime';
-import { appContext } from './context.server';
+import { appContext, type AppContext } from './context.server';
 
 export async function accountDeps(): Promise<AccountDeps> {
   const { registry, secrets, brands } = await appContext();
@@ -17,7 +17,8 @@ export async function accountDeps(): Promise<AccountDeps> {
 
 /** Everything the Channels page shows: the catalog, each network's accounts, and what still comes from .env */
 export async function channelsView() {
-  const { registry, secrets, app, brand } = await appContext();
+  const ctx = await appContext();
+  const { registry, secrets, brand } = ctx;
   const current = await brand();
   const snapshots = await registry.lastSnapshots();
   const now = new Date();
@@ -36,7 +37,7 @@ export async function channelsView() {
   return {
     brands: [{ id: current.id, name: current.displayName }],
     secretsKind: secrets.kind,
-    instagramOAuth: app.instagram !== undefined,
+    instagramOAuth: instagramApp(ctx) !== undefined,
     networks: NETWORKS.map((n) => ({
       ...n,
       accounts: accounts.filter((a) => a.network === n.id),
@@ -114,25 +115,35 @@ export async function finishMastodon(request: Request): Promise<Response> {
   }
 }
 
-/** Instagram Login: needs the app id and secret of the owner's Meta app in .env */
+/** The owner's Meta app for Instagram Login, from the settings; undefined until both are set */
+function instagramApp(ctx: Pick<AppContext, 'settings'>) {
+  const { instagramAppId, instagramAppSecret } = ctx.settings.current();
+  return instagramAppId && instagramAppSecret ? { appId: instagramAppId, appSecret: instagramAppSecret } : undefined;
+}
+
+/** Instagram Login: needs the app id and secret of the owner's Meta app, set in Settings */
 export async function startInstagram(request: Request): Promise<Response> {
-  const { app } = await appContext();
-  if (!app.instagram) return back('instagram', 'Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to .env, then restart the app.');
+  const ctx = await appContext();
+  const { app } = ctx;
+  const instagram = instagramApp(ctx);
+  if (!instagram) return back('instagram', 'Set the Instagram app id and secret in Settings (/settings) first.');
   const url = new URL(request.url);
   const state = remember({ network: 'instagram', brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
-  return redirect(instagramAuthorizeUrl(app.instagram.appId, `${app.publicUrl}/auth/instagram/callback`, state));
+  return redirect(instagramAuthorizeUrl(instagram.appId, `${app.publicUrl}/auth/instagram/callback`, state));
 }
 
 export async function finishInstagram(request: Request): Promise<Response> {
-  const { app } = await appContext();
+  const ctx = await appContext();
+  const { app } = ctx;
+  const instagram = instagramApp(ctx);
   const url = new URL(request.url);
   const flow = pending.get(url.searchParams.get('state') ?? '');
   pending.delete(url.searchParams.get('state') ?? '');
   if (!flow || flow.network !== 'instagram' || flow.expires < Date.now()) return back('instagram', 'This authorisation is stale or was not started here: try again.');
   const code = url.searchParams.get('code');
-  if (!code || !app.instagram) return back('instagram', `Instagram did not authorise Shipcast: ${url.searchParams.get('error_description') ?? url.searchParams.get('error_reason') ?? 'cancelled'}.`);
+  if (!code || !instagram) return back('instagram', `Instagram did not authorise Shipcast: ${url.searchParams.get('error_description') ?? url.searchParams.get('error_reason') ?? 'cancelled'}.`);
   try {
-    const token = await exchangeInstagramCode(app.instagram, `${app.publicUrl}/auth/instagram/callback`, code);
+    const token = await exchangeInstagramCode(instagram, `${app.publicUrl}/auth/instagram/callback`, code);
     const result = await connectAccount(await accountDeps(), {
       network: 'instagram',
       brand: flow.brand,

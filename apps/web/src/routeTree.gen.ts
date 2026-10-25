@@ -15,6 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
@@ -61,6 +62,11 @@ const AppAutomationRoute = AppAutomationRouteImport.update({
 const AppLaunchRoute = AppLaunchRouteImport.update({
   id: '/launch',
   path: '/launch',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTokensRoute = AppTokensRouteImport.update({
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
+  '/settings': typeof AppSettingsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
@@ -184,6 +191,7 @@ export interface FileRoutesByTo {
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
+  '/settings': typeof AppSettingsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/launch': typeof AppLaunchRoute
+  '/_app/settings': typeof AppSettingsRoute
   '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
@@ -239,6 +248,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/automation'
     | '/launch'
+    | '/settings'
     | '/tokens'
     | '/write'
     | '/api/health'
@@ -263,6 +273,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/automation'
     | '/launch'
+    | '/settings'
     | '/tokens'
     | '/write'
     | '/api/health'
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/_app/ai'
     | '/_app/automation'
     | '/_app/launch'
+    | '/_app/settings'
     | '/_app/tokens'
     | '/_app/write'
     | '/api/health'
@@ -366,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/launch'
       fullPath: '/launch'
       preLoaderRoute: typeof AppLaunchRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/tokens': {
@@ -501,6 +520,7 @@ interface AppRouteChildren {
   AppAiRoute: typeof AppAiRoute
   AppAutomationRoute: typeof AppAutomationRoute
   AppLaunchRoute: typeof AppLaunchRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppTokensRoute: typeof AppTokensRoute
   AppWriteRoute: typeof AppWriteRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -514,6 +534,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAiRoute: AppAiRoute,
   AppAutomationRoute: AppAutomationRoute,
   AppLaunchRoute: AppLaunchRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppTokensRoute: AppTokensRoute,
   AppWriteRoute: AppWriteRoute,
   AppIndexRoute: AppIndexRoute,

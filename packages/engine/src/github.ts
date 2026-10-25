@@ -1,3 +1,5 @@
+import type { GitHubAuth } from './github-app.ts';
+
 /** An event of a user's public timeline, reduced to what triggers a launch. */
 export type GitHubEvent =
   | {
@@ -84,29 +86,44 @@ export class GitHubError extends Error {
  * does not count against the rate limit.
  */
 export class GitHubRest implements GitHubSource, GitHubWriter {
-  readonly #token: string;
+  readonly #auth: GitHubAuth;
   readonly #fetch: typeof fetch;
   readonly #base: string;
 
-  constructor(options: { token: string; fetch?: typeof fetch; baseUrl?: string }) {
-    this.#token = options.token;
+  /** A personal token, or something that mints one per request (the GitHub App's installation) */
+  constructor(options: { token: string | GitHubAuth; fetch?: typeof fetch; baseUrl?: string }) {
+    const token = options.token;
+    this.#auth = typeof token === 'string' ? { token: async () => token } : token;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = options.baseUrl ?? 'https://api.github.com';
   }
 
-  #headers(extra: Record<string, string> = {}): Record<string, string> {
-    return {
-      accept: 'application/vnd.github+json',
-      authorization: `Bearer ${this.#token}`,
-      'x-github-api-version': '2022-11-28',
-      'user-agent': 'shipcast',
-      ...extra,
-    };
+  /**
+   * One request to the API with the current token. A 401 means the token was revoked or expired
+   * early (an App's installation can be suspended); a minted token is then forgotten and the request
+   * tried once more with a fresh one.
+   */
+  async #request(url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
+    const send = async () =>
+      this.#fetch(url, {
+        ...init,
+        headers: {
+          accept: 'application/vnd.github+json',
+          authorization: `Bearer ${await this.#auth.token()}`,
+          'x-github-api-version': '2022-11-28',
+          'user-agent': 'shipcast',
+          ...init.headers,
+        },
+      });
+    const response = await send();
+    if (response.status !== 401 || !this.#auth.invalidate) return response;
+    this.#auth.invalidate();
+    return send();
   }
 
   async userEvents(owner: string, etag?: string): Promise<EventsPage> {
-    const response = await this.#fetch(`${this.#base}/users/${encodeURIComponent(owner)}/events/public?per_page=100`, {
-      headers: this.#headers(etag ? { 'if-none-match': etag } : {}),
+    const response = await this.#request(`${this.#base}/users/${encodeURIComponent(owner)}/events/public?per_page=100`, {
+      headers: etag ? { 'if-none-match': etag } : {},
     });
     if (response.status === 304) return { notModified: true };
     if (!response.ok) throw new GitHubError(`GitHub events for ${owner}: ${response.status}`, response.status);
@@ -118,7 +135,7 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     // HEAD means the default branch, which is what the API reads when no ref is given
     const query = ref === 'HEAD' ? '' : `?ref=${encodeURIComponent(ref)}`;
     const url = `${this.#base}/repos/${repo}/contents/${path}${query}`;
-    const response = await this.#fetch(url, { headers: this.#headers({ accept: 'application/vnd.github.raw+json' }) });
+    const response = await this.#request(url, { headers: { accept: 'application/vnd.github.raw+json' } });
     if (response.status === 404) return undefined;
     if (!response.ok) throw new GitHubError(`GitHub ${repo}/${path}@${ref}: ${response.status}`, response.status);
     return response.text();
@@ -132,7 +149,11 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     return { tag: release.tag_name, url: release.html_url };
   }
 
-  /** Traffic needs push access to the repo; without it the public numbers still come back. */
+  /**
+   * Traffic needs Administration: read on the repo, which neither the GitHub App nor its user
+   * tokens are granted: it comes back with a fine-grained personal token (a connected GitHub
+   * account). Without it the public numbers still do.
+   */
   async repoStats(repo: string): Promise<RepoStats> {
     const info = (await this.#ok('GET', `/repos/${repo}`)) as { stargazers_count: number; forks_count: number; subscribers_count: number };
     const stats: RepoStats = { stars: info.stargazers_count, forks: info.forks_count, watchers: info.subscribers_count };
@@ -151,10 +172,10 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   }
 
   async #json(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown }> {
-    const response = await this.#fetch(`${this.#base}${path}`, {
+    const response = await this.#request(`${this.#base}${path}`, {
       method,
-      headers: this.#headers(body === undefined ? {} : { 'content-type': 'application/json' }),
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined ? {} : { 'content-type': 'application/json' },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     });
     const data = response.status === 204 ? null : await response.json().catch(() => null);
     return { status: response.status, data };
