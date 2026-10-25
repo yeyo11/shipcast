@@ -345,6 +345,11 @@ export class Registry {
       .run(key, value);
   }
 
+  /** Every cursor whose key starts with a prefix, such as the failures of one launch (`publish-failed:12:`) */
+  cursorsWithPrefix(prefix: string): Array<{ key: string; value: string }> {
+    return this.#db.prepare("SELECT key, value FROM cursors WHERE key LIKE ? || '%' ORDER BY key").all(prefix) as Array<{ key: string; value: string }>;
+  }
+
   /**
    * Gives a channel whose publishing failed for good another chance, once its cause is fixed: the
    * failure is forgotten and its launch goes back to `drafted`, so the next publish round tries that

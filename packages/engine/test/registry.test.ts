@@ -123,3 +123,11 @@ test('accounts: the first per network and brand is the primary, and another can 
   assert.equal(registry.updateAccount(a.id, { label: 'renamed' }).label, 'renamed');
   assert.deepEqual(registry.account(a.id)?.settings, { instance: 'https://mastodon.social' });
 });
+
+test('cursors are listed by prefix', () => {
+  const registry = new Registry(':memory:');
+  registry.setCursor('publish-failed:1:devto', 'rejected');
+  registry.setCursor('publish-failed:1:bluesky', 'down');
+  registry.setCursor('publish-failed:12:devto', 'other launch');
+  assert.deepEqual(registry.cursorsWithPrefix('publish-failed:1:').map((c) => c.key), ['publish-failed:1:bluesky', 'publish-failed:1:devto']);
+});
