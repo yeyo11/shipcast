@@ -81,7 +81,75 @@ const MIGRATIONS = [
      taken_at TEXT NOT NULL
    );
    CREATE INDEX metrics_by_launch ON metrics (launch_id, source, name, taken_at);`,
+  // Accounts connected from the app: public settings here, secrets in the keychain under `account:<id>`
+  `CREATE TABLE accounts (
+     id INTEGER PRIMARY KEY,
+     network TEXT NOT NULL,
+     brand TEXT NOT NULL,
+     label TEXT NOT NULL,
+     settings TEXT NOT NULL DEFAULT '{}',
+     is_primary INTEGER NOT NULL DEFAULT 0,
+     status TEXT NOT NULL DEFAULT 'unchecked',
+     identity TEXT,
+     problem TEXT,
+     checked_at TEXT,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+     UNIQUE (network, brand, label)
+   );`,
 ];
+
+export type AccountStatus = 'unchecked' | 'ok' | 'failed';
+
+/**
+ * An account on a network, connected for one brand. Several may exist per network and brand; the
+ * primary one is what launches publish with, since a launch posts once per channel.
+ */
+export interface Account {
+  id: number;
+  /** A network of the catalog: `devto`, `mastodon`, `brevo`, `github`… */
+  network: string;
+  brand: string;
+  label: string;
+  /** Public settings (handle, instance, user id); never a secret */
+  settings: Record<string, string>;
+  primary: boolean;
+  status: AccountStatus;
+  /** Who the network says the credential belongs to, from the last check */
+  identity: string | null;
+  problem: string | null;
+  checkedAt: string | null;
+  createdAt: string;
+}
+
+interface AccountRow {
+  id: number;
+  network: string;
+  brand: string;
+  label: string;
+  settings: string;
+  is_primary: number;
+  status: string;
+  identity: string | null;
+  problem: string | null;
+  checked_at: string | null;
+  created_at: string;
+}
+
+function toAccount(row: AccountRow): Account {
+  return {
+    id: row.id,
+    network: row.network,
+    brand: row.brand,
+    label: row.label,
+    settings: JSON.parse(row.settings) as Record<string, string>,
+    primary: row.is_primary === 1,
+    status: row.status as AccountStatus,
+    identity: row.identity,
+    problem: row.problem,
+    checkedAt: row.checked_at,
+    createdAt: row.created_at,
+  };
+}
 
 /** One number read from one source for one launch, at one moment. */
 export interface MetricReading {
@@ -292,6 +360,76 @@ export class Registry {
       if (launch && !this.posts(id).some((p) => p.channel === channel)) reopened.push(this.setStatus(id, 'drafted', launch.detail));
     }
     return reopened;
+  }
+
+  accounts(filter: { brand?: string; network?: string } = {}): Account[] {
+    const rows = this.#db
+      .prepare('SELECT * FROM accounts WHERE (?1 IS NULL OR brand = ?1) AND (?2 IS NULL OR network = ?2) ORDER BY network, brand, is_primary DESC, label')
+      .all(filter.brand ?? null, filter.network ?? null) as unknown as AccountRow[];
+    return rows.map(toAccount);
+  }
+
+  account(id: number): Account | undefined {
+    const row = this.#db.prepare('SELECT * FROM accounts WHERE id = ?').get(id);
+    return row ? toAccount(row as unknown as AccountRow) : undefined;
+  }
+
+  /** The account a brand publishes with on a network, if it has one */
+  primaryAccount(brand: string, network: string): Account | undefined {
+    const row = this.#db.prepare('SELECT * FROM accounts WHERE brand = ? AND network = ? AND is_primary = 1').get(brand, network);
+    return row ? toAccount(row as unknown as AccountRow) : undefined;
+  }
+
+  /** A new account; the first one of its network and brand becomes the primary */
+  addAccount(account: { network: string; brand: string; label: string; settings: Record<string, string> }): Account {
+    const first = this.accounts({ brand: account.brand, network: account.network }).length === 0;
+    const result = this.#db
+      .prepare('INSERT INTO accounts (network, brand, label, settings, is_primary) VALUES (?, ?, ?, ?, ?)')
+      .run(account.network, account.brand, account.label, JSON.stringify(account.settings), first ? 1 : 0);
+    return this.account(Number(result.lastInsertRowid))!;
+  }
+
+  updateAccount(id: number, change: { label?: string; settings?: Record<string, string> }): Account {
+    const current = this.account(id);
+    if (!current) throw new Error(`no account with id ${id}`);
+    this.#db
+      .prepare('UPDATE accounts SET label = ?, settings = ? WHERE id = ?')
+      .run(change.label ?? current.label, JSON.stringify(change.settings ?? current.settings), id);
+    return this.account(id)!;
+  }
+
+  recordCheck(id: number, check: { ok: true; account: string } | { ok: false; problem: string }, at = new Date()): Account {
+    this.#db
+      .prepare('UPDATE accounts SET status = ?, identity = ?, problem = ?, checked_at = ? WHERE id = ?')
+      .run(check.ok ? 'ok' : 'failed', check.ok ? check.account : null, check.ok ? null : check.problem, at.toISOString(), id);
+    return this.account(id)!;
+  }
+
+  /** Makes one account the one its brand publishes with on that network */
+  makePrimary(id: number): Account {
+    const account = this.account(id);
+    if (!account) throw new Error(`no account with id ${id}`);
+    this.#db.exec('BEGIN');
+    try {
+      this.#db.prepare('UPDATE accounts SET is_primary = 0 WHERE brand = ? AND network = ?').run(account.brand, account.network);
+      this.#db.prepare('UPDATE accounts SET is_primary = 1 WHERE id = ?').run(id);
+      this.#db.exec('COMMIT');
+    } catch (error) {
+      this.#db.exec('ROLLBACK');
+      throw error;
+    }
+    return this.account(id)!;
+  }
+
+  /** Removes an account; when it was the primary, the next one of its network and brand takes over */
+  deleteAccount(id: number): void {
+    const account = this.account(id);
+    if (!account) return;
+    this.#db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
+    if (account.primary) {
+      const next = this.accounts({ brand: account.brand, network: account.network })[0];
+      if (next) this.makePrimary(next.id);
+    }
   }
 
   close(): void {

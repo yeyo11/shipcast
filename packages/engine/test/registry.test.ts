@@ -99,3 +99,27 @@ test('a channel that failed for good can be retried, without posting the others 
   assert.equal(registry.cursor(`publish-failed:${launch.id}:devto`), 'stale', 'other channels untouched');
   assert.deepEqual(registry.retryChannel('newsletter'), [], 'nothing left to retry');
 });
+
+test('accounts: the first per network and brand is the primary, and another can take over', () => {
+  const registry = new Registry(':memory:');
+  const a = registry.addAccount({ network: 'mastodon', brand: 'personal', label: 'main', settings: { instance: 'https://mastodon.social' } });
+  const b = registry.addAccount({ network: 'mastodon', brand: 'personal', label: 'second', settings: {} });
+  const c = registry.addAccount({ network: 'mastodon', brand: 'company', label: 'main', settings: {} });
+  assert.equal(a.primary, true);
+  assert.equal(b.primary, false);
+  assert.equal(c.primary, true, 'brands never share a primary');
+  assert.equal(registry.primaryAccount('personal', 'mastodon')?.id, a.id);
+
+  registry.makePrimary(b.id);
+  assert.equal(registry.primaryAccount('personal', 'mastodon')?.id, b.id);
+  assert.equal(registry.account(a.id)?.primary, false);
+
+  registry.deleteAccount(b.id);
+  assert.equal(registry.primaryAccount('personal', 'mastodon')?.id, a.id, 'the next one takes over');
+  assert.deepEqual(registry.accounts({ brand: 'company' }).map((x) => x.id), [c.id]);
+
+  const checked = registry.recordCheck(a.id, { ok: false, problem: 'rejected' }, new Date('2026-10-25T00:00:00Z'));
+  assert.deepEqual([checked.status, checked.problem, checked.checkedAt], ['failed', 'rejected', '2026-10-25T00:00:00.000Z']);
+  assert.equal(registry.updateAccount(a.id, { label: 'renamed' }).label, 'renamed');
+  assert.deepEqual(registry.account(a.id)?.settings, { instance: 'https://mastodon.social' });
+});
