@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T11:06:04.761591497Z
-updated_at: 2026-10-25T11:06:04.761591497Z
+created_at: 2026-10-25T11:41:47.048348514Z
+updated_at: 2026-10-25T12:05:32.65323642Z
 tags:
     - plan
     - seo
@@ -20,9 +20,10 @@ grants both. This plan gives Google every signal it reads. It runs with the blog
 
 On 2026-10-25 Google had two of the blog's ten pages: it had read the sitemap once, the day the site
 was added. The sitemap was resubmitted the same day, and Shipcast now resubmits it when an article goes
-live and while one is missing. Google's results for the owner's name also hold a namesake: a Spanish
-racing cyclist with a Wikidata item and a Wikipedia article, so every signal has to say plainly which
-José Antonio Garrido the blog is about.
+live and while one is missing. Google's results for the owner's name also hold namesakes: a Spanish
+racing cyclist with a Wikidata item and a Wikipedia article, and many a "José Garrido" (a
+disambiguation page lists them), so every signal has to say plainly which José Antonio Garrido the
+blog is about.
 
 ## Sitelinks
 
@@ -30,8 +31,7 @@ Google picks sitelinks on its own, from sites with clear sections that people se
 helps:
 
 - **A site name and favicon Google accepts**: the `WebSite` structured data with `name` and
-  `alternateName`, and a square favicon of at least 48 px on every page (in the blog's current pull
-  request).
+  `alternateName`, and a square favicon of at least 48 px on every page.
 - **A structure of real sections**, the pages Google tends to choose:
   - a page per project (`/en/projects/claudio/`, `/en/projects/shipcast/`, and the Spanish ones)
     gathering its launches, with what the project is, its repository and its latest version;
@@ -48,19 +48,15 @@ The panel comes from Google's Knowledge Graph, which recognises entities, not pa
 
 - **The `Person` on the blog** (`@id` `https://josegarrido.dev/#person`) with the same name, photo
   and description everywhere, and `sameAs` to every profile: GitHub, Mastodon, Bluesky, dev.to,
-  Instagram.
-- **A Wikidata item for the owner**, which Google reads, kept distinct from the cyclist by its
-  description ("software developer"). Its statements: instance of human, occupation software
-  developer, official website, GitHub username, Mastodon address, Bluesky handle; and items for the
-  projects (free software, developer the owner, source code repository, MIT licence, programmed in
-  TypeScript) linked to it. The blog's `Person` then adds the item to `sameAs`.
+  Instagram, Reddit, and the Wikidata item.
+- **A Wikidata item for the owner**, which Google reads, kept distinct from the namesakes by its
+  description ("full-stack developer"), and items for the projects linked to it.
   - Wikidata asks for an item to describe a clearly identifiable entity backed by serious public
-    references. Repositories and the owner's own blog are self-published, so the item is at risk of
+    references. Repositories and the owner's own blog are self-published, so the items are at risk of
     deletion until something independent writes about the owner or the projects; independent coverage
-    (an interview, a talk, an article by someone else) is what makes it hold.
+    (an interview, a talk, an article by someone else) is what makes them hold.
   - Wikidata's conflict-of-interest guideline allows people to create their own item, disclosed on
-    the user page. The owner creates it from their own Wikidata account; Shipcast's side prepares the
-    statements ready to paste into QuickStatements.
+    the user page.
 - **Links from outside**: dev.to already points to the blog as the original; each project's README
   should link the blog and the article that launched it.
 - **Claiming the panel** once Google shows one: the owner verifies through Google and can then suggest
@@ -68,6 +64,25 @@ The panel comes from Google's Knowledge Graph, which recognises entities, not pa
 
 Sitelinks are realistic within weeks of the structure being in place. A panel may take months, and
 depends on the independent references above.
+
+## Progress
+
+- **2026-10-25**, done:
+  - Site name, favicons at 48 and 96 px, breadcrumbs and the `Person` with every profile in
+    `sameAs`, on the blog ([launches-repo.md](../launches-repo.md)).
+  - The Wikidata items, created through the API from the owner's account, with the conflict of
+    interest disclosed on its user page:
+    - the owner, [Q141856101](https://www.wikidata.org/wiki/Q141856101): human, software developer,
+      given and family names, official website, GitHub, Mastodon, Bluesky, Instagram, Reddit and
+      Telegram usernames, notable work, each referenced to the about page except Telegram;
+    - claudio, [Q141856151](https://www.wikidata.org/wiki/Q141856151), and Shipcast,
+      [Q141856152](https://www.wikidata.org/wiki/Q141856152): free software, developer the owner,
+      source repository, MIT licence, programmed in TypeScript, described at their launch articles.
+  - The owner's item added to the blog's `sameAs`.
+  - QuickStatements needs an autoconfirmed account (four days and fifty edits), so the items went
+    through the Wikidata API with a bot password the owner created.
+- **Next**: the project pages and the article index (design with the owner), links from each
+  project's README to the blog, and adding the owner to the "José Garrido" disambiguation page.
 
 ## Related
 
