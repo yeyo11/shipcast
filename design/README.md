@@ -76,6 +76,11 @@ A state is always a word and a shape; colour repeats what the shape says.
 
 Reddit and Hacker News are always Manual.
 
+**Toasts** carry an action's outcome in the app: a card with the 2.5 px outline and the small stamp,
+its state pill first (Done, Failed, Waiting for you), a short title, what to do, and any technical
+text folded under Details in the mono face. A failure is the failed card (red outline, diamond);
+waiting is the yellow card. Successes leave after six seconds; failures stay until closed.
+
 ## Rules
 
 Do: one yellow primary action per view; display type uppercase and heavy, everything else in
