@@ -6,3 +6,4 @@ export * from './instagram.ts';
 export * from './cloudflare.ts';
 export * from './search-console.ts';
 export * from './brevo.ts';
+export * from './oauth.ts';

@@ -1,4 +1,4 @@
-import { ConnectorError, json, type Metrics, type Published } from './http.ts';
+import { checkProblem, ConnectorError, json, type Check, type Metrics, type Published } from './http.ts';
 
 export interface BlueskyPost {
   text: string;
@@ -105,6 +105,17 @@ export class Bluesky {
     const rkey = created.uri.split('/').at(-1);
     if (!rkey) throw new ConnectorError('Bluesky', `unexpected record uri ${created.uri}`);
     return { externalId: created.uri, url: `https://bsky.app/profile/${session.handle}/post/${rkey}` };
+  }
+
+  /** Signs in with the app password: the only way to know it still works */
+  async check(): Promise<Check> {
+    try {
+      this.#session = undefined;
+      const session = await this.#login();
+      return { ok: true, account: `@${session.handle}` };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   async metrics(externalId: string): Promise<Metrics> {

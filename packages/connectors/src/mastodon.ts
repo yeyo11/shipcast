@@ -1,4 +1,4 @@
-import { json, type Metrics, type Published } from './http.ts';
+import { checkProblem, json, type Check, type Metrics, type Published } from './http.ts';
 
 export interface MastodonPost {
   text: string;
@@ -41,6 +41,17 @@ export class Mastodon {
     });
     const created = await json<{ id: string; url: string }>('Mastodon', response, 'publish');
     return { externalId: created.id, url: created.url };
+  }
+
+  /** The token's account; also proves the token may read, which the metrics need */
+  async check(): Promise<Check> {
+    try {
+      const response = await this.#fetch(`${this.#instance}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${this.#token}` } });
+      const me = await json<{ acct: string }>('Mastodon', response, 'check');
+      return { ok: true, account: `@${me.acct}@${new URL(this.#instance).host}` };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   async metrics(externalId: string): Promise<Metrics> {

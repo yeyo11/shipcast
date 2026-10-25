@@ -37,3 +37,22 @@ export async function json<T>(network: string, response: Response, what: string)
     throw new ConnectorError(network, `${what}: the answer is not JSON`, response.status);
   }
 }
+
+/** Whether a credential works, in words a person can act on: what the Channels page shows. */
+export type Check = { ok: true; account: string } | { ok: false; problem: string };
+
+/**
+ * Turns a failed check into a sentence: a status code means nothing to the person who has to fix the
+ * credential, so the common answers are named for what they mean.
+ */
+export function checkProblem(error: unknown): Check {
+  if (error instanceof ConnectorError) {
+    if (error.status === 401) return { ok: false, problem: `${error.network} rejected the credential: it is wrong, revoked or expired` };
+    if (error.status === 403) return { ok: false, problem: `${error.network} accepted the credential but it lacks a permission Shipcast needs` };
+    if (error.status === 404) return { ok: false, problem: `${error.network} does not know that account or address` };
+    if (error.status === 429) return { ok: false, problem: `${error.network} is rate limiting: try again in a few minutes` };
+    if (error.status !== undefined && error.status >= 500) return { ok: false, problem: `${error.network} is having trouble (${error.status}): try again later` };
+    return { ok: false, problem: error.message };
+  }
+  return { ok: false, problem: `could not reach the network: ${error instanceof Error ? error.message : String(error)}` };
+}

@@ -1,4 +1,4 @@
-import { ConnectorError, json, type Metrics, type Published } from './http.ts';
+import { checkProblem, ConnectorError, json, type Check, type Metrics, type Published } from './http.ts';
 
 export interface BrevoCampaign {
   /** The campaign's name in Brevo's dashboard, also its UTM campaign */
@@ -46,6 +46,16 @@ export class Brevo {
       headers: { 'api-key': this.#key, accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+  }
+
+  /** The key's account */
+  async check(): Promise<Check> {
+    try {
+      const account = await json<{ email: string; companyName?: string }>('Brevo', await this.#request('GET', '/account'), 'check');
+      return { ok: true, account: account.companyName ? `${account.companyName} (${account.email})` : account.email };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   /** Contacts in a list who can still receive it */

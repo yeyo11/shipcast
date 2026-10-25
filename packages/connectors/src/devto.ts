@@ -1,4 +1,4 @@
-import { json, type Metrics, type Published } from './http.ts';
+import { checkProblem, json, type Check, type Metrics, type Published } from './http.ts';
 
 export interface DevtoArticle {
   title: string;
@@ -47,6 +47,16 @@ export class Devto {
     });
     const created = await json<{ id: number; url: string }>('dev.to', response, 'publish');
     return { externalId: String(created.id), url: created.url };
+  }
+
+  /** The key's owner, proving the key works */
+  async check(): Promise<Check> {
+    try {
+      const me = await json<{ username: string }>('dev.to', await this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() }), 'check');
+      return { ok: true, account: `@${me.username}` };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   /** Views are only visible to the author, so they come from the author's list, not the public article. */

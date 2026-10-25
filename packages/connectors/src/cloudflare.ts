@@ -1,4 +1,4 @@
-import { ConnectorError, json, type Metrics } from './http.ts';
+import { checkProblem, ConnectorError, json, type Check, type Metrics } from './http.ts';
 
 export interface PageVisits {
   /** Page views of the path in the period */
@@ -42,6 +42,17 @@ export class CloudflareAnalytics {
     this.#account = options.accountId;
     this.#siteTag = options.siteTag;
     this.#fetch = options.fetch ?? globalThis.fetch;
+  }
+
+  /** A query for yesterday's views of the home page: proves the token, the account and the site tag together */
+  async check(): Promise<Check> {
+    try {
+      const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+      const visits = await this.pageVisits('/', day, day);
+      return { ok: true, account: `site ${this.#siteTag.slice(0, 8)}…, ${visits.views} views of / yesterday` };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   /** Views of `path` (e.g. `/en/claudio/`) between two dates (YYYY-MM-DD, inclusive). */

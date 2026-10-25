@@ -1,4 +1,4 @@
-import { ConnectorError, json, type Metrics, type Published } from './http.ts';
+import { checkProblem, ConnectorError, json, type Check, type Metrics, type Published } from './http.ts';
 
 /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
 export type InstagramMedia = { kind: 'image' | 'video'; url: string };
@@ -127,6 +127,20 @@ export class Instagram {
     const out: Metrics = {};
     for (const metric of data) out[metric.name] = metric.total_value?.value ?? metric.values?.[0]?.value ?? 0;
     return out;
+  }
+
+  /** The token's account, which must be the configured one */
+  async check(): Promise<Check> {
+    try {
+      const me = await this.#get<{ user_id?: string; id: string; username: string }>('/me', { fields: 'user_id,username' }, 'check');
+      // `user_id` is the professional account's id, the one media is published under; `id` is app-scoped
+      if (me.user_id !== this.#user && me.id !== this.#user) {
+        return { ok: false, problem: `the token belongs to @${me.username}, not to the account ${this.#user}` };
+      }
+      return { ok: true, account: `@${me.username}` };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   /** Swaps the long-lived token for a fresh one (valid 60 more days); allowed once it is 24 h old. */

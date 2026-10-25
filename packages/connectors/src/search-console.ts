@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto';
-import { json, type Metrics } from './http.ts';
+import { checkProblem, json, type Check, type Metrics } from './http.ts';
 
 /** The fields of a Google service account key file that signing needs. */
 export interface ServiceAccount {
@@ -47,6 +47,19 @@ export class SearchConsole {
     const token = await json<{ access_token: string; expires_in: number }>('Search Console', response, 'sign in');
     this.#token = { value: token.access_token, expires: Date.now() + token.expires_in * 1000 };
     return token.access_token;
+  }
+
+  /** Signs in and reads the property, which fails unless the service account was added as its user */
+  async check(): Promise<Check> {
+    try {
+      const response = await this.#fetch(`https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(this.#property)}`, {
+        headers: { authorization: `Bearer ${await this.#accessToken()}` },
+      });
+      const site = await json<{ permissionLevel: string }>('Search Console', response, 'check');
+      return { ok: true, account: `${this.#account.client_email} on ${this.#property} (${site.permissionLevel})` };
+    } catch (error) {
+      return checkProblem(error);
+    }
   }
 
   /** Search numbers of one page URL between two dates (YYYY-MM-DD); Google reports with ~2 days of delay. */
