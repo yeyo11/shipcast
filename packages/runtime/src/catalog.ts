@@ -1,4 +1,5 @@
 import {
+  BingWebmaster,
   Bluesky,
   Brevo,
   checkProblem,
@@ -184,6 +185,15 @@ export const NETWORKS: readonly Network[] = [
     howTo: 'A Google Cloud service account with a JSON key, added as a user of the site’s domain property.',
   },
   {
+    id: 'bingWebmaster',
+    name: 'Bing Webmaster Tools',
+    metrics: true,
+    auth: 'form',
+    fields: [{ key: 'apiKey', label: 'API key', secret: true }],
+    permissions: ['Reads the articles’ Bing clicks and impressions, and whether Bing has crawled them'],
+    howTo: 'Bing Webmaster Tools › Settings › API Access › Generate API Key, for a user who has verified the site.',
+  },
+  {
     id: 'hackerNews',
     name: 'Hacker News',
     channel: 'hackerNews',
@@ -250,6 +260,7 @@ export interface Built {
   github?: { token: string };
   cloudflare?: CloudflareAnalytics;
   searchConsole?: SearchConsole;
+  bing?: BingWebmaster;
 }
 
 /**
@@ -311,6 +322,10 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
       const searchConsole = new SearchConsole({ serviceAccount: account, property: `sc-domain:${new URL(brand.site).host}`, fetch: http });
       return { searchConsole, check: () => searchConsole.check() };
     }
+    case 'bingWebmaster': {
+      const bing = new BingWebmaster({ apiKey: v('apiKey'), site: `${new URL(brand.site).origin}/`, fetch: http });
+      return { bing, check: () => bing.check() };
+    }
     default:
       throw new MissingField(`${id} has nothing to connect`);
   }
@@ -366,6 +381,8 @@ export function credentialsFromEnv(id: string, env: NodeJS.ProcessEnv, brand: Br
         : undefined;
     case 'searchConsole':
       return has('GOOGLE_SERVICE_ACCOUNT_FILE') ? { settings: {}, secrets: { serviceAccount: readFile(env.GOOGLE_SERVICE_ACCOUNT_FILE!) } } : undefined;
+    case 'bingWebmaster':
+      return has('BING_WEBMASTER_API_KEY') ? { settings: {}, secrets: { apiKey: env.BING_WEBMASTER_API_KEY! } } : undefined;
     default:
       return undefined;
   }

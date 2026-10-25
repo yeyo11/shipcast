@@ -151,6 +151,11 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     sources.search = search;
     configured.push('search console');
   }
+  const bing = (await built('bingWebmaster'))?.bing;
+  if (bing) {
+    sources.bing = bing;
+    configured.push('bing webmaster');
+  }
   return { publishers, sources, instagram, notifier, configured, origins };
 }
 

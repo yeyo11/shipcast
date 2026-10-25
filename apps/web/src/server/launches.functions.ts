@@ -25,15 +25,18 @@ export const getLaunch = createServerFn({ method: 'GET' })
     if (!launch) return null;
     const blog = (await registry.posts(launch.id)).find((p) => p.channel === 'blog');
     const site = blog?.url ? (await brand()).site : undefined;
-    // Google's view of each language's article, as of the last metrics reading
-    const index = blog?.url && site
-      ? await Promise.all(
-          articleUrls(blog.externalId, blog.url, site).map(async ({ lang, url }) => {
-            const status = await indexStatus(registry, url);
-            return { lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
-          }),
-        )
-      : [];
+    // Each search engine's view of each language's article, as of the last metrics reading. Google
+    // is always listed, as the engine that matters most; Bing once it has been read at all
+    const urls = blog?.url && site ? articleUrls(blog.externalId, blog.url, site) : [];
+    const views = await Promise.all(
+      urls.flatMap(({ lang, url }) =>
+        (['google', 'bing'] as const).map(async (engine) => {
+          const status = await indexStatus(registry, url, engine);
+          return { engine, lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
+        }),
+      ),
+    );
+    const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
     const review = await readReview(launch, { github, launchesRepo: deps.launchesRepo }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
     const metrics = (await registry.latestMetrics(launch.id)).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
     return { launch: await launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index, jobs: await jobsView() };

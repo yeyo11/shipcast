@@ -15,6 +15,11 @@ export interface MetricSources {
     inspect?(url: string): Promise<IndexStatus>;
     submitSitemap?(sitemapUrl: string): Promise<void>;
   };
+  /** Bing's clicks and impressions per article URL, and whether Bing has crawled it */
+  bing?: {
+    pageMetrics(url: string): Promise<Metrics>;
+    inspect?(url: string): Promise<IndexStatus>;
+  };
   /** The launched repo's stars, forks and traffic */
   github?: { repoStats(repo: string): Promise<RepoStats> };
 }
@@ -26,17 +31,20 @@ export interface CollectResult {
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
-/** Where Google's view of one article URL is kept, as of the last reading */
-export const indexStatusKey = (url: string) => `index-status:${url}`;
+/** A search engine whose view of each article is kept */
+export type SearchEngine = 'google' | 'bing';
+
+/** Where a search engine's view of one article URL is kept, as of the last reading */
+export const indexStatusKey = (url: string, engine: SearchEngine = 'google') => (engine === 'google' ? `index-status:${url}` : `index-status:${engine}:${url}`);
 /** When the sitemap was last resubmitted, so it is asked for at most once a day */
 export const SITEMAP_SUBMITTED_KEY = 'sitemap-submitted-at';
 const SITEMAP_EVERY_MS = 24 * 3600 * 1000;
 
 export const sitemapUrl = (site: string) => `${site}/sitemap-index.xml`;
 
-/** Google's view of an article URL, as of the last reading; undefined until it is first read */
-export async function indexStatus(registry: Registry, url: string): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
-  const raw = await registry.cursor(indexStatusKey(url));
+/** A search engine's view of an article URL, as of the last reading; undefined until it is first read */
+export async function indexStatus(registry: Registry, url: string, engine: SearchEngine = 'google'): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
+  const raw = await registry.cursor(indexStatusKey(url, engine));
   return raw ? (JSON.parse(raw) as IndexStatus & { checkedAt: string }) : undefined;
 }
 
@@ -128,6 +136,22 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
               unindexed ||= statuses.some((s) => !s.status.indexed);
             });
           }
+        }
+        if (sources.bing) {
+          const bing = sources.bing;
+          await attempt(`${launch.repo} ${launch.ref} Bing`, async () => {
+            const found = await Promise.all(urls.map(({ url }) => bing.pageMetrics(url)));
+            const values: Record<string, number> = {
+              clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
+              impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
+            };
+            if (bing.inspect) {
+              const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await bing.inspect!(url) })));
+              for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+              values.crawled = statuses.filter((s) => s.status.indexed).length;
+            }
+            await record(launch.id, 'bing', values);
+          });
         }
       }
     }

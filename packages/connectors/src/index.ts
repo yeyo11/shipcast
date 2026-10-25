@@ -10,3 +10,4 @@ export * from './oauth.ts';
 export * from './hashnode.ts';
 export * from './telegram.ts';
 export * from './discord.ts';
+export * from './bing-webmaster.ts';
