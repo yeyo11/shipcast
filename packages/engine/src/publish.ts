@@ -2,7 +2,7 @@ import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/co
 import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { launchDir, parseInstagramDraft, projectSlug } from './drafts.ts';
+import { isArticle, launchDir, parseInstagramDraft, projectSlug } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
@@ -90,20 +90,26 @@ const issueKey = (launch: Launch, lang: string) => `newsletter-sent:${launch.id}
 export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {
   const { github, registry } = deps;
   const http = deps.fetch ?? globalThis.fetch;
-  const number = Number(/\/pull\/(\d+)$/.exec(launch.detail ?? '')?.[1]);
-  if (!number) return { state: 'waiting', launch, reason: 'no drafts pull request recorded' };
-
-  const state = await github.pullRequestState(deps.launchesRepo, number);
-  if (state === 'open') return { state: 'waiting', launch, reason: 'the drafts pull request is open' };
-  if (state === 'closed') {
-    return { state: 'skipped', launch: registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
+  // Published without a pull request: the drafts went straight onto the launches repo's main branch
+  const direct = launch.detail?.startsWith('direct:') ?? false;
+  if (!direct) {
+    const number = Number(/\/pull\/(\d+)$/.exec(launch.detail ?? '')?.[1]);
+    if (!number) return { state: 'waiting', launch, reason: 'no drafts pull request recorded' };
+    const state = await github.pullRequestState(deps.launchesRepo, number);
+    if (state === 'open') return { state: 'waiting', launch, reason: 'the drafts pull request is open' };
+    if (state === 'closed') {
+      return { state: 'skipped', launch: registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
+    }
   }
 
   const dir = launchDir(launch);
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
   if (!packText) return { state: 'waiting', launch, reason: `${dir}/pack.json is not on the default branch yet` };
   const pack = ContentPack.parse(JSON.parse(packText));
-  const configText = await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);
+  // An article's channels were chosen in the app and travel with its drafts
+  const configText = isArticle(launch)
+    ? await github.fileAt(deps.launchesRepo, `${dir}/launch.yml`, 'HEAD')
+    : await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);
   const parsed = configText === undefined ? undefined : parseLaunchConfig(configText);
   if (!parsed?.ok) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
   const config: LaunchConfig = parsed.value;
@@ -267,7 +273,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 html: renderIssueHtml(issue, {
                   brand,
                   project: pack.project.name,
-                  look: lookOf(projects, projectSlug(launch.repo)),
+                  look: lookOf(projects, isArticle(launch) ? launch.ref : projectSlug(launch.repo)),
                   title: typeof langTitle === 'string' ? langTitle : title,
                   articleUrl: `${urlOf(pack, brand.site, lang) ?? articleUrl}?ref=newsletter`,
                   // No launch image: it carries the English headline, which the issue already sets on colour

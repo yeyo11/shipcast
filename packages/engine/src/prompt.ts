@@ -14,7 +14,7 @@ const PACK_BRIEF: Record<PackKind, string> = {
 };
 
 /** What each channel's piece must be, in the prompt's words. */
-function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): string | undefined {
+export function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): string | undefined {
   const blogLangs = brand.languages.blog.join(' and ');
   switch (channel) {
     case 'blog':

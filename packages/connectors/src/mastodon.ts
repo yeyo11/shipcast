@@ -29,7 +29,7 @@ export class Mastodon {
     const mediaIds: string[] = [];
     if (post.image) {
       const form = new FormData();
-      form.append('file', new Blob([post.image.bytes], { type: post.image.mimeType }), post.image.filename);
+      form.append('file', new Blob([post.image.bytes as Uint8Array<ArrayBuffer>], { type: post.image.mimeType }), post.image.filename);
       form.append('description', post.image.description);
       const uploaded = await this.#fetch(`${this.#instance}/api/v2/media`, { method: 'POST', headers: auth, body: form });
       mediaIds.push((await json<{ id: string }>('Mastodon', uploaded, 'upload the image')).id);

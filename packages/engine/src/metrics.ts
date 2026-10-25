@@ -91,7 +91,8 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
       }
     }
 
-    if (sources.github) {
+    // An article has no repo of its own to count stars on
+    if (sources.github && !launch.ref.startsWith('article:')) {
       await attempt(`${launch.repo} GitHub`, async () => {
         const stats = await sources.github!.repoStats(launch.repo);
         record(launch.id, 'github', { ...stats });

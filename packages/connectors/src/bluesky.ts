@@ -75,7 +75,8 @@ export class Bluesky {
         const uploaded = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.uploadBlob`, {
           method: 'POST',
           headers: { ...auth, 'content-type': post.link.thumb.mimeType },
-          body: post.link.thumb.bytes,
+          // The cast tells the DOM's types (the web app compiles this file too) that the bytes are a plain buffer
+          body: post.link.thumb.bytes as Uint8Array<ArrayBuffer>,
         });
         thumb = (await json<{ blob: unknown }>('Bluesky', uploaded, 'upload the card image')).blob;
       }

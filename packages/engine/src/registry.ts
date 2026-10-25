@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { Channel, PackKind } from '@shipcast/schema';
 
-/** What started a launch; the launch.yml `triggers` decide which of these are honoured. */
-export type Trigger = 'release' | 'manual' | 'public' | 'enabled';
+/** What started a launch; the launch.yml `triggers` decide which of these are honoured. An `article` is written in the app, not released. */
+export type Trigger = 'release' | 'manual' | 'public' | 'enabled' | 'article';
 
 /**
  * The life of a launch. `skipped` and `failed` keep their row, so a release that was deliberately
@@ -343,6 +343,10 @@ export class Registry {
     this.#db
       .prepare('INSERT INTO cursors (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
       .run(key, value);
+  }
+
+  deleteCursor(key: string): void {
+    this.#db.prepare('DELETE FROM cursors WHERE key = ?').run(key);
   }
 
   /** Every cursor whose key starts with a prefix, such as the failures of one launch (`publish-failed:12:`) */

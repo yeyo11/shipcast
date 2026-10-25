@@ -30,8 +30,14 @@ export function projectSlug(repo: string): string {
   return repo.split('/').at(-1)!.toLowerCase();
 }
 
-/** Where a launch's pieces live in the launches repo: `launches/<project>/<ref>/`. */
+/** An article written in the app, not a release: its ref is `article:<slug>` and its repo the launches repo */
+export function isArticle(launch: Pick<Launch, 'ref'>): boolean {
+  return launch.ref.startsWith('article:');
+}
+
+/** Where a launch's pieces live in the launches repo: `launches/<project>/<ref>/`, or `articles/<slug>/` for an article. */
 export function launchDir(launch: Launch): string {
+  if (isArticle(launch)) return `articles/${launch.ref.slice('article:'.length).replace(/[^a-z0-9-]/g, '-')}`;
   return `launches/${projectSlug(launch.repo)}/${launch.ref.replace(/[^A-Za-z0-9._-]/g, '_')}`;
 }
 

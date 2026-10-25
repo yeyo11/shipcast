@@ -1,7 +1,7 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
 import type { AiProvider } from './claudio.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { launchDir, projectSlug, pullRequestBody, renderDrafts } from './drafts.ts';
+import { launchDir, projectSlug, pullRequestBody, renderDrafts, type DraftFile } from './drafts.ts';
 import { generatePack } from './generate.ts';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
@@ -20,6 +20,41 @@ export interface PipelineDeps {
   maxBudgetUsd?: number;
   /** For the site's covers; the global fetch by default */
   fetch?: typeof fetch;
+  /** A folder the AI provider can work in when there is no repo to clone (an article); its workspace root */
+  aiWorkdir?: string;
+}
+
+export interface DraftOptions {
+  /**
+   * Skip the pull request: the drafts are committed straight onto the launches repo's main branch,
+   * which publishes the blog, and the engine publishes the channels on its next round.
+   */
+  direct?: boolean;
+}
+
+/**
+ * Hands the drafts over: a pull request to review, or, when publishing directly, one commit on main.
+ * The launch records where they went (`direct:<sha>` or the pull request's URL).
+ */
+export async function deliverDrafts(
+  launch: Launch,
+  deps: PipelineDeps,
+  drafts: { files: DraftFile[]; branch: string; title: string; body: string; message: string },
+  options: DraftOptions,
+): Promise<{ ok: true; launch: Launch; where: string } | { ok: false; problem: string }> {
+  try {
+    if (options.direct) {
+      if (!deps.github.commitToBranch) return { ok: false, problem: 'this GitHub client cannot commit directly' };
+      const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', drafts.message, drafts.files);
+      const where = `https://github.com/${deps.launchesRepo}/commit/${commit.sha}`;
+      return { ok: true, launch: deps.registry.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`), where };
+    }
+    const pr = await deps.github.openPullRequest({ repo: deps.launchesRepo, base: 'main', ...drafts });
+    return { ok: true, launch: deps.registry.setStatus(launch.id, 'drafted', pr.url), where: pr.url };
+  } catch (error) {
+    const what = options.direct ? 'commit the drafts to main' : 'open the drafts pull request';
+    return { ok: false, problem: `could not ${what}: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
 
 /** The brand the launches repo speaks for, read from its `brand.yml` on the default branch. */
@@ -56,7 +91,7 @@ export type DraftResult =
  * generates and checks the content pack, and opens the pull request in the launches repo. The
  * registry records each step, so a failure says where it stopped and why.
  */
-export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDeps): Promise<DraftResult> {
+export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDeps, options: DraftOptions = {}): Promise<DraftResult> {
   const { github, registry } = deps;
   const fail = (problems: string[]): DraftResult => ({
     ok: false,
@@ -100,27 +135,20 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     ...assets.files,
   ];
   const name = `${projectSlug(launch.repo)} ${launch.ref}`;
-  let pr;
-  try {
-    pr = await github.openPullRequest({
-      repo: deps.launchesRepo,
+  const delivered = await deliverDrafts(
+    launch,
+    deps,
+    {
+      files,
       branch: `launch/${launchDir(launch).slice('launches/'.length).replace('/', '-')}`,
-      base: 'main',
       title: `Launch ${name}`,
       body: pullRequestBody(generated.pack, launch, config),
       message: `launch: ${name}\n\nDrafted by Shipcast from the code of ${launch.repo} at ${launch.ref}.`,
-      files,
-    });
-  } catch (error) {
-    return fail([`could not open the drafts pull request: ${error instanceof Error ? error.message : String(error)}`]);
-  }
-
-  return {
-    ok: true,
-    launch: registry.setStatus(launch.id, 'drafted', pr.url),
-    pullRequest: pr.url,
-    costUsd: generated.costUsd,
-  };
+    },
+    options,
+  );
+  if (!delivered.ok) return fail([delivered.problem]);
+  return { ok: true, launch: delivered.launch, pullRequest: delivered.where, costUsd: generated.costUsd };
 }
 
 /**

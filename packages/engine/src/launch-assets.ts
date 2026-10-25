@@ -20,7 +20,7 @@ import {
   type SlideImage,
 } from '@shipcast/assets';
 import { lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
-import { launchDir, projectSlug, type DraftFile } from './drafts.ts';
+import { isArticle, launchDir, projectSlug, type DraftFile } from './drafts.ts';
 import type { Launch } from './registry.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -94,12 +94,13 @@ export async function buildAssets(options: AssetOptions): Promise<BuiltAssets> {
   const dir = `public/${mediaDir(launch)}`;
   const files: DraftFile[] = [];
   const projects = options.projects ?? {};
-  const look = lookOf(projects, projectSlug(launch.repo));
+  // An article belongs to no project: its colour and motif come from its own slug
+  const look = lookOf(projects, isArticle(launch) ? launch.ref : projectSlug(launch.repo));
   const http = options.fetch ?? globalThis.fetch;
 
   // The cover the project's articles and the carousel wear: listed, else already on the site, else drawn now
   let cover: SlideImage | undefined;
-  if (!look.cover) {
+  if (!look.cover && !isArticle(launch)) {
     const path = coverPath(launch);
     cover = await image(http, `${brand.site}${path}`);
     if (!cover) {

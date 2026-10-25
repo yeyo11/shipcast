@@ -62,6 +62,8 @@ export interface PullRequestDraft {
 export interface GitHubWriter {
   /** Opens the pull request, or returns the open one for the same branch */
   openPullRequest(draft: PullRequestDraft): Promise<{ number: number; url: string; created: boolean }>;
+  /** Commits straight onto a branch, for what is published without a pull request */
+  commitToBranch?(repo: string, branch: string, message: string, files: PullRequestDraft['files']): Promise<{ sha: string }>;
 }
 
 export class GitHubError extends Error {
@@ -175,27 +177,7 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     if (open[0]) return { number: open[0].number, url: open[0].html_url, created: false };
 
     const base = (await this.#ok('GET', `/repos/${draft.repo}/git/ref/heads/${encodeURIComponent(draft.base)}`)) as { object: { sha: string } };
-    const baseCommit = (await this.#ok('GET', `/repos/${draft.repo}/git/commits/${base.object.sha}`)) as { tree: { sha: string } };
-    const entries = [];
-    for (const file of draft.files) {
-      if ('content' in file) {
-        entries.push({ path: file.path, mode: '100644', type: 'blob', content: file.content });
-      } else {
-        const blob = (await this.#ok('POST', `/repos/${draft.repo}/git/blobs`, {
-          content: Buffer.from(file.bytes).toString('base64'),
-          encoding: 'base64',
-        })) as { sha: string };
-        entries.push({ path: file.path, mode: '100644', type: 'blob', sha: blob.sha });
-      }
-    }
-    const tree = (await this.#ok('POST', `/repos/${draft.repo}/git/trees`, { base_tree: baseCommit.tree.sha, tree: entries })) as {
-      sha: string;
-    };
-    const commit = (await this.#ok('POST', `/repos/${draft.repo}/git/commits`, {
-      message: draft.message,
-      tree: tree.sha,
-      parents: [base.object.sha],
-    })) as { sha: string };
+    const commit = await this.#commit(draft.repo, base.object.sha, draft.message, draft.files);
 
     // A branch left over from a run whose pull request was closed is moved, not duplicated
     const created = await this.#json('POST', `/repos/${draft.repo}/git/refs`, { ref: `refs/heads/${draft.branch}`, sha: commit.sha });
@@ -215,6 +197,104 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   }
 
   /** A release by tag; the draft flag lets the caller tell an unpublished one apart. */
+  /** A commit with every file on top of a parent, through the Git data API: no clone, one commit */
+  async #commit(repo: string, parent: string, message: string, files: PullRequestDraft['files']): Promise<{ sha: string }> {
+    const parentCommit = (await this.#ok('GET', `/repos/${repo}/git/commits/${parent}`)) as { tree: { sha: string } };
+    const entries = [];
+    for (const file of files) {
+      if ('content' in file) {
+        entries.push({ path: file.path, mode: '100644', type: 'blob', content: file.content });
+      } else {
+        const blob = (await this.#ok('POST', `/repos/${repo}/git/blobs`, {
+          content: Buffer.from(file.bytes).toString('base64'),
+          encoding: 'base64',
+        })) as { sha: string };
+        entries.push({ path: file.path, mode: '100644', type: 'blob', sha: blob.sha });
+      }
+    }
+    const tree = (await this.#ok('POST', `/repos/${repo}/git/trees`, { base_tree: parentCommit.tree.sha, tree: entries })) as { sha: string };
+    return (await this.#ok('POST', `/repos/${repo}/git/commits`, { message, tree: tree.sha, parents: [parent] })) as { sha: string };
+  }
+
+  /**
+   * Commits files straight onto a branch, for what is published without a pull request. The ref is
+   * moved without force, so a branch that moved meanwhile refuses the commit instead of losing work.
+   */
+  async commitToBranch(repo: string, branch: string, message: string, files: PullRequestDraft['files']): Promise<{ sha: string }> {
+    const head = (await this.#ok('GET', `/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`)) as { object: { sha: string } };
+    const commit = await this.#commit(repo, head.object.sha, message, files);
+    await this.#ok('PATCH', `/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, { sha: commit.sha, force: false });
+    return commit;
+  }
+
+  /** A pull request's branch and state, for reviewing its drafts */
+  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string }> {
+    const pr = (await this.#ok('GET', `/repos/${repo}/pulls/${number}`)) as {
+      number: number;
+      html_url: string;
+      state: 'open' | 'closed';
+      merged: boolean;
+      title: string;
+      head: { ref: string };
+    };
+    return { number: pr.number, url: pr.html_url, state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed', branch: pr.head.ref, title: pr.title };
+  }
+
+  /** The paths a pull request adds or changes (up to 300, GitHub's page limit times three) */
+  async pullRequestFiles(repo: string, number: number): Promise<string[]> {
+    const paths: string[] = [];
+    for (let page = 1; page <= 3; page++) {
+      const files = (await this.#ok('GET', `/repos/${repo}/pulls/${number}/files?per_page=100&page=${page}`)) as Array<{ filename: string; status: string }>;
+      paths.push(...files.filter((f) => f.status !== 'removed').map((f) => f.filename));
+      if (files.length < 100) break;
+    }
+    return paths;
+  }
+
+  /** Replaces one text file on a branch, as one commit: an edit made in the app */
+  async updateFile(repo: string, branch: string, path: string, content: string, message: string): Promise<void> {
+    const current = await this.#json('GET', `/repos/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`);
+    const sha = current.status === 200 ? (current.data as { sha: string }).sha : undefined;
+    await this.#ok('PUT', `/repos/${repo}/contents/${path}`, {
+      message,
+      content: Buffer.from(content, 'utf8').toString('base64'),
+      branch,
+      ...(sha ? { sha } : {}),
+    });
+  }
+
+  /** Merges a pull request with a squash, so the launches repo keeps one commit per launch */
+  async mergePullRequest(repo: string, number: number, title: string): Promise<{ sha: string }> {
+    const merged = (await this.#ok('PUT', `/repos/${repo}/pulls/${number}/merge`, { merge_method: 'squash', commit_title: title })) as { sha: string };
+    return { sha: merged.sha };
+  }
+
+  /** An owner's public repos, newest push first, for choosing what to launch */
+  async userRepos(owner: string): Promise<Array<{ repo: string; description: string | null; pushedAt: string }>> {
+    const repos = (await this.#ok('GET', `/users/${encodeURIComponent(owner)}/repos?per_page=100&sort=pushed&type=owner`)) as Array<{
+      full_name: string;
+      description: string | null;
+      pushed_at: string;
+      fork: boolean;
+      archived: boolean;
+    }>;
+    return repos.filter((r) => !r.fork && !r.archived).map((r) => ({ repo: r.full_name, description: r.description, pushedAt: r.pushed_at }));
+  }
+
+  /** A repo's published releases, newest first */
+  async releases(repo: string): Promise<Array<{ tag: string; name: string; publishedAt: string; prerelease: boolean }>> {
+    const releases = (await this.#ok('GET', `/repos/${repo}/releases?per_page=30`)) as Array<{
+      tag_name: string;
+      name: string | null;
+      published_at: string | null;
+      draft: boolean;
+      prerelease: boolean;
+    }>;
+    return releases
+      .filter((r) => !r.draft && r.published_at)
+      .map((r) => ({ tag: r.tag_name, name: r.name ?? r.tag_name, publishedAt: r.published_at!, prerelease: r.prerelease }));
+  }
+
   async releaseByTag(repo: string, tag: string): Promise<{ tag: string; url: string; draft: boolean } | undefined> {
     const { status, data } = await this.#json('GET', `/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`);
     if (status === 404) return undefined;
