@@ -1,4 +1,5 @@
 import { articleUrl as urlOf, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { carouselPieces } from './launch-assets.ts';
 import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
 
@@ -95,6 +96,62 @@ export function renderDrafts(
         'dev.to',
         mode('devto'),
         `Republishes the English article with its canonical URL set to ${articleUrl('en')}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`,
+      ),
+    });
+  }
+  if (pack.hashnode && mode('hashnode') !== 'off') {
+    files.push({
+      path: `${dir}/hashnode.md`,
+      content: draft(
+        'Hashnode',
+        mode('hashnode'),
+        `Republishes the English article with its original URL set to ${articleUrl('en')}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`,
+      ),
+    });
+  }
+  if (pack.telegram && mode('telegram') !== 'off') {
+    files.push({ path: `${dir}/telegram.md`, content: draft('Telegram', mode('telegram'), pack.telegram.text) });
+  }
+  if (pack.discord && mode('discord') !== 'off') {
+    files.push({ path: `${dir}/discord.md`, content: draft('Discord', mode('discord'), pack.discord.text) });
+  }
+  if (pack.hackerNews && mode('hackerNews') !== 'off') {
+    files.push({
+      path: `${dir}/show-hn.md`,
+      content: draft(
+        'Show HN',
+        mode('hackerNews'),
+        `Title: ${pack.hackerNews.title}\n\nURL to submit: ${pack.project.repo}\n\nFirst comment, to post right after submitting:\n\n${pack.hackerNews.firstComment}`,
+      ),
+    });
+  }
+  if (pack.productHunt && mode('productHunt') !== 'off') {
+    const ph = pack.productHunt;
+    // The images the launch builds, which the owner uploads to the gallery by hand
+    const gallery = [
+      'og.png',
+      ...(pack.instagram && mode('instagram') !== 'off' ? carouselPieces(pack, config).filter((p) => p.kind === 'image').map((p) => p.file) : []),
+    ];
+    files.push({
+      path: `${dir}/product-hunt.md`,
+      content: draft(
+        'Product Hunt',
+        mode('productHunt'),
+        [
+          `Tagline: ${ph.tagline}`,
+          '',
+          `Description: ${ph.description}`,
+          '',
+          `Website: ${pack.project.repo}`,
+          '',
+          "Maker's first comment:",
+          '',
+          ph.firstComment,
+          '',
+          `Gallery, from \`public/${dir}/\`:`,
+          '',
+          ...gallery.map((f) => `- ${f}`),
+        ].join('\n'),
       ),
     });
   }

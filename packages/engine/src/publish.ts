@@ -42,7 +42,7 @@ export interface Publishers {
 }
 
 /** Channels the engine publishes to itself; the blog is published by the merge, Reddit by hand. */
-const PUBLISHED_BY_ENGINE = ['devto', 'bluesky', 'mastodon', 'instagram', 'newsletter'] as const;
+const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord'] as const;
 type EngineChannel = (typeof PUBLISHED_BY_ENGINE)[number];
 
 export interface PublishDeps {
@@ -155,6 +155,36 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               mainImage: `${brand.site}${mediaPath(launch, 'og.png')}`,
             });
           }
+        : undefined,
+    hashnode:
+      deps.publishers.hashnode && pack.hashnode && article
+        ? async () => {
+            const draft = await read(`${dir}/hashnode.md`);
+            const tags = /Tags: (.+)$/m.exec(draft ?? '')?.[1]?.match(/`([^`]+)`/g)?.map((t) => t.slice(1, -1)) ?? pack.hashnode!.tags;
+            return deps.publishers.hashnode!.publish({
+              title,
+              markdown: articleBody,
+              tags,
+              canonicalUrl: articleUrl,
+              coverImageUrl: `${brand.site}${mediaPath(launch, 'og.png')}`,
+            });
+          }
+        : undefined,
+    telegram:
+      deps.publishers.telegram && pack.telegram
+        ? async () =>
+            deps.publishers.telegram!.publish({
+              text: draftBody((await read(`${dir}/telegram.md`)) ?? pack.telegram!.text),
+              imageUrl: ogJpegUrl,
+            })
+        : undefined,
+    discord:
+      deps.publishers.discord && pack.discord
+        ? async () =>
+            deps.publishers.discord!.publish({
+              content: draftBody((await read(`${dir}/discord.md`)) ?? pack.discord!.text),
+              embed: { title, url: articleUrl, description, imageUrl: `${brand.site}${mediaPath(launch, 'og.png')}` },
+            })
         : undefined,
     bluesky:
       deps.publishers.bluesky && pack.bluesky

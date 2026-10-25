@@ -251,3 +251,58 @@ test('after the Instagram carousel, its story and the edited comment go out once
   assert.deepEqual(done, ['post', 'story instagram-story.jpg']);
   assert.equal(registry.posts(launch.id).filter((p) => p.channel === 'instagram').length, 1);
 });
+
+test('Hashnode, Telegram and Discord are published with the edited drafts; Show HN and Product Hunt never are', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({
+      ...pack,
+      hashnode: { tags: ['ai'] },
+      telegram: { text: 'AI telegram' },
+      discord: { text: 'AI discord' },
+      hackerNews: { title: 'Show HN: claudio', firstComment: 'c' },
+      productHunt: { tagline: 't', description: 'd', firstComment: 'c' },
+    }),
+    [`yeyo11/launches/${D}/hashnode.md@HEAD`]: '# Hashnode\n\n> **Approval:** x\n\nRepublishes…\n\nTags: `claude`, `typescript`\n',
+    [`yeyo11/launches/${D}/telegram.md@HEAD`]: '# Telegram\n\n> **Approval:** x\n\nEdited telegram\n',
+    [`yeyo11/launches/${D}/discord.md@HEAD`]: '# Discord\n\n> **Approval:** x\n\nEdited discord\n',
+    'yeyo11/claudio/.github/launch.yml@v0.8.2':
+      'enabled: true\nbrand: personal\npublishing:\n  hashnode: approval\n  telegram: approval\n  discord: approval\n  hackerNews: manual\n  productHunt: manual\nreddit:\n  subreddits: [ClaudeAI]\n',
+  };
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const { calls, publishers } = recorder();
+  const ok = (channel: string) => async (input: unknown) => {
+    calls.push({ channel, input });
+    return { externalId: `${channel}-1`, url: `https://${channel}.example/1` };
+  };
+  publishers.hashnode = { publish: ok('hashnode') };
+  publishers.telegram = { publish: ok('telegram') };
+  publishers.discord = { publish: ok('discord') };
+  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+
+  assert.equal(result.state, 'published');
+  const input = (channel: string) => calls.find((c) => c.channel === channel)!.input;
+  assert.deepEqual(input('hashnode'), {
+    title: 'Edited title',
+    markdown: 'Edited body.',
+    tags: ['claude', 'typescript'],
+    canonicalUrl: 'https://josegarrido.dev/en/claudio/',
+    coverImageUrl: 'https://josegarrido.dev/launches/claudio/v0.8.2/og.png',
+  });
+  assert.deepEqual(input('telegram'), { text: 'Edited telegram', imageUrl: 'https://josegarrido.dev/launches/claudio/v0.8.2/og.jpg' });
+  assert.deepEqual(input('discord'), {
+    content: 'Edited discord',
+    embed: {
+      title: 'Edited title',
+      url: 'https://josegarrido.dev/en/claudio/',
+      description: 'Edited description',
+      imageUrl: 'https://josegarrido.dev/launches/claudio/v0.8.2/og.png',
+    },
+  });
+  assert.deepEqual(registry.posts(launch.id).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
+  assert.ok(!calls.some((c) => c.channel === 'hackerNews' || c.channel === 'productHunt'));
+
+  await publishLaunch(registry.get(launch.id)!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  assert.equal(calls.length, 7, 'a second round publishes nothing again');
+});

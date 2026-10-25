@@ -5,6 +5,7 @@ import {
   ContentPack,
   contentPackJsonSchema,
   graphemeCount,
+  LIMITS,
   LaunchConfig,
   missingPieces,
   type ContentPack as Pack,
@@ -123,4 +124,51 @@ test('the newsletter needs a list in brand.yml and an issue for each list', () =
   assert.ok(missingPieces(pack, config, withLists).includes('newsletter: the issue has no es version'));
   assert.ok(!ContentPack.safeParse({ ...fullPack, newsletter: {} }).success, 'at least one language');
   assert.ok(!Brand.safeParse({ ...withLists, newsletter: { sender: { name: 'Me', email: 'nope' }, lists: { en: 3 } } }).success);
+});
+
+const phase5 = {
+  hashnode: { tags: ['claude', 'ai'] },
+  telegram: { text: 'claudio runs Claude Code as a service. https://example.dev/en/claudio-0-8/?ref=telegram' },
+  discord: { text: 'claudio runs Claude Code as a service. https://example.dev/en/claudio-0-8/?ref=discord' },
+  hackerNews: { title: 'Show HN: claudio, Claude Code as a service', firstComment: 'I built it because...' },
+  productHunt: { tagline: 'Claude Code as a service', description: 'Run Claude Code from anywhere.', firstComment: 'Hi, I made it.' },
+};
+
+test('the phase 5 pieces are valid within their limits and invalid beyond them', () => {
+  assert.ok(parse(phase5).success);
+  assert.ok(!parse({ hashnode: { tags: [] } }).success);
+  assert.ok(!parse({ hashnode: { tags: ['a', 'b', 'c', 'd', 'e', 'f'] } }).success);
+  assert.ok(!parse({ hashnode: { tags: ['Claude'] } }).success);
+  assert.ok(parse({ telegram: { text: 'a'.repeat(LIMITS.telegramText) } }).success);
+  assert.ok(!parse({ telegram: { text: 'a'.repeat(LIMITS.telegramText + 1) } }).success);
+  assert.ok(!parse({ discord: { text: 'a'.repeat(LIMITS.discordText + 1) } }).success);
+  assert.ok(!parse({ hackerNews: { ...phase5.hackerNews, title: `Show HN: ${'a'.repeat(80)}` } }).success);
+  assert.ok(!parse({ hackerNews: { ...phase5.hackerNews, title: 'claudio' } }).success, 'must start with Show HN');
+  assert.ok(!parse({ hackerNews: { ...phase5.hackerNews, firstComment: 'a'.repeat(2001) } }).success);
+  assert.ok(!parse({ productHunt: { ...phase5.productHunt, tagline: 'a'.repeat(61) } }).success);
+  assert.ok(!parse({ productHunt: { ...phase5.productHunt, description: 'a'.repeat(261) } }).success);
+  assert.ok(!parse({ productHunt: { ...phase5.productHunt, firstComment: 'a'.repeat(1001) } }).success);
+});
+
+test('missingPieces requires each phase 5 piece once its channel is on', () => {
+  const on = LaunchConfig.parse({
+    enabled: true,
+    brand: 'personal',
+    publishing: { hashnode: 'approval', telegram: 'approval', discord: 'approval', hackerNews: 'manual', productHunt: 'manual' },
+  });
+  assert.deepEqual(missingPieces(ContentPack.parse({ ...fullPack, reddit: undefined, ...phase5 }), on, brand), []);
+  assert.deepEqual(missingPieces(ContentPack.parse({ ...fullPack, reddit: undefined }), on, brand), [
+    'hackerNews: the pack has no hackerNews',
+    'hashnode: the pack has no hashnode',
+    'productHunt: the pack has no productHunt',
+    'telegram: the pack has no telegram',
+    'discord: the pack has no discord',
+  ]);
+});
+
+test('Hacker News and Product Hunt are draft-only: auto and approval are refused', () => {
+  for (const channel of ['hackerNews', 'productHunt']) {
+    assert.ok(!LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'approval' } }).success);
+    assert.ok(LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'manual' } }).success);
+  }
 });

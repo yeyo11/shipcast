@@ -28,6 +28,16 @@ export const LIMITS = {
   redditTitle: 300,
   newsletterSubject: 90,
   newsletterPreview: 140,
+  hashnodeTags: 5,
+  /** Fits a photo caption (1024) with room for the link */
+  telegramText: 900,
+  discordText: 1800,
+  /** Hacker News cuts titles at 80 */
+  hackerNewsTitle: 80,
+  hackerNewsComment: 2000,
+  productHuntTagline: 60,
+  productHuntDescription: 260,
+  productHuntComment: 1000,
 } as const;
 
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
@@ -100,6 +110,42 @@ export const ContentPack = z
       })
       .optional()
       .describe("dev.to republishes the English article with the blog as canonical URL; only its tags are its own"),
+    hashnode: z
+      .strictObject({
+        tags: z
+          .array(z.string().regex(/^[a-z0-9]+$/, 'Hashnode tags are lowercase letters and digits'))
+          .min(1)
+          .max(LIMITS.hashnodeTags),
+      })
+      .optional()
+      .describe('Hashnode republishes the English article with the blog as the original URL; only its tags are its own'),
+    telegram: z
+      .strictObject({ text: z.string().min(1).max(LIMITS.telegramText) })
+      .optional()
+      .describe('One post in English that goes under the launch image'),
+    discord: z
+      .strictObject({ text: z.string().min(1).max(LIMITS.discordText) })
+      .optional()
+      .describe('One message in English'),
+    hackerNews: z
+      .strictObject({
+        title: z
+          .string()
+          .min(1)
+          .max(LIMITS.hackerNewsTitle)
+          .refine((t) => t.startsWith('Show HN: '), 'a Show HN title starts with "Show HN: "'),
+        firstComment: z.string().min(1).max(LIMITS.hackerNewsComment).describe("The author's first comment, in plain text"),
+      })
+      .optional()
+      .describe('A Show HN draft the owner posts by hand; the URL submitted is the repository'),
+    productHunt: z
+      .strictObject({
+        tagline: z.string().min(1).max(LIMITS.productHuntTagline),
+        description: z.string().min(1).max(LIMITS.productHuntDescription),
+        firstComment: z.string().min(1).max(LIMITS.productHuntComment).describe("The maker's first comment"),
+      })
+      .optional()
+      .describe('A Product Hunt draft the owner posts by hand'),
     bluesky: z
       .strictObject({
         lang: Language,
@@ -182,6 +228,11 @@ const PIECE_OF: Partial<Record<Channel, keyof ContentPack>> = {
   mastodon: 'mastodon',
   instagram: 'instagram',
   reddit: 'reddit',
+  hashnode: 'hashnode',
+  telegram: 'telegram',
+  discord: 'discord',
+  hackerNews: 'hackerNews',
+  productHunt: 'productHunt',
   newsletter: 'newsletter',
 };
 
@@ -208,6 +259,9 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
   }
   if (config.publishing.devto !== 'off' && !pack.article?.en) {
     missing.push('devto: dev.to republishes the English article, which is missing');
+  }
+  if (config.publishing.hashnode !== 'off' && !pack.article?.en) {
+    missing.push('hashnode: Hashnode republishes the English article, which is missing');
   }
   if (config.publishing.reddit !== 'off' && pack.reddit) {
     const drafted = new Set(pack.reddit.map((d) => d.subreddit?.toLowerCase()));

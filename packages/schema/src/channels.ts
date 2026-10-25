@@ -35,7 +35,7 @@ export const PublishMode = z.enum(['auto', 'approval', 'manual', 'off']);
 export type PublishMode = z.infer<typeof PublishMode>;
 
 /** Communities that judge self-promotion by hand: Shipcast only ever drafts for them. */
-export const DRAFT_ONLY_CHANNELS: readonly Channel[] = ['reddit', 'hackerNews'];
+export const DRAFT_ONLY_CHANNELS: readonly Channel[] = ['reddit', 'hackerNews', 'productHunt'];
 
 /** What a channel does when launch.yml does not mention it: the MVP's channels on, the rest off (Reddit, by the owner's choice, since 2026-10-25). */
 export const DEFAULT_MODES: Readonly<Record<Channel, PublishMode>> = {

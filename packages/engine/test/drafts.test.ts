@@ -203,3 +203,40 @@ test('a branch left from a closed attempt is moved to the new commit', async () 
   assert.equal((await github.openPullRequest(draft)).number, 8);
   assert.deepEqual(calls.find((c) => c.method === 'PATCH')?.body, { sha: 'nc', force: true });
 });
+
+test('the phase 5 channels get their drafts with the right mode lines', () => {
+  const full = ContentPack.parse({
+    ...pack,
+    hashnode: { tags: ['claude', 'ai'] },
+    telegram: { text: 'Telegram post' },
+    discord: { text: 'Discord message' },
+    hackerNews: { title: 'Show HN: claudio', firstComment: 'First comment.' },
+    productHunt: { tagline: 'Claude Code as a service', description: 'Run it anywhere.', firstComment: 'Maker comment.' },
+  });
+  const on = LaunchConfig.parse({
+    enabled: true,
+    brand: 'personal',
+    publishing: { hashnode: 'approval', telegram: 'auto', discord: 'approval', hackerNews: 'manual', productHunt: 'manual' },
+  });
+  const files = renderDrafts(full, launch, on, brand, new Date('2026-10-25'));
+  const dir = launchDir(launch);
+  const file = (name: string) => text(files.find((f) => f.path === `${dir}/${name}`));
+
+  assert.match(file('hashnode.md'), /original URL set to https:\/\/josegarrido\.dev\/en\/claudio\/[\s\S]*Tags: `claude`, `ai`/);
+  assert.match(file('hashnode.md'), /\*\*Approval:\*\*/);
+  assert.match(file('telegram.md'), /\*\*Auto:\*\*[\s\S]*Telegram post/);
+  assert.match(file('discord.md'), /\*\*Approval:\*\*[\s\S]*Discord message/);
+  const hn = file('show-hn.md');
+  assert.match(hn, /\*\*Manual:\*\*/);
+  assert.match(hn, /Title: Show HN: claudio/);
+  assert.match(hn, /URL to submit: https:\/\/github\.com\/yeyo11\/claudio/);
+  assert.match(hn, /First comment[\s\S]*First comment\./);
+  const ph = file('product-hunt.md');
+  assert.match(ph, /\*\*Manual:\*\*/);
+  assert.match(ph, /Tagline: Claude Code as a service/);
+  assert.match(ph, /Maker comment\./);
+  assert.match(ph, /^- og\.png$/m);
+  assert.match(ph, /^- instagram-01\.jpg$/m);
+  assert.match(ph, /^- instagram-04\.jpg$/m);
+  assert.match(pullRequestBody(full, launch, on), /- \*\*hackerNews\*\*: manual[\s\S]*- \*\*productHunt\*\*: manual/);
+});

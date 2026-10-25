@@ -32,6 +32,16 @@ function channelBrief(channel: Channel, brand: Brand, config: LaunchConfig): str
       const target = subs.length > 0 ? `one draft for each of r/${subs.join(', r/')}` : 'one or two drafts, suggesting fitting subreddits';
       return `reddit: ${target}. Write each for that community: what was built and why, plain and honest, never an ad. Link the article with ?ref=reddit. The owner posts these by hand.`;
     }
+    case 'hashnode':
+      return `hashnode: 1 to ${LIMITS.hashnodeTags} lowercase tags (letters and digits only). Hashnode republishes the English article with the blog as the original URL, so write nothing else for it.`;
+    case 'telegram':
+      return `telegram: one post in English, at most ${LIMITS.telegramText} characters (it is the caption of the launch image), ending with the English article's link ${brand.site}/en/<English slug>/?ref=telegram.`;
+    case 'discord':
+      return `discord: one message in English, at most ${LIMITS.discordText} characters, ending with the English article's link ${brand.site}/en/<English slug>/?ref=discord. Short paragraphs; Discord renders Markdown.`;
+    case 'hackerNews':
+      return `hackerNews: a Show HN draft. A title starting with "Show HN: ", at most ${LIMITS.hackerNewsTitle} characters in all, plain and without hype; and the author's first comment (at most ${LIMITS.hackerNewsComment} characters, plain text): what it is, why you built it, how it works in a few lines, and what comes next. Honest about what exists today. The URL submitted is the repository, so do not link the article. The owner posts it by hand.`;
+    case 'productHunt':
+      return `productHunt: a tagline (at most ${LIMITS.productHuntTagline} characters), a description (at most ${LIMITS.productHuntDescription}) and the maker's first comment (at most ${LIMITS.productHuntComment}): who made it, why, what it does today. Concrete, no superlatives. The owner posts it by hand.`;
     case 'newsletter': {
       const langs = Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and ');
       return `newsletter: one issue per language (${langs}), each with a subject (at most ${LIMITS.newsletterSubject} characters), a preview text (at most ${LIMITS.newsletterPreview}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language (${brand.site}/<lang>/<that language's slug>/?ref=newsletter). Not the article itself; no images.`;
