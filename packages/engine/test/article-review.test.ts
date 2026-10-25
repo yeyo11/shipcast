@@ -116,6 +116,8 @@ test('published directly, the drafts go onto main in one commit and the launch s
   assert.equal(github.opened.length, 0, 'no pull request');
   assert.equal(github.commits[0]?.branch, 'main');
   assert.match(d.registry.get(launch.id)?.detail ?? '', /^direct:abc123 /);
+  const bluesky = github.commits[0]?.files.find((f) => f.path.endsWith('/bluesky.md'));
+  assert.match(bluesky && 'content' in bluesky ? bluesky.content : '', /^> \*\*Published directly:\*\*/m, 'no merge to speak of');
 });
 
 test('an article lives under articles/, is claimed once, and turns on only the chosen channels', () => {

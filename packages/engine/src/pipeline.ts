@@ -1,7 +1,7 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
 import type { AiProvider } from './claudio.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { launchDir, projectSlug, pullRequestBody, renderDrafts, type DraftFile } from './drafts.ts';
+import { asPublishedDirectly, launchDir, projectSlug, pullRequestBody, renderDrafts, type DraftFile } from './drafts.ts';
 import { generatePack } from './generate.ts';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
@@ -45,7 +45,7 @@ export async function deliverDrafts(
   try {
     if (options.direct) {
       if (!deps.github.commitToBranch) return { ok: false, problem: 'this GitHub client cannot commit directly' };
-      const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', drafts.message, drafts.files);
+      const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', drafts.message, asPublishedDirectly(drafts.files));
       const where = `https://github.com/${deps.launchesRepo}/commit/${commit.sha}`;
       return { ok: true, launch: deps.registry.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`), where };
     }

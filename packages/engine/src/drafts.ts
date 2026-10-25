@@ -54,6 +54,19 @@ function draft(title: string, mode: PublishMode, body: string): string {
 }
 
 /**
+ * Drafts published without a pull request say so: their mode line would otherwise speak of a merge
+ * that never happens. Only the line changes, so publishing reads them as it reads any other.
+ */
+export function asPublishedDirectly(files: DraftFile[]): DraftFile[] {
+  const pending = /^> \*\*(Approval|Auto):\*\* .*$/m;
+  return files.map((f) =>
+    'content' in f && f.path.endsWith('.md') && pending.test(f.content)
+      ? { ...f, content: f.content.replace(pending, '> **Published directly:** sent out without a pull request; edit it on the channel itself.') }
+      : f,
+  );
+}
+
+/**
  * Turns a content pack into the files of the drafts pull request: the articles where the blog reads
  * them, a readable draft per channel for review, and the pack itself for the engine to publish from
  * once the pull request is merged. Edits made in the pull request are what gets published.
