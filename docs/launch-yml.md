@@ -1,10 +1,10 @@
 ---
-created_at: 2026-10-24T16:41:26.920966963Z
-updated_at: 2026-10-25T00:24:53.4517646Z
+created_at: 2026-10-25T00:57:18.123643992Z
+updated_at: 2026-10-25T01:42:13.402893333Z
 tags:
-    - launch-yml
     - schema
-    - config
+    - launch-yml
+    - configuration
 ---
 # launch.yml
 
@@ -39,6 +39,11 @@ publishing:              # auto | approval | manual | off, per channel
   mastodon: approval
   instagram: approval
   newsletter: approval
+  hashnode: approval     # phase 5 channels: off by default
+  telegram: approval
+  discord: approval
+  hackerNews: manual     # the Show HN draft
+  productHunt: manual    # the launch kit
   reddit: manual         # off by default since 2026-10-25
 
 assets:
@@ -64,14 +69,16 @@ Defaults (`DEFAULT_MODES` in `channels.ts`) turn on the MVP's channels — blog,
 Mastodon, Instagram on `approval` (the newsletter, off by default, is turned on per project) — and
 leave every other channel `off`, Reddit included since 2026-10-25, when the owner left it out for now
 ([decisions/mvp-scope.md](decisions/mvp-scope.md)). A project that wants Reddit drafts sets
-`publishing.reddit: manual`.
+`publishing.reddit: manual`. An article written in the app has no `launch.yml` of its own: the
+channels chosen there are written beside its drafts ([engine.md](engine.md#articles-written-in-the-app)).
 
 ## Rules the schema holds
 
 - **Strict objects everywhere.** A misspelt key (`blgo: auto`) is an error pointing at its line, not a
   setting silently ignored.
-- **Reddit and Hacker News are drafts.** Any mode other than `manual` or `off` is refused: the plan
-  keeps both communities for the owner to post by hand.
+- **Reddit, Hacker News and Product Hunt are drafts.** Any mode other than `manual` or `off` is
+  refused: the plan keeps those communities for the owner to post by hand (Product Hunt joined them on
+  2026-10-25; neither it nor Hacker News has an API to post through).
 - **Channels are named ahead of their connectors.** `CHANNELS` lists every channel of the plan, so a
   file written today stays valid; turning on one without a connector yet is caught when the pack is
   checked (`missingPieces`, see [content-pack.md](content-pack.md)).
@@ -85,4 +92,4 @@ that is not semver gets `minor`, the quiet choice.
 
 ## Related
 
-[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]]
+[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]]

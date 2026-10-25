@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:01:57.063375627Z
-updated_at: 2026-10-25T00:28:38.02360834Z
+created_at: 2026-10-25T00:57:14.502862567Z
+updated_at: 2026-10-25T01:41:40.20005951Z
 tags:
     - publishing
     - connectors
@@ -16,7 +16,7 @@ tags:
 What happens after the drafts pull request ([engine.md](engine.md)): the launch's media, publishing
 on every channel once the owner merges, and reading the numbers back. Built on 2026-10-24 in
 `packages/assets`, `packages/connectors`, `packages/engine` (`launch-assets.ts`, `publish.ts`,
-`newsletter.ts`, `metrics.ts`) and `apps/cli` (`services.ts`, `dashboard.ts`). Every connector is
+`newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`) and the [web app](web-app.md). Every connector is
 Shipcast's own, over `fetch`, with no SDK ([decisions/mvp-scope.md](decisions/mvp-scope.md) says why
 Postiz was dropped).
 
@@ -35,9 +35,10 @@ Postiz was dropped).
   project's flat colour in Fraunces with each word's first letter in its wonky italic, the pitch and
   the version on black, and beside them the house halftone illustration with the project's motif.
   Satori reads no variable fonts, so static TrueType instances of Fraunces and Instrument Sans, cut
-  with `fonttools varLib.instancer`, live in `packages/assets/fonts/` (OFL). The colours and motifs
-  per project are copied from the blog's `src/projects.ts`, hash included: a project added there has
-  to be added in `og.ts` too, until both read them from one place.
+  with `fonttools varLib.instancer`, live in `packages/assets/fonts/` (OFL). The colour and motif of
+  each project come from the launches repo's `projects.yml`, which the blog reads too (one list since
+  2026-10-25); a project without a cover gets one drawn by `renderCover`
+  ([launches-repo.md](launches-repo.md)).
 - **The Instagram carousel and its story**, when the pack has an Instagram piece (decided on
   2026-10-25, after the single Reel did worst in the first launch; the owner approved the slides seen
   running). Every piece is 4:5 (1080×1350, the tallest feed format; Instagram crops a carousel to its
@@ -63,12 +64,14 @@ Binary files go into the pull request as base64 blobs through the Git data API.
 
 `publishLaunch(launch, brand, deps)` (`publish.ts`) runs for each `drafted` launch:
 
-1. Pull request **open** → wait; **closed without merging** → the launch is `skipped`.
+1. Pull request **open** → wait; **closed without merging** → the launch is `skipped`. A launch
+   published without a pull request (`direct:<sha>`) skips this step: its drafts are on main already.
 2. **Merged** → wait until the article answers a `HEAD` on the site (the merge starts the deploy,
    and the media live there), then record the blog post, with both languages' slugs.
 3. Every text is read **from the launches repo as merged**, so the owner's edits in the pull request
-   are what goes out: each channel's draft after its mode line, the article's front matter, dev.to's
-   tags.
+   (or in the app, which commits them to its branch) are what goes out: each channel's draft after its
+   mode line, the article's front matter, dev.to's and Hashnode's tags. An article written in the app
+   reads its channels from `articles/<slug>/launch.yml` instead of a project's `launch.yml`.
 4. Each channel whose mode is `auto` or `approval` and that has a connector is published once (the
    registry refuses a second post on the same channel):
    - **dev.to** (`devto.ts`): the English article with `canonical_url` to the blog, `og.png` as the
@@ -87,14 +90,25 @@ Binary files go into the pull request as base64 blobs through the Git data API.
      comment on its `Comment:` line, and the caption (a hook, two or three lines, at most five
      specific hashtags) after a `---` line.
    - **The newsletter** (`brevo.ts`): one Brevo campaign per language, described below.
+   - **Hashnode** (`hashnode.ts`, 2026-10-25): the English article with `originalArticleURL` set to the
+     blog, `og.png` as the cover, tags from the merged `hashnode.md`. Its GraphQL calls were written
+     without a live check (its API endpoint was moving when it was built) and Hashnode's API may need
+     the publication on its Pro plan: the first real post confirms both.
+   - **Telegram** (`telegram.ts`): the edited `telegram.md` as the caption of `og.jpg`, to the channel;
+     its link is `t.me/<channel>/<id>`, or `t.me/c/<id>/<id>` for a private one.
+   - **Discord** (`discord.ts`): the edited `discord.md` through a webhook, with an embed of the article
+     (title, link, description, `og.png`).
+   - **Show HN** and **Product Hunt** are drafts for the owner to post (`show-hn.md` with the title, the
+     repo URL to submit and the first comment; `product-hunt.md` with the tagline, description, first
+     comment and the gallery images): neither network has an API to post through.
    - **Reddit** is off by default since 2026-10-25, so no drafts are generated; a project that turns
      it on (`manual`) gets drafts for the owner to post by hand, never a post.
 5. A temporary failure (`ConnectorError.retryable`: 429, 5xx, no answer) is retried on the next
    round; a permanent one is recorded in the cursor `publish-failed:<launch>:<channel>` and not
-   retried until `shipcast publish --retry <channel>`. A connector can mark a failure as not retryable
-   whatever its status, when a retry would repeat what already happened. The launch is `published`
-   when nothing is pending, otherwise it stays `drafted` (reported as `partial`) and the next round
-   picks it up.
+   retried until `shipcast publish --retry <channel>` (every launch) or **Try again** in the app (that
+   launch only). A connector can mark a failure as not retryable whatever its status, when a retry
+   would repeat what already happened. The launch is `published` when nothing is pending, otherwise it
+   stays `drafted` (reported as `partial`) and the next round picks it up.
 
 ## The newsletter
 
@@ -102,9 +116,10 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
 
 - **Configuration:** `brand.yml` has a `newsletter` block with the sender (`name`, `email`), the Brevo
   list of each language (`lists: { en: <id>, es: <id> }`) and the action URL of each language's Brevo
-  subscription form the blog posts to (`forms: { en: <url>, es: <url> }`). `BREVO_API_KEY` goes in
-  `.env`. A project turns it on with `publishing.newsletter: approval` in its `launch.yml` (off by
-  default); claudio does since its pull request #62.
+  subscription form the blog posts to (`forms: { en: <url>, es: <url> }`). The Brevo key is a
+  connected account (or `BREVO_API_KEY` in `.env`). A project turns it on with
+  `publishing.newsletter: approval` in its `launch.yml` (off by default); claudio does since its pull
+  request #62.
 - **The issue:** the content pack's `newsletter` piece carries one issue per language with a list:
   a subject (at most 90 characters), a preview text (at most 140) and a short Markdown note to
   subscribers linking the article in that language with `?ref=newsletter`, not the article itself.
@@ -140,15 +155,17 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
 
 `collectMetrics(registry, brand, sources)` (`metrics.ts`) reads every source for every published
 launch and records each reading in the registry's `metrics` table (migration 2), so every metric has
-a history and the dashboard shows the latest. One source failing never stops the others.
+a history and the web app shows the latest. One source failing never stops the others.
 
 | Source | What | From |
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue (all languages added up); opens are inflated by Apple's privacy protection, clicks are the number to trust | Brevo's campaign statistics |
-| `devto`, `bluesky`, `mastodon`, `instagram` | views, reactions, comments, likes, reposts, reach… per post | each connector's `metrics(externalId)`; Bluesky through the public AppView, Mastodon needs `read:statuses`, Instagram through insights |
+| `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram` | views, reactions, comments, likes, reposts, reach… per post | each connector's `metrics(externalId)`; Bluesky through the public AppView, Mastodon needs `read:statuses`, Instagram through insights |
 | `blog` | each language's article visits (by its own slug) and their sum, and by referrer (`views_bluesky`, `views_devto`, …) | Cloudflare Web Analytics' GraphQL API (`cloudflare.ts`) |
 | `search` | clicks and impressions of both articles; Google takes two or three days to report a new page | Search Console, with a service account's JWT signed by `node:crypto` (`search-console.ts`) |
-| `github` | stars, forks, watchers; views and unique visitors of the repo's last 14 days (not only since the launch) | GitHub REST (`repoStats`) |
+| `github` | stars, forks, watchers; views and unique visitors of the repo's last 14 days (not only since the launch); not read for articles | GitHub REST (`repoStats`) |
+
+Telegram and Discord give no numbers back: bots and webhooks cannot read views or reactions.
 
 Two limits found while building it:
 
@@ -160,24 +177,24 @@ Two limits found while building it:
 
 ## The shipcast command
 
-`apps/cli/src/services.ts` builds the connectors from `.env` and `brand.yml`: the public parts (the
-Bluesky handle, the Mastodon instance) come from the brand's profile URLs unless `.env` overrides
-them; a network without its secret is left out, never half-configured, and `shipcast status` lists
-what is on. The newsletter needs both `BREVO_API_KEY` and the `newsletter` block in `brand.yml`. The
-Instagram token lasts 60 days: `watch` refreshes it every 30 (never on the first run, since Meta
-refuses to refresh a token younger than 24 hours) and keeps the fresh one in the registry, where it
-wins over `.env`.
+`buildServices` (`packages/runtime/src/services.ts`) builds the connectors from the brand's connected
+accounts, with `.env` as the fallback for the brand it speaks for ([accounts.md](accounts.md)); a
+network without its credential is left out, never half-configured, and `shipcast status` lists what
+is on. The newsletter also needs the `newsletter` block in `brand.yml`. The Instagram token lasts 60
+days: `watch` refreshes it every 30 (never on the first run, since Meta refuses to refresh a token
+younger than 24 hours) and keeps the fresh one where it came from (the account's keychain entry, or
+the registry for a token from `.env`). With Telegram connected, `watch` and the app tell the owner's
+own chat with the bot when drafts wait, when a launch is published and when it fails.
 
 | Command | Does |
 | --- | --- |
 | `watch` | Each round: detect and draft, publish what is ready, refresh the Instagram token when due, and read the metrics every 6 hours. Run by hand: the owner declined running it as a service |
 | `publish [--retry <channel>]` | Publishes every drafted launch that is ready, once; `--retry` gives a channel that failed for good another chance |
 | `metrics` | Reads every source now |
-| `dashboard [--port] [--host]` | Serves the launches, their posts and latest numbers on `127.0.0.1` (default port 4321), and the same as JSON at `/api/launches`; `--host 0.0.0.0` opens it to the local network, which it trusts (no login) |
 
-The dashboard is plain server-rendered HTML with a neutral dark style until it is rebuilt in Cartel
-from `design/specimen.html` ([plans/design-system.md](plans/design-system.md)).
+The launches, their posts and numbers, approving and retrying are also in the [web app](web-app.md),
+which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]]
+[[engine.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]]

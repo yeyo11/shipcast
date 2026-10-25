@@ -1,10 +1,10 @@
 ---
-created_at: 2026-10-24T19:13:49.217534335Z
-updated_at: 2026-10-24T21:33:11.156661032Z
+created_at: 2026-10-25T00:01:49.64325884Z
+updated_at: 2026-10-25T01:38:29.97518803Z
 tags:
     - engine
     - registry
-    - github
+    - detection
     - claudio
     - pipeline
     - cli
@@ -14,9 +14,11 @@ tags:
 
 `packages/engine` ([source](../packages/engine/src/)) decides what gets launched, asks the AI for the
 content and opens the drafts pull request; `apps/cli` ([source](../apps/cli/src/)) is the `shipcast`
-command around it. Written on 2026-10-24, each piece tested with fakes and checked against the real
-service where it is safe to. It depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md),
-[content-pack.md](content-pack.md), [brands.md](brands.md)).
+command around it and `apps/web` the [web app](web-app.md). What both share (configuration, the
+keychain, connected accounts, the connectors built from them) is `@shipcast/runtime`
+([accounts.md](accounts.md)). Written on 2026-10-24, extended on 2026-10-25, each piece tested with
+fakes and checked against the real service where it is safe to. It depends on `@shipcast/schema`
+([launch-yml.md](launch-yml.md), [content-pack.md](content-pack.md), [brands.md](brands.md)).
 
 ## The launch registry
 
@@ -27,13 +29,18 @@ once" hold:
 - **`claim(launch)`** inserts a row unique on `(repo, ref)` and reports whether this call made it. A
   launch is claimed *before* anything is generated, so a second poll, a re-run, a manual launch of
   the same release or a crash halfway through never starts the same campaign twice.
-- **Statuses**: `detected`, `generating`, `drafted` (the detail is the pull request), `published`,
-  `skipped`, `failed` (the detail says why). Skipped and failed launches keep their row.
+- **Statuses**: `detected`, `generating`, `drafted` (the detail is the pull request, or
+  `direct:<sha> <commit URL>` when published without one), `published`, `skipped`, `failed` (the
+  detail says why). Skipped and failed launches keep their row.
+- **Triggers**: `release`, `manual`, `public`, `enabled`, and `article` for an article written in the app.
 - **`lastPublishedRef(repo)`** feeds the pack inference: only `published` launches count.
 - **`recordPost`** is unique on `(launch, channel)`: the same piece is never published twice.
 - **`recordMetrics`**, **`latestMetrics`** and **`metricHistory`** keep every metric reading
   ([publishing.md](publishing.md#metrics)).
-- **`cursor` / `setCursor`** keep polling state; **`recent()`** lists launches for `shipcast status`.
+- **Cursors** keep small pieces of state: polling, a channel's permanent failure
+  (`publish-failed:<launch>:<channel>`), the Instagram extras, each newsletter language sent.
+  `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
+- **Accounts** (migration 3): the accounts connected per brand ([accounts.md](accounts.md)).
 
 ## Detecting launches
 
@@ -41,8 +48,7 @@ once" hold:
 (`GET /users/{login}/events/public`):
 
 - **Conditional** requests (ETag): a `304` costs no rate limit. GitHub answers `x-poll-interval: 60`,
-  so `shipcast watch` polls at most once a minute. A conditional request can still come back `200`
-  when the timeline changed.
+  so `shipcast watch` polls at most once a minute.
 - Events newer than the last seen id, oldest first; the cursor advances per event.
 - **Triggers**: `ReleaseEvent` with action `published`, and `PublicEvent` (a repo made public).
 - `.github/launch.yml` is read **at that tag** (the default branch for a repo made public): no file,
@@ -50,46 +56,71 @@ once" hold:
   invalid file → claimed and recorded `failed` with the line-numbered issues; otherwise **claimed**,
   with the pack from `resolvePack`.
 
+## The pre-flight check
+
+`preflight(repo, ref?, { github })` (`preflight.ts`, 2026-10-25) says whether a repo is ready to
+launch, every problem at once, each in a sentence a person can act on: a **published release** (the
+tag, or the latest), a **valid `launch.yml`** with `enabled: true`, a **license** GitHub recognises, a
+**README**, and the **demo** `assets.demo` names (a path in the repo at the ref, or a URL answering
+`HEAD`). All are required; a launch.yml without a demo gets advice, not a block. `shipcast launch` and
+the app's Launch a repo page run it first and stop when a required check fails; `shipcast preflight`
+runs it alone.
+
 ## The AI provider: claudio
 
 `Claudio` (`claudio.ts`) implements `AiProvider.generate()` against claudio's REST API
 ([claudio.md](claudio.md)): `POST /api/chats` with the prompt, the `cwd` (a path under claudio's
-`/workspace`), `jsonSchema`, `allowedTools` and `permissionMode: 'dontAsk'` (tools not allowed are
-denied, never asked about); poll until the main agent calls **`StructuredOutput`**, whose `input` is
-the answer (verified on 2026-10-24); then **stop the chat**, since claudio keeps a finished chat alive
-for a follow-up. Failures, a turn without `StructuredOutput` and the timeout raise `ClaudioError` with
-the chat id.
+`/workspace`), `jsonSchema`, `allowedTools` and `permissionMode: 'dontAsk'`; poll until the main agent
+calls **`StructuredOutput`**, whose `input` is the answer; then **stop the chat**. Failures, a turn
+without `StructuredOutput` and the timeout raise `ClaudioError` with the chat id.
 
-## From a claimed launch to its pull request
+## From a claimed launch to its drafts
 
-`draftLaunch(launch, brand, deps)` (`pipeline.ts`) records each step in the registry:
+`draftLaunch(launch, brand, deps, { direct? })` (`pipeline.ts`) records each step in the registry:
 
 1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's.
 2. **A fresh shallow clone** of the release (`workspace.ts`): `workspace/<owner>__<repo>@<ref>`, which
    claudio sees as `/workspace/...`; recreated every time so no run leaks into the next.
 3. **The content pack** (`generate.ts`, `prompt.ts`): a system prompt with the brand's name and tone
    and the truth rule (only what the code implements is presented as working; no invented commands
-   or numbers; a different text per channel), and a prompt with the pack's brief (`launch`, `major`,
-   `minor`) and one brief per active channel, with its limits and links
-   (`<site>/<lang>/<that language's slug>/?ref=<channel>`; none on Instagram). Tools are read-only
-   (`Read`, `Grep`, `Glob`, `ls`, `git log/tag/show`). The answer is accepted only when it validates,
-   matches the launch (kind, repo) and `missingPieces` is empty.
-4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, one slug per
-   language ([content-pack.md](content-pack.md#one-slug-per-language)), with front matter the blog's
-   content schema accepts (checked with a real build of the launches repo), a readable draft per
-   channel at `launches/<project>/<ref>/<channel>.md` saying its mode (`approval`: merged = published;
-   `manual`: the owner posts it), and `pack.json` to publish from after the merge. The launch image and
-   the demo Reel go with them ([publishing.md](publishing.md#the-launchs-media)).
-5. **The pull request** in the launches repo (`GitHubRest.openPullRequest`): branch
-   `launch/<project>-<ref>` off `main`, one commit with every file through the Git data API (binary
-   files as base64 blobs), a body with what the code analysis found and the channels' modes. An open
-   pull request for the branch is returned instead of a second one; a leftover branch is moved.
+   or numbers; a different text per channel), and a prompt with the pack's brief and one brief per
+   active channel (`channelBrief`), with its limits and links. Tools are read-only. The answer is
+   accepted only when it validates, matches the launch and `missingPieces` is empty.
+4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, a readable
+   draft per channel at `launches/<project>/<ref>/<channel>.md` saying its mode, and `pack.json`; the
+   media go with them ([publishing.md](publishing.md#the-launchs-media)), read with the project's
+   look from the launches repo's `projects.yml` ([launches-repo.md](launches-repo.md)).
+5. **Delivery** (`deliverDrafts`): a **pull request** in the launches repo (branch
+   `launch/<project>-<ref>`, one commit through the Git data API; an open one is returned instead of
+   a second), or, with `direct`, **one commit straight onto `main`** (`commitToBranch`, moved without
+   force so a branch that moved meanwhile refuses it), which publishes the blog; the engine publishes
+   the channels on its next round.
 
-`claimManual(repo, ref?)` starts a launch by hand: the given tag or the latest release, refused when
-there is no release, no `launch.yml` at it, or `triggers.manual` is off.
+`claimManual(repo, ref?)` starts a launch by hand: the given tag or the latest release; a failed
+launch asked for again is retried. `loadBrand` and `loadProjects` read `brand.yml` and `projects.yml`
+from the launches repo's default branch.
 
-`loadBrand` reads `brand.yml` from the launches repo's default branch, so the brand always comes from
-where the blog reads it.
+## Articles written in the app
+
+`article.ts` (2026-10-25): an article that comes from no release is a launch of its own.
+
+- **Claimed once** (`claimArticle`): repo = the launches repo, ref = `article:<slug>` from its title,
+  trigger `article`. Its pieces live in `articles/<slug>/`, its media in `public/articles/<slug>/`.
+- **Its channels** are the owner's choice in the app (`articleConfig`: the blog and the chosen ones on,
+  drafts-only communities manual, the rest off), written as `articles/<slug>/launch.yml` beside its
+  drafts, which is where publishing reads them.
+- **The AI translates and distributes, never rewrites** (`draftArticle`): it gets the article and the
+  channels' briefs, no tools, and returns a pack; the owner's title and text then replace the AI's
+  copy of them, so only the other languages and the channels' pieces are the AI's. The truth rule
+  becomes "only what the article says".
+- An article draws no project cover, counts no GitHub stars, and takes its colour from its slug.
+
+## Reviewing and approving
+
+`review.ts` (2026-10-25), for the app: `readReview` lists a launch's drafts from its pull request (the
+articles and channel texts with their content on the branch, the media with a link to their bytes),
+`editDraft` saves an edit as a commit on the pull request's branch (only drafts, only while it is
+open), and `approveLaunch` merges it with a squash, after which publishing follows as on any merge.
 
 ## The shipcast command
 
@@ -97,26 +128,26 @@ where the blog reads it.
 
 | Command | Does |
 | --- | --- |
-| `launch <owner/repo> [--ref <tag>]` | Claims and drafts the launch of a release (the latest without `--ref`) |
-| `watch [--interval <s>]` | Polls the events (default every 300 s, never under 60), drafts each claimed launch, then publishes and reads the metrics ([publishing.md](publishing.md)) |
-| `publish`, `metrics`, `dashboard` | Publishing, metrics and the dashboard, one at a time ([publishing.md](publishing.md)) |
+| `launch <owner/repo> [--ref <tag>]` | Runs the pre-flight check, then claims and drafts the launch of a release (the latest without `--ref`) |
+| `preflight <owner/repo> [--ref <tag>]` | The pre-flight check alone |
+| `watch [--interval <s>]` | Polls the events (default every 300 s, never under 60), drafts each claimed launch, publishes, reads the metrics, and tells the owner through Telegram ([publishing.md](publishing.md)) |
+| `publish [--retry <channel>]`, `metrics` | Publishing and metrics, one round ([publishing.md](publishing.md)) |
 | `status` | The latest launches, their pack and status, and which networks and sources are configured |
 
-Configuration comes from `.env` (`GITHUB_TOKEN_PERSONAL`, `CLAUDIO_API_URL`, `CLAUDIO_API_TOKEN`,
+The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. Configuration comes from
+`.env` (`GITHUB_TOKEN_PERSONAL`, `SHIPCAST_CLAUDIO_URL`, `SHIPCAST_CLAUDIO_TOKEN`,
 `SHIPCAST_LAUNCHES_REPO`, optional `SHIPCAST_DATA_DIR` and `SHIPCAST_MAX_BUDGET_USD`); every missing
-variable is reported at once. The networks' and the analytics' variables are optional: each one
-without them is left out ([publishing.md](publishing.md)).
+variable is reported at once. The networks' credentials come from connected accounts, with `.env` as a
+fallback ([accounts.md](accounts.md)).
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
-its `launch.yml` reached the default branch (or `--ref` to a tag that has it). On 2026-10-24 claudio's
-latest release, `v0.8.1`, predates its `launch.yml` (claudio pull requests #60 and #62, the second
-turning the newsletter on).
+its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
 
 ## After the drafts
 
-The launch's media, publishing after the merge, the newsletter, metrics and the dashboard are in
+The launch's media, publishing after the merge, the newsletter and metrics are in
 [publishing.md](publishing.md).
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]]
