@@ -1,0 +1,17 @@
+# How Shipcast launches Shipcast (docs/launch-yml.md)
+enabled: true
+brand: personal
+language: en
+
+publishing:
+  blog: approval
+  devto: approval
+  bluesky: approval
+  mastodon: approval
+  instagram: approval
+  newsletter: approval
+  hackerNews: manual
+  productHunt: manual
+
+assets:
+  demo: docs/media/tour.gif

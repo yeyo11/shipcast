@@ -4,80 +4,112 @@
 
 [![CI](https://github.com/yeyo11/shipcast/actions/workflows/ci.yml/badge.svg)](https://github.com/yeyo11/shipcast/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
+![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/yeyo11)
 
 You publish a release. Shipcast reads the project's **code**, not just its README, writes a launch
-post tailored to every channel, and publishes each one after you approve it: the article on your
-blog, a canonical copy on dev.to and Hashnode, an X thread, a LinkedIn post, ready-to-paste Show HN
-and Reddit drafts, and a demo GIF and OG image to go with them.
+piece for every channel, and publishes each one once you approve it: the article on your blog in
+English and Spanish, canonical copies on dev.to and Hashnode, posts on Bluesky, Mastodon, Telegram
+and Discord, an Instagram carousel with its story, a newsletter issue, and ready-to-paste Show HN and
+Product Hunt drafts. Then it reads back how each channel did.
 
-> [!IMPORTANT]
-> Shipcast is in **phase 0**: the design is done and the repository is set up, but nothing runs yet.
-> Everything below describes what is being built. Follow [the roadmap](docs/plans/shipcast.md#roadmap)
-> and [where it stands](docs/status.md), or watch the repo for the first release.
+![Shipcast's app: launches, launching a repo, channels and writing an article](docs/media/tour.gif)
 
-## Why
+> [!NOTE]
+> Shipcast is **alpha**, built for and used by its author: it launched
+> [claudio](https://github.com/yeyo11/claudio) v0.9.0 on six channels. It runs on your own machine
+> with your own accounts. Installing it for yourself takes some setup today (below); a GitHub Action
+> mode and a one-command install are on [the roadmap](docs/plans/shipcast.md#roadmap).
 
-Launching a side project well takes longer than the last commit did: one article, a thread with the
-link in the right place, a different tone for LinkedIn, a Show HN that does not read like an ad, a
-GIF, and then remembering which channel actually brought anyone. Most projects get none of it, or
-the same paragraph pasted everywhere.
+## How it works
 
-Shipcast turns that into a pull request you review.
-
-## How it will work
-
-1. **Opt in per repo.** A `.github/launch.yml` turns launches on and picks the brand, the language,
-   the content pack and a publishing mode for each channel:
+1. **Opt in per repo.** A `.github/launch.yml` turns launches on and sets a mode for each channel:
+   `approval` (published when you approve), `manual` (a draft for you to post), `auto` or `off`.
 
    ```yaml
    # .github/launch.yml
    enabled: true
    brand: personal
-   language: en
-
    publishing:
-     blog: auto          # publish without asking
-     x: approval         # publish once you approve
-     linkedin: approval
-     reddit: manual      # a draft for you to paste
-     hackerNews: manual
+     blog: approval
+     devto: approval
+     bluesky: approval
+     instagram: approval
+     hackerNews: manual   # the Show HN draft
+   assets:
+     demo: docs/demo.gif
    ```
 
-2. **Trigger.** A published release or `shipcast launch <repo>`; optionally a repo going public or
-   `enabled: true` landing on an old one. The local engine polls the GitHub API, so it needs no
-   webhooks and exposes nothing.
+2. **Trigger.** Publish a release (the engine polls your public GitHub events, no webhooks), or pick a
+   repo and a release in the app. A pre-flight check first makes sure there is a release, a valid
+   `launch.yml`, a license, a README and the demo.
 3. **Analyse.** Claude reads the repository and separates what is implemented from what is only
-   planned or documented, so the content never promises a feature that does not exist.
-4. **Generate.** One structured JSON content pack per launch, with a piece written for each channel,
-   in English and Spanish.
+   planned or claimed by the docs; only the implemented part is presented as working.
+4. **Generate.** One structured content pack per launch: the article in each language, a piece written
+   for each channel within its limits, the launch image, the Instagram carousel and story, and a cover
+   in your blog's style when the project has none.
 5. **Approve.** The drafts arrive as a pull request in your launches repo, which is also your blog's
-   source. Edit them with commits or from GitHub's web editor; merging publishes.
-6. **Publish and measure.** Each channel follows its mode, every launch is recorded so it never runs
-   twice, and stars, traffic, views and clicks per channel end up in one dashboard.
+   source. Read and edit every piece in the app or on GitHub; approving merges it and publishes. Or
+   skip the review and publish straight away.
+6. **Publish and measure.** Each channel is published once, never twice; a failure is retried or left
+   for you to retry. Visits by channel, search, stars and traffic, and each post's numbers end up on
+   the launch's page. With Telegram connected, you hear when drafts wait and when a launch is out.
 
-## Roadmap
+You can also **write an article** in the app, in your own words: Shipcast translates it, writes each
+channel's piece and publishes it the same way.
 
-| Phase | Delivers |
+## The app
+
+`pnpm app` serves Shipcast's web app on a domain of yours reachable only over your
+[Tailscale](https://tailscale.com) network, with its own Let's Encrypt certificate:
+
+- **Launches**: every launch, where it went, what is waiting for you, and its numbers.
+- **Channels**: every network, the accounts connected to each (per brand, several per network), what
+  Shipcast may do with them, a check of each credential, and OAuth for Mastodon and Instagram. Secrets
+  live in your operating system's keychain.
+- **Launch a repo** and **Write**, with the choice to review first or publish directly.
+
+Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](docs/web-app.md).
+
+## What you need
+
+- Node 24 and pnpm; on Linux, `libsecret-tools` for the keychain; ffmpeg for the demo video.
+- [claudio](https://github.com/yeyo11/claudio), which runs Claude Code as a service, as the AI provider
+  (`docker-compose.yml` here starts it).
+- A launches repo with an Astro blog that accepts Shipcast's articles
+  ([docs/launches-repo.md](docs/launches-repo.md) describes the contract), and its `brand.yml`.
+- An account on each network you want, connected from the app or listed in `.env`
+  ([.env.example](.env.example)).
+
+```bash
+pnpm install
+cp .env.example .env             # fill in what you use
+pnpm shipcast preflight owner/repo
+pnpm shipcast launch owner/repo  # or: pnpm app
+```
+
+## Channels
+
+| Channel | What Shipcast does |
 | --- | --- |
-| 0 · Foundations | Repository, `launch.yml` and content pack schemas, Astro blog |
-| 1 · Local MVP | Release detection, analysis, drafts as a pull request, blog and dev.to with canonical URLs |
-| 2 · Networks and brands | Hashnode, Bluesky, Mastodon, X, LinkedIn, per-brand tone, per-channel modes |
-| 3 · Assets | Demo GIFs (VHS, Playwright), OG images, screenshots |
-| 4 · Dashboard | Metrics from every channel, approval from the browser |
-| 5 · Communities | Show HN, Reddit, Product Hunt, newsletter, Telegram, Discord |
-| 6 · For everyone | Swappable AI providers, a GitHub Action mode, one-command install |
+| Blog | Commits the article in each language; the merge publishes it |
+| dev.to, Hashnode | Republish the English article with the blog as canonical URL |
+| Bluesky, Mastodon | A post with a link card or image |
+| Instagram | A carousel (cover, demo video, features, closing), a story and a comment |
+| Newsletter (Brevo) | One issue per language, sent to your lists |
+| Telegram, Discord | A post to your channel, an embed through a webhook |
+| Show HN, Product Hunt | Drafts for you to post: neither has an API to post through |
 
-The last test of phase 6 is Shipcast's own launch, generated and published by Shipcast. The full
-design, with every decision and the reasoning behind it, is in
-[docs/plans/shipcast.md](docs/plans/shipcast.md).
+X, LinkedIn and Reddit are not supported.
 
 ## Built with
 
-TypeScript on Node 24 LTS in a pnpm monorepo. The AI provider is
-[claudio](https://github.com/yeyo11/claudio), which runs Claude Code as a service; the Anthropic API
-and the Claude Code GitHub Action join it in phase 6.
+TypeScript on Node 24 in a pnpm monorepo: `packages/schema` (Zod), `packages/engine` (the registry on
+`node:sqlite`, detection, generation, publishing), `packages/connectors` (one module per network over
+`fetch`, no SDKs), `packages/assets` (Satori and resvg), `packages/runtime` (accounts and keychain),
+`apps/cli` and `apps/web` (TanStack Start). The design, with every decision and the reasoning behind
+it, is in [docs/plans/shipcast.md](docs/plans/shipcast.md); where it stands, in
+[docs/status.md](docs/status.md).
 
 ## Contributing
 

@@ -112,7 +112,7 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .check { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border: var(--sc-border-control) solid var(--sc-rail); border-radius: var(--sc-radius-pill); font: var(--sc-label); cursor: pointer; }
 .check:has(input:checked) { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .check input { accent-color: var(--sc-yellow); }
-.seg { display: inline-flex; border: 2px solid var(--sc-text); border-radius: var(--sc-radius-pill); overflow: hidden; }
+.seg { justify-self: start; display: inline-flex; border: 2px solid var(--sc-text); border-radius: var(--sc-radius-pill); overflow: hidden; }
 .seg label { position: relative; }
 .seg input { position: absolute; opacity: 0; }
 .seg span { display: inline-flex; align-items: center; height: 42px; padding: 0 18px; font: 600 14.5px/1 var(--sc-font-text); cursor: pointer; }
