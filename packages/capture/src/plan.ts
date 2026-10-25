@@ -5,10 +5,10 @@ import type { ScreenshotPage, TourStep } from '@shipcast/schema';
 export const DESKTOP = { width: 1440, height: 900, deviceScaleFactor: 1 } as const;
 export const MOBILE = { width: 390, height: 844, deviceScaleFactor: 2 } as const;
 export const TOUR_VIEWPORT = { width: 1280, height: 800 } as const;
-export const GIF_WIDTH = 960;
-export const GIF_FPS = 12;
+export const GIF_WIDTH = 800;
+export const GIF_FPS = 10;
 /** A longer tour is cut: the GIF becomes the Instagram demo and the pull request's weight */
-export const MAX_TOUR_SECONDS = 20;
+export const MAX_TOUR_SECONDS = 12;
 export const MAX_STEPS = 12;
 
 /** Slow on purpose: the viewer has to follow it. Scrolls are relative; a huge negative one reaches the top. */

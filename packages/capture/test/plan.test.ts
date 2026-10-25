@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BROWSER_MISSING, defaultTour, gifArgs, isBrowserMissing, MAX_TOUR_SECONDS, pageName, pageUrl, planScreenshots, planTour } from '../src/index.ts';
+import { BROWSER_MISSING, defaultTour, GIF_FPS, GIF_WIDTH, gifArgs, isBrowserMissing, MAX_TOUR_SECONDS, pageName, pageUrl, planScreenshots, planTour } from '../src/index.ts';
 
 const SITE = 'https://claudio.example';
 
@@ -32,11 +32,11 @@ test('screenshot names come from the path, are unique, and default to the root',
   assert.deepEqual(planScreenshots([{ path: '/a' }, { path: '/a/' }, { path: '/' }]).map((p) => p.name), ['a', 'a-2', 'home']);
 });
 
-test('the GIF is cut at 20 s, 12 fps, 960 wide, with one palette for the clip', () => {
+test('the GIF is cut at its maximum length, at its frame rate and width, with one palette for the clip', () => {
   const args = gifArgs('in.webm', 'out.gif');
   assert.equal(args[args.indexOf('-t') + 1], String(MAX_TOUR_SECONDS));
   const filter = args[args.indexOf('-filter_complex') + 1]!;
-  assert.match(filter, /fps=12,scale=960:-1/);
+  assert.ok(filter.includes(`fps=${GIF_FPS},scale=${GIF_WIDTH}:-1`));
   assert.match(filter, /palettegen/);
   assert.match(filter, /paletteuse/);
   assert.equal(args.at(-1), 'out.gif');
