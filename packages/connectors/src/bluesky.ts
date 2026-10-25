@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, type Check, type Metrics, type Published } from './http.ts';
+import { checkProblem, ConnectorError, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface BlueskyPost {
   text: string;
@@ -13,7 +13,15 @@ interface Session {
   accessJwt: string;
 }
 
-const URL_RE = /https?:\/\/[^\s)]+/g;
+interface BlueskyProfile {
+  avatar?: string;
+  displayName?: string;
+  followersCount?: number;
+  followsCount?: number;
+  postsCount?: number;
+}
+
+const URL_RE =/https?:\/\/[^\s)]+/g;
 
 /**
  * Link facets: Bluesky does not detect URLs in a post's text, so each one is declared with its range
@@ -108,15 +116,31 @@ export class Bluesky {
     return { externalId: created.uri, url: `https://bsky.app/profile/${session.handle}/post/${rkey}` };
   }
 
-  /** Signs in with the app password: the only way to know it still works */
+  /** The public profile from the AppView, which needs no session: picture, name and counts */
+  async #profile(actor: string): Promise<BlueskyProfile> {
+    const response = await this.#fetch(`${this.#appView}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`);
+    return json<BlueskyProfile>('Bluesky', response, 'read the profile');
+  }
+
+  /**
+   * Signs in with the app password: the only way to know it still works. The profile is read after
+   * it for the picture; a profile that does not answer leaves the check working, without one.
+   */
   async check(): Promise<Check> {
+    let session: Session;
     try {
       this.#session = undefined;
-      const session = await this.#login();
-      return { ok: true, account: `@${session.handle}` };
+      session = await this.#login();
     } catch (error) {
       return checkProblem(error);
     }
+    const profile = await this.#profile(session.did).catch(() => undefined);
+    return okCheck(`@${session.handle}`, { avatarUrl: profile?.avatar, displayName: profile?.displayName });
+  }
+
+  async profileStats(): Promise<ProfileStats> {
+    const profile = await this.#profile(this.#session?.did ?? this.#identifier);
+    return statsOf({ followers: profile.followersCount, following: profile.followsCount, posts: profile.postsCount });
   }
 
   async metrics(externalId: string): Promise<Metrics> {

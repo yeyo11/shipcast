@@ -171,6 +171,10 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .problem .toast-details summary { color: var(--sc-failure); }
 /* The account just connected gets the focus ring, the same yellow as every focus */
 .account-row:focus { outline: 3px solid var(--sc-yellow); outline-offset: 6px; border-radius: 12px; }
+/* Profile pictures: round, cropped to fill, never squeezed by the row beside them */
+.avatar { flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--sc-hairline); background: var(--sc-ground); }
+.account-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.stale { color: var(--sc-failure); font-weight: 700; }
 
 /* The illustrations' review page (/design/illustrations): each panel sets its own theme, so night and
    day sit side by side whatever the page is in */

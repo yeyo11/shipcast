@@ -48,6 +48,8 @@ const USAGE = `Usage: shipcast <command>
   publish [--retry <channel>]         Publish every drafted launch whose pull request is merged, once;
                                       --retry gives a channel that failed for good another chance
   metrics                             Read the numbers of every published launch now
+  sync [<account id>]                 Check every connected account (or one) and record today's
+                                      followers, following and posts where its network counts them
   status                              The latest launches and where they stand, and what is configured
   token create <name> --scopes <list> A token for the REST API (/api/v1), scopes read, write or both
                                       (read,write); printed once, only its hash is kept
@@ -156,6 +158,36 @@ async function main(argv: string[]): Promise<number> {
           const done = await queue.wait(id, 30 * 60_000);
           for (const line of done?.log ?? []) console.log(line);
           if (!done) console.error('The reading did not end within 30 minutes.');
+          return done?.state === 'completed' ? 0 : 1;
+        } finally {
+          await queue.stop();
+        }
+      }
+
+      case 'sync': {
+        // The snapshots job, sent and worked here like `metrics`: every account, or the one named
+        const accountId = rest[0] === undefined ? undefined : Number(rest[0]);
+        if (accountId !== undefined && !Number.isInteger(accountId)) {
+          console.error(`sync takes an account id, not "${rest[0]}"`);
+          return 2;
+        }
+        const brand = await loadBrand(github, config.launchesRepo);
+        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5 });
+        try {
+          const id = await queue.send(
+            'snapshots',
+            { reason: BY_HAND, ...(accountId !== undefined && { accountId }) },
+            { title: 'Syncing the accounts, by hand', singletonKey: accountId === undefined ? BY_HAND : `account:${accountId}` },
+          );
+          if (!id) {
+            console.error('A sync by hand is queued already.');
+            return 1;
+          }
+          const { snapshots } = workHandlers(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: async () => brand });
+          await queue.work({ snapshots });
+          const done = await queue.wait(id, 10 * 60_000);
+          for (const line of done?.log ?? []) console.log(line);
+          if (!done) console.error('The sync did not end within 10 minutes.');
           return done?.state === 'completed' ? 0 : 1;
         } finally {
           await queue.stop();

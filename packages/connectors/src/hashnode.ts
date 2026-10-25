@@ -1,4 +1,4 @@
-import { ConnectorError, json, checkProblem, type Check, type Metrics, type Published } from './http.ts';
+import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface HashnodeArticle {
   title: string;
@@ -101,11 +101,19 @@ export class Hashnode {
 
   async check(): Promise<Check> {
     try {
-      const data = await this.#query<{ me: { username: string } }>('check', 'query { me { username } }');
+      const data = await this.#query<{ me: { username: string; name?: string; profilePicture?: string | null } }>('check', 'query { me { username name profilePicture } }');
       if (this.#publicationHost || this.#publicationId) await this.#publication();
-      return { ok: true, account: data.me.username };
+      return okCheck(data.me.username, { avatarUrl: data.me.profilePicture, displayName: data.me.name });
     } catch (error) {
       return checkProblem(error, 'the token was rejected, or the publication is not on the Pro plan the API now needs');
     }
+  }
+
+  async profileStats(): Promise<ProfileStats> {
+    const { me } = await this.#query<{ me: { followersCount?: number; followingsCount?: number; posts?: { totalDocuments?: number } } }>(
+      'read the profile',
+      'query { me { followersCount followingsCount posts(pageSize: 1, page: 1) { totalDocuments } } }',
+    );
+    return statsOf({ followers: me.followersCount, following: me.followingsCount, posts: me.posts?.totalDocuments });
   }
 }

@@ -1,4 +1,4 @@
-import { json, checkProblem, type Check, type Metrics, type Published } from './http.ts';
+import { json, checkProblem, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface TelegramPost {
   /** 4096 characters at most; with an image it becomes the caption, which stops at 1024 */
@@ -72,9 +72,17 @@ export class Telegram {
     try {
       const me = await this.#call<{ username: string }>('getMe', 'check the bot');
       const chat = await this.#call<{ title?: string; username?: string }>('getChat', 'check the chat', { chat_id: this.#chatId });
-      return { ok: true, account: `@${me.username} in ${chat.title ?? chat.username ?? this.#chatId}` };
+      // No picture: the chat's photo is only downloadable at an address with the bot token in it,
+      // which must never be stored or reach a browser
+      return okCheck(`@${me.username} in ${chat.title ?? chat.username ?? this.#chatId}`, { displayName: chat.title });
     } catch (error) {
       return checkProblem(error, 'the bot token was rejected, or the bot cannot see that chat (add it as an admin)');
     }
+  }
+
+  /** A channel's or group's members: the one count the Bot API gives */
+  async profileStats(): Promise<ProfileStats> {
+    const members = await this.#call<number>('getChatMemberCount', 'count the members', { chat_id: this.#chatId });
+    return statsOf({ followers: members });
   }
 }

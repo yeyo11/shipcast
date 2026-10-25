@@ -1,4 +1,4 @@
-import { json, checkProblem, type Check, type Metrics, type Published } from './http.ts';
+import { json, checkProblem, okCheck, type Check, type Metrics, type Published } from './http.ts';
 
 export interface DiscordPost {
   /** 2000 characters at most */
@@ -7,7 +7,9 @@ export interface DiscordPost {
 }
 
 interface WebhookInfo {
+  id?: string;
   name: string;
+  avatar?: string | null;
   guild_id?: string;
   channel_id: string | null;
 }
@@ -54,7 +56,10 @@ export class Discord {
 
   async check(): Promise<Check> {
     try {
-      return { ok: true, account: (await this.#webhookInfo()).name };
+      const info = await this.#webhookInfo();
+      // The webhook's own picture, on Discord's public CDN; a webhook without one posts with the default
+      const avatarUrl = info.avatar && info.id ? `https://cdn.discordapp.com/avatars/${info.id}/${info.avatar}.png?size=128` : undefined;
+      return okCheck(info.name, { avatarUrl });
     } catch (error) {
       return checkProblem(error, 'the webhook was rejected, it may have been deleted');
     }

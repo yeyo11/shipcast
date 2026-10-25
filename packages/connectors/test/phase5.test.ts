@@ -111,7 +111,7 @@ test('Telegram check reads the bot and the chat, and explains a rejected token',
       [],
     ),
   });
-  assert.deepEqual(await ok.check(), { ok: true, account: '@shipcast_bot in Shipcast' });
+  assert.deepEqual(await ok.check(), { ok: true, account: '@shipcast_bot in Shipcast', displayName: 'Shipcast' });
   const bad = new Telegram({ botToken: 'T', chatId: '1', fetch: fakeFetch([['POST', () => Response.json({ ok: false }, { status: 401 })]], []) });
   const result = await bad.check();
   assert.equal(result.ok, false);

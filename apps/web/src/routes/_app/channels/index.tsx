@@ -2,8 +2,8 @@ import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-r
 import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../../../components/Toasts';
-import { Pill, Problem, when } from '../../../components/ui';
-import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount } from '../../../server/channels.functions';
+import { Avatar, number, Pill, Problem, when } from '../../../components/ui';
+import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount, syncAccountNow } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
 
 export const Route = createFileRoute('/_app/channels/')({
@@ -19,6 +19,17 @@ export const Route = createFileRoute('/_app/channels/')({
 type Data = Awaited<ReturnType<typeof getChannels>>;
 type NetworkView = Data['networks'][number];
 type AccountView = NetworkView['accounts'][number];
+
+/** The latest numbers, in words: only what the network counts */
+function counts(snapshot: AccountView['snapshot']): string | null {
+  if (!snapshot) return null;
+  const parts = [
+    snapshot.followers !== null ? `${number(snapshot.followers)} followers` : null,
+    snapshot.following !== null ? `${number(snapshot.following)} following` : null,
+    snapshot.posts !== null ? `${number(snapshot.posts)} posts` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
 
 function AccountRow({ account, brands }: { account: AccountView; brands: Data['brands'] }) {
   const router = useRouter();
@@ -45,45 +56,64 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
       if (result.status === 'ok') toast.done(`${account.label} works`, result.identity ? `Signed in as ${result.identity}.` : undefined);
       else toast.fail(result.problem ?? `${account.label} did not answer its check`);
     });
+  const sync = () =>
+    act(async () => {
+      const result = await syncAccountNow({ data: account.id });
+      const details = result.lines.join('\n') || undefined;
+      if (result.state === 'completed') toast.done(`${account.label} synced`, details);
+      else if (result.state === 'failed') toast.fail(result.lines[0] ?? `${account.label} could not be synced`);
+      else toast.done(`Syncing ${account.label}`, 'It is still running: reload the page in a minute to see it.');
+    });
   const brand = brands.find((b) => b.id === account.brand)?.name ?? account.brand;
+  const numbers = counts(account.snapshot);
   return (
     <li id={`account-${account.id}`} tabIndex={-1} className="account-row">
-      <div style={{ minWidth: 0, flex: 1 }}>
-        {renaming ? (
-          <form
-            className="row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void act(async () => {
-                await renameAccount({ data: { id: account.id, label } });
-                toast.done(`Renamed to ${label}`);
-                setRenaming(false);
-              });
-            }}
-          >
-            <label className="visually-hidden" htmlFor={`label-${account.id}`}>
-              Name
-            </label>
-            <input id={`label-${account.id}`} className="input" style={{ maxWidth: 280 }} value={label} onChange={(e) => setLabel(e.target.value)} />
-            <button className="btn btn-small" disabled={busy} type="submit">
-              Save
-            </button>
-          </form>
-        ) : (
-          <strong>{account.label}</strong>
-        )}
-        <div className="muted" style={{ fontSize: 14 }}>
-          {brand}
-          {account.primary ? ' · publishes for this brand' : ''}
-          {account.identity && account.identity !== account.label ? ` · ${account.identity}` : ''}
-          {account.checkedAt ? ` · checked ${when(account.checkedAt)}` : ''}
+      <div className="account-who" style={{ flex: 1 }}>
+        <Avatar src={account.avatarUrl} alt="" size={40} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {renaming ? (
+            <form
+              className="row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act(async () => {
+                  await renameAccount({ data: { id: account.id, label } });
+                  toast.done(`Renamed to ${label}`);
+                  setRenaming(false);
+                });
+              }}
+            >
+              <label className="visually-hidden" htmlFor={`label-${account.id}`}>
+                Name
+              </label>
+              <input id={`label-${account.id}`} className="input" style={{ maxWidth: 280 }} value={label} onChange={(e) => setLabel(e.target.value)} />
+              <button className="btn btn-small" disabled={busy} type="submit">
+                Save
+              </button>
+            </form>
+          ) : (
+            <strong>{account.label}</strong>
+          )}
+          <div className="muted" style={{ fontSize: 14 }}>
+            {brand}
+            {account.primary ? ' · publishes for this brand' : ''}
+            {account.identity && account.identity !== account.label ? ` · ${account.identity}` : ''}
+          </div>
+          <div className="muted" style={{ fontSize: 14 }}>
+            {numbers ? `${numbers} · ` : ''}
+            {account.syncedAt ? `synced ${when(account.syncedAt)}` : 'never synced'}
+            {account.stale && <span className="stale"> · not synced for over 36 hours</span>}
+          </div>
+          {account.problem && <Problem text={account.problem} />}
         </div>
-        {account.problem && <Problem text={account.problem} />}
       </div>
       <div className="row">
         {account.status === 'ok' ? <Pill tone="published">Connected</Pill> : account.status === 'failed' ? <Pill tone="failed">Not working</Pill> : <Pill tone="draft">Not checked</Pill>}
+        <button className="btn btn-small" disabled={busy} onClick={() => void sync()}>
+          {busy ? 'Working…' : 'Sync now'}
+        </button>
         <button className="btn btn-small" disabled={busy} onClick={() => void check()}>
-          {busy ? 'Checking…' : 'Check'}
+          Check
         </button>
         {!account.primary && (
           <button className="btn btn-small" disabled={busy} onClick={() => act(() => makePrimary({ data: account.id }), `${account.label} now publishes for ${brand}`)}>

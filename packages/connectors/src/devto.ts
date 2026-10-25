@@ -1,4 +1,4 @@
-import { checkProblem, json, type Check, type Metrics, type Published } from './http.ts';
+import { checkProblem, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface DevtoArticle {
   title: string;
@@ -52,11 +52,37 @@ export class Devto {
   /** The key's owner, proving the key works */
   async check(): Promise<Check> {
     try {
-      const me = await json<{ username: string }>('dev.to', await this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() }), 'check');
-      return { ok: true, account: `@${me.username}` };
+      const me = await json<{ username: string; name?: string; profile_image?: string }>(
+        'dev.to',
+        await this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() }),
+        'check',
+      );
+      return okCheck(`@${me.username}`, { avatarUrl: me.profile_image, displayName: me.name });
     } catch (error) {
       return checkProblem(error);
     }
+  }
+
+  /**
+   * Forem gives no counts on the profile, only lists: they are counted a thousand at a time, which is
+   * one request for any account short of a thousand followers or articles.
+   */
+  async #count(path: string, what: string): Promise<number> {
+    let total = 0;
+    for (let page = 1; page <= 20; page++) {
+      const response = await this.#fetch(`${this.#base}${path}?per_page=1000&page=${page}`, { headers: this.#headers() });
+      const items = await json<unknown[]>('dev.to', response, what);
+      total += items.length;
+      if (items.length < 1000) break;
+    }
+    return total;
+  }
+
+  async profileStats(): Promise<ProfileStats> {
+    return statsOf({
+      followers: await this.#count('/followers/users', 'count the followers'),
+      posts: await this.#count('/articles/me/published', 'count the articles'),
+    });
   }
 
   /** Views are only visible to the author, so they come from the author's list, not the public article. */

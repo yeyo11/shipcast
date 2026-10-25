@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { doublePrecision, index, integer, jsonb, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
 
 /*
  * The registry's tables. The first migration mirrors node:sqlite's column for column, so
@@ -97,8 +97,33 @@ export const accounts = pgTable(
     problem: text('problem'),
     checkedAt: text('checked_at'),
     createdAt: text('created_at').notNull().default(nowIso),
+    // The profile picture the last working check found, on the network's own CDN; never an address
+    // that carries a credential
+    avatarUrl: text('avatar_url'),
   },
   (t) => [unique('accounts_network_brand_label_unique').on(t.network, t.brand, t.label)],
+);
+
+// An account's own numbers, one row per account per UTC day: no network gives their history, so it
+// is recorded from the day the account is connected. A second reading on the same day replaces the
+// first. See docs/decisions/account-snapshots.md
+export const accountSnapshots = pgTable(
+  'account_snapshots',
+  {
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    // YYYY-MM-DD in UTC, the key that keeps one row a day
+    day: text('day').notNull(),
+    takenAt: text('taken_at').notNull(),
+    // Null where the network does not count it, which is not the same as zero
+    followers: integer('followers'),
+    following: integer('following'),
+    posts: integer('posts'),
+    // What only that network counts, by name
+    extra: jsonb('extra').$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => [primaryKey({ name: 'account_snapshots_account_day', columns: [t.accountId, t.day] })],
 );
 
 // What the owner chose (automation, and next the onboarding, AI and prompts), as JSON the registry

@@ -1,7 +1,7 @@
 import type { Check } from '@shipcast/connectors';
 import type { Account, Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
-import { buildConnector, credentialsFromEnv, MissingField, network, NETWORKS, type Credentials } from './catalog.ts';
+import { buildConnector, credentialsFromEnv, MissingField, network, NETWORKS, type Built, type Credentials } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey, envBrand } from './services.ts';
 
@@ -35,12 +35,18 @@ export function splitFields(networkId: string, values: Record<string, string>): 
   return { settings, secrets };
 }
 
-async function check(networkId: string, credentials: Credentials, brand: Brand, http: typeof fetch | undefined): Promise<Check> {
+/** A check, and the connector it was made with when one could be built: a sync reads its numbers next */
+async function checked(networkId: string, credentials: Credentials, brand: Brand, http: typeof fetch | undefined): Promise<{ result: Check; built?: Built }> {
   try {
-    return await buildConnector(networkId, credentials, brand, http).check();
+    const built = buildConnector(networkId, credentials, brand, http);
+    return { result: await built.check(), built };
   } catch (error) {
-    return { ok: false, problem: error instanceof Error ? error.message : String(error) };
+    return { result: { ok: false, problem: error instanceof Error ? error.message : String(error) } };
   }
+}
+
+async function check(networkId: string, credentials: Credentials, brand: Brand, http: typeof fetch | undefined): Promise<Check> {
+  return (await checked(networkId, credentials, brand, http)).result;
 }
 
 /**
@@ -70,11 +76,17 @@ export async function connectAccount(
 export async function checkAccount(deps: AccountDeps, id: number): Promise<Account> {
   const account = await deps.registry.account(id);
   if (!account) throw new MissingField(`no account ${id}`);
-  const secrets = await getJson(deps.secrets, accountSecretKey(id));
-  const result: Check = secrets
-    ? await check(account.network, { settings: account.settings, secrets }, brandOf(deps, account.brand), deps.fetch)
-    : { ok: false, problem: `its secrets are missing from ${deps.secrets.kind}: connect it again` };
-  return deps.registry.recordCheck(id, result);
+  return (await checkAccountWith(deps, account)).account;
+}
+
+/** Checks an account and records the answer, handing back the connector it built for what follows */
+export async function checkAccountWith(deps: AccountDeps, account: Account, at = new Date()): Promise<{ account: Account; built?: Built }> {
+  const secrets = await getJson(deps.secrets, accountSecretKey(account.id));
+  const found = secrets
+    ? await checked(account.network, { settings: account.settings, secrets }, brandOf(deps, account.brand), deps.fetch)
+    : { result: { ok: false as const, problem: `its secrets are missing from ${deps.secrets.kind}: connect it again` } };
+  const recorded = await deps.registry.recordCheck(account.id, found.result, at);
+  return found.built ? { account: recorded, built: found.built } : { account: recorded };
 }
 
 /** Disconnects an account: its row and its keychain entry both go */

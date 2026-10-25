@@ -10,9 +10,12 @@ import {
   Instagram,
   json,
   Mastodon,
+  okCheck,
   SearchConsole,
   Telegram,
+  statsOf,
   type Check,
+  type ProfileStats,
   type ServiceAccount,
 } from '@shipcast/connectors';
 import type { Brand, Channel } from '@shipcast/schema';
@@ -233,22 +236,43 @@ function need(values: Record<string, string>, key: string, network: string): str
   return value;
 }
 
+interface GitHubUser {
+  login: string;
+  name?: string | null;
+  avatar_url?: string;
+  followers?: number;
+  following?: number;
+  public_repos?: number;
+}
+
+async function gitHubUser(token: string, http: typeof fetch, what: string): Promise<GitHubUser> {
+  const response = await http('https://api.github.com/user', {
+    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'user-agent': 'shipcast' },
+  });
+  return json<GitHubUser>('GitHub', response, what);
+}
+
 /** A GitHub token's owner, checked without the engine's client */
 async function checkGitHub(token: string, http: typeof fetch): Promise<Check> {
   try {
-    const response = await http('https://api.github.com/user', {
-      headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'user-agent': 'shipcast' },
-    });
-    const user = await json<{ login: string }>('GitHub', response, 'check');
-    return { ok: true, account: `@${user.login}` };
+    const user = await gitHubUser(token, http, 'check');
+    return okCheck(`@${user.login}`, { avatarUrl: user.avatar_url, displayName: user.name });
   } catch (error) {
     return checkProblem(error);
   }
 }
 
+/** A GitHub user's posts are their public repos: what they ship */
+async function gitHubStats(token: string, http: typeof fetch): Promise<ProfileStats> {
+  const user = await gitHubUser(token, http, 'read the profile');
+  return statsOf({ followers: user.followers, following: user.following, posts: user.public_repos });
+}
+
 /** The connectors one network's account builds, whichever of them the network has. */
 export interface Built {
   check(): Promise<Check>;
+  /** The account's own followers, following and posts, on the networks whose API counts them */
+  profileStats?(): Promise<ProfileStats>;
   devto?: Devto;
   bluesky?: Bluesky;
   mastodon?: Mastodon;
@@ -273,19 +297,19 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
   switch (id) {
     case 'devto': {
       const devto = new Devto({ apiKey: v('apiKey'), fetch: http });
-      return { devto, check: () => devto.check() };
+      return { devto, check: () => devto.check(), profileStats: () => devto.profileStats() };
     }
     case 'bluesky': {
       const bluesky = new Bluesky({ identifier: v('handle'), appPassword: v('appPassword'), fetch: http });
-      return { bluesky, check: () => bluesky.check() };
+      return { bluesky, check: () => bluesky.check(), profileStats: () => bluesky.profileStats() };
     }
     case 'mastodon': {
       const mastodon = new Mastodon({ instance: v('instance'), accessToken: v('accessToken'), fetch: http });
-      return { mastodon, check: () => mastodon.check() };
+      return { mastodon, check: () => mastodon.check(), profileStats: () => mastodon.profileStats() };
     }
     case 'instagram': {
       const instagram = new Instagram({ userId: v('userId'), accessToken: v('accessToken'), fetch: http });
-      return { instagram, check: () => instagram.check() };
+      return { instagram, check: () => instagram.check(), profileStats: () => instagram.profileStats() };
     }
     case 'brevo': {
       const brevo = new Brevo({ apiKey: v('apiKey'), fetch: http });
@@ -293,11 +317,11 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     }
     case 'hashnode': {
       const hashnode = new Hashnode({ token: v('token'), publicationHost: all.publicationHost || undefined, fetch: http });
-      return { hashnode, check: () => hashnode.check() };
+      return { hashnode, check: () => hashnode.check(), profileStats: () => hashnode.profileStats() };
     }
     case 'telegram': {
       const telegram = new Telegram({ botToken: v('botToken'), chatId: v('chatId'), fetch: http });
-      return { telegram, check: () => telegram.check() };
+      return { telegram, check: () => telegram.check(), profileStats: () => telegram.profileStats() };
     }
     case 'discord': {
       const discord = new Discord({ webhookUrl: v('webhookUrl'), fetch: http });
@@ -305,7 +329,7 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     }
     case 'github': {
       const token = v('token');
-      return { github: { token }, check: () => checkGitHub(token, http) };
+      return { github: { token }, check: () => checkGitHub(token, http), profileStats: () => gitHubStats(token, http) };
     }
     case 'cloudflare': {
       const cloudflare = new CloudflareAnalytics({ apiToken: v('apiToken'), accountId: v('accountId'), siteTag: v('siteTag'), fetch: http });

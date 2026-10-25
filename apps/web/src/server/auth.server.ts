@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { imageUrl } from '@shipcast/connectors';
 import { consoleLinks } from './console-links';
 import { appContext } from './context.server';
 import { cookieOf, createSession, SESSION_COOKIE, setCookie, STATE_COOKIE } from './session.server';
@@ -50,12 +51,15 @@ export async function finishGitHubSignIn(request: Request): Promise<Response> {
   const userResponse = await fetch('https://api.github.com/user', {
     headers: { authorization: `Bearer ${token.access_token}`, accept: 'application/vnd.github+json', 'user-agent': 'shipcast' },
   });
-  const user = (await userResponse.json()) as { login?: string };
+  const user = (await userResponse.json()) as { login?: string; name?: string | null; avatar_url?: string };
   const login = user.login?.toLowerCase();
   if (!login) return page(502, 'GitHub did not say who you are.');
   if (!app.allowedLogins.includes(login)) return page(403, `@${user.login} is not allowed into this Shipcast.`);
 
-  const session = await createSession(secrets, login);
+  // The name and picture ride in the signed cookie, so the header shows them without asking GitHub again
+  const avatarUrl = imageUrl(user.avatar_url);
+  const name = user.name?.trim().slice(0, 100);
+  const session = await createSession(secrets, login, Date.now(), { ...(name && { name }), ...(avatarUrl && { avatarUrl }) });
   return redirect('/', [clearState, setCookie(SESSION_COOKIE, session.value, session.maxAge)]);
 }
 

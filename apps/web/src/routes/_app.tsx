@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { ToastProvider } from '../components/Toasts';
+import { Avatar } from '../components/ui';
 import { whoAmI } from '../server/session.functions';
 
 export const Route = createFileRoute('/_app')({
@@ -18,7 +19,7 @@ const SECTIONS = [
 ] as const;
 
 function Shell() {
-  const { login } = Route.useLoaderData();
+  const { login, name, avatarUrl } = Route.useLoaderData();
   return (
     <ToastProvider>
       <SmoothScroll />
@@ -35,7 +36,8 @@ function Shell() {
           ))}
         </nav>
         <div className="who">
-          <span>@{login}</span>
+          <Avatar src={avatarUrl} alt="" size={28} />
+          <span title={name ?? undefined}>@{login}</span>
           <form method="post" action="/auth/logout">
             <button className="btn btn-small" type="submit">
               Sign out
