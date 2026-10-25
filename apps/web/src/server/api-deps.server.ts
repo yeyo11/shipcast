@@ -2,7 +2,7 @@ import { FailureLimiter, type ApiDeps } from './api';
 import { appContext } from './context.server';
 import { jobsView } from './jobs.server';
 import { editingDeps } from './posts.server';
-import { approve, startArticle, startLaunch, startPublishing } from './work.server';
+import { approve, armSchedule, startArticle, startLaunch, startPublishing } from './work.server';
 
 /** One per process and shared by /api/v1 and /mcp, so wrong tokens count once whichever door they knock on */
 const limiter = new FailureLimiter();
@@ -23,5 +23,6 @@ export async function apiDeps(): Promise<ApiDeps> {
     startArticle,
     startPublishing,
     editing: editingDeps,
+    armSchedule,
   };
 }

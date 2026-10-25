@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
 import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
 import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
-import { MemoryStore, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
+import { armScheduled, MemoryStore, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
 
 /*
  * The queue on PGlite: the real pg-boss and the real SQL in this process. Installing pg-boss's schema
@@ -214,4 +214,57 @@ test('the handlers of a publish job retry a channel only once and leave a launch
   assert.equal(done?.state, 'completed');
   assert.deepEqual(done?.log, ['Nothing to publish: the launch is detected']);
   assert.equal(await db.registry.cursor(`publish-failed:${launchId}:devto`), undefined, 'the failure is forgotten');
+});
+
+test('a scheduled piece wakes its launch’s publishing when due, also after a restart, and not when cancelled', async () => {
+  const db = await database();
+  const launchId = await launch(db.registry);
+  await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  const due = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 60_000)))!;
+  const cancelled = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() - 60_000)))!;
+
+  // Armed by a process that stops before the time comes; arming twice leaves one job
+  const before = queueOn(db);
+  const first = await armScheduled(before, due);
+  assert.equal(await armScheduled(before, due), first);
+  assert.equal((await before.queued('scheduled', `post:${due.id}`)).length, 1);
+  const lost = await armScheduled(before, cancelled);
+  await db.registry.unschedulePost(cancelled.id);
+  await before.stop();
+
+  const merged = { ...deps(db.registry), github: { pullRequestState: async () => 'merged' } as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
+  const afterRestart = queueOn(db);
+  const published: number[] = [];
+  await afterRestart.work({
+    scheduled: workHandlers(afterRestart, merged).scheduled,
+    async publish(data) {
+      published.push(data.launchId);
+    },
+  });
+  const done = await afterRestart.wait(first!, 20_000, 100);
+  assert.equal(done?.state, 'completed');
+  assert.match(done?.log.join('\n') ?? '', /bluesky is due/);
+  await until(async () => published.length > 0);
+  assert.deepEqual(published, [launchId]);
+  const skipped = await afterRestart.wait(lost!, 20_000, 100);
+  assert.deepEqual(skipped?.log, ['Nothing to do: the post is no longer scheduled']);
+});
+
+test('a due piece of a launch whose drafts still wait for approval waits for the merge', async () => {
+  const db = await database();
+  const launchId = await launch(db.registry);
+  await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  const post = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
+  const open = { ...deps(db.registry), github: { pullRequestState: async () => 'open' } as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
+  const queue = queueOn(db);
+  let publishes = 0;
+  await queue.work({
+    scheduled: workHandlers(queue, open).scheduled,
+    async publish() {
+      publishes++;
+    },
+  });
+  const done = await queue.wait((await armScheduled(queue, post))!, 20_000, 100);
+  assert.deepEqual(done?.log, ['Waiting for approval: it goes out once the drafts are merged']);
+  assert.equal(publishes, 0);
 });

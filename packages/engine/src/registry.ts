@@ -76,7 +76,10 @@ export interface Launch {
  */
 export type PostKind = 'post' | 'story' | 'comment' | `issue:${Language}` | `article:${Language}`;
 
-/** `scheduled`, `edited` and `deleted` are for what comes next (scheduling, edits); the engine records `live` today */
+/**
+ * `scheduled` is a piece waiting for its time (no external id yet, see docs/scheduling.md); `live`
+ * once out, `edited` or `deleted` after it; `failed` is kept for what comes next.
+ */
 export type PostStatus = 'scheduled' | 'live' | 'edited' | 'deleted' | 'failed';
 
 /** One published piece. A launch has one of each kind per channel and account, never two. */
@@ -380,6 +383,25 @@ export class Registry {
    * same piece twice is refused, not repeated, and the row already there is returned.
    */
   async recordPost(post: NewPost): Promise<{ recorded: boolean; post: Post }> {
+    const status = post.status ?? 'live';
+    if (status !== 'scheduled') {
+      // A piece that was waiting for its time becomes the published one: the same row, whatever
+      // account it was scheduled with, so the slot it went out in stays on it and no second row appears
+      const [promoted] = await this.#db
+        .update(posts)
+        .set({
+          accountId: post.accountId ?? null,
+          externalId: post.externalId,
+          url: post.url,
+          status,
+          contentHash: post.contentHash ?? null,
+          publishedAt: nowIso,
+          updatedAt: nowIso,
+        })
+        .where(and(eq(posts.launchId, post.launchId), eq(posts.channel, post.channel), eq(posts.kind, post.kind ?? 'post'), eq(posts.status, 'scheduled')))
+        .returning();
+      if (promoted) return { recorded: true, post: toPost(promoted) };
+    }
     const values = {
       launchId: post.launchId,
       channel: post.channel,
@@ -387,7 +409,7 @@ export class Registry {
       kind: post.kind ?? 'post',
       externalId: post.externalId,
       url: post.url,
-      status: post.status ?? 'live',
+      status,
       contentHash: post.contentHash ?? null,
     };
     const [inserted] = await this.#db
@@ -441,6 +463,71 @@ export class Registry {
       .returning();
     if (!row) throw new Error(`no post ${id}`);
     return toPost(row);
+  }
+
+  /**
+   * Puts a channel's piece of a launch on a time: a `post` row with no external id, `scheduled`,
+   * which the publish step leaves alone until then and turns into the published row when it goes
+   * out. Scheduling it again moves it. Refused (undefined) once anything of that channel is out: a
+   * launch happens once, and a time for a piece already published means nothing.
+   */
+  async schedulePost(launchId: number, channel: Channel, at: Date): Promise<Post | undefined> {
+    return this.#transaction(async (tx) => {
+      // Serialises two schedules of the same piece, and a schedule racing its own publication
+      await tx.#db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`schedule:${launchId}:${channel}`}))`);
+      const pieces = await tx.posts(launchId, { channel });
+      if (pieces.some((p) => p.status !== 'scheduled')) return undefined;
+      const existing = pieces.find((p) => p.kind === 'post');
+      if (existing) {
+        const [moved] = await tx.#db
+          .update(posts)
+          .set({ scheduledAt: at.toISOString(), updatedAt: nowIso })
+          .where(and(eq(posts.id, existing.id), eq(posts.status, 'scheduled')))
+          .returning();
+        return moved ? toPost(moved) : undefined;
+      }
+      const [row] = await tx.#db
+        .insert(posts)
+        .values({ launchId, channel, kind: 'post', accountId: null, externalId: null, url: null, status: 'scheduled', scheduledAt: at.toISOString() })
+        .returning();
+      return row ? toPost(row) : undefined;
+    });
+  }
+
+  /** Moves a piece still waiting for its time; undefined when it is not (any more) scheduled */
+  async reschedulePost(id: number, at: Date): Promise<Post | undefined> {
+    const [row] = await this.#db
+      .update(posts)
+      .set({ scheduledAt: at.toISOString(), updatedAt: nowIso })
+      .where(and(eq(posts.id, id), eq(posts.status, 'scheduled')))
+      .returning();
+    return row ? toPost(row) : undefined;
+  }
+
+  /** Removes the waiting row of a piece not yet out; undefined when it was not scheduled */
+  async unschedulePost(id: number): Promise<Post | undefined> {
+    const [row] = await this.#db
+      .delete(posts)
+      .where(and(eq(posts.id, id), eq(posts.status, 'scheduled')))
+      .returning();
+    return row ? toPost(row) : undefined;
+  }
+
+  /** Drops what is left waiting of a launch's channel once that channel is done, or failed for good */
+  async clearSchedule(launchId: number, channel: Channel): Promise<void> {
+    await this.#db.delete(posts).where(and(eq(posts.launchId, launchId), eq(posts.channel, channel), eq(posts.status, 'scheduled')));
+  }
+
+  /** Every piece waiting for its time, the soonest first; those due by `dueBy` only, when given */
+  async scheduledPosts(filter: { dueBy?: Date } = {}): Promise<Post[]> {
+    const where: SQL[] = [eq(posts.status, 'scheduled')];
+    if (filter.dueBy) where.push(sql`${posts.scheduledAt} <= ${filter.dueBy.toISOString()}`);
+    const rows = await this.#db
+      .select()
+      .from(posts)
+      .where(and(...where))
+      .orderBy(asc(posts.scheduledAt), asc(posts.id));
+    return rows.map(toPost);
   }
 
   /** `postId` for a reading of one piece; without it the reading is the launch's, as a site-level source's is */

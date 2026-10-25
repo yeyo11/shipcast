@@ -15,7 +15,7 @@ export interface LaunchView {
   problem: string | undefined;
   createdAt: string;
   /** One per piece: a channel can have several (an article per language, an issue per language, a story) */
-  posts: Array<{ id: number; channel: string; kind: string; url: string | null; publishedAt: string }>;
+  posts: Array<{ id: number; channel: string; kind: string; url: string | null; publishedAt: string; status: string; scheduledAt: string | null }>;
   failures: Array<{ channel: string; message: string }>;
   headline: Array<{ label: string; value: number }>;
 }

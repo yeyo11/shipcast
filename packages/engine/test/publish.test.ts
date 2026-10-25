@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import { Brand } from '@shipcast/schema';
-import { deletePost, draftBody, publishLaunch, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+import { Brand, parseLaunchConfig } from '@shipcast/schema';
+import { cancelScheduledPost, deletePost, draftBody, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -456,4 +456,119 @@ test('a post deleted after the launch is never published again, even with the la
   assert.equal((await publishLaunch((await registry.get(launch.id))!, brand, deps)).state, 'published');
   assert.equal(calls.length, before, 'deleting never re-enables publishing the same piece');
   assert.equal((await registry.post(mastodon!.id))!.status, 'deleted');
+});
+
+const T = new Date('2026-11-03T09:00:00.000Z');
+const hours = (n: number) => new Date(T.getTime() + n * 3600_000);
+
+test('a scheduled channel waits for its time, never holds the others back, and goes out once in its own row', async () => {
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  const [waiting] = await scheduleLaunch(registry, launch.id, { bluesky: hours(2) }, { now: T });
+  assert.deepEqual([waiting?.status, waiting?.scheduledAt, waiting?.externalId], ['scheduled', hours(2).toISOString(), null]);
+
+  let clock = T;
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => clock };
+  const first = await publishLaunch(launch, brand, deps);
+  assert.equal(first.state, 'partial');
+  assert.deepEqual(first.state === 'partial' && first.scheduled, [{ channel: 'bluesky', at: hours(2).toISOString() }]);
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'mastodon', 'instagram'], 'the other channels go out at once');
+  assert.equal((await registry.get(launch.id))!.status, 'drafted', 'the launch waits for its scheduled piece');
+
+  clock = hours(1);
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.equal(calls.length, 3, 'not before its time');
+
+  clock = hours(2);
+  const due = await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.equal(due.state, 'published');
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'mastodon', 'instagram', 'bluesky']);
+  const [out] = await registry.posts(launch.id, { channel: 'bluesky' });
+  assert.deepEqual([out?.id, out?.status, out?.externalId, out?.scheduledAt], [waiting?.id, 'live', 'bluesky-1', hours(2).toISOString()], 'the same row, now live, keeping its slot');
+
+  await registry.setStatus(launch.id, 'drafted', launch.detail);
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.equal(calls.length, 4, 'a launch happens once');
+});
+
+test('a slot missed while the machine was off goes out on the next run', async () => {
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  await scheduleLaunch(registry, launch.id, { mastodon: hours(1), bluesky: hours(30) }, { now: T });
+  // Off from before the first slot until three days later
+  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => hours(72) });
+  assert.equal(result.state, 'published', 'overdue is sent, not dropped');
+  assert.equal(calls.filter((c) => c.channel === 'mastodon' || c.channel === 'bluesky').length, 2);
+});
+
+test('a scheduled piece is moved and cancelled; a cancelled channel is not published, and scheduling it again brings it back', async () => {
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  const [bluesky, mastodon] = await scheduleLaunch(registry, launch.id, { bluesky: hours(5), mastodon: hours(5) }, { now: T });
+  const deps = { github: new FakeGitHub('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => T };
+
+  // Moved to a time past: due at once
+  assert.equal((await reschedulePost(registry, bluesky!.id, hours(-1), { now: T })).scheduledAt, hours(-1).toISOString());
+  await cancelScheduledPost(registry, mastodon!.id);
+  await assert.rejects(cancelScheduledPost(registry, mastodon!.id), (e: unknown) => e instanceof ScheduleRefused && e.reason === 'not_found');
+
+  // Scheduled again (which forgets the cancel), then cancelled again
+  await scheduleLaunch(registry, launch.id, { mastodon: hours(6) }, { now: T });
+  assert.equal(await registry.cursor(`publish-cancelled:${launch.id}:mastodon`), undefined);
+  const again = (await registry.posts(launch.id, { channel: 'mastodon' }))[0]!;
+  await cancelScheduledPost(registry, again.id);
+  assert.equal((await publishLaunch(launch, brand, deps)).state, 'waiting', 'nothing goes out before the merge, scheduled or not');
+
+  const result = await publishLaunch(launch, brand, { ...deps, github: new FakeGitHub('merged') });
+  assert.equal(result.state, 'published');
+  assert.deepEqual(calls.map((c) => c.channel).sort(), ['bluesky', 'devto', 'instagram'], 'the cancelled channel is left out');
+});
+
+test('a schedule is refused for a channel out already, one Shipcast does not publish, one manual in launch.yml, or a launch done', async () => {
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const refused = (reason: string) => (e: unknown) => e instanceof ScheduleRefused && e.reason === reason;
+  await registry.recordPost({ launchId: launch.id, channel: 'devto', externalId: '1', url: 'https://dev.to/1' });
+  await assert.rejects(scheduleLaunch(registry, launch.id, { devto: hours(1) }, { now: T }), refused('refused'));
+  await assert.rejects(scheduleLaunch(registry, launch.id, { reddit: hours(1) }, { now: T }), refused('invalid'));
+  await assert.rejects(scheduleLaunch(registry, launch.id, { bluesky: hours(24 * 61) }, { now: T }), refused('invalid'));
+  const parsed = parseLaunchConfig('enabled: true\nbrand: personal\npublishing:\n  mastodon: manual\n');
+  assert.ok(parsed.ok);
+  await assert.rejects(scheduleLaunch(registry, launch.id, { mastodon: hours(1) }, { now: T, config: parsed.value }), refused('refused'));
+  await assert.rejects(scheduleLaunch(registry, 999, { bluesky: hours(1) }, { now: T }), refused('not_found'));
+
+  // Scheduling twice moves the one row; the uniqueness of the piece holds
+  await scheduleLaunch(registry, launch.id, { bluesky: hours(1) }, { now: T });
+  await scheduleLaunch(registry, launch.id, { bluesky: hours(3) }, { now: T });
+  const rows = await registry.posts(launch.id, { channel: 'bluesky' });
+  assert.deepEqual(rows.map((p) => [p.status, p.scheduledAt]), [['scheduled', hours(3).toISOString()]]);
+
+  await registry.setStatus(launch.id, 'published', launch.detail);
+  await assert.rejects(scheduleLaunch(registry, launch.id, { mastodon: hours(1) }, { now: T }), refused('refused'));
+});
+
+test('the newsletter’s scheduled row goes once its issues are out', async () => {
+  const withNewsletter = Brand.parse({
+    id: 'personal',
+    displayName: 'Me',
+    site: 'https://josegarrido.dev',
+    github: 'yeyo11',
+    newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3 } },
+  });
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, newsletter: { en: { subject: 's', previewText: 'p', markdown: 'b' } } }),
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  newsletter: approval\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  await scheduleLaunch(registry, launch.id, { newsletter: hours(1) }, { now: T });
+  const publishers: Publishers = { newsletter: { subscribers: async () => 5, send: async () => ({ externalId: '77', url: 'https://app.brevo.com/r/77' }) } };
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  assert.equal((await publishLaunch(launch, withNewsletter, { ...deps, now: () => T })).state, 'partial');
+  assert.equal((await publishLaunch(launch, withNewsletter, { ...deps, now: () => hours(2) })).state, 'published');
+  assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.status]), [['issue:en', 'live']]);
 });

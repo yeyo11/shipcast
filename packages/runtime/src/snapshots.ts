@@ -1,4 +1,4 @@
-import type { Account } from '@shipcast/engine';
+import { audienceKey, type Account } from '@shipcast/engine';
 import { MissingField, network } from './catalog.ts';
 import { checkAccountWith, type AccountDeps } from './accounts.ts';
 
@@ -41,9 +41,35 @@ export async function syncAccount(deps: AccountDeps, account: Account, now = new
       snapshot.following !== null ? `${snapshot.following} following` : null,
       snapshot.posts !== null ? `${snapshot.posts} posts` : null,
     ].filter(Boolean);
-    return { account: checked.account, outcome: 'recorded', line: `${name}: ${parts.join(', ') || 'no counts given'}` };
+    const audience = checked.built?.instagram ? await readAudience(deps, account, checked.built.instagram, snapshot.followers, now) : undefined;
+    return { account: checked.account, outcome: 'recorded', line: `${name}: ${[parts.join(', ') || 'no counts given', audience].filter(Boolean).join('; ')}` };
   } catch (error) {
     return { account: checked.account, outcome: 'failed', line: `${name}: could not read its numbers: ${message(error)}` };
+  }
+}
+
+/** Meta gives an account's online followers only from 100 followers up */
+const AUDIENCE_MIN_FOLLOWERS = 100;
+
+/**
+ * The hours an Instagram account's followers are online, kept for the scheduling recommendation.
+ * Never fails the sync: the numbers are what it is for, and the hours are a bonus Meta may not give.
+ */
+async function readAudience(
+  deps: AccountDeps,
+  account: Account,
+  instagram: { audienceHours(): Promise<{ timeZone: string; hours: number[] } | undefined> },
+  followers: number | null,
+  now: Date,
+): Promise<string | undefined> {
+  if (followers !== null && followers < AUDIENCE_MIN_FOLLOWERS) return undefined;
+  try {
+    const audience = await instagram.audienceHours();
+    if (!audience) return 'no online-follower hours given';
+    await deps.registry.setCursor(audienceKey(account.id), JSON.stringify({ ...audience, takenAt: now.toISOString() }));
+    return 'online-follower hours read';
+  } catch (error) {
+    return `online-follower hours not read: ${message(error)}`;
   }
 }
 

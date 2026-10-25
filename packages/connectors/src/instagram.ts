@@ -131,6 +131,34 @@ export class Instagram {
     return out;
   }
 
+  /**
+   * How many followers are online at each hour of the day, summed over the days Meta returns (it
+   * keeps the last 30): `online_followers`, under `instagram_business_manage_insights`, which the
+   * connector already asks for. Undefined when Meta gives nothing, as it does below 100 followers.
+   * Meta reports the hours in Pacific time (the Graph API's insights day), so they are returned with
+   * that zone and converted where they are used.
+   */
+  async audienceHours(): Promise<{ timeZone: string; hours: number[] } | undefined> {
+    const { data } = await this.#get<{ data?: Array<{ name: string; values?: Array<{ value?: Record<string, number> | number }> }> }>(
+      `/${this.#user}/insights`,
+      { metric: 'online_followers', period: 'lifetime' },
+      'read the online followers',
+    );
+    const values = data?.find((m) => m.name === 'online_followers')?.values ?? [];
+    const hours = Array.from({ length: 24 }, () => 0);
+    let seen = false;
+    for (const { value } of values) {
+      if (!value || typeof value !== 'object') continue;
+      for (const [hour, count] of Object.entries(value)) {
+        const h = Number(hour);
+        if (!Number.isInteger(h) || h < 0 || h > 23 || typeof count !== 'number') continue;
+        hours[h] = (hours[h] ?? 0) + count;
+        seen = true;
+      }
+    }
+    return seen && hours.some((h) => h > 0) ? { timeZone: 'America/Los_Angeles', hours } : undefined;
+  }
+
   /** The token's account, which must be the configured one */
   async check(): Promise<Check> {
     try {

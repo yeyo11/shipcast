@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:23:35.100765476Z
-updated_at: 2026-10-25T16:25:24.325879515Z
+created_at: 2026-10-25T19:57:14.285453045Z
+updated_at: 2026-10-25T20:05:23.625220408Z
 tags:
     - publishing
     - connectors
@@ -13,6 +13,7 @@ tags:
     - post-model
     - job-queue
     - edit-delete
+    - scheduling
 ---
 # Publishing, media and metrics
 
@@ -93,7 +94,9 @@ Binary files go into the pull request as base64 blobs through the Git data API.
    with (none for credentials from `.env`), and the registry refuses a second piece of the same kind
    ([decisions/post-model.md](decisions/post-model.md)). A channel is done once it has its `post`,
    whichever account published it and whatever its status since (edited or deleted); the newsletter
-   once every language with a list has its issue:
+   once every language with a list has its issue. A channel whose piece is **scheduled** for a time
+   still to come waits for it without holding the others back, and goes out on the first run at or
+   after its time; a cancelled one is skipped ([scheduling.md](scheduling.md)):
    - **dev.to** (`devto.ts`): the English article with `canonical_url` to the blog, `og.png` as the
      cover.
    - **Bluesky** (`bluesky.ts`): app password session, link facets counted in UTF-8 bytes, an external
@@ -126,14 +129,23 @@ Binary files go into the pull request as base64 blobs through the Git data API.
    round; a permanent one is recorded in the cursor `publish-failed:<launch>:<channel>` and not
    retried until `shipcast publish --retry <channel>` (every launch) or **Try again** in the app (that
    launch only). A connector can mark a failure as not retryable whatever its status, when a retry
-   would repeat what already happened. The launch is `published` when nothing is pending, otherwise it
-   stays `drafted` (reported as `partial`) and the next round picks it up.
+   would repeat what already happened. The launch is `published` when nothing is pending and nothing
+   waits for its time, otherwise it stays `drafted` (reported as `partial`, with the channels still
+   `scheduled`) and the next round picks it up.
 
 Started from the app (approving, **Try again**, a direct publish) or by a merge's webhook, publishing
 is a `publish` job of the queue ([decisions/job-queue.md](decisions/job-queue.md)): one try per
 attempt, and while the site has not deployed (or some channels will retry) the job is tried again 30
 seconds later, up to 40 times, so the 20-minute wait survives a restart. A launch has one publish job
 waiting at most, and the round leaves a launch with one alone.
+
+### Scheduled pieces
+
+A channel's piece can wait for a time (`POST /api/v1/launches/{id}/schedule`): a `scheduled` row of
+its own, which becomes the published row when it goes out. A `scheduled` job per piece queues the
+launch's publishing at that time, and the round publishes whatever is overdue, so a slot missed while
+the machine was off goes out when it is back. The model, the due job and the recommended times are in
+[scheduling.md](scheduling.md).
 
 ## After publishing: editing and deleting
 
@@ -164,13 +176,14 @@ note, fields }`.
   with the row's account (`postEditors` in `packages/runtime/src/edits.ts`; `.env` for a row with
   none), send it, and update the row: `edited` with the `content_hash` of what was sent, or
   `deleted`, and `updated_at`. Only a channel's `post` and the blog's articles are edited or deleted;
-  a story, a comment or a newsletter issue is refused. A network that answers 404 to a delete counts
-  as deleted.
+  a story, a comment or a newsletter issue is refused, and so is a piece still `scheduled`, which is
+  on no network yet (its schedule is moved or cancelled instead). A network that answers 404 to a
+  delete counts as deleted.
 - **A whole launch:** `editPosts(launchId, changes, channels?)` sends the shared fields (text, link,
   image) to every live piece of the channels named, each network taking what it has (the text is the
   post on Mastodon and Telegram with the link after it, the message on Discord, the body on dev.to,
   Hashnode and the blog); `deleteLaunchPosts(launchId, channels?)` deletes them. Both answer one
-  outcome per piece and never let one failure stop the rest.
+  outcome per piece, leave scheduled pieces out, and never let one failure stop the rest.
 - **The blog:** an edit rewrites `src/content/posts/<lang>/<slug>.md` on the launches repo's `main`
   (the front matter kept as written, `updatedDate` set), a delete removes it, and the launch's media
   folder only once no other language of the launch is left; each is one commit, which deploys the site.
@@ -236,7 +249,10 @@ found) and keeps the numbers it last had.
 | `search` | clicks and impressions of both articles; Google takes two or three days to report a new page | Search Console, with a service account's JWT signed by `node:crypto` (`search-console.ts`) |
 | `github` | stars, forks, watchers; views and unique visitors of the repo's last 14 days (not only since the launch); not read for articles | GitHub REST (`repoStats`) |
 
-Telegram and Discord give no numbers back: bots and webhooks cannot read views or reactions.
+Telegram and Discord give no numbers back: bots and webhooks cannot read views or reactions. The
+per-post numbers, scored by the stats ranking's popularity per network ([stats.md](stats.md)), are
+also what the recommended publishing times learn from
+([scheduling.md](scheduling.md#recommended-times)).
 
 Two limits found while building it:
 
@@ -257,19 +273,19 @@ owner's own chat with the bot hears when drafts wait, when a launch is published
 
 The round (`runRound` in `packages/runtime/src/rounds.ts`, 2026-10-25) is shared: claim new releases
 (when polling; each claimed launch is queued as a `draft` job) and publish every drafted launch that
-is ready. Since phase 6 it is a job of the queue ([decisions/job-queue.md](decisions/job-queue.md)):
-one round at most queued and one running, whichever process sent it, each sending the next an
-interval later. Reading the metrics (every 6 hours, cron `0 */6 * * *`) and refreshing every
-connected Instagram account's token that is 30 days old (daily; they last 60, and Meta refuses to
-refresh one younger than a day, so a first sight only records the date) are jobs of their own. With
-automation off, none of them runs unless sent by hand. The web app works every queue, or takes
-GitHub webhooks instead of polling ([web-app.md](web-app.md#automation)); `watch` works the same
-queues from a terminal.
+is ready, scheduled pieces whose time has passed included. Since phase 6 it is a job of the queue
+([decisions/job-queue.md](decisions/job-queue.md)): one round at most queued and one running,
+whichever process sent it, each sending the next an interval later. Reading the metrics (every 6
+hours, cron `0 */6 * * *`) and refreshing every connected Instagram account's token that is 30 days
+old (daily; they last 60, and Meta refuses to refresh one younger than a day, so a first sight only
+records the date) are jobs of their own. With automation off, none of them runs unless sent by hand.
+The web app works every queue, or takes GitHub webhooks instead of polling
+([web-app.md](web-app.md#automation)); `watch` works the same queues from a terminal.
 
 | Command | Does |
 | --- | --- |
 | `watch [--interval <s>]` | A worker of the job queue beside (or instead of) the app, in the Automation settings' mode; `--interval` sets the seconds between rounds (never under 60) |
-| `publish [--retry <channel>]` | Publishes every drafted launch that is ready, once; `--retry` gives a channel that failed for good another chance |
+| `publish [--retry <channel>]` | Publishes every drafted launch that is ready, once, and lists the channels still waiting for their time; `--retry` gives a channel that failed for good another chance |
 | `metrics` | Reads every source now, as a job of the queue the app lists |
 
 The launches, their posts and numbers, approving and retrying are also in the [web app](web-app.md),
@@ -277,4 +293,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[api.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[api.md]]

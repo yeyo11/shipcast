@@ -43,8 +43,16 @@ export interface Publishers {
 }
 
 /** Channels the engine publishes to itself; the blog is published by the merge, Reddit by hand. */
-const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord'] as const;
+export const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord'] as const;
 type EngineChannel = (typeof PUBLISHED_BY_ENGINE)[number];
+
+/** A cancelled scheduled piece is not published at all: the publish step skips its channel, as it skips a permanent failure */
+export const cancelledKey = (launchId: number, channel: Channel) => `publish-cancelled:${launchId}:${channel}`;
+
+/** The time a piece waits for, while it is still to come; a scheduled piece whose time has passed is due */
+export function waitsUntil(post: Post, now: Date): string | undefined {
+  return post.status === 'scheduled' && post.scheduledAt !== null && post.scheduledAt > now.toISOString() ? post.scheduledAt : undefined;
+}
 
 export interface PublishDeps {
   github: GitHubSource;
@@ -57,12 +65,21 @@ export interface PublishDeps {
   search?: MetricSources['search'];
   /** The connected account each channel publishes with, recorded on its pieces; none for `.env` credentials */
   accounts?: Partial<Record<Channel, number>>;
+  /** The clock a scheduled piece is due by; the tests move it */
+  now?: () => Date;
 }
 
 export type PublishResult =
   | { state: 'waiting'; launch: Launch; reason: string }
   | { state: 'skipped'; launch: Launch }
-  | { state: 'published' | 'partial'; launch: Launch; posted: Array<{ channel: Channel; url: string }>; problems: string[] };
+  | {
+      state: 'published' | 'partial';
+      launch: Launch;
+      posted: Array<{ channel: Channel; url: string }>;
+      problems: string[];
+      /** Channels waiting for their time: the launch stays drafted until they are out */
+      scheduled: Array<{ channel: Channel; at: string }>;
+    };
 
 /** A draft file's text as edited in the pull request: everything after its mode line. */
 export function draftBody(markdown: string): string {
@@ -78,6 +95,19 @@ function splitFrontMatter(markdown: string): { data: Record<string, unknown>; bo
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(markdown);
   if (!match) return { data: {}, body: markdown };
   return { data: (parseYaml(match[1]!) as Record<string, unknown>) ?? {}, body: match[2]!.trim() };
+}
+
+/**
+ * The launch.yml a launch publishes by: the repo's at the release, or for an article the one its
+ * drafts carry (on the launches repo's main branch once merged). Undefined when it cannot be read.
+ */
+export async function launchConfigOf(github: Pick<GitHubSource, 'fileAt'>, launchesRepo: string, launch: Launch): Promise<LaunchConfig | undefined> {
+  // An article's channels were chosen in the app and travel with its drafts
+  const configText = isArticle(launch)
+    ? await github.fileAt(launchesRepo, `${launchDir(launch)}/launch.yml`, 'HEAD')
+    : await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);
+  const parsed = configText === undefined ? undefined : parseLaunchConfig(configText);
+  return parsed?.ok ? parsed.value : undefined;
 }
 
 const failureKey = (launch: Launch, channel: Channel) => `publish-failed:${launch.id}:${channel}`;
@@ -108,13 +138,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
   if (!packText) return { state: 'waiting', launch, reason: `${dir}/pack.json is not on the default branch yet` };
   const pack = ContentPack.parse(JSON.parse(packText));
-  // An article's channels were chosen in the app and travel with its drafts
-  const configText = isArticle(launch)
-    ? await github.fileAt(deps.launchesRepo, `${dir}/launch.yml`, 'HEAD')
-    : await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);
-  const parsed = configText === undefined ? undefined : parseLaunchConfig(configText);
-  if (!parsed?.ok) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
-  const config: LaunchConfig = parsed.value;
+  const config = await launchConfigOf(github, deps.launchesRepo, launch);
+  if (!config) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
 
   // English is the canonical version every channel links to; Spanish only where that is the only one
   const lead: 'en' | 'es' = pack.article?.en ? 'en' : 'es';
@@ -153,16 +178,20 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   };
 
   const accountOf = (channel: Channel) => deps.accounts?.[channel] ?? null;
+  const now = deps.now?.() ?? new Date();
   // The languages with a list and an issue in the pack: the newsletter is out once each has its issue
   const issueLanguages = (['en', 'es'] as const).filter((lang) => brand.newsletter?.lists[lang] && pack.newsletter?.[lang]);
   // Whatever account a piece went out with: a launch whose account changed since is not posted again
   const done = (pieces: Post[], channel: EngineChannel) =>
     channel === 'newsletter'
       ? issueLanguages.length > 0 && issueLanguages.every((lang) => pieces.some((p) => p.channel === channel && p.kind === `issue:${lang}`))
-      : pieces.some((p) => p.channel === channel && p.kind === 'post');
+      : pieces.some((p) => p.channel === channel && p.kind === 'post' && p.status !== 'scheduled');
+  // A channel whose piece waits for a time still to come is neither done nor pending: it never holds the others back
+  const later = (pieces: Post[], channel: EngineChannel) => pieces.map((p) => (p.channel === channel ? waitsUntil(p, now) : undefined)).find((at) => at !== undefined);
   const pieces = await registry.posts(launch.id);
   const posted: Array<{ channel: Channel; url: string }> = [];
   const problems: string[] = [];
+  const scheduled: Array<{ channel: Channel; at: string }> = [];
   /** Channels whose run finished this round, though a piece may be left out (a list nobody is on yet) */
   const finished = new Set<EngineChannel>();
 
@@ -325,7 +354,12 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   for (const channel of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[channel];
     if (mode === 'off' || mode === 'manual' || done(pieces, channel)) continue;
-    if (await registry.cursor(failureKey(launch, channel))) continue;
+    if ((await registry.cursor(failureKey(launch, channel))) || (await registry.cursor(cancelledKey(launch.id, channel)))) continue;
+    const at = later(pieces, channel);
+    if (at) {
+      scheduled.push({ channel, at });
+      continue;
+    }
     const run = publishers[channel];
     if (!run) {
       problems.push(`${channel}: no piece in the pack or no credentials configured`);
@@ -338,10 +372,16 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         posted.push({ channel, url: result.url });
       }
       finished.add(channel);
+      // What is left waiting of a finished channel (the newsletter's row, whose issues are rows of their own) goes
+      await registry.clearSchedule(launch.id, channel);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retryable = !(error instanceof Error && 'retryable' in error) || (error as { retryable: boolean }).retryable;
-      if (!retryable) await registry.setCursor(failureKey(launch, channel), message);
+      if (!retryable) {
+        await registry.setCursor(failureKey(launch, channel), message);
+        // A retry of the channel is sent at once: its time has come already
+        await registry.clearSchedule(launch.id, channel);
+      }
       problems.push(`${channel}: ${message}${retryable ? ' (will retry)' : ''}`);
     }
   }
@@ -350,9 +390,9 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const pending: EngineChannel[] = [];
   for (const c of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[c];
-    if (mode === 'off' || mode === 'manual' || !publishers[c] || finished.has(c) || done(piecesNow, c)) continue;
-    if (!(await registry.cursor(failureKey(launch, c)))) pending.push(c);
+    if (mode === 'off' || mode === 'manual' || !publishers[c] || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
+    if (!(await registry.cursor(failureKey(launch, c))) && !(await registry.cursor(cancelledKey(launch.id, c)))) pending.push(c);
   }
-  if (pending.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems };
-  return { state: 'published', launch: await registry.setStatus(launch.id, 'published', launch.detail), posted, problems };
+  if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems, scheduled };
+  return { state: 'published', launch: await registry.setStatus(launch.id, 'published', launch.detail), posted, problems, scheduled };
 }

@@ -1,16 +1,26 @@
 import { ConnectorError } from '@shipcast/connectors';
 import {
   CAPABILITIES,
+  cancelScheduledPost,
   deleteLaunchPosts,
   deletePost,
   editPost,
   editPosts,
+  launchConfigOf,
   PostRefused,
+  readTimezone,
+  recommendFor,
+  reschedulePost,
+  saveTimezone,
+  SCHEDULABLE_CHANNELS,
+  scheduleLaunch,
+  ScheduleRefused,
   type ApiScope,
   type ArticleInput,
   type EditDeps,
   type Launch,
   type LaunchStatus,
+  type Post,
   type Registry,
   type ReviewGitHub,
 } from '@shipcast/engine';
@@ -62,6 +72,8 @@ export interface ApiDeps {
   startPublishing(launch: Launch, retryChannel?: Channel): Promise<string>;
   /** What editing and deleting published pieces needs: the connectors by account, and GitHub for the blog */
   editing(): Promise<EditDeps>;
+  /** Queues (or moves) the wake-up of each scheduled piece at its time */
+  armSchedule(posts: Post[]): Promise<void>;
 }
 
 /**
@@ -229,6 +241,32 @@ async function onPosts<T>(work: () => Promise<T>): Promise<T> {
     throw error;
   }
 }
+
+/** What the engine refused of a schedule, as the client's problem */
+async function onSchedule<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof ScheduleRefused) {
+      if (error.reason === 'not_found') throw new ApiError(404, 'not_found', error.message);
+      if (error.reason === 'invalid') throw new InvalidInput(error.message);
+      throw new ApiError(409, 'refused', error.message);
+    }
+    throw error;
+  }
+}
+
+/** A moment with its offset; a time without one would be read in the server's zone, which is nobody's choice */
+function moment(value: unknown, name: string): Date {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    throw new InvalidInput(`${name} is an ISO 8601 date-time with its offset, such as 2026-10-27T17:00:00+01:00`);
+  }
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) throw new InvalidInput(`${name} is not a real date`);
+  return at;
+}
+
+const dateTime = { type: 'string', format: 'date-time', description: 'ISO 8601 with its offset; a time already past sends it on the next run' };
 
 const changesBody: JsonSchema = {
   type: 'object',
@@ -444,6 +482,107 @@ export const ROUTES: ApiRoute[] = [
     },
   },
   ...STATS_ROUTES,
+  {
+    method: 'POST',
+    path: '/launches/{id}/schedule',
+    scope: 'write',
+    operationId: 'scheduleLaunch',
+    summary: 'Set the time each channel’s piece of a launch goes out; it still waits for the drafts’ approval, and a channel scheduled again is moved',
+    body: {
+      type: 'object',
+      required: ['times'],
+      properties: { times: { type: 'object', minProperties: 1, description: 'Channel to time, such as {"bluesky": "2026-10-27T17:00:00+01:00"}', additionalProperties: dateTime } },
+    },
+    response: { status: 200, description: 'The scheduled pieces', schema: { type: 'object', required: ['posts'], properties: { posts: { type: 'array', items: ref('Post') } } } },
+    async handle(deps, { params, request }) {
+      const launch = await existingLaunch(deps, params.id);
+      const raw = object(object(await readJson(request), 'the body').times, 'times');
+      const times: Partial<Record<Channel, Date>> = {};
+      for (const [name, value] of Object.entries(raw)) {
+        if (!(SCHEDULABLE_CHANNELS as readonly string[]).includes(name)) throw new InvalidInput(`${name} has no time: the channels are ${SCHEDULABLE_CHANNELS.join(', ')}`);
+        times[name as Channel] = moment(value, `times.${name}`);
+      }
+      // Best effort: a launch.yml that cannot be read yet (an article's, before its merge) leaves the check to the publish step
+      const config = await launchConfigOf(deps.github, deps.launchesRepo, launch).catch(() => undefined);
+      const posts = await onSchedule(() => scheduleLaunch(deps.registry, launch.id, times, config ? { config } : {}));
+      await deps.armSchedule(posts);
+      return json(200, { posts });
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/posts/{postId}/schedule',
+    scope: 'write',
+    operationId: 'reschedulePost',
+    summary: 'Move a scheduled piece to another time; now, or a time past, sends it on the next run',
+    body: { type: 'object', required: ['at'], properties: { at: dateTime } },
+    response: { status: 200, description: 'The piece, at its new time', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
+    async handle(deps, { params, request }) {
+      const at = moment(object(await readJson(request), 'the body').at, 'at');
+      const post = await onSchedule(() => reschedulePost(deps.registry, postId(params.postId), at));
+      await deps.armSchedule([post]);
+      return json(200, { post });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/posts/{postId}/schedule',
+    scope: 'write',
+    operationId: 'cancelScheduledPost',
+    summary: 'Cancel a scheduled piece: its channel is not published for that launch until it is scheduled again',
+    response: { status: 200, description: 'The piece that was scheduled, now removed', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
+    async handle(deps, { params }) {
+      return json(200, { post: await onSchedule(() => cancelScheduledPost(deps.registry, postId(params.postId))) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/recommendations',
+    scope: 'read',
+    operationId: 'recommendTimes',
+    summary: 'The best times to publish on a channel in the next days, ranked, each with its reason',
+    query: [
+      { name: 'channel', description: 'A channel Shipcast publishes', schema: { type: 'string', enum: SCHEDULABLE_CHANNELS } },
+      { name: 'days', description: 'Days ahead, 1 to 30 (7 by default)', schema: { type: 'integer', minimum: 1, maximum: 30, default: 7 } },
+      { name: 'count', description: 'How many times, 1 to 30 (5 by default), one per day at most', schema: { type: 'integer', minimum: 1, maximum: 30, default: 5 } },
+    ],
+    response: { status: 200, description: 'The ranked times', schema: ref('Recommendation') },
+    async handle(deps, { url }) {
+      const channel = url.searchParams.get('channel');
+      if (channel === null || !(SCHEDULABLE_CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput(`channel is one of ${SCHEDULABLE_CHANNELS.join(', ')}`);
+      const bounded = (name: string, fallback: number) => {
+        const raw = url.searchParams.get(name);
+        const value = raw === null ? fallback : Number(raw);
+        if (!Number.isInteger(value) || value < 1 || value > 30) throw new InvalidInput(`${name} is an integer from 1 to 30`);
+        return value;
+      };
+      return json(200, await recommendFor(deps.registry, channel as Channel, { days: bounded('days', 7), count: bounded('count', 5) }));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/settings/timezone',
+    scope: 'read',
+    operationId: 'getTimezone',
+    summary: 'The owner’s time zone, which recommendations are told in (Europe/Madrid until set)',
+    response: { status: 200, description: 'The zone', schema: ref('Timezone') },
+    async handle(deps) {
+      return json(200, { timezone: await readTimezone(deps.registry) });
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/settings/timezone',
+    scope: 'write',
+    operationId: 'setTimezone',
+    summary: 'Set the owner’s time zone, an IANA name',
+    body: { type: 'object', required: ['timezone'], properties: { timezone: { type: 'string', description: 'An IANA zone, such as Europe/Madrid' } } },
+    response: { status: 200, description: 'The zone, saved', schema: ref('Timezone') },
+    async handle(deps, { request }) {
+      const body = object(await readJson(request), 'the body');
+      return json(200, { timezone: await onSchedule(() => saveTimezone(deps.registry, body.timezone)) });
+    },
+  },
 ];
 
 const compiled = ROUTES.map((route) => {
@@ -562,7 +701,18 @@ const launchProperties = {
   createdAt: { type: 'string', format: 'date-time' },
   posts: {
     type: 'array',
-    items: { type: 'object', properties: { id: { type: 'integer' }, channel: { type: 'string' }, kind: { type: 'string' }, url: { type: ['string', 'null'] }, publishedAt: { type: 'string' } } },
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer' },
+        channel: { type: 'string' },
+        kind: { type: 'string' },
+        url: { type: ['string', 'null'] },
+        publishedAt: { type: 'string' },
+        status: { type: 'string' },
+        scheduledAt: { type: ['string', 'null'] },
+      },
+    },
   },
   failures: { type: 'array', items: { type: 'object', properties: { channel: { type: 'string' }, message: { type: 'string' } } } },
   headline: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } } } },
@@ -688,6 +838,7 @@ export function openApiDocument(publicUrl: string) {
             url: { type: ['string', 'null'] },
             status: { type: 'string', enum: ['scheduled', 'live', 'edited', 'deleted', 'failed'] },
             contentHash: { type: ['string', 'null'], description: 'The hash of what the last edit sent' },
+            scheduledAt: { type: ['string', 'null'], description: 'The time it waits for, or went out at, when it was scheduled' },
             publishedAt: { type: 'string' },
             updatedAt: { type: 'string' },
           },
@@ -713,6 +864,31 @@ export function openApiDocument(publicUrl: string) {
             delete: { type: 'string', enum: ['yes', 'no', 'unpublish'], description: '`unpublish`: off the site, kept in the author’s drafts' },
             note: { type: 'string' },
             fields: { type: 'array', items: { type: 'string', enum: ['text', 'title', 'tags', 'link', 'image'] } },
+          },
+        },
+        Timezone: { type: 'object', required: ['timezone'], properties: { timezone: { type: 'string' } } },
+        Recommendation: {
+          type: 'object',
+          required: ['channel', 'timezone', 'slots', 'history', 'audience'],
+          properties: {
+            channel: { type: 'string' },
+            timezone: { type: 'string' },
+            slots: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['at', 'local', 'score', 'basis', 'reason'],
+                properties: {
+                  at: { type: 'string', format: 'date-time' },
+                  local: { type: 'string', description: 'The time in the owner’s zone, `Tue 2026-10-27 17:00`' },
+                  score: { type: 'number', description: 'Expected performance against the channel’s median post (1 is the median)' },
+                  basis: { type: 'string', enum: ['default', 'audience', 'history', 'blend'] },
+                  reason: { type: 'string' },
+                },
+              },
+            },
+            history: { type: 'object', properties: { posts: { type: 'integer' }, used: { type: 'integer' }, median: { type: ['number', 'null'] }, what: { type: ['string', 'null'] } } },
+            audience: { type: 'boolean', description: 'Whether Instagram’s online-follower hours were used' },
           },
         },
         Job: {
