@@ -94,7 +94,7 @@ test('Instagram: the code becomes a long-lived token in two steps', async () => 
 
   const token = await exchangeInstagramCode({ appId: 'app', appSecret: 'sec' }, 'https://app.example/auth/instagram/callback', 'abc#_', http);
   assert.deepEqual(token, { userId: '178', accessToken: 'long', expiresIn: 5_184_000 });
-  assert.equal(new URLSearchParams(String(calls[0]!.body)).get('code'), 'abc', 'the #_ Instagram appends is dropped');
+  assert.equal((calls[0]!.body as FormData).get('code'), 'abc', 'the #_ Instagram appends is dropped');
   assert.equal(new URL(calls[1]!.url).searchParams.get('grant_type'), 'ig_exchange_token');
 });
 

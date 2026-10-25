@@ -71,9 +71,7 @@ export function instagramAuthorizeUrl(appId: string, redirectUri: string, state:
     response_type: 'code',
     scope: INSTAGRAM_SCOPES.join(','),
     state,
-    // Without it, an account connected once is never asked again for a permission added later
     enable_fb_login: '0',
-    force_reauth: 'true',
   });
   return `https://www.instagram.com/oauth/authorize?${query}`;
 }
@@ -90,31 +88,26 @@ export async function exchangeInstagramCode(
 ): Promise<{ userId: string; accessToken: string; expiresIn: number }> {
   // Instagram appends `#_` to the code it redirects with
   const clean = code.replace(/#_$/, '');
-  type ShortToken = { access_token: string; user_id: number | string };
-  const answer = await json<ShortToken | { data: ShortToken[] }>(
+  // As Postiz does, whose flow works against the same API: the code goes as multipart form data
+  const form = new FormData();
+  form.append('client_id', app.appId);
+  form.append('client_secret', app.appSecret);
+  form.append('grant_type', 'authorization_code');
+  form.append('redirect_uri', redirectUri);
+  form.append('code', clean);
+  type ShortToken = { access_token?: string; user_id?: number | string; permissions?: string };
+  const answer = await json<ShortToken & { data?: ShortToken[] }>(
     'Instagram',
-    await http('https://api.instagram.com/oauth/access_token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: app.appId, client_secret: app.appSecret, grant_type: 'authorization_code', redirect_uri: redirectUri, code: clean }),
-    }),
+    await http('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form }),
     'exchange the code',
   );
-  // Business Login answers inside `data`; the older flow answered at the top level
-  const short = 'data' in answer ? answer.data[0] : answer;
+  const short = answer.access_token ? answer : answer.data?.[0];
   if (!short?.access_token) throw new ConnectorError('Instagram', 'the code exchange returned no access token');
-  const query = new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: app.appSecret, access_token: short.access_token });
-  const exchanged = await http(`https://graph.instagram.com/access_token?${query}`);
-  if (!exchanged.ok) {
-    // Meta refuses this step for some accounts with no clear cause: say whether the short-lived token works at all
-    const me = await http(`https://graph.instagram.com/me?${new URLSearchParams({ fields: 'user_id,username', access_token: short.access_token })}`);
-    const body = await exchanged.text();
-    throw new ConnectorError(
-      'Instagram',
-      `get a long-lived token: ${exchanged.status} ${body.slice(0, 300)}; the short-lived token ${me.ok ? 'works' : `fails too (${me.status} ${(await me.text()).slice(0, 200)})`}; granted: ${'permissions' in short ? String((short as { permissions?: string }).permissions) : 'unknown'}`,
-      exchanged.status,
-    );
-  }
-  const long = await json<{ access_token: string; expires_in: number }>('Instagram', exchanged, 'get a long-lived token');
+  const query = new URLSearchParams({ grant_type: 'ig_exchange_token', client_id: app.appId, client_secret: app.appSecret, access_token: short.access_token });
+  const long = await json<{ access_token: string; expires_in: number }>(
+    'Instagram',
+    await http(`https://graph.instagram.com/access_token?${query}`),
+    'get a long-lived token',
+  );
   return { userId: String(short.user_id), accessToken: long.access_token, expiresIn: long.expires_in };
 }
