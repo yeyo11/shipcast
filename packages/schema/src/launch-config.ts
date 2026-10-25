@@ -23,6 +23,28 @@ const Publishing = z.strictObject(publishingShape).superRefine((modes, ctx) => {
   }
 });
 
+export const MAX_TOUR_STEPS = 12;
+export const MAX_SCREENSHOTS = 6;
+
+/** A path on the site: it cannot leave it, so no scheme and no `//host` */
+const SitePath = z.string().regex(/^\/(?!\/)[^\s]*$/, 'a path on the site, starting with a single /');
+
+/** One thing to do while the tour is recorded; scrolls are relative, in pixels, or `bottom` */
+export const TourStep = z.union([
+  z.strictObject({ scroll: z.union([z.number().int().min(-20000).max(20000), z.literal('bottom')]) }),
+  z.strictObject({ click: z.string().min(1) }),
+  z.strictObject({ wait: z.number().int().min(100).max(5000) }),
+  z.strictObject({ goto: SitePath }),
+]);
+export type TourStep = z.infer<typeof TourStep>;
+
+export const ScreenshotPage = z.strictObject({
+  path: SitePath,
+  /** The file name stem; derived from the path when absent */
+  name: z.string().regex(/^[a-z0-9-]+$/, 'lowercase letters, digits and hyphens').optional(),
+});
+export type ScreenshotPage = z.infer<typeof ScreenshotPage>;
+
 /**
  * `.github/launch.yml` in a project: whether and how Shipcast launches it. Strict objects, so a
  * misspelt key is an error with its line rather than a setting silently ignored.
@@ -58,6 +80,12 @@ export const LaunchConfig = z.strictObject({
     .strictObject({
       /** Path in the repo or URL of the demo GIF; every launch needs one, as the plan decides */
       demo: z.string().min(1).optional(),
+      /** The deployed project: Shipcast screenshots it and, with no `demo`, records a tour of it as the demo */
+      site: z.url({ protocol: /^https$/, error: 'the deployed project, an https URL' }).optional(),
+      /** What to do on the site while recording; a short scroll down and back when absent */
+      tour: z.array(TourStep).max(MAX_TOUR_STEPS, `a tour has at most ${MAX_TOUR_STEPS} steps`).optional(),
+      /** The pages to capture, desktop and mobile each; the site's root when absent */
+      screenshots: z.array(ScreenshotPage).min(1).max(MAX_SCREENSHOTS, `at most ${MAX_SCREENSHOTS} screenshot pages`).optional(),
     })
     .prefault({}),
   reddit: z
@@ -77,4 +105,9 @@ export function parseLaunchConfig(text: string): ParseResult<LaunchConfig> {
 /** The channels a launch generates something for, in the order of CHANNELS. */
 export function activeChannels(config: LaunchConfig): Channel[] {
   return CHANNELS.filter((channel) => config.publishing[channel] !== 'off');
+}
+
+/** Whether the launch has a demo: a committed one, or one to record from the deployed project. */
+export function hasDemo(config: LaunchConfig): boolean {
+  return Boolean(config.assets.demo ?? config.assets.site);
 }

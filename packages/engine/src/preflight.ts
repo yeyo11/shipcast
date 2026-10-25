@@ -60,7 +60,7 @@ export async function preflight(repo: string, ref: string | undefined, deps: { g
       : { id: 'readme', ok: false, required: true, detail: `No README at ${at}: add one that says what the project does.` },
   );
 
-  checks.push(await demoCheck(repo, at, config.demo, github));
+  checks.push(await demoCheck(repo, at, config.demo, config.site, github));
 
   return { repo, ref, ok: checks.every((c) => c.ok || !c.required), checks };
 }
@@ -77,19 +77,30 @@ async function releaseCheck(repo: string, ref: string | undefined, github: Prefl
   return { check: { id: 'release', ok: true, required: true, detail: `Release ${found.tag} is published.` }, tag: found.tag };
 }
 
-async function launchYmlCheck(repo: string, at: string, github: PreflightSource): Promise<{ check: PreflightCheck; demo?: string }> {
+async function launchYmlCheck(repo: string, at: string, github: PreflightSource): Promise<{ check: PreflightCheck; demo?: string; site?: string }> {
   const fail = (detail: string) => ({ check: { id: 'launchYml' as const, ok: false, required: true, detail } });
   const text = await github.fileAt(repo, LAUNCH_CONFIG_PATH, at);
   if (text === undefined) return fail(`No ${LAUNCH_CONFIG_PATH} at ${at}: add one to say how this project launches.`);
   const parsed = parseLaunchConfig(text);
   if (!parsed.ok) return fail(`${LAUNCH_CONFIG_PATH} is invalid: ${formatIssues(LAUNCH_CONFIG_PATH, parsed.issues).replace(/\s*\n\s*/g, '; ')}`);
   // Read even when disabled, so a missing demo still shows up next to the blocking problem
-  const demo = parsed.value.assets.demo;
-  if (!parsed.value.enabled) return { ...fail(`${LAUNCH_CONFIG_PATH} has enabled: false: set it to true to launch.`), demo };
-  return { check: { id: 'launchYml', ok: true, required: true, detail: `${LAUNCH_CONFIG_PATH} is valid and enabled.` }, demo };
+  const { demo, site } = parsed.value.assets;
+  if (!parsed.value.enabled) return { ...fail(`${LAUNCH_CONFIG_PATH} has enabled: false: set it to true to launch.`), demo, site };
+  return { check: { id: 'launchYml', ok: true, required: true, detail: `${LAUNCH_CONFIG_PATH} is valid and enabled.` }, demo, site };
 }
 
-async function demoCheck(repo: string, at: string, demo: string | undefined, github: PreflightSource): Promise<PreflightCheck> {
+async function demoCheck(repo: string, at: string, demo: string | undefined, site: string | undefined, github: PreflightSource): Promise<PreflightCheck> {
+  if (demo === undefined && site !== undefined) {
+    const status = await github.head(site).catch(() => undefined);
+    return status === 200
+      ? { id: 'demo', ok: true, required: true, detail: `No assets.demo: the demo will be recorded from ${site}, which answers.` }
+      : {
+          id: 'demo',
+          ok: false,
+          required: true,
+          detail: `The site ${site} ${status === undefined ? 'cannot be reached' : `answered ${status}`}: the demo is recorded from it, so fix assets.site in launch.yml.`,
+        };
+  }
   if (demo === undefined) {
     return { id: 'demo', ok: false, required: false, detail: 'launch.yml names no assets.demo: every launch should have a demo GIF.' };
   }

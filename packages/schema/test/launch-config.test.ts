@@ -72,3 +72,44 @@ test('subreddits are names without r/', () => {
   assert.ok(!result.ok);
   assert.equal(result.issues[0]?.path, 'reddit.subreddits.0');
 });
+
+test('assets.site alone is valid, and a tour and screenshot pages are read', () => {
+  const alone = parseLaunchConfig('enabled: true\nbrand: personal\nassets:\n  site: https://claudio.example\n');
+  assert.ok(alone.ok);
+  assert.equal(alone.value.assets.demo, undefined);
+  const full = parseLaunchConfig(`enabled: true
+brand: personal
+assets:
+  site: https://claudio.example
+  tour:
+    - wait: 1000
+    - scroll: 600
+    - scroll: bottom
+    - click: "#start"
+    - goto: /docs
+  screenshots:
+    - path: /
+    - path: /docs/start
+      name: start
+`);
+  assert.ok(full.ok, JSON.stringify(!full.ok && full.issues));
+  assert.equal(full.value.assets.tour?.length, 5);
+  assert.deepEqual(full.value.assets.screenshots?.[1], { path: '/docs/start', name: 'start' });
+});
+
+test('an invalid tour step, site or page is an error with its line', () => {
+  const bad = (assets: string) => parseLaunchConfig(`enabled: true\nbrand: personal\nassets:\n${assets}`);
+  assert.ok(!bad('  site: http://claudio.example\n').ok, 'https only');
+  assert.ok(!bad('  tour:\n    - jump: 3\n').ok, 'unknown step');
+  assert.ok(!bad('  tour:\n    - scroll: 10\n      wait: 100\n').ok, 'one action per step');
+  assert.ok(!bad('  tour:\n    - scroll: middle\n').ok);
+  assert.ok(!bad('  tour:\n    - goto: https://elsewhere.example\n').ok, 'a path on the same site');
+  assert.ok(!bad('  tour:\n    - goto: //elsewhere.example\n').ok);
+  assert.ok(!bad('  tour:\n    - wait: 999999\n').ok);
+  assert.ok(!bad(`  tour:\n${'    - wait: 100\n'.repeat(13)}`).ok, 'at most 12 steps');
+  assert.ok(!bad('  screenshots:\n    - path: docs\n').ok);
+  assert.ok(!bad('  screenshots:\n    - path: /\n      title: x\n').ok, 'strict');
+  const result = bad('  tour:\n    - click: ""\n');
+  assert.ok(!result.ok);
+  assert.match(formatIssues('launch.yml', result.issues), /launch\.yml:\d+/);
+});

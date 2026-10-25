@@ -1,4 +1,4 @@
-import { articleUrl as urlOf, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { articleUrl as urlOf, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import { carouselPieces } from './launch-assets.ts';
 import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
@@ -185,7 +185,7 @@ export function renderDrafts(
     const ig = pack.instagram;
     const slides = [
       `Cover: ${pack.article?.en?.title ?? pack.project.name}. ${ig.summary}`,
-      ...(config.assets.demo ? ['The demo, as a video'] : []),
+      ...(hasDemo(config) ? ['The demo, as a video'] : []),
       ...ig.slides.map((s) => `${s.title}: ${s.text}`),
       'Closing: the full write-up is in my bio',
     ];

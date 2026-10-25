@@ -1,0 +1,19 @@
+{
+  "name": "@shipcast/capture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A launch's media from the deployed project: screenshots and a recorded tour, with Playwright",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@shipcast/schema": "workspace:*",
+    "playwright-core": "^1.55.0"
+  }
+}

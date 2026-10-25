@@ -3,6 +3,7 @@ import type { AiProvider } from './claudio.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, launchDir, projectSlug, pullRequestBody, renderDrafts, type DraftFile } from './drafts.ts';
 import { generatePack } from './generate.ts';
+import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Registry } from './registry.ts';
@@ -20,6 +21,8 @@ export interface PipelineDeps {
   maxBudgetUsd?: number;
   /** For the site's covers; the global fetch by default */
   fetch?: typeof fetch;
+  /** Screenshots and the tour of a project's site; headless Chromium by default */
+  capture?: SiteCapture;
   /** A folder the AI provider can work in when there is no repo to clone (an article); its workspace root */
   aiWorkdir?: string;
 }
@@ -127,7 +130,7 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   } catch (error) {
     return fail([error instanceof Error ? error.message : String(error)]);
   }
-  const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout, projects: known.projects, projectsText: known.text, fetch: deps.fetch });
+  const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout, projects: known.projects, projectsText: known.text, fetch: deps.fetch, capture: deps.capture });
   if (!assets.ok) return fail([assets.problem]);
 
   const files = [

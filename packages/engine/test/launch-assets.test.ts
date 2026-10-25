@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import type { SiteCapture } from '@shipcast/capture';
 import { Brand, ContentPack, LaunchConfig, parseProjects } from '@shipcast/schema';
 import { buildAssets, carouselPieces, mediaPath, Registry } from '../src/index.ts';
 
@@ -157,5 +158,87 @@ test(
     const built = await buildAssets({ pack, launch, config, brand, projects: listed, checkout: { hostPath: repo, providerPath: '/w' } });
     assert.ok(built.ok);
     assert.ok(!built.files.some((f) => f.path === 'projects.yml' || f.path.startsWith('public/covers/')));
+  }),
+);
+
+/** A capture that never opens a browser: one page's worth of PNG bytes and a GIF */
+function fakeCapture(options: { failScreenshots?: boolean; failTour?: boolean } = {}) {
+  const calls: string[] = [];
+  const capture: SiteCapture = {
+    async screenshots(site, pages) {
+      calls.push(`screenshots ${site} ${pages?.length ?? 0}`);
+      if (options.failScreenshots) throw new Error('Chromium for Playwright is not installed: run `npx playwright install chromium`');
+      return [
+        { name: 'home', viewport: 'desktop', png: new Uint8Array([1]) },
+        { name: 'home', viewport: 'mobile', png: new Uint8Array([2]) },
+      ];
+    },
+    async tour(site) {
+      calls.push(`tour ${site}`);
+      if (options.failTour) throw new Error('ffmpeg is not on PATH');
+      return { gif: new Uint8Array([71, 73, 70]), seconds: 8 };
+    },
+  };
+  return { capture, calls };
+}
+
+test(
+  'assets.site adds the screenshots and, with no demo, the recorded tour as demo.gif',
+  withRepo(async (repo) => {
+    const { capture, calls } = fakeCapture();
+    const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
+    const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture, checkout: { hostPath: repo, providerPath: '/w' } });
+    assert.ok(built.ok);
+    const dir = 'public/launches/claudio/v0.8.2';
+    const paths = built.files.map((f) => f.path);
+    assert.ok(paths.includes(`${dir}/screenshots/home-desktop.png`));
+    assert.ok(paths.includes(`${dir}/screenshots/home-mobile.png`));
+    assert.ok(paths.includes(`${dir}/demo.gif`));
+    assert.deepEqual(calls, ['screenshots https://claudio.example 0', 'tour https://claudio.example']);
+  }),
+);
+
+test(
+  'a committed demo is not replaced by a recording',
+  withRepo(async (repo) => {
+    const { capture, calls } = fakeCapture();
+    const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example', demo: 'docs/tour.gif' } });
+    const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture, checkout: { hostPath: repo, providerPath: '/w' } });
+    assert.ok(built.ok);
+    assert.deepEqual(calls, ['screenshots https://claudio.example 0']);
+    assert.ok(!built.files.some((f) => f.path.endsWith('demo.gif')));
+  }),
+);
+
+test(
+  'a capture that fails stops the launch with a sentence',
+  withRepo(async (repo) => {
+    const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
+    for (const failing of [{ failScreenshots: true }, { failTour: true }]) {
+      const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture: fakeCapture(failing).capture, checkout: { hostPath: repo, providerPath: '/w' } });
+      assert.equal(built.ok, false);
+      assert.match(!built.ok ? built.problem : '', /^could not capture https:\/\/claudio\.example: /);
+    }
+  }),
+);
+
+test('a site alone puts the demo video in the carousel', () => {
+  const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
+  assert.equal(carouselPieces(withInstagram, config)[1]?.kind, 'video');
+});
+
+test(
+  'the recorded GIF feeds the Instagram demo video like a committed one',
+  { skip: !hasFfmpeg && 'ffmpeg not installed' },
+  withRepo(async (repo) => {
+    const gif = join(repo, 'tour.gif');
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10', '-t', '1', gif]);
+    const bytes = new Uint8Array(readFileSync(gif));
+    const capture: SiteCapture = { screenshots: async () => [], tour: async () => ({ gif: bytes, seconds: 1 }) };
+    const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
+    const built = await buildAssets({ projects: listed, pack: withInstagram, launch, config, brand, capture, fetch: noCover, checkout: { hostPath: repo, providerPath: '/w' } });
+    assert.ok(built.ok);
+    const video = built.files.find((f) => f.path.endsWith('instagram-02.mp4'));
+    assert.ok(video && 'bytes' in video && video.bytes.length > 1000);
   }),
 );

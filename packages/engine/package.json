@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@shipcast/assets": "workspace:*",
+    "@shipcast/capture": "workspace:*",
     "@shipcast/connectors": "workspace:*",
     "@shipcast/schema": "workspace:*",
     "marked": "^16.4.2",

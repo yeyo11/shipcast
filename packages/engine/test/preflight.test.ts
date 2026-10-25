@@ -200,3 +200,15 @@ test('head sends a HEAD without the token and returns the status', async () => {
   assert.equal(seen[0]?.method, 'HEAD');
   assert.equal(seen[0]?.headers.authorization, undefined);
 });
+
+test('a site in place of a demo passes when it answers, and says the demo will be recorded', async () => {
+  const files = { '.github/launch.yml': `${YML}assets:\n  site: https://example.com\n` };
+  const up = await preflight('o/r', 'v1.0.0', { github: fake({ files, heads: { 'https://example.com': 200 } }) });
+  const demo = up.checks.find((c) => c.id === 'demo');
+  assert.equal(demo?.ok, true);
+  assert.match(demo?.detail ?? '', /recorded from https:\/\/example\.com/);
+  assert.equal(up.ok, true);
+  const down = await preflight('o/r', 'v1.0.0', { github: fake({ files }) });
+  assert.equal(down.ok, false);
+  assert.match(down.checks.find((c) => c.id === 'demo')?.detail ?? '', /answered 404/);
+});

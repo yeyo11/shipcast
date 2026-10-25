@@ -19,7 +19,8 @@ import {
   type OgTheme,
   type SlideImage,
 } from '@shipcast/assets';
-import { lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
+import { playwrightCapture, type SiteCapture } from '@shipcast/capture';
+import { hasDemo, lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
 import { isArticle, launchDir, projectSlug, type DraftFile } from './drafts.ts';
 import type { Launch } from './registry.ts';
 import type { Checkout } from './workspace.ts';
@@ -43,7 +44,7 @@ export interface CarouselPiece {
 export function carouselPieces(pack: ContentPack, config: LaunchConfig): CarouselPiece[] {
   if (!pack.instagram) return [];
   const pieces: CarouselPiece[] = [{ file: 'instagram-01.jpg', kind: 'image' }];
-  if (config.assets.demo) pieces.push({ file: 'instagram-02.mp4', kind: 'video' });
+  if (hasDemo(config)) pieces.push({ file: 'instagram-02.mp4', kind: 'video' });
   for (let i = 0; i < pack.instagram.slides.length + 1; i++) {
     pieces.push({ file: `instagram-${String(pieces.length + 1).padStart(2, '0')}.jpg`, kind: 'image' });
   }
@@ -77,6 +78,8 @@ export interface AssetOptions {
   projects?: Projects;
   /** `projects.yml` as it is now, so a new cover is written into it without losing the rest */
   projectsText?: string;
+  /** Screenshots and the tour of `assets.site`; headless Chromium by default, a fake in tests */
+  capture?: SiteCapture;
 }
 
 /** The site path a project's generated cover is served from */
@@ -97,6 +100,24 @@ export async function buildAssets(options: AssetOptions): Promise<BuiltAssets> {
   // An article belongs to no project: its colour and motif come from its own slug
   const look = lookOf(projects, isArticle(launch) ? launch.ref : projectSlug(launch.repo));
   const http = options.fetch ?? globalThis.fetch;
+
+  // The deployed project's screenshots, and its tour as the demo when the repo has none
+  let recorded: Uint8Array | undefined;
+  const site = options.config.assets.site;
+  if (site) {
+    const capture = options.capture ?? playwrightCapture();
+    try {
+      for (const shot of await capture.screenshots(site, options.config.assets.screenshots)) {
+        files.push({ path: `${dir}/screenshots/${shot.name}-${shot.viewport}.png`, bytes: shot.png });
+      }
+      if (!options.config.assets.demo) {
+        recorded = (await capture.tour(site, options.config.assets.tour)).gif;
+        files.push({ path: `${dir}/demo.gif`, bytes: recorded });
+      }
+    } catch (error) {
+      return { ok: false, problem: `could not capture ${site}: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
 
   // The cover the project's articles and the carousel wear: listed, else already on the site, else drawn now
   let cover: SlideImage | undefined;
@@ -126,7 +147,7 @@ export async function buildAssets(options: AssetOptions): Promise<BuiltAssets> {
   files.push({ path: `${dir}/og.png`, bytes: og.png }, { path: `${dir}/og.jpg`, bytes: og.jpeg });
 
   if (pack.instagram) {
-    const built = await buildCarousel(options, dir, look, cover);
+    const built = await buildCarousel(options, dir, look, cover, recorded);
     if (!built.ok) return built;
     files.push(...built.files);
   }
@@ -146,7 +167,7 @@ async function image(http: typeof fetch, url: string): Promise<SlideImage | unde
  * project's cover (listed, served by the site or just generated), else the house illustration;
  * the closing slide carries the brand's avatar when brand.yml names one.
  */
-async function buildCarousel(options: AssetOptions, dir: string, look: ProjectLook, listed: SlideImage | undefined): Promise<{ ok: true; files: DraftFile[] } | { ok: false; problem: string }> {
+async function buildCarousel(options: AssetOptions, dir: string, look: ProjectLook, listed: SlideImage | undefined, recorded: Uint8Array | undefined): Promise<{ ok: true; files: DraftFile[] } | { ok: false; problem: string }> {
   const { pack, launch, config, brand, checkout } = options;
   const instagram = pack.instagram!;
   const http = options.fetch ?? globalThis.fetch;
@@ -177,22 +198,27 @@ async function buildCarousel(options: AssetOptions, dir: string, look: ProjectLo
 
   const video = pieces.find((p) => p.kind === 'video');
   const source = config.assets.demo;
-  if (video && source) {
+  if (video && (source || recorded)) {
     const work = await mkdtemp(join(tmpdir(), 'shipcast-demo-'));
     try {
       let input: string;
-      if (/^https?:\/\//.test(source)) {
+      if (!source && recorded) {
+        input = join(work, 'demo-source');
+        await writeFile(input, recorded);
+      } else if (source && /^https?:\/\//.test(source)) {
         const response = await http(source);
         if (!response.ok) return { ok: false, problem: `the demo ${source} answered ${response.status}` };
         input = join(work, 'demo-source');
         await writeFile(input, new Uint8Array(await response.arrayBuffer()));
-      } else {
+      } else if (source) {
         // A path in the repo: refused if it climbs out of the clone
         const relative = normalize(source).replace(/^(\.\.(\/|\\|$))+/, '');
         input = join(checkout.hostPath, relative);
         if (relative !== normalize(source) || !existsSync(input)) {
           return { ok: false, problem: `launch.yml names the demo ${source}, which is not in the repository at ${launch.ref}` };
         }
+      } else {
+        throw new Error('unreachable: a demo video needs a source or a recording');
       }
       const backdrop = join(work, 'backdrop.png');
       await writeFile(backdrop, (await renderSlide(demoSlide({ look, project, title: 'See it run', version: pack.project.version }))).png);
