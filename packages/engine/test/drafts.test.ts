@@ -6,7 +6,8 @@ import { GitHubRest, launchDir, pullRequestBody, Registry, renderDrafts, type Dr
 const text = (file: DraftFile | undefined): string => (file && 'content' in file ? file.content : '');
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
-const config = LaunchConfig.parse({ enabled: true, brand: 'personal', reddit: { subreddits: ['ClaudeAI'] } });
+// Reddit is off by default; turned on here so its drafts are still checked
+const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'manual' }, reddit: { subreddits: ['ClaudeAI'] } });
 const launch = new Registry(':memory:').claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' }).launch;
 
 const pack = ContentPack.parse({
@@ -75,6 +76,7 @@ test('a channel set to off gets no draft', () => {
   const quiet = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { mastodon: 'off', instagram: 'off' } });
   const paths = renderDrafts(pack, launch, quiet, brand, new Date()).map((f) => f.path);
   assert.ok(!paths.some((p) => p.endsWith('mastodon.md') || p.endsWith('instagram.md')));
+  assert.ok(!paths.some((p) => p.includes('reddit')), 'Reddit gets no draft unless launch.yml turns it on');
 });
 
 test('the pull request body shows what the code analysis found and what merging does', () => {

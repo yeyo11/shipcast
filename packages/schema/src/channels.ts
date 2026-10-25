@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Every channel Shipcast knows. The MVP publishes on blog, devto, bluesky, mastodon and instagram,
- * and drafts reddit (docs/decisions/mvp-scope.md); the rest are named now so a launch.yml written
- * today stays valid when their connectors arrive.
+ * Every channel Shipcast knows. The MVP publishes on blog, devto, bluesky, mastodon, instagram and
+ * the newsletter (docs/decisions/mvp-scope.md); reddit can draft but is off unless a launch.yml turns
+ * it on; the rest are named now so a launch.yml written today stays valid when their connectors arrive.
  */
 export const CHANNELS = [
   'blog',
@@ -37,14 +37,14 @@ export type PublishMode = z.infer<typeof PublishMode>;
 /** Communities that judge self-promotion by hand: Shipcast only ever drafts for them. */
 export const DRAFT_ONLY_CHANNELS: readonly Channel[] = ['reddit', 'hackerNews'];
 
-/** What a channel does when launch.yml does not mention it: the MVP's channels on, the rest off. */
+/** What a channel does when launch.yml does not mention it: the MVP's channels on, the rest off (Reddit, by the owner's choice, since 2026-10-25). */
 export const DEFAULT_MODES: Readonly<Record<Channel, PublishMode>> = {
   blog: 'approval',
   devto: 'approval',
   bluesky: 'approval',
   mastodon: 'approval',
   instagram: 'approval',
-  reddit: 'manual',
+  reddit: 'off',
   hackerNews: 'off',
   hashnode: 'off',
   linkedin: 'off',

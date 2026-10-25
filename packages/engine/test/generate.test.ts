@@ -14,6 +14,8 @@ const config = LaunchConfig.parse({
   enabled: true,
   brand: 'personal',
   assets: { demo: 'docs/media/tour.gif' },
+  // Reddit is off by default; turned on here so its brief is still checked
+  publishing: { reddit: 'manual' },
   reddit: { subreddits: ['ClaudeAI', 'selfhosted'] },
 });
 

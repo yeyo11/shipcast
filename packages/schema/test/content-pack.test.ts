@@ -31,7 +31,8 @@ const fullPack = {
   reddit: [{ subreddit: 'ClaudeAI', title: 'I built claudio', body: 'What and why.' }],
 } as const;
 
-const config = LaunchConfig.parse({ enabled: true, brand: 'personal', reddit: { subreddits: ['ClaudeAI'] } });
+// Reddit is off by default; turned on here so its drafts are still checked
+const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'manual' }, reddit: { subreddits: ['ClaudeAI'] } });
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
 
 function parse(overrides: Record<string, unknown>) {

@@ -27,7 +27,7 @@ publishing:
 test('the smallest file turns on the MVP channels', () => {
   const result = parseLaunchConfig('enabled: true\nbrand: personal\n');
   assert.ok(result.ok);
-  assert.deepEqual(activeChannels(result.value), ['blog', 'devto', 'bluesky', 'mastodon', 'instagram', 'reddit']);
+  assert.deepEqual(activeChannels(result.value), ['blog', 'devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit only when a launch.yml asks for it');
 });
 
 test('enabled must be written out', () => {
