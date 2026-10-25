@@ -2,7 +2,8 @@ import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-rout
 import { useEffect, useState } from 'react';
 import { Jobs } from '../../../components/Jobs';
 import { LaunchCard } from '../../../components/LaunchCard';
-import { Notice, number, Pill, when } from '../../../components/ui';
+import { useToast } from '../../../components/Toasts';
+import { Notice, number, Pill, Problem, when } from '../../../components/ui';
 import { approveDrafts, getLaunch, publishAgain, saveDraft } from '../../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../../server/view';
 
@@ -23,7 +24,7 @@ type DraftView = Review['drafts'][number];
 function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: DraftView; editable: boolean }) {
   const router = useRouter();
   const [content, setContent] = useState(draft.content ?? '');
-  const [state, setState] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const changed = content !== (draft.content ?? '');
   // Channel texts are short and read first; articles and what already went out stay folded
@@ -51,13 +52,13 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
                 setBusy(true);
                 const answer = await saveDraft({ data: { id: launchId, path: draft.path, content } });
                 setBusy(false);
-                setState(answer.ok ? { tone: 'ok', text: 'Saved to the pull request' } : { tone: 'bad', text: answer.problem });
+                if (answer.ok) toast.done(`${draft.label} saved`, 'The edit is a commit on the pull request: it is what gets published.');
+                else toast.fail(answer.problem);
                 if (answer.ok) await router.invalidate();
               }}
             >
               {busy ? 'Saving…' : 'Save this edit'}
             </button>
-            {state && <span style={{ color: state.tone === 'bad' ? 'var(--sc-failure)' : undefined, fontSize: 14 }}>{state.text}</span>}
           </div>
         </>
       ) : (
@@ -70,7 +71,7 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
 function LaunchPage() {
   const data = Route.useLoaderData();
   const router = useRouter();
-  const [message, setMessage] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const { launch, review, metrics, jobs } = data;
   const running = jobs.some((j) => j.state === 'running') || launch.status === 'generating';
@@ -104,7 +105,6 @@ function LaunchPage() {
         </div>
       </div>
       <Jobs jobs={jobs} />
-      {message && <Notice tone={message.tone}>{message.text}</Notice>}
       {launch.problem && (
         <Notice tone="bad">
           <strong>The launch failed.</strong>
@@ -128,7 +128,8 @@ function LaunchPage() {
                 setBusy(true);
                 const answer = await approveDrafts({ data: launch.id });
                 setBusy(false);
-                setMessage(answer.ok ? { tone: 'ok', text: 'Approved: the pull request is merged and publishing has started.' } : { tone: 'bad', text: answer.problem });
+                if (answer.ok) toast.done('Approved', 'The pull request is merged; the blog deploys, then every channel publishes.');
+                else toast.fail(answer.problem);
                 await router.invalidate();
               }}
             >
@@ -153,13 +154,14 @@ function LaunchPage() {
               <li key={f.channel}>
                 <div>
                   <strong>{CHANNEL_NAMES[f.channel] ?? f.channel}</strong>
-                  <div style={{ color: 'var(--sc-failure)', fontSize: 14 }}>{f.message}</div>
+                  <Problem text={f.message} />
                 </div>
                 <button
                   className="btn btn-small"
                   onClick={async () => {
                     const answer = await publishAgain({ data: { id: launch.id, channel: f.channel } });
-                    setMessage(answer.ok ? { tone: 'ok', text: `Trying ${CHANNEL_NAMES[f.channel] ?? f.channel} again.` } : { tone: 'bad', text: answer.problem });
+                    if (answer.ok) toast.done(`Trying ${CHANNEL_NAMES[f.channel] ?? f.channel} again`);
+                    else toast.fail(answer.problem);
                     await router.invalidate();
                   }}
                 >
@@ -177,7 +179,8 @@ function LaunchPage() {
             className="btn"
             onClick={async () => {
               const answer = await publishAgain({ data: { id: launch.id } });
-              setMessage(answer.ok ? { tone: 'ok', text: 'Publishing what is still pending.' } : { tone: 'bad', text: answer.problem });
+              if (answer.ok) toast.done('Publishing what is still pending');
+              else toast.fail(answer.problem);
               await router.invalidate();
             }}
           >

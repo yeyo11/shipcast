@@ -150,3 +150,22 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .signin h1 { font-size: clamp(64px, 14vw, 150px); }
 .signin h1 span { color: var(--sc-yellow); }
 .signin p { font: var(--sc-body-lg); color: var(--sc-muted); margin: 24px 0 36px; }
+
+/* Toasts: a card with its outline and stamp, its state a word and a shape; failures in red outline */
+.toasts { position: fixed; right: 24px; bottom: 24px; z-index: 50; display: grid; gap: 14px; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toast { pointer-events: auto; background: var(--sc-raised); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); padding: 16px 18px 18px; display: grid; gap: 8px; animation: toast-in var(--sc-fade) ease-out; }
+.toast header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.toast.bad { border-color: var(--sc-failure); }
+.toast.wait { background: var(--sc-yellow); color: var(--sc-on-yellow); border-color: #000; box-shadow: var(--sc-stamp-sm) #000; }
+.toast.wait .pill.s-waiting { background: #000; color: var(--sc-yellow); }
+.toast-title { margin: 0; font: 700 17px/1.3 var(--sc-font-text); }
+.toast-text { margin: 0; font: var(--sc-body); font-size: 15px; }
+.toast.bad .toast-text, .toast.ok .toast-text { color: var(--sc-muted); }
+.toast-close { width: 34px; height: 34px; border-radius: var(--sc-radius-pill); border: var(--sc-border-control) solid var(--sc-rail); background: transparent; color: inherit; font: 700 18px/1 var(--sc-font-text); cursor: pointer; }
+.toast-details summary { cursor: pointer; font: var(--sc-label); color: var(--sc-muted); }
+.toast-details pre { margin: 8px 0 0; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--sc-black); color: var(--sc-on-black); border-radius: var(--sc-radius-chip); font: 12.5px/1.5 var(--sc-font-mono); }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 760px) { .toasts { right: 16px; bottom: 16px; } }
+/* A failure kept on the page: red, worded, its original text folded away */
+.problem { margin-top: 6px; font-size: 14px; line-height: 1.45; color: var(--sc-failure); }
+.problem .toast-details summary { color: var(--sc-failure); }

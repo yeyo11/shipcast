@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
+import { ToastProvider } from '../components/Toasts';
 import { whoAmI } from '../server/session.functions';
 
 export const Route = createFileRoute('/_app')({
@@ -16,7 +17,7 @@ const SECTIONS = [
 function Shell() {
   const { login } = Route.useLoaderData();
   return (
-    <>
+    <ToastProvider>
       <header className="top wrap">
         <Link to="/" className="lockup" aria-label="Shipcast, the launches">
           <img src="/logo/mark.svg" alt="" />
@@ -41,6 +42,6 @@ function Shell() {
       <main className="wrap">
         <Outlet />
       </main>
-    </>
+    </ToastProvider>
   );
 }

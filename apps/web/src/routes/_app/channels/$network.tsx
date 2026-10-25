@@ -1,5 +1,6 @@
-import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-router';
-import { useState } from 'react';
+import { createFileRoute, Link, notFound, useNavigate, useRouter } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import { useToast } from '../../../components/Toasts';
 import { Notice } from '../../../components/ui';
 import { connectWithForm, getChannels } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
@@ -26,10 +27,16 @@ function Connect() {
   const [brand, setBrand] = useState(brands[0]?.id ?? 'personal');
   const [label, setLabel] = useState('');
   const [values, setValues] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(
-    search.connected ? { ok: true, text: search.connected } : search.problem ? { ok: false, text: search.problem } : null,
-  );
+  const toast = useToast();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  // The way back from an OAuth flow carries its outcome in the address: shown once, then cleared
+  useEffect(() => {
+    if (!search.connected && !search.problem) return;
+    if (search.connected) toast.done(search.connected, `${network.name} is ready to publish.`);
+    if (search.problem) toast.fail(search.problem);
+    void navigate({ to: '/channels/$network', params: { network: network.id }, search: {}, replace: true });
+  }, [search.connected, search.problem, network.id, network.name, navigate, toast]);
   const icon = channelIcon(network.channel ?? network.id);
   const oauthUrl = `/auth/${network.id}?${new URLSearchParams({ brand, label, ...(network.id === 'mastodon' ? { instance: values.instance ?? '' } : {}) })}`;
 
@@ -58,17 +65,19 @@ function Connect() {
               return;
             }
             setBusy(true);
-            setResult(null);
-            const answer = await connectWithForm({ data: { network: network.id, brand, label, values } });
+            const answer = await connectWithForm({ data: { network: network.id, brand, label, values } }).catch((error: unknown) => ({
+              ok: false as const,
+              problem: error instanceof Error ? error.message : String(error),
+            }));
             setBusy(false);
-            setResult(answer.ok ? { ok: true, text: `Connected ${answer.identity}` } : { ok: false, text: answer.problem });
+            if (answer.ok) toast.done(`Connected ${answer.identity}`, `${network.name} is ready to publish.`);
+            else toast.fail(answer.problem);
             if (answer.ok) {
               setValues({});
               await router.invalidate();
             }
           }}
         >
-          {result && <Notice tone={result.ok ? 'ok' : 'bad'}>{result.text}</Notice>}
           {brands.length > 1 && (
             <div className="field">
               <label htmlFor="brand">Brand</label>

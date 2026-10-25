@@ -2,7 +2,8 @@ import type { Preflight as Result } from '@shipcast/engine';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Preflight } from '../../components/Preflight';
-import { Notice, when } from '../../components/ui';
+import { useToast } from '../../components/Toasts';
+import { when } from '../../components/ui';
 import { checkRepo, launchRepo, listReleases, listRepos } from '../../server/launches.functions';
 
 export const Route = createFileRoute('/_app/launch')({
@@ -19,13 +20,12 @@ function LaunchARepo() {
   const [ref, setRef] = useState('');
   const [check, setCheck] = useState<Result | null>(null);
   const [direct, setDirect] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
 
   const pick = async (name: string) => {
     setRepo(name);
     setCheck(null);
-    setProblem(null);
     setRef('');
     if (!name) return;
     setBusy('Reading releases…');
@@ -51,11 +51,15 @@ function LaunchARepo() {
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy('Starting…');
-          setProblem(null);
-          const answer = await launchRepo({ data: { repo, ref, direct } });
+          const answer = await launchRepo({ data: { repo, ref, direct } }).catch((error: unknown) => ({
+            ok: false as const,
+            problem: error instanceof Error ? error.message : String(error),
+          }));
           setBusy(null);
-          if (answer.ok) await navigate({ to: '/' });
-          else setProblem(answer.problem);
+          if (answer.ok) {
+            toast.done(`Drafting ${repo.split('/')[1]} ${ref}`, 'The analysis takes a few minutes; it shows on Launches while it runs.');
+            await navigate({ to: '/' });
+          } else toast.fail(answer.problem);
         }}
       >
         <div className="field">
@@ -110,7 +114,6 @@ function LaunchARepo() {
             <small>{direct ? 'The drafts go straight onto the blog’s main branch and every approved channel publishes once the site is live.' : 'The drafts wait in a pull request until you approve them here or merge it on GitHub.'}</small>
           </fieldset>
         )}
-        {problem && <Notice tone="bad">{problem}</Notice>}
         <div className="row">
           <button className="btn btn-primary" type="submit" disabled={!check?.ok || busy !== null}>
             {direct ? 'Draft and publish' : 'Draft the launch'}

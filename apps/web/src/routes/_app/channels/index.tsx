@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Notice, Pill, when } from '../../../components/ui';
+import { useToast } from '../../../components/Toasts';
+import { Pill, Problem, when } from '../../../components/ui';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
 
@@ -16,18 +17,29 @@ type AccountView = NetworkView['accounts'][number];
 
 function AccountRow({ account, brands }: { account: AccountView; brands: Data['brands'] }) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [label, setLabel] = useState(account.label);
-  const act = async (fn: () => Promise<unknown>) => {
+  /** Runs an action; a thrown error becomes a toast instead of a silent failure */
+  const act = async (fn: () => Promise<unknown>, done?: string) => {
     setBusy(true);
     try {
       await fn();
+      if (done) toast.done(done);
       await router.invalidate();
+    } catch (error) {
+      toast.fail(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
   };
+  const check = () =>
+    act(async () => {
+      const result = await recheckAccount({ data: account.id });
+      if (result.status === 'ok') toast.done(`${account.label} works`, result.identity ? `Signed in as ${result.identity}.` : undefined);
+      else toast.fail(result.problem ?? `${account.label} did not answer its check`);
+    });
   const brand = brands.find((b) => b.id === account.brand)?.name ?? account.brand;
   return (
     <li>
@@ -39,6 +51,7 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
               e.preventDefault();
               void act(async () => {
                 await renameAccount({ data: { id: account.id, label } });
+                toast.done(`Renamed to ${label}`);
                 setRenaming(false);
               });
             }}
@@ -60,15 +73,15 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
           {account.identity && account.identity !== account.label ? ` · ${account.identity}` : ''}
           {account.checkedAt ? ` · checked ${when(account.checkedAt)}` : ''}
         </div>
-        {account.problem && <div style={{ color: 'var(--sc-failure)', fontSize: 14 }}>{account.problem}</div>}
+        {account.problem && <Problem text={account.problem} />}
       </div>
       <div className="row">
         {account.status === 'ok' ? <Pill tone="published">Connected</Pill> : account.status === 'failed' ? <Pill tone="failed">Not working</Pill> : <Pill tone="draft">Not checked</Pill>}
-        <button className="btn btn-small" disabled={busy} onClick={() => act(() => recheckAccount({ data: account.id }))}>
+        <button className="btn btn-small" disabled={busy} onClick={() => void check()}>
           {busy ? 'Checking…' : 'Check'}
         </button>
         {!account.primary && (
-          <button className="btn btn-small" disabled={busy} onClick={() => act(() => makePrimary({ data: account.id }))}>
+          <button className="btn btn-small" disabled={busy} onClick={() => act(() => makePrimary({ data: account.id }), `${account.label} now publishes for ${brand}`)}>
             Publish with this one
           </button>
         )}
@@ -79,7 +92,7 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
           className="btn btn-small btn-danger"
           disabled={busy}
           onClick={() => {
-            if (window.confirm(`Disconnect ${account.label}? Its credential is deleted from the keychain.`)) void act(() => disconnect({ data: account.id }));
+            if (window.confirm(`Disconnect ${account.label}? Its credential is deleted from the keychain.`)) void act(() => disconnect({ data: account.id }), `${account.label} disconnected`);
           }}
         >
           Disconnect
@@ -138,7 +151,7 @@ function NetworkCard({ network, brands }: { network: NetworkView; brands: Data['
 function Channels() {
   const data = Route.useLoaderData();
   const router = useRouter();
-  const [imported, setImported] = useState<Awaited<ReturnType<typeof importEnv>> | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const connected = data.networks.filter((n) => n.accounts.length > 0);
   const rest = data.networks.filter((n) => n.accounts.length === 0);
@@ -164,19 +177,23 @@ function Channels() {
             disabled={busy}
             onClick={async () => {
               setBusy(true);
-              setImported(await importEnv());
+              const results = await importEnv().catch((error: unknown) => {
+                toast.fail(error instanceof Error ? error.message : String(error));
+                return null;
+              });
               setBusy(false);
+              if (results) {
+                const connected = results.filter((r) => r.ok).map((r) => r.network);
+                if (connected.length > 0) toast.done(`Imported ${connected.length} from .env`, connected.join(', '));
+                else if (results.length === 0) toast.done('Nothing to import');
+                for (const r of results) if (!r.ok && r.problem) toast.fail(r.problem);
+              }
               await router.invalidate();
             }}
           >
             {busy ? 'Importing…' : `Import ${envCount} from .env`}
           </button>
         </div>
-      )}
-      {imported && (
-        <Notice tone={imported.every((r) => r.ok) ? 'ok' : 'bad'}>
-          {imported.length === 0 ? 'Nothing to import.' : imported.map((r) => `${r.network}: ${r.ok ? 'connected' : r.problem}`).join(' · ')}
-        </Notice>
       )}
       {connected.length > 0 && (
         <>

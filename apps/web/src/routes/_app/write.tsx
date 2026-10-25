@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Notice } from '../../components/ui';
+import { useToast } from '../../components/Toasts';
 import { getChannels } from '../../server/channels.functions';
 import { writeArticle } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
@@ -24,7 +24,7 @@ function Write() {
   const [lang, setLang] = useState<'en' | 'es'>('es');
   const [channels, setChannels] = useState<string[]>(ready.filter((c) => c !== 'hackerNews' && c !== 'productHunt'));
   const [direct, setDirect] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   return (
     <>
@@ -40,11 +40,12 @@ function Write() {
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
-          setProblem(null);
           const answer = await writeArticle({ data: { title, markdown, lang, channels, direct } }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
           setBusy(false);
-          if (answer.ok) await navigate({ to: '/' });
-          else setProblem(answer.problem);
+          if (answer.ok) {
+            toast.done(direct ? 'Publishing your article' : 'Preparing the pieces', 'Shipcast translates it and writes each channel’s piece; it shows on Launches while it runs.');
+            await navigate({ to: '/' });
+          } else toast.fail(answer.problem);
         }}
       >
         <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
@@ -99,7 +100,6 @@ function Write() {
             </label>
           </div>
         </fieldset>
-        {problem && <Notice tone="bad">{problem}</Notice>}
         <div className="row">
           <button className="btn btn-primary" type="submit" disabled={busy}>
             {busy ? 'Starting…' : direct ? 'Publish the article' : 'Prepare the pieces'}
