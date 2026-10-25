@@ -12,7 +12,9 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "shipcast": "node apps/cli/src/main.ts"
+    "shipcast": "node apps/cli/src/main.ts",
+    "app": "pnpm --filter @shipcast/web build && node apps/web/main.ts",
+    "app:dev": "pnpm --filter @shipcast/web dev"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

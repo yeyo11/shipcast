@@ -1,0 +1,57 @@
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
+import { useEffect } from 'react';
+import { Jobs } from '../../components/Jobs';
+import { LaunchCard } from '../../components/LaunchCard';
+import { listLaunches } from '../../server/launches.functions';
+
+export const Route = createFileRoute('/_app/')({
+  head: () => ({ meta: [{ title: 'Launches · Shipcast' }] }),
+  loader: () => listLaunches(),
+  component: Launches,
+});
+
+function Launches() {
+  const { launches, jobs } = Route.useLoaderData();
+  const router = useRouter();
+  const busy = jobs.some((j) => j.state === 'running') || launches.some((l) => l.status === 'generating');
+  // While something runs, the page follows it without a reload
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setInterval(() => router.invalidate(), 5000);
+    return () => clearInterval(timer);
+  }, [busy, router]);
+
+  const waiting = launches.filter((l) => l.state.tone === 'waiting');
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1 className="ph">Launches</h1>
+          <p>Every launch, where it went and how it did.</p>
+        </div>
+        <Link className="btn btn-primary" to="/launch">
+          Launch a repo
+        </Link>
+      </div>
+      <Jobs jobs={jobs} />
+      {waiting.length > 0 && (
+        <div className="band band-yellow">
+          <h2 className="ph" style={{ margin: 0 }}>
+            {waiting.length === 1 ? '1 launch waits for you' : `${waiting.length} launches wait for you`}
+          </h2>
+          <p className="muted" style={{ margin: '10px 0 0' }}>
+            Review the drafts and approve them: approving publishes on every channel.
+          </p>
+        </div>
+      )}
+      {launches.length === 0 ? (
+        <div className="band band-black">
+          <h2 className="ph">No launches yet</h2>
+          <p>Launch a repo with a release and a .github/launch.yml, or write an article.</p>
+        </div>
+      ) : (
+        launches.map((launch) => <LaunchCard key={launch.id} launch={launch} />)
+      )}
+    </>
+  );
+}

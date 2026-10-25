@@ -1,0 +1,32 @@
+{
+  "name": "@shipcast/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shipcast's web app: launches and their numbers, the channels and their accounts, drafts to review and articles to publish",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "node server.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@shipcast/connectors": "workspace:*",
+    "@shipcast/engine": "workspace:*",
+    "@shipcast/runtime": "workspace:*",
+    "@shipcast/schema": "workspace:*",
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.4",
+    "acme-client": "5.4.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.5"
+  }
+}

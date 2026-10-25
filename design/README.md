@@ -20,7 +20,7 @@ Add `#day` to the URL, or use the switch, for the day theme.
 | `logo/mark-mono.svg` | One-colour mark in `currentColor` (inline it) |
 | `logo/favicon.svg` | The mark without its shadow, for 16–32 px |
 | `logo/wordmark.svg`, `logo/lockup.svg`, `logo/lockup-day.svg` | Wordmark and lockups; Phudu is embedded, so they render without the font installed |
-| `icons/*.svg` | Channel glyphs in `currentColor`: the networks' own marks from [Simple Icons](https://simpleicons.org) (CC0), plus Blog and LinkedIn drawn here |
+| `icons/*.svg` | Channel glyphs in `currentColor`: the networks' own marks from [Simple Icons](https://simpleicons.org) (CC0), plus Blog, LinkedIn and Newsletter drawn here |
 | `social-preview.svg`, `social-preview.png` | GitHub social preview, 1280 × 640 |
 | `specimen.html` | The living specimen |
 
