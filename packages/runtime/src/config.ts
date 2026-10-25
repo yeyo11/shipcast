@@ -86,7 +86,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         ? { appId: env.INSTAGRAM_APP_ID.trim(), appSecret: env.INSTAGRAM_APP_SECRET.trim() }
         : undefined,
     host: env.SHIPCAST_APP_HOST?.trim() || '127.0.0.1',
-    port: Number(env.SHIPCAST_APP_PORT ?? 8443),
+    port: Number(env.SHIPCAST_APP_PORT ?? 8744),
     tlsCloudflareToken: env.SHIPCAST_TLS_CLOUDFLARE_TOKEN?.trim() || undefined,
   };
   if (missing.length > 0) throw new ConfigError(`missing in .env for the app: ${missing.join(', ')} (see .env.example)`);

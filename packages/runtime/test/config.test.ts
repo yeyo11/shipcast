@@ -41,6 +41,6 @@ test('the app config needs its address, the GitHub app and who may sign in', () 
   });
   assert.equal(app.publicUrl, 'https://shipcast.example.dev');
   assert.deepEqual(app.allowedLogins, ['yeyo11', 'other']);
-  assert.deepEqual([app.host, app.port, app.instagram, app.tlsCloudflareToken], ['127.0.0.1', 8443, undefined, undefined]);
+  assert.deepEqual([app.host, app.port, app.instagram, app.tlsCloudflareToken], ['127.0.0.1', 8744, undefined, undefined]);
   assert.throws(() => loadAppConfig({ SHIPCAST_PUBLIC_URL: 'http://x', SHIPCAST_GITHUB_CLIENT_ID: 'i', SHIPCAST_GITHUB_CLIENT_SECRET: 's', SHIPCAST_ALLOWED_GITHUB: 'a' }), /https:\/\/host/);
 });

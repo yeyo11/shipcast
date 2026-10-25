@@ -12,9 +12,15 @@ import acme from 'acme-client';
 
 const RENEW_BEFORE_MS = 30 * 24 * 3600 * 1000;
 
+/** Who places the challenge's TXT record: Cloudflare's API with a token, or anything else that can */
+export interface DnsSolver {
+  create(name: string, value: string): Promise<void>;
+  remove(name: string, value: string): Promise<void>;
+}
+
 export interface CertificateOptions {
   domain: string;
-  cloudflareToken: string;
+  dns: DnsSolver;
   secrets: SecretStore;
   /** Where the certificate (public) is kept; the private keys go to the keychain */
   dataDir: string;
@@ -44,8 +50,34 @@ async function zoneOf(token: string, domain: string): Promise<string> {
   throw new Error(`no Cloudflare zone holds ${domain}: the token needs Zone DNS edit on it`);
 }
 
+/**
+ * The TXT records through Cloudflare's API: the zone that holds the name is found from the token,
+ * and each record is removed once its challenge is answered.
+ */
+export function cloudflareDns(token: string, domain: string): DnsSolver {
+  const records = new Map<string, string>();
+  let zone: Promise<string> | undefined;
+  return {
+    async create(name, value) {
+      zone ??= zoneOf(token, domain);
+      const record = await cloudflare<{ id: string }>(token, 'POST', `/zones/${await zone}/dns_records`, {
+        type: 'TXT',
+        name,
+        content: value,
+        ttl: 60,
+        comment: 'Shipcast certificate challenge, removed after',
+      });
+      records.set(value, record.id);
+    },
+    async remove(_name, value) {
+      const id = records.get(value);
+      if (id && zone) await cloudflare(token, 'DELETE', `/zones/${await zone}/dns_records/${id}`).catch(() => undefined);
+    },
+  };
+}
+
 /** When the certificate on disk expires, if there is one and its key is in the keychain */
-async function current(options: CertificateOptions): Promise<{ key: string; cert: string; expires: Date } | undefined> {
+export async function current(options: Pick<CertificateOptions, 'domain' | 'secrets' | 'dataDir'>): Promise<{ key: string; cert: string; expires: Date } | undefined> {
   const path = join(options.dataDir, 'tls', `${options.domain}.crt`);
   if (!existsSync(path)) return undefined;
   const key = await options.secrets.get(`app:tls-key:${options.domain}`);
@@ -74,8 +106,6 @@ export async function ensureCertificate(options: CertificateOptions, now = new D
     accountKey,
   });
   const [key, csr] = await acme.crypto.createCsr({ commonName: options.domain }, await acme.crypto.createPrivateEcdsaKey());
-  const zone = await zoneOf(options.cloudflareToken, options.domain);
-  const records = new Map<string, string>();
   const cert = await client.auto({
     csr,
     termsOfServiceAgreed: true,
@@ -83,19 +113,11 @@ export async function ensureCertificate(options: CertificateOptions, now = new D
     // The local resolver may have cached the record's absence; Cloudflare serves it within seconds
     skipChallengeVerification: true,
     challengeCreateFn: async (authz, _challenge, keyAuthorization) => {
-      const record = await cloudflare<{ id: string }>(options.cloudflareToken, 'POST', `/zones/${zone}/dns_records`, {
-        type: 'TXT',
-        name: `_acme-challenge.${authz.identifier.value}`,
-        content: keyAuthorization,
-        ttl: 60,
-        comment: 'Shipcast certificate challenge, removed after',
-      });
-      records.set(keyAuthorization, record.id);
+      await options.dns.create(`_acme-challenge.${authz.identifier.value}`, keyAuthorization);
       await new Promise((r) => setTimeout(r, 15_000));
     },
-    challengeRemoveFn: async (_authz, _challenge, keyAuthorization) => {
-      const id = records.get(keyAuthorization);
-      if (id) await cloudflare(options.cloudflareToken, 'DELETE', `/zones/${zone}/dns_records/${id}`).catch(() => undefined);
+    challengeRemoveFn: async (authz, _challenge, keyAuthorization) => {
+      await options.dns.remove(`_acme-challenge.${authz.identifier.value}`, keyAuthorization);
     },
   });
 

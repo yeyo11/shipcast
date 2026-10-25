@@ -1,13 +1,23 @@
-import { mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { checkout, Claudio, GitHubRest, loadBrand, Registry, type PipelineDeps } from '@shipcast/engine';
 import { KeychainStore, loadAppConfig, loadConfig, type AppConfig, type Config, type SecretStore } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
 import { Jobs } from './jobs.server';
 
-/** The repository's root, where `.env`, `data/` and `workspace/` live, whatever directory the app runs from */
-export const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../../..');
+/**
+ * The repository's root, where `.env`, `data/` and `workspace/` live: the nearest folder up from where
+ * the app runs that holds `pnpm-workspace.yaml`. Not from this file's path, which differs between
+ * Vite's development server and the bundled build.
+ */
+function findRoot(from: string): string {
+  for (let dir = from; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir;
+    if (dirname(dir) === dir) return from;
+  }
+}
+
+export const ROOT = process.env.SHIPCAST_ROOT ?? findRoot(process.cwd());
 
 export interface AppContext {
   config: Config;
