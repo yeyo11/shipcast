@@ -3,6 +3,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
 import { jobsView } from './jobs.server';
+import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchDetail, launchView, publishAgain as publishAgainFor } from './launches.server';
 import { articleRequest, channelName, launchRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing } from './work.server';
@@ -31,6 +32,8 @@ export const saveDraft = createServerFn({ method: 'POST' })
     const { registry, github, deps } = await appContext();
     const launch = await registry.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
+    // A draft edit is a commit on the real pull request
+    if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
     try {
       await editDraft(launch, data.path, data.content, { github, launchesRepo: deps.launchesRepo });
       return { ok: true as const };
