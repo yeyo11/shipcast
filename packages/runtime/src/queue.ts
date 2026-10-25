@@ -1,0 +1,309 @@
+import type { ArticleInput, JobRecord, Registry } from '@shipcast/engine';
+import type { Channel } from '@shipcast/schema';
+import { fromPglite, PgBoss, type ConstructorOptions, type PGliteLike, type Queue } from 'pg-boss';
+import type { WebhookAction } from './webhooks.ts';
+
+/*
+ * The durable work: every job is a pg-boss job in the registry's Postgres, in pg-boss's own schema,
+ * so a job sent before a restart runs after it, a job a crash interrupted is tried again once it
+ * expires, and two processes (the app and `shipcast watch`) share one queue instead of each running
+ * its own. What the app shows of a job is a row of the registry's `jobs` table, kept by the wrapper
+ * around each handler. See docs/decisions/job-queue.md
+ */
+
+/** What each queue's jobs carry */
+export interface JobData {
+  draft: { launchId: number; direct?: boolean };
+  article: { launchId: number; input: ArticleInput; direct?: boolean };
+  publish: { launchId: number; retryChannel?: Channel };
+  delivery: { action: Extract<WebhookAction, { kind: 'claim' | 'publish' }>; delivery: string };
+  round: { reason: string };
+  metrics: { reason: string };
+  'instagram-tokens': { reason: string };
+}
+
+export type QueueName = keyof JobData;
+
+/** The schema pg-boss creates its tables in, beside the registry's */
+export const QUEUE_SCHEMA = 'pgboss';
+
+/** Seconds between a publish job's attempts while it waits for the site to deploy */
+export const PUBLISH_RETRY_SECONDS = 30;
+/** Attempts after the first: 40 of 30 seconds wait the 20 minutes the old loop did */
+export const PUBLISH_RETRIES = 40;
+
+interface QueueSpec extends Omit<Queue, 'name'> {
+  /** The title of a job nobody named, such as one a schedule sent */
+  title: string;
+  /** How many of its jobs one process runs at once */
+  concurrency: number;
+}
+
+/*
+ * Retries are for waiting, not for repeating work: a draft costs an AI run and fails into the
+ * launch's own `failed` status, so it is never tried again on its own; a publish job's retries are
+ * how it waits for a deploy. The round, the metrics and the token refresh are `stately`: one queued
+ * and one running at most, whichever process sent them.
+ */
+const QUEUES: Record<QueueName, QueueSpec> = {
+  draft: { title: 'Drafting a launch', policy: 'standard', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
+  article: { title: 'Writing an article’s pieces', policy: 'standard', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
+  publish: { title: 'Publishing a launch', policy: 'stately', retryLimit: PUBLISH_RETRIES, retryDelay: PUBLISH_RETRY_SECONDS, expireInSeconds: 30 * 60, concurrency: 2 },
+  delivery: { title: 'A GitHub delivery', policy: 'standard', retryLimit: 2, retryDelay: 30, expireInSeconds: 10 * 60, concurrency: 2 },
+  round: { title: 'Automation round', policy: 'stately', retryLimit: 0, expireInSeconds: 3600, concurrency: 1 },
+  metrics: { title: 'Reading the numbers', policy: 'stately', retryLimit: 1, retryDelay: 15 * 60, expireInSeconds: 3600, concurrency: 1 },
+  'instagram-tokens': { title: 'Refreshing Instagram tokens', policy: 'stately', retryLimit: 2, retryDelay: 3600, expireInSeconds: 15 * 60, concurrency: 1 },
+};
+
+export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];
+
+/** Thrown by a handler that cannot finish yet: its job is tried again after the queue's delay */
+export class RetryLater extends Error {
+  override name = 'RetryLater';
+}
+
+/** What a handler gets besides its job's data */
+export interface JobContext {
+  /** pg-boss's id of the job, which is also its row in the registry */
+  id: string;
+  /** 1 for the first attempt */
+  attempt: number;
+  /** Whether a RetryLater from this attempt would still be tried again */
+  lastAttempt: boolean;
+  log(line: string): void;
+  /** Where the app sends the owner once the job is done */
+  link(url: string): void;
+  /** Aborted when the job expires or the queue stops */
+  signal: AbortSignal;
+}
+
+export type Handler<Q extends QueueName> = (data: JobData[Q], job: JobContext) => Promise<void>;
+export type Handlers = { [Q in QueueName]?: Handler<Q> };
+
+export interface SendOptions {
+  /** What the app shows; the queue's own title when not given */
+  title?: string;
+  launchId?: number | null;
+  /** Seconds from now, or a moment */
+  startAfter?: number | Date;
+  /** On a stately queue, the jobs that share a key are the ones that exclude each other */
+  singletonKey?: string;
+}
+
+export interface QueueOptions {
+  /** Runs pg-boss's cron, which turns schedules into jobs; on by default */
+  schedule?: boolean;
+  /** pg-boss's maintenance: expiring jobs that stopped, deleting old ones; on by default */
+  supervise?: boolean;
+  /** How often an idle worker looks for jobs, in seconds */
+  pollingIntervalSeconds?: number;
+  /** A name for this process among pg-boss's instances: `app`, `watch` */
+  instanceName?: string;
+  /** Where pg-boss's errors go; it never throws them at the caller */
+  onError?: (error: Error) => void;
+  /** Seconds between any queue's attempts instead of its own: tests make the waits short */
+  retryDelaySeconds?: number;
+}
+
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** The registry's state of a job pg-boss reports, the cancelled ones among the failed */
+function stateOf(state: string): JobRecord['state'] {
+  if (state === 'created' || state === 'active' || state === 'retry' || state === 'completed') return state;
+  return 'failed';
+}
+
+export class WorkQueue {
+  readonly #boss: PgBoss;
+  readonly #registry: Registry;
+  readonly #polling: number;
+  readonly #retryDelay: number | undefined;
+  #started: Promise<void> | undefined;
+  #stopped = false;
+
+  constructor(boss: PgBoss, registry: Registry, options: QueueOptions = {}) {
+    this.#boss = boss;
+    this.#registry = registry;
+    this.#polling = options.pollingIntervalSeconds ?? 2;
+    this.#retryDelay = options.retryDelaySeconds;
+    boss.on('error', options.onError ?? ((error) => console.error(`job queue: ${error.message}`)));
+  }
+
+  static #options(options: QueueOptions): ConstructorOptions {
+    return { schema: QUEUE_SCHEMA, schedule: options.schedule ?? true, supervise: options.supervise ?? true, instanceName: options.instanceName };
+  }
+
+  /** The queue on a Postgres server: the registry's, pg-boss in its own schema and pool */
+  static postgres(url: string, registry: Registry, options: QueueOptions = {}): WorkQueue {
+    // A small pool: the work is a handful of jobs at a time, and the registry has a pool of its own
+    return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), connectionString: url, max: 4, application_name: `shipcast-${options.instanceName ?? 'queue'}` }), registry, options);
+  }
+
+  /** The queue on a PGlite instance, for tests: the same pg-boss and the same SQL, in this process */
+  static pglite(client: PGliteLike, registry: Registry, options: QueueOptions = {}): WorkQueue {
+    return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), db: fromPglite(client), backend: 'pglite', registerInstance: false }), registry, options);
+  }
+
+  get registry(): Registry {
+    return this.#registry;
+  }
+
+  /**
+   * Starts pg-boss, which creates or migrates its schema, and makes sure every queue exists with
+   * the settings written here. Once per instance; every caller waits for the same start.
+   */
+  start(): Promise<void> {
+    this.#started ??= (async () => {
+      await this.#boss.start();
+      for (const name of QUEUE_NAMES) {
+        const { title: _title, concurrency: _concurrency, policy, ...spec } = QUEUES[name];
+        const settings = this.#retryDelay === undefined ? spec : { ...spec, retryDelay: this.#retryDelay };
+        await this.#boss.createQueue(name, { policy, ...settings });
+        // createQueue leaves an existing queue as it was; a setting changed here reaches it this way
+        await this.#boss.updateQueue(name, settings);
+      }
+      await this.#reconcile();
+    })();
+    return this.#started;
+  }
+
+  /**
+   * Brings the rows of jobs that were waiting or running when a process stopped in line with
+   * pg-boss: a job it expired, failed or deleted (by retention) is not left showing "running".
+   */
+  async #reconcile(): Promise<void> {
+    for (const record of await this.#registry.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
+      if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
+      const [job] = await this.#boss.findJobs(record.queue, { id: record.id });
+      if (!job) {
+        await this.#registry.updateJob(record.id, { state: 'failed', ended: true });
+        await this.#registry.logJob(record.id, 'The queue no longer has this job');
+        continue;
+      }
+      const state = stateOf(job.state);
+      if (state === record.state) continue;
+      await this.#registry.updateJob(record.id, { state, attempts: Math.max(record.attempts, job.retryCount + (state === 'created' ? 0 : 1)), ended: state === 'completed' || state === 'failed' });
+    }
+    // A draft cut short by a stop leaves its launch "generating" for good, and a launch in that state
+    // cannot be started again; failed, it can, and its page says why
+    const live = await this.#registry.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
+    const drafting = new Set(live.map((j) => j.launchId));
+    const { launches } = await this.#registry.launchesPage({ status: 'generating', limit: 100 });
+    for (const launch of launches) {
+      if (!drafting.has(launch.id)) await this.#registry.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
+    }
+  }
+
+  /**
+   * Sends a job and records it, so the app shows it from the moment it is queued. Null when a
+   * stately queue already holds a job of that key in that state: the caller's work is queued already.
+   */
+  async send<Q extends QueueName>(queue: Q, data: JobData[Q], options: SendOptions = {}): Promise<string | null> {
+    await this.start();
+    const id = await this.#boss.send(queue, data, {
+      ...(options.singletonKey !== undefined && { singletonKey: options.singletonKey }),
+      ...(options.startAfter !== undefined && { startAfter: options.startAfter }),
+    });
+    if (id) await this.#registry.recordJob({ id, queue, title: options.title ?? QUEUES[queue].title, launchId: options.launchId ?? null });
+    return id;
+  }
+
+  /**
+   * Moves the queued job of a key to a new start and data, or sends one if none is queued; on a
+   * stately queue, what makes "run it now" mean the round already waiting rather than a second one.
+   */
+  async upsert<Q extends QueueName>(queue: Q, data: JobData[Q], options: SendOptions & { singletonKey: string }): Promise<string | null> {
+    await this.start();
+    const startAfter = options.startAfter === undefined ? new Date() : typeof options.startAfter === 'number' ? new Date(Date.now() + options.startAfter * 1000) : options.startAfter;
+    const result = await this.#boss.upsert(queue, data, { singletonKey: options.singletonKey, startAfter });
+    const id = result.jobs[0] ?? null;
+    if (id) {
+      const record = await this.#registry.recordJob({ id, queue, title: options.title ?? QUEUES[queue].title, launchId: options.launchId ?? null });
+      if (options.title && record.title !== options.title) await this.#registry.updateJob(id, { title: options.title });
+    }
+    return id;
+  }
+
+  /**
+   * A job sent on a recurring cron expression, in UTC; scheduling a queue again replaces its
+   * schedule. pg-boss sends each occurrence once, whichever of the processes running its cron sees it.
+   */
+  async schedule<Q extends QueueName>(queue: Q, cron: string, data: JobData[Q], options: { singletonKey?: string } = {}): Promise<void> {
+    await this.start();
+    await this.#boss.schedule(queue, cron, data, { tz: 'UTC', ...(options.singletonKey !== undefined && { singletonKey: options.singletonKey }) });
+  }
+
+  /** The jobs of a stately queue's key that are queued but not yet running */
+  async queued(queue: QueueName, singletonKey?: string): Promise<string[]> {
+    await this.start();
+    const jobs = await this.#boss.findJobs(queue, { queued: true, ...(singletonKey !== undefined && { key: singletonKey }) });
+    return jobs.map((j) => j.id);
+  }
+
+  /** Works the queues there is a handler for, in this process, until stop() */
+  async work(handlers: Handlers): Promise<void> {
+    await this.start();
+    // Generic per queue, so each handler stays tied to its own queue's data
+    const register = async <Q extends QueueName>(name: Q) => {
+      const handler: Handlers[Q] = handlers[name];
+      if (handler) await this.#work<Q>(name, handler as Handler<Q>);
+    };
+    for (const name of QUEUE_NAMES) await register(name);
+  }
+
+  async #work<Q extends QueueName>(queue: Q, handler: Handler<Q>): Promise<void> {
+    const spec = QUEUES[queue];
+    const registry = this.#registry;
+    await this.#boss.work<JobData[Q]>(queue, { pollingIntervalSeconds: this.#polling, localConcurrency: spec.concurrency }, async ([job]) => {
+      if (!job) return;
+      const attempt = job.retryCount + 1;
+      const lastAttempt = job.retryCount >= (spec.retryLimit ?? 0);
+      // A job a schedule sent, or one sent before its row existed, is recorded when it starts
+      await registry.recordJob({ id: job.id, queue, title: spec.title });
+      await registry.updateJob(job.id, { state: 'active', attempts: attempt, started: true, ended: false });
+      // Lines are written in order, and a failed write never fails the work
+      let written: Promise<void> = Promise.resolve();
+      const log = (line: string) => {
+        written = written.then(() => registry.logJob(job.id, line)).catch(() => undefined);
+      };
+      let link: string | undefined;
+      try {
+        await handler(job.data, { id: job.id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal });
+      } catch (error) {
+        log(error instanceof RetryLater ? `Waiting: ${message(error)}` : message(error));
+        await written;
+        await registry.updateJob(job.id, { state: lastAttempt ? 'failed' : 'retry', ended: lastAttempt, ...(link !== undefined && { link }) });
+        // pg-boss decides what follows: another attempt after the queue's delay, or failed for good
+        throw error;
+      }
+      await written;
+      await registry.updateJob(job.id, { state: 'completed', ended: true, ...(link !== undefined && { link }) });
+    });
+  }
+
+  /**
+   * Waits until a job has ended, in this process or any other that works its queue; undefined when
+   * the time is up first.
+   */
+  async wait(id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const record = await this.#registry.job(id);
+      if (record && (record.state === 'completed' || record.state === 'failed')) return record;
+      if (Date.now() > deadline) return undefined;
+      await new Promise((r) => setTimeout(r, everyMs));
+    }
+  }
+
+  /**
+   * Stops the workers, giving the running jobs a while to finish; one still running after it keeps
+   * its `active` state in pg-boss, which expires and retries it (or fails it, for a queue without
+   * retries) once its time is up.
+   */
+  async stop(timeoutMs = 20_000): Promise<void> {
+    if (this.#stopped || !this.#started) return;
+    this.#stopped = true;
+    await this.#started.catch(() => undefined);
+    await this.#boss.stop({ graceful: true, timeout: timeoutMs });
+  }
+}

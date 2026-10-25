@@ -39,7 +39,7 @@ export interface ApiDeps {
   startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<WorkAnswer>;
   approve(launchId: number): Promise<WorkAnswer>;
   startArticle(input: ArticleInput, direct: boolean): Promise<WorkAnswer>;
-  startPublishing(launch: Launch): Promise<string>;
+  startPublishing(launch: Launch, retryChannel?: Channel): Promise<string>;
 }
 
 /**

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T12:53:15.018473682Z
-updated_at: 2026-10-25T13:34:52.336698606Z
+created_at: 2026-10-25T14:07:43.287895843Z
+updated_at: 2026-10-25T15:18:11.952731206Z
 tags:
     - engine
     - registry
@@ -11,16 +11,18 @@ tags:
     - architecture
     - postgres
     - post-model
+    - job-queue
 ---
 # The engine
 
 `packages/engine` ([source](../packages/engine/src/)) decides what gets launched, asks the AI for the
 content and opens the drafts pull request; `apps/cli` ([source](../apps/cli/src/)) is the `shipcast`
 command around it and `apps/web` the [web app](web-app.md). What both share (configuration, the
-keychain, connected accounts, the connectors built from them) is `@shipcast/runtime`
-([accounts.md](accounts.md)). Written on 2026-10-24, extended on 2026-10-25, each piece tested with
-fakes and checked against the real service where it is safe to. It depends on `@shipcast/schema`
-([launch-yml.md](launch-yml.md), [content-pack.md](content-pack.md), [brands.md](brands.md)).
+keychain, connected accounts, the connectors built from them, and the job queue with its handlers)
+is `@shipcast/runtime` ([accounts.md](accounts.md), [decisions/job-queue.md](decisions/job-queue.md)).
+Written on 2026-10-24, extended on 2026-10-25, each piece tested with fakes and checked against the
+real service where it is safe to. It depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md),
+[content-pack.md](content-pack.md), [brands.md](brands.md)).
 
 ## The launch registry
 
@@ -68,6 +70,10 @@ makes "a launch happens once" hold:
 - **Accounts**: the accounts connected per brand ([accounts.md](accounts.md)); adding, making
   primary and removing one run in a transaction locked per network and brand, so each has one
   primary.
+- **Jobs** (`jobs`, migration `0003_jobs`): one row per job of the queue, keyed by pg-boss's id, with
+  its title, launch, state, attempts, last 40 log lines, link and times; what the app shows of the
+  work after it ends and across restarts (`recordJob`, `updateJob`, `logJob`, `jobs`, `pruneJobs`).
+  pg-boss keeps its own tables in the `pgboss` schema ([decisions/job-queue.md](decisions/job-queue.md)).
 
 An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
 ([decisions/postgres.md](decisions/postgres.md#moving-an-install)): the rows land in the first
@@ -80,7 +86,7 @@ install's.
 (`GET /users/{login}/events/public`):
 
 - **Conditional** requests (ETag): a `304` costs no rate limit. GitHub answers `x-poll-interval: 60`,
-  so `shipcast watch` polls at most once a minute.
+  so rounds poll at most once a minute.
 - Events newer than the last seen id, oldest first; the cursor advances per event.
 - **Triggers**: `ReleaseEvent` with action `published`, and `PublicEvent` (a repo made public).
 - `.github/launch.yml` is read **at that tag** (the default branch for a repo made public): no file,
@@ -130,7 +136,8 @@ without `StructuredOutput` and the timeout raise `ClaudioError` with the chat id
 
 `claimManual(repo, ref?)` starts a launch by hand: the given tag or the latest release; a failed
 launch asked for again is retried. `loadBrand` and `loadProjects` read `brand.yml` and `projects.yml`
-from the launches repo's default branch.
+from the launches repo's default branch. In the app and the rounds, drafting is a `draft` job of the
+queue, never retried on its own since it costs an AI run.
 
 ## Articles written in the app
 
@@ -162,8 +169,9 @@ open), and `approveLaunch` merges it with a squash, after which publishing follo
 | --- | --- |
 | `launch <owner/repo> [--ref <tag>]` | Runs the pre-flight check, then claims and drafts the launch of a release (the latest without `--ref`) |
 | `preflight <owner/repo> [--ref <tag>]` | The pre-flight check alone |
-| `watch [--interval <s>]` | Polls the events (default every 300 s, never under 60), drafts each claimed launch, publishes, reads the metrics, and tells the owner through Telegram ([publishing.md](publishing.md)) |
-| `publish [--retry <channel>]`, `metrics` | Publishing and metrics, one round ([publishing.md](publishing.md)) |
+| `watch [--interval <s>]` | A worker of the job queue, as the app is: rounds in the Automation settings' mode (detect, draft, publish), the metrics every 6 hours and the token refreshes; `--interval` sets the seconds between rounds (never under 60). Stops on Ctrl+C or SIGTERM ([publishing.md](publishing.md)) |
+| `publish [--retry <channel>]` | Publishing, once ([publishing.md](publishing.md)) |
+| `metrics` | Reads every source now, as a job of the queue, so the app lists it |
 | `status` | The latest launches, their pack and status, and which networks and sources are configured |
 
 The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. Configuration comes from
@@ -183,4 +191,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]]

@@ -4,7 +4,6 @@ import type { Brand } from '@shipcast/schema';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey, buildServices, refreshInstagramToken, type Services } from './services.ts';
 
-export const METRICS_EVERY_MS = 6 * 3600 * 1000;
 export const METRICS_AT_KEY = 'metrics-collected-at';
 const TOKEN_REFRESH_EVERY_MS = 30 * 24 * 3600 * 1000;
 
@@ -95,43 +94,55 @@ async function step(name: string, log: (line: string) => void, fn: () => Promise
   }
 }
 
+export interface RoundOptions {
+  detect: boolean;
+  /** What happens to a release the round claimed; by default it is drafted here, which takes minutes */
+  draft?: (launch: Launch, services: Services) => Promise<void>;
+  /** Whether other work is publishing a launch already, which the round then leaves to it */
+  busy?: (launch: Launch) => Promise<boolean>;
+}
+
 /**
  * One round of the work nobody has to start by hand: claim the account's new releases (when polling;
- * webhooks claim them as they happen), publish every drafted launch that is ready, refresh the
- * Instagram tokens that are due, and read the metrics every six hours. `shipcast watch` and the app
- * both run it.
+ * webhooks claim them as they happen) and publish every drafted launch that is ready. The queue's
+ * round job runs it, in the app or in `shipcast watch`; reading the metrics and refreshing the
+ * Instagram tokens are jobs of their own, on schedules.
  */
-export async function runRound(d: RoundDeps, options: { detect: boolean; now?: Date }): Promise<void> {
+export async function runRound(d: RoundDeps, options: RoundOptions): Promise<void> {
   const log = d.log ?? (() => {});
-  const now = options.now ?? new Date();
   const services = await buildServices({ env: d.env, brand: d.brand, registry: d.registry, github: d.github, secrets: d.secrets });
+  const draft = options.draft ?? ((launch: Launch, s: Services) => draftClaimed(launch, d, s));
 
   if (options.detect) {
     await step('detect', log, async () => {
       for (const outcome of await detect({ github: d.github, registry: d.registry, brand: d.brand })) {
-        if (outcome.result === 'claimed') await draftClaimed(outcome.launch, d, services);
+        if (outcome.result === 'claimed') await draft(outcome.launch, services);
         else if (outcome.result === 'invalid-config') log(`${outcome.event.repo}: ${outcome.launch.detail}`);
       }
     });
   }
   await step('publish', log, async () => {
-    for (const launch of (await d.registry.recent(100)).filter((l) => l.status === 'drafted')) await publishOne(launch, d, services);
-  });
-  await step('Instagram tokens', log, async () => {
-    for (const line of await refreshInstagramAccounts(d, now)) log(line);
-    // A token still read from .env is refreshed where it lives, in the registry
-    if (services.instagram?.origin.kind === 'env') {
-      const line = await refreshInstagramToken(services, d, now);
-      if (line) log(line);
+    for (const launch of (await d.registry.recent(100)).filter((l) => l.status === 'drafted')) {
+      if (await options.busy?.(launch)) continue;
+      await publishOne(launch, d, services);
     }
   });
-  const lastMetrics = Date.parse((await d.registry.cursor(METRICS_AT_KEY)) ?? '') || 0;
-  if (now.getTime() - lastMetrics >= METRICS_EVERY_MS) {
-    await step('metrics', log, async () => {
-      const result = await collectMetrics(d.registry, d.brand, services.sources);
-      await d.registry.setCursor(METRICS_AT_KEY, now.toISOString());
-      log(`Metrics: ${result.readings} readings`);
-      for (const problem of result.problems) log(`  ${problem}`);
-    });
+}
+
+/** Every Instagram token that is due: the connected accounts', and one still read from `.env` */
+export async function refreshInstagramTokens(d: Pick<RoundDeps, 'registry' | 'secrets'>, services: Services, now = new Date()): Promise<string[]> {
+  const lines = await refreshInstagramAccounts(d, now);
+  // A token still read from .env is refreshed where it lives, in the registry
+  if (services.instagram?.origin.kind === 'env') {
+    const line = await refreshInstagramToken(services, d, now);
+    if (line) lines.push(line);
   }
+  return lines;
+}
+
+/** Reads every published launch's numbers now, and remembers when */
+export async function readMetrics(d: Pick<RoundDeps, 'registry' | 'brand'>, services: Services, now = new Date()): Promise<string[]> {
+  const result = await collectMetrics(d.registry, d.brand, services.sources);
+  await d.registry.setCursor(METRICS_AT_KEY, now.toISOString());
+  return [`Metrics: ${result.readings} readings`, ...result.problems.map((p) => `  ${p}`)];
 }

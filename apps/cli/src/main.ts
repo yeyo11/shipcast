@@ -3,7 +3,6 @@ import {
   checkout,
   claimManual,
   Claudio,
-  collectMetrics,
   draftLaunch,
   GitHubRest,
   loadBrand,
@@ -14,22 +13,25 @@ import {
   type PipelineDeps,
   type PublishResult,
 } from '@shipcast/engine';
-import { Channel, type Brand } from '@shipcast/schema';
+import { Channel } from '@shipcast/schema';
 import {
   buildServices,
+  BY_HAND,
   ConfigError,
   createApiToken,
   InvalidScopes,
   KeychainStore,
   loadConfig,
-  METRICS_AT_KEY,
   MIN_INTERVAL_SECONDS,
   parseScopes,
   publishOne,
-  runRound,
+  readAutomation,
+  startWorking,
+  WorkQueue,
+  workHandlers,
+  writeAutomation,
   type RoundDeps,
   type SecretStore,
-  type Services,
 } from '@shipcast/runtime';
 
 const USAGE = `Usage: shipcast <command>
@@ -39,8 +41,10 @@ const USAGE = `Usage: shipcast <command>
   preflight <owner/repo> [--ref <tag>]
                                       Check a repo is ready to launch: release, launch.yml, license,
                                       README and demo
-  watch [--interval <seconds>]        Watch the account's releases, draft each launch and publish it once
-                                      its drafts are merged; read the numbers every 6 h (default 300 s)
+  watch [--interval <seconds>]        Work Shipcast's job queue beside (or instead of) the app: rounds
+                                      that claim releases, draft them and publish what is merged, and
+                                      the numbers every 6 h, in the Automation settings' mode;
+                                      --interval sets the seconds between rounds (at least 60)
   publish [--retry <channel>]         Publish every drafted launch whose pull request is merged, once;
                                       --retry gives a channel that failed for good another chance
   metrics                             Read the numbers of every published launch now
@@ -82,13 +86,6 @@ function reportPublish(result: PublishResult): void {
 async function publishReady(round: RoundDeps): Promise<void> {
   const services = await buildServices({ env: round.env, brand: round.brand, registry: round.registry, github: round.github, secrets: round.secrets });
   for (const launch of (await round.registry.recent(100)).filter((l) => l.status === 'drafted')) reportPublish(await publishOne(launch, round, services));
-}
-
-async function readMetrics(brand: Brand, services: Services, registry: Registry): Promise<void> {
-  const result = await collectMetrics(registry, brand, services.sources);
-  await registry.setCursor(METRICS_AT_KEY, new Date().toISOString());
-  console.log(`Metrics: ${result.readings} readings`);
-  for (const problem of result.problems) console.error(`  ${problem}`);
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -145,9 +142,24 @@ async function main(argv: string[]): Promise<number> {
       }
 
       case 'metrics': {
+        // A job of the queue, sent and worked here, so the app lists it like any other reading
         const brand = await loadBrand(github, config.launchesRepo);
-        await readMetrics(brand, await buildServices({ env: process.env, brand, registry, github, secrets }), registry);
-        return 0;
+        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5 });
+        try {
+          const id = await queue.send('metrics', { reason: BY_HAND }, { title: 'Reading the numbers, by hand', singletonKey: BY_HAND });
+          if (!id) {
+            console.error('A reading by hand is queued already.');
+            return 1;
+          }
+          const { metrics } = workHandlers(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: async () => brand });
+          await queue.work({ metrics });
+          const done = await queue.wait(id, 30 * 60_000);
+          for (const line of done?.log ?? []) console.log(line);
+          if (!done) console.error('The reading did not end within 30 minutes.');
+          return done?.state === 'completed' ? 0 : 1;
+        } finally {
+          await queue.stop();
+        }
       }
 
       case 'dashboard': {
@@ -196,21 +208,33 @@ async function main(argv: string[]): Promise<number> {
       }
 
       case 'watch': {
-        const interval = Math.max(MIN_INTERVAL_SECONDS, Number(values.interval ?? 300)) * 1000;
         const brand = await loadBrand(github, config.launchesRepo);
         const services = await buildServices({ env: process.env, brand, registry, github, secrets });
-        console.log(`Watching ${brand.github}'s releases for ${config.launchesRepo}, every ${interval / 1000} s. Ctrl+C to stop.`);
-        console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);
-        let stopping = false;
-        process.once('SIGINT', () => {
-          stopping = true;
-          console.log('\nStopping after the current round.');
-        });
-        // The same round the web app runs: detect, publish, refresh tokens, metrics every 6 hours
-        while (!stopping) {
-          await runRound({ env: process.env, registry, github, secrets, brand, pipeline: deps, log: (line) => console.log(line) }, { detect: true });
-          await new Promise((r) => setTimeout(r, interval));
+        // The cadence is the Automation setting, shared with the app: --interval changes it
+        if (values.interval !== undefined) {
+          const seconds = Number(values.interval);
+          if (!Number.isFinite(seconds)) {
+            console.error(`--interval needs a number of seconds, not "${values.interval}"`);
+            return 2;
+          }
+          await writeAutomation(registry, { ...(await readAutomation(registry)), intervalSeconds: Math.max(MIN_INTERVAL_SECONDS, seconds) });
         }
+        const automation = await readAutomation(registry);
+        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch' });
+        // A worker of the same queue as the app: the same rounds and jobs, never one round twice
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: async () => brand }, { firstRoundInSeconds: 0 });
+        console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${config.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
+        if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');
+        console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);
+        await new Promise<void>((resolve) => {
+          const stop = () => {
+            console.log('\nStopping: the running jobs get a while to finish.');
+            resolve();
+          };
+          process.once('SIGINT', stop);
+          process.once('SIGTERM', stop);
+        });
+        await queue.stop();
         return 0;
       }
 

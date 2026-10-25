@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T10:29:15.686407029Z
-updated_at: 2026-10-25T13:36:33.218685615Z
+created_at: 2026-10-25T14:07:50.460172283Z
+updated_at: 2026-10-25T15:17:26.116337982Z
 tags:
     - publishing
     - connectors
@@ -11,14 +11,15 @@ tags:
     - newsletter
     - instagram
     - post-model
+    - job-queue
 ---
 # Publishing, media and metrics
 
 What happens after the drafts pull request ([engine.md](engine.md)): the launch's media, publishing
 on every channel once the owner merges, and reading the numbers back. Built on 2026-10-24 in
 `packages/assets`, `packages/capture`, `packages/connectors`, `packages/engine` (`launch-assets.ts`,
-`publish.ts`, `newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`, `rounds.ts`) and the
-[web app](web-app.md). Every connector is Shipcast's own, over `fetch`, with no SDK
+`publish.ts`, `newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`, `rounds.ts`,
+`work.ts`) and the [web app](web-app.md). Every connector is Shipcast's own, over `fetch`, with no SDK
 ([decisions/mvp-scope.md](decisions/mvp-scope.md) says why Postiz was dropped).
 
 ## The launch's media
@@ -125,6 +126,12 @@ Binary files go into the pull request as base64 blobs through the Git data API.
    would repeat what already happened. The launch is `published` when nothing is pending, otherwise it
    stays `drafted` (reported as `partial`) and the next round picks it up.
 
+Started from the app (approving, **Try again**, a direct publish) or by a merge's webhook, publishing
+is a `publish` job of the queue ([decisions/job-queue.md](decisions/job-queue.md)): one try per
+attempt, and while the site has not deployed (or some channels will retry) the job is tried again 30
+seconds later, up to 40 times, so the 20-minute wait survives a restart. A launch has one publish job
+waiting at most, and the round leaves a launch with one alone.
+
 ## The newsletter
 
 Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newsletter-brevo)).
@@ -203,21 +210,25 @@ The newsletter also needs the `newsletter` block in `brand.yml`. With Telegram c
 owner's own chat with the bot hears when drafts wait, when a launch is published and when it fails.
 
 The round (`runRound` in `packages/runtime/src/rounds.ts`, 2026-10-25) is shared: claim new releases
-(when polling), publish every drafted launch that is ready, refresh every connected Instagram
-account's token that is 30 days old (they last 60; Meta refuses to refresh one younger than a day, so
-a first sight only records the date), and read the metrics every 6 hours. The web app runs it on its
-own timer, or takes GitHub webhooks instead ([web-app.md](web-app.md#automation)); `watch` runs it
-from a terminal.
+(when polling; each claimed launch is queued as a `draft` job) and publish every drafted launch that
+is ready. Since phase 6 it is a job of the queue ([decisions/job-queue.md](decisions/job-queue.md)):
+one round at most queued and one running, whichever process sent it, each sending the next an
+interval later. Reading the metrics (every 6 hours, cron `0 */6 * * *`) and refreshing every
+connected Instagram account's token that is 30 days old (daily; they last 60, and Meta refuses to
+refresh one younger than a day, so a first sight only records the date) are jobs of their own. With
+automation off, none of them runs unless sent by hand. The web app works every queue, or takes
+GitHub webhooks instead of polling ([web-app.md](web-app.md#automation)); `watch` works the same
+queues from a terminal.
 
 | Command | Does |
 | --- | --- |
-| `watch` | The round, every interval (default 300 s, never under 60) |
+| `watch [--interval <s>]` | A worker of the job queue beside (or instead of) the app, in the Automation settings' mode; `--interval` sets the seconds between rounds (never under 60) |
 | `publish [--retry <channel>]` | Publishes every drafted launch that is ready, once; `--retry` gives a channel that failed for good another chance |
-| `metrics` | Reads every source now |
+| `metrics` | Reads every source now, as a job of the queue the app lists |
 
 The launches, their posts and numbers, approving and retrying are also in the [web app](web-app.md),
 which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]]
