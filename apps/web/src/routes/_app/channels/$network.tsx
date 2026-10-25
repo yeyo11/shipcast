@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, useNavigate, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useToast } from '../../../components/Toasts';
 import { Notice } from '../../../components/ui';
@@ -6,10 +6,7 @@ import { connectWithForm, getChannels } from '../../../server/channels.functions
 import { channelIcon } from '../../../server/view';
 
 export const Route = createFileRoute('/_app/channels/$network')({
-  validateSearch: (search: Record<string, unknown>): { connected?: string; problem?: string } => ({
-    ...(typeof search.connected === 'string' ? { connected: search.connected } : {}),
-    ...(typeof search.problem === 'string' ? { problem: search.problem } : {}),
-  }),
+  validateSearch: (search: Record<string, unknown>): { problem?: string } => (typeof search.problem === 'string' ? { problem: search.problem } : {}),
   loader: async ({ params }) => {
     const data = await getChannels();
     const network = data.networks.find((n) => n.id === params.network);
@@ -23,20 +20,18 @@ export const Route = createFileRoute('/_app/channels/$network')({
 function Connect() {
   const { network, brands, instagramOAuth, secretsKind } = Route.useLoaderData();
   const search = Route.useSearch();
-  const router = useRouter();
   const [brand, setBrand] = useState(brands[0]?.id ?? 'personal');
   const [label, setLabel] = useState('');
   const [values, setValues] = useState<Record<string, string>>({});
   const toast = useToast();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
-  // The way back from an OAuth flow carries its outcome in the address: shown once, then cleared
+  // A failed OAuth flow comes back here with its problem in the address: shown once, then cleared
   useEffect(() => {
-    if (!search.connected && !search.problem) return;
-    if (search.connected) toast.done(search.connected, `${network.name} is ready to publish.`);
-    if (search.problem) toast.fail(search.problem);
+    if (!search.problem) return;
+    toast.fail(search.problem);
     void navigate({ to: '/channels/$network', params: { network: network.id }, search: {}, replace: true });
-  }, [search.connected, search.problem, network.id, network.name, navigate, toast]);
+  }, [search.problem, network.id, navigate, toast]);
   const icon = channelIcon(network.channel ?? network.id);
   const oauthUrl = `/auth/${network.id}?${new URLSearchParams({ brand, label, ...(network.id === 'mastodon' ? { instance: values.instance ?? '' } : {}) })}`;
 
@@ -70,12 +65,9 @@ function Connect() {
               problem: error instanceof Error ? error.message : String(error),
             }));
             setBusy(false);
-            if (answer.ok) toast.done(`Connected ${answer.identity}`, `${network.name} is ready to publish.`);
+            // The new account is shown where it now lives: the channels list, scrolled to it
+            if (answer.ok) await navigate({ to: '/channels', search: { connected: `Connected ${answer.identity}`, focus: String(answer.id) } });
             else toast.fail(answer.problem);
-            if (answer.ok) {
-              setValues({});
-              await router.invalidate();
-            }
           }}
         >
           {brands.length > 1 && (

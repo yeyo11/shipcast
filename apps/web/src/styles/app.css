@@ -169,3 +169,5 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 /* A failure kept on the page: red, worded, its original text folded away */
 .problem { margin-top: 6px; font-size: 14px; line-height: 1.45; color: var(--sc-failure); }
 .problem .toast-details summary { color: var(--sc-failure); }
+/* The account just connected gets the focus ring, the same yellow as every focus */
+.account-row:focus { outline: 3px solid var(--sc-yellow); outline-offset: 6px; border-radius: 12px; }

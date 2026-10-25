@@ -1,11 +1,15 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useState } from 'react';
+import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
 import { useToast } from '../../../components/Toasts';
 import { Pill, Problem, when } from '../../../components/ui';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
 
 export const Route = createFileRoute('/_app/channels/')({
+  validateSearch: (search: Record<string, unknown>): { connected?: string; focus?: string } => ({
+    ...(typeof search.connected === 'string' ? { connected: search.connected } : {}),
+    ...(typeof search.focus === 'string' && /^\d+$/.test(search.focus) ? { focus: search.focus } : {}),
+  }),
   head: () => ({ meta: [{ title: 'Channels · Shipcast' }] }),
   loader: () => getChannels(),
   component: Channels,
@@ -42,7 +46,7 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
     });
   const brand = brands.find((b) => b.id === account.brand)?.name ?? account.brand;
   return (
-    <li>
+    <li id={`account-${account.id}`} tabIndex={-1} className="account-row">
       <div style={{ minWidth: 0, flex: 1 }}>
         {renaming ? (
           <form
@@ -152,7 +156,22 @@ function Channels() {
   const data = Route.useLoaderData();
   const router = useRouter();
   const toast = useToast();
+  const navigate = useNavigate();
+  const search = Route.useSearch();
   const [busy, setBusy] = useState(false);
+  // Just connected: say so, then bring the new account into view and give it the focus
+  useEffect(() => {
+    if (!search.connected && !search.focus) return;
+    if (search.connected) toast.done(search.connected, 'It is checked and ready to publish.');
+    const focus = search.focus;
+    // Clearing the address is a navigation, which would scroll back to the top: scroll after it
+    void navigate({ to: '/channels', search: {}, replace: true, resetScroll: false }).then(() => {
+      const row = focus ? document.getElementById(`account-${focus}`) : null;
+      if (!row) return;
+      row.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      row.focus({ preventScroll: true });
+    });
+  }, [search.connected, search.focus, navigate, toast]);
   const connected = data.networks.filter((n) => n.accounts.length > 0);
   const rest = data.networks.filter((n) => n.accounts.length === 0);
   const envCount = data.networks.filter((n) => n.usesEnv).length;

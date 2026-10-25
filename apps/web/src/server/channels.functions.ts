@@ -16,7 +16,7 @@ export const connectWithForm = createServerFn({ method: 'POST' })
     try {
       const credentials = splitFields(data.network, data.values);
       const result = await connectAccount(await accountDeps(), { network: data.network, brand: data.brand, label: data.label, credentials });
-      return result.ok ? { ok: true as const, identity: result.account.identity ?? result.account.label } : { ok: false as const, problem: result.problem };
+      return result.ok ? { ok: true as const, id: result.account.id, identity: result.account.identity ?? result.account.label } : { ok: false as const, problem: result.problem };
     } catch (error) {
       return { ok: false as const, problem: error instanceof MissingField ? error.message : `could not connect: ${error instanceof Error ? error.message : String(error)}` };
     }
