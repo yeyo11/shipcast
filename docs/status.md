@@ -1,13 +1,13 @@
 ---
-created_at: 2026-10-24T23:14:39.740485805Z
-updated_at: 2026-10-24T23:31:20.360951464Z
+created_at: 2026-10-25T00:01:59.561130176Z
+updated_at: 2026-10-25T00:17:58.32574231Z
 tags:
     - status
     - roadmap
 ---
 # Status
 
-**Phase 0, foundations, done**; **phase 1, the local MVP: its first real launch went out on 2026-10-25** ([plan](plans/shipcast.md#roadmap)).
+**Phase 0, foundations, done**; **phase 1, the local MVP: its first real launch went out on 2026-10-25** ([plan](plans/shipcast.md#roadmap), ticked the same day).
 Of phase 0: the repo, the `launch.yml` and content pack schemas, the launches repo with its blog and
 the dev.to account are in place, and the name is reserved on npm (`shipcast@0.0.0`, published by the
 owner on 2026-10-24); Hashnode left the MVP.
@@ -44,9 +44,9 @@ Services, set up on 2026-10-24:
   submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
   Meta app's privacy policy URL points to `https://josegarrido.dev/en/privacy/`.
 - **Every credential of the MVP** — Brevo, GitHub (with repo traffic), claudio, dev.to, Instagram
-  (with insights), Bluesky, Mastodon, Cloudflare's analytics API and a Search Console service account
-  — is in the owner's `.env` and answered when tested. Accounts, expiry dates and machine details are
-  in the owner's local notes, not in the public docs.
+  (with insights and comments), Bluesky, Mastodon, Cloudflare's analytics API and a Search Console
+  service account — is in the owner's `.env` and answered when tested. Accounts, expiry dates and
+  machine details are in the owner's local notes, not in the public docs.
 
 **Code:**
 
@@ -63,9 +63,11 @@ Services, set up on 2026-10-24:
   one-commit pull request); then publishing once the pull request is merged, the newsletter, and
   metrics collection ([publishing.md](publishing.md)).
 - `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon,
-  Instagram and Brevo (publish and metrics), Cloudflare Web Analytics and Search Console readers.
-- `packages/assets` (2026-10-24): the 1200×630 launch image in the blog's editorial identity
-  (Satori and resvg) and the demo GIF turned into an Instagram Reel with ffmpeg.
+  Instagram (carousel, story, comment) and Brevo (publish and metrics), Cloudflare Web Analytics and
+  Search Console readers.
+- `packages/assets` (2026-10-24): the 1200×630 launch image and the Instagram carousel and story in
+  the blog's editorial identity (Satori and resvg), and the demo GIF as a video over its backdrop with
+  ffmpeg.
 - `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]` (which retries a failed launch),
   `watch` (detect, draft, publish, metrics every 6 h, Instagram token refresh), `publish [--retry
   <channel>]`, `metrics`, `dashboard [--port] [--host]`, `status`, configured from `.env`.
@@ -89,11 +91,14 @@ mail server. claudio turned it on (claudio pull request #62).
 --ref v0.9.0` into [launches#1](https://github.com/yeyo11/launches/pull/1) (AI cost $0.45), edited by
 the owner in the pull request (out went every "what does not work yet" part, now also out of the
 brand's tone), merged, and published by `shipcast publish`: the article in both languages on the
-blog, dev.to, Bluesky, Mastodon, Instagram (the demo as a Reel) and the newsletter in both languages;
-the Reddit drafts are for the owner to post. Every metrics source answered (Mastodon once the owner
-widened its token's scopes). The owner judged the test a success, with Instagram as the weakest
-result. `watch` runs only when the owner starts it: running it as a service was declined on
-2026-10-25.
+blog, dev.to, Bluesky, Mastodon, Instagram and the newsletter in both languages; the Reddit drafts are
+for the owner to post. Every metrics source answered (Mastodon once the owner widened its token's
+scopes). The owner judged the test a success, with Instagram as the weakest result: Instagram became a
+carousel with a story and a comment ([publishing.md](publishing.md#the-launchs-media)), and claudio's
+launch was published again in that format the same day (the first Reel removed by the owner).
+`watch` runs only when the owner starts it: running it as a service was declined on 2026-10-25. The
+Instagram bio links to the blog's home page, where the newest launch comes first; a dynamic "link in
+bio" page was offered and declined.
 
 What the first run found, each fixed and tested:
 
@@ -111,11 +116,16 @@ Waiting on the owner:
 - Post the Reddit drafts by hand, after reading each subreddit's self-promotion rules (r/opensource
   wants the Promotional flair).
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
+- Decide on the stale worktree `worktree-agent-a04f1c5741bdcf80d` (the rejected signal-path design
+  assets): delete it or keep it as history.
 
 Next in code:
 
-- Later: one source for the project colours, generated covers per article, the subreddits' flairs in
-  `launch.yml`, and the dashboard in Cartel.
+- One source for the project colours, generated covers per article, the subreddits' flairs in
+  `launch.yml`, the pre-flight check (license, README, release), and the dashboard in Cartel.
+- Then the rest of the roadmap ([plans/shipcast.md](plans/shipcast.md#roadmap)): the company brand,
+  Hashnode, Show HN and Product Hunt, and phase 6 (other AI providers, the GitHub Action mode,
+  documentation and Shipcast's own launch).
 
 ## Related
 

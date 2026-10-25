@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T12:00:00Z
-updated_at: 2026-10-24T12:00:00Z
+created_at: 2026-10-24T12:26:39.628366342Z
+updated_at: 2026-10-25T00:17:10.766709944Z
 tags:
     - plan
     - architecture
@@ -17,7 +17,9 @@ it per channel after the owner's approval. To start with, the engine runs on the
 phase 6.
 
 Both proposals agreed on the basics: Postiz for social networks, human review for Reddit and Hacker
-News, and the release as the trigger.
+News, and the release as the trigger. (Postiz was later discarded for Shipcast's own connectors, and
+X and LinkedIn dropped: see [decisions/mvp-scope.md](../decisions/mvp-scope.md); the roadmap below
+is ticked with what was built.)
 
 ## Ideas taken from the ChatGPT proposal
 
@@ -163,56 +165,65 @@ last is Shipcast's own launch, made with Shipcast. At least one similar tool exi
 [Release Announcer](https://mcpmarket.com/zh/server/release-announcer), which only generates
 drafts; Shipcast differs in that it publishes, generates assets and measures results.
 
+Ticked on 2026-10-25, after the first real launch; the MVP pulled several items forward from later
+phases ([decisions/mvp-scope.md](../decisions/mvp-scope.md)) and dropped others for good.
+
 ### Phase 0: foundations
 
-- [ ] Check and reserve the name (GitHub organisation, npm and domain)
+- [x] Check and reserve the name: npm `shipcast` reserved; the GitHub organisation and the domains
+      were taken, so the repo stays at `yeyo11/shipcast`
 - [x] Create the `shipcast` repo: MIT, TypeScript and a pnpm monorepo, the same stack as claudio
-- [ ] Define the schema of `launch.yml` and of the JSON content pack
-- [ ] Create the launches repo with the blog in Astro, published on GitHub Pages
-- [ ] Create the dev.to and Hashnode accounts
+- [x] Define the schema of `launch.yml` and of the JSON content pack
+- [x] Create the launches repo with the blog in Astro, published on GitHub Pages (`josegarrido.dev`)
+- [x] Create the dev.to account; Hashnode left the MVP
 
 ### Phase 1: local MVP, end to end
 
-- [ ] Local engine that detects releases and manual launches on both accounts
-- [ ] claudio integration to analyse the repo and generate the pack
-- [ ] Pre-flight check: license, README, demo GIF and release
-- [ ] Drafts in a pull request; the merge publishes
-- [ ] Publishing to the blog and to dev.to with a canonical URL
-- [ ] Launch registry to avoid duplicates
+- [x] Local engine that detects releases and manual launches (the personal account; the company one
+      waits until after the MVP)
+- [x] claudio integration to analyse the repo and generate the pack
+- [ ] Pre-flight check: license, README, demo GIF and release (only the demo is checked so far)
+- [x] Drafts in a pull request; the merge publishes
+- [x] Publishing to the blog and to dev.to with a canonical URL
+- [x] Launch registry to avoid duplicates
 
-Test: claudio announced on the blog and on dev.to with no intervention beyond the merge.
+Test, passed on 2026-10-25: claudio v0.9.0 announced with no intervention beyond the merge — on the
+blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 
 ### Phase 2: networks and brands
 
-- [ ] Hashnode
-- [ ] Bluesky and Mastodon (free APIs)
-- [ ] X, with the pay-per-use API and the link in a reply
-- [ ] LinkedIn
-- [ ] Brand separation: accounts, tone and language
-- [ ] Spanish and English versions
+- [ ] Hashnode (out of the MVP)
+- [x] Bluesky and Mastodon (free APIs)
+- [x] ~~X~~ and ~~LinkedIn~~: dropped for good by the owner on 2026-10-24
+- [x] Instagram, added to the MVP: a carousel, its story and a comment (2026-10-25)
+- [ ] Brand separation: the schema enforces it (a launch's brand must match its launches repo); only
+      the personal brand is set up
+- [x] Spanish and English versions, each with its own URL
 - [ ] Telegram notifications
-- [ ] `auto`, `approval` and `manual` modes per channel
+- [x] `auto`, `approval` and `manual` modes per channel
 
 ### Phase 3: assets
 
-- [ ] Mandatory demo GIF: VHS for terminal tools, Playwright for websites
-- [ ] Generated OG image and cover
+- [x] Mandatory demo GIF, as a video in the Instagram carousel (made by VHS or Playwright: not yet)
+- [x] Generated OG image, Instagram slides and story; drawn covers per project on the blog
 - [ ] Automatic screenshots of deployed demos
 
 ### Phase 4: dashboard and metrics
 
-- [ ] Local web dashboard, reachable through Tailscale Serve
-- [ ] GitHub stars, forks and traffic with a daily copy (the traffic API keeps only 14 days)
-- [ ] dev.to and Hashnode views and reactions, and blog analytics
-- [ ] Clicks per channel with UTM links
+- [x] Local web dashboard (plain; the Cartel design is pending), `--host` for the local network
+- [x] GitHub stars, forks and traffic (read every 6 hours while `watch` runs)
+- [x] dev.to views and reactions, Bluesky, Mastodon, Instagram, newsletter, blog analytics and
+      Search Console
+- [x] Clicks per channel: `?ref=<channel>` on every link; visits attributed by referrer, since
+      Cloudflare Web Analytics drops the query string
 - [ ] Approval and editing from the dashboard
 
 ### Phase 5: communities and extra channels
 
-- [ ] Reddit and Show HN drafts
+- [x] Reddit drafts (Show HN: not yet)
 - [ ] Product Hunt kit
-- [ ] Newsletter, Telegram channel and Discord
-- [ ] Personal style guide for the AI
+- [x] Newsletter, through Brevo (Telegram channel and Discord: not yet)
+- [x] Personal style guide for the AI: the brand's `tone` in `brand.yml`, refined after the first launch
 
 ### Phase 6: a product for other developers
 
@@ -225,13 +236,13 @@ Final test: Shipcast's launch, generated and published by Shipcast.
 
 ## Open questions
 
-- **Launch volume:** measured with the phase 1 registry.
-- **Writing style:** defined from examples in phase 5.
-- **Subreddits and communities:** to be decided according to the owner's profile.
-- **Postiz or our own X and LinkedIn connectors:** Postiz needs Postgres, Redis and Temporal, heavy for
-  a laptop; decided in phase 2.
-- **Cost of X:** a post costs about $0.015 and one with a link about $0.20; a six-post thread with
-  one link comes to about $0.28 per launch.
+- **Launch volume:** measured with the registry, now that it is in use.
+- **Writing style:** set in `brand.yml`'s `tone`; to refine with each launch.
+- **Subreddits and communities:** for claudio, r/ClaudeAI, r/selfhosted, r/SideProject and
+  r/opensource; per project in its `launch.yml`.
+- ~~**Postiz or our own connectors:**~~ decided on 2026-10-24: our own connectors, Postiz only as
+  reference reading.
+- ~~**Cost of X:**~~ moot: the owner does not publish on X.
 
 ## Sources
 
@@ -243,4 +254,4 @@ Final test: Shipcast's launch, generated and published by Shipcast.
 
 ## Related
 
-[[status.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]]
+[[status.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]
