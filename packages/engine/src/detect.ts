@@ -37,7 +37,7 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
 
   const outcomes: Outcome[] = [];
   for (const event of fresh) {
-    outcomes.push(await consider(event, { github, registry, brand }));
+    outcomes.push(await claimEvent(event, { github, registry, brand }));
     // Advanced per event, so a crash halfway through resumes where it stopped
     registry.setCursor(lastKey, event.id);
   }
@@ -45,7 +45,11 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
   return outcomes;
 }
 
-async function consider(event: GitHubEvent, { github, registry, brand }: DetectOptions): Promise<Outcome> {
+/**
+ * Decides one event: the same rules whether it came from polling the events or from a GitHub webhook,
+ * so a release is launched (or ignored) for the same reasons either way, and claimed only once.
+ */
+export async function claimEvent(event: GitHubEvent, { github, registry, brand }: DetectOptions): Promise<Outcome> {
   if (event.type === 'release' && event.prerelease) return { event, result: 'ignored', reason: 'a pre-release' };
 
   // A repo made public has no tag: its launch reads the default branch and is keyed by the event
