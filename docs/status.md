@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T06:56:01.750214688Z
-updated_at: 2026-10-25T08:12:09.761328351Z
+created_at: 2026-10-25T08:12:11.885265669Z
+updated_at: 2026-10-25T09:19:51.949377925Z
 tags:
     - status
     - roadmap
@@ -12,7 +12,7 @@ tags:
 **Phases 0 to 5 done; Shipcast v0.1.0 was launched with Shipcast, from its app, on 2026-10-25.** The
 same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in
 the keychain, the phase 5 channels and what the MVP had left ([its outcome](plans/goal-finish.md#outcome-2026-10-25)).
-The app has its certificate (renewed by itself); its address waits on the tailnet's port 443.
+The app is live at its address, signed in with GitHub, with Instagram connected through its OAuth.
 
 ## What exists
 
@@ -43,7 +43,8 @@ The app has its certificate (renewed by itself); its address waits on the tailne
   TanStack Start in Cartel; GitHub sign-in limited to the owner, signed sessions, same-origin checks;
   Launches, a launch's review (edit, approve, retry), Launch a repo, Write, and Channels (every
   integration, its accounts and permissions, connect by form or OAuth, check, rename, disconnect,
-  several accounts per channel and brand, import from `.env`). It replaced the CLI's dashboard.
+  several accounts per channel and brand, import from `.env`); outcomes and errors as toasts in Cartel,
+  explained for a person. It replaced the CLI's dashboard.
 
 ## Services
 
@@ -55,11 +56,13 @@ The app has its certificate (renewed by itself); its address waits on the tailne
 - **Search and analytics**: Search Console and Cloudflare Web Analytics on the blog.
 - **The newsletter** in Brevo, live on the blog ([publishing.md](publishing.md#the-newsletter)).
 - **The app's address**: `https://shipcast.josegarrido.dev`, an A record at this machine's tailnet
-  address, a GitHub OAuth App for the sign-in, and a Let's Encrypt certificate renewed through the
-  Cloudflare token (2026-10-25).
+  address, the tailnet's port 443 forwarded to it by Tailscale Serve, a GitHub OAuth App for the
+  sign-in (used for real on 2026-10-25), and a Let's Encrypt certificate renewed through the
+  Cloudflare token.
 - **Credentials**: on 2026-10-25 every network moved from `.env` into the keychain as a connected
   account, each checked live: dev.to, Bluesky, Instagram, Brevo, Cloudflare, Search Console, then
-  Mastodon (a new token), Telegram (a bot posting to the owner's channel) and Discord (a webhook). Accounts,
+  Mastodon (a new token), Telegram (a bot posting to the owner's channel) and Discord (a webhook),
+  and a second Instagram account connected through Instagram Login from the app. Accounts,
   expiry dates and machine details are in the owner's local notes, not in the public docs.
 
 ## Launches so far
@@ -81,18 +84,17 @@ The app has its certificate (renewed by itself); its address waits on the tailne
 
 ## Waiting on the owner
 
-- **The tailnet's port 443**: Tailscale running on this machine, and the other app it serves on 443
-  moved to another port, so `pnpm app` can forward 443 to Shipcast.
-- **Signing in with GitHub and connecting Instagram by OAuth** on the real address, which only the
-  owner's own sessions can do; the Instagram app secret is in place.
 - **Hashnode is out for now** (the owner's decision, 2026-10-25): its API needs a paid Pro plan since
   2026-05-13; the connector stays ready.
 - Try the app running and validate its design (built in Cartel, as approved).
-- Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 
 ## Next
 
-- The app on its address, once port 443 is free.
+- **The app runs no rounds of its own.** Detecting releases, publishing a launch merged on GitHub,
+  reading the metrics every 6 hours and refreshing the Instagram tokens happen only while
+  `pnpm shipcast watch` runs, or when an action in the app starts them. Making the app run those
+  rounds, and keeping it running across reboots, is the next decision.
+- Closing the MVP: work moves to pull requests ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)).
 - Phase 6 ([plans/shipcast.md](plans/shipcast.md#roadmap)): other AI providers, the GitHub Action
   mode, documentation and a one-command install; and the company brand's own setup.
 
