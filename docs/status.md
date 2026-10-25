@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:57:17.114493621Z
-updated_at: 2026-10-25T01:50:57.068080332Z
+created_at: 2026-10-25T01:51:00.154801285Z
+updated_at: 2026-10-25T04:15:03.495559848Z
 tags:
     - status
     - roadmap
@@ -9,10 +9,10 @@ tags:
 ---
 # Status
 
-**Phases 0 and 1 done; the first real launch went out on 2026-10-25.** On the same day the
-[goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in the
-keychain, the phase 5 channels and what the MVP had left; its final test (Shipcast launched with
-Shipcast) is waiting on the credentials listed under "Waiting on the owner".
+**Phases 0 to 5 done; Shipcast v0.1.0 was launched with Shipcast, from its app, on 2026-10-25.** The
+same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in
+the keychain, the phase 5 channels and what the MVP had left ([its outcome](plans/goal-finish.md#outcome-2026-10-25)).
+The app's own address (HTTPS on the owner's domain) waits on one credential.
 
 ## What exists
 
@@ -21,7 +21,7 @@ Shipcast) is waiting on the credentials listed under "Waiting on the owner".
   CI on every pull request and on main, Sluice gates for `typecheck` and `test`, pando as the
   knowledge base ([knowledge-base.md](knowledge-base.md)). Work goes straight to `main` until the MVP
   ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The README says what Shipcast does
-  today, with a demo of the app (`docs/media/tour.gif`).
+  today, with a demo of the app (`docs/media/tour.gif`). Release v0.1.0 on GitHub.
 - **`packages/schema`**: `launch.yml` ([launch-yml.md](launch-yml.md)), `brand.yml`
   ([brands.md](brands.md)), `projects.yml` (the project looks) and the content pack
   ([content-pack.md](content-pack.md)), with line-aware YAML errors and the pack's draft-07 JSON Schema.
@@ -68,6 +68,11 @@ Shipcast) is waiting on the credentials listed under "Waiting on the owner".
 - **A test article written in the app and published without a pull request** (2026-10-25): the blog
   in both languages (the Spanish exactly as written, the English translated) and Bluesky. A test, for
   the owner to delete.
+- **Shipcast v0.1.0** (2026-10-25), the goal's final test, launched from the app: release, pre-flight,
+  drafts reviewed in the app (launches#2, AI cost $0.32) and approved there; out on the blog in both
+  languages, dev.to, Bluesky, Instagram (carousel, story, comment) and the newsletter in both
+  languages, with the metrics read from every source. Mastodon failed on its invalid token and waits
+  for **Try again** once it is reconnected.
 
 ## Waiting on the owner
 
@@ -76,15 +81,16 @@ Shipcast) is waiting on the credentials listed under "Waiting on the owner".
 - **The Instagram app secret** (`INSTAGRAM_APP_SECRET`) for Instagram Login from the app.
 - **A new Mastodon token**: the one in `.env` is invalid (the network answers "the access token is
   invalid"); connect it again from the app, by OAuth or by pasting a token.
-- **Phase 5 accounts**: a Telegram bot and channel, a Discord webhook, a Hashnode token (whose API may
-  need the Pro plan). Each connector is built and tested with fakes; each gets its real test once
-  connected.
+- **Phase 5 accounts**: a Telegram bot and channel and a Discord webhook. Each connector is built and
+  tested with fakes; each gets its real test once connected. **Hashnode's API needs its paid Pro plan**
+  since 2026-05-13 (against the MVP's "no paid APIs"): the owner decides whether to pay for it.
+- Try the app running and validate its design (built in Cartel, as approved).
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 
 ## Next
 
-- The goal's final test: Shipcast v0.1.0 launched from the app on every connected channel.
-- Then phase 6 ([plans/shipcast.md](plans/shipcast.md#roadmap)): other AI providers, the GitHub Action
+- The app on its address, once the certificate's token is in `.env`.
+- Phase 6 ([plans/shipcast.md](plans/shipcast.md#roadmap)): other AI providers, the GitHub Action
   mode, documentation and a one-command install; and the company brand's own setup.
 
 ## Related

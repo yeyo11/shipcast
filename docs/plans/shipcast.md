@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:57:10.926320515Z
-updated_at: 2026-10-25T01:52:27.145015184Z
+created_at: 2026-10-25T01:52:30.790442949Z
+updated_at: 2026-10-25T04:15:49.644303841Z
 tags:
     - plan
     - architecture
@@ -193,7 +193,7 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 
 ### Phase 2: networks and brands
 
-- [x] Hashnode: connector and publishing built on 2026-10-25; its live test waits on an account
+- [x] Hashnode: connector and publishing built on 2026-10-25; its live test needs the paid Pro plan its API requires since 2026-05-13
 - [x] Bluesky and Mastodon (free APIs)
 - [x] ~~X~~ and ~~LinkedIn~~: dropped for good by the owner on 2026-10-24
 - [x] Instagram, added to the MVP: a carousel, its story and a comment (2026-10-25)
@@ -232,9 +232,10 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 - [ ] Swappable AI providers: claudio, the Anthropic API and the Claude Code Action
 - [ ] GitHub Action mode, with no local machine, alongside the local mode
 - [ ] Documentation, blog template and one-command install
-- [ ] Shipcast launched with Shipcast
+- [x] Shipcast launched with Shipcast: v0.1.0, from the app, on 2026-10-25
 
-Final test: Shipcast's launch, generated and published by Shipcast.
+Final test: Shipcast's launch, generated and published by Shipcast — done ahead of the rest of
+phase 6, as the goal's final test.
 
 ## Open questions
 
@@ -252,6 +253,7 @@ Final test: Shipcast's launch, generated and published by Shipcast.
 - [claudio (GitHub)](https://github.com/yeyo11/claudio)
 - [Release Announcer (MCP Market)](https://mcpmarket.com/zh/server/release-announcer)
 - [Releasecast (GitHub)](https://www.github.com/superhighfives/releasecast)
+- [Hashnode's GraphQL API needs Pro](https://hashnode.com/announcements/graphql-api)
 
 ## Related
 

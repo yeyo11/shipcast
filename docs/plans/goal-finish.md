@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:37:51.291232832Z
-updated_at: 2026-10-25T00:37:51.291232832Z
+created_at: 2026-10-25T00:57:20.99176043Z
+updated_at: 2026-10-25T04:14:23.205402851Z
 tags:
     - plan
     - roadmap
@@ -174,6 +174,39 @@ Finished when: every milestone is merged on `main` with its docs, the gates pass
 `status.md` and the roadmap are ticked, and the final report lists what was published (to delete),
 what the owner still has to create, and anything left undone with its reason.
 
+## Outcome (2026-10-25)
+
+Run the same day. Every milestone is on `main` with its docs and the gates pass; the final test went
+out from the app; one piece of milestone 1 waits on a credential.
+
+| Milestone | State |
+| --- | --- |
+| 1. Foundations | Done: `apps/web` on TanStack Start, GitHub sign-in, signed sessions, CSRF, the keychain, accounts per brand, Cartel ([web-app.md](../web-app.md), [accounts.md](../accounts.md)). **HTTPS on the owner's domain is built but not live**: the certificate needs the Cloudflare DNS token, so the app ran on `127.0.0.1` with a console sign-in link |
+| 2. Channels | Done: every integration, accounts and permissions, connect by form or OAuth (Mastodon, Instagram), check, rename, disconnect, several accounts per channel and brand, the catalog, import from `.env` (six accounts moved and checked live) |
+| 3. Publishing from the app | Done: launch a repo after its pre-flight, review and edit drafts, approve, retry a channel, write an article, publish without a pull request |
+| 4. What the MVP left | Done: `projects.yml` read by the blog and Shipcast, generated covers, the pre-flight check |
+| 5. Phase 5 | Built and tested with fakes: Hashnode, Telegram (posts and notices), Discord, Show HN, Product Hunt. No live test: no accounts yet, and Hashnode's API needs its paid Pro plan since 2026-05-13, against the MVP's "no paid APIs" |
+| 6. Final test | Done from the app: **Shipcast v0.1.0** (release, pre-flight, drafts in launches#2 reviewed in the app, approved there) published on the blog in both languages, dev.to, Bluesky, Instagram (carousel, story, comment) and the newsletter in both languages; Mastodon failed on its invalid token and waits for a retry; the metrics arrived from every source. **A free article** written in the app went out without a pull request on the blog and Bluesky |
+
+Subagents used: Sonnet for the phase 5 connectors, the pre-flight check, the project looks and
+covers, and the phase 5 channels in the engine, each in its own worktree, reviewed and integrated on
+`main`; the architecture, security and app work stayed in the main session (Opus).
+
+Found and fixed on the way: the blog treated every post as a project's launch (articles now belong
+to none); media links in the review encoded the branch's slash; drafts published directly spoke of a
+merge; the README promised X and LinkedIn and said nothing ran.
+
+**Published during the run, for the owner to delete** (also in `data/goal-published.md`, local):
+the test article (`/en/shipcast-now-has-its-own-app/`, `/es/shipcast-ya-tiene-su-propia-app/`, its
+Bluesky post), and Shipcast v0.1.0's launch (blog, dev.to, Bluesky, Instagram, the newsletter — sent,
+it cannot be unsent — and the GitHub release). Kept on purpose: the blog's updated privacy policy,
+`projects.yml`, and support for articles without a project.
+
+**Still for the owner:** the Cloudflare token (`SHIPCAST_TLS_CLOUDFLARE_TOKEN`) to put the app on its
+address; the Instagram app secret for Instagram Login; a new Mastodon token or its OAuth connection,
+then **Try again** on Shipcast's launch; Telegram and Discord accounts, and a decision on Hashnode's
+Pro plan; the GitHub social preview; trying the app running and validating its design.
+
 ## Related
 
-[[plans/shipcast.md]] · [[status.md]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]] · [[plans/design-system.md]] · [[brands.md]] · [[launch-yml.md]] · [[content-pack.md]]
+[[plans/shipcast.md]] · [[status.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]] · [[plans/design-system.md]] · [[brands.md]] · [[launch-yml.md]] · [[content-pack.md]]
