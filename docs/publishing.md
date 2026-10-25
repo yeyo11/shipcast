@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T21:33:57.473488826Z
-updated_at: 2026-10-24T23:48:46.173826043Z
+created_at: 2026-10-25T00:01:57.063375627Z
+updated_at: 2026-10-25T00:28:38.02360834Z
 tags:
     - publishing
     - connectors
@@ -87,7 +87,8 @@ Binary files go into the pull request as base64 blobs through the Git data API.
      comment on its `Comment:` line, and the caption (a hook, two or three lines, at most five
      specific hashtags) after a `---` line.
    - **The newsletter** (`brevo.ts`): one Brevo campaign per language, described below.
-   - **Reddit** is never published: its drafts are for the owner to post by hand.
+   - **Reddit** is off by default since 2026-10-25, so no drafts are generated; a project that turns
+     it on (`manual`) gets drafts for the owner to post by hand, never a post.
 5. A temporary failure (`ConnectorError.retryable`: 429, 5xx, no answer) is retried on the next
    round; a permanent one is recorded in the cursor `publish-failed:<launch>:<channel>` and not
    retried until `shipcast publish --retry <channel>`. A connector can mark a failure as not retryable

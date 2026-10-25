@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:01:59.561130176Z
-updated_at: 2026-10-25T00:17:58.32574231Z
+created_at: 2026-10-25T00:18:01.109060642Z
+updated_at: 2026-10-25T00:26:08.98324925Z
 tags:
     - status
     - roadmap
@@ -30,9 +30,9 @@ offer APIs Node 24 lacks.
 The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, the
 repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages at `josegarrido.dev`. The
 technical stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog,
-dev.to, Bluesky, Mastodon, Instagram and a newsletter (through Brevo, added on 2026-10-24), and drafts
-Reddit (for claudio: r/ClaudeAI, r/selfhosted, r/SideProject, r/opensource), through Shipcast's own
-connectors; Postiz is discarded. Metrics are in the MVP too.
+dev.to, Bluesky, Mastodon, Instagram and a newsletter (through Brevo, added on 2026-10-24), through
+Shipcast's own connectors; Postiz is discarded. Reddit drafted for the first launch and was left out
+for now on 2026-10-25. Metrics are in the MVP too.
 
 Services, set up on 2026-10-24:
 
@@ -80,7 +80,8 @@ Services, set up on 2026-10-24:
   each page's path in its own language ([launches-repo.md](launches-repo.md)); the blackboard identity
   was rejected.
 - **Shipcast** has its design system, Cartel ([plans/design-system.md](plans/design-system.md),
-  [`design/`](../design/README.md)); the first direction, the signal path, was rejected.
+  [`design/`](../design/README.md)); the first direction, the signal path, was rejected and its branch
+  deleted on 2026-10-25.
 
 **The newsletter** (2026-10-24) is set up in Brevo and live on the blog: domain verified, lists and
 forms per language, confirmation emails in the blog's style
@@ -91,14 +92,14 @@ mail server. claudio turned it on (claudio pull request #62).
 --ref v0.9.0` into [launches#1](https://github.com/yeyo11/launches/pull/1) (AI cost $0.45), edited by
 the owner in the pull request (out went every "what does not work yet" part, now also out of the
 brand's tone), merged, and published by `shipcast publish`: the article in both languages on the
-blog, dev.to, Bluesky, Mastodon, Instagram and the newsletter in both languages; the Reddit drafts are
-for the owner to post. Every metrics source answered (Mastodon once the owner widened its token's
-scopes). The owner judged the test a success, with Instagram as the weakest result: Instagram became a
-carousel with a story and a comment ([publishing.md](publishing.md#the-launchs-media)), and claudio's
-launch was published again in that format the same day (the first Reel removed by the owner).
-`watch` runs only when the owner starts it: running it as a service was declined on 2026-10-25. The
-Instagram bio links to the blog's home page, where the newest launch comes first; a dynamic "link in
-bio" page was offered and declined.
+blog, dev.to, Bluesky, Mastodon, Instagram and the newsletter in both languages (its Reddit drafts
+were not posted: the owner left Reddit out afterwards). Every metrics source answered (Mastodon once
+the owner widened its token's scopes). The owner judged the test a success, with Instagram as the
+weakest result: Instagram became a carousel with a story and a comment
+([publishing.md](publishing.md#the-launchs-media)), and claudio's launch was published again in that
+format the same day (the first Reel removed by the owner). `watch` runs only when the owner starts
+it: running it as a service was declined on 2026-10-25. The Instagram bio links to the blog's home
+page, where the newest launch comes first; a dynamic "link in bio" page was offered and declined.
 
 What the first run found, each fixed and tested:
 
@@ -113,16 +114,12 @@ What the first run found, each fixed and tested:
 
 Waiting on the owner:
 
-- Post the Reddit drafts by hand, after reading each subreddit's self-promotion rules (r/opensource
-  wants the Promotional flair).
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
-- Decide on the stale worktree `worktree-agent-a04f1c5741bdcf80d` (the rejected signal-path design
-  assets): delete it or keep it as history.
 
 Next in code:
 
-- One source for the project colours, generated covers per article, the subreddits' flairs in
-  `launch.yml`, the pre-flight check (license, README, release), and the dashboard in Cartel.
+- One source for the project colours, generated covers per article, the pre-flight check (license,
+  README, release), and the dashboard in Cartel.
 - Then the rest of the roadmap ([plans/shipcast.md](plans/shipcast.md#roadmap)): the company brand,
   Hashnode, Show HN and Product Hunt, and phase 6 (other AI providers, the GitHub Action mode,
   documentation and Shipcast's own launch).

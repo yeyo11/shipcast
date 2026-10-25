@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T12:26:39.628366342Z
-updated_at: 2026-10-25T00:17:10.766709944Z
+created_at: 2026-10-25T00:17:14.183448442Z
+updated_at: 2026-10-25T00:26:54.509324185Z
 tags:
     - plan
     - architecture
@@ -17,9 +17,9 @@ it per channel after the owner's approval. To start with, the engine runs on the
 phase 6.
 
 Both proposals agreed on the basics: Postiz for social networks, human review for Reddit and Hacker
-News, and the release as the trigger. (Postiz was later discarded for Shipcast's own connectors, and
-X and LinkedIn dropped: see [decisions/mvp-scope.md](../decisions/mvp-scope.md); the roadmap below
-is ticked with what was built.)
+News, and the release as the trigger. (Postiz was later discarded for Shipcast's own connectors, X
+and LinkedIn dropped, and Reddit left out for now: see
+[decisions/mvp-scope.md](../decisions/mvp-scope.md); the roadmap below is ticked with what was built.)
 
 ## Ideas taken from the ChatGPT proposal
 
@@ -220,7 +220,7 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 
 ### Phase 5: communities and extra channels
 
-- [x] Reddit drafts (Show HN: not yet)
+- [ ] Reddit drafts: built, then left out by the owner on 2026-10-25 (`off` by default); Show HN: not yet
 - [ ] Product Hunt kit
 - [x] Newsletter, through Brevo (Telegram channel and Discord: not yet)
 - [x] Personal style guide for the AI: the brand's `tone` in `brand.yml`, refined after the first launch
@@ -238,8 +238,7 @@ Final test: Shipcast's launch, generated and published by Shipcast.
 
 - **Launch volume:** measured with the registry, now that it is in use.
 - **Writing style:** set in `brand.yml`'s `tone`; to refine with each launch.
-- **Subreddits and communities:** for claudio, r/ClaudeAI, r/selfhosted, r/SideProject and
-  r/opensource; per project in its `launch.yml`.
+- ~~**Subreddits and communities:**~~ Reddit is left out for now (2026-10-25).
 - ~~**Postiz or our own connectors:**~~ decided on 2026-10-24: our own connectors, Postiz only as
   reference reading.
 - ~~**Cost of X:**~~ moot: the owner does not publish on X.

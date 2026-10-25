@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:13:45.64452051Z
-updated_at: 2026-10-24T20:19:50.588182459Z
+created_at: 2026-10-25T00:02:02.082293222Z
+updated_at: 2026-10-25T00:25:21.75054675Z
 tags:
     - decision
     - mvp
@@ -14,7 +14,7 @@ tags:
 Decided on 2026-10-24 by the owner, at the start of the work, and widened the same day. The MVP is
 the test that closes phase 1 of the [roadmap](../plans/shipcast.md#roadmap): **claudio announced on
 the blog, dev.to, Bluesky, Mastodon, Instagram and the newsletter with no intervention beyond the
-merge, its Reddit drafts ready to paste, and Shipcast showing what each channel brought.**
+merge, and Shipcast showing what each channel brought.** Passed on 2026-10-25.
 
 ## Channels
 
@@ -24,21 +24,21 @@ merge, its Reddit drafts ready to paste, and Shipcast showing what each channel 
 | dev.to | Yes | Republished with `canonical_url` to the blog; free API |
 | Bluesky | Yes | Free API (AT Protocol, app password) |
 | Mastodon | Yes | Free API (access token on mastodon.social) |
-| Instagram | Yes | Free API (Instagram API with Instagram Login); needs a professional account and the owner's Meta app |
-| Reddit | Yes, as `manual` | Shipcast writes one draft per subreddit and the owner posts it. The plan already keeps Reddit as drafts (self-promotion is judged by each subreddit's rules and a post that reads automated gets removed), and since November 2025 Reddit's API needs a manual approval under its Responsible Builder Policy, which a personal script is unlikely to get. Account: [u/josegarridodev](https://www.reddit.com/user/josegarridodev/). Subreddits are set per project in its `launch.yml`; for claudio, chosen by the owner on 2026-10-24: r/ClaudeAI, r/selfhosted, r/SideProject and r/opensource (read each one's self-promotion rules before posting) |
+| Instagram | Yes | Free API (Instagram API with Instagram Login); needs a professional account and the owner's Meta app. A carousel, its story and a comment since 2026-10-25 |
+| Reddit | **No, for now** | Left out by the owner on 2026-10-25, after the first launch: no drafts are generated (`publishing.reddit` is `off` by default). Before that, Shipcast wrote one draft per subreddit for the owner to post by hand; Reddit's API needs a manual approval under its Responsible Builder Policy since November 2025, which a personal script is unlikely to get. The draft code stays, for a project that turns it on (`publishing.reddit: manual` in its `launch.yml`) |
 | Newsletter | Yes, through Brevo | Added on 2026-10-24 at the owner's request, before the first real launch: one issue per language, reviewed in the drafts pull request and sent on merge. See [the newsletter](#the-newsletter-brevo) below |
 | LinkedIn | **No, not at all** | The owner will not publish on LinkedIn, in the MVP or after (2026-10-24) |
 | X | **No, not at all** | The owner will not publish on X, in the MVP or after (2026-10-24); its API is paid besides |
 
 Widened on 2026-10-24: the first version covered only the blog and dev.to; the owner asked for every
 network they already have an account on, then excluded LinkedIn and X — first from the MVP, then for
-good — and added Reddit, and later the newsletter.
+good — added Reddit and later the newsletter, and left Reddit out again on 2026-10-25.
 
 **Instagram brings assets forward.** An Instagram post is an image, a carousel or a video, never text
 alone; JPEG is the only image format, GIFs are not accepted, links in captions are not clickable, and
-the media must sit at a public URL when it is published. So the MVP needs, from phase 3, at least a
-generated image per launch (the OG image, as JPEG) and, where the project has one, its demo GIF turned
-into an MP4 for a Reel. The launches repo's GitHub Pages site serves them publicly after the merge.
+the media must sit at a public URL when it is published. So the MVP generates its pieces per launch
+(the carousel's slides, the demo as a video, the story) and the launches repo's GitHub Pages site
+serves them publicly after the merge ([publishing.md](../publishing.md#the-launchs-media)).
 
 ## Metrics are in the MVP
 
@@ -56,7 +56,6 @@ channel that produced it, so it can say which channel worked.
 | Bluesky, Mastodon | Likes, reposts, replies per post | Their APIs |
 | Instagram | Reach and interactions | `instagram_business_manage_insights`, granted 2026-10-24 |
 | Newsletter | Sent, delivered, opens, clicks, unsubscribes, bounces | Brevo's campaign statistics |
-| Reddit | Score and comments | No API: recorded by hand, if at all |
 
 Every link Shipcast publishes carries a per-channel marker (`?ref=<channel>`) so the blog's analytics
 attribute visits even where a network strips the referrer. A dashboard to look at them is part of the
@@ -110,9 +109,9 @@ needs the key. How it publishes is in [publishing.md](../publishing.md#the-newsl
 Decided on 2026-10-24 by the owner: **Postiz is discarded.** Shipcast talks to every network the owner
 has an account on through its own connectors — one module per network over `fetch`, in
 `packages/connectors` ([plans/stack.md](../plans/stack.md)). For the MVP that is dev.to, Bluesky,
-Mastodon, Instagram and Brevo, plus Reddit as drafts. LinkedIn and X get no connector for the owner;
-Shipcast keeps both as channels (off by default) for other brands that want them. Reddit's connector
-writes drafts until the account obtains API approval, if it ever does.
+Mastodon, Instagram and Brevo (Reddit drafts exist but are off by default). LinkedIn and X get no
+connector for the owner; Shipcast keeps both as channels (off by default) for other brands that want
+them.
 
 Why: Postiz needs Postgres, Redis, Temporal and Elasticsearch (6–7 GB on disk, about 2 GB of RAM), too
 much for a laptop tool and a hard requirement to put on the developers Shipcast is for in phase 6;
@@ -122,9 +121,9 @@ Postiz stays useful as **reference code**: when a connector needs to know how an
 practice (media upload, token refresh, limits), read Postiz's provider for that network
 ([gitroomhq/postiz-app](https://github.com/gitroomhq/postiz-app), under
 `libraries/nestjs-libraries/src/integrations/social/`: `dev.to.provider.ts`, `bluesky.provider.ts`,
-`mastodon.provider.ts`, `instagram.standalone.provider.ts`, `reddit.provider.ts`). Postiz is
-AGPL-3.0 and Shipcast is MIT: read it to learn how an API behaves, then write the connector from the
-API's own documentation; never copy its code.
+`mastodon.provider.ts`, `instagram.standalone.provider.ts`). Postiz is AGPL-3.0 and Shipcast is MIT:
+read it to learn how an API behaves, then write the connector from the API's own documentation; never
+copy its code.
 
 ## Related
 

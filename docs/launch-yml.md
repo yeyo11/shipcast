@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T15:20:31.709171633Z
-updated_at: 2026-10-24T15:20:31.709171633Z
+created_at: 2026-10-24T16:41:26.920966963Z
+updated_at: 2026-10-25T00:24:53.4517646Z
 tags:
     - launch-yml
     - schema
@@ -38,13 +38,14 @@ publishing:              # auto | approval | manual | off, per channel
   bluesky: approval
   mastodon: approval
   instagram: approval
-  reddit: manual
+  newsletter: approval
+  reddit: manual         # off by default since 2026-10-25
 
 assets:
   demo: docs/demo.gif    # path in the repo or URL; every launch needs one
 
 reddit:
-  subreddits: [ClaudeAI, node]   # names without r/
+  subreddits: [ClaudeAI, node]   # names without r/; only read when reddit is turned on
 ```
 
 The smallest valid file is `enabled: true` and `brand: personal`; everything else has a default.
@@ -60,8 +61,10 @@ The smallest valid file is `enabled: true` and `brand: personal`; everything els
 
 The plan named three modes; `off` was added so a channel can be left out without deleting a key.
 Defaults (`DEFAULT_MODES` in `channels.ts`) turn on the MVP's channels — blog, dev.to, Bluesky,
-Mastodon and Instagram on `approval`, Reddit on `manual` — and leave every other channel `off`
-([decisions/mvp-scope.md](decisions/mvp-scope.md)).
+Mastodon, Instagram on `approval` (the newsletter, off by default, is turned on per project) — and
+leave every other channel `off`, Reddit included since 2026-10-25, when the owner left it out for now
+([decisions/mvp-scope.md](decisions/mvp-scope.md)). A project that wants Reddit drafts sets
+`publishing.reddit: manual`.
 
 ## Rules the schema holds
 
