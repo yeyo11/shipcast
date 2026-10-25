@@ -1,9 +1,10 @@
 # Contributing to Shipcast
 
-Thanks for your interest. Shipcast is pre-alpha: until the MVP (phase 1 of the
-[roadmap](docs/plans/shipcast.md#roadmap)) the maintainer commits straight to `main` and the design
-still moves, so the most useful contributions right now are **issues**: a channel you would want, a
-launch you do by hand today, a part of the design that looks wrong.
+Thanks for your interest. Shipcast is pre-alpha: the MVP is done (Shipcast launched itself, see
+the [roadmap](docs/plans/shipcast.md#roadmap)) but the design still moves, so the most useful
+contributions right now are **issues**: a channel you would want, a launch you do by hand today, a
+part of the design that looks wrong. Every change, the maintainer's too, lands through a pull
+request, squash-merged once CI passes.
 
 If you want to send code, open an issue first so we can agree on the approach before you spend time
 on it.

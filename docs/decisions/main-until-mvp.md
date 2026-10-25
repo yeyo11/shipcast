@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T12:54:20.293141151Z
-updated_at: 2026-10-24T13:19:29.081054127Z
+created_at: 2026-10-24T14:26:58.648123954Z
+updated_at: 2026-10-25T10:01:24.713699659Z
 tags:
     - decision
     - workflow
@@ -8,7 +8,9 @@ tags:
 ---
 # Work straight on main until the MVP
 
-Decided on 2026-10-24 by the owner.
+Decided on 2026-10-24 by the owner. **Ended on 2026-10-25**, when the owner closed the MVP
+([plans/mvp-close.md](../plans/mvp-close.md)): every change now goes through a pull request,
+squash-merged (see [After the MVP](#after-the-mvp)).
 
 ## Decision
 
@@ -28,7 +30,7 @@ What still guards `main` without pull requests:
 - **CI** runs on every push to `main`, not only on pull requests
   ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)), so a break shows up on GitHub.
 
-## Rules while it lasts
+## Rules while it lasted
 
 - **Small commits in Conventional Commits.** Without pull requests the history of `main` is the only
   record of what changed and why, and the changelog will be built from it.
@@ -41,12 +43,21 @@ What still guards `main` without pull requests:
   maintainer integrates it into `main` (or it goes through Sluice's merge queue), so two agents never
   race each other on the same branch.
 
-## When it ends
+## After the MVP
 
-At the MVP, pull requests come back, squash-merged, and `main` gets branch protection on the CI check:
-from then on other people use Shipcast and contribute to it. [CONTRIBUTING.md](../../CONTRIBUTING.md)
-already tells outside contributors to open an issue first and send pull requests.
+The MVP closed on 2026-10-25: phases 0 to 5 done, Shipcast v0.1.0 launched with Shipcast, and the app
+running its own rounds. Other people can now use Shipcast and contribute to it, so:
+
+- **Every change is a branch and a pull request**, squash-merged: the pull request's title, in
+  Conventional Commits, becomes the commit on `main`. The repository only allows squash merges and
+  deletes the branch once merged.
+- **`main` is protected**: no direct pushes, for the owner too, and the CI `test` check must pass
+  before a merge. No approving review is required, since the owner cannot approve their own pull
+  requests.
+- **Agents** branch from `main`, commit through the Sluice gates, push their branch and open the pull
+  request without asking; **the owner merges it**, unless they ask the agent to.
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) still asks outside contributors to open an issue first.
 
 ## Related
 
-[[plans/shipcast.md]] · [[status.md]]
+[[plans/shipcast.md]] · [[plans/mvp-close.md]] · [[status.md]]
