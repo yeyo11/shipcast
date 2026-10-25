@@ -17,6 +17,7 @@ import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppStatsRouteImport } from './routes/_app/stats'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
@@ -28,6 +29,7 @@ import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
+import { Route as AppDesignComponentsRouteImport } from './routes/_app/design/components'
 import { Route as AppDesignIllustrationsRouteImport } from './routes/_app/design/illustrations'
 import { Route as AppLaunchesIdRouteImport } from './routes/_app/launches/$id'
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
@@ -73,6 +75,11 @@ const AppLaunchRoute = AppLaunchRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppStatsRoute = AppStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTokensRoute = AppTokensRouteImport.update({
@@ -130,6 +137,11 @@ const AppChannelsNetworkRoute = AppChannelsNetworkRouteImport.update({
   path: '/channels/$network',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDesignComponentsRoute = AppDesignComponentsRouteImport.update({
+  id: '/design/components',
+  path: '/design/components',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDesignIllustrationsRoute = AppDesignIllustrationsRouteImport.update({
   id: '/design/illustrations',
   path: '/design/illustrations',
@@ -174,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
   '/settings': typeof AppSettingsRoute
+  '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
@@ -184,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/channels/$network': typeof AppChannelsNetworkRoute
+  '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
   '/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
@@ -200,6 +214,7 @@ export interface FileRoutesByTo {
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
   '/settings': typeof AppSettingsRoute
+  '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
@@ -211,6 +226,7 @@ export interface FileRoutesByTo {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
+  '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
   '/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
@@ -229,6 +245,7 @@ export interface FileRoutesById {
   '/_app/automation': typeof AppAutomationRoute
   '/_app/launch': typeof AppLaunchRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/stats': typeof AppStatsRoute
   '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
   '/api/health': typeof ApiHealthRoute
@@ -240,6 +257,7 @@ export interface FileRoutesById {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
+  '/_app/design/components': typeof AppDesignComponentsRoute
   '/_app/design/illustrations': typeof AppDesignIllustrationsRoute
   '/_app/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
@@ -259,6 +277,7 @@ export interface FileRouteTypes {
     | '/automation'
     | '/launch'
     | '/settings'
+    | '/stats'
     | '/tokens'
     | '/write'
     | '/api/health'
@@ -269,6 +288,7 @@ export interface FileRouteTypes {
     | '/auth/logout'
     | '/auth/mastodon'
     | '/channels/$network'
+    | '/design/components'
     | '/design/illustrations'
     | '/launches/$id'
     | '/api/github/webhook'
@@ -285,6 +305,7 @@ export interface FileRouteTypes {
     | '/automation'
     | '/launch'
     | '/settings'
+    | '/stats'
     | '/tokens'
     | '/write'
     | '/api/health'
@@ -296,6 +317,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/'
     | '/channels/$network'
+    | '/design/components'
     | '/design/illustrations'
     | '/launches/$id'
     | '/api/github/webhook'
@@ -313,6 +335,7 @@ export interface FileRouteTypes {
     | '/_app/automation'
     | '/_app/launch'
     | '/_app/settings'
+    | '/_app/stats'
     | '/_app/tokens'
     | '/_app/write'
     | '/api/health'
@@ -324,6 +347,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/_app/'
     | '/_app/channels/$network'
+    | '/_app/design/components'
     | '/_app/design/illustrations'
     | '/_app/launches/$id'
     | '/api/github/webhook'
@@ -407,6 +431,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/stats': {
+      id: '/_app/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof AppStatsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/tokens': {
       id: '/_app/tokens'
       path: '/tokens'
@@ -484,6 +515,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChannelsNetworkRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/design/components': {
+      id: '/_app/design/components'
+      path: '/design/components'
+      fullPath: '/design/components'
+      preLoaderRoute: typeof AppDesignComponentsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/design/illustrations': {
       id: '/_app/design/illustrations'
       path: '/design/illustrations'
@@ -541,10 +579,12 @@ interface AppRouteChildren {
   AppAutomationRoute: typeof AppAutomationRoute
   AppLaunchRoute: typeof AppLaunchRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppStatsRoute: typeof AppStatsRoute
   AppTokensRoute: typeof AppTokensRoute
   AppWriteRoute: typeof AppWriteRoute
   AppIndexRoute: typeof AppIndexRoute
   AppChannelsNetworkRoute: typeof AppChannelsNetworkRoute
+  AppDesignComponentsRoute: typeof AppDesignComponentsRoute
   AppDesignIllustrationsRoute: typeof AppDesignIllustrationsRoute
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
@@ -555,10 +595,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppAutomationRoute: AppAutomationRoute,
   AppLaunchRoute: AppLaunchRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppStatsRoute: AppStatsRoute,
   AppTokensRoute: AppTokensRoute,
   AppWriteRoute: AppWriteRoute,
   AppIndexRoute: AppIndexRoute,
   AppChannelsNetworkRoute: AppChannelsNetworkRoute,
+  AppDesignComponentsRoute: AppDesignComponentsRoute,
   AppDesignIllustrationsRoute: AppDesignIllustrationsRoute,
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,

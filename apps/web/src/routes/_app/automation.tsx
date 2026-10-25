@@ -1,7 +1,10 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { Automation as AutomationArt } from '../../components/illustrations';
+import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Pill, when } from '../../components/ui';
+import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { getAutomation, rotateWebhookSecret, runRoundNow, saveAutomation } from '../../server/automation.functions';
 
 export const Route = createFileRoute('/_app/automation')({
@@ -24,7 +27,7 @@ function Copyable({ label, value }: { label: string; value: string }) {
     <div className="field">
       <span className="label">{label}</span>
       <div className="row">
-        <code className="input mono" style={{ flex: 1, display: 'flex', alignItems: 'center', overflowX: 'auto' }}>
+        <code className="input mono copyable">
           {value}
         </code>
         <button
@@ -68,26 +71,35 @@ function Automation() {
     }
   };
 
+  const newSecret = async () => {
+    const answer = await rotateWebhookSecret();
+    setSecret(answer.secret);
+    toast.show({ tone: 'wait', title: 'Copy the secret now', text: 'It is shown only this once. Paste it into each webhook on GitHub.' });
+    await router.invalidate();
+  };
+
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Automation</h1>
-          <p>How Shipcast hears about your releases and merges without you starting anything.</p>
-        </div>
-        <button
-          className="btn"
-          disabled={data.running}
-          onClick={async () => {
-            const answer = await runRoundNow();
-            if (answer.started) toast.done('A round has started', 'It checks for releases, publishes what is ready and reads the numbers when due.');
-            else toast.show({ tone: 'wait', title: 'A round is already running' });
-            await router.invalidate();
-          }}
-        >
-          {data.running ? 'A round is running…' : 'Run a round now'}
-        </button>
-      </div>
+      <PageHead
+        title="Automation"
+        art={<AutomationArt width={300} />}
+        action={
+          <button
+            className="btn"
+            disabled={data.running}
+            onClick={async () => {
+              const answer = await runRoundNow();
+              if (answer.started) toast.done('A round has started', 'It checks for releases, publishes what is ready and reads the numbers when due.');
+              else toast.show({ tone: 'wait', title: 'A round is already running' });
+              await router.invalidate();
+            }}
+          >
+            {data.running ? 'A round is running…' : 'Run a round now'}
+          </button>
+        }
+      >
+        How Shipcast hears about your releases and merges without you starting anything.
+      </PageHead>
 
       <form
         className="form"
@@ -141,19 +153,22 @@ function Automation() {
                   <small>{data.hasSecret ? 'A secret is set; it is kept in the keychain and never shown again.' : 'No secret yet: generate one, then paste it into each webhook on GitHub.'}</small>
                 )}
                 <div className="row">
-                  <button
-                    className="btn btn-small"
-                    type="button"
-                    onClick={async () => {
-                      if (data.hasSecret && !window.confirm('A new secret replaces the current one: every webhook on GitHub must be given the new one. Continue?')) return;
-                      const answer = await rotateWebhookSecret();
-                      setSecret(answer.secret);
-                      toast.show({ tone: 'wait', title: 'Copy the secret now', text: 'It is shown only this once. Paste it into each webhook on GitHub.' });
-                      await router.invalidate();
-                    }}
-                  >
-                    {data.hasSecret ? 'Rotate the secret' : 'Generate a secret'}
-                  </button>
+                  {data.hasSecret ? (
+                    <ConfirmButton
+                      className="btn btn-small"
+                      title="Rotate the webhook secret?"
+                      description="A new secret replaces the current one at once: every webhook on GitHub stops being trusted until it is given the new one."
+                      confirm="Rotate the secret"
+                      tone="primary"
+                      onConfirm={newSecret}
+                    >
+                      Rotate the secret
+                    </ConfirmButton>
+                  ) : (
+                    <button className="btn btn-small" type="button" onClick={() => void newSecret()}>
+                      Generate a secret
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,10 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Toast } from '@base-ui/react/toast';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { explain } from './errors';
+import { CloseIcon } from './ui/icons';
 
 /**
  * Toasts, in Cartel's terms: a card with its outline and hard stamp shadow, and a state that is a word
  * and a shape (Done, Failed with its diamond, Waiting for you on yellow). Successes leave on their
  * own; failures stay until they are closed, since they ask for something to be done.
+ *
+ * Base UI's Toast does the rest: the viewport is a landmark F6 jumps to, timers pause while the
+ * pointer or the focus is on a toast, a toast can be swiped away, and it animates out before it is
+ * removed. The API the pages use (`useToast().show/done/fail`) is the one from before Base UI.
  */
 export type ToastTone = 'ok' | 'bad' | 'wait';
 
@@ -13,10 +19,6 @@ export interface ToastInput {
   title: string;
   text?: string;
   details?: string;
-}
-
-interface Toast extends ToastInput {
-  id: number;
 }
 
 interface ToastApi {
@@ -35,60 +37,71 @@ const LABEL: Record<ToastTone, { word: string; pill: string }> = {
 };
 
 const OK_FOR_MS = 6000;
+/** At most four at once: older ones wait, hidden, until a newer one leaves */
+const LIMIT = 4;
 
-function ToastCard({ toast, close }: { toast: Toast; close: () => void }) {
-  useEffect(() => {
-    if (toast.tone !== 'ok') return;
-    const timer = setTimeout(close, OK_FOR_MS);
-    return () => clearTimeout(timer);
-  }, [toast.tone, close]);
-  const label = LABEL[toast.tone];
-  return (
-    <div className={`toast ${toast.tone}`} role={toast.tone === 'bad' ? 'alert' : 'status'}>
-      <header>
-        <span className={`pill ${label.pill}`}>{label.word}</span>
-        <button className="toast-close" type="button" onClick={close} aria-label="Close">
-          ×
-        </button>
-      </header>
-      <p className="toast-title">{toast.title}</p>
-      {toast.text && <p className="toast-text">{toast.text}</p>}
-      {toast.details && (
-        <details className="toast-details">
-          <summary>Details</summary>
-          <pre>{toast.details}</pre>
-        </details>
-      )}
-    </div>
-  );
+const isTone = (type: string | undefined): type is ToastTone => type === 'ok' || type === 'bad' || type === 'wait';
+
+function ToastList() {
+  const { toasts } = Toast.useToastManager<{ details?: string }>();
+  return toasts.map((toast) => {
+    const tone = isTone(toast.type) ? toast.type : 'ok';
+    const label = LABEL[tone];
+    const details = toast.data?.details;
+    return (
+      <Toast.Root key={toast.id} toast={toast} className={`toast ${tone}`} swipeDirection={['right', 'down']}>
+        <Toast.Content className="toast-content">
+          <header>
+            <span className={`pill ${label.pill}`}>{label.word}</span>
+            <Toast.Close className="toast-close" aria-label="Close">
+              <CloseIcon size={18} />
+            </Toast.Close>
+          </header>
+          <Toast.Title className="toast-title" />
+          {toast.description && <Toast.Description className="toast-text" />}
+          {details && (
+            <details className="toast-details">
+              <summary>Details</summary>
+              <pre>{details}</pre>
+            </details>
+          )}
+        </Toast.Content>
+      </Toast.Root>
+    );
+  });
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const next = useRef(1);
-  const remove = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), []);
-  const show = useCallback((toast: ToastInput) => {
-    const id = next.current++;
-    // At most four at once: the oldest go first
-    setToasts((list) => [...list, { ...toast, id }].slice(-4));
-  }, []);
-  const api = useMemo<ToastApi>(
-    () => ({
+  // One manager per provider, made once: the API built on it keeps its identity across renders, so
+  // pages can list it in an effect's dependencies without the effect running again
+  const [manager] = useState(() => Toast.createToastManager<{ details?: string }>());
+  const api = useMemo<ToastApi>(() => {
+    const show = (toast: ToastInput) => {
+      manager.add({
+        type: toast.tone,
+        title: toast.title,
+        description: toast.text,
+        timeout: toast.tone === 'ok' ? OK_FOR_MS : 0,
+        // A failure interrupts the screen reader; the rest wait their turn
+        priority: toast.tone === 'bad' ? 'high' : 'low',
+        data: { details: toast.details },
+      });
+    };
+    return {
       show,
       fail: (raw) => show({ tone: 'bad', ...explain(raw) }),
       done: (title, text) => show({ tone: 'ok', title, text }),
-    }),
-    [show],
-  );
+    };
+  }, [manager]);
   return (
-    <ToastContext.Provider value={api}>
-      {children}
-      <section className="toasts" aria-label="Notifications">
-        {toasts.map((t) => (
-          <ToastCard key={t.id} toast={t} close={() => remove(t.id)} />
-        ))}
-      </section>
-    </ToastContext.Provider>
+    <Toast.Provider limit={LIMIT} toastManager={manager}>
+      <ToastContext.Provider value={api}>{children}</ToastContext.Provider>
+      <Toast.Portal>
+        <Toast.Viewport className="toasts" aria-label="Notifications">
+          <ToastList />
+        </Toast.Viewport>
+      </Toast.Portal>
+    </Toast.Provider>
   );
 }
 

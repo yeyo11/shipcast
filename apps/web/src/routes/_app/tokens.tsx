@@ -1,7 +1,9 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Pill, when } from '../../components/ui';
+import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { createToken, listTokens, revokeToken } from '../../server/tokens.functions';
 
 export const Route = createFileRoute('/_app/tokens')({
@@ -43,22 +45,17 @@ function Api() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">API</h1>
-          <p>
-            Tokens for scripts, the MCP server and other clients of the REST API at <code>{data.apiUrl}</code>. Its routes are described in{' '}
-            <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
-          </p>
-        </div>
-      </div>
+      <PageHead title="API">
+        Tokens for scripts, the MCP server and other clients of the REST API at <code className="break">{data.apiUrl}</code>. Its routes are described in{' '}
+        <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
+      </PageHead>
 
       {created && (
         <div className="form" style={{ marginBottom: 36 }}>
           <div className="field">
             <span className="label">New token, {created.name}</span>
             <div className="row">
-              <code className="input mono" style={{ flex: 1, display: 'flex', alignItems: 'center', overflowX: 'auto' }}>
+              <code className="input mono copyable">
                 {created.token}
               </code>
               <button className="btn btn-small" type="button" onClick={() => void navigator.clipboard.writeText(created.token).then(() => toast.done('Token copied'))}>
@@ -111,7 +108,7 @@ function Api() {
       {data.tokens.length === 0 ? (
         <p className="muted">No tokens yet.</p>
       ) : (
-        <table className="table">
+        <table className="table table-stack">
           <tbody>
             {data.tokens.map((t) => (
               <tr key={t.id}>
@@ -124,18 +121,19 @@ function Api() {
                   {t.revokedAt ? (
                     <Pill tone="manual">Revoked {when(t.revokedAt)}</Pill>
                   ) : (
-                    <button
+                    <ConfirmButton
                       className="btn btn-small btn-danger"
-                      type="button"
-                      onClick={async () => {
-                        if (!window.confirm(`Revoke “${t.name}”? Anything using it stops working at once.`)) return;
+                      title={`Revoke “${t.name}”?`}
+                      description="Anything using it stops working at once. A revoked token cannot be brought back; make a new one instead."
+                      confirm="Revoke"
+                      onConfirm={async () => {
                         await revokeToken({ data: t.id });
                         toast.done('Token revoked', `${t.name} no longer opens the API.`);
                         await router.invalidate();
                       }}
                     >
                       Revoke
-                    </button>
+                    </ConfirmButton>
                   )}
                 </td>
               </tr>

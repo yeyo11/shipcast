@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { pieceName, type LaunchView } from '../server/view';
 import { ChannelName, number, Pill, when } from './ui';
+import { Tooltip } from './ui/Tooltip';
 
 /** A launch as the specimen's launch card: black, a yellow stamp, one row per channel */
 export function LaunchCard({ launch }: { launch: LaunchView }) {
@@ -35,9 +36,12 @@ export function LaunchCard({ launch }: { launch: LaunchView }) {
               <span className="post">
                 {row.piece && <span className="mono">{row.piece} </span>}
                 {row.url ? (
-                  <a href={row.url} target="_blank" rel="noreferrer">
-                    {row.url.replace(/^https:\/\//, '')}
-                  </a>
+                  // Clamped to one line on wide screens, so the full address is on hover and focus too
+                  <Tooltip content={row.url}>
+                    <a href={row.url} target="_blank" rel="noreferrer">
+                      {row.url.replace(/^https:\/\//, '')}
+                    </a>
+                  </Tooltip>
                 ) : (
                   (row.failure ?? failed.get(row.channel) ?? '')
                 )}

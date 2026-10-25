@@ -8,6 +8,12 @@ import { consoleLinks, signInPath } from './src/server/console-links.ts';
 const WORKSPACE = ['@shipcast/engine', '@shipcast/runtime', '@shipcast/connectors', '@shipcast/schema', '@shipcast/assets', '@shipcast/mcp'];
 /** Never pre-bundled for the browser: native renderers the engine loads on the server */
 const NATIVE = ['@resvg/resvg-js', 'satori'];
+/**
+ * With discovery off, development would serve Base UI unbundled, and its CommonJS dependency
+ * (use-sync-external-store) cannot load in the browser that way: its entry points are pre-bundled.
+ * Add one here when a page starts using another Base UI component.
+ */
+const BASE_UI = ['alert-dialog', 'autocomplete', 'combobox', 'dialog', 'drawer', 'menu', 'popover', 'select', 'tabs', 'toast', 'tooltip'].map((c) => `@base-ui/react/${c}`);
 
 /**
  * Discovery would crawl from the routes into the engine's source (a linked package) and try to
@@ -18,7 +24,7 @@ const serverOnlyDeps = (): Plugin => ({
   name: 'shipcast-server-only-deps',
   enforce: 'post',
   configEnvironment(name) {
-    if (name === 'client') return { optimizeDeps: { noDiscovery: true, exclude: [...WORKSPACE, ...NATIVE] } };
+    if (name === 'client') return { optimizeDeps: { noDiscovery: true, include: BASE_UI, exclude: [...WORKSPACE, ...NATIVE] } };
     return undefined;
   },
 });

@@ -2,6 +2,8 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { Jobs } from '../../components/Jobs';
 import { LaunchCard } from '../../components/LaunchCard';
+import { Empty, PageHead } from '../../components/PageHead';
+import { EmptyLaunches } from '../../components/illustrations';
 import { listLaunches } from '../../server/launches.functions';
 
 export const Route = createFileRoute('/_app/')({
@@ -24,15 +26,16 @@ function Launches() {
   const waiting = launches.filter((l) => l.state.tone === 'waiting');
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Launches</h1>
-          <p>Every launch, where it went and how it did.</p>
-        </div>
-        <Link className="btn btn-primary" to="/launch">
-          Launch a repo
-        </Link>
-      </div>
+      <PageHead
+        title="Launches"
+        action={
+          <Link className="btn btn-primary" to="/launch">
+            Launch a repo
+          </Link>
+        }
+      >
+        Every launch, where it went and how it did.
+      </PageHead>
       <Jobs jobs={jobs} />
       {waiting.length > 0 && (
         <div className="band band-yellow">
@@ -45,10 +48,17 @@ function Launches() {
         </div>
       )}
       {launches.length === 0 ? (
-        <div className="band band-black">
-          <h2 className="ph">No launches yet</h2>
-          <p>Launch a repo with a release and a .github/launch.yml, or write an article.</p>
-        </div>
+        <Empty
+          art={<EmptyLaunches width={280} />}
+          title="No launches yet"
+          action={
+            <Link className="btn" to="/write">
+              Write an article
+            </Link>
+          }
+        >
+          Launch a repo with a release and a .github/launch.yml, or write an article of your own.
+        </Empty>
       ) : (
         launches.map((launch) => <LaunchCard key={launch.id} launch={launch} />)
       )}

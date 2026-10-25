@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { explain } from './errors';
-import { CHANNEL_NAMES, channelIcon, type Tone } from '../server/view';
+import { explain } from '../errors';
+import { CHANNEL_NAMES, channelIcon, type Tone } from '../../server/view';
 
 export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`pill s-${tone}`}>{children}</span>;

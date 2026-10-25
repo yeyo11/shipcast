@@ -51,12 +51,13 @@ function toRequest(request: IncomingMessage, origin: string): Request {
   return new Request(new URL(request.url ?? '/', origin), { method, headers, body, duplex: 'half' } as RequestInit);
 }
 
-async function send(response: ServerResponse, answer: Response): Promise<void> {
+async function send(response: ServerResponse, answer: Response, plainHttp = false): Promise<void> {
   const headers: Record<string, string | string[]> = {};
   answer.headers.forEach((value, name) => {
     if (name !== 'set-cookie') headers[name] = value;
   });
-  const cookies = answer.headers.getSetCookie();
+  // Over the preview's plain HTTP a browser drops a Secure cookie, so the session could not be kept there
+  const cookies = answer.headers.getSetCookie().map((c) => (plainHttp ? c.replace(/;\s*Secure/gi, '') : c));
   if (cookies.length > 0) headers['set-cookie'] = cookies;
   response.writeHead(answer.status, headers);
   if (!answer.body) {
@@ -73,6 +74,8 @@ export interface ServeOptions {
   /** The public origin requests are rebuilt on, so URLs the app builds point where the browser is */
   origin: string;
   tls?: { key: string; cert: string };
+  /** A preview copy over plain HTTP (`SHIPCAST_APP_TLS=off` in main.ts): cookies lose their Secure flag, which a browser refuses over HTTP on a tailnet address */
+  plainHttp?: boolean;
 }
 
 export async function serve(options: ServeOptions): Promise<{ close(): Promise<void>; setCertificate(tls: { key: string; cert: string }): void }> {
@@ -81,7 +84,7 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
     try {
       const pathname = new URL(request.url ?? '/', 'http://x').pathname;
       if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && serveStatic(pathname, response)) return;
-      await send(response, await entry.default.fetch(toRequest(request, options.origin)));
+      await send(response, await entry.default.fetch(toRequest(request, options.origin)), options.plainHttp === true && !options.tls);
     } catch (error) {
       console.error(error);
       if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' });
