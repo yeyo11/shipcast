@@ -34,6 +34,10 @@ export const CHANNEL_NAMES: Record<string, string> = {
   productHunt: 'Product Hunt',
   linkedin: 'LinkedIn',
   x: 'X',
+  // Metric sources that are not channels, as their cards on a launch's page are titled
+  search: 'Google Search',
+  bing: 'Bing',
+  github: 'GitHub',
 };
 
 /** The design system's glyph for a channel, when it has one */

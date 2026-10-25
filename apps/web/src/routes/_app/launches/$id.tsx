@@ -219,12 +219,13 @@ function LaunchPage() {
 
       {index.length > 0 && (
         <>
-          <h2 className="ph">On Google</h2>
+          <h2 className="ph">In search engines</h2>
           <table className="table">
             <tbody>
               {index.map((i) => (
-                <tr key={i.url}>
+                <tr key={`${i.engine} ${i.url}`}>
                   <th scope="row">
+                    {i.engine === 'bing' ? 'Bing' : 'Google'},{' '}
                     <a href={i.url} target="_blank" rel="noreferrer">
                       {i.lang === 'es' ? 'Spanish' : 'English'}
                     </a>
@@ -234,7 +235,10 @@ function LaunchPage() {
                       <span className="muted">Not checked yet: the next metrics reading asks Google</span>
                     ) : (
                       <>
-                        <Pill tone={i.indexed ? 'published' : 'waiting'}>{i.indexed ? 'Indexed' : 'Not indexed yet'}</Pill> <span className="muted">{i.coverage}</span>
+                        <Pill tone={i.indexed ? 'published' : 'waiting'}>
+                          {i.engine === 'bing' ? (i.indexed ? 'Crawled' : 'Not crawled yet') : i.indexed ? 'Indexed' : 'Not indexed yet'}
+                        </Pill>{' '}
+                        <span className="muted">{i.coverage}</span>
                       </>
                     )}
                   </td>

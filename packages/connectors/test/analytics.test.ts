@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
-import { CloudflareAnalytics, SearchConsole, sourceOfReferrer, visitsToMetrics } from '../src/index.ts';
+import { BingWebmaster, CloudflareAnalytics, SearchConsole, sourceOfReferrer, visitsToMetrics, wcfDate } from '../src/index.ts';
 import { fakeFetch, type Call } from './fake.ts';
 
 test('a referrer host maps to the channel that sent the visit', () => {
@@ -127,4 +127,39 @@ test('Search Console tells whether a URL is indexed and resubmits the sitemap', 
   assert.deepEqual(JSON.parse(String(calls[1]!.body)), { inspectionUrl: 'https://josegarrido.dev/en/claudio/', siteUrl: 'sc-domain:josegarrido.dev' });
   await sc.submitSitemap('https://josegarrido.dev/sitemap-index.xml');
   assert.equal(calls.at(-1)!.method, 'PUT');
+});
+
+test('Bing Webmaster checks the site is verified, reads page traffic and crawl state, and parses WCF dates', async () => {
+  const calls: Call[] = [];
+  const answers: Record<string, unknown> = {
+    GetUserSites: [{ Url: 'https://josegarrido.dev/', IsVerified: true }],
+    GetUrlTrafficInfo: { Clicks: 4, Impressions: 120, IsPage: true, Url: 'https://josegarrido.dev/en/claudio/' },
+    GetUrlInfo: { DiscoveryDate: '/Date(1792900000000-0700)/', LastCrawledDate: '/Date(1792930000000-0700)/', HttpStatus: 200 },
+  };
+  const bing = new BingWebmaster({
+    apiKey: 'k',
+    site: 'https://josegarrido.dev/',
+    fetch: fakeFetch([['GET https://ssl.bing.com/webmaster/api.svc/json/', () => Response.json({ d: answers[new URL(calls.at(-1)!.url).pathname.split('/').at(-1)!] })]], calls),
+  });
+
+  assert.deepEqual(await bing.check(), { ok: true, account: 'https://josegarrido.dev/ (verified)' });
+  assert.equal(new URL(calls[0]!.url).searchParams.get('apikey'), 'k');
+  assert.deepEqual(await bing.pageMetrics('https://josegarrido.dev/en/claudio/'), { clicks: 4, impressions: 120 });
+  const traffic = new URL(calls[1]!.url).searchParams;
+  assert.equal(traffic.get('siteUrl'), 'https://josegarrido.dev/');
+  assert.equal(traffic.get('url'), 'https://josegarrido.dev/en/claudio/');
+  assert.deepEqual(await bing.inspect('https://josegarrido.dev/en/claudio/'), {
+    indexed: true,
+    coverage: `Crawled on ${new Date(1792930000000).toISOString().slice(0, 10)}`,
+    lastCrawl: new Date(1792930000000).toISOString(),
+  });
+
+  answers.GetUrlInfo = { DiscoveryDate: '/Date(-62135596800000)/', LastCrawledDate: '/Date(-62135596800000)/' };
+  assert.deepEqual(await bing.inspect('https://josegarrido.dev/es/claudio/'), { indexed: false, coverage: 'Not known to Bing yet' });
+  assert.equal(wcfDate('/Date(-62135596800000)/'), undefined, 'Bing answers the year 1 for never');
+
+  answers.GetUserSites = [{ Url: 'https://josegarrido.dev', IsVerified: false }];
+  const unverified = await bing.check();
+  assert.equal(unverified.ok, false);
+  assert.match(unverified.ok ? '' : unverified.problem, /not verified/);
 });

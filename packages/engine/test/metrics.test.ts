@@ -132,3 +132,27 @@ test('with every article indexed the sitemap is left alone', async () => {
   });
   assert.deepEqual(submitted, []);
 });
+
+test("Bing's clicks, impressions and crawl state are kept apart from Google's", async () => {
+  const registry = await memoryRegistry();
+  const launch = await published(registry);
+  await collectMetrics(
+    registry,
+    brand,
+    {
+      search: { pageMetrics: async () => ({ clicks: 3, impressions: 90 }), inspect: async () => ({ indexed: true, coverage: 'Submitted and indexed' }) },
+      bing: {
+        pageMetrics: async (url) => (url.includes('/en/') ? { clicks: 2, impressions: 40 } : { clicks: 0, impressions: 5 }),
+        inspect: async (url) => (url.includes('/en/') ? { indexed: true, coverage: 'Crawled on 2026-10-29' } : { indexed: false, coverage: 'Not known to Bing yet' }),
+      },
+    },
+    new Date('2026-10-30T12:00:00Z'),
+  );
+  const latest = Object.fromEntries((await registry.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
+  assert.equal(latest['bing.clicks'], 2);
+  assert.equal(latest['bing.impressions'], 45);
+  assert.equal(latest['bing.crawled'], 1);
+  assert.equal(latest['search.indexed'], 2, "Google's own numbers are untouched");
+  assert.equal((await indexStatus(registry, 'https://josegarrido.dev/en/claudio/', 'bing'))?.coverage, 'Crawled on 2026-10-29');
+  assert.equal((await indexStatus(registry, 'https://josegarrido.dev/en/claudio/'))?.coverage, 'Submitted and indexed');
+});
