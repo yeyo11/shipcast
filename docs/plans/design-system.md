@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-24T19:20:12.447836117Z
-updated_at: 2026-10-24T19:20:33.000715612Z
+created_at: 2026-10-24T19:52:50.075846055Z
+updated_at: 2026-10-25T15:26:01.304278007Z
 tags:
     - plan
     - design-system
     - brand
     - decision
+    - illustrations
 ---
 # Design system: Cartel
 
@@ -33,6 +34,41 @@ The first direction, the "signal path", was rejected and is recorded below.
 - **Mark:** a yellow rounded square with a black outline, a black dot inside and an offset shadow.
 
 It was chosen over three other directions explored at the same time (Departures, Manifest, Console).
+
+## Illustrations
+
+Drawn for the [design direction after the MVP](../decisions/app-design-direction.md): **postal, with
+humour**, in the Gumroad-like language of flat shapes, a thick black outline and an offset shadow.
+They live in `apps/web/src/components/illustrations/`, one React component per scene, exported with a
+typed `Illustration` name union and an `ILLUSTRATIONS` map (component and what it is for).
+
+- **Tokens only.** Every colour is a Cartel role through a CSS variable (`--sc-black` for ink,
+  `--sc-cream` and `--sc-on-black` for paper, `--sc-yellow`, `--sc-stamp` for the shadow,
+  `--sc-rail` for a wall behind) or `currentColor` for what is drawn straight on the page (floors,
+  cords, motion marks). So the day theme works with no second drawing. `--sc-failure` appears only
+  in the failure scenes (ServerError, PublishFailed), always with its word ("Damaged"); print on a
+  red seal is in `--sc-ground`, the one colour that passes on both themes' reds.
+- **The stamp shadow** is a duplicate of the shape offset down and right in `--sc-stamp`, like
+  `--sc-stamp-sm/lg`: no filters, no blur, no gradients. Texture is a halftone `<pattern>` (ink dots
+  on a box's shaded side, page-colour dots for the disc behind a subject), with ids from `useId` so
+  copies on one page never clash.
+- **Humour:** each scene carries one wink — "Return to sender" with tracking No. 404, "this side up"
+  arrows upside down on the 500 parcel, a dozing mailbox, a moth leaving the empty box, a megaphone
+  that only puffs dots, "Reward: stars" on the Wanted poster, a stamp with a face for the AI.
+- **Frame and sizes:** a 320 × 240 (4:3) `viewBox`, scaled by `width`; drawn to read from 160 to
+  320 px. The outline is 4 units (2 px at 160 px). Lettering only in Phudu (uppercase) or the mono,
+  and short.
+- **Accessibility:** decorative (`aria-hidden`) by default; a `title` prop makes it an image with a
+  name, for when the drawing says something the page does not. The one motion (the desk bell's
+  wobble in WaitingForYou) runs only under `prefers-reduced-motion: no-preference`.
+- **Never** generated images, **no rockets** (another brand's), no colour outside the palette.
+
+The set: NotFound, ServerError, Offline, EmptyLaunches, EmptyDrafts, NoAccounts, WaitingForYou,
+Shipped, PublishFailed, SignIn, Automation, and the onboarding steps OnboardBrand, OnboardAI,
+OnboardChannels, OnboardMeasure, OnboardAutomation. They are reviewed running at the hidden app route
+`/design/illustrations` (both themes, 320 and 160 px) and copied into `design/specimen.html` as static
+SVG by `pnpm illustrations:specimen`, so the specimen still opens from disk. They are not wired into
+the real pages yet: that comes with the Base UI work of the [goal after the MVP](goal-after-mvp.md).
 
 ## Principles kept from the first plan
 
@@ -65,4 +101,4 @@ Claude Design briefs are withdrawn.
 
 ## Related
 
-[[plans/shipcast.md]] · [[status.md]] · [[personal-identity.md]] · [[brands.md]] · [[publishing.md]]
+[[plans/shipcast.md]] · [[status.md]] · [[personal-identity.md]] · [[brands.md]] · [[publishing.md]] · [[decisions/app-design-direction.md]] · [[plans/goal-after-mvp.md]]

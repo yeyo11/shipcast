@@ -15,7 +15,8 @@
     "shipcast": "node apps/cli/src/main.ts",
     "app": "pnpm --filter @shipcast/web build && node apps/web/main.ts",
     "app:dev": "pnpm --filter @shipcast/web dev",
-    "sqlite-to-postgres": "node scripts/sqlite-to-postgres.ts"
+    "sqlite-to-postgres": "node scripts/sqlite-to-postgres.ts",
+    "illustrations:specimen": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/illustrations-specimen.tsx"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

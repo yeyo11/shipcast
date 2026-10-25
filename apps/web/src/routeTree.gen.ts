@@ -25,6 +25,7 @@ import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
+import { Route as AppDesignIllustrationsRouteImport } from './routes/_app/design/illustrations'
 import { Route as AppLaunchesIdRouteImport } from './routes/_app/launches/$id'
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
@@ -111,6 +112,11 @@ const AppChannelsNetworkRoute = AppChannelsNetworkRouteImport.update({
   path: '/channels/$network',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDesignIllustrationsRoute = AppDesignIllustrationsRouteImport.update({
+  id: '/design/illustrations',
+  path: '/design/illustrations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLaunchesIdRoute = AppLaunchesIdRouteImport.update({
   id: '/launches/$id',
   path: '/launches/$id',
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/channels/$network': typeof AppChannelsNetworkRoute
+  '/design/illustrations': typeof AppDesignIllustrationsRoute
   '/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
+  '/design/illustrations': typeof AppDesignIllustrationsRoute
   '/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -205,6 +213,7 @@ export interface FileRoutesById {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
+  '/_app/design/illustrations': typeof AppDesignIllustrationsRoute
   '/_app/launches/$id': typeof AppLaunchesIdRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
     | '/auth/logout'
     | '/auth/mastodon'
     | '/channels/$network'
+    | '/design/illustrations'
     | '/launches/$id'
     | '/api/github/webhook'
     | '/api/v1/$'
@@ -253,6 +263,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/'
     | '/channels/$network'
+    | '/design/illustrations'
     | '/launches/$id'
     | '/api/github/webhook'
     | '/api/v1/$'
@@ -277,6 +288,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/_app/'
     | '/_app/channels/$network'
+    | '/_app/design/illustrations'
     | '/_app/launches/$id'
     | '/api/github/webhook'
     | '/api/v1/$'
@@ -414,6 +426,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChannelsNetworkRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/design/illustrations': {
+      id: '/_app/design/illustrations'
+      path: '/design/illustrations'
+      fullPath: '/design/illustrations'
+      preLoaderRoute: typeof AppDesignIllustrationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/launches/$id': {
       id: '/_app/launches/$id'
       path: '/launches/$id'
@@ -466,6 +485,7 @@ interface AppRouteChildren {
   AppWriteRoute: typeof AppWriteRoute
   AppIndexRoute: typeof AppIndexRoute
   AppChannelsNetworkRoute: typeof AppChannelsNetworkRoute
+  AppDesignIllustrationsRoute: typeof AppDesignIllustrationsRoute
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
 }
@@ -477,6 +497,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppWriteRoute: AppWriteRoute,
   AppIndexRoute: AppIndexRoute,
   AppChannelsNetworkRoute: AppChannelsNetworkRoute,
+  AppDesignIllustrationsRoute: AppDesignIllustrationsRoute,
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
 }
