@@ -1,0 +1,20 @@
+{
+  "name": "@shipcast/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What the shipcast command and the web app share: configuration, the keychain, connected accounts and the connectors built from them",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@shipcast/connectors": "workspace:*",
+    "@shipcast/engine": "workspace:*",
+    "@shipcast/schema": "workspace:*"
+  }
+}

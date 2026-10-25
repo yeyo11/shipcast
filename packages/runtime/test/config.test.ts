@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConfigError, loadConfig } from '../src/config.ts';
+import { ConfigError, loadAppConfig, loadConfig } from '../src/config.ts';
 
 const complete = {
   GITHUB_TOKEN_PERSONAL: 'g',
@@ -29,4 +29,18 @@ test('a malformed launches repo or budget is refused', () => {
   assert.throws(() => loadConfig({ ...complete, SHIPCAST_LAUNCHES_REPO: 'launches' }, '/repo'), /owner\/name/);
   assert.throws(() => loadConfig({ ...complete, SHIPCAST_MAX_BUDGET_USD: '-1' }, '/repo'), /positive number/);
   assert.equal(loadConfig({ ...complete, SHIPCAST_MAX_BUDGET_USD: '5' }, '/repo').maxBudgetUsd, 5);
+});
+
+test('the app config needs its address, the GitHub app and who may sign in', () => {
+  assert.throws(() => loadAppConfig({}), /SHIPCAST_PUBLIC_URL, SHIPCAST_GITHUB_CLIENT_ID, SHIPCAST_GITHUB_CLIENT_SECRET, SHIPCAST_ALLOWED_GITHUB/);
+  const app = loadAppConfig({
+    SHIPCAST_PUBLIC_URL: 'https://shipcast.example.dev/',
+    SHIPCAST_GITHUB_CLIENT_ID: 'id',
+    SHIPCAST_GITHUB_CLIENT_SECRET: 'secret',
+    SHIPCAST_ALLOWED_GITHUB: 'Yeyo11, other',
+  });
+  assert.equal(app.publicUrl, 'https://shipcast.example.dev');
+  assert.deepEqual(app.allowedLogins, ['yeyo11', 'other']);
+  assert.deepEqual([app.host, app.port, app.instagram, app.tlsCloudflareToken], ['127.0.0.1', 8443, undefined, undefined]);
+  assert.throws(() => loadAppConfig({ SHIPCAST_PUBLIC_URL: 'http://x', SHIPCAST_GITHUB_CLIENT_ID: 'i', SHIPCAST_GITHUB_CLIENT_SECRET: 's', SHIPCAST_ALLOWED_GITHUB: 'a' }), /https:\/\/host/);
 });

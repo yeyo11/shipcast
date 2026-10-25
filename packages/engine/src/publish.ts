@@ -36,6 +36,9 @@ export interface Publishers {
     comment?(mediaId: string, message: string): Promise<{ id: string }>;
   };
   newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign): Promise<Published> };
+  hashnode?: { publish(a: { title: string; markdown: string; tags: string[]; canonicalUrl: string; coverImageUrl?: string }): Promise<Published> };
+  telegram?: { publish(p: { text: string; imageUrl?: string }): Promise<Published> };
+  discord?: { publish(p: { content: string; embed?: { title: string; url: string; description: string; imageUrl?: string } }): Promise<Published> };
 }
 
 /** Channels the engine publishes to itself; the blog is published by the merge, Reddit by hand. */

@@ -12,6 +12,7 @@
   "dependencies": {
     "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
-    "@shipcast/schema": "workspace:*"
+    "@shipcast/schema": "workspace:*",
+    "@shipcast/runtime": "workspace:*"
   }
 }

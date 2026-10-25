@@ -10,20 +10,25 @@ import {
   draftLaunch,
   GitHubRest,
   loadBrand,
+  preflight,
   publishLaunch,
   Registry,
+  type Preflight,
   type DraftResult,
   type PipelineDeps,
   type PublishResult,
 } from '@shipcast/engine';
 import { Channel, type Brand } from '@shipcast/schema';
-import { ConfigError, loadConfig } from './config.ts';
+import { buildServices, ConfigError, KeychainStore, loadConfig, refreshInstagramToken, type SecretStore, type Services } from '@shipcast/runtime';
 import { serveDashboard } from './dashboard.ts';
-import { buildServices, refreshInstagramToken, type Services } from './services.ts';
 
 const USAGE = `Usage: shipcast <command>
 
-  launch <owner/repo> [--ref <tag>]   Draft the launch of a release (the latest one without --ref)
+  launch <owner/repo> [--ref <tag>]   Draft the launch of a release (the latest one without --ref),
+                                      after its pre-flight check passes
+  preflight <owner/repo> [--ref <tag>]
+                                      Check a repo is ready to launch: release, launch.yml, license,
+                                      README and demo
   watch [--interval <seconds>]        Watch the account's releases, draft each launch and publish it once
                                       its drafts are merged; read the numbers every 6 h (default 300 s)
   publish [--retry <channel>]         Publish every drafted launch whose pull request is merged, once;
@@ -56,6 +61,10 @@ function report(result: DraftResult): void {
   } else {
     console.error(`Launch of ${result.launch.repo} ${result.launch.ref} failed:\n${result.problems.map((p) => `  ${p}`).join('\n')}`);
   }
+}
+
+function reportPreflight(result: Preflight): void {
+  for (const check of result.checks) console.log(`  ${check.ok ? 'ok  ' : check.required ? 'FAIL' : 'warn'}  ${check.detail}`);
 }
 
 function reportPublish(result: PublishResult): void {
@@ -96,6 +105,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const config = loadConfig();
+  const secrets: SecretStore = new KeychainStore();
   mkdirSync(config.dataDir, { recursive: true });
   const registry = new Registry(join(config.dataDir, 'shipcast.db'));
   const github = new GitHubRest({ token: config.githubToken });
@@ -117,7 +127,8 @@ async function main(argv: string[]): Promise<number> {
           console.log(`${l.createdAt.slice(0, 16).replace('T', ' ')}  ${l.repo} ${l.ref}  ${l.kind}  ${l.status}${l.detail ? `  ${l.detail.split('\n')[0]}` : ''}`);
         }
         const brand = await loadBrand(github, config.launchesRepo);
-        console.log(`\nConfigured: ${buildServices(process.env, brand, registry, github).configured.join(', ')}`);
+        const services = await buildServices({ env: process.env, brand, registry, github, secrets });
+        console.log(`\nConfigured: ${services.configured.join(', ')}`);
         return 0;
       }
 
@@ -131,13 +142,13 @@ async function main(argv: string[]): Promise<number> {
           for (const l of registry.retryChannel(channel.data)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
         }
         const brand = await loadBrand(github, config.launchesRepo);
-        await publishReady(brand, buildServices(process.env, brand, registry, github), deps);
+        await publishReady(brand, await buildServices({ env: process.env, brand, registry, github, secrets }), deps);
         return 0;
       }
 
       case 'metrics': {
         const brand = await loadBrand(github, config.launchesRepo);
-        await readMetrics(brand, buildServices(process.env, brand, registry, github), registry);
+        await readMetrics(brand, await buildServices({ env: process.env, brand, registry, github, secrets }), registry);
         return 0;
       }
 
@@ -156,6 +167,12 @@ async function main(argv: string[]): Promise<number> {
           console.error('launch needs a repo as owner/name');
           return 2;
         }
+        const check = await preflight(repo, values.ref, { github });
+        reportPreflight(check);
+        if (!check.ok) {
+          console.error(`${repo} is not ready to launch: fix the checks marked FAIL`);
+          return 1;
+        }
         const brand = await loadBrand(github, config.launchesRepo);
         const claim = await claimManual(repo, values.ref, brand, deps);
         if ('error' in claim) {
@@ -172,10 +189,22 @@ async function main(argv: string[]): Promise<number> {
         return result.ok ? 0 : 1;
       }
 
+      case 'preflight': {
+        const repo = rest[0];
+        if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+          console.error('preflight needs a repo as owner/name');
+          return 2;
+        }
+        const check = await preflight(repo, values.ref, { github });
+        console.log(`${repo} ${check.ok ? 'is ready to launch' : 'is not ready to launch'}`);
+        reportPreflight(check);
+        return check.ok ? 0 : 1;
+      }
+
       case 'watch': {
         const interval = Math.max(MIN_INTERVAL_S, Number(values.interval ?? 300)) * 1000;
         const brand = await loadBrand(github, config.launchesRepo);
-        let services = buildServices(process.env, brand, registry, github);
+        let services = await buildServices({ env: process.env, brand, registry, github, secrets });
         console.log(`Watching ${brand.github}'s releases for ${config.launchesRepo}, every ${interval / 1000} s. Ctrl+C to stop.`);
         console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);
         let stopping = false;
@@ -196,10 +225,10 @@ async function main(argv: string[]): Promise<number> {
           // Each step on its own: one failing must not keep the others from running this round
           await step('publish', () => publishReady(brand, services, deps));
           await step('Instagram token', async () => {
-            const refreshed = await refreshInstagramToken(services, registry);
+            const refreshed = await refreshInstagramToken(services, { registry, secrets });
             if (refreshed) {
               console.log(refreshed);
-              services = buildServices(process.env, brand, registry, github);
+              services = await buildServices({ env: process.env, brand, registry, github, secrets });
             }
           });
           const lastMetrics = Date.parse(registry.cursor(METRICS_AT_KEY) ?? '') || 0;

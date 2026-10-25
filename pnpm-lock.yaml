@@ -29,6 +29,9 @@ importers:
       '@shipcast/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@shipcast/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@shipcast/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -64,6 +67,18 @@ importers:
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
+
+  packages/runtime:
+    dependencies:
+      '@shipcast/connectors':
+        specifier: workspace:*
+        version: link:../connectors
+      '@shipcast/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@shipcast/schema':
+        specifier: workspace:*
+        version: link:../schema
 
   packages/schema:
     dependencies:
