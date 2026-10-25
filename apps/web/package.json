@@ -15,6 +15,7 @@
   "dependencies": {
     "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
+    "@shipcast/mcp": "workspace:*",
     "@shipcast/runtime": "workspace:*",
     "@shipcast/schema": "workspace:*",
     "@tanstack/react-router": "1.170.46",

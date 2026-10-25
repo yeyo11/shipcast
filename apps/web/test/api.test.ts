@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import type { ArticleInput, Editors, Launch, Registry, ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { createApiToken, MemoryStore } from '@shipcast/runtime';
-import { FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
+import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
+import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
+import { checkBearer, FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
+import { createSession, SESSION_COOKIE } from '../src/server/session.server.ts';
 
 const github: ReviewGitHub = {
   pullRequest: async (_repo, number) => ({ number, url: `https://github.com/yeyo11/launches/pull/${number}`, state: 'open', branch: 'launch/x', title: 'x' }),
@@ -377,4 +379,37 @@ test('recommendations and the time zone are read with the read scope, the zone s
   const slots = answer.slots as Array<{ at: string; reason: string; basis: string }>;
   assert.equal(slots.length, 3);
   assert.ok(slots.every((slot) => slot.basis === 'default' && slot.reason.length > 0), 'no history yet: the defaults speak');
+});
+
+test('WebMCP: the session cookie opens the API only same-origin, with the header, and while the setting is on', async () => {
+  const s = await setup();
+  const session = `${SESSION_COOKIE}=${encodeURIComponent((await createSession(s.deps.secrets, 'yeyo11')).value)}`;
+  const webmcp = (headers: Record<string, string>) => call(s.deps, 'POST', '/launches', { body: { repo: 'yeyo11/claudio' }, headers });
+  const browser = { cookie: session, [WEBMCP_HEADER]: '1', 'sec-fetch-site': 'same-origin' };
+
+  const off = await webmcp(browser);
+  assert.equal(off.status, 401, 'off by default');
+  assert.match(JSON.stringify(await body(off)), /WebMCP is off/);
+
+  await writeWebMcp(s.registry, true);
+  assert.equal((await webmcp(browser)).status, 202, 'the owner’s session may read and write');
+  assert.equal((await call(s.deps, 'GET', '/launches', { headers: browser })).status, 200);
+
+  assert.equal((await webmcp({ ...browser, 'sec-fetch-site': 'cross-site' })).status, 401, 'a page on another site');
+  assert.equal((await webmcp({ cookie: session, 'sec-fetch-site': 'same-origin' })).status, 401, 'the app’s own pages without the header');
+  assert.equal((await webmcp({ ...browser, cookie: `${SESSION_COOKIE}=forged.sig` })).status, 401, 'a forged session');
+  assert.equal((await webmcp({ ...browser, authorization: `Bearer ${s.read}` })).status, 403, 'a token, when sent, is what counts');
+  assert.deepEqual(s.calls, ['launch yeyo11/claudio - false']);
+});
+
+test('the MCP endpoint’s bearer check: the API’s refusals, and the same limit on wrong tokens', async () => {
+  const s = await setup();
+  const at = (token: string | undefined, peer = '10.0.0.9') =>
+    checkBearer(new Request('https://shipcast.example/mcp', { method: 'POST', headers: { [PEER_HEADER]: peer, ...(token && { authorization: `Bearer ${token}` }) } }), s.deps);
+  assert.equal(await at(s.both), undefined);
+  assert.equal(await at(s.read), undefined, 'scopes are checked per tool, by the API');
+  assert.equal((await at(undefined))?.status, 401);
+  for (let i = 0; i < 3; i++) assert.equal((await at('shipcast_9_wrong'))?.status, 401);
+  assert.equal((await at(s.both))?.status, 429);
+  assert.equal((await call(s.deps, 'GET', '/jobs', { token: s.both, headers: { [PEER_HEADER]: '10.0.0.9' } })).status, 429, 'one limit for both doors');
 });

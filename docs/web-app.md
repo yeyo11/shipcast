@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:02:41.924003579Z
-updated_at: 2026-10-25T16:26:32.086908211Z
+updated_at: 2026-10-25T19:33:14.072270582Z
 tags:
     - web-app
     - dashboard
@@ -15,6 +15,7 @@ tags:
     - ai
     - github-app
     - settings
+    - mcp
 ---
 # The web app
 
@@ -75,7 +76,12 @@ runs on the owner's machine.
   (it answers `ok` and nothing else) and the GitHub webhook, which carries its own proof.
 - **The REST API checks its own tokens.** `/api/v1/*` takes only `Authorization: Bearer <token>`, never
   the session cookie, so it is left out of the session and same-origin checks and cannot be forged
-  from another site ([api.md](api.md), [decisions/api-tokens.md](decisions/api-tokens.md)).
+  from another site ([api.md](api.md), [decisions/api-tokens.md](decisions/api-tokens.md)). The one
+  exception is WebMCP's same-origin calls, with their marker header, while the owner has turned that
+  experiment on ([decisions/mcp.md](decisions/mcp.md)).
+- **The MCP endpoint takes the same tokens.** `/mcp` serves the [MCP server](mcp.md) over Streamable
+  HTTP, left out of the session and same-origin checks like the API: it checks the bearer token first
+  and refuses a browser `Origin` other than the app's.
 
 ## Sections
 
@@ -209,8 +215,13 @@ Cartel markup (`src/routes/_app/settings.tsx`, `src/server/settings.functions.ts
 - **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
   `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
   OpenAPI document is built from it. Requests that start work are checked by the same functions as
-  the pages' (`src/server/requests.ts`).
+  the pages' (`src/server/requests.ts`). Its dependencies are built per request in
+  `src/server/api-deps.server.ts`, shared with `/mcp`.
+- **The MCP server** is `src/routes/mcp.ts`, a thin route over `@shipcast/mcp` (`packages/mcp`):
+  each tool calls `handleApi` in-process with the caller's own `Authorization` header. WebMCP's
+  module, `@shipcast/mcp/webmcp`, exports `mountWebMcp({ enabled })` for the shell to call once it reads
+  the `webmcp:enabled` setting; it is not mounted yet.
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]]
