@@ -4,6 +4,7 @@ import {
   claimManual,
   draftLaunch,
   loadBrand,
+  loadProjects,
   Registry,
   type AiProvider,
   type EventsPage,
@@ -84,6 +85,8 @@ function setup(output: unknown = pack, files: Record<string, string> = {}) {
       return { hostPath: '/h', providerPath: '/workspace/x' };
     },
     now: () => new Date('2026-10-25T00:00:00Z'),
+    // The site serves no covers
+    fetch: (async () => new Response(null, { status: 404 })) as typeof fetch,
   };
   return { github, registry, deps, clones };
 }
@@ -92,6 +95,14 @@ test('the brand comes from the launches repo, validated', async () => {
   const { github } = setup();
   assert.equal((await loadBrand(github, 'yeyo11/launches')).site, 'https://josegarrido.dev');
   await assert.rejects(loadBrand(new FakeGitHub({}), 'yeyo11/launches'), /has no brand.yml/);
+});
+
+test('the known projects come from the launches repo; without projects.yml there are none', async () => {
+  const { github } = setup(pack, { 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: "#2FD7A0"\n  motif: phone\n' });
+  assert.equal((await loadProjects(github, 'yeyo11/launches'))['claudio']?.motif, 'phone');
+  assert.deepEqual(await loadProjects(new FakeGitHub({}), 'yeyo11/launches'), {});
+  const broken = new FakeGitHub({ 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: green\n  motif: phone\n' });
+  await assert.rejects(loadProjects(broken, 'yeyo11/launches'), /projects\.yml is invalid/);
 });
 
 test('a claimed launch becomes a drafts pull request and is recorded as drafted', async () => {
@@ -111,6 +122,8 @@ test('a claimed launch becomes a drafts pull request and is recorded as drafted'
   const article = pr.files.find((f) => f.path === 'src/content/posts/en/claudio.md');
   assert.match(article && 'content' in article ? article.content : '', /^image: "\/launches\/claudio\/v0\.9\.0\/og\.png"$/m);
   assert.ok(!pr.files.some((f) => f.path.includes('instagram')), 'channels off in launch.yml get nothing');
+  assert.ok(pr.files.some((f) => f.path === 'public/covers/claudio.jpg'), 'a project without a cover gets one');
+  assert.ok(pr.files.some((f) => f.path === 'projects.yml' && 'content' in f && f.content.includes('/covers/claudio.jpg')));
   const after = registry.get(launch.id)!;
   assert.equal(after.status, 'drafted');
   assert.equal(after.detail, 'https://github.com/yeyo11/launches/pull/1');

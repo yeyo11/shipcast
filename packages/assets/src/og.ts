@@ -4,8 +4,10 @@ import jpeg from 'jpeg-js';
 import satori from 'satori';
 
 export interface OgContent {
-  /** The project's name: picks its colour and its drawing */
+  /** The project's name, shown on the images that name it */
   project: string;
+  /** The project's colour and drawing */
+  look: Look;
   /** The article's headline, set on the project's colour */
   title: string;
   /** One line on what it does */
@@ -57,28 +59,14 @@ export const MUTED = '#B8B4AA';
 export const PAPER = '#F7F5EF';
 
 export type Motif = 'phone' | 'terminal' | 'label' | 'wave' | 'orb' | 'stack';
-const KNOWN: Record<string, { colour: string; motif: Motif }> = {
-  claudio: { colour: '#2FD7A0', motif: 'phone' },
-  shipcast: { colour: '#FFD43B', motif: 'label' },
-};
-const SPARE_COLOURS = ['#FF6FAE', '#FF7A2F', '#7C8CFF', '#FF5A4A'];
-const SPARE_MOTIFS: Motif[] = ['wave', 'orb', 'stack', 'terminal'];
 
-function hash(text: string): number {
-  let h = 0;
-  for (const char of text) h = (h * 31 + char.charCodeAt(0)) >>> 0;
-  return h;
-}
-
-/** The project's flat colour and drawing, picked exactly as the blog picks them */
-export function projectLook(project: string): { colour: string; motif: Motif } {
-  const name = project.toLowerCase();
-  return (
-    KNOWN[name] ?? {
-      colour: SPARE_COLOURS[hash(name) % SPARE_COLOURS.length] ?? '#FF6FAE',
-      motif: SPARE_MOTIFS[hash(`${name}:motif`) % SPARE_MOTIFS.length] ?? 'orb',
-    }
-  );
+/**
+ * A project's flat colour and drawing. They come from the brand's `projects.yml` (`lookOf` in
+ * @shipcast/schema), so the images and the blog never disagree.
+ */
+export interface Look {
+  colour: string;
+  motif: Motif;
 }
 
 /** A headline in the house style: every word's first letter in Fraunces' wonky italic. */
@@ -190,11 +178,35 @@ function illustration(colour: string, kind: Motif): OgNode {
  * The house illustration alone, as a PNG twice its drawn size: the cover of a project that has no
  * drawn one. Drawn at 560 × 630 and rendered at `scale`, so it stays sharp when cropped to a slide.
  */
-export async function renderIllustration(project: string, scale = 2): Promise<Uint8Array> {
-  const { colour, motif: kind } = projectLook(project);
+export async function renderIllustration(look: Look, scale = 2): Promise<Uint8Array> {
+  const { colour, motif: kind } = look;
   const fonts = await Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
   const svg = await satori(illustration(colour, kind) as never, { width: 560, height: OG_HEIGHT, fonts });
   return new Uint8Array(new Resvg(svg, { fitTo: { mode: 'width', value: 560 * scale } }).render().asPng());
+}
+
+export const COVER_WIDTH = 1600;
+export const COVER_HEIGHT = 900;
+
+/**
+ * A cover for a project that has no drawn one: the blog's illustration at article size, 1600 × 900.
+ * The flat colour, the halftone gathering at the corners and the motif, large and right of centre
+ * where the blog's drawn covers keep their subject; no text, like those covers. One cover per
+ * project, so the motif is the project's own, not the article's.
+ */
+export async function renderCover(look: Look): Promise<Uint8Array> {
+  const { colour, motif: kind } = look;
+  const scale = 1.55;
+  const scene = box({ position: 'relative', width: COVER_WIDTH, height: COVER_HEIGHT, background: colour, overflow: 'hidden' }, [
+    halftone({ left: 880, top: 330, size: 720 }, INK, colour, '100% 100%'),
+    halftone({ left: 0, top: 0, size: 560 }, 'rgba(255,255,255,0.85)', colour, '0% 0%'),
+    // The motif is drawn in a 560 × 630 panel; scaled up from its corner, it fills the right side
+    box({ position: 'absolute', left: 716, top: -38, width: 560, height: OG_HEIGHT, transform: `scale(${scale})`, transformOrigin: 'top left' }, [motif(kind, colour)]),
+  ]);
+  const fonts = await Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
+  const svg = await satori(scene as never, { width: COVER_WIDTH, height: COVER_HEIGHT, fonts });
+  const rendered = new Resvg(svg, { fitTo: { mode: 'width', value: COVER_WIDTH } }).render();
+  return new Uint8Array(jpeg.encode({ data: Buffer.from(rendered.pixels), width: rendered.width, height: rendered.height }, 92).data);
 }
 
 /** The personal brand's launch image: the headline on the project's colour, beside its drawing. */
@@ -209,7 +221,7 @@ export const EDITORIAL_FONTS: OgFont[] = [
 export const EDITORIAL_THEME: OgTheme = {
   fonts: EDITORIAL_FONTS,
   layout(content) {
-    const { colour, motif: kind } = projectLook(content.project);
+    const { colour, motif: kind } = content.look;
     const long = content.title.length > 48;
     return box({ width: '100%', height: '100%', background: INK, color: TEXT, fontFamily: 'Instrument Sans' }, [
       box({ width: 640, height: '100%', boxSizing: 'border-box', padding: '52px 56px 48px', flexDirection: 'column', justifyContent: 'space-between' }, [

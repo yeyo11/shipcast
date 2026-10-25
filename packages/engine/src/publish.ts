@@ -1,11 +1,12 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleUrl as urlOf, ContentPack, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { launchDir, parseInstagramDraft } from './drafts.ts';
+import { launchDir, parseInstagramDraft, projectSlug } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
+import { loadProjects } from './pipeline.ts';
 import type { Launch, Registry } from './registry.ts';
 
 /**
@@ -208,6 +209,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             const settings = brand.newsletter!;
             const sent: Published[] = [];
             const empty: string[] = [];
+            const projects = await loadProjects(github, deps.launchesRepo);
             for (const lang of ['en', 'es'] as const) {
               const listId = settings.lists[lang];
               const fromPack = pack.newsletter![lang];
@@ -232,6 +234,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 html: renderIssueHtml(issue, {
                   brand,
                   project: pack.project.name,
+                  look: lookOf(projects, projectSlug(launch.repo)),
                   title: typeof langTitle === 'string' ? langTitle : title,
                   articleUrl: `${urlOf(pack, brand.site, lang) ?? articleUrl}?ref=newsletter`,
                   // No launch image: it carries the English headline, which the issue already sets on colour

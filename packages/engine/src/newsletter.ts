@@ -1,4 +1,3 @@
-import { projectLook } from '@shipcast/assets';
 import type { Brand, Language } from '@shipcast/schema';
 import { Marked } from 'marked';
 
@@ -34,10 +33,10 @@ export function parseIssueDraft(body: string, fallback: NewsletterIssue): Newsle
  * colour as on the blog, the note, a button to the article and the unsubscribe line Brevo fills in.
  * Tables and inline styles, since that is what every mail client renders the same.
  */
-export function renderIssueHtml(issue: NewsletterIssue, options: { brand: Brand; project: string; title: string; articleUrl: string; imageUrl?: string; lang: Language }): string {
+export function renderIssueHtml(issue: NewsletterIssue, options: { brand: Brand; project: string; look: { colour: string }; title: string; articleUrl: string; imageUrl?: string; lang: Language }): string {
   const { brand, lang } = options;
   const copy = COPY[lang];
-  const colour = projectLook(options.project).colour;
+  const colour = options.look.colour;
   const marked = new Marked({ gfm: true, breaks: false });
   const body = (marked.parse(issue.markdown, { async: false }) as string)
     .replace(/<p>/g, '<p style="margin:0 0 18px;font:18px/1.6 Georgia,\'Times New Roman\',serif;color:#22211f">')

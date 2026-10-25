@@ -1,4 +1,4 @@
-import { formatIssues, parseBrand, parseLaunchConfig, resolvePack, type Brand } from '@shipcast/schema';
+import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
 import type { AiProvider } from './claudio.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { launchDir, projectSlug, pullRequestBody, renderDrafts } from './drafts.ts';
@@ -18,6 +18,8 @@ export interface PipelineDeps {
   checkout: (repo: string, ref: string) => Promise<Checkout>;
   now?: () => Date;
   maxBudgetUsd?: number;
+  /** For the site's covers; the global fetch by default */
+  fetch?: typeof fetch;
 }
 
 /** The brand the launches repo speaks for, read from its `brand.yml` on the default branch. */
@@ -27,6 +29,22 @@ export async function loadBrand(github: GitHubSource, launchesRepo: string): Pro
   const parsed = parseBrand(text);
   if (!parsed.ok) throw new Error(`${launchesRepo}/brand.yml is invalid:\n${formatIssues('brand.yml', parsed.issues)}`);
   return parsed.value;
+}
+
+/**
+ * The brand's known projects, read from `projects.yml` on the launches repo's default branch, with
+ * the file's text. A repo without one has no known projects: every look comes from the project's name.
+ */
+export async function readProjects(github: GitHubSource, launchesRepo: string): Promise<{ projects: Projects; text: string | undefined }> {
+  const text = await github.fileAt(launchesRepo, PROJECTS_PATH, 'HEAD');
+  if (text === undefined) return { projects: {}, text };
+  const parsed = parseProjects(text);
+  if (!parsed.ok) throw new Error(`${launchesRepo}/${PROJECTS_PATH} is invalid:\n${formatIssues(PROJECTS_PATH, parsed.issues)}`);
+  return { projects: parsed.value, text };
+}
+
+export async function loadProjects(github: GitHubSource, launchesRepo: string): Promise<Projects> {
+  return (await readProjects(github, launchesRepo)).projects;
 }
 
 export type DraftResult =
@@ -68,7 +86,13 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }
 
-  const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout });
+  let known;
+  try {
+    known = await readProjects(github, deps.launchesRepo);
+  } catch (error) {
+    return fail([error instanceof Error ? error.message : String(error)]);
+  }
+  const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout, projects: known.projects, projectsText: known.text, fetch: deps.fetch });
   if (!assets.ok) return fail([assets.problem]);
 
   const files = [
