@@ -18,3 +18,4 @@ export * from './newsletter.ts';
 export * from './preflight.ts';
 export * from './article.ts';
 export * from './review.ts';
+export * from './stats.ts';
