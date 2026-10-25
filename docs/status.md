@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T09:57:37.470820711Z
-updated_at: 2026-10-25T10:02:30.35494427Z
+created_at: 2026-10-25T10:37:27.12966162Z
+updated_at: 2026-10-25T10:37:27.12966162Z
 tags:
     - status
     - roadmap
@@ -97,12 +97,11 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 
 ## Next
 
-- The app on a VPS or server, which also lets GitHub's webhooks reach it.
-- Phase 6, after the MVP, as steps of a setup wizard: the AI providers through the Vercel AI SDK
-  (claudio through its OpenAI-compatible API), the GitHub Action mode, documentation, a blog template
-  and a one-command install. The company brand of the founding plan is dropped: the brand is the
-  owner's own, josegarridodev.
+[plans/after-mvp.md](plans/after-mvp.md), decided on 2026-10-25: phase 6 lays the foundations
+(Postgres with Drizzle, a post model, durable work on pg-boss, configuration in two parts, the GitHub
+App, account snapshots); then the interface, AI, after publishing, engagement and reach. The blog
+moves to Cloudflare and gets its SEO work in parallel. The server deployment is postponed.
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]

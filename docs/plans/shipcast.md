@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T06:55:59.910066905Z
-updated_at: 2026-10-25T09:55:48.545205562Z
+created_at: 2026-10-25T10:29:22.201212587Z
+updated_at: 2026-10-25T10:33:04.640764954Z
 tags:
     - plan
     - architecture
@@ -195,7 +195,8 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 
 - [x] Hashnode: connector and publishing built on 2026-10-25; its live test needs the paid Pro plan its API requires since 2026-05-13
 - [x] Bluesky and Mastodon (free APIs)
-- [x] ~~X~~ and ~~LinkedIn~~: dropped for good by the owner on 2026-10-24
+- [x] ~~X~~ and ~~LinkedIn~~: dropped by the owner on 2026-10-24; LinkedIn's personal profile came back
+      on 2026-10-25 ([plans/after-mvp.md](after-mvp.md))
 - [x] Instagram, added to the MVP: a carousel, its story and a comment (2026-10-25)
 - [x] Brand separation: accounts per brand, a launch only uses its own brand's, `.env` speaks for
       one brand only (2026-10-25). One brand, the owner's own (josegarridodev); the company brand
@@ -229,19 +230,14 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 - [x] Newsletter, through Brevo; Telegram channel and Discord (2026-10-25, live tests wait on accounts)
 - [x] Personal style guide for the AI: the brand's `tone` in `brand.yml`, refined after the first launch
 
-### Phase 6: a product for other developers
+### Phase 6 onwards
 
-After the MVP, as steps of a setup wizard ([plans/mvp-close.md](mvp-close.md)): the AI providers
-through the Vercel AI SDK, with claudio reached through its OpenAI-compatible API by the SDK's
-adapter.
+Replaced on 2026-10-25 by [plans/after-mvp.md](after-mvp.md), which orders what follows the MVP:
+foundations (Postgres, a post model, durable work, the GitHub App), the interface, AI, after
+publishing, engagement and reach, with the blog's SEO in parallel. Of the old phase 6, Shipcast's own
+launch is done:
 
-- [ ] Swappable AI providers: claudio, the Anthropic API and the Claude Code Action
-- [ ] GitHub Action mode, with no local machine, alongside the local mode
-- [ ] Documentation, blog template and one-command install
 - [x] Shipcast launched with Shipcast: v0.1.0, from the app, on 2026-10-25
-
-Final test: Shipcast's launch, generated and published by Shipcast — done ahead of the rest of
-phase 6, as the goal's final test.
 
 ## Open questions
 
@@ -263,4 +259,4 @@ phase 6, as the goal's final test.
 
 ## Related
 
-[[status.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]
+[[status.md]] · [[plans/after-mvp.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]

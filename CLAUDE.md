@@ -5,7 +5,8 @@ Claude, generates a content pack for every channel and publishes it after the ow
 pnpm monorepo, TypeScript, Node 24 LTS (24.22.1, pinned in `.nvmrc` and in pnpm's `useNodeVersion`,
 so every `pnpm` script runs on it whatever is on `PATH`) — the same stack as
 [claudio](https://github.com/yeyo11/claudio), which is also Shipcast's AI provider. The design and
-the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md); where the project stands is in
+the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md), what follows the MVP in
+[docs/plans/after-mvp.md](docs/plans/after-mvp.md); where the project stands is in
 [docs/status.md](docs/status.md).
 
 ## Principles
@@ -15,13 +16,14 @@ the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md); where the p
   not exist is a bug.
 - **Nothing is published without its channel's mode.** Each channel is `auto`, `approval` or
   `manual` in the repo's `.github/launch.yml`; Reddit and Hacker News are always drafts.
-- **Brands never mix.** The personal brand (yeyo11) and the company brand (josegarridodigio) have
-  their own accounts, tone and language.
+- **Brands never mix.** Each brand has its own accounts, tone and language, and a launch only uses
+  its own brand's. Today there is one, the owner's (josegarridodev); the company brand was dropped on
+  2026-10-25.
 - **A launch happens once.** Every launch is recorded; re-running a workflow or publishing a minor
   version must not repeat a campaign.
-- **Local first.** The engine runs on the owner's laptop, polls the GitHub API (both accounts are user
-  accounts, so there are no organisation webhooks) and reaches the outside through Tailscale Serve
-  only when needed. The GitHub Action mode comes in phase 6.
+- **Local first.** The engine runs on the owner's machine and is built so a server changes nothing
+  but the address. It polls GitHub, or takes webhooks when it is reachable; the GitHub Action mode
+  comes later ([docs/plans/after-mvp.md](docs/plans/after-mvp.md)).
 
 ## Layout
 
@@ -60,7 +62,8 @@ Both run as [Sluice](.sluice.toml) gates (`typecheck` on pre-commit, `test` on p
   direct pushes, and CI's `test` check must pass. An agent branches from `main`, commits through the
   Sluice gates, pushes its branch and opens the pull request (titled in Conventional Commits) without
   asking; the owner merges it, unless they ask the agent to.
-- Secrets (API keys, tokens for each network) live in `.env`, never in the repo.
+- Secrets never go in the repo. A network's credentials live in the OS keychain as a connected
+  account; `.env` holds only what the app needs before anyone signs in.
 
 ## Knowledge
 
