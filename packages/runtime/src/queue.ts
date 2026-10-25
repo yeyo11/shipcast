@@ -184,6 +184,14 @@ export class WorkQueue {
       if (state === record.state) continue;
       await this.#registry.updateJob(record.id, { state, attempts: Math.max(record.attempts, job.retryCount + (state === 'created' ? 0 : 1)), ended: state === 'completed' || state === 'failed' });
     }
+    // A draft cut short by a stop leaves its launch "generating" for good, and a launch in that state
+    // cannot be started again; failed, it can, and its page says why
+    const live = await this.#registry.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
+    const drafting = new Set(live.map((j) => j.launchId));
+    const { launches } = await this.#registry.launchesPage({ status: 'generating', limit: 100 });
+    for (const launch of launches) {
+      if (!drafting.has(launch.id)) await this.#registry.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
+    }
   }
 
   /**
