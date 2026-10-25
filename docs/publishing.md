@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:57:14.285453045Z
-updated_at: 2026-10-25T20:05:23.625220408Z
+created_at: 2026-10-25T20:20:23.589869057Z
+updated_at: 2026-10-25T20:27:25.793174826Z
 tags:
     - publishing
     - connectors
@@ -14,16 +14,17 @@ tags:
     - job-queue
     - edit-delete
     - scheduling
+    - comments
 ---
 # Publishing, media and metrics
 
 What happens after the drafts pull request ([engine.md](engine.md)): the launch's media, publishing
-on every channel once the owner merges, editing and deleting what went out, and reading the numbers
-back. Built on 2026-10-24 in `packages/assets`, `packages/capture`, `packages/connectors`,
-`packages/engine` (`launch-assets.ts`, `publish.ts`, `edit.ts`, `newsletter.ts`, `metrics.ts`),
-`packages/runtime` (`services.ts`, `edits.ts`, `rounds.ts`, `work.ts`) and the
-[web app](web-app.md). Every connector is Shipcast's own, over `fetch`, with no SDK
-([decisions/mvp-scope.md](decisions/mvp-scope.md) says why Postiz was dropped).
+on every channel once the owner merges, editing and deleting what went out, answering the comments
+under it, and reading the numbers back. Built on 2026-10-24 in `packages/assets`, `packages/capture`,
+`packages/connectors`, `packages/engine` (`launch-assets.ts`, `publish.ts`, `edit.ts`, `comments.ts`,
+`newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`, `edits.ts`, `comments.ts`,
+`rounds.ts`, `work.ts`) and the [web app](web-app.md). Every connector is Shipcast's own, over
+`fetch`, with no SDK ([decisions/mvp-scope.md](decisions/mvp-scope.md) says why Postiz was dropped).
 
 ## The launch's media
 
@@ -190,6 +191,32 @@ note, fields }`.
 - **A launch happens once:** a deleted row stays, so the channel stays done and the piece is never
   published again, even with the launch drafted again.
 
+## Comments: the assistant
+
+Added on 2026-10-25 (phase 10; the decisions are in
+[decisions/comment-assistant.md](decisions/comment-assistant.md)). The comments under Shipcast's own
+posts are read, each new one gets a reply drafted by the AI, and a reply goes out with the account
+the post went out with when the owner approves it, or at once on a channel set to auto.
+
+| Channel | Read | Reply |
+| --- | --- | --- |
+| Mastodon | the status's public and unlisted replies (`/context`) | a public reply mentioning the author, with an idempotency key |
+| Bluesky | the post's thread, from the public AppView | a reply record threaded under the post and the comment |
+| Instagram | the post's comments and their replies | `POST /{comment-id}/replies`; both need `instagram_business_manage_comments` |
+| dev.to | the article's comments | no: Forem's API cannot write one; the page links to the comment to answer there |
+| Telegram, Discord | no | no |
+
+- **Reading:** a `comments` job every 30 minutes and on demand ("Check comments now") reads every
+  live post of the last 30 days, records each comment once (`comments` table, unique per channel and
+  network id), keeps the owner's own replies for the thread's context, and marks a comment the owner
+  answered on the network as answered.
+- **Drafting:** the `replies` AI task and the editable `reply` prompt, closed by locked rules: the
+  code and the launch's analysis are the truth, never a promise they do not back, the comment's
+  language, short, and no reply to spam or abuse (suggested for dismissal instead).
+- **Modes:** each channel is `off`, `approval` (the default) or `auto`; a reply is sent once, claimed
+  before it goes out. With drafts ready, the owner's Telegram chat with the bot hears of them.
+- **Where:** the plain `/comments` page and the `/api/v1/comments` routes ([api.md](api.md)).
+
 ## The newsletter
 
 Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newsletter-brevo)).
@@ -269,18 +296,20 @@ accounts, with `.env` as the fallback for the brand it speaks for ([accounts.md]
 network without its credential is left out, never half-configured, and `shipcast status` lists what
 is on. It also says which connected account each channel publishes with, which its pieces record.
 The newsletter also needs the `newsletter` block in `brand.yml`. With Telegram connected, the
-owner's own chat with the bot hears when drafts wait, when a launch is published and when it fails.
+owner's own chat with the bot hears when drafts wait, when a launch is published and when it fails,
+and when replies to comments are drafted.
 
 The round (`runRound` in `packages/runtime/src/rounds.ts`, 2026-10-25) is shared: claim new releases
 (when polling; each claimed launch is queued as a `draft` job) and publish every drafted launch that
 is ready, scheduled pieces whose time has passed included. Since phase 6 it is a job of the queue
 ([decisions/job-queue.md](decisions/job-queue.md)): one round at most queued and one running,
 whichever process sent it, each sending the next an interval later. Reading the metrics (every 6
-hours, cron `0 */6 * * *`) and refreshing every connected Instagram account's token that is 30 days
-old (daily; they last 60, and Meta refuses to refresh one younger than a day, so a first sight only
-records the date) are jobs of their own. With automation off, none of them runs unless sent by hand.
-The web app works every queue, or takes GitHub webhooks instead of polling
-([web-app.md](web-app.md#automation)); `watch` works the same queues from a terminal.
+hours, cron `0 */6 * * *`), reading the comments (every 30 minutes, `*/30 * * * *`) and refreshing
+every connected Instagram account's token that is 30 days old (daily; they last 60, and Meta refuses
+to refresh one younger than a day, so a first sight only records the date) are jobs of their own.
+With automation off, none of them runs unless sent by hand. The web app works every queue, or takes
+GitHub webhooks instead of polling ([web-app.md](web-app.md#automation)); `watch` works the same
+queues from a terminal.
 
 | Command | Does |
 | --- | --- |
@@ -293,4 +322,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[api.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[api.md]]

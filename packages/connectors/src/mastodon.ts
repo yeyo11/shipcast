@@ -1,12 +1,49 @@
-import { checkProblem, expectOk, json, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+import {
+  checkProblem,
+  expectOk,
+  htmlToText,
+  imageUrl,
+  json,
+  okCheck,
+  statsOf,
+  type Check,
+  type Comment,
+  type CommentReader,
+  type Deletable,
+  type Editable,
+  type Metrics,
+  type ProfileStats,
+  type Published,
+  type Replier,
+  type ReplyTarget,
+  type SentReply,
+} from './http.ts';
 
 interface MastodonAccount {
+  id: string;
   acct: string;
   display_name?: string;
   avatar?: string;
   followers_count?: number;
   following_count?: number;
   statuses_count?: number;
+}
+
+interface MastodonStatus {
+  id: string;
+  in_reply_to_id: string | null;
+  account: MastodonAccount;
+  content: string;
+  created_at: string;
+  url?: string | null;
+  visibility: 'public' | 'unlisted' | 'private' | 'direct';
+}
+
+/** The author's name and picture, each only when there is one */
+function profileOf(account: MastodonAccount): { displayName?: string; avatarUrl?: string } {
+  const avatarUrl = imageUrl(account.avatar);
+  const displayName = account.display_name?.trim();
+  return { ...(displayName && { displayName }), ...(avatarUrl && { avatarUrl }) };
 }
 
 export interface MastodonPost {
@@ -28,12 +65,13 @@ export interface MastodonEdit {
 /**
  * Mastodon through its REST API: a public status (with an optional image, described for screen
  * readers), and its favourites, boosts and replies read back from the status. A status can be edited
- * (text and media) and deleted.
+ * (text and media) and deleted, and the replies under it read and answered.
  */
-export class Mastodon implements Editable<MastodonEdit>, Deletable {
+export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReader, Replier {
   readonly #instance: string;
   readonly #token: string;
   readonly #fetch: typeof fetch;
+  #ownAccount: Promise<string> | undefined;
 
   constructor(options: { instance: string; accessToken: string; fetch?: typeof fetch }) {
     this.#instance = options.instance.replace(/\/+$/, '');
@@ -113,6 +151,66 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable {
   async profileStats(): Promise<ProfileStats> {
     const me = await this.#me('read the profile');
     return statsOf({ followers: me.followers_count, following: me.following_count, posts: me.statuses_count });
+  }
+
+  /** The token's own account id, read once: what tells the owner's replies from the others' */
+  async #ownId(): Promise<string> {
+    this.#ownAccount ??= this.#me('read the account').then(
+      (me) => me.id,
+      (error: unknown) => {
+        this.#ownAccount = undefined;
+        throw error;
+      },
+    );
+    return this.#ownAccount;
+  }
+
+  /**
+   * The replies under a status, from its context's descendants, threads included. Only public and
+   * unlisted ones: a private or direct reply was meant for the owner alone, and nothing Shipcast
+   * drafts or shows should treat it as a public comment.
+   */
+  async comments(externalId: string): Promise<Comment[]> {
+    const id = encodeURIComponent(externalId);
+    const context = await json<{ descendants: MastodonStatus[] }>(
+      'Mastodon',
+      await this.#fetch(`${this.#instance}/api/v1/statuses/${id}/context`, { headers: { authorization: `Bearer ${this.#token}` } }),
+      'read the replies',
+    );
+    const own = await this.#ownId();
+    const host = new URL(this.#instance).host;
+    return context.descendants
+      .filter((s) => s.visibility === 'public' || s.visibility === 'unlisted')
+      .map((s) => ({
+        externalId: s.id,
+        // A local account's acct has no instance; the full handle is what a person can look up anywhere
+        author: { handle: `@${s.account.acct.includes('@') ? s.account.acct : `${s.account.acct}@${host}`}`, ...profileOf(s.account) },
+        text: htmlToText(s.content),
+        createdAt: s.created_at,
+        ...(s.in_reply_to_id && s.in_reply_to_id !== externalId && { inReplyTo: s.in_reply_to_id }),
+        ...(s.url && { url: s.url }),
+        own: s.account.id === own,
+      }));
+  }
+
+  /**
+   * A public reply. Mastodon notifies only the accounts the text mentions, so it starts with the
+   * author's handle unless the draft names them already; the key makes a retried send a no-op.
+   */
+  async reply(target: ReplyTarget, text: string, options: { key?: string; lang?: string } = {}): Promise<SentReply> {
+    const mention = target.authorHandle.startsWith('@') ? target.authorHandle : `@${target.authorHandle}`;
+    const status = text.includes(mention) ? text : `${mention} ${text}`;
+    const response = await this.#fetch(`${this.#instance}/api/v1/statuses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${this.#token}`,
+        'content-type': 'application/json',
+        ...(options.key && { 'idempotency-key': options.key }),
+      },
+      body: JSON.stringify({ status, in_reply_to_id: target.commentExternalId, visibility: 'public', ...(options.lang && { language: options.lang }) }),
+    });
+    const created = await json<{ id: string; url: string }>('Mastodon', response, 'reply');
+    return { externalId: created.id, url: created.url };
   }
 
   async metrics(externalId: string): Promise<Metrics> {

@@ -1,4 +1,4 @@
-import { checkProblem, expectOk, json, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, expectOk, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 /** What an edit may change; whatever is left out stays as it is */
 export type DevtoEdit = Partial<DevtoArticle>;
@@ -19,10 +19,11 @@ export interface DevtoArticle {
  * and its views, reactions and comments read back from the author's own list. An article can be
  * edited; Forem's API has no delete, so `delete` unpublishes it (it stays in the author's drafts).
  */
-export class Devto implements Editable<DevtoEdit>, Deletable {
+export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader {
   readonly #key: string;
   readonly #fetch: typeof fetch;
   readonly #base: string;
+  #username: Promise<string> | undefined;
 
   constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string }) {
     this.#key = options.apiKey;
@@ -79,6 +80,60 @@ export class Devto implements Editable<DevtoEdit>, Deletable {
   /** dev.to cannot delete through its API: the article goes back to the author's drafts, off the site */
   async delete(externalId: string): Promise<void> {
     await this.#update(externalId, { published: false }, 'unpublish');
+  }
+
+  /** The key owner's username, read once: what tells the owner's replies from the others' */
+  async #ownName(): Promise<string> {
+    this.#username ??= this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() })
+      .then((response) => json<{ username: string }>('dev.to', response, 'read the account'))
+      .then(
+        (me) => me.username,
+        (error: unknown) => {
+          this.#username = undefined;
+          throw error;
+        },
+      );
+    return this.#username;
+  }
+
+  /**
+   * The comments under an article, threads flattened. Read-only: Forem's API has no endpoint to
+   * write a comment, so a reply is written on dev.to itself.
+   */
+  async comments(externalId: string): Promise<Comment[]> {
+    type ForemComment = {
+      id_code: string;
+      created_at: string;
+      body_html?: string;
+      deleted?: boolean;
+      user?: { username: string; name?: string; profile_image?: string; profile_image_90?: string };
+      children?: ForemComment[];
+    };
+    const list = await json<ForemComment[]>('dev.to', await this.#fetch(`${this.#base}/comments?a_id=${encodeURIComponent(externalId)}`, { headers: this.#headers() }), 'read the comments');
+    const own = await this.#ownName();
+    const site = new URL(this.#base).origin;
+    const out: Comment[] = [];
+    const visit = (items: ForemComment[], parent?: string) => {
+      for (const c of items) {
+        // A deleted comment keeps its place in the thread with no author or text; its replies still count
+        if (!c.deleted && c.user) {
+          const avatarUrl = imageUrl(c.user.profile_image_90 ?? c.user.profile_image);
+          const displayName = c.user.name?.trim();
+          out.push({
+            externalId: c.id_code,
+            author: { handle: `@${c.user.username}`, ...(displayName && { displayName }), ...(avatarUrl && { avatarUrl }) },
+            text: htmlToText(c.body_html ?? ''),
+            createdAt: c.created_at,
+            ...(parent && { inReplyTo: parent }),
+            url: `${site}/${c.user.username}/comment/${c.id_code}`,
+            own: c.user.username === own,
+          });
+        }
+        visit(c.children ?? [], c.id_code);
+      }
+    };
+    visit(list);
+    return out;
   }
 
   /** The key's owner, proving the key works */

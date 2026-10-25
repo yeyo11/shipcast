@@ -1,4 +1,34 @@
-import { checkProblem, ConnectorError, expectOk, json, okCheck, statsOf, type Check, type Deletable, type Metrics, type ProfileStats, type Published } from './http.ts';
+import {
+  checkProblem,
+  ConnectorError,
+  expectOk,
+  imageUrl,
+  json,
+  okCheck,
+  statsOf,
+  type Check,
+  type Comment,
+  type CommentReader,
+  type Deletable,
+  type Metrics,
+  type ProfileStats,
+  type Published,
+  type Replier,
+  type ReplyTarget,
+  type SentReply,
+} from './http.ts';
+
+/** A node of app.bsky.feed.getPostThread; a blocked or deleted reply has no `post` */
+interface ThreadView {
+  post?: {
+    uri: string;
+    cid: string;
+    author: { did: string; handle: string; displayName?: string; avatar?: string };
+    record: { text?: string; createdAt?: string; reply?: { parent: { uri: string } } };
+    indexedAt?: string;
+  };
+  replies?: ThreadView[];
+}
 
 export interface BlueskyPost {
   text: string;
@@ -45,7 +75,7 @@ export function linkFacets(text: string): Array<{ index: { byteStart: number; by
  * Bluesky through the AT Protocol: a session from the handle and an app password, a post record with
  * link facets and a link card, and its counts read from the public AppView, which needs no login.
  */
-export class Bluesky implements Deletable {
+export class Bluesky implements Deletable, CommentReader, Replier {
   readonly #identifier: string;
   readonly #password: string;
   readonly #fetch: typeof fetch;
@@ -132,6 +162,74 @@ export class Bluesky implements Deletable {
       body: JSON.stringify({ repo, collection, rkey }),
     });
     await expectOk('Bluesky', response, 'delete');
+  }
+
+  /**
+   * The replies under a post, threads included, from the public AppView's thread view (no session
+   * needed). A reply whose author blocked the reader, or that was deleted, comes back as a stub with
+   * no post, and is left out.
+   */
+  async comments(externalId: string): Promise<Comment[]> {
+    const query = new URLSearchParams({ uri: externalId, depth: '10', parentHeight: '0' });
+    const { thread } = await json<{ thread: ThreadView }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPostThread?${query}`), 'read the replies');
+    const owner = thread.post?.author.did;
+    const out: Comment[] = [];
+    const visit = (node: ThreadView) => {
+      for (const child of node.replies ?? []) {
+        const post = child.post;
+        if (!post) continue;
+        const parent = post.record.reply?.parent.uri;
+        const rkey = post.uri.split('/').at(-1) ?? '';
+        const avatarUrl = imageUrl(post.author.avatar);
+        const displayName = post.author.displayName?.trim();
+        out.push({
+          externalId: post.uri,
+          author: { handle: `@${post.author.handle}`, ...(displayName && { displayName }), ...(avatarUrl && { avatarUrl }) },
+          text: post.record.text ?? '',
+          createdAt: post.record.createdAt ?? post.indexedAt ?? new Date().toISOString(),
+          ...(parent && parent !== externalId && { inReplyTo: parent }),
+          url: `https://bsky.app/profile/${post.author.handle}/post/${rkey}`,
+          own: post.author.did === owner,
+        });
+        visit(child);
+      }
+    };
+    visit(thread);
+    return out;
+  }
+
+  /**
+   * A reply record: the AT Protocol threads it by strong references (URI and CID) to the thread's
+   * root, the post Shipcast published, and to the comment it answers; both CIDs are read from the
+   * AppView just before, so nothing extra has to be stored with the comment.
+   */
+  async reply(target: ReplyTarget, text: string, options: { key?: string; lang?: string } = {}): Promise<SentReply> {
+    const query = new URLSearchParams();
+    query.append('uris', target.postExternalId);
+    query.append('uris', target.commentExternalId);
+    const { posts } = await json<{ posts: Array<{ uri: string; cid: string }> }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?${query}`), 'read the thread');
+    const root = posts.find((p) => p.uri === target.postExternalId);
+    const parent = posts.find((p) => p.uri === target.commentExternalId);
+    if (!root || !parent) throw new ConnectorError('Bluesky', 'the post or the comment is gone: nothing to reply to', 404);
+    const session = await this.#login();
+    const response = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.createRecord`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${session.accessJwt}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        repo: session.did,
+        collection: 'app.bsky.feed.post',
+        record: {
+          $type: 'app.bsky.feed.post',
+          text,
+          createdAt: new Date().toISOString(),
+          ...(options.lang && { langs: [options.lang] }),
+          facets: linkFacets(text),
+          reply: { root: { uri: root.uri, cid: root.cid }, parent: { uri: parent.uri, cid: parent.cid } },
+        },
+      }),
+    });
+    const created = await json<{ uri: string }>('Bluesky', response, 'reply');
+    return { externalId: created.uri, url: `https://bsky.app/profile/${session.handle}/post/${created.uri.split('/').at(-1) ?? ''}` };
   }
 
   /** The public profile from the AppView, which needs no session: picture, name and counts */

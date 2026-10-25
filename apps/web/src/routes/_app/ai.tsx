@@ -21,6 +21,7 @@ const TASKS: Record<Task, { label: string; text: string }> = {
   pack: { label: 'Launch content pack', text: 'Reads the released repo and writes every channel’s piece. claudio’s Claude Code explores the clone itself; the others get read-only tools over it.' },
   article: { label: 'Article distribution', text: 'Translates an article you wrote and writes each channel’s piece from it.' },
   assistant: { label: 'Writing assistant', text: 'The streamed suggestions beside Write and each draft (coming next).' },
+  replies: { label: 'Comment replies', text: 'Drafts a reply to each comment on your posts, grounded in the repo and the launch’s analysis; it reads the code when a comment asks about it.' },
 };
 
 const CHANNEL_NAMES: Record<string, string> = {
@@ -40,6 +41,7 @@ const CHANNEL_NAMES: Record<string, string> = {
 
 function promptLabel(id: string): string {
   if (id === 'article') return 'Article: the translation';
+  if (id === 'reply') return 'Comment reply';
   const [group, name = ''] = id.split('.');
   if (group === 'pack') return `Pack brief: ${name === 'launch' ? 'first launch' : `${name} version`}`;
   return `Channel brief: ${CHANNEL_NAMES[name] ?? name}`;
@@ -249,6 +251,10 @@ function AiSettingsPage() {
         <details className="card">
           <summary>Rules for an article</summary>
           <div className="log">{data.locked.articleRules.join('\n')}</div>
+        </details>
+        <details className="card">
+          <summary>Rules for a reply to a comment</summary>
+          <div className="log">{data.locked.replyRules.join('\n')}</div>
         </details>
         <details className="card">
           <summary>The content pack’s schema</summary>

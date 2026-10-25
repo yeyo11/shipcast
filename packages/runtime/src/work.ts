@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, publishLaunch, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, draftReply, publishLaunch, runComments, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
@@ -8,6 +8,7 @@ import { SettingMissing } from './settings.ts';
 import { buildServices, type Services } from './services.ts';
 import { takeSnapshots } from './snapshots.ts';
 import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
+import { COMMENTS_CRON, COMMENTS_KEY, commentsNotice, replyDeps } from './comments.ts';
 
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
 export interface WorkDeps {
@@ -329,6 +330,32 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       // A Sync now that failed says so on the job; the daily run fails only when nothing at all could be read
       if (failed > 0 && (accountId !== undefined || failed === results.length)) throw new Error(`${failed} of ${results.length} could not be synced`);
     },
+
+    /*
+     * The comment assistant: every live post's comments read, the new ones drafted, the drafts of an
+     * auto channel sent, and the owner told what waits; or, with a comment id, that one drafted again.
+     */
+    async comments({ reason, commentId }, job) {
+      job.link('/comments');
+      if (commentId === undefined && (await off(reason))) {
+        job.log('Automation is off: the comments are read by hand');
+        return;
+      }
+      const brand = await d.brand();
+      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) });
+      if (commentId !== undefined) {
+        const drafted = await draftReply(commentId, deps);
+        if (drafted.status === 'failed') throw new Error(drafted.problem ?? 'could not draft');
+        job.log(drafted.draft ? `Drafted: ${drafted.draft}` : `Suggested: dismiss (${drafted.classification ?? 'no reply'})`);
+        return;
+      }
+      const result = await runComments(deps, { log: (line) => job.log(line) });
+      if (result.drafted.length > 0) job.log(`Drafted ${result.drafted.length}; sent ${result.sent.length}`);
+      const notice = commentsNotice(result, d.env.SHIPCAST_PUBLIC_URL);
+      if (notice) await notify(await servicesFor(brand), notice);
+      // A run that could read nothing at all failed; one network failing is in the log
+      if (result.posts === 0 && result.problems.length > 0) throw new Error(result.problems.join('; '));
+    },
   };
 }
 
@@ -364,6 +391,7 @@ export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { fir
   await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
   await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });
+  await queue.schedule('comments', COMMENTS_CRON, { reason: 'every 30 minutes' }, { singletonKey: COMMENTS_KEY });
   // The round's key: a watchdog round is dropped while the chain has one queued
   await queue.schedule('round', ROUND_WATCHDOG_CRON, { reason: 'watchdog' }, { singletonKey: ROUND_KEY });
   if ((await readAutomation(d.registry)).mode !== 'off') await scheduleRound(queue, 'after a start', options.firstRoundInSeconds ?? 15);

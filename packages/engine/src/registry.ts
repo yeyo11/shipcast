@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gte, inArray, like, lt, sql, type SQL } from 'drizzle-orm';
 import type { Channel, Language, PackKind } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
-import { accounts, accountSnapshots, apiTokens, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
+import { accounts, accountSnapshots, apiTokens, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
 /** A job's state, as pg-boss names them; `retry` waits for its next attempt */
 export type JobState = 'created' | 'active' | 'retry' | 'completed' | 'failed';
@@ -265,6 +265,101 @@ function toPost(row: typeof posts.$inferSelect): Post {
     contentHash: row.contentHash,
     scheduledAt: row.scheduledAt,
     publishedAt: row.publishedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * Where a comment stands. `approved` is the moment between the owner's click (or auto mode) and the
+ * network's answer: a comment in it is being sent, and is never sent a second time.
+ */
+export type CommentStatus = 'new' | 'draft-ready' | 'approved' | 'sent' | 'dismissed' | 'failed';
+export const COMMENT_STATUSES: readonly CommentStatus[] = ['new', 'draft-ready', 'approved', 'sent', 'dismissed', 'failed'];
+
+/** What the AI took a comment for; spam and abuse get no reply */
+export type CommentClass = 'question' | 'feedback' | 'praise' | 'bug' | 'spam' | 'abuse' | 'other';
+
+/** A comment under one of Shipcast's posts, and the reply drafted for it */
+export interface CommentRecord {
+  id: number;
+  postId: number;
+  /** The launch of the post it is under */
+  launchId: number;
+  channel: Channel;
+  externalId: string;
+  author: { handle: string; displayName: string | null; avatarUrl: string | null };
+  text: string;
+  url: string | null;
+  createdAt: string;
+  inReplyTo: string | null;
+  own: boolean;
+  fetchedAt: string;
+  status: CommentStatus;
+  classification: CommentClass | null;
+  draft: string | null;
+  note: string | null;
+  problem: string | null;
+  sentExternalId: string | null;
+  sentUrl: string | null;
+  sentAt: string | null;
+  updatedAt: string;
+}
+
+export interface NewComment {
+  postId: number;
+  channel: Channel;
+  externalId: string;
+  author: { handle: string; displayName?: string; avatarUrl?: string };
+  text: string;
+  url?: string;
+  createdAt: string;
+  inReplyTo?: string;
+  own: boolean;
+  status?: CommentStatus;
+}
+
+export interface CommentChange {
+  status?: CommentStatus;
+  classification?: CommentClass | null;
+  draft?: string | null;
+  note?: string | null;
+  problem?: string | null;
+  sentExternalId?: string | null;
+  sentUrl?: string | null;
+  sentAt?: string | null;
+}
+
+export interface CommentFilter {
+  status?: CommentStatus;
+  channel?: Channel;
+  launchId?: number;
+  postId?: number;
+  own?: boolean;
+  limit?: number;
+}
+
+function toComment(row: typeof comments.$inferSelect, launchId: number): CommentRecord {
+  return {
+    id: row.id,
+    postId: row.postId,
+    launchId,
+    channel: row.channel as Channel,
+    externalId: row.externalId,
+    author: { handle: row.authorHandle, displayName: row.authorName, avatarUrl: row.authorAvatarUrl },
+    text: row.text,
+    url: row.url,
+    createdAt: row.createdAt,
+    inReplyTo: row.inReplyTo,
+    own: row.own,
+    fetchedAt: row.fetchedAt,
+    status: row.status as CommentStatus,
+    classification: row.classification as CommentClass | null,
+    draft: row.draft,
+    note: row.note,
+    problem: row.problem,
+    sentExternalId: row.sentExternalId,
+    sentUrl: row.sentUrl,
+    sentAt: row.sentAt,
     updatedAt: row.updatedAt,
   };
 }
@@ -933,6 +1028,99 @@ export class Registry {
   async pruneJobs(endedBefore: string): Promise<number> {
     const deleted = await this.#db.delete(jobs).where(lt(jobs.endedAt, endedBefore)).returning({ id: jobs.id });
     return deleted.length;
+  }
+
+  /**
+   * The posts whose comments are read: each channel's own post (not a story, an issue or an
+   * article), still up (live or edited), published since a moment, on the channels asked.
+   */
+  async postsSince(since: string, channels: readonly Channel[]): Promise<Post[]> {
+    if (channels.length === 0) return [];
+    const rows = await this.#db
+      .select()
+      .from(posts)
+      .where(and(gte(posts.publishedAt, since), inArray(posts.channel, [...channels]), eq(posts.kind, 'post'), inArray(posts.status, ['live', 'edited'])))
+      .orderBy(asc(posts.publishedAt), asc(posts.id));
+    return rows.map(toPost);
+  }
+
+  /**
+   * Records a comment unless its channel already has one with that id: reading a thread again is a
+   * no-op for what is known, and `ON CONFLICT` keeps two readers at once from adding it twice.
+   */
+  async recordComment(comment: NewComment): Promise<{ recorded: boolean; comment: CommentRecord }> {
+    const [inserted] = await this.#db
+      .insert(comments)
+      .values({
+        postId: comment.postId,
+        channel: comment.channel,
+        externalId: comment.externalId,
+        authorHandle: comment.author.handle,
+        authorName: comment.author.displayName ?? null,
+        authorAvatarUrl: comment.author.avatarUrl ?? null,
+        text: comment.text,
+        url: comment.url ?? null,
+        createdAt: comment.createdAt,
+        inReplyTo: comment.inReplyTo ?? null,
+        own: comment.own,
+        status: comment.status ?? 'new',
+      })
+      .onConflictDoNothing({ target: [comments.channel, comments.externalId] })
+      .returning({ id: comments.id });
+    if (inserted) return { recorded: true, comment: (await this.comment(inserted.id))! };
+    const [row] = await this.#db
+      .select({ id: comments.id })
+      .from(comments)
+      .where(and(eq(comments.channel, comment.channel), eq(comments.externalId, comment.externalId)));
+    return { recorded: false, comment: (await this.comment(row!.id))! };
+  }
+
+  async comment(id: number): Promise<CommentRecord | undefined> {
+    const [row] = await this.#db.select({ comment: comments, launchId: posts.launchId }).from(comments).innerJoin(posts, eq(comments.postId, posts.id)).where(eq(comments.id, id));
+    return row ? toComment(row.comment, row.launchId) : undefined;
+  }
+
+  /** The comment of a channel with that network id, if it is known */
+  async commentByExternalId(channel: Channel, externalId: string): Promise<CommentRecord | undefined> {
+    const [row] = await this.#db
+      .select({ comment: comments, launchId: posts.launchId })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .where(and(eq(comments.channel, channel), eq(comments.externalId, externalId)));
+    return row ? toComment(row.comment, row.launchId) : undefined;
+  }
+
+  /** The newest first, as written on the network */
+  async comments(filter: CommentFilter = {}): Promise<CommentRecord[]> {
+    const where: SQL[] = [];
+    if (filter.status !== undefined) where.push(eq(comments.status, filter.status));
+    if (filter.channel !== undefined) where.push(eq(comments.channel, filter.channel));
+    if (filter.launchId !== undefined) where.push(eq(posts.launchId, filter.launchId));
+    if (filter.postId !== undefined) where.push(eq(comments.postId, filter.postId));
+    if (filter.own !== undefined) where.push(eq(comments.own, filter.own));
+    const rows = await this.#db
+      .select({ comment: comments, launchId: posts.launchId })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .where(where.length > 0 ? and(...where) : undefined)
+      .orderBy(desc(comments.createdAt), desc(comments.id))
+      .limit(filter.limit ?? 200);
+    return rows.map((r) => toComment(r.comment, r.launchId));
+  }
+
+  /**
+   * Changes a comment, only while it is in one of the states given when `onlyIf` is set: the
+   * compare-and-set that lets one sender claim a reply, so two clicks never send it twice.
+   * Undefined when the comment does not exist or was in another state.
+   */
+  async updateComment(id: number, change: CommentChange, onlyIf?: readonly CommentStatus[]): Promise<CommentRecord | undefined> {
+    const where = onlyIf ? and(eq(comments.id, id), inArray(comments.status, [...onlyIf])) : eq(comments.id, id);
+    const [row] = await this.#db
+      .update(comments)
+      .set({ ...change, updatedAt: nowIso })
+      .where(where)
+      .returning({ id: comments.id });
+    return row ? this.comment(row.id) : undefined;
   }
 
   async close(): Promise<void> {

@@ -26,6 +26,9 @@ async function setup() {
     startPublishing: unused,
     editing: unused,
     armSchedule: unused,
+    comments: unused,
+    checkComments: unused,
+    redraftComment: unused,
   };
   const tokens = { registry, secrets };
   return { deps, registry, read: (await createApiToken(tokens, 'reader', ['read'])).token, write: (await createApiToken(tokens, 'writer', ['write'])).token };

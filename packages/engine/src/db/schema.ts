@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
 
 /*
  * The registry's tables. The first migration mirrors node:sqlite's column for column, so
@@ -169,4 +169,50 @@ export const jobs = pgTable(
     endedAt: text('ended_at'),
   },
   (t) => [index('jobs_by_created').on(t.createdAt), index('jobs_by_launch').on(t.launchId)],
+);
+
+// The comments under Shipcast's own posts, one row per comment, and the reply the assistant drafted
+// for it, edited, sent or dismissed. A comment is known by its network's id, once per channel, so
+// reading the same thread again never adds it twice. See docs/decisions/comment-assistant.md
+export const comments = pgTable(
+  'comments',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    postId: integer('post_id')
+      .notNull()
+      .references(() => posts.id),
+    channel: text('channel').notNull(),
+    externalId: text('external_id').notNull(),
+    authorHandle: text('author_handle').notNull(),
+    authorName: text('author_name'),
+    // An https address on the network's CDN, never one that carries a credential
+    authorAvatarUrl: text('author_avatar_url'),
+    text: text('text').notNull(),
+    url: text('url'),
+    // When it was written, as the network says; fetched_at is when Shipcast first read it
+    createdAt: text('created_at').notNull(),
+    // The parent comment's external id, for a reply inside a thread
+    inReplyTo: text('in_reply_to'),
+    // Written by the account that published the post: the owner's own replies, never answered
+    own: boolean('own').notNull().default(false),
+    fetchedAt: text('fetched_at').notNull().default(nowIso),
+    // new, draft-ready, approved (being sent), sent, dismissed or failed
+    status: text('status').notNull().default('new'),
+    // What the AI took it for: question, feedback, praise, bug, spam, abuse, other
+    classification: text('classification'),
+    draft: text('draft'),
+    // The AI's one line for the owner: why this reply, or why to dismiss it
+    note: text('note'),
+    // Why drafting or sending failed, in words
+    problem: text('problem'),
+    sentExternalId: text('sent_external_id'),
+    sentUrl: text('sent_url'),
+    sentAt: text('sent_at'),
+    updatedAt: text('updated_at').notNull().default(nowIso),
+  },
+  (t) => [
+    unique('comments_channel_external_unique').on(t.channel, t.externalId),
+    index('comments_by_post').on(t.postId),
+    index('comments_by_status').on(t.status, t.createdAt),
+  ],
 );
