@@ -1,11 +1,11 @@
 ---
-created_at: 2026-10-25T06:55:52.422435726Z
-updated_at: 2026-10-25T10:02:54.53545942Z
+created_at: 2026-10-25T10:30:42.855415605Z
+updated_at: 2026-10-25T12:04:18.048620621Z
 tags:
     - launches-repo
     - blog
     - astro
-    - github-pages
+    - cloudflare
     - privacy
     - domain
     - analytics
@@ -25,24 +25,37 @@ means a change to the code.
 
 ## What it is
 
-- **Astro 7, static**, deployed to GitHub Pages by `.github/workflows/deploy.yml` (the official
-  `withastro/action` and `actions/deploy-pages`) on every push to `main`. Pages is set to build from
-  workflows. Node 24.22.1 through `.nvmrc` and pnpm's `useNodeVersion`, as in Shipcast.
+- **Astro 7, static, on Cloudflare Workers static assets** since 2026-10-25 (GitHub Pages before):
+  `wrangler.jsonc` serves `dist/` from the edge, with a small Worker (`worker/index.ts`) in front of
+  the few paths that need a decision. `.github/workflows/deploy.yml` builds and runs `wrangler deploy`
+  on every push to `main`, then pings IndexNow with the articles that changed; every pull request
+  uploads a preview version and comments its URL (so a drafts pull request can be read rendered
+  before it is merged) and runs a Lighthouse gate (performance 0.9, accessibility, best practices and
+  SEO 0.95, median of three). The repository secrets `CLOUDFLARE_API_TOKEN` (Workers Scripts and
+  Routes, Zone and Account Settings read) and `CLOUDFLARE_ACCOUNT_ID` drive it. Node 24.22.1 through
+  `.nvmrc` and pnpm's `useNodeVersion`, as in Shipcast.
+- **The Worker** answers `/` with a 302 to `/es/` or `/en/`, from a `lang` cookie (set when the
+  reader switches language) or else `Accept-Language`, so the bare domain opens in the reader's
+  language with no blank page; it serves an article as Markdown to `Accept: text/markdown`, and does
+  the old `/es/privacy/` redirect. Static files never invoke it, so they stay free and unlimited on
+  the free plan; page views do count against its 100,000 requests a day. Previews (one URL per
+  version, one alias per branch) do not expire; Cloudflare keeps the latest 1,000 aliases.
+- **Headers** (`src/headers.mjs`): HSTS, `nosniff`, a strict referrer policy, a Permissions-Policy, a
+  CSP with `frame-ancestors 'none'` (each page also carries a CSP `<meta>` with the hashes of its
+  inline scripts and styles), and a year of immutable cache for hashed assets.
 - **Served at `https://josegarrido.dev`**, the owner's domain, since 2026-10-24: `site:
   'https://josegarrido.dev'`, no `base`, trailing slashes. Every canonical URL is
   `https://josegarrido.dev/<lang>/<slug>/` (each language with its own slug, in its own words), and
-  the dev.to copies point to it, so `site` and published slugs never change without a redirect. The
-  move was made before the first article, so no canonical URL had to be redirected. The custom domain
-  is set in the repo's Pages settings, HTTPS is enforced (certificate for the apex and `www`), `www`
-  and the old `yeyo11.github.io/launches/` answer `301` to the domain, and the DNS lives in
-  Cloudflare: four `A` and four `AAAA` records to GitHub Pages and a `CNAME` for `www`, all DNS-only
-  (not proxied), because GitHub must issue the certificate and `.dev` requires HTTPS. The first deploy
-  after setting the domain was cancelled, likely by the Pages build GitHub starts when a domain is
-  set; a manual `workflow_dispatch` re-ran it.
-- **Bilingual**: Astro i18n with `en` (default) and `es`, both prefixed; `/` redirects to `/en/` at
-  once (a page of its own with a zero-second refresh) and stays out of the sitemap. Each page links its
+  the dev.to copies point to it, so `site` and published slugs never change without a redirect. Since
+  2026-10-25 the domain is the Worker's custom domain (certificate by Cloudflare), `www` is a proxied
+  placeholder record that a Redirect Rule sends to the apex with a 301, "Always Use HTTPS" turns
+  `http://` into `https://`, and the zone's AI bot settings are off, so the site's own `robots.txt`
+  is the one served. The DNS lives in Cloudflare; mail and Brevo's records are untouched.
+- **Bilingual**: Astro i18n with `en` (default) and `es`, both prefixed; the Worker sends `/` to the
+  reader's language, and `src/pages/index.astro` (out of the sitemap, noindex) is only the fallback
+  without the Worker: it picks by `navigator.languages`, or offers both languages. Each page links its
   translation when it exists.
-- **RSS per language** (`/<lang>/rss.xml`) and a sitemap.
+- **RSS per language** (`/<lang>/rss.xml`, with the full text) and a sitemap.
 - **Paths in each language's words** since 2026-10-24, as Google advises for multilingual sites:
   `/en/privacy/` and `/es/privacidad/`, `/en/subscribed/` and `/es/suscrito/`, `/en/about/` and
   `/es/sobre-mi/` (`pagePath` in `src/site.ts`; the pages render shared components under
@@ -54,10 +67,9 @@ means a change to the code.
   (double opt-in) from `brand.yml`'s `newsletter.forms`, with Brevo's hidden trap field for bots and
   the answer shown in place; without JavaScript it is a plain form post. The confirmation link lands
   on `/subscribed/`, kept out of search and the sitemap ([publishing.md](publishing.md#the-newsletter)).
-- **Its own 404** (`src/pages/404.astro`), which GitHub Pages serves for every missing path: both
+- **Its own 404** (`src/pages/404.astro`), served with the status 404 for every missing path: both
   languages in one page, showing the one the URL asks for before the first paint, with the house
-  illustration (a shipping label, "Return to sender") and the latest launches. A static site has no
-  other error page.
+  illustration (a shipping label, "Return to sender") and the latest launches.
 - **An about page** at `/en/about/` and `/es/sobre-mi/` (`src/components/pages/AboutPage.astro`,
   2026-10-25), written from the owner's own GitHub profile and approved by them: who they are, the
   projects (claudio, Shipcast and Sluice, the one project of their work account they chose to show),
@@ -70,7 +82,8 @@ means a change to the code.
   <author>`. RSS is only there and in the head's `alternate` link, which feed readers discover on their
   own: the newsletter is how a person follows the blog.
 - **Marks:** the favicon (the italic J over the green rule) and the `jg` monogram are Fraunces
-  outlines in SVG, so they render the same without the font, with PNGs at 16, 32 and 180 px.
+  outlines in SVG, so they render the same without the font, with PNGs at 16, 32, 48, 96 and 180 px
+  (48 and its multiples are what Google asks of a favicon in its results).
 - **Project looks in `projects.yml`** (2026-10-25): each known project's flat colour, motif and
   cover, at the repo's root beside `brand.yml`. The blog reads it at build time (`src/projects.ts`,
   same fallback for a project not listed: a colour and a motif picked from its name by a hash) and
@@ -78,32 +91,43 @@ means a change to the code.
 - **Covers:** a project (`cover` in `projects.yml`) or an article (`cover` in its front matter) can
   carry a cover that replaces the CSS illustration; claudio's is drawn. A project launched without one
   gets one generated by Shipcast in the house style (1600×900, its colour and motif, no text) at
-  `public/covers/<project>.jpg`, and the drafts pull request lists it in `projects.yml`.
+  `public/covers/<project>.jpg`, and the drafts pull request lists it in `projects.yml`. The site
+  imports the same files at build time for AVIF and WebP, sizes and dimensions, so they stay where
+  Shipcast writes them.
 - **The owner's own identity**: the editorial one ([personal-identity.md](personal-identity.md)),
   live since 2026-10-24, after the rejected "blackboard"; before both, the site wore Shipcast's tokens
   while it was only the launches blog. Night theme by default, day on a toggle, stored in
   `localStorage` and applied by an inline script before the first paint. Code blocks carry both Shiki
-  themes as CSS variables and follow the page. The home page is titled with the owner's name, every
-  other page `<page> | José Antonio Garrido`.
+  themes as CSS variables and follow the page, with comment colours that pass AA. The home page is
+  titled with the owner's name, every other page `<page> | José Antonio Garrido`.
 - **The brand** is described in `brand.yml` at the root ([brands.md](brands.md)); the site reads it
   for the author, the profile links (with `rel="me"`), the support link in the footer, the analytics
   token and the newsletter's forms.
+- **For search engines and AI readers** (2026-10-25): one JSON-LD graph per page (`Person` with
+  `sameAs` to every profile and to the author's Wikidata item, `WebSite` with Google's site name,
+  `BlogPosting` with the project as `SoftwareSourceCode`, breadcrumbs), robots meta allowing full
+  snippets, a default share card per language, a sitemap with hreflang and real `lastmod`, a
+  `robots.txt` that names the crawlers and lets every one in, `llms.txt` and `llms-full.txt`, and each
+  article as Markdown at `/<lang>/<slug>.md`. The CSS is inlined and the fonts preloaded with
+  metric-matched fallbacks, so nothing shifts; PageSpeed went from 83-84 to 93-94 on mobile and 100 on
+  desktop. Shipcast keeps every article indexed ([search-indexing.md](search-indexing.md)); the plan
+  for sitelinks and a knowledge panel is [plans/search-presence.md](plans/search-presence.md).
 - **Visits are counted with Cloudflare Web Analytics** since 2026-10-24: cookieless, no local
   storage, no fingerprinting; the beacon loads only in production builds, with the site token from
-  `brand.yml` (`analytics.cloudflareWebAnalytics`; public, it ships in every page). The site was
-  created through the Cloudflare API as a host-based site (`josegarrido.dev`, no auto-install, since
-  the DNS is not proxied). Shipcast reads these numbers back for its metrics
-  ([decisions/mvp-scope.md](decisions/mvp-scope.md)).
+  `brand.yml` (`analytics.cloudflareWebAnalytics`; public, it ships in every page), as a host-based
+  site (`josegarrido.dev`). Ad blockers block the beacon, so those visits go uncounted. Shipcast reads
+  these numbers back for its metrics ([decisions/mvp-scope.md](decisions/mvp-scope.md)).
 - **Privacy policy** at `/en/privacy/` and `/es/privacidad/`
   (`src/components/pages/PrivacyPage.astro`), added on 2026-10-24 because Meta requires its URL to
   create the Instagram app: what Shipcast accesses (the owner's own accounts on each network it
   publishes to or reads from), that it stores tokens only locally and collects nothing about anyone
-  else, that the blog sets no cookies and counts visits with Cloudflare Web Analytics (what it records
-  and why), and how to delete data (`#data-deletion`, also the URL for Meta's data deletion field).
-  Contact: `yeyochico@gmail.com`, as the owner asked. Since 2026-10-24 it covers the newsletter too
-  (only the address and its language are kept, Brevo processes them, double opt-in, open and click
-  tracking, one-click unsubscribe). Linked from the footer and from the newsletter form. Update it,
-  and its date, whenever a connector starts accessing something new.
+  else, that the blog sets one cookie (`lang`, only when the reader switches language) and counts
+  visits with Cloudflare Web Analytics (what it records and why), where it is hosted, and how to
+  delete data (`#data-deletion`, also the URL for Meta's data deletion field). Contact:
+  `yeyochico@gmail.com`, as the owner asked. Since 2026-10-24 it covers the newsletter too (only the
+  address and its language are kept, Brevo processes them, double opt-in, open and click tracking,
+  one-click unsubscribe). Linked from the footer and from the newsletter form. Update it, and its
+  date, whenever a connector starts accessing something new.
 
 ## The contract with Shipcast
 
@@ -114,7 +138,8 @@ What Shipcast writes there, and the content pack has to produce:
   validated at build time by `src/content.config.ts`: `title`, `description` (at most 200
   characters), `pubDate`, optional `updatedDate`, `lang` (`en` or `es`), `translationKey` (shared by
   both language versions), `repo` (the project's URL), optional `version`, `tags`, `draft`, `image`
-  (the launch image's path, the page's `og:image`) and `cover` (a drawn cover).
+  (the launch image's path, the page's `og:image`), `cover` (a drawn cover), and the optional
+  `imageAlt` and `coverAlt`.
 - **The other channels' pieces** at `launches/<project>/<ref>/`: one readable draft per channel and
   `pack.json` ([engine.md](engine.md)).
 - **The launch's media** at `public/launches/<project>/<ref>/` (`og.png`, `og.jpg`, the Instagram
@@ -129,9 +154,11 @@ What Shipcast writes there, and the content pack has to produce:
 
 ## Checks
 
-`pnpm check` (`astro check`, which needs TypeScript 6: it refuses 7, so this repo pins `typescript@^6`
-while Shipcast uses 7), `pnpm build`, and `node scripts/contrast.mjs` after any colour change.
+`pnpm check` (`astro check`, which needs TypeScript 6 and refuses 7, so this repo pins
+`typescript@^6` while Shipcast uses 7, and the Worker's `tsc`), `pnpm test` (the Worker), `pnpm build`,
+`pnpm preview:worker` to serve the build through the Worker locally, and `node scripts/contrast.mjs`
+after any colour change.
 
 ## Related
 
-[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[plans/design-system.md]] · [[plans/stack.md]] · [[brands.md]] · [[personal-identity.md]] · [[content-pack.md]] · [[engine.md]] · [[publishing.md]]
+[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[plans/design-system.md]] · [[plans/stack.md]] · [[brands.md]] · [[personal-identity.md]] · [[content-pack.md]] · [[engine.md]] · [[publishing.md]] · [[search-indexing.md]] · [[plans/search-presence.md]]

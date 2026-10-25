@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T10:37:27.12966162Z
-updated_at: 2026-10-25T10:37:27.12966162Z
+created_at: 2026-10-25T10:57:26.1120447Z
+updated_at: 2026-10-25T12:05:12.815563572Z
 tags:
     - status
     - roadmap
@@ -58,9 +58,16 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 - **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches), the blog at
   <https://josegarrido.dev> ([launches-repo.md](launches-repo.md)), with `brand.yml` and, since
   2026-10-25, `projects.yml`, articles without a project, and a privacy policy that names every network
-  Shipcast now reaches.
+  Shipcast now reaches. Since 2026-10-25 on Cloudflare Workers (GitHub Pages before): the bare domain
+  opens in the reader's language, security headers, a preview per pull request, IndexNow, a Lighthouse
+  gate, structured data, `llms.txt`, and PageSpeed at 93-94 on mobile and 100 on desktop.
+- **Wikidata**: the owner's item ([Q141856101](https://www.wikidata.org/wiki/Q141856101)) and the
+  projects' (claudio Q141856151, Shipcast Q141856152), created on 2026-10-25 from the owner's account
+  with the conflict of interest disclosed, and linked from the blog's `Person`
+  ([plans/search-presence.md](plans/search-presence.md)).
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)).
-- **Search and analytics**: Search Console and Cloudflare Web Analytics on the blog.
+- **Search and analytics**: Search Console and Cloudflare Web Analytics on the blog; Shipcast
+  resubmits the sitemap and tracks each article's index status ([search-indexing.md](search-indexing.md)).
 - **The newsletter** in Brevo, live on the blog ([publishing.md](publishing.md#the-newsletter)).
 - **The app's address**: `https://shipcast.josegarrido.dev`, an A record at this machine's tailnet
   address, the tailnet's port 443 forwarded to it by Tailscale Serve, a GitHub OAuth App for the
@@ -97,11 +104,13 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 
 ## Next
 
-[plans/after-mvp.md](plans/after-mvp.md), decided on 2026-10-25: phase 6 lays the foundations
-(Postgres with Drizzle, a post model, durable work on pg-boss, configuration in two parts, the GitHub
-App, account snapshots); then the interface, AI, after publishing, engagement and reach. The blog
-moves to Cloudflare and gets its SEO work in parallel. The server deployment is postponed.
+[plans/after-mvp.md](plans/after-mvp.md), decided on 2026-10-25. Done the same day: the blog's
+work in parallel (on Cloudflare, SEO and AI readiness, speed), the article indexing brought forward,
+and the Wikidata items. Next is phase 6, the foundations, starting with Postgres and Drizzle and the
+post model; then the interface, AI, after publishing, engagement and reach. Waiting on the owner: the
+design of the blog's project pages and article index. The server deployment is postponed; until
+then the app runs on the owner's machine and does not start on its own after a reboot.
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]
