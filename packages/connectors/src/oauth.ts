@@ -114,5 +114,12 @@ export async function exchangeInstagramCode(
     );
   }
   const long = await json<{ access_token: string; expires_in: number }>('Instagram', exchanged, 'get a long-lived token');
-  return { userId: String(short.user_id), accessToken: long.access_token, expiresIn: long.expires_in };
+  // The exchange's user_id is a JSON number past 2^53, so it reaches JavaScript already rounded: the
+  // account's id is read from /me, as text, with the token just issued
+  const me = await http(`https://graph.instagram.com/v25.0/me?${new URLSearchParams({ fields: 'user_id,username', access_token: long.access_token })}`);
+  const text = await me.text();
+  if (!me.ok) throw new ConnectorError('Instagram', `read the account: ${me.status} ${text.slice(0, 300)}`, me.status);
+  const userId = /"user_id"\s*:\s*"?(\d+)/.exec(text)?.[1];
+  if (!userId) throw new ConnectorError('Instagram', 'the account has no user_id: it is not a professional account');
+  return { userId, accessToken: long.access_token, expiresIn: long.expires_in };
 }
