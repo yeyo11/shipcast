@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:17:14.183448442Z
-updated_at: 2026-10-25T00:26:54.509324185Z
+created_at: 2026-10-25T00:57:10.926320515Z
+updated_at: 2026-10-25T01:52:27.145015184Z
 tags:
     - plan
     - architecture
@@ -165,7 +165,8 @@ last is Shipcast's own launch, made with Shipcast. At least one similar tool exi
 [Release Announcer](https://mcpmarket.com/zh/server/release-announcer), which only generates
 drafts; Shipcast differs in that it publishes, generates assets and measures results.
 
-Ticked on 2026-10-25, after the first real launch; the MVP pulled several items forward from later
+Ticked on 2026-10-25, after the first real launch and again after the
+[goal](goal-finish.md) that built the app and phase 5; the MVP pulled several items forward from later
 phases ([decisions/mvp-scope.md](../decisions/mvp-scope.md)) and dropped others for good.
 
 ### Phase 0: foundations
@@ -182,7 +183,7 @@ phases ([decisions/mvp-scope.md](../decisions/mvp-scope.md)) and dropped others 
 - [x] Local engine that detects releases and manual launches (the personal account; the company one
       waits until after the MVP)
 - [x] claudio integration to analyse the repo and generate the pack
-- [ ] Pre-flight check: license, README, demo GIF and release (only the demo is checked so far)
+- [x] Pre-flight check: license, README, demo GIF, release and `launch.yml`, before every launch (2026-10-25)
 - [x] Drafts in a pull request; the merge publishes
 - [x] Publishing to the blog and to dev.to with a canonical URL
 - [x] Launch registry to avoid duplicates
@@ -192,37 +193,38 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 
 ### Phase 2: networks and brands
 
-- [ ] Hashnode (out of the MVP)
+- [x] Hashnode: connector and publishing built on 2026-10-25; its live test waits on an account
 - [x] Bluesky and Mastodon (free APIs)
 - [x] ~~X~~ and ~~LinkedIn~~: dropped for good by the owner on 2026-10-24
 - [x] Instagram, added to the MVP: a carousel, its story and a comment (2026-10-25)
-- [ ] Brand separation: the schema enforces it (a launch's brand must match its launches repo); only
-      the personal brand is set up
+- [x] Brand separation: accounts per brand, a launch only uses its own brand's, `.env` speaks for
+      one brand only (2026-10-25); only the personal brand is set up
 - [x] Spanish and English versions, each with its own URL
-- [ ] Telegram notifications
+- [x] Telegram notifications: drafts waiting, published, failed (2026-10-25)
 - [x] `auto`, `approval` and `manual` modes per channel
 
 ### Phase 3: assets
 
 - [x] Mandatory demo GIF, as a video in the Instagram carousel (made by VHS or Playwright: not yet)
-- [x] Generated OG image, Instagram slides and story; drawn covers per project on the blog
+- [x] Generated OG image, Instagram slides and story; covers per project, drawn or generated (2026-10-25)
 - [ ] Automatic screenshots of deployed demos
 
 ### Phase 4: dashboard and metrics
 
-- [x] Local web dashboard (plain; the Cartel design is pending), `--host` for the local network
+- [x] The web app in Cartel (TanStack Start), on the owner's domain over the tailnet, GitHub sign-in (2026-10-25)
 - [x] GitHub stars, forks and traffic (read every 6 hours while `watch` runs)
 - [x] dev.to views and reactions, Bluesky, Mastodon, Instagram, newsletter, blog analytics and
       Search Console
 - [x] Clicks per channel: `?ref=<channel>` on every link; visits attributed by referrer, since
       Cloudflare Web Analytics drops the query string
-- [ ] Approval and editing from the dashboard
+- [x] Approval and editing from the app, retrying a channel, launching a repo, writing an article
+- [x] Channels: every integration, its accounts and OAuth, connecting a new one, publishing from the app
 
 ### Phase 5: communities and extra channels
 
-- [ ] Reddit drafts: built, then left out by the owner on 2026-10-25 (`off` by default); Show HN: not yet
-- [ ] Product Hunt kit
-- [x] Newsletter, through Brevo (Telegram channel and Discord: not yet)
+- [x] Show HN drafts (2026-10-25); Reddit drafts built, then left out by the owner on 2026-10-25 (`off` by default)
+- [x] Product Hunt kit: tagline, description, first comment, gallery (2026-10-25)
+- [x] Newsletter, through Brevo; Telegram channel and Discord (2026-10-25, live tests wait on accounts)
 - [x] Personal style guide for the AI: the brand's `tone` in `brand.yml`, refined after the first launch
 
 ### Phase 6: a product for other developers
@@ -253,4 +255,4 @@ Final test: Shipcast's launch, generated and published by Shipcast.
 
 ## Related
 
-[[status.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]
+[[status.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]
