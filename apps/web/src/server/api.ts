@@ -7,7 +7,6 @@ import {
   editPosts,
   PostRefused,
   type ApiScope,
-  type ApiToken,
   type ArticleInput,
   type EditDeps,
   type Launch,
@@ -15,9 +14,11 @@ import {
   type Registry,
   type ReviewGitHub,
 } from '@shipcast/engine';
-import { hasScope, verifyApiToken, type SecretStore } from '@shipcast/runtime';
+import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
+import { hasScope, readWebMcp, verifyApiToken, type SecretStore } from '@shipcast/runtime';
 import type { Channel } from '@shipcast/schema';
 import { id, InvalidInput, object } from './input.ts';
+import { cookieOf, readSession, SESSION_COOKIE } from './session.server.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest } from './requests.ts';
@@ -25,9 +26,10 @@ import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 
 /*
  * The REST API under /api/v1: stable routes for the MCP server and any other client, beside the
- * server functions the pages use, and thin over the same functions. A bearer token is the only way
- * in; a session cookie is ignored here, so no page on another site can make a signed-in browser call
- * it. See docs/api.md and docs/decisions/api-tokens.md
+ * server functions the pages use, and thin over the same functions. A bearer token is the way in; a
+ * session cookie is ignored here, so no page on another site can make a signed-in browser call it,
+ * except on WebMCP's same-origin calls when the owner turned it on (webMcpSession below). See
+ * docs/api.md, docs/decisions/api-tokens.md and docs/decisions/mcp.md
  */
 
 export const API_PREFIX = '/api/v1';
@@ -178,7 +180,8 @@ interface Call {
   request: Request;
   url: URL;
   params: Record<string, string>;
-  token: ApiToken;
+  /** What the caller may do: its token's scopes, or both for the owner's session through WebMCP */
+  scopes: readonly ApiScope[];
 }
 
 type JsonSchema = Record<string, unknown>;
@@ -462,6 +465,52 @@ function authenticate(request: Request): string {
   return match[1]!;
 }
 
+/** Checks the bearer token, counting a wrong one against the client; answers the token's scopes */
+async function bearer(request: Request, deps: Pick<ApiDeps, 'registry' | 'secrets' | 'limiter'>): Promise<readonly ApiScope[]> {
+  const client = request.headers.get(PEER_HEADER) || 'unknown';
+  const wait = deps.limiter.blocked(client);
+  if (wait !== undefined) throw new ApiError(429, 'rate_limited', 'too many wrong tokens; wait and try again', { 'retry-after': String(wait) });
+  const check = await verifyApiToken(deps, authenticate(request));
+  if (!check.ok) {
+    deps.limiter.fail(client);
+    throw new ApiError(401, 'unauthorized', check.reason === 'revoked' ? 'this token was revoked' : 'this token is not valid', {
+      'www-authenticate': 'Bearer realm="shipcast", error="invalid_token"',
+    });
+  }
+  return check.token.scopes;
+}
+
+/**
+ * WebMCP's calls, made by the app's own page in the owner's browser, carry the session cookie rather
+ * than a token, with WEBMCP_HEADER and no Authorization. They are taken only when the owner turned
+ * WebMCP on, and only when the browser says the request is same-origin: a page on another site can
+ * neither add the custom header without a CORS preflight the app never answers, nor forge
+ * Sec-Fetch-Site. Anything else falls through to the bearer token. See docs/decisions/mcp.md
+ */
+async function webMcpSession(request: Request, deps: Pick<ApiDeps, 'registry' | 'secrets'>): Promise<boolean> {
+  if (request.headers.has('authorization') || request.headers.get(WEBMCP_HEADER) !== '1') return false;
+  if (request.headers.get('sec-fetch-site') !== 'same-origin') return false;
+  if (!(await readWebMcp(deps.registry))) throw new ApiError(401, 'unauthorized', 'WebMCP is off; turn it on in the app’s settings, or use a bearer token', { 'www-authenticate': 'Bearer realm="shipcast"' });
+  const session = await readSession(deps.secrets, cookieOf(request, SESSION_COOKIE));
+  if (!session) throw new ApiError(401, 'unauthorized', 'sign in to the app first', { 'www-authenticate': 'Bearer realm="shipcast"' });
+  return true;
+}
+
+/**
+ * The bearer check alone, for the MCP endpoint (/mcp): the same tokens, the same limit on wrong ones,
+ * and a refusal shaped like the API's. Answers the refusal, or nothing when the token is good; the
+ * scopes are then checked route by route, as each tool calls the API with the same token.
+ */
+export async function checkBearer(request: Request, deps: Pick<ApiDeps, 'registry' | 'secrets' | 'limiter'>): Promise<Response | undefined> {
+  try {
+    await bearer(request, deps);
+    return undefined;
+  } catch (error) {
+    if (error instanceof ApiError) return errorResponse(error);
+    throw error;
+  }
+}
+
 /** Serves one request under /api/v1, whatever its method; the route file hands every request here */
 export async function handleApi(request: Request, deps: ApiDeps): Promise<Response> {
   const url = new URL(request.url);
@@ -472,16 +521,8 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
       return json(200, openApiDocument(deps.publicUrl), { 'cache-control': 'no-cache' });
     }
 
-    const client = request.headers.get(PEER_HEADER) || 'unknown';
-    const wait = deps.limiter.blocked(client);
-    if (wait !== undefined) throw new ApiError(429, 'rate_limited', 'too many wrong tokens; wait and try again', { 'retry-after': String(wait) });
-    const check = await verifyApiToken(deps, authenticate(request));
-    if (!check.ok) {
-      deps.limiter.fail(client);
-      throw new ApiError(401, 'unauthorized', check.reason === 'revoked' ? 'this token was revoked' : 'this token is not valid', {
-        'www-authenticate': 'Bearer realm="shipcast", error="invalid_token"',
-      });
-    }
+    // The signed-in owner, through WebMCP, may do what a read and write token may
+    const scopes: readonly ApiScope[] = (await webMcpSession(request, deps)) ? ['read', 'write'] : await bearer(request, deps);
 
     const matches = compiled.flatMap((c) => {
       const m = c.regex.exec(path);
@@ -493,13 +534,13 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
       const allow = matches.map((m) => m.route.method).join(', ');
       throw new ApiError(405, 'method_not_allowed', `${path} takes ${allow}`, { allow });
     }
-    if (!hasScope(check.token, found.route.scope)) {
+    if (!hasScope({ scopes: [...scopes] }, found.route.scope)) {
       throw new ApiError(403, 'insufficient_scope', `this token lacks the ${found.route.scope} scope`, {
         'www-authenticate': `Bearer realm="shipcast", error="insufficient_scope", scope="${found.route.scope}"`,
       });
     }
     const params = Object.fromEntries(found.names.map((name, i) => [name, decodeURIComponent(found.values[i] ?? '')]));
-    return await found.route.handle(deps, { request, url, params, token: check.token });
+    return await found.route.handle(deps, { request, url, params, scopes });
   } catch (error) {
     if (error instanceof ApiError) return errorResponse(error);
     if (error instanceof InvalidInput) return errorResponse(new ApiError(400, 'invalid_input', error.message));

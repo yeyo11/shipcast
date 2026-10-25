@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:31:23.52628171Z
-updated_at: 2026-10-25T19:30:53.451375769Z
+created_at: 2026-10-25T15:11:31.167567391Z
+updated_at: 2026-10-25T19:34:28.329693738Z
 tags:
     - api
     - reference
@@ -10,6 +10,7 @@ tags:
     - edit-delete
     - phase-9
     - stats
+    - mcp
 ---
 # The REST API
 
@@ -31,7 +32,11 @@ pnpm shipcast token revoke 3
 ```
 
 `read` covers the `GET` routes, `write` the `POST`, `PATCH` and `DELETE` ones; one does not include
-the other. Every route takes `Authorization: Bearer <token>`; the session cookie does not open the API.
+the other. Every route takes `Authorization: Bearer <token>`; the session cookie does not open the API,
+except for WebMCP's same-origin calls while the owner has turned that experiment on
+([decisions/mcp.md](decisions/mcp.md)). The [MCP server](mcp.md) uses a `read,write` token, over
+stdio (`shipcast mcp`) or at the app's `/mcp`, which checks the same tokens and shares their limit on
+wrong ones.
 
 ## Routes
 
@@ -115,4 +120,4 @@ real work was sent. The stats queries were run the same day against another such
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[stats.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]]

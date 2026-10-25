@@ -1,5 +1,7 @@
-import { parseArgs } from 'node:util';
+import { readFileSync } from 'node:fs';
+import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
+import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
 import { claimManual, draftLaunch, preflight, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
@@ -46,6 +48,10 @@ const USAGE = `Usage: shipcast <command>
                                       (read,write); printed once, only its hash is kept
   token list                          The API tokens, revoked ones too
   token revoke <id>                   Revoke an API token at once
+  mcp [--url <url>] [--token <token>] The MCP server over stdio, for Claude Code and other clients:
+                                      calls the app's REST API at SHIPCAST_API_URL (this checkout's
+                                      SHIPCAST_PUBLIC_URL by default) with SHIPCAST_API_TOKEN, a
+                                      read,write token (see docs/mcp.md)
 
 The launches, their channels and numbers, drafts to review and articles to write are in the web
 app: pnpm app (see docs/web-app.md).
@@ -80,17 +86,46 @@ async function publishReady(round: RoundDeps): Promise<void> {
   for (const launch of (await round.registry.recent(100)).filter((l) => l.status === 'drafted')) reportPublish(await publishOne(launch, round, services));
 }
 
+/**
+ * The app's public URL from this checkout's .env, when there is one: `shipcast mcp` on the machine the
+ * app runs on then needs only the token. Read alone, so the MCP process never loads the other secrets.
+ */
+function localPublicUrl(): string | undefined {
+  try {
+    return parseEnv(readFileSync(resolve(ROOT, '.env'), 'utf8')).SHIPCAST_PUBLIC_URL;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Serves MCP over stdio until the client closes it; stdout is the protocol, so nothing else is printed there */
+async function mcp(url: string | undefined, token: string | undefined): Promise<number> {
+  const options = checkStdioOptions({ url: url ?? process.env.SHIPCAST_API_URL ?? localPublicUrl(), token: token ?? process.env.SHIPCAST_API_TOKEN });
+  const handle = serveShipcastStdio(options);
+  console.error(`shipcast mcp: serving over stdio, calling ${options.url}/api/v1`);
+  await new Promise<void>((done) => {
+    process.stdin.once('end', done);
+    process.once('SIGINT', done);
+    process.once('SIGTERM', done);
+  });
+  await handle.close();
+  return 0;
+}
+
 async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { ref: { type: 'string' }, interval: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, scopes: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+    options: { ref: { type: 'string' }, interval: { type: 'string' }, url: { type: 'string' }, token: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, scopes: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
   });
   const [command, ...rest] = positionals;
   if (values.help || !command) {
     console.log(USAGE);
     return command ? 0 : 1;
   }
+
+  // Before the runtime: the MCP server needs no database or keychain, only the app's URL and a token
+  if (command === 'mcp') return mcp(values.url, values.token);
 
   const runtime = await createRuntime({ root: ROOT, log: (line) => console.error(line) });
   const { config, registry, github, secrets, settings, pipeline: deps } = runtime;
@@ -311,7 +346,7 @@ async function main(argv: string[]): Promise<number> {
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
   (error: unknown) => {
-    console.error(error instanceof ConfigError || error instanceof InvalidScopes || error instanceof SettingMissing ? error.message : error);
+    console.error(error instanceof ConfigError || error instanceof InvalidScopes || error instanceof SettingMissing || error instanceof McpSetupError ? error.message : error);
     process.exit(1);
   },
 );

@@ -11,8 +11,11 @@ const WEBHOOK = '/api/github/webhook';
  */
 const API = /^\/api\/v1\//;
 
+/** The MCP endpoint is the API's other door: the same bearer tokens, checked there (routes/mcp.ts), never the cookie */
+const MCP = /^\/mcp$/;
+
 /** Paths anyone may open: signing in, the static files the sign-in page needs, the health check and GitHub's webhook */
-const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/, API];
+const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/, API, MCP];
 
 /**
  * Every other request needs a session. A page without one goes to the sign-in page; anything else
@@ -29,6 +32,6 @@ const requireSession = createMiddleware().server(async ({ request, pathname, nex
 });
 
 /** Anything that changes something must come from the app's own pages */
-const sameOrigin = createCsrfMiddleware({ filter: ({ request, pathname }) => request.method !== 'GET' && request.method !== 'HEAD' && pathname !== WEBHOOK && !API.test(pathname) });
+const sameOrigin = createCsrfMiddleware({ filter: ({ request, pathname }) => request.method !== 'GET' && request.method !== 'HEAD' && pathname !== WEBHOOK && !API.test(pathname) && !MCP.test(pathname) });
 
 export const startInstance = createStart(() => ({ requestMiddleware: [sameOrigin, requireSession] }));
