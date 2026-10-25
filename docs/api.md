@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:33:34.617018091Z
-updated_at: 2026-10-25T19:33:49.160478462Z
+created_at: 2026-10-25T20:03:25.876237752Z
+updated_at: 2026-10-25T20:06:47.176857981Z
 tags:
     - api
     - reference
@@ -127,7 +127,8 @@ connectors. On 2026-10-25 the built app ran against a copy of the live registry 
 Postgres, with automation off: tokens made with the CLI, every read route answered, and the 400, 401
 (none, wrong, cookie only, revoked), 403, 404, 405, 409, 415 and 429 cases answered as above. No
 write that starts real work was sent. The stats queries were run the same day against another such
-copy ([stats.md](stats.md#checked)).
+copy ([stats.md](stats.md#checked)), and the recommendations against a third
+([scheduling.md](scheduling.md#checked)).
 
 ## Related
 

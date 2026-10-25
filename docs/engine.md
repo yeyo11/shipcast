@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:32:36.054573338Z
-updated_at: 2026-10-25T19:36:24.017163272Z
+created_at: 2026-10-25T19:57:06.204922261Z
+updated_at: 2026-10-25T20:07:41.20733035Z
 tags:
     - engine
     - registry
@@ -65,9 +65,9 @@ makes "a launch happens once" hold:
   of a second row. `posts(launch, { channel?, kind? })` and `post(id)` read them. **Scheduling**
   ([scheduling.md](scheduling.md)): `schedulePost` writes or moves a channel's waiting row (refused
   once anything of that channel is out), `reschedulePost` and `unschedulePost` move or remove one,
-  `clearSchedule` drops what is left of a finished channel, `scheduledPosts({ dueBy? })` lists them,
-  and `publishedWithMetrics(channel)` gives the pieces that went out with their newest numbers, what
-  the recommended times learn from.
+  `clearSchedule` drops what is left of a finished channel, and `scheduledPosts({ dueBy? })` lists
+  them. The recommended times (`recommend.ts`) learn from the stats ranking's popularity per network,
+  not from a reading of their own.
 - **`recordMetrics`**, **`latestMetrics`** and **`metricHistory`** keep every metric reading
   ([publishing.md](publishing.md#metrics)). A reading of one piece points at it (`post_id`, read back
   with `postMetrics`); the site-level sources (blog visits, search, Bing, GitHub) stay the launch's.

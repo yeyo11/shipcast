@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:31:30.036977121Z
-updated_at: 2026-10-25T19:35:10.474001409Z
+created_at: 2026-10-25T19:57:14.285453045Z
+updated_at: 2026-10-25T20:05:23.625220408Z
 tags:
     - publishing
     - connectors
@@ -250,7 +250,8 @@ found) and keeps the numbers it last had.
 | `github` | stars, forks, watchers; views and unique visitors of the repo's last 14 days (not only since the launch); not read for articles | GitHub REST (`repoStats`) |
 
 Telegram and Discord give no numbers back: bots and webhooks cannot read views or reactions. The
-per-post numbers are also what the recommended publishing times learn from
+per-post numbers, scored by the stats ranking's popularity per network ([stats.md](stats.md)), are
+also what the recommended publishing times learn from
 ([scheduling.md](scheduling.md#recommended-times)).
 
 Two limits found while building it:
@@ -292,4 +293,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[api.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[api.md]]

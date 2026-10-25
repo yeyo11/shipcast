@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:33:10.17202672Z
-updated_at: 2026-10-25T19:33:10.17202672Z
+created_at: 2026-10-25T20:06:06.864204941Z
+updated_at: 2026-10-25T20:06:06.864204941Z
 tags:
     - scheduling
     - publishing
@@ -8,6 +8,7 @@ tags:
     - job-queue
     - api
     - instagram
+    - stats
     - phase-10
 ---
 # Scheduling: a time per post, chosen or recommended
@@ -106,14 +107,17 @@ Every candidate is scored as the expected multiple of the channel's median post:
   channel's defaults (below), so 0.5 at the worst hours and 1.5 at the best. On Instagram, when the
   account's online-follower hours are known, `w` is the average of the default and the share of
   followers online at that moment (against the peak hour).
-- **The owner's history**: every post of the channel that went out (live or edited) with its newest
-  numbers, at least 48 hours old (younger numbers are still growing), and only once there are 3 or more.
-  Each post's ratio to the channel's median is its engagement: interactions on Bluesky (likes, reposts,
-  replies, quotes), Mastodon (favourites, boosts, replies) and Instagram (likes, comments, saves,
-  shares); views on dev.to and Hashnode; the open rate on the newsletter (the list grows, so a count
-  would favour the newest issues). Telegram and Discord read no numbers and keep their defaults. Each
-  post counts toward a candidate by how near it is: fully at the same weekday and hour, half at an hour
-  off, and 0.3 of that at the same hour on another day of the same kind (weekday or weekend).
+- **The owner's history**: every piece of the channel that went out (live or edited), scored by the
+  stats ranking over its whole life (`channelHistory`, through `statsRanking`;
+  [stats.md](stats.md#popularity-normalised-per-network)): for each active family (views, reactions,
+  comments, shares, clicks) its increase against the network's median piece, `(x + 1) / (m + 1)`,
+  averaged. The learning therefore measures what the stats section shows, with one definition of a
+  network's numbers, not a second one. Only pieces at least 48 hours old count (younger numbers are
+  still growing), and only once there are 3 or more; each one's ratio is its score over the median
+  score of those pieces. Telegram and Discord read no numbers and keep their defaults; the newsletter
+  is scored on opens and clicks, as the stats are. Each post counts toward a candidate by how near it
+  is: fully at the same weekday and hour, half at an hour off, and 0.3 of that at the same hour on
+  another day of the same kind (weekday or weekend).
 - **Blend**: the default counts as 3 posts (`PRIOR_WEIGHT`), and the two are averaged in log space:
   `score = exp((3·ln(prior) + Σ kᵢ·ln(ratioᵢ)) / (3 + Σ kᵢ))`. A handful of posts barely moves a
   default; with as many posts near an hour as the prior's weight the two weigh the same; a history takes
@@ -176,16 +180,20 @@ run; moving, cancelling and scheduling again; the refusals (out already, Reddit,
 done launch) and the uniqueness of the row; the newsletter's row; the due job runs after a restart,
 does nothing for a cancelled piece, waits for approval while the pull request is open, and arming twice
 leaves one job; the API's routes and scopes; the recommendation's defaults, the blend (a few posts
-barely move it, a history takes over with its reason), young posts left out, Instagram's audience in
-Pacific time, the end of summer time, a zone half an hour off UTC, and the time zone's validation.
+barely move it, a history takes over with its reason), young posts left out, the history read through
+the stats ranking (Bluesky posts with 6, 1 and 2 likes scored 7/3, 2/3 and 1, a scheduled piece left
+out), Instagram's audience in Pacific time, the end of summer time, a zone half an hour off UTC, and
+the time zone's validation.
 
-On 2026-10-25 the recommendation ran against a copy of the live registry in a throwaway Postgres,
-without the app and without publishing anything. Every channel had two or three posts, all from the
-last two days, and the Instagram account had under 100 followers, so all four channels gave their
-defaults: Bluesky weekdays at 15:00, Mastodon Tue–Thu at 09:00, Instagram weekdays at 18:00, dev.to
-Tue–Thu at 08:00, Madrid time. Three days later Bluesky's three posts would count, but they went out
-at night, far from any recommended hour, so the defaults still lead.
+On 2026-10-25 the recommendation ran against a copy of the live registry restored from a read-only
+`pg_dump` into a throwaway Postgres 17, without the app and without publishing anything. Bluesky had
+three posts (stats scores 1.5, 0.5 and 1.0), Mastodon, Instagram and dev.to two each, all from the
+last two days, and no Instagram audience was stored (the account had under 100 followers), so all
+four channels gave their defaults, Madrid time: Bluesky weekdays at 15:00, Mastodon Tue–Thu at 09:00,
+Instagram weekdays at 18:00, dev.to Tue–Thu at 08:00. Run three days later, Bluesky's three posts
+count (median 1.0), but they went out between 01:00 and 06:00 Madrid time, far from any recommended
+hour, so the defaults still lead.
 
 ## Related
 
-[[publishing.md]] · [[api.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[accounts.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[publishing.md]] · [[api.md]] · [[engine.md]] · [[stats.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[accounts.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
