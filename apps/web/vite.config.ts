@@ -5,7 +5,7 @@ import { consoleLinks, signInPath } from './src/server/console-links.ts';
 
 // The engine and its packages run as they are, through Node's own TypeScript support, as they do for
 // the CLI: bundling them would mean bundling native and wasm renderers too
-const WORKSPACE = ['@shipcast/engine', '@shipcast/runtime', '@shipcast/connectors', '@shipcast/schema', '@shipcast/assets'];
+const WORKSPACE = ['@shipcast/engine', '@shipcast/runtime', '@shipcast/connectors', '@shipcast/schema', '@shipcast/assets', '@shipcast/mcp'];
 /** Never pre-bundled for the browser: native renderers the engine loads on the server */
 const NATIVE = ['@resvg/resvg-js', 'satori'];
 

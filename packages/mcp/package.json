@@ -1,0 +1,24 @@
+{
+  "name": "@shipcast/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shipcast's MCP server over its REST API, for stdio and the app's /mcp endpoint, and the same tools for WebMCP in the browser",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./webmcp": "./src/webmcp.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@shipcast/schema": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0"
+  }
+}
