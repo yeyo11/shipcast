@@ -1,129 +1,92 @@
 ---
-created_at: 2026-10-25T00:18:01.109060642Z
-updated_at: 2026-10-25T00:26:08.98324925Z
+created_at: 2026-10-25T00:57:17.114493621Z
+updated_at: 2026-10-25T01:50:57.068080332Z
 tags:
     - status
     - roadmap
+    - phase-0
+    - phase-1
 ---
 # Status
 
-**Phase 0, foundations, done**; **phase 1, the local MVP: its first real launch went out on 2026-10-25** ([plan](plans/shipcast.md#roadmap), ticked the same day).
-Of phase 0: the repo, the `launch.yml` and content pack schemas, the launches repo with its blog and
-the dev.to account are in place, and the name is reserved on npm (`shipcast@0.0.0`, published by the
-owner on 2026-10-24); Hashnode left the MVP.
+**Phases 0 and 1 done; the first real launch went out on 2026-10-25.** On the same day the
+[goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in the
+keychain, the phase 5 channels and what the MVP had left; its final test (Shipcast launched with
+Shipcast) is waiting on the credentials listed under "Waiting on the owner".
 
-Done on 2026-10-24: the repository exists and is public at
-[github.com/yeyo11/shipcast](https://github.com/yeyo11/shipcast) — MIT, pnpm monorepo on TypeScript
-and Node 24 LTS, the same stack as claudio — with the agent setup copied from claudio: `CLAUDE.md`,
-pando as the knowledge base and code index ([knowledge-base.md](knowledge-base.md)), the
-`write-knowledge-doc` skill, and Sluice gates for `typecheck` and `test`. CI
-(`.github/workflows/ci.yml`) runs install, audit, typecheck and test on every pull request and on
-main. Work goes straight to `main` until the MVP
-([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The design system is in
-[plans/design-system.md](plans/design-system.md).
+## What exists
 
-Node is pinned to **24.22.1**, the LTS current on 2026-10-24: in `.nvmrc` (which CI reads through
-`node-version-file`), in pnpm's `useNodeVersion` (so every `pnpm` script runs on it, whatever Node
-is on `PATH`), in `engines` as `>=24.22.1`, and with `@types/node` on the 24 line so the types do not
-offer APIs Node 24 lacks.
+- **The repository** [github.com/yeyo11/shipcast](https://github.com/yeyo11/shipcast): MIT, pnpm
+  monorepo on TypeScript and Node 24.22.1 (pinned in `.nvmrc`, pnpm's `useNodeVersion` and `engines`),
+  CI on every pull request and on main, Sluice gates for `typecheck` and `test`, pando as the
+  knowledge base ([knowledge-base.md](knowledge-base.md)). Work goes straight to `main` until the MVP
+  ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The README says what Shipcast does
+  today, with a demo of the app (`docs/media/tour.gif`).
+- **`packages/schema`**: `launch.yml` ([launch-yml.md](launch-yml.md)), `brand.yml`
+  ([brands.md](brands.md)), `projects.yml` (the project looks) and the content pack
+  ([content-pack.md](content-pack.md)), with line-aware YAML errors and the pack's draft-07 JSON Schema.
+- **`packages/engine`** ([engine.md](engine.md)): the registry on `node:sqlite` (launches, posts,
+  cursors, metrics, accounts), detection from the account's public events, the pre-flight check,
+  claudio as the AI provider, drafting to a pull request or straight onto main, articles written in
+  the app, reviewing and approving, publishing once per channel, the newsletter and metrics
+  ([publishing.md](publishing.md)).
+- **`packages/connectors`**: dev.to, Hashnode, Bluesky, Mastodon, Instagram (carousel, story, comment),
+  Telegram, Discord and Brevo, the Cloudflare Web Analytics and Search Console readers, a `check()` per
+  connector, and the Mastodon and Instagram OAuth flows.
+- **`packages/assets`**: the launch image, the Instagram carousel and story, generated covers, and the
+  demo as a video, in the blog's editorial identity.
+- **`packages/runtime`** ([accounts.md](accounts.md)): configuration, the OS keychain, accounts per
+  brand, the network catalog and the connectors built from them, shared by the CLI and the app.
+- **`apps/cli`**: `launch` (after the pre-flight), `preflight`, `watch`, `publish [--retry]`,
+  `metrics`, `status`.
+- **`apps/web`** ([web-app.md](web-app.md), [decisions/web-app-stack.md](decisions/web-app-stack.md)):
+  TanStack Start in Cartel; GitHub sign-in limited to the owner, signed sessions, same-origin checks;
+  Launches, a launch's review (edit, approve, retry), Launch a repo, Write, and Channels (every
+  integration, its accounts and permissions, connect by form or OAuth, check, rename, disconnect,
+  several accounts per channel and brand, import from `.env`). It replaced the CLI's dashboard.
 
-The MVP's scope is set ([decisions/mvp-scope.md](decisions/mvp-scope.md)): personal brand only, the
-repo stays under `yeyo11`, the blog in `yeyo11/launches` on GitHub Pages at `josegarrido.dev`. The
-technical stack is confirmed ([plans/stack.md](plans/stack.md)). The MVP publishes on the blog,
-dev.to, Bluesky, Mastodon, Instagram and a newsletter (through Brevo, added on 2026-10-24), through
-Shipcast's own connectors; Postiz is discarded. Reddit drafted for the first launch and was left out
-for now on 2026-10-25. Metrics are in the MVP too.
+## Services
 
-Services, set up on 2026-10-24:
+- **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches), the blog at
+  <https://josegarrido.dev> ([launches-repo.md](launches-repo.md)), with `brand.yml` and, since
+  2026-10-25, `projects.yml`, articles without a project, and a privacy policy that names every network
+  Shipcast now reaches.
+- **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)).
+- **Search and analytics**: Search Console and Cloudflare Web Analytics on the blog.
+- **The newsletter** in Brevo, live on the blog ([publishing.md](publishing.md#the-newsletter)).
+- **The app's address**: an A record of a subdomain of the owner's domain at this machine's tailnet
+  address (2026-10-25), and a GitHub OAuth App for the sign-in; the certificate waits on a token.
+- **Credentials**: on 2026-10-25 six networks moved from `.env` into the keychain through the app's
+  import (dev.to, Bluesky, Instagram, Brevo, Cloudflare, Search Console), each checked live. Accounts,
+  expiry dates and machine details are in the owner's local notes, not in the public docs.
 
-- **The launches repo** [`yeyo11/launches`](https://github.com/yeyo11/launches) exists, with the Astro
-  blog live at <https://josegarrido.dev> and deployed on every push to `main`
-  ([launches-repo.md](launches-repo.md)). Its `brand.yml` names the brand's site, where articles live.
-- **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), signed in to Claude.
-- **Search and analytics**: Google Search Console property `josegarrido.dev` verified by DNS, sitemap
-  submitted, `robots.txt` pointing to it; Cloudflare Web Analytics counting visits on the blog. The
-  Meta app's privacy policy URL points to `https://josegarrido.dev/en/privacy/`.
-- **Every credential of the MVP** — Brevo, GitHub (with repo traffic), claudio, dev.to, Instagram
-  (with insights and comments), Bluesky, Mastodon, Cloudflare's analytics API and a Search Console
-  service account — is in the owner's `.env` and answered when tested. Accounts, expiry dates and
-  machine details are in the owner's local notes, not in the public docs.
+## Launches so far
 
-**Code:**
+- **claudio v0.9.0** (2026-10-25), the first real launch: blog in both languages, dev.to, Bluesky,
+  Mastodon, Instagram (republished the same day as a carousel with its story and comment) and the
+  newsletter. Judged a success by the owner, Instagram the weakest result, hence the carousel.
+- **A test article written in the app and published without a pull request** (2026-10-25): the blog
+  in both languages (the Spanish exactly as written, the English translated) and Bluesky. A test, for
+  the owner to delete.
 
-- `packages/schema` (2026-10-24): `LaunchConfig` ([launch-yml.md](launch-yml.md)), `Brand`
-  ([brands.md](brands.md)) and `ContentPack` ([content-pack.md](content-pack.md)) in Zod 4, YAML errors
-  with their line, `missingPieces`, pack inference from semver, one slug per language, and the JSON
-  Schema for Claude (draft-07). It set the package template (`tsconfig.json` extending the base with
-  `erasableSyntaxOnly`, `exports` pointing at `src/index.ts`, tests on `node:test` run by Node's type
-  stripping).
-- `packages/engine` (2026-10-24, [engine.md](engine.md)): the launch registry on `node:sqlite`, launch
-  detection from the account's public GitHub events, claudio as the AI provider, and the pipeline from
-  a claimed launch to its drafts pull request (fresh clone, prompt with the brand and the truth rule,
-  read-only tools, pack validated and complete, articles and per-channel drafts, the launch's media,
-  one-commit pull request); then publishing once the pull request is merged, the newsletter, and
-  metrics collection ([publishing.md](publishing.md)).
-- `packages/connectors` (2026-10-24, [publishing.md](publishing.md)): dev.to, Bluesky, Mastodon,
-  Instagram (carousel, story, comment) and Brevo (publish and metrics), Cloudflare Web Analytics and
-  Search Console readers.
-- `packages/assets` (2026-10-24): the 1200×630 launch image and the Instagram carousel and story in
-  the blog's editorial identity (Satori and resvg), and the demo GIF as a video over its backdrop with
-  ffmpeg.
-- `apps/cli` (2026-10-24): `pnpm shipcast launch <repo> [--ref]` (which retries a failed launch),
-  `watch` (detect, draft, publish, metrics every 6 h, Instagram token refresh), `publish [--retry
-  <channel>]`, `metrics`, `dashboard [--port] [--host]`, `status`, configured from `.env`.
+## Waiting on the owner
 
-**Design** (2026-10-24, everything merged after the owner tried it running):
-
-- **josegarrido.dev** wears the editorial identity ([personal-identity.md](personal-identity.md)),
-  with the author's photo, `og:image` from each launch's image, the `jg` monogram and favicon drawn
-  from Fraunces' outlines, claudio's drawn cover, its own 404, the newsletter form, an about page and
-  each page's path in its own language ([launches-repo.md](launches-repo.md)); the blackboard identity
-  was rejected.
-- **Shipcast** has its design system, Cartel ([plans/design-system.md](plans/design-system.md),
-  [`design/`](../design/README.md)); the first direction, the signal path, was rejected and its branch
-  deleted on 2026-10-25.
-
-**The newsletter** (2026-10-24) is set up in Brevo and live on the blog: domain verified, lists and
-forms per language, confirmation emails in the blog's style
-([publishing.md](publishing.md#the-newsletter)). Replies to `me@josegarrido.dev` reach the owner's own
-mail server. claudio turned it on (claudio pull request #62).
-
-**The first real launch** (2026-10-25): claudio v0.9.0, drafted by `shipcast launch yeyo11/claudio
---ref v0.9.0` into [launches#1](https://github.com/yeyo11/launches/pull/1) (AI cost $0.45), edited by
-the owner in the pull request (out went every "what does not work yet" part, now also out of the
-brand's tone), merged, and published by `shipcast publish`: the article in both languages on the
-blog, dev.to, Bluesky, Mastodon, Instagram and the newsletter in both languages (its Reddit drafts
-were not posted: the owner left Reddit out afterwards). Every metrics source answered (Mastodon once
-the owner widened its token's scopes). The owner judged the test a success, with Instagram as the
-weakest result: Instagram became a carousel with a story and a comment
-([publishing.md](publishing.md#the-launchs-media)), and claudio's launch was published again in that
-format the same day (the first Reel removed by the owner). `watch` runs only when the owner starts
-it: running it as a service was declined on 2026-10-25. The Instagram bio links to the blog's home
-page, where the newest launch comes first; a dynamic "link in bio" page was offered and declined.
-
-What the first run found, each fixed and tested:
-
-- `workspace/` was created by Docker as root, so the clone failed; it now belongs to the owner's user.
-- claudio exports `CLAUDIO_API_URL` and `CLAUDIO_API_TOKEN` to the sessions it runs, and `.env` does
-  not override the environment, so a Shipcast started from claudio reached the desktop app: Shipcast
-  now reads `SHIPCAST_CLAUDIO_URL` and `SHIPCAST_CLAUDIO_TOKEN`.
-- Claude Code's `--json-schema` refuses draft 2020-12: the pack's schema is draft-07.
-- Brevo's free plan refuses a tagged campaign: the newsletter goes untagged.
-- A failed launch could not be retried: a manual `launch` now retries it, and
-  `publish --retry <channel>` retries a channel that failed for good.
-
-Waiting on the owner:
-
+- **A Cloudflare token with Zone DNS edit** (`SHIPCAST_TLS_CLOUDFLARE_TOKEN`): the app's certificate,
+  and with it GitHub sign-in and OAuth on the real address.
+- **The Instagram app secret** (`INSTAGRAM_APP_SECRET`) for Instagram Login from the app.
+- **A new Mastodon token**: the one in `.env` is invalid (the network answers "the access token is
+  invalid"); connect it again from the app, by OAuth or by pasting a token.
+- **Phase 5 accounts**: a Telegram bot and channel, a Discord webhook, a Hashnode token (whose API may
+  need the Pro plan). Each connector is built and tested with fakes; each gets its real test once
+  connected.
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 
-Next in code:
+## Next
 
-- One source for the project colours, generated covers per article, the pre-flight check (license,
-  README, release), and the dashboard in Cartel.
-- Then the rest of the roadmap ([plans/shipcast.md](plans/shipcast.md#roadmap)): the company brand,
-  Hashnode, Show HN and Product Hunt, and phase 6 (other AI providers, the GitHub Action mode,
-  documentation and Shipcast's own launch).
+- The goal's final test: Shipcast v0.1.0 launched from the app on every connected channel.
+- Then phase 6 ([plans/shipcast.md](plans/shipcast.md#roadmap)): other AI providers, the GitHub Action
+  mode, documentation and a one-command install; and the company brand's own setup.
 
 ## Related
 
-[[plans/shipcast.md]] · [[knowledge-base.md]] · [[decisions/main-until-mvp.md]] · [[decisions/mvp-scope.md]] · [[plans/stack.md]] · [[claudio.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[personal-identity.md]] · [[engine.md]] · [[publishing.md]]
+[[plans/shipcast.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]
