@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T01:37:22.715987418Z
-updated_at: 2026-10-25T01:37:22.715987418Z
+created_at: 2026-10-25T01:37:26.046030761Z
+updated_at: 2026-10-25T04:21:51.530588819Z
 tags:
     - web-app
     - dashboard
@@ -21,8 +21,9 @@ folder, so tokens, fonts, logo and channel glyphs have one copy.
 
 | Command | Does |
 | --- | --- |
-| `pnpm app` | Builds the app and serves it on `SHIPCAST_PUBLIC_URL` (HTTPS, tailnet only), printing a one-time sign-in link |
+| `pnpm app` | Builds the app and serves it on `SHIPCAST_PUBLIC_URL` over HTTPS (tailnet only), printing a one-time sign-in link |
 | `pnpm app:dev` | Vite's development server on `http://127.0.0.1:3000`, printing a one-time sign-in link |
+| `pnpm --filter @shipcast/web exec node scripts/certificate-by-hand.ts` | Gets the certificate without a Cloudflare token: it writes the challenge's TXT record to `data/tls/challenge.json` for someone to create, and waits for DNS to answer it |
 
 What `.env` needs is in `.env.example` under "The web app": the public URL, the GitHub OAuth App's
 id and secret, the allowed logins, and the Cloudflare token for the certificate.
@@ -33,13 +34,21 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
   machine's tailnet address, so only the owner's devices on the tailnet can reach it. The record is
   public DNS, but the address behind it answers no one outside the tailnet.
 - **HTTPS with a real certificate.** Tailscale Serve only issues `*.ts.net` certificates, so the app
-  gets its own from Let's Encrypt through the DNS challenge on Cloudflare (`apps/web/tls.ts`, with
-  `acme-client`): a TXT record proves control, since no authority can reach a tailnet address. The
-  certificate lives in `data/tls/`, its key and the ACME account key in the keychain; it is renewed
-  when less than 30 days remain, checked daily and swapped in without a restart.
-- **Port 443 through Tailscale Serve.** The app listens on `127.0.0.1:8443` and `pnpm app` runs
-  `tailscale serve --bg --tcp 443 tcp://127.0.0.1:8443`: a plain TCP forward, so TLS still ends in
-  the app with the domain's certificate. No root, no capability on Node.
+  gets its own from Let's Encrypt through the DNS challenge (`apps/web/tls.ts`, with `acme-client`): a
+  TXT record proves control, since no authority can reach a tailnet address. The record is placed by a
+  `DnsSolver`: Cloudflare's API with `SHIPCAST_TLS_CLOUDFLARE_TOKEN`, or by hand with
+  `scripts/certificate-by-hand.ts`. The certificate lives in `data/tls/`, its key and the ACME account
+  key in the keychain. With the token it is renewed when less than 30 days remain, checked daily and
+  swapped in without a restart; without it, a valid certificate on disk is still served, and the app
+  says how many days it has left. The first one was obtained by hand on 2026-10-25, valid until
+  2027-01-23.
+- **The port.** The app listens on `127.0.0.1:8744` (8443 was taken on the owner's machine) and
+  `pnpm app` asks Tailscale Serve to forward the tailnet's port 443 to it as plain TCP, so TLS still
+  ends in the app. **On the owner's machine port 443 already serves another app through Tailscale
+  Serve**, which a TCP forward cannot share; until that is settled the app can be served on its own
+  port instead (`SHIPCAST_APP_HOST=<tailnet address>`, `SHIPCAST_APP_TAILSCALE=off` and the port in
+  `SHIPCAST_PUBLIC_URL`, as on 2026-10-25 at `:8744`), in which case the GitHub and Meta callbacks
+  must list that port too.
 - **Sign in with GitHub.** An OAuth App with the callback `/auth/github/callback`; the code is
   exchanged for a token used once to read the login, which must be in `SHIPCAST_ALLOWED_GITHUB`. The
   token is not kept. The session is the login and an expiry signed with HMAC-SHA256 (key in the
@@ -82,7 +91,9 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
   function; the server converts requests, serves `dist/client` with long caching for hashed assets,
   and terminates TLS. No Nitro.
 - **One context per process** (`src/server/context.server.ts`): the configuration, the registry,
-  the GitHub client, the keychain and the brand (read from the launches repo every five minutes).
+  the GitHub client, the keychain and the brand (read from the launches repo every five minutes). The
+  repo's root is found by its `pnpm-workspace.yaml` from where the app runs, not from the module's
+  path, which differs between development and the bundle.
 - **Background jobs** (`src/server/jobs.server.ts`) run in the app's process and are kept in memory:
   drafting (minutes of AI work) and publishing (waiting for the deploy, up to 20 minutes, then the
   next publish round picks it up). The registry holds what matters, so a restart loses only the
