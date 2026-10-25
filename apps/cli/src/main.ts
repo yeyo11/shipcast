@@ -72,6 +72,7 @@ function reportPublish(result: PublishResult): void {
   }
   console.log(`${name} ${result.state}:${result.posted.map((p) => `\n  ${p.channel} ${p.url}`).join('')}`);
   for (const problem of result.problems) console.error(`  ${problem}`);
+  for (const waiting of result.scheduled) console.log(`  ${waiting.channel} scheduled for ${waiting.at}`);
 }
 
 /** Publishes what is ready: each drafted launch whose pull request was merged and whose article is live. */

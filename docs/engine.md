@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:54:47.43048597Z
-updated_at: 2026-10-25T19:31:50.665507999Z
+created_at: 2026-10-25T19:32:36.054573338Z
+updated_at: 2026-10-25T19:36:24.017163272Z
 tags:
     - engine
     - registry
@@ -17,6 +17,7 @@ tags:
     - github-app
     - settings
     - stats
+    - scheduling
 ---
 # The engine
 
@@ -57,10 +58,16 @@ makes "a launch happens once" hold:
   Instagram's `story` and `comment`, a newsletter `issue:<lang>`, a blog `article:<lang>`. Each has
   its `account_id` (null for the blog, or an old piece that cannot be attributed; set to null when the
   account is removed), `external_id`, `url`, `status` (`scheduled`, `live`, `edited`, `deleted`,
-  `failed`; `live` today), a nullable `content_hash` and `scheduled_at`, `published_at` and
+  `failed`), a nullable `content_hash` and `scheduled_at`, `published_at` and
   `updated_at`. **`recordPost`** is unique on `(launch, channel, account, kind)` with `NULLS NOT
   DISTINCT`, so the same piece is never published twice, and returns the row already there when it
-  is; `posts(launch, { channel?, kind? })` and `post(id)` read them.
+  is; a `scheduled` row of the same launch, channel and kind is turned into the published one instead
+  of a second row. `posts(launch, { channel?, kind? })` and `post(id)` read them. **Scheduling**
+  ([scheduling.md](scheduling.md)): `schedulePost` writes or moves a channel's waiting row (refused
+  once anything of that channel is out), `reschedulePost` and `unschedulePost` move or remove one,
+  `clearSchedule` drops what is left of a finished channel, `scheduledPosts({ dueBy? })` lists them,
+  and `publishedWithMetrics(channel)` gives the pieces that went out with their newest numbers, what
+  the recommended times learn from.
 - **`recordMetrics`**, **`latestMetrics`** and **`metricHistory`** keep every metric reading
   ([publishing.md](publishing.md#metrics)). A reading of one piece points at it (`post_id`, read back
   with `postMetrics`); the site-level sources (blog visits, search, Bing, GitHub) stay the launch's.
@@ -73,9 +80,12 @@ makes "a launch happens once" hold:
   typed with `setting<T>(key)` and written with `setSetting(key, value)`: the automation mode and
   interval, the AI settings (`ai`) and the prompts' versions (`prompts`), and since the configuration
   split the launches repo, claudio's URL, the AI budget and the Instagram app id
-  ([decisions/github-app.md](decisions/github-app.md)); the onboarding next.
+  ([decisions/github-app.md](decisions/github-app.md)); the owner's IANA time zone (`timezone`,
+  Europe/Madrid until set, [scheduling.md](scheduling.md)); the onboarding next.
 - **Cursors** keep positions and state only: polling, a channel's permanent failure
-  (`publish-failed:<launch>:<channel>`), each article's index status, the last round and delivery.
+  (`publish-failed:<launch>:<channel>`) or cancelled schedule (`publish-cancelled:<launch>:<channel>`),
+  each Instagram account's online-follower hours (`instagram-audience:<account>`), each article's
+  index status, the last round and delivery.
   `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
   `retryChannel` reopens a launch unless that channel already has its post.
 - **Accounts**: the accounts connected per brand ([accounts.md](accounts.md)); adding, making
@@ -247,8 +257,9 @@ its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
 
 The launch's media, publishing after the merge, the newsletter and metrics are in
 [publishing.md](publishing.md); what the stats section reads from the metrics and the snapshots, and
-how popularity is normalised per network, in [stats.md](stats.md).
+how popularity is normalised per network, in [stats.md](stats.md); scheduled publishing and the
+recommended times in [scheduling.md](scheduling.md).
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[stats.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[stats.md]] · [[scheduling.md]]

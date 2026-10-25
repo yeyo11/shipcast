@@ -177,6 +177,8 @@ async function existing(registry: Registry, postId: number): Promise<Post> {
 /** Refuses what the network cannot do, before any request leaves */
 function assertCan(post: Post, action: 'edit' | 'delete'): void {
   if (post.status === 'deleted') throw new PostRefused('deleted', `${describe(post)} was deleted already`);
+  // Nothing of it is on the network yet: its schedule is what changes (PATCH or DELETE /posts/{id}/schedule)
+  if (post.status === 'scheduled') throw new PostRefused('unsupported', `${describe(post)} is scheduled and not out yet: move or cancel its schedule instead`);
   const capability = CAPABILITIES[post.channel];
   if (capability[action] === 'no') throw new PostRefused('unsupported', `${nameOf(post.channel)} cannot ${action} a published post: ${capability.note}`);
   if (!isMain(post)) throw new PostRefused('unsupported', `${describe(post)} cannot be ${action === 'edit' ? 'edited' : 'deleted'} from Shipcast, only the post it belongs to`);
@@ -375,7 +377,7 @@ export type PostOutcome =
 
 async function eachPost(launchId: number, channels: readonly Channel[] | undefined, deps: EditDeps, run: (post: Post) => Promise<Post>): Promise<PostOutcome[]> {
   if (!(await deps.registry.get(launchId))) throw new PostRefused('not_found', 'no such launch');
-  const pieces = (await deps.registry.posts(launchId)).filter((p) => p.status !== 'deleted' && (!channels || channels.includes(p.channel)));
+  const pieces = (await deps.registry.posts(launchId)).filter((p) => p.status !== 'deleted' && p.status !== 'scheduled' && (!channels || channels.includes(p.channel)));
   const outcomes: PostOutcome[] = [];
   // One at a time: a network that rate-limits sees one request of ours, and the order is the launch's
   for (const post of pieces) {

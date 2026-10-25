@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, publishLaunch, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, publishLaunch, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
@@ -46,6 +46,21 @@ export async function startPublishing(queue: WorkQueue, launch: Launch, retryCha
   if (id) return id;
   const [waiting] = await queue.registry.jobs({ launchId: launch.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 });
   return waiting?.id;
+}
+
+/** The key of a scheduled piece's wake-up: one queued per piece, moved when the piece is */
+const scheduledKey = (postId: number) => `post:${postId}`;
+
+/**
+ * Queues the wake-up of a scheduled piece at its time, or moves the one queued already. A time past
+ * (a slot missed while the machine was off) wakes it at once. Idempotent: arming a piece twice
+ * leaves one job, and the job does nothing if the piece went out or moved meanwhile.
+ */
+export async function armScheduled(queue: WorkQueue, post: Post, launch?: Launch): Promise<string | null> {
+  if (post.status !== 'scheduled' || !post.scheduledAt) return null;
+  const at = new Date(Math.max(Date.parse(post.scheduledAt), Date.now()));
+  const of = launch ? ` of ${nameOf(launch)}` : '';
+  return queue.upsert('scheduled', { postId: post.id, launchId: post.launchId }, { singletonKey: scheduledKey(post.id), startAfter: at, title: `${post.channel}${of} at ${post.scheduledAt.slice(0, 16).replace('T', ' ')} UTC`, launchId: post.launchId });
 }
 
 export async function startDrafting(queue: WorkQueue, launch: Launch, direct = false): Promise<string | null> {
@@ -149,17 +164,55 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       }
       for (const p of result.posted) job.log(`${p.channel}: ${p.url}`);
       for (const p of result.problems) job.log(p);
+      for (const p of result.scheduled) job.log(`${p.channel}: scheduled for ${p.at}`);
       const willRetry = result.state === 'partial' && result.problems.some((p) => p.includes('(will retry)'));
       // An attempt that only finds the same channels still failing tells the owner nothing new
-      if (result.posted.length > 0 || !willRetry || job.lastAttempt) {
+      // Nor does one that only finds channels still waiting for their time
+      const news = result.posted.length > 0 || result.problems.length > 0 || result.state === 'published';
+      if (news && (result.posted.length > 0 || !willRetry || job.lastAttempt)) {
         await notify(
           services,
           result.state === 'published'
             ? `Shipcast published ${nameOf(current)}: ${result.posted.map((p) => p.channel).join(', ') || 'nothing new'}`
-            : `Shipcast published ${nameOf(current)} in part. Problems: ${result.problems.join('; ')}`,
+            : result.problems.length > 0
+              ? `Shipcast published ${nameOf(current)} in part. Problems: ${result.problems.join('; ')}`
+              : `Shipcast published ${nameOf(current)}: ${result.posted.map((p) => p.channel).join(', ') || 'nothing yet'}; scheduled: ${result.scheduled.map((p) => `${p.channel} at ${p.at}`).join(', ')}`,
         );
       }
       if (willRetry && !job.lastAttempt) throw new RetryLater('some channels will try again');
+    },
+
+    /*
+     * A scheduled piece's time has come: the launch's publishing is queued, and the publish step
+     * sends what is due. The post row is the truth, so a job for a piece cancelled, moved later or
+     * already out does nothing; a launch whose drafts still wait for approval waits, and its merge
+     * publishes what is overdue by then.
+     */
+    async scheduled({ postId, launchId }, job) {
+      job.link(pageOf(launchId));
+      const post = await registry.post(postId);
+      if (!post || post.status !== 'scheduled') {
+        job.log('Nothing to do: the post is no longer scheduled');
+        return;
+      }
+      if (post.scheduledAt && Date.parse(post.scheduledAt) > Date.now()) {
+        // Moved later after this job was queued; the job keeps its key, so arming it again moves it
+        job.log(`Moved to ${post.scheduledAt}`);
+        await armScheduled(queue, post);
+        return;
+      }
+      const current = await launch(launchId);
+      if (current.status !== 'drafted') {
+        job.log(`Waiting: the launch is ${current.status}; its publishing sends what is due`);
+        return;
+      }
+      const number = Number(/\/pull\/(\d+)$/.exec(current.detail ?? '')?.[1]);
+      if (number && (await d.github.pullRequestState(d.pipeline.launchesRepo, number)) === 'open') {
+        job.log('Waiting for approval: it goes out once the drafts are merged');
+        return;
+      }
+      job.log(`${post.channel} is due: publishing ${nameOf(current)}`);
+      await startPublishing(queue, current);
     },
 
     /** A delivery's work: what GitHub announced is claimed and drafted, or a merged launch published */
@@ -314,4 +367,6 @@ export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { fir
   // The round's key: a watchdog round is dropped while the chain has one queued
   await queue.schedule('round', ROUND_WATCHDOG_CRON, { reason: 'watchdog' }, { singletonKey: ROUND_KEY });
   if ((await readAutomation(d.registry)).mode !== 'off') await scheduleRound(queue, 'after a start', options.firstRoundInSeconds ?? 15);
+  // Every scheduled piece has its wake-up queued; one missing (or one whose time passed while the machine was off) is armed now
+  for (const post of await d.registry.scheduledPosts()) await armScheduled(queue, post);
 }

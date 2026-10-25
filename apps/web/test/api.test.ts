@@ -67,6 +67,9 @@ async function setup(): Promise<Setup> {
       registry,
       editors: async (channel) => ({ [channel]: channel === 'bluesky' ? { delete: fake('bluesky').delete } : fake(channel) }) as Editors,
     }),
+    armSchedule: async (posts) => {
+      for (const p of posts) calls.push(`arm ${p.id} ${p.scheduledAt}`);
+    },
   };
   const tokens = { registry, secrets };
   return {
@@ -320,4 +323,58 @@ test('the capability map is readable with the read scope', async () => {
   const capabilities = (await body(response)).capabilities as Record<string, { edit: string; delete: string }>;
   assert.deepEqual(capabilities.bluesky && [capabilities.bluesky.edit, capabilities.bluesky.delete], ['no', 'yes']);
   assert.equal(capabilities.devto?.delete, 'unpublish');
+});
+
+test('a launch’s channels are scheduled, moved and cancelled through the API', async () => {
+  const s = await setup();
+  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
+
+  const refusedScope = await call(s.deps, 'POST', `/launches/${launch.id}/schedule`, { token: s.read, body: { times: { bluesky: '2030-01-01T10:00:00Z' } } });
+  assert.equal(refusedScope.status, 403);
+  const noOffset = await call(s.deps, 'POST', `/launches/${launch.id}/schedule`, { token: s.write, body: { times: { bluesky: '2030-01-01T10:00:00' } } });
+  assert.equal(noOffset.status, 400, 'a time without its offset is nobody’s time');
+  const reddit = await call(s.deps, 'POST', `/launches/${launch.id}/schedule`, { token: s.write, body: { times: { reddit: '2030-01-01T10:00:00Z' } } });
+  assert.equal(reddit.status, 400, 'Reddit is always a draft');
+
+  const at = new Date(Date.now() + 3 * 86_400_000);
+  at.setUTCMinutes(0, 0, 0);
+  const scheduled = await call(s.deps, 'POST', `/launches/${launch.id}/schedule`, { token: s.write, body: { times: { bluesky: at.toISOString(), mastodon: at.toISOString().replace('Z', '+00:00') } } });
+  assert.equal(scheduled.status, 200);
+  const posts = (await body(scheduled)).posts as Array<{ id: number; channel: string; status: string; scheduledAt: string }>;
+  assert.deepEqual(posts.map((p) => [p.channel, p.status, p.scheduledAt]), [['bluesky', 'scheduled', at.toISOString()], ['mastodon', 'scheduled', at.toISOString()]]);
+  assert.deepEqual(s.calls.filter((c) => c.startsWith('arm')).length, 2, 'each one’s wake-up is queued');
+
+  const later = new Date(at.getTime() + 3600_000).toISOString();
+  const moved = await call(s.deps, 'PATCH', `/posts/${posts[0]!.id}/schedule`, { token: s.write, body: { at: later } });
+  assert.equal(moved.status, 200);
+  assert.equal(((await body(moved)).post as { scheduledAt: string }).scheduledAt, later);
+  assert.ok(s.calls.includes(`arm ${posts[0]!.id} ${later}`), 'and moved with it');
+
+  const edit = await call(s.deps, 'PATCH', `/posts/${posts[0]!.id}`, { token: s.write, body: { text: 'x' } });
+  assert.equal(edit.status, 409, 'a scheduled piece is not on the network yet: its schedule is what changes');
+
+  const cancelled = await call(s.deps, 'DELETE', `/posts/${posts[1]!.id}/schedule`, { token: s.write });
+  assert.equal(cancelled.status, 200);
+  assert.equal((await call(s.deps, 'DELETE', `/posts/${posts[1]!.id}/schedule`, { token: s.write })).status, 404, 'gone');
+  assert.deepEqual((await s.registry.posts(launch.id)).map((p) => p.channel), ['bluesky']);
+});
+
+test('recommendations and the time zone are read with the read scope, the zone set with write', async () => {
+  const s = await setup();
+  const zone = await call(s.deps, 'GET', '/settings/timezone', { token: s.read });
+  assert.deepEqual(await body(zone), { timezone: 'Europe/Madrid' });
+  assert.equal((await call(s.deps, 'PATCH', '/settings/timezone', { token: s.write, body: { timezone: '+01:00' } })).status, 400, 'an offset has no summer time');
+  assert.equal((await call(s.deps, 'PATCH', '/settings/timezone', { token: s.write, body: { timezone: 'Mars/Olympus' } })).status, 400);
+  const saved = await call(s.deps, 'PATCH', '/settings/timezone', { token: s.write, body: { timezone: 'America/New_York' } });
+  assert.deepEqual(await body(saved), { timezone: 'America/New_York' });
+
+  assert.equal((await call(s.deps, 'GET', '/recommendations?channel=reddit', { token: s.read })).status, 400);
+  const rec = await call(s.deps, 'GET', '/recommendations?channel=bluesky&count=3', { token: s.read });
+  assert.equal(rec.status, 200);
+  const answer = await body(rec);
+  assert.equal(answer.timezone, 'America/New_York');
+  const slots = answer.slots as Array<{ at: string; reason: string; basis: string }>;
+  assert.equal(slots.length, 3);
+  assert.ok(slots.every((slot) => slot.basis === 'default' && slot.reason.length > 0), 'no history yet: the defaults speak');
 });

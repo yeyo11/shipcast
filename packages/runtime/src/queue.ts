@@ -22,6 +22,8 @@ export interface JobData {
   'instagram-tokens': { reason: string };
   /** Every account's numbers, or one account's when it is synced by hand */
   snapshots: { reason: string; accountId?: number };
+  /** Wakes the publishing of a launch when one of its scheduled pieces is due */
+  scheduled: { postId: number; launchId: number };
 }
 
 export type QueueName = keyof JobData;
@@ -57,6 +59,8 @@ const QUEUES: Record<QueueName, QueueSpec> = {
   metrics: { title: 'Reading the numbers', policy: 'stately', retryLimit: 1, retryDelay: 15 * 60, expireInSeconds: 3600, concurrency: 1 },
   'instagram-tokens': { title: 'Refreshing Instagram tokens', policy: 'stately', retryLimit: 2, retryDelay: 3600, expireInSeconds: 15 * 60, concurrency: 1 },
   snapshots: { title: 'Syncing the accounts', policy: 'stately', retryLimit: 1, retryDelay: 30 * 60, expireInSeconds: 30 * 60, concurrency: 1 },
+  // One per scheduled piece (its key), moved when the piece is: the post row holds the time, the job only wakes the publishing
+  scheduled: { title: 'A scheduled post', policy: 'stately', retryLimit: 2, retryDelay: 60, expireInSeconds: 10 * 60, concurrency: 1 },
 };
 
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];

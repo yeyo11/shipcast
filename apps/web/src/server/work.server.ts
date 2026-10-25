@@ -1,6 +1,6 @@
-import { approveLaunch, claimArticle, claimManual, preflight, type ArticleInput, type Launch } from '@shipcast/engine';
+import { approveLaunch, claimArticle, claimManual, preflight, type ArticleInput, type Launch, type Post } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
-import { startDrafting, startPublishing as queuePublishing } from '@shipcast/runtime';
+import { armScheduled, startDrafting, startPublishing as queuePublishing } from '@shipcast/runtime';
 import { appContext } from './context.server';
 
 /*
@@ -52,4 +52,10 @@ export async function approve(launchId: number): Promise<Started> {
     return { ok: false, problem: error instanceof Error ? error.message : String(error) };
   }
   return { ok: true, job: await startPublishing(launch) };
+}
+
+/** Queues (or moves) the wake-up of each scheduled piece at its time */
+export async function armSchedule(posts: Post[]): Promise<void> {
+  const { queue } = await appContext();
+  for (const post of posts) await armScheduled(queue, post);
 }
