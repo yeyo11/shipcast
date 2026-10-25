@@ -530,34 +530,6 @@ export class Registry {
     return rows.map(toPost);
   }
 
-  /**
-   * A channel's pieces that went out (live or edited, not deleted, not waiting), each with the
-   * newest reading of every number it has: what the recommendation learns from.
-   */
-  async publishedWithMetrics(channel: Channel, kinds: readonly PostKind[] = ['post']): Promise<Array<{ post: Post; metrics: Record<string, number> }>> {
-    const rows = await this.#db
-      .select()
-      .from(posts)
-      .where(and(eq(posts.channel, channel), inArray(posts.kind, [...kinds]), inArray(posts.status, ['live', 'edited'])))
-      .orderBy(asc(posts.publishedAt), asc(posts.id));
-    if (rows.length === 0) return [];
-    const ids = rows.map((r) => r.id);
-    // The newest reading of each number of each post, in one query rather than one per post
-    const readings = await this.#db
-      .selectDistinctOn([metrics.postId, metrics.name], { postId: metrics.postId, name: metrics.name, value: metrics.value })
-      .from(metrics)
-      .where(inArray(metrics.postId, ids))
-      .orderBy(asc(metrics.postId), asc(metrics.name), desc(metrics.takenAt));
-    const byPost = new Map<number, Record<string, number>>();
-    for (const r of readings) {
-      if (r.postId === null) continue;
-      const entry = byPost.get(r.postId) ?? {};
-      entry[r.name] = r.value;
-      byPost.set(r.postId, entry);
-    }
-    return rows.map((row) => ({ post: toPost(row), metrics: byPost.get(row.id) ?? {} }));
-  }
-
   /** `postId` for a reading of one piece; without it the reading is the launch's, as a site-level source's is */
   async recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date, postId: number | null = null): Promise<void> {
     const at = takenAt.toISOString();

@@ -113,16 +113,26 @@ test('Instagram’s online-follower hours, in Pacific time, move its slots', () 
   assert.match(top.reason, /% more of your Instagram followers are online at 21:00/);
 });
 
-test('the registry’s history uses each post’s newest numbers, and only what went out', async () => {
+test('the registry’s history is the stats ranking’s popularity per network, and only what went out', async () => {
   const registry = await memoryRegistry();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1', trigger: 'release', kind: 'launch', brand: 'personal' });
-  const { post } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
-  await registry.recordMetrics(launch.id, 'bluesky', { likes: 1, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-01T00:00:00Z'), post.id);
-  await registry.recordMetrics(launch.id, 'bluesky', { likes: 6, reposts: 2, replies: 1, quotes: 0 }, new Date('2026-07-02T00:00:00Z'), post.id);
-  const { launch: other } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v2', trigger: 'release', kind: 'launch', brand: 'personal' });
+  // Three Bluesky posts with 6, 1 and 2 likes: the stats ranking scores them 7/3, 2/3 and 1 against the median of 2
+  const likes = [6, 1, 2];
+  const ids: number[] = [];
+  for (const [i, n] of likes.entries()) {
+    const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: `v${i + 1}`, trigger: 'release', kind: 'launch', brand: 'personal' });
+    const { post } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: `at://${i}`, url: `https://bsky.app/${i}` });
+    await registry.recordMetrics(launch.id, 'bluesky', { likes: 0, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-01T00:00:00Z'), post.id);
+    await registry.recordMetrics(launch.id, 'bluesky', { likes: n, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-02T00:00:00Z'), post.id);
+    ids.push(post.id);
+  }
+  const { launch: other } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v9', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.schedulePost(other.id, 'bluesky', new Date('2030-01-01T00:00:00Z'));
-  const history = await channelHistory(registry, 'bluesky');
-  assert.deepEqual(history.map((h) => h.engagement), [9]);
+  const history = await channelHistory(registry, 'bluesky', SUMMER_MONDAY);
+  assert.equal(history.length, 3, 'the scheduled piece is not history');
+  assert.deepEqual(
+    history.map((h) => Math.round(h.engagement * 1000) / 1000).sort(),
+    [7 / 3, 2 / 3, 1].map((x) => Math.round(x * 1000) / 1000).sort(),
+  );
   assert.deepEqual(await channelHistory(registry, 'telegram'), [], 'Telegram reads no numbers');
 
   // The Instagram audience is read from the account's kept hours

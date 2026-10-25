@@ -1,6 +1,8 @@
 import type { Channel } from '@shipcast/schema';
-import type { Post, PostKind, Registry } from './registry.ts';
+import { sql } from 'drizzle-orm';
+import type { Registry } from './registry.ts';
 import { readTimezone, SCHEDULABLE_CHANNELS } from './schedule.ts';
+import { METRIC_FAMILIES, statsRanking } from './stats.ts';
 
 /*
  * When to publish: ranked times for the next days, per channel, in the owner's time zone. Each hour
@@ -129,22 +131,6 @@ export function defaultWeight(channel: Channel, day: Weekday, hour: number): num
   return best;
 }
 
-/*
- * Engagement per post, by channel, from the numbers its connector reads: interactions where the
- * network counts them, views on the article sites (reactions there are too few to rank by), and the
- * share of the newsletter's readers who opened it (the list grows, so a count would favour the
- * newest issues). Telegram and Discord read no numbers, so they keep their defaults.
- */
-const sum = (m: Record<string, number>, names: string[]) => (names.some((n) => m[n] !== undefined) ? names.reduce((t, n) => t + (m[n] ?? 0), 0) : undefined);
-export const ENGAGEMENT: Partial<Record<Channel, { kinds: readonly PostKind[]; score(m: Record<string, number>): number | undefined; what: string }>> = {
-  bluesky: { kinds: ['post'], score: (m) => sum(m, ['likes', 'reposts', 'replies', 'quotes']), what: 'interactions' },
-  mastodon: { kinds: ['post'], score: (m) => sum(m, ['favourites', 'boosts', 'replies']), what: 'interactions' },
-  instagram: { kinds: ['post'], score: (m) => sum(m, ['likes', 'comments', 'saved', 'shares']), what: 'interactions' },
-  devto: { kinds: ['post'], score: (m) => m.views, what: 'views' },
-  hashnode: { kinds: ['post'], score: (m) => m.views, what: 'views' },
-  newsletter: { kinds: ['issue:en', 'issue:es'], score: (m) => (m.delivered ? (m.opens ?? 0) / m.delivered : undefined), what: 'open rate' },
-};
-
 /** A post's numbers keep growing for a day or two; younger ones would look worse than they are */
 export const MIN_POST_AGE_MS = 48 * 3600 * 1000;
 /** Fewer posts than this and the history is not used at all: one or two posts have no median worth the name */
@@ -174,7 +160,7 @@ export function localTime(at: Date, timeZone: string): LocalTime {
   return { day: (day < 0 ? 0 : day) as Weekday, hour: Number(parts.hour) % 24, minute: Number(parts.minute), date: `${parts.year}-${parts.month}-${parts.day}` };
 }
 
-/** One of the owner's published pieces, with the number the channel is ranked by */
+/** One of the owner's published pieces, with its popularity normalised per network (docs/stats.md) */
 export interface HistoryPost {
   publishedAt: string;
   engagement: number;
@@ -258,7 +244,6 @@ export function recommendTimes(input: RecommendInput): Recommendation {
   const { channel, tz, now } = input;
   const days = input.days ?? 7;
   const count = input.count ?? 5;
-  const engagement = ENGAGEMENT[channel];
 
   const old = (input.history ?? []).filter((p) => now.getTime() - Date.parse(p.publishedAt) >= MIN_POST_AGE_MS && Number.isFinite(p.engagement) && p.engagement >= 0);
   const mid = old.length >= MIN_HISTORY ? median(old.map((p) => p.engagement)) : null;
@@ -347,7 +332,7 @@ export function recommendTimes(input: RecommendInput): Recommendation {
     channel,
     timezone: tz,
     slots,
-    history: { posts: input.history?.length ?? 0, used: learned.length, median: mid, what: engagement?.what ?? null },
+    history: { posts: input.history?.length ?? 0, used: learned.length, median: mid, what: METRIC_FAMILIES[channel] ? POPULARITY_WHAT : null },
     audience: audience !== undefined,
   };
 }
@@ -371,14 +356,32 @@ export function parseAudience(value: string | undefined): StoredAudience | undef
   }
 }
 
-/** The owner's history on a channel: every piece that went out, with the number it is ranked by */
-export async function channelHistory(registry: Registry, channel: Channel): Promise<HistoryPost[]> {
-  const engagement = ENGAGEMENT[channel];
-  if (!engagement) return [];
-  const rows = await registry.publishedWithMetrics(channel, engagement.kinds);
-  return rows.flatMap(({ post, metrics }: { post: Post; metrics: Record<string, number> }) => {
-    const value = engagement.score(metrics);
-    return value === undefined ? [] : [{ publishedAt: post.publishedAt, engagement: value }];
+/** What the history's numbers are, in the answer */
+export const POPULARITY_WHAT = 'popularity normalised per network';
+
+/** Older than any reading Shipcast took: the ranking's period is then the whole history */
+const HISTORY_START = '2020-01-01T00:00:00.000Z';
+/** A ranking page wide enough for every piece a channel ever had */
+const HISTORY_LIMIT = 100_000;
+
+/**
+ * The owner's history on a channel: every piece that went out (live or edited) with its popularity
+ * over its whole life, as the stats ranking scores it (docs/stats.md): each family's increase
+ * against the network's median piece, so the learning measures what the stats section shows and a
+ * network's numbers are read the one way. Channels that read no numbers (Telegram, Discord) have no
+ * history and keep their defaults.
+ */
+export async function channelHistory(registry: Registry, channel: Channel, now: Date = new Date()): Promise<HistoryPost[]> {
+  if (!METRIC_FAMILIES[channel]) return [];
+  const ranking = await statsRanking(registry, { by: 'post', channels: [channel], from: HISTORY_START, to: new Date(now.getTime() + 1).toISOString(), limit: HISTORY_LIMIT });
+  const scores = new Map(ranking.entries.flatMap((e) => (e.postId === null ? [] : [[e.postId, e.score] as const])));
+  if (scores.size === 0) return [];
+  const rows = await registry.selectRows<{ id: number; published_at: string }>(
+    sql`SELECT id, published_at FROM posts WHERE id IN (${sql.join([...scores.keys()].map((id) => sql`${id}`), sql`, `)}) AND status IN ('live', 'edited') ORDER BY published_at, id`,
+  );
+  return rows.flatMap((row) => {
+    const score = scores.get(Number(row.id));
+    return score === undefined ? [] : [{ publishedAt: String(row.published_at), engagement: score }];
   });
 }
 
@@ -395,11 +398,12 @@ export async function recommendFor(registry: Registry, channel: Channel, options
       if (audience) break;
     }
   }
+  const now = options.now ?? new Date();
   return recommendTimes({
     channel,
     tz,
-    now: options.now ?? new Date(),
-    history: await channelHistory(registry, channel),
+    now,
+    history: await channelHistory(registry, channel, now),
     ...(audience && { audience }),
     ...(options.days !== undefined && { days: options.days }),
     ...(options.count !== undefined && { count: options.count }),
