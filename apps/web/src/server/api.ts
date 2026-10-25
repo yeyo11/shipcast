@@ -1,8 +1,25 @@
-import type { ApiScope, ApiToken, ArticleInput, Launch, LaunchStatus, Registry, ReviewGitHub } from '@shipcast/engine';
+import { ConnectorError } from '@shipcast/connectors';
+import {
+  CAPABILITIES,
+  deleteLaunchPosts,
+  deletePost,
+  editPost,
+  editPosts,
+  PostRefused,
+  type ApiScope,
+  type ApiToken,
+  type ArticleInput,
+  type EditDeps,
+  type Launch,
+  type LaunchStatus,
+  type Registry,
+  type ReviewGitHub,
+} from '@shipcast/engine';
 import { hasScope, verifyApiToken, type SecretStore } from '@shipcast/runtime';
 import type { Channel } from '@shipcast/schema';
-import { id, InvalidInput } from './input.ts';
+import { id, InvalidInput, object } from './input.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
+import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest } from './requests.ts';
 
 /*
@@ -40,6 +57,8 @@ export interface ApiDeps {
   approve(launchId: number): Promise<WorkAnswer>;
   startArticle(input: ArticleInput, direct: boolean): Promise<WorkAnswer>;
   startPublishing(launch: Launch, retryChannel?: Channel): Promise<string>;
+  /** What editing and deleting published pieces needs: the connectors by account, and GitHub for the blog */
+  editing(): Promise<EditDeps>;
 }
 
 /**
@@ -77,7 +96,7 @@ export class FailureLimiter {
 /** The header server.ts sets from the socket, replacing any a client sent; absent under Vite's dev server */
 export const PEER_HEADER = 'x-shipcast-peer';
 
-type ErrorCode = 'unauthorized' | 'insufficient_scope' | 'rate_limited' | 'not_found' | 'method_not_allowed' | 'invalid_input' | 'unsupported_media_type' | 'refused' | 'internal';
+type ErrorCode = 'unauthorized' | 'insufficient_scope' | 'rate_limited' | 'not_found' | 'method_not_allowed' | 'invalid_input' | 'unsupported_media_type' | 'refused' | 'upstream' | 'internal';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -165,7 +184,7 @@ type JsonSchema = Record<string, unknown>;
 
 /** One route: how it is matched and served, and what the OpenAPI document says of it */
 export interface ApiRoute {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   /** OpenAPI's form, `/launches/{id}`, relative to /api/v1 */
   path: string;
   scope: ApiScope;
@@ -181,6 +200,42 @@ const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const PATH_PARAMS: Record<string, { description: string; schema: JsonSchema }> = {
   id: { description: 'The launch id', schema: { type: 'integer', minimum: 1 } },
   channel: { description: 'A channel of launch.yml', schema: { type: 'string' } },
+  postId: { description: 'The post id, as a launch lists its posts', schema: { type: 'integer', minimum: 1 } },
+};
+
+function postId(value: string | undefined): number {
+  return id(/^\d{1,10}$/.test(value ?? '') ? Number(value) : NaN, 'the post id');
+}
+
+/**
+ * Runs an edit or a delete, answering what the engine refused as the client's problem (404, 409 or
+ * 400) and what the network refused as the network's (502), with the network's own words.
+ */
+async function onPosts<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof PostRefused) {
+      if (error.reason === 'not_found') throw new ApiError(404, 'not_found', error.message);
+      if (error.reason === 'invalid') throw new InvalidInput(error.message);
+      throw new ApiError(409, 'refused', error.message);
+    }
+    if (error instanceof ConnectorError) throw new ApiError(502, 'upstream', error.message);
+    throw error;
+  }
+}
+
+const changesBody: JsonSchema = {
+  type: 'object',
+  minProperties: 1,
+  properties: {
+    text: { type: 'string', description: 'The post’s text; on dev.to, Hashnode and the blog, the article’s Markdown body' },
+    title: { type: 'string', maxLength: 200, description: 'Articles only: dev.to, Hashnode and the blog' },
+    tags: { type: 'array', items: { type: 'string' }, maxItems: 10, description: 'Articles only' },
+    link: { type: 'string', format: 'uri', description: 'Added after the text on Mastodon, Telegram and Discord; the canonical URL on dev.to and Hashnode' },
+    imageUrl: { type: 'string', format: 'uri', description: 'A new image: Mastodon, Telegram (a photo message), dev.to and Hashnode covers' },
+    imageAlt: { type: 'string', description: 'What the image shows, where the network keeps it' },
+  },
 };
 
 export const ROUTES: ApiRoute[] = [
@@ -313,6 +368,76 @@ export const ROUTES: ApiRoute[] = [
       return refused(await deps.startArticle(input.input, input.direct));
     },
   },
+  {
+    method: 'GET',
+    path: '/capabilities',
+    scope: 'read',
+    operationId: 'listCapabilities',
+    summary: 'What each channel can do with a published post: edit, delete, and why not where it cannot',
+    response: {
+      status: 200,
+      description: 'The capability of every channel',
+      schema: { type: 'object', required: ['capabilities'], properties: { capabilities: { type: 'object', additionalProperties: ref('Capability') } } },
+    },
+    async handle() {
+      return json(200, { capabilities: CAPABILITIES });
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/posts/{postId}',
+    scope: 'write',
+    operationId: 'editPost',
+    summary: 'Edit one published post on its network, with the account it went out with',
+    body: changesBody,
+    response: { status: 200, description: 'The post, now edited', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
+    async handle(deps, { params, request }) {
+      const changes = postChanges(await readJson(request));
+      return json(200, { post: await onPosts(async () => editPost(postId(params.postId), changes, await deps.editing())) });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/posts/{postId}',
+    scope: 'write',
+    operationId: 'deletePost',
+    summary: 'Delete one published post on its network (dev.to unpublishes); the launch never publishes it again',
+    response: { status: 200, description: 'The post, now deleted', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
+    async handle(deps, { params }) {
+      return json(200, { post: await onPosts(async () => deletePost(postId(params.postId), await deps.editing())) });
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/launches/{id}/posts',
+    scope: 'write',
+    operationId: 'editLaunchPosts',
+    summary: 'Edit every post of a launch at once through the shared fields, each network taking what it has',
+    body: { ...changesBody, properties: { ...(changesBody.properties as JsonSchema), channels: { type: 'array', items: { type: 'string' }, description: 'Only these channels; every channel when left out' } } },
+    response: { status: 200, description: 'What happened to each post', schema: { type: 'object', required: ['outcomes'], properties: { outcomes: { type: 'array', items: ref('PostOutcome') } } } },
+    async handle(deps, { params, request }) {
+      const body = object(await readJson(request), 'the body');
+      const { channels: named, ...rest } = body;
+      const channels = channelList(named);
+      const changes = postChanges(rest);
+      const launch = await existingLaunch(deps, params.id);
+      return json(200, { outcomes: await onPosts(async () => editPosts(launch.id, changes, channels, await deps.editing())) });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/launches/{id}/posts',
+    scope: 'write',
+    operationId: 'deleteLaunchPosts',
+    summary: 'Delete every post of a launch, or those of the channels named; what a network cannot delete is reported',
+    query: [{ name: 'channels', description: 'Comma-separated channels; every channel when left out', schema: { type: 'string' } }],
+    response: { status: 200, description: 'What happened to each post', schema: { type: 'object', required: ['outcomes'], properties: { outcomes: { type: 'array', items: ref('PostOutcome') } } } },
+    async handle(deps, { params, url }) {
+      const channels = channelList(url.searchParams.get('channels'));
+      const launch = await existingLaunch(deps, params.id);
+      return json(200, { outcomes: await onPosts(async () => deleteLaunchPosts(launch.id, channels, await deps.editing())) });
+    },
+  },
 ];
 
 const compiled = ROUTES.map((route) => {
@@ -418,7 +543,13 @@ export function openApiDocument(publicUrl: string) {
       ...(route.body && { requestBody: { required: true, content: { 'application/json': { schema: route.body } } } }),
       responses: {
         [String(route.response.status)]: { description: route.response.description, content: { 'application/json': { schema: route.response.schema } } },
-        ...errors(route.method === 'POST' ? [400, 401, 403, 404, 409, 415, 429] : [400, 401, 403, 404, 429]),
+        ...errors(
+          route.method === 'GET'
+            ? [400, 401, 403, 404, 429]
+            : route.method === 'DELETE'
+              ? [400, 401, 403, 404, 409, 429, 502]
+              : [400, 401, 403, 404, 409, 415, 429, ...(route.method === 'PATCH' ? [502] : [])],
+        ),
       },
     };
   }
@@ -443,6 +574,7 @@ export function openApiDocument(publicUrl: string) {
         E409: described('Refused: launched already, a failing pre-flight, drafts that cannot merge…'),
         E415: described('The body is not JSON'),
         E429: described('Too many wrong tokens from this client; see Retry-After'),
+        E502: described('The network refused the edit or the delete; the message is what it said'),
       },
       schemas: {
         Error: {
@@ -498,6 +630,45 @@ export function openApiDocument(publicUrl: string) {
             problem: { type: ['string', 'null'] },
             checkedAt: { type: ['string', 'null'] },
             createdAt: { type: 'string' },
+          },
+        },
+        Post: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            launchId: { type: 'integer' },
+            channel: { type: 'string' },
+            accountId: { type: ['integer', 'null'] },
+            kind: { type: 'string' },
+            externalId: { type: ['string', 'null'] },
+            url: { type: ['string', 'null'] },
+            status: { type: 'string', enum: ['scheduled', 'live', 'edited', 'deleted', 'failed'] },
+            contentHash: { type: ['string', 'null'], description: 'The hash of what the last edit sent' },
+            publishedAt: { type: 'string' },
+            updatedAt: { type: 'string' },
+          },
+        },
+        PostOutcome: {
+          type: 'object',
+          required: ['postId', 'channel', 'kind', 'ok'],
+          properties: {
+            postId: { type: 'integer' },
+            channel: { type: 'string' },
+            kind: { type: 'string' },
+            ok: { type: 'boolean' },
+            post: ref('Post'),
+            reason: { type: 'string', enum: ['not_found', 'unsupported', 'deleted', 'invalid', 'no_credentials', 'failed'] },
+            problem: { type: 'string' },
+          },
+        },
+        Capability: {
+          type: 'object',
+          required: ['edit', 'delete', 'note', 'fields'],
+          properties: {
+            edit: { type: 'string', enum: ['yes', 'no', 'partial'] },
+            delete: { type: 'string', enum: ['yes', 'no', 'unpublish'], description: '`unpublish`: off the site, kept in the author’s drafts' },
+            note: { type: 'string' },
+            fields: { type: 'array', items: { type: 'string', enum: ['text', 'title', 'tags', 'link', 'image'] } },
           },
         },
         Job: {

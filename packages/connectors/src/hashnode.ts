@@ -1,4 +1,4 @@
-import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface HashnodeArticle {
   title: string;
@@ -8,6 +8,9 @@ export interface HashnodeArticle {
   canonicalUrl: string;
   coverImageUrl?: string;
 }
+
+/** What an edit may change; whatever is left out stays as it is */
+export type HashnodeEdit = Partial<HashnodeArticle>;
 
 interface GraphQLAnswer<T> {
   data?: T;
@@ -22,9 +25,9 @@ function tagInput(name: string): { slug: string; name: string } {
 /**
  * Hashnode through its GraphQL API: an article published to the publication with `originalArticleURL`
  * set to the blog, and its views, reactions and comments read back. Since May 2026 the API answers
- * only publications on the Pro plan.
+ * only publications on the Pro plan. A post can be edited (`updatePost`) and removed (`removePost`).
  */
-export class Hashnode {
+export class Hashnode implements Editable<HashnodeEdit>, Deletable {
   readonly #token: string;
   #publicationId: string | undefined;
   readonly #publicationHost: string | undefined;
@@ -87,6 +90,31 @@ export class Hashnode {
     );
     const { id, url } = data.publishPost.post;
     return { externalId: id, url };
+  }
+
+  async edit(externalId: string, edit: HashnodeEdit): Promise<void> {
+    await this.#query<{ updatePost: { post: { id: string } } }>(
+      'edit',
+      'mutation($input: UpdatePostInput!) { updatePost(input: $input) { post { id } } }',
+      {
+        input: {
+          id: externalId,
+          ...(edit.title !== undefined && { title: edit.title }),
+          ...(edit.markdown !== undefined && { contentMarkdown: edit.markdown }),
+          ...(edit.tags !== undefined && { tags: edit.tags.map(tagInput) }),
+          ...(edit.canonicalUrl !== undefined && { originalArticleURL: edit.canonicalUrl }),
+          ...(edit.coverImageUrl !== undefined && { coverImageOptions: { coverImageURL: edit.coverImageUrl } }),
+        },
+      },
+    );
+  }
+
+  async delete(externalId: string): Promise<void> {
+    await this.#query<{ removePost: { post: { id: string } | null } }>(
+      'delete',
+      'mutation($input: RemovePostInput!) { removePost(input: $input) { post { id } } }',
+      { input: { id: externalId } },
+    );
   }
 
   async metrics(externalId: string): Promise<Metrics> {

@@ -64,7 +64,8 @@ export async function resubmitSitemap(registry: Registry, site: string, search: 
 /** The article's URL in each language, from the blog's `article:<lang>` pieces of a launch */
 export function articleUrls(pieces: Post[]): Array<{ lang: Language; url: string }> {
   return pieces.flatMap((p) => {
-    const lang = p.channel === 'blog' && p.kind.startsWith('article:') ? kindLanguage(p.kind) : undefined;
+    // A deleted article has no page left to count
+    const lang = p.channel === 'blog' && p.kind.startsWith('article:') && p.status !== 'deleted' ? kindLanguage(p.kind) : undefined;
     return lang && p.url ? [{ lang, url: p.url }] : [];
   });
 }
@@ -100,7 +101,8 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
       const reader = sources.posts?.[post.channel];
       // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its own
       const read = post.kind === 'post' || post.kind.startsWith('issue:');
-      if (reader && read && post.externalId && post.channel !== 'blog') {
+      // A deleted piece answers nothing but not found; its last numbers stay as they were
+      if (reader && read && post.externalId && post.channel !== 'blog' && post.status !== 'deleted') {
         const what = post.kind === 'post' ? post.channel : `${post.channel} ${post.kind}`;
         await attempt(`${launch.repo} ${launch.ref} ${what}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!), post.id));
       }

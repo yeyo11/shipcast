@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { draftBody, publishLaunch, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+import { deletePost, draftBody, publishLaunch, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -440,4 +440,20 @@ test('the blog records one article per language, each at its own URL', async () 
       ['article:es', 'https://josegarrido.dev/es/claudio-como-servicio/', 'claudio-como-servicio'],
     ],
   );
+});
+
+test('a post deleted after the launch is never published again, even with the launch drafted again', async () => {
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  assert.equal((await publishLaunch(launch, brand, deps)).state, 'published');
+  const [mastodon] = await registry.posts(launch.id, { channel: 'mastodon' });
+  await deletePost(mastodon!.id, { registry, editors: async () => ({ mastodon: { edit: async () => {}, delete: async () => {} } }) });
+
+  const before = calls.length;
+  await registry.setStatus(launch.id, 'drafted', launch.detail);
+  assert.equal((await publishLaunch((await registry.get(launch.id))!, brand, deps)).state, 'published');
+  assert.equal(calls.length, before, 'deleting never re-enables publishing the same piece');
+  assert.equal((await registry.post(mastodon!.id))!.status, 'deleted');
 });

@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { FailureLimiter, handleApi, type ApiDeps } from '../../../server/api';
 import { appContext } from '../../../server/context.server';
 import { jobsView } from '../../../server/jobs.server';
+import { editingDeps } from '../../../server/posts.server';
 import { approve, startArticle, startLaunch, startPublishing } from '../../../server/work.server';
 
 // One per process, as the failures it counts are
@@ -21,6 +22,7 @@ async function deps(): Promise<ApiDeps> {
     approve,
     startArticle,
     startPublishing,
+    editing: editingDeps,
   };
 }
 

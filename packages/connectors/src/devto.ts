@@ -1,4 +1,7 @@
-import { checkProblem, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, expectOk, json, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+
+/** What an edit may change; whatever is left out stays as it is */
+export type DevtoEdit = Partial<DevtoArticle>;
 
 export interface DevtoArticle {
   title: string;
@@ -13,9 +16,10 @@ export interface DevtoArticle {
 
 /**
  * dev.to through its API (Forem v1): an article republished from the blog with `canonical_url` set,
- * and its views, reactions and comments read back from the author's own list.
+ * and its views, reactions and comments read back from the author's own list. An article can be
+ * edited; Forem's API has no delete, so `delete` unpublishes it (it stays in the author's drafts).
  */
-export class Devto {
+export class Devto implements Editable<DevtoEdit>, Deletable {
   readonly #key: string;
   readonly #fetch: typeof fetch;
   readonly #base: string;
@@ -47,6 +51,34 @@ export class Devto {
     });
     const created = await json<{ id: number; url: string }>('dev.to', response, 'publish');
     return { externalId: String(created.id), url: created.url };
+  }
+
+  async #update(externalId: string, article: Record<string, unknown>, what: string): Promise<void> {
+    const response = await this.#fetch(`${this.#base}/articles/${encodeURIComponent(externalId)}`, {
+      method: 'PUT',
+      headers: this.#headers(),
+      body: JSON.stringify({ article }),
+    });
+    await expectOk('dev.to', response, what);
+  }
+
+  async edit(externalId: string, edit: DevtoEdit): Promise<void> {
+    await this.#update(
+      externalId,
+      {
+        ...(edit.title !== undefined && { title: edit.title }),
+        ...(edit.markdown !== undefined && { body_markdown: edit.markdown }),
+        ...(edit.tags !== undefined && { tags: edit.tags }),
+        ...(edit.canonicalUrl !== undefined && { canonical_url: edit.canonicalUrl }),
+        ...(edit.mainImage !== undefined && { main_image: edit.mainImage }),
+      },
+      'edit',
+    );
+  }
+
+  /** dev.to cannot delete through its API: the article goes back to the author's drafts, off the site */
+  async delete(externalId: string): Promise<void> {
+    await this.#update(externalId, { published: false }, 'unpublish');
   }
 
   /** The key's owner, proving the key works */

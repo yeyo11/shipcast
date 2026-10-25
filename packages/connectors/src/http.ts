@@ -105,3 +105,26 @@ export function checkProblem(error: unknown, rejected?: string): Check {
   }
   return { ok: false, problem: `could not reach the network: ${error instanceof Error ? error.message : String(error)}` };
 }
+
+/**
+ * Reads an answer whose body does not matter (a 204, a commit record), turning a non-2xx into a
+ * ConnectorError the way `json` does.
+ */
+export async function expectOk(network: string, response: Response, what: string): Promise<void> {
+  if (response.ok) return;
+  const text = await response.text().catch(() => '');
+  throw new ConnectorError(network, `${what}: ${response.status} ${text.slice(0, 300)}`, response.status);
+}
+
+/**
+ * A connector that can change a piece it published, in place. `Piece` is what that network lets
+ * change; a network whose API has no edit does not implement it, so the type says so.
+ */
+export interface Editable<Piece> {
+  edit(externalId: string, piece: Piece): Promise<void>;
+}
+
+/** A connector that can take down a piece it published (dev.to only unpublishes: it has no delete). */
+export interface Deletable {
+  delete(externalId: string): Promise<void>;
+}

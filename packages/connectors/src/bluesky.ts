@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, ConnectorError, expectOk, json, okCheck, statsOf, type Check, type Deletable, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface BlueskyPost {
   text: string;
@@ -45,7 +45,7 @@ export function linkFacets(text: string): Array<{ index: { byteStart: number; by
  * Bluesky through the AT Protocol: a session from the handle and an app password, a post record with
  * link facets and a link card, and its counts read from the public AppView, which needs no login.
  */
-export class Bluesky {
+export class Bluesky implements Deletable {
   readonly #identifier: string;
   readonly #password: string;
   readonly #fetch: typeof fetch;
@@ -114,6 +114,24 @@ export class Bluesky {
     const rkey = created.uri.split('/').at(-1);
     if (!rkey) throw new ConnectorError('Bluesky', `unexpected record uri ${created.uri}`);
     return { externalId: created.uri, url: `https://bsky.app/profile/${session.handle}/post/${rkey}` };
+  }
+
+  /**
+   * Deletes the post record named by its at:// URI (`at://<did>/<collection>/<rkey>`). Bluesky has
+   * no edit: a post can only be deleted and posted again, which loses its likes and replies, so
+   * Shipcast never does that on its own.
+   */
+  async delete(externalId: string): Promise<void> {
+    const match = /^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(externalId);
+    if (!match) throw new ConnectorError('Bluesky', `${externalId} is not an at:// record URI`, 400);
+    const [, repo, collection, rkey] = match;
+    const session = await this.#login();
+    const response = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.deleteRecord`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${session.accessJwt}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ repo, collection, rkey }),
+    });
+    await expectOk('Bluesky', response, 'delete');
   }
 
   /** The public profile from the AppView, which needs no session: picture, name and counts */
