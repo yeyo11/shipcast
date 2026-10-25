@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { getChannels } from '../../server/channels.functions';
 import { writeArticle } from '../../server/launches.functions';
@@ -28,12 +29,7 @@ function Write() {
   const [busy, setBusy] = useState(false);
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Write</h1>
-          <p>An article of your own, in your words. Shipcast translates it, writes a piece for each channel you choose and publishes it on the blog.</p>
-        </div>
-      </div>
+      <PageHead title="Write">An article of your own, in your words. Shipcast translates it, writes a piece for each channel you choose and publishes it on the blog.</PageHead>
       <form
         className="form"
         style={{ maxWidth: 900 }}

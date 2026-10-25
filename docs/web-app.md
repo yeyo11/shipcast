@@ -16,6 +16,9 @@ tags:
     - github-app
     - settings
     - mcp
+    - base-ui
+    - accessibility
+    - mobile
 ---
 # The web app
 
@@ -31,6 +34,8 @@ folder is the app's public folder, so tokens, fonts, logo and channel glyphs hav
 | --- | --- |
 | `pnpm app` | Builds the app and serves it on `SHIPCAST_PUBLIC_URL` over HTTPS (tailnet only), printing a one-time sign-in link |
 | `pnpm app:dev` | Vite's development server on `http://127.0.0.1:3000`, printing a one-time sign-in link |
+| `SHIPCAST_APP_TLS=off SHIPCAST_APP_HOST=<tailnet address> SHIPCAST_APP_PORT=<port> node apps/web/main.ts` | A preview of a branch's build for the owner: plain HTTP on that one address, a one-time sign-in link, and no certificate code at all (below) |
+| `pnpm --filter @shipcast/web check:reflow --base <url> --link <sign-in link>` | The reflow and accessibility check against a running app (below) |
 | `pnpm --filter @shipcast/web exec node scripts/certificate-by-hand.ts` | Gets the certificate without a Cloudflare token: it writes the challenge's TXT record to `data/tls/challenge.json` for someone to create, and waits for DNS to answer it |
 
 `.env` holds only the **bootstrap** (`.env.example`): the database, the public URL, host and port,
@@ -69,6 +74,14 @@ runs on the owner's machine.
   in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie for 14 days.
 - **Console links.** The app prints a single-use sign-in link (15 minutes) when it starts: a way in
   without GitHub for whoever reads the app's own terminal.
+- **Previews never touch TLS.** A branch's build shown to the owner before it merges runs with
+  `SHIPCAST_APP_TLS=off`: `main.ts` never reads, issues or writes certificate material, never runs
+  Tailscale Serve, and serves plain HTTP on `SHIPCAST_APP_HOST` (one address, the tailnet one; every
+  interface is refused), with the session cookie's `Secure` flag dropped by `server.ts`, since a
+  browser refuses a Secure cookie over HTTP on a tailnet address. On 2026-10-25 an app copy run with
+  another data folder obtained a certificate there and wrote its key over the keychain entry the real
+  app uses, which then failed to start; that is why. A preview points at a throwaway Postgres restored
+  from a copy of the registry, with automation Off.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
   `/login` and answers everything else with 401; Start's CSRF middleware refuses any change whose
   `Sec-Fetch-Site`, `Origin` or `Referer` is not the app's own. Server functions check the shape of
@@ -94,9 +107,10 @@ runs on the owner's machine.
   (merges the pull request with a squash, then queues the publishing, which waits for the site to
   deploy), failed channels with **Try again** (that launch only, as a job of its own), the launch's
   jobs, and the latest numbers by source.
-- **Launch a repo** (`/launch`): the owner's repos and their releases, the
-  [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice, and the choice
-  between reviewing the drafts first or publishing without review. Drafting is a job of the queue.
+- **Launch a repo** (`/launch`): the owner's repos (a combobox with a search) and their releases (a
+  select), the [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice,
+  and the choice between reviewing the drafts first or publishing without review. Drafting is a job
+  of the queue.
 - **Write** (`/write`): an article in the owner's words, in Spanish or English; the channels it
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
   directly. See [articles](engine.md#articles-written-in-the-app).
@@ -107,6 +121,8 @@ runs on the owner's machine.
 - **AI** (`/ai`): below.
 - **API** (`/tokens`): the REST API's tokens, created with a name and scopes (`read`, `write`), shown
   once, listed with when each was last used, and revoked. See [api.md](api.md).
+- **Stats** (`/stats`): a placeholder with its illustration until the stats section of milestone 5
+  arrives, so the phone's bottom bar keeps its four sections from now on.
 - **Settings** (`/settings`): below.
 
 Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Waiting for you on
@@ -115,6 +131,53 @@ yellow), and every error is explained for a person, with the original text folde
 reduced motion.
 
 **AI cost is never shown**, in any page or in the CLI ([decisions/ai-providers.md](decisions/ai-providers.md)).
+
+## The interface
+
+Built on 2026-10-25, the first part of milestone 3 of the [goal after the MVP](plans/goal-after-mvp.md),
+on the [approved design direction](decisions/app-design-direction.md).
+
+- **The shell** (`src/routes/_app.tsx`). On wide screens the top bar holds the lockup, the sections
+  (Launches, Write, Channels, Stats, Automation, AI, API), Search with its shortcut, and the signed-in
+  user as a menu with Settings and Sign out. Below 860 px the sections leave the top for a **bottom
+  bar** in reach of the thumb: Launches, Write, Channels, Stats and **More**, which opens a drawer
+  with Automation, AI, API, Settings, Launch a repo, the search and the signed-in account with Sign
+  out. The current section is `aria-current="page"` in both (a launch's page and Launch a repo count
+  as Launches); there is a skip link to the content, `<main>` is a landmark, every target is at least
+  44 px, focus is the yellow ring, and Escape closes any popup with focus back where it was.
+- **Section headers are Cartel bands** (`PageHead`): the neutral band, the huge uppercase title, a line
+  under it and the section's main action, yellow when there is one (Launch a repo on Launches). Below
+  it the work area is calm. Yellow bands stay for what waits for the owner.
+- **The command palette**: ⌘K or Ctrl+K anywhere, Search in the top bar, or More on a phone. It
+  filters the sections (AI and Settings among them) and the main actions (launch a repo, write,
+  connect an account, run an automation round, create a token, sign out); Enter runs the
+  highlighted one.
+- **The components** are Base UI wearing Cartel only, typed wrappers in `src/components/ui/`, styled in
+  `src/styles/components.css`: Dialog, an AlertDialog behind `ConfirmButton` (it replaced every
+  `window.confirm`: disconnecting an account, rotating the webhook secret, revoking a token,
+  clearing a setting), Combobox, Select (a release, a connection's brand, the AI page's providers and
+  preview launch), Menu (an account's secondary actions), Tabs, Tooltip, Popover, Drawer, the toasts
+  and the palette. See [decisions/component-layer.md](decisions/component-layer.md). They are
+  reviewed running at the hidden route `/design/components`.
+- **Illustrations wired in**: the 404 page ("Return to sender") and the error boundary ("Damaged on
+  the way", with Try again), both inside the shell when a section fails and on their own otherwise;
+  the empty states for no launches, no drafts on a launch's page and no connected accounts; the
+  sign-in page; the Automation header; the Stats placeholder.
+- **Reflow to WCAG 2.2 at 320 CSS px.** The page no longer hides horizontal overflow
+  (`overflow-x: clip` is gone); what overflowed was fixed instead: the card and two-column grids use
+  `minmax(min(100%, N), 1fr)`, forms and fields are `minmax(0, 1fr)` grids, flex and grid children get
+  `min-width: 0`, segmented controls stack under 560 px, record tables become blocks under 640 px,
+  long URLs, refs, paths, handles and secrets break with `overflow-wrap: anywhere` (`.break`,
+  `.copyable`, table cells), and on phones each launch row shows its piece and link under the
+  channel's name, wrapped where it must (on wide screens the link is clamped to one line with the
+  full address in a tooltip).
+- **The reflow check** (`apps/web/scripts/reflow-check.ts`): a Lighthouse gate cannot run in CI
+  without a database and a session, so this script runs against a live instance instead. It signs in
+  with a console link (or a session saved with `--state`), opens every page at the widths given (320
+  by default; 320, 390 and 1280 for a full pass), opens the command palette, an alert dialog and the
+  phone's drawer, and fails on horizontal overflow (`scrollWidth > innerWidth`, naming the widest
+  elements) or on any axe-core violation of serious or critical impact (WCAG 2.0–2.2 A/AA and best
+  practices). `--shots <dir>` saves screenshots. It is not part of `pnpm test`.
 
 ## Automation
 
@@ -142,8 +205,8 @@ never run the same round twice.
   Everything else is answered and ignored with its reason.
 - **The GitHub App delivers for every repo it is installed on**, so nothing is set per repo. The
   per-repo secret from before the App is still generated in the page (32 random bytes), kept in the
-  keychain, shown once and rotatable, with the payload URL, the content type and what to tick on
-  GitHub for a webhook set by hand.
+  keychain, shown once and rotatable after a confirmation, with the payload URL, the content type and
+  what to tick on GitHub for a webhook set by hand.
 - **What happened**: the last round and the last delivery, with their lines; and **Run a round now**,
   which moves the round already queued to now (refused while one is running, in any process).
 - GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
@@ -152,8 +215,9 @@ never run the same round twice.
 
 ## AI
 
-Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md)), a plain page in today's
-Cartel markup until the redesign (`src/routes/_app/ai.tsx`, `src/server/ai.functions.ts`):
+Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md)); since the component
+layer it has the section band and Base UI selects, the rest of its redesign comes later
+(`src/routes/_app/ai.tsx`, `src/server/ai.functions.ts`):
 
 - **Providers**: per task (the launch content pack, an article's distribution, the writing
   assistant) a provider (claudio, the Anthropic API, an OpenAI-compatible server; the ones without a
@@ -172,8 +236,9 @@ The selection actions and side chat of the writing assistant come later, with th
 
 ## Settings
 
-Added on 2026-10-25 ([decisions/github-app.md](decisions/github-app.md)), a plain page in today's
-Cartel markup (`src/routes/_app/settings.tsx`, `src/server/settings.functions.ts`):
+Added on 2026-10-25 ([decisions/github-app.md](decisions/github-app.md)); since the component layer
+it has the section band, and its Clear asks first (`src/routes/_app/settings.tsx`,
+`src/server/settings.functions.ts`):
 
 - **Each setting** that is not the bootstrap: the launches repo, claudio's URL and token, the AI
   budget per generation, the Instagram app id and secret. Each says where its value comes from (saved
@@ -194,8 +259,9 @@ Cartel markup (`src/routes/_app/settings.tsx`, `src/server/settings.functions.ts
 - **The engine is not bundled.** The workspace packages are external to the server build and run
   through Node's own TypeScript support, as they do for the CLI, so the native and wasm renderers of
   `@shipcast/assets` and Playwright never go through Vite. Client dependency discovery is turned off
-  for the same reason. A consequence in development: a change to an engine package needs a restart
-  of `pnpm app:dev`.
+  for the same reason; the Base UI entry points the app uses are listed for pre-bundling instead
+  (`BASE_UI` in `vite.config.ts`). A consequence in development: a change to an engine package needs
+  a restart of `pnpm app:dev`.
 - **Production runs Node's own server** (`apps/web/server.ts`): the built Start handler is a `fetch`
   function; the server converts requests, serves `dist/client` with long caching for hashed assets,
   and terminates TLS. No Nitro.
@@ -224,4 +290,4 @@ Cartel markup (`src/routes/_app/settings.tsx`, `src/server/settings.functions.ts
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]]

@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { ILLUSTRATIONS, ILLUSTRATION_NAMES } from '../../../components/illustrations';
+import { PageHead } from '../../../components/PageHead';
 
 // Not in the navigation: a review page for the owner, kept so the set can be checked running, in both
-// themes and at the smallest and largest sizes it is drawn for, before it is wired into pages
+// themes and at the smallest and largest sizes it is drawn for
 export const Route = createFileRoute('/_app/design/illustrations')({
   head: () => ({ meta: [{ title: 'Illustrations · Shipcast' }] }),
   component: Gallery,
@@ -13,15 +14,9 @@ const THEMES = ['night', 'day'] as const;
 function Gallery() {
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Illustrations</h1>
-          <p>
-            Postal, with humour: every scene at 320 and 160 px, night and day. Drawn in{' '}
-            <code>components/illustrations</code> on Cartel's role tokens.
-          </p>
-        </div>
-      </div>
+      <PageHead title="Illustrations">
+        Postal, with humour: every scene at 320 and 160 px, night and day. Drawn in <code>components/illustrations</code> on Cartel's role tokens.
+      </PageHead>
       <ul className="illo-gallery">
         {ILLUSTRATION_NAMES.map((name) => {
           const { component: Scene, use } = ILLUSTRATIONS[name];

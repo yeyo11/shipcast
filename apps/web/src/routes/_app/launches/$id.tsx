@@ -2,6 +2,8 @@ import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-rout
 import { useEffect, useState } from 'react';
 import { Jobs } from '../../../components/Jobs';
 import { LaunchCard } from '../../../components/LaunchCard';
+import { EmptyDrafts } from '../../../components/illustrations';
+import { Empty, PageHead } from '../../../components/PageHead';
 import { useToast } from '../../../components/Toasts';
 import { Notice, number, Pill, Problem, when } from '../../../components/ui';
 import { approveDrafts, getLaunch, publishAgain, saveDraft } from '../../../server/launches.functions';
@@ -30,13 +32,9 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
   // Channel texts are short and read first; articles and what already went out stay folded
   return (
     <details className="draft" open={editable && draft.kind === 'channel'}>
-      <summary style={{ cursor: 'pointer', listStyle: 'none' }}>
-        <header>
-          <h3 className="ph">{draft.label}</h3>
-          <span className="muted mono" style={{ fontSize: 12 }}>
-            {draft.path}
-          </span>
-        </header>
+      <summary>
+        <h3 className="ph">{draft.label}</h3>
+        <span className="muted mono break draft-path">{draft.path}</span>
       </summary>
       {editable ? (
         <>
@@ -90,20 +88,19 @@ function LaunchPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">{launch.ref.startsWith('article:') ? 'Article' : launch.repo.split('/')[1]}</h1>
-          <p>
-            {launch.repo} · <span className="mono">{launch.ref}</span> · {launch.kind} · started {when(launch.createdAt)}
-          </p>
-        </div>
-        <div className="row">
-          <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
-          <Link className="btn" to="/">
-            All launches
-          </Link>
-        </div>
-      </div>
+      <PageHead
+        title={launch.ref.startsWith('article:') ? 'Article' : launch.repo.split('/')[1]}
+        action={
+          <div className="row">
+            <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
+            <Link className="btn" to="/">
+              All launches
+            </Link>
+          </div>
+        }
+      >
+        {launch.repo} · <span className="mono break">{launch.ref}</span> · {launch.kind} · started {when(launch.createdAt)}
+      </PageHead>
       <Jobs jobs={jobs} />
       {launch.problem && (
         <Notice tone="bad">
@@ -190,6 +187,15 @@ function LaunchPage() {
       )}
 
       {review && 'error' in review && <Notice tone="bad">Could not read the drafts: {review.error}</Notice>}
+      {texts.length === 0 && launch.posts.length === 0 && !launch.problem && (
+        <Empty art={<EmptyDrafts width={260} />} title={running ? 'Drafting…' : 'No drafts here'}>
+          {running
+            ? 'Shipcast is reading the code and writing each piece; the drafts show here when they are ready.'
+            : reviewOk
+              ? 'The pull request has no texts to review.'
+              : 'Nothing was drafted for this launch yet.'}
+        </Empty>
+      )}
       {texts.length > 0 && (
         <>
           <h2 className="ph">{open ? 'The drafts' : 'What went out'}</h2>

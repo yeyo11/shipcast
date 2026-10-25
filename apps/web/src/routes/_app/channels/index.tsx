@@ -1,8 +1,13 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
 import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
+import { NoAccounts } from '../../../components/illustrations';
+import { Empty, PageHead } from '../../../components/PageHead';
 import { useToast } from '../../../components/Toasts';
 import { Avatar, number, Pill, Problem, when } from '../../../components/ui';
+import { ConfirmButton } from '../../../components/ui/ConfirmButton';
+import { DotsIcon } from '../../../components/ui/icons';
+import { Menu } from '../../../components/ui/Menu';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount, syncAccountNow } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
 
@@ -68,7 +73,7 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
   const numbers = counts(account.snapshot);
   return (
     <li id={`account-${account.id}`} tabIndex={-1} className="account-row">
-      <div className="account-who" style={{ flex: 1 }}>
+      <div className="account-who" style={{ flex: '1 1 260px' }}>
         <Avatar src={account.avatarUrl} alt="" size={40} />
         <div style={{ minWidth: 0, flex: 1 }}>
           {renaming ? (
@@ -112,26 +117,28 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
         <button className="btn btn-small" disabled={busy} onClick={() => void sync()}>
           {busy ? 'Working…' : 'Sync now'}
         </button>
-        <button className="btn btn-small" disabled={busy} onClick={() => void check()}>
-          Check
-        </button>
-        {!account.primary && (
-          <button className="btn btn-small" disabled={busy} onClick={() => act(() => makePrimary({ data: account.id }), `${account.label} now publishes for ${brand}`)}>
-            Publish with this one
-          </button>
-        )}
-        <button className="btn btn-small" disabled={busy} onClick={() => setRenaming((r) => !r)}>
-          Rename
-        </button>
-        <button
+        <Menu
+          trigger={
+            <button type="button" className="btn btn-small" disabled={busy} aria-label={`More for ${account.label}`}>
+              <DotsIcon />
+            </button>
+          }
+          entries={[
+            { label: 'Check the credential', onSelect: () => void check() },
+            ...(account.primary ? [] : [{ label: 'Publish with this one', onSelect: () => void act(() => makePrimary({ data: account.id }), `${account.label} now publishes for ${brand}`) }]),
+            { label: renaming ? 'Stop renaming' : 'Rename', onSelect: () => setRenaming((r) => !r) },
+          ]}
+        />
+        <ConfirmButton
           className="btn btn-small btn-danger"
           disabled={busy}
-          onClick={() => {
-            if (window.confirm(`Disconnect ${account.label}? Its credential is deleted from the keychain.`)) void act(() => disconnect({ data: account.id }), `${account.label} disconnected`);
-          }}
+          title={`Disconnect ${account.label}?`}
+          description="Its credential is deleted from the keychain and it stops publishing and reading numbers. Connecting it again needs a new credential."
+          confirm="Disconnect"
+          onConfirm={() => act(() => disconnect({ data: account.id }), `${account.label} disconnected`)}
         >
           Disconnect
-        </button>
+        </ConfirmButton>
       </div>
     </li>
   );
@@ -218,12 +225,9 @@ function Channels() {
   const envCount = data.networks.filter((n) => n.usesEnv).length;
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Channels</h1>
-          <p>Every network Shipcast can publish to or read from, the accounts connected to each, and what they may do. Credentials are kept in {data.secretsKind}.</p>
-        </div>
-      </div>
+      <PageHead title="Channels">
+        Every network Shipcast can publish to or read from, the accounts connected to each, and what they may do. Credentials are kept in {data.secretsKind}.
+      </PageHead>
       {envCount > 0 && (
         <div className="band band-yellow">
           <h2 className="ph" style={{ margin: 0 }}>
@@ -265,7 +269,14 @@ function Channels() {
           </div>
         </>
       )}
-      <h2 className="ph">{connected.length > 0 ? 'Add a network' : 'Networks'}</h2>
+      {connected.length === 0 && (
+        <Empty art={<NoAccounts width={280} />} title="No accounts yet">
+          Nothing is connected, so a launch only makes drafts. Connect a network below and Shipcast publishes there with your approval.
+        </Empty>
+      )}
+      <h2 className="ph" id="add" tabIndex={-1}>
+        {connected.length > 0 ? 'Add a network' : 'Networks'}
+      </h2>
       <div className="cards">
         {rest.map((n) => (
           <NetworkCard key={n.id} network={n} brands={data.brands} />

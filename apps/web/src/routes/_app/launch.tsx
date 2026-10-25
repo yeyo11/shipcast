@@ -1,9 +1,12 @@
 import type { Preflight as Result } from '@shipcast/engine';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { PageHead } from '../../components/PageHead';
 import { Preflight } from '../../components/Preflight';
 import { useToast } from '../../components/Toasts';
 import { when } from '../../components/ui';
+import { Combobox } from '../../components/ui/Combobox';
+import { Select } from '../../components/ui/Select';
 import { checkRepo, launchRepo, listReleases, listRepos } from '../../server/launches.functions';
 
 export const Route = createFileRoute('/_app/launch')({
@@ -22,6 +25,11 @@ function LaunchARepo() {
   const [direct, setDirect] = useState(false);
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
+  const repoOptions = useMemo(() => repos.map((r) => ({ value: r.repo, label: r.repo.split('/')[1] ?? r.repo, hint: `pushed ${when(r.pushedAt).slice(0, 10)}` })), [repos]);
+  const releaseOptions = useMemo(
+    () => releases.map((r) => ({ value: r.tag, label: r.tag, hint: `${r.name} · ${when(r.publishedAt).slice(0, 10)}${r.prerelease ? ' · pre-release' : ''}` })),
+    [releases],
+  );
 
   const pick = async (name: string) => {
     setRepo(name);
@@ -40,12 +48,7 @@ function LaunchARepo() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Launch a repo</h1>
-          <p>Pick one of {owner}’s repos and a release. Shipcast reads its code, writes every piece and hands you the drafts.</p>
-        </div>
-      </div>
+      <PageHead title="Launch a repo">Pick one of {owner}’s repos and a release. Shipcast reads its code, writes every piece and hands you the drafts.</PageHead>
       <form
         className="form"
         onSubmit={async (e) => {
@@ -62,39 +65,29 @@ function LaunchARepo() {
           } else toast.fail(answer.problem);
         }}
       >
-        <div className="field">
-          <label htmlFor="repo">Repository</label>
-          <select id="repo" className="select" value={repo} onChange={(e) => void pick(e.target.value)}>
-            <option value="">Choose a repo</option>
-            {repos.map((r) => (
-              <option key={r.repo} value={r.repo}>
-                {r.repo.split('/')[1]} — pushed {when(r.pushedAt).slice(0, 10)}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Combobox
+          label="Repository"
+          placeholder="Type a repo’s name"
+          empty="No repo of yours matches."
+          options={repoOptions}
+          value={repo || null}
+          onValueChange={(name) => void pick(name ?? '')}
+        />
         {repo && (
-          <div className="field">
-            <label htmlFor="ref">Release</label>
-            <select
-              id="ref"
-              className="select mono"
-              value={ref}
-              onChange={async (e) => {
-                setRef(e.target.value);
-                setBusy('Checking…');
-                setCheck(await checkRepo({ data: { repo, ref: e.target.value || undefined } }));
-                setBusy(null);
-              }}
-            >
-              {releases.length === 0 && <option value="">No published releases</option>}
-              {releases.map((r) => (
-                <option key={r.tag} value={r.tag}>
-                  {r.tag} — {r.name} ({when(r.publishedAt).slice(0, 10)}){r.prerelease ? ' · pre-release' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Release"
+            mono
+            placeholder={releases.length === 0 ? 'No published releases' : 'Choose a release'}
+            disabled={releases.length === 0}
+            options={releaseOptions}
+            value={ref || null}
+            onValueChange={async (tag) => {
+              setRef(tag);
+              setBusy('Checking…');
+              setCheck(await checkRepo({ data: { repo, ref: tag || undefined } }));
+              setBusy(null);
+            }}
+          />
         )}
         {busy && <p className="muted">{busy}</p>}
         {check && <Preflight result={check} />}
