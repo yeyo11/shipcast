@@ -45,8 +45,10 @@ export type Check = { ok: true; account: string } | { ok: false; problem: string
  * Turns a failed check into a sentence: a status code means nothing to the person who has to fix the
  * credential, so the common answers are named for what they mean.
  */
-export function checkProblem(error: unknown): Check {
+export function checkProblem(error: unknown, rejected?: string): Check {
   if (error instanceof ConnectorError) {
+    // Some networks mean something more specific by a refusal, which the connector knows best
+    if (rejected && (error.status === 401 || error.status === 403)) return { ok: false, problem: rejected };
     if (error.status === 401) return { ok: false, problem: `${error.network} rejected the credential: it is wrong, revoked or expired` };
     if (error.status === 403) return { ok: false, problem: `${error.network} accepted the credential but it lacks a permission Shipcast needs` };
     if (error.status === 404) return { ok: false, problem: `${error.network} does not know that account or address` };
