@@ -20,8 +20,6 @@ export interface DnsSolver {
 
 export interface CertificateOptions {
   domain: string;
-  /** More names on the same certificate (the app's address on the local network) */
-  altNames?: string[];
   dns: DnsSolver;
   secrets: SecretStore;
   /** Where the certificate (public) is kept; the private keys go to the keychain */
@@ -95,10 +93,7 @@ export async function current(options: Pick<CertificateOptions, 'domain' | 'secr
 export async function ensureCertificate(options: CertificateOptions, now = new Date()): Promise<{ key: string; cert: string; expires: Date }> {
   const log = options.log ?? (() => {});
   const found = await current(options);
-  const names = [options.domain, ...(options.altNames ?? [])];
-  // A certificate is kept only while it still covers every name the app answers on
-  const covered = found ? new Set(acme.crypto.readCertificateInfo(found.cert).domains.altNames) : new Set<string>();
-  if (found && names.every((n) => covered.has(n)) && found.expires.getTime() - now.getTime() > RENEW_BEFORE_MS) return found;
+  if (found && found.expires.getTime() - now.getTime() > RENEW_BEFORE_MS) return found;
 
   log(`Getting a certificate for ${options.domain} from Let's Encrypt (DNS challenge on Cloudflare)…`);
   let accountKey = await options.secrets.get('app:acme-account-key');
@@ -110,10 +105,7 @@ export async function ensureCertificate(options: CertificateOptions, now = new D
     directoryUrl: options.staging ? acme.directory.letsencrypt.staging : acme.directory.letsencrypt.production,
     accountKey,
   });
-  const [key, csr] = await acme.crypto.createCsr(
-    { commonName: options.domain, altNames: [options.domain, ...(options.altNames ?? [])] },
-    await acme.crypto.createPrivateEcdsaKey(),
-  );
+  const [key, csr] = await acme.crypto.createCsr({ commonName: options.domain }, await acme.crypto.createPrivateEcdsaKey());
   const cert = await client.auto({
     csr,
     termsOfServiceAgreed: true,

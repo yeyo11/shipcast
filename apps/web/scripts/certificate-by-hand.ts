@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { KeychainStore, loadAppConfig, loadConfig } from '@shipcast/runtime';
 import { ensureCertificate, type DnsSolver } from '../tls.ts';
@@ -12,14 +12,7 @@ import { ensureCertificate, type DnsSolver } from '../tls.ts';
 const ROOT = resolve(import.meta.dirname, '../../..');
 const config = loadConfig(process.env, ROOT);
 const app = loadAppConfig(process.env);
-const file = join(config.dataDir, 'tls', 'challenges.json');
-const aliases = (process.env.SHIPCAST_APP_ALIASES ?? '').split(',').map((a) => a.trim()).filter(Boolean);
-
-/** Several names are challenged at once, so the file lists every record still to be placed */
-function pending(change: (list: Array<{ name: string; value: string }>) => Array<{ name: string; value: string }>): void {
-  const list = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Array<{ name: string; value: string }>) : [];
-  writeFileSync(file, JSON.stringify(change(list), null, 2));
-}
+const file = join(config.dataDir, 'tls', 'challenge.json');
 
 async function answered(name: string, value: string): Promise<boolean> {
   const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${name}&type=TXT`, { headers: { accept: 'application/dns-json' } }).catch(() => undefined);
@@ -30,19 +23,19 @@ async function answered(name: string, value: string): Promise<boolean> {
 const byHand: DnsSolver = {
   async create(name, value) {
     mkdirSync(join(config.dataDir, 'tls'), { recursive: true });
-    pending((list) => [...list, { name, value }]);
+    writeFileSync(file, JSON.stringify({ name, value }));
     console.log(`Create the TXT record ${name} = ${value} (written to ${file}); waiting for DNS…`);
     while (!(await answered(name, value))) await new Promise((r) => setTimeout(r, 5000));
     console.log('DNS answers the record.');
   },
-  async remove(name, value) {
-    pending((list) => list.filter((r) => r.value !== value));
+  async remove(name) {
+    rmSync(file, { force: true });
     console.log(`The TXT record ${name} can be deleted now.`);
   },
 };
 
 const certificate = await ensureCertificate(
-  { domain: new URL(app.publicUrl).hostname, altNames: aliases.map((a) => new URL(a).hostname), dns: byHand, secrets: new KeychainStore(), dataDir: config.dataDir, log: console.log, staging: process.argv.includes('--staging') },
+  { domain: new URL(app.publicUrl).hostname, dns: byHand, secrets: new KeychainStore(), dataDir: config.dataDir, log: console.log, staging: process.argv.includes('--staging') },
   process.argv.includes('--force') ? new Date(Date.now() + 365 * 86_400_000) : new Date(),
 );
 console.log(`Certificate valid until ${certificate.expires.toISOString()}`);

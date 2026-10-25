@@ -70,11 +70,6 @@ export interface ServeOptions {
   port: number;
   /** The public origin requests are rebuilt on, so URLs the app builds point where the browser is */
   origin: string;
-  /**
-   * Other origins the same app answers on (its address on the local network): a request whose Host is
-   * one of them is rebuilt on it, so same-origin checks and cookies follow the address the browser used
-   */
-  aliases?: string[];
   tls?: { key: string; cert: string };
 }
 
@@ -84,8 +79,7 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
     try {
       const pathname = new URL(request.url ?? '/', 'http://x').pathname;
       if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && serveStatic(pathname, response)) return;
-      const alias = options.aliases?.find((o) => new URL(o).host === request.headers.host);
-      await send(response, await entry.default.fetch(toRequest(request, alias ?? options.origin)));
+      await send(response, await entry.default.fetch(toRequest(request, options.origin)));
     } catch (error) {
       console.error(error);
       if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' });
