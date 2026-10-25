@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, ContentPack, LaunchConfig } from '@shipcast/schema';
-import { GitHubRest, launchDir, pullRequestBody, renderDrafts, type DraftFile } from '../src/index.ts';
+import { GitHubRest, launchDir, pullRequestBody, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const text = (file: DraftFile | undefined): string => (file && 'content' in file ? file.content : '');
@@ -240,4 +240,34 @@ test('the phase 5 channels get their drafts with the right mode lines', () => {
   assert.match(ph, /^- instagram-01\.jpg$/m);
   assert.match(ph, /^- instagram-04\.jpg$/m);
   assert.match(pullRequestBody(full, launch, on), /- \*\*hackerNews\*\*: manual[\s\S]*- \*\*productHunt\*\*: manual/);
+});
+
+test('the article carries its launch image alt text and the project screenshot after its opening paragraph', () => {
+  const withAlt = ContentPack.parse({
+    ...pack,
+    article: {
+      ...pack.article!,
+      en: { ...pack.article!.en!, markdown: 'claudio runs Claude Code as a service.\n\n## How do I install it?\n\nWith Docker.', imageAlt: 'The claudio launch card: Claude Code as a service' },
+    },
+  });
+  const files = renderDrafts(withAlt, launch, config, brand, new Date('2026-10-25'), '/launches/claudio/v0.9.0/og.png', ['/launches/claudio/v0.9.0/screenshots/home-desktop.png']);
+  const en = text(files.find((f) => f.path === 'src/content/posts/en/claudio.md'));
+  assert.match(en, /^imageAlt: "The claudio launch card: Claude Code as a service"$/m);
+  assert.match(en, /Claude Code as a service\.\n\n!\[claudio, screenshot\]\(\/launches\/claudio\/v0\.9\.0\/screenshots\/home-desktop\.png\)\n\n## How do I install it\?/);
+  const es = text(files.find((f) => f.path === 'src/content/posts/es/claudio-como-servicio.md'));
+  assert.match(es, /^imageAlt: "claudio: claudio: Claude Code como servicio"$/m, 'without one from the AI, the project and the title');
+  assert.match(es, /!\[claudio, captura de pantalla\]/);
+});
+
+test('the desktop screenshots are found among the media, the home page first, and placed once', () => {
+  const files: DraftFile[] = [
+    { path: 'public/launches/claudio/v1/screenshots/docs-desktop.png', bytes: new Uint8Array() },
+    { path: 'public/launches/claudio/v1/screenshots/home-mobile.png', bytes: new Uint8Array() },
+    { path: 'public/launches/claudio/v1/screenshots/home-desktop.png', bytes: new Uint8Array() },
+    { path: 'public/launches/claudio/v1/og.png', bytes: new Uint8Array() },
+  ];
+  assert.deepEqual(screenshotPaths(files), ['/launches/claudio/v1/screenshots/home-desktop.png', '/launches/claudio/v1/screenshots/docs-desktop.png']);
+  const once = withScreenshot('One.\n\nTwo.', '/s.png', 'x', 'en');
+  assert.equal(withScreenshot(once, '/s.png', 'x', 'en'), once);
+  assert.equal(withScreenshot('Only one paragraph.', '/s.png', 'x', 'en'), 'Only one paragraph.\n\n![x, screenshot](/s.png)');
 });

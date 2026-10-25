@@ -17,6 +17,7 @@ const URL_PATTERN = /https?:\/\/\S+/i;
 /** Limits each network enforces, checked here so a pack that would be rejected never reaches review. */
 export const LIMITS = {
   articleDescription: 200,
+  imageAlt: 140,
   devtoTags: 4,
   blueskyGraphemes: 300,
   mastodonCharacters: 500,
@@ -54,8 +55,14 @@ const ArticleVersion = z.strictObject({
     .string()
     .min(1)
     .describe(
-      'The article body in Markdown, without front matter and without a top-level heading. For a launch: the problem, the solution, how it works, a quick start and next steps.',
+      'The article body in Markdown, without front matter and without a top-level heading. It opens with one or two sentences that say plainly what the project is and what it does, the answer a search engine or an assistant quotes. For a launch: the problem, the solution, how it works, a quick start and next steps, with headings phrased as the questions a reader asks where that reads naturally ("How do I install it?").',
     ),
+  imageAlt: z
+    .string()
+    .min(1)
+    .max(LIMITS.imageAlt)
+    .optional()
+    .describe("The launch image's alternative text in this language: what the image shows (the project's name, what it does), for people who cannot see it and for search"),
 });
 
 const NewsletterIssue = z.strictObject({
