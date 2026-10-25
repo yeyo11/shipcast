@@ -104,7 +104,8 @@ test('after the merge every approval channel is published with the edited texts,
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const devto = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { devto: devto.id } };
 
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published');
@@ -129,6 +130,11 @@ test('after the merge every approval channel is published with the edited texts,
 
   assert.equal((await registry.get(launch.id))!.status, 'published');
   assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'instagram', 'mastodon']);
+  const [article] = await registry.posts(launch.id, { channel: 'blog' });
+  assert.deepEqual([article?.kind, article?.url, article?.externalId, article?.accountId], ['article:en', 'https://josegarrido.dev/en/claudio/', 'claudio', null]);
+  const [onDevto] = await registry.posts(launch.id, { channel: 'devto' });
+  assert.deepEqual([onDevto?.kind, onDevto?.accountId, onDevto?.externalId], ['post', devto.id, 'devto-1'], 'the account it went out with');
+  assert.equal((await registry.posts(launch.id, { channel: 'bluesky' }))[0]?.accountId, null, 'credentials from .env have no account');
 
   await publishLaunch((await registry.get(launch.id))!, brand, deps);
   assert.equal(calls.length, 4, 'a second round publishes nothing again');
@@ -198,7 +204,11 @@ test('the newsletter sends one campaign per language with the edited issue, and 
   assert.match(sends[0]!.html, /https:\/\/josegarrido\.dev\/en\/claudio\/\?ref=newsletter/);
   assert.match(sends[0]!.html, /\{\{ unsubscribe \}\}/);
   assert.ok(result.state === 'partial' || result.state === 'published');
-  assert.equal((await registry.posts(launch.id)).find((p) => p.channel === 'newsletter')?.externalId, '901');
+  assert.deepEqual(
+    (await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.externalId, p.url]),
+    [['issue:en', '901', 'https://app.brevo.com/marketing-campaign/report/901']],
+  );
+  assert.deepEqual(await registry.cursorsWithPrefix('newsletter-sent:'), [], 'the rows are the record');
 
   await publishLaunch((await registry.get(launch.id))!, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(sends.length, 1, 'never sent twice');
@@ -250,7 +260,84 @@ test('after the Instagram carousel, its story and the edited comment go out once
   const first = await publishLaunch(launch, brand, deps);
   assert.ok(first.state === 'published' && first.problems.some((p) => p.startsWith('instagram comment: Instagram: comment: 403')));
   assert.deepEqual(done, ['post', 'story instagram-story.jpg']);
-  assert.equal((await registry.posts(launch.id)).filter((p) => p.channel === 'instagram').length, 1);
+  assert.deepEqual(
+    (await registry.posts(launch.id, { channel: 'instagram' })).map((p) => [p.kind, p.externalId]),
+    [
+      ['post', 'post-1'],
+      ['story', 'story-1'],
+    ],
+  );
+  assert.deepEqual(await registry.cursorsWithPrefix('instagram-'), [], 'the rows are the record');
+});
+
+test('the Instagram comment is its own row, and a second round neither reposts nor comments again', async () => {
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const account = await registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const done: string[] = [];
+  const publishers: Publishers = {
+    instagram: {
+      publish: async () => (done.push('post'), { externalId: 'post-1', url: 'https://www.instagram.com/p/1/' }),
+      comment: async (id) => (done.push(`comment ${id}`), { id: 'c-1' }),
+    },
+  };
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { instagram: account.id } };
+  await publishLaunch(launch, brand, deps);
+  await registry.setStatus(launch.id, 'drafted', launch.detail);
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.deepEqual(done, ['post', 'comment post-1']);
+  assert.deepEqual(
+    (await registry.posts(launch.id, { channel: 'instagram' })).map((p) => [p.kind, p.externalId, p.url, p.accountId]),
+    [
+      ['post', 'post-1', 'https://www.instagram.com/p/1/', account.id],
+      ['comment', 'c-1', null, account.id],
+    ],
+  );
+});
+
+test('a newsletter issue that went out is kept when the other language fails, and only that one is retried', async () => {
+  const withNewsletter = Brand.parse({
+    id: 'personal',
+    displayName: 'Me',
+    site: 'https://josegarrido.dev',
+    github: 'yeyo11',
+    newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3, es: 4 } },
+  });
+  const issue = { subject: 's', previewText: 'p', markdown: 'm' };
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, newsletter: { en: issue, es: issue } }),
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  newsletter: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const sends: number[] = [];
+  let spanishTries = 0;
+  const publishers: Publishers = {
+    newsletter: {
+      subscribers: async () => 5,
+      send: async (c) => {
+        if (c.listId === 4 && ++spanishTries === 1) throw new ConnectorError('Brevo', 'create the campaign: 502', 502);
+        sends.push(c.listId);
+        return { externalId: String(900 + c.listId), url: `https://app.brevo.com/marketing-campaign/report/${900 + c.listId}` };
+      },
+    },
+  };
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const first = await publishLaunch(launch, withNewsletter, deps);
+  assert.equal(first.state, 'partial');
+  assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => p.kind), ['issue:en']);
+
+  const second = await publishLaunch((await registry.get(launch.id))!, withNewsletter, deps);
+  assert.equal(second.state, 'published');
+  assert.deepEqual(sends, [3, 4], 'English once, Spanish once it went through');
+  assert.deepEqual(
+    (await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.externalId]).sort(),
+    [
+      ['issue:en', '903'],
+      ['issue:es', '904'],
+    ],
+  );
 });
 
 test('Hashnode, Telegram and Discord are published with the edited drafts; Show HN and Product Hunt never are', async () => {
@@ -328,5 +415,29 @@ test('when the article goes live Google is asked to read the sitemap, once, and 
   assert.deepEqual(submitted, ['https://josegarrido.dev/sitemap-index.xml']);
 
   await publishLaunch((await registry.get(launch.id))!, brand, deps);
-  assert.equal(submitted.length, 1, 'the blog post was already recorded: not asked again');
+  assert.equal(submitted.length, 1, 'the article was already recorded: not asked again');
+});
+
+test('the blog records one article per language, each at its own URL', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({
+      ...pack,
+      article: { ...pack.article, es: { slug: 'claudio-como-servicio', title: 't', description: 'd', markdown: 'm' } },
+    }),
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { publishers } = recorder();
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  await publishLaunch(launch, brand, deps);
+  await registry.setStatus(launch.id, 'drafted', launch.detail);
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.deepEqual(
+    (await registry.posts(launch.id, { channel: 'blog' })).map((p) => [p.kind, p.url, p.externalId]),
+    [
+      ['article:en', 'https://josegarrido.dev/en/claudio/', 'claudio'],
+      ['article:es', 'https://josegarrido.dev/es/claudio-como-servicio/', 'claudio-como-servicio'],
+    ],
+  );
 });

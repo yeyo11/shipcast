@@ -14,9 +14,17 @@ export interface LaunchView {
   pullRequest: string | undefined;
   problem: string | undefined;
   createdAt: string;
-  posts: Array<{ channel: string; url: string | null; publishedAt: string }>;
+  /** One per piece: a channel can have several (an article per language, an issue per language, a story) */
+  posts: Array<{ id: number; channel: string; kind: string; url: string | null; publishedAt: string }>;
   failures: Array<{ channel: string; message: string }>;
   headline: Array<{ label: string; value: number }>;
+}
+
+/** A piece beside its channel's name: nothing for the post itself, the language for an article or an issue */
+export function pieceName(kind: string): string {
+  if (kind === 'post') return '';
+  const lang = /^(?:article|issue):(\w+)$/.exec(kind)?.[1];
+  return lang ? lang.toUpperCase() : kind;
 }
 
 export const CHANNEL_NAMES: Record<string, string> = {

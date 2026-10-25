@@ -1,11 +1,11 @@
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
-import type { Brand, Channel } from '@shipcast/schema';
+import type { Brand, Channel, Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
-import type { Registry } from './registry.ts';
+import { kindLanguage, type Post, type Registry } from './registry.ts';
 
 /** Each source the engine can read numbers from; a source left out is not read. */
 export interface MetricSources {
-  /** Per post, by channel: the connectors' `metrics(externalId)` */
+  /** Per piece, by channel: the connectors' `metrics(externalId)`, read for each post and newsletter issue */
   posts?: Partial<Record<Channel, { metrics(externalId: string): Promise<Metrics> }>>;
   /** The blog's visits per article path, by source */
   blog?: { pageVisits(path: string, since: string, until: string): Promise<PageVisits> };
@@ -61,17 +61,12 @@ export async function resubmitSitemap(registry: Registry, site: string, search: 
   return true;
 }
 
-/**
- * The article's URL in each language. The blog post records both slugs (`en:a-slug,es:un-slug`),
- * since each language has its own; an older record with one slug shared by both is read too.
- */
-export function articleUrls(externalId: string | null | undefined, url: string, site: string): Array<{ lang: string; url: string }> {
-  const pairs = (externalId ?? '').split(',').map((p) => /^(en|es):(.+)$/.exec(p)).filter((m): m is RegExpExecArray => m !== null);
-  if (pairs.length > 0) return pairs.map(([, lang, slug]) => ({ lang: lang!, url: `${site}/${lang}/${slug}/` }));
-  return [
-    { lang: 'en', url },
-    { lang: 'es', url: url.replace(`${site}/en/`, `${site}/es/`) },
-  ];
+/** The article's URL in each language, from the blog's `article:<lang>` pieces of a launch */
+export function articleUrls(pieces: Post[]): Array<{ lang: Language; url: string }> {
+  return pieces.flatMap((p) => {
+    const lang = p.channel === 'blog' && p.kind.startsWith('article:') ? kindLanguage(p.kind) : undefined;
+    return lang && p.url ? [{ lang, url: p.url }] : [];
+  });
 }
 
 /**
@@ -81,9 +76,9 @@ export function articleUrls(externalId: string | null | undefined, url: string, 
 export async function collectMetrics(registry: Registry, brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
   let readings = 0;
   const problems: string[] = [];
-  const record = async (launchId: number, source: string, values: Record<string, number | undefined>) => {
+  const record = async (launchId: number, source: string, values: Record<string, number | undefined>, postId: number | null = null) => {
     const clean = Object.fromEntries(Object.entries(values).filter((e): e is [string, number] => typeof e[1] === 'number'));
-    await registry.recordMetrics(launchId, source, clean, now);
+    await registry.recordMetrics(launchId, source, clean, now, postId);
     readings += Object.keys(clean).length;
   };
   const attempt = async (what: string, fn: () => Promise<void>) => {
@@ -100,59 +95,65 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
     const since = launch.createdAt.slice(0, 10);
     const until = day(now);
 
-    for (const post of await registry.posts(launch.id)) {
+    const pieces = await registry.posts(launch.id);
+    for (const post of pieces) {
       const reader = sources.posts?.[post.channel];
-      if (reader && post.externalId && post.channel !== 'blog') {
-        await attempt(`${launch.repo} ${launch.ref} ${post.channel}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!)));
+      // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its own
+      const read = post.kind === 'post' || post.kind.startsWith('issue:');
+      if (reader && read && post.externalId && post.channel !== 'blog') {
+        const what = post.kind === 'post' ? post.channel : `${post.channel} ${post.kind}`;
+        await attempt(`${launch.repo} ${launch.ref} ${what}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!), post.id));
       }
-      if (post.channel === 'blog' && post.url) {
-        const urls = articleUrls(post.externalId, post.url, brand.site);
-        if (sources.blog) {
-          await attempt(`${launch.repo} ${launch.ref} blog visits`, async () => {
-            const visits = await Promise.all(urls.map(async ({ lang, url }) => ({ lang, ...(await sources.blog!.pageVisits(new URL(url).pathname, since, until)) })));
-            const values: Record<string, number> = { views: 0 };
-            for (const v of visits) {
-              values.views! += v.views;
-              values[`views_${v.lang}`] = (values[`views_${v.lang}`] ?? 0) + v.views;
-              for (const [source, count] of Object.entries(v.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
-            }
-            await record(launch.id, 'blog', values);
-          });
-        }
-        if (sources.search) {
-          await attempt(`${launch.repo} ${launch.ref} search`, async () => {
-            const found = await Promise.all(urls.map(({ url }) => sources.search!.pageMetrics(url, since, until)));
-            await record(launch.id, 'search', {
-              clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
-              impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
-            });
-          });
-          const inspect = sources.search.inspect?.bind(sources.search);
-          if (inspect) {
-            await attempt(`${launch.repo} ${launch.ref} index status`, async () => {
-              const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await inspect(url) })));
-              for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
-              await record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
-              unindexed ||= statuses.some((s) => !s.status.indexed);
-            });
+    }
+
+    // The blog's sources are the site's, read per article URL and kept for the launch
+    const urls = articleUrls(pieces);
+    if (urls.length > 0) {
+      if (sources.blog) {
+        await attempt(`${launch.repo} ${launch.ref} blog visits`, async () => {
+          const visits = await Promise.all(urls.map(async ({ lang, url }) => ({ lang, ...(await sources.blog!.pageVisits(new URL(url).pathname, since, until)) })));
+          const values: Record<string, number> = { views: 0 };
+          for (const v of visits) {
+            values.views! += v.views;
+            values[`views_${v.lang}`] = (values[`views_${v.lang}`] ?? 0) + v.views;
+            for (const [source, count] of Object.entries(v.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
           }
-        }
-        if (sources.bing) {
-          const bing = sources.bing;
-          await attempt(`${launch.repo} ${launch.ref} Bing`, async () => {
-            const found = await Promise.all(urls.map(({ url }) => bing.pageMetrics(url)));
-            const values: Record<string, number> = {
-              clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
-              impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
-            };
-            if (bing.inspect) {
-              const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await bing.inspect!(url) })));
-              for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
-              values.crawled = statuses.filter((s) => s.status.indexed).length;
-            }
-            await record(launch.id, 'bing', values);
+          await record(launch.id, 'blog', values);
+        });
+      }
+      if (sources.search) {
+        await attempt(`${launch.repo} ${launch.ref} search`, async () => {
+          const found = await Promise.all(urls.map(({ url }) => sources.search!.pageMetrics(url, since, until)));
+          await record(launch.id, 'search', {
+            clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
+            impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
+          });
+        });
+        const inspect = sources.search.inspect?.bind(sources.search);
+        if (inspect) {
+          await attempt(`${launch.repo} ${launch.ref} index status`, async () => {
+            const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await inspect(url) })));
+            for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+            await record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
+            unindexed ||= statuses.some((s) => !s.status.indexed);
           });
         }
+      }
+      if (sources.bing) {
+        const bing = sources.bing;
+        await attempt(`${launch.repo} ${launch.ref} Bing`, async () => {
+          const found = await Promise.all(urls.map(({ url }) => bing.pageMetrics(url)));
+          const values: Record<string, number> = {
+            clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
+            impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
+          };
+          if (bing.inspect) {
+            const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await bing.inspect!(url) })));
+            for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+            values.crawled = statuses.filter((s) => s.status.indexed).length;
+          }
+          await record(launch.id, 'bing', values);
+        });
       }
     }
 

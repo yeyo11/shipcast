@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, like, sql, type SQL } from 'drizzle-orm';
-import type { Channel, PackKind } from '@shipcast/schema';
+import type { Channel, Language, PackKind } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
-import { accounts, cursors, launches, metrics, nowIso, posts } from './db/schema.ts';
+import { accounts, cursors, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
 /** What started a launch; the launch.yml `triggers` decide which of these are honoured. An `article` is written in the app, not released. */
 export type Trigger = 'release' | 'manual' | 'public' | 'enabled' | 'article';
@@ -28,12 +28,48 @@ export interface Launch {
   updatedAt: string;
 }
 
+/**
+ * What a piece is: the channel's post itself, Instagram's story or first comment after it, one
+ * newsletter issue or one blog article per language.
+ */
+export type PostKind = 'post' | 'story' | 'comment' | `issue:${Language}` | `article:${Language}`;
+
+/** `scheduled`, `edited` and `deleted` are for what comes next (scheduling, edits); the engine records `live` today */
+export type PostStatus = 'scheduled' | 'live' | 'edited' | 'deleted' | 'failed';
+
+/** One published piece. A launch has one of each kind per channel and account, never two. */
 export interface Post {
+  id: number;
   launchId: number;
   channel: Channel;
-  url: string | null;
+  /** The account it went out with; null for the blog, or an old piece that cannot be attributed */
+  accountId: number | null;
+  kind: PostKind;
   externalId: string | null;
+  url: string | null;
+  status: PostStatus;
+  contentHash: string | null;
+  scheduledAt: string | null;
   publishedAt: string;
+  updatedAt: string;
+}
+
+export interface NewPost {
+  launchId: number;
+  channel: Channel;
+  /** `post` unless said */
+  kind?: PostKind;
+  accountId?: number | null;
+  externalId: string | null;
+  url: string | null;
+  status?: PostStatus;
+  contentHash?: string | null;
+}
+
+/** The language of an `article:<lang>` or `issue:<lang>` piece */
+export function kindLanguage(kind: PostKind): Language | undefined {
+  const lang = /^(?:article|issue):(en|es)$/.exec(kind)?.[1];
+  return lang === 'en' || lang === 'es' ? lang : undefined;
 }
 
 export interface NewLaunch {
@@ -67,7 +103,10 @@ export interface Account {
   createdAt: string;
 }
 
-/** One number read from one source for one launch, at one moment. */
+/**
+ * One number read from one source for one launch, at one moment. A launch's readings add up its
+ * pieces': two newsletter issues read in one round are one reading of the newsletter.
+ */
 export interface MetricReading {
   launchId: number;
   /** A channel (`devto`, `bluesky`…), or a site-level source (`blog`, `search`, `github`) */
@@ -108,11 +147,29 @@ function toLaunch(row: typeof launches.$inferSelect): Launch {
   };
 }
 
-const reading = {
+function toPost(row: typeof posts.$inferSelect): Post {
+  return {
+    id: row.id,
+    launchId: row.launchId,
+    channel: row.channel as Channel,
+    accountId: row.accountId,
+    kind: row.kind as PostKind,
+    externalId: row.externalId,
+    url: row.url,
+    status: row.status as PostStatus,
+    contentHash: row.contentHash,
+    scheduledAt: row.scheduledAt,
+    publishedAt: row.publishedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+// A round reads every piece at the same moment, so a launch's reading at a moment is its pieces' sum
+const summed = {
   launchId: metrics.launchId,
   source: metrics.source,
   name: metrics.name,
-  value: metrics.value,
+  value: sql<number>`sum(${metrics.value})::float8`.mapWith(Number).as('value'),
   takenAt: metrics.takenAt,
 };
 
@@ -216,34 +273,70 @@ export class Registry {
     return row?.ref;
   }
 
-  /** One post per launch and channel: publishing the same piece twice is refused, not repeated. */
-  async recordPost(post: Omit<Post, 'publishedAt'>): Promise<{ recorded: boolean }> {
-    const inserted = await this.#db
+  /**
+   * One row per piece, and one piece of each kind per launch, channel and account: publishing the
+   * same piece twice is refused, not repeated, and the row already there is returned.
+   */
+  async recordPost(post: NewPost): Promise<{ recorded: boolean; post: Post }> {
+    const values = {
+      launchId: post.launchId,
+      channel: post.channel,
+      accountId: post.accountId ?? null,
+      kind: post.kind ?? 'post',
+      externalId: post.externalId,
+      url: post.url,
+      status: post.status ?? 'live',
+      contentHash: post.contentHash ?? null,
+    };
+    const [inserted] = await this.#db
       .insert(posts)
-      .values({ launchId: post.launchId, channel: post.channel, url: post.url, externalId: post.externalId })
-      .onConflictDoNothing({ target: [posts.launchId, posts.channel] })
-      .returning({ launchId: posts.launchId });
-    return { recorded: inserted.length === 1 };
+      .values(values)
+      .onConflictDoNothing({ target: [posts.launchId, posts.channel, posts.accountId, posts.kind] })
+      .returning();
+    if (inserted) return { recorded: true, post: toPost(inserted) };
+    const [existing] = await this.#db
+      .select()
+      .from(posts)
+      .where(
+        and(
+          eq(posts.launchId, values.launchId),
+          eq(posts.channel, values.channel),
+          eq(posts.kind, values.kind),
+          // What the constraint's NULLS NOT DISTINCT means, said in a query
+          sql`${posts.accountId} IS NOT DISTINCT FROM ${values.accountId}`,
+        ),
+      );
+    return { recorded: false, post: toPost(existing!) };
   }
 
-  async posts(launchId: number): Promise<Post[]> {
+  /** A launch's pieces, oldest first; only one channel's, or one kind's, when asked */
+  async posts(launchId: number, filter: { channel?: Channel; kind?: PostKind } = {}): Promise<Post[]> {
+    const where: SQL[] = [eq(posts.launchId, launchId)];
+    if (filter.channel !== undefined) where.push(eq(posts.channel, filter.channel));
+    if (filter.kind !== undefined) where.push(eq(posts.kind, filter.kind));
     const rows = await this.#db
       .select()
       .from(posts)
-      .where(eq(posts.launchId, launchId))
-      .orderBy(asc(posts.publishedAt), asc(posts.channel));
-    return rows.map((r) => ({ launchId: r.launchId, channel: r.channel as Channel, url: r.url, externalId: r.externalId, publishedAt: r.publishedAt }));
+      .where(and(...where))
+      .orderBy(asc(posts.publishedAt), asc(posts.channel), asc(posts.kind), asc(posts.id));
+    return rows.map(toPost);
   }
 
-  async recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date): Promise<void> {
+  async post(id: number): Promise<Post | undefined> {
+    const [row] = await this.#db.select().from(posts).where(eq(posts.id, id));
+    return row ? toPost(row) : undefined;
+  }
+
+  /** `postId` for a reading of one piece; without it the reading is the launch's, as a site-level source's is */
+  async recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date, postId: number | null = null): Promise<void> {
     const at = takenAt.toISOString();
     const rows = Object.entries(values)
       .filter(([, value]) => Number.isFinite(value))
-      .map(([name, value]) => ({ launchId, source, name, value, takenAt: at }));
+      .map(([name, value]) => ({ launchId, postId, source, name, value, takenAt: at }));
     if (rows.length > 0) await this.#db.insert(metrics).values(rows);
   }
 
-  /** The newest reading of every metric of a launch. */
+  /** The newest reading of every metric of a launch, its pieces' added up. */
   async latestMetrics(launchId: number): Promise<MetricReading[]> {
     const last = this.#db
       .select({ source: metrics.source, name: metrics.name, at: sql<string>`max(${metrics.takenAt})`.as('at') })
@@ -252,23 +345,55 @@ export class Registry {
       .groupBy(metrics.source, metrics.name)
       .as('last');
     return this.#db
-      .select(reading)
+      .select(summed)
       .from(metrics)
       .innerJoin(last, and(eq(last.source, metrics.source), eq(last.name, metrics.name), eq(last.at, metrics.takenAt)))
       .where(eq(metrics.launchId, launchId))
+      .groupBy(metrics.launchId, metrics.source, metrics.name, metrics.takenAt)
       .orderBy(asc(metrics.source), asc(metrics.name));
   }
 
   /** Every reading of one metric of a launch, oldest first: its curve. */
   async metricHistory(launchId: number, source: string, name: string): Promise<MetricReading[]> {
     return this.#db
-      .select(reading)
+      .select(summed)
       .from(metrics)
       .where(and(eq(metrics.launchId, launchId), eq(metrics.source, source), eq(metrics.name, name)))
+      .groupBy(metrics.launchId, metrics.source, metrics.name, metrics.takenAt)
       .orderBy(asc(metrics.takenAt));
   }
 
-  /** Small pieces of polling state, such as the ETag of the last events page. */
+  /** The newest reading of every metric of one piece. */
+  async postMetrics(postId: number): Promise<MetricReading[]> {
+    const last = this.#db
+      .select({ name: metrics.name, at: sql<string>`max(${metrics.takenAt})`.as('at') })
+      .from(metrics)
+      .where(eq(metrics.postId, postId))
+      .groupBy(metrics.name)
+      .as('last');
+    return this.#db
+      .select(summed)
+      .from(metrics)
+      .innerJoin(last, and(eq(last.name, metrics.name), eq(last.at, metrics.takenAt)))
+      .where(eq(metrics.postId, postId))
+      .groupBy(metrics.launchId, metrics.source, metrics.name, metrics.takenAt)
+      .orderBy(asc(metrics.name));
+  }
+
+  /** Something the owner chose (automation today), as it was stored; undefined until it is first set */
+  async setting<T>(key: string): Promise<T | undefined> {
+    const [row] = await this.#db.select({ value: settings.value }).from(settings).where(eq(settings.key, key));
+    return row ? (row.value as T) : undefined;
+  }
+
+  async setSetting<T>(key: string, value: T): Promise<void> {
+    await this.#db
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: nowIso } });
+  }
+
+  /** Small pieces of polling state, such as the ETag of the last events page; what the owner chooses is a setting */
   async cursor(key: string): Promise<string | undefined> {
     const [row] = await this.#db.select({ value: cursors.value }).from(cursors).where(eq(cursors.key, key));
     return row?.value;
@@ -296,7 +421,8 @@ export class Registry {
   /**
    * Gives a channel whose publishing failed for good another chance, once its cause is fixed: the
    * failure is forgotten and its launch goes back to `drafted`, so the next publish round tries that
-   * channel again. Channels already posted stay posted; the registry never posts one twice.
+   * channel again. Pieces already out stay out; the registry never records one twice, so a launch
+   * whose channel already has its post is left as it is.
    */
   async retryChannel(channel: Channel): Promise<Launch[]> {
     return this.#transaction(async (tx) => {
@@ -309,7 +435,8 @@ export class Registry {
         const id = Number(key.split(':')[1]);
         await tx.deleteCursor(key);
         const launch = await tx.get(id);
-        if (launch && !(await tx.posts(id)).some((p) => p.channel === channel)) reopened.push(await tx.setStatus(id, 'drafted', launch.detail));
+        // The newsletter has no single post: some issues may be out and others not, which the publish round sorts out
+        if (launch && (await tx.posts(id, { channel, kind: 'post' })).length === 0) reopened.push(await tx.setStatus(id, 'drafted', launch.detail));
       }
       return reopened;
     });

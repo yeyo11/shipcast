@@ -5,9 +5,10 @@
  *   node scripts/sqlite-to-postgres.ts [path/to/shipcast.db] [--force]
  *
  * Reads the SQLite file read-only (by default `data/shipcast.db`, or under SHIPCAST_DATA_DIR) and
- * copies every row into the Postgres at SHIPCAST_DATABASE_URL, after bringing its schema up to date,
- * keeping the ids. Stop the app and the CLI first, so nothing is written to the old file while it is
- * read. A database that already holds rows is refused; `--force` empties it first.
+ * copies every row into the Postgres at SHIPCAST_DATABASE_URL, keeping the ids, in the schema SQLite
+ * had; the later migrations then convert them as they convert any install. Stop the app and the CLI
+ * first, so nothing is written to the old file while it is read. A database that already holds rows
+ * is refused; `--force` empties it first.
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -37,9 +38,11 @@ console.log(`SQLite ${path}: ${describe(sqlite)}`);
 const { db, close } = await connectPostgres(url);
 try {
   console.log(`Postgres before: ${describe(await countPostgres(db))}`);
-  const after = await copyFromSqlite(path, db, { force });
-  console.log(`Postgres after:  ${describe(after)}`);
-  const short = Object.keys(sqlite).filter((table) => after[table] !== sqlite[table]);
+  const copied = await copyFromSqlite(path, db, { force });
+  console.log(`Copied:          ${describe(copied)}`);
+  // One row per piece now: a blog post became an article per language, so the posts may have grown
+  console.log(`Postgres after:  ${describe(await countPostgres(db))}`);
+  const short = Object.keys(sqlite).filter((table) => copied[table] !== sqlite[table]);
   if (short.length > 0) {
     console.error(`the counts differ for ${short.join(', ')}`);
     process.exitCode = 1;

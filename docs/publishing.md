@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T06:56:05.745001796Z
-updated_at: 2026-10-25T09:54:04.440289878Z
+created_at: 2026-10-25T10:29:15.686407029Z
+updated_at: 2026-10-25T13:36:33.218685615Z
 tags:
     - publishing
     - connectors
@@ -10,6 +10,7 @@ tags:
     - cli
     - newsletter
     - instagram
+    - post-model
 ---
 # Publishing, media and metrics
 
@@ -78,13 +79,17 @@ Binary files go into the pull request as base64 blobs through the Git data API.
 1. Pull request **open** → wait; **closed without merging** → the launch is `skipped`. A launch
    published without a pull request (`direct:<sha>`) skips this step: its drafts are on main already.
 2. **Merged** → wait until the article answers a `HEAD` on the site (the merge starts the deploy,
-   and the media live there), then record the blog post, with both languages' slugs.
+   and the media live there), then record the blog: one `article:<lang>` piece per language, each at
+   its own URL with its slug as the external id.
 3. Every text is read **from the launches repo as merged**, so the owner's edits in the pull request
    (or in the app, which commits them to its branch) are what goes out: each channel's draft after its
    mode line, the article's front matter, dev.to's and Hashnode's tags. An article written in the app
    reads its channels from `articles/<slug>/launch.yml` instead of a project's `launch.yml`.
-4. Each channel whose mode is `auto` or `approval` and that has a connector is published once (the
-   registry refuses a second post on the same channel):
+4. Each channel whose mode is `auto` or `approval` and that has a connector is published once. Every
+   piece is a row of its own, recorded as soon as it is out, with the connected account it went out
+   with (none for credentials from `.env`), and the registry refuses a second piece of the same kind
+   ([decisions/post-model.md](decisions/post-model.md)). A channel is done once it has its `post`,
+   whichever account published it; the newsletter once every language with a list has its issue:
    - **dev.to** (`devto.ts`): the English article with `canonical_url` to the blog, `og.png` as the
      cover.
    - **Bluesky** (`bluesky.ts`): app password session, link facets counted in UTF-8 bytes, an external
@@ -94,12 +99,12 @@ Binary files go into the pull request as base64 blobs through the Git data API.
    - **Instagram** (`instagram.ts`, Graph API v25.0): the carousel, one container per piece
      (`is_carousel_item`, videos as `media_type=VIDEO`) polled until `FINISHED`, then a `CAROUSEL`
      container with the children in order and the caption, then `media_publish` (a launch drafted
-     before the carousel existed falls back to `og.jpg`). Then, each once and never reposting the
-     carousel when it fails: the story (`media_type=STORIES`) and a comment under the post with the
-     article's address and a question (`POST /{media}/comments`, which needs the app's
-     `instagram_business_manage_comments` permission). The draft `instagram.md` lists the slides, the
-     comment on its `Comment:` line, and the caption (a hook, two or three lines, at most five
-     specific hashtags) after a `---` line.
+     before the carousel existed falls back to `og.jpg`). The post is recorded at once; then, each
+     once and never reposting the carousel when it fails, a `story` piece (`media_type=STORIES`) and
+     a `comment` piece under the post with the article's address and a question
+     (`POST /{media}/comments`, which needs the app's `instagram_business_manage_comments`
+     permission). The draft `instagram.md` lists the slides, the comment on its `Comment:` line, and
+     the caption (a hook, two or three lines, at most five specific hashtags) after a `---` line.
    - **The newsletter** (`brevo.ts`): one Brevo campaign per language, described below.
    - **Hashnode** (`hashnode.ts`, 2026-10-25): the English article with `originalArticleURL` set to the
      blog, `og.png` as the cover, tags from the merged `hashnode.md`. Hashnode's API needs a paid Pro
@@ -142,12 +147,13 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
   (`{{ unsubscribe }}`, which Brevo fills in). The launch image is left out, since it carries the
   English headline the issue already sets on colour.
 - **Sending:** for each language, the list's size is read first; an empty list is skipped. Otherwise a
-  campaign is created, untagged (Brevo's free plan refuses tags), and sent at once (`sendNow`); its id
-  is kept in the cursor `newsletter-sent:<launch>:<lang>`, so a language is never sent twice even when
-  another one fails and is retried. A refused `sendNow` leaves a draft in Brevo and is not retried,
-  since a retry would create a second campaign. With nobody subscribed in any list, the channel is
-  recorded as failed once ("no subscribers yet") and not retried. The post's external id joins the
-  campaign ids (`12,13`), and the metrics add them up. Replies go to the sender's address.
+  campaign is created, untagged (Brevo's free plan refuses tags), and sent at once (`sendNow`); it is
+  recorded at once as that language's `issue:<lang>` piece, with the campaign id and its report URL,
+  so a language is never sent twice even when another one fails and is retried. A refused `sendNow`
+  leaves a draft in Brevo and is not retried, since a retry would create a second campaign. With
+  nobody subscribed in any list, the channel is recorded as failed once ("no subscribers yet") and
+  not retried. Each issue's statistics are read on their own and the launch's newsletter numbers add
+  them up. Replies go to the sender's address.
 - **Set up on 2026-10-24:** `josegarrido.dev` verified in Brevo (its code, DKIM and DMARC are in
   Cloudflare); the senders `me@` and `noreply@josegarrido.dev`; the lists `Newsletter (en)` (4) and
   `Newsletter (es)` (5) in the folder `josegarrido.dev`; one Brevo form per language with double
@@ -164,8 +170,10 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
 ## Metrics
 
 `collectMetrics(registry, brand, sources)` (`metrics.ts`) reads every source for every published
-launch and records each reading in the registry's `metrics` table (migration 2), so every metric has
-a history and the web app shows the latest. One source failing never stops the others.
+launch and records each reading in the registry's `metrics` table, so every metric has a history and
+the web app shows the latest. A reading of a post or a newsletter issue points at that piece; the
+blog's, search's and GitHub's are the launch's, read for the URLs of its `article:<lang>` pieces. One
+source failing never stops the others.
 
 | Source | What | From |
 | --- | --- | --- |
@@ -190,7 +198,8 @@ Two limits found while building it:
 `buildServices` (`packages/runtime/src/services.ts`) builds the connectors from the brand's connected
 accounts, with `.env` as the fallback for the brand it speaks for ([accounts.md](accounts.md)); a
 network without its credential is left out, never half-configured, and `shipcast status` lists what
-is on. The newsletter also needs the `newsletter` block in `brand.yml`. With Telegram connected, the
+is on. It also says which connected account each channel publishes with, which its pieces record.
+The newsletter also needs the `newsletter` block in `brand.yml`. With Telegram connected, the
 owner's own chat with the bot hears when drafts wait, when a launch is published and when it fails.
 
 The round (`runRound` in `packages/runtime/src/rounds.ts`, 2026-10-25) is shared: claim new releases
@@ -211,4 +220,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]]

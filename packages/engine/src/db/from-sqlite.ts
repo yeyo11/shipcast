@@ -1,26 +1,22 @@
 import { DatabaseSync } from 'node:sqlite';
-import { count, getTableColumns, sql } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
-import type { Database } from './connect.ts';
-import { accounts, cursors, launches, metrics, posts } from './schema.ts';
+import { sql } from 'drizzle-orm';
+import { FIRST_MIGRATION, migrateDatabase, type Database } from './connect.ts';
 
 /*
  * Moves a registry kept by the old node:sqlite engine (`data/shipcast.db`) into Postgres, row for
- * row: the tables kept their names and columns, so a row is copied as it is, ids included.
+ * row, into the first migration's schema, which is SQLite's column for column; the later migrations
+ * then convert it as they convert any install (one row per piece, settings out of the cursors).
  * scripts/sqlite-to-postgres.ts is the command around it.
  */
 
 /** Launches first: posts and metrics point at them */
-const TABLES: Array<[string, PgTable]> = [
-  ['launches', launches],
-  ['posts', posts],
-  ['metrics', metrics],
-  ['cursors', cursors],
-  ['accounts', accounts],
-];
+const TABLES = ['launches', 'posts', 'metrics', 'cursors', 'accounts'] as const;
 
 /** The tables whose ids Postgres generates, so their sequences must start after the copied ids */
 const IDENTITIES = ['launches', 'accounts'];
+
+/** Every table a migration creates, to start again from nothing */
+const ALL_TABLES = ['metrics', 'posts', 'settings', 'cursors', 'accounts', 'launches'];
 
 // Well under Postgres' 65535 parameters per statement, at 11 columns a row
 const BATCH = 1000;
@@ -31,16 +27,22 @@ export type RowCounts = Record<string, number>;
 export function countSqlite(path: string): RowCounts {
   const db = new DatabaseSync(path, { readOnly: true });
   try {
-    return Object.fromEntries(TABLES.map(([name]) => [name, sqliteRows(db, name).length]));
+    return Object.fromEntries(TABLES.map((name) => [name, sqliteRows(db, name).length]));
   } finally {
     db.close();
   }
 }
 
+/** Rows per table in Postgres, whichever migration its schema is at; a table not created yet counts 0 */
 export async function countPostgres(db: Database): Promise<RowCounts> {
   const counts: RowCounts = {};
-  for (const [name, table] of TABLES) {
-    const [row] = await db.select({ n: count() }).from(table);
+  for (const name of TABLES) {
+    const [table] = await db.select({ found: sql<string | null>`to_regclass(${name})::text` }).from(sql`(SELECT 1) AS one`);
+    if (!table?.found) {
+      counts[name] = 0;
+      continue;
+    }
+    const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(sql`${sql.identifier(name)}`);
     counts[name] = row?.n ?? 0;
   }
   return counts;
@@ -55,34 +57,44 @@ function sqliteRows(db: DatabaseSync, table: string): Array<Record<string, unkno
 export class NotEmpty extends Error {}
 
 /**
- * Copies every row of the SQLite registry at `path` into `db`, whose schema is already migrated, in
- * one transaction: a failure leaves Postgres as it was. A database that already holds rows is
- * refused, unless `force` empties it first.
+ * Copies every row of the SQLite registry at `path` into `db`, then brings the schema up to date,
+ * which converts them. The copy is one transaction and so is the conversion: a failure in either
+ * leaves no half-copied table. A database that already holds rows is refused, unless `force`
+ * empties it first. Returns the rows copied, per table, as SQLite had them.
  */
 export async function copyFromSqlite(path: string, db: Database, options: { force?: boolean } = {}): Promise<RowCounts> {
   const existing = await countPostgres(db);
   if (!options.force && Object.values(existing).some((n) => n > 0)) {
     throw new NotEmpty(`the Postgres database is not empty (${describe(existing)}); --force empties it first`);
   }
+  // Empty, or emptied on purpose: back to the first schema, which the rows fit as they are
+  await db.execute(sql.raw(`DROP TABLE IF EXISTS ${ALL_TABLES.join(', ')} CASCADE`));
+  await db.execute(sql.raw('DROP SCHEMA IF EXISTS drizzle CASCADE'));
+  await migrateDatabase(db, { upTo: FIRST_MIGRATION });
+
   const source = new DatabaseSync(path, { readOnly: true });
+  let copied: RowCounts;
   try {
-    await db.transaction(async (tx) => {
-      if (options.force) await tx.execute(sql.raw(`TRUNCATE ${TABLES.map(([name]) => name).join(', ')} RESTART IDENTITY`));
-      for (const [name, table] of TABLES) {
-        // From SQLite's column names to Drizzle's keys: `launch_id` is `launchId`
-        const columns = Object.entries(getTableColumns(table));
-        const rows = sqliteRows(source, name).map((row) => Object.fromEntries(columns.map(([key, column]) => [key, row[column.name]])));
-        for (let i = 0; i < rows.length; i += BATCH) await tx.insert(table).values(rows.slice(i, i + BATCH));
+    copied = await db.transaction(async (tx) => {
+      for (const name of TABLES) {
+        const rows = sqliteRows(source, name);
+        const columns = Object.keys(rows[0] ?? {});
+        for (let i = 0; i < rows.length; i += BATCH) {
+          const values = rows.slice(i, i + BATCH).map((row) => sql`(${sql.join(columns.map((c) => sql`${row[c]}`), sql`, `)})`);
+          await tx.execute(sql`INSERT INTO ${sql.identifier(name)} (${sql.join(columns.map((c) => sql.identifier(c)), sql`, `)}) VALUES ${sql.join(values, sql`, `)}`);
+        }
       }
       // The ids were copied, not generated: the next new row takes the one after the highest
       for (const name of IDENTITIES) {
         await tx.execute(sql.raw(`SELECT setval(pg_get_serial_sequence('${name}', 'id'), COALESCE(MAX(id), 0) + 1, false) FROM ${name}`));
       }
+      return countPostgres(tx);
     });
   } finally {
     source.close();
   }
-  return countPostgres(db);
+  await migrateDatabase(db);
+  return copied;
 }
 
 export function describe(counts: RowCounts): string {

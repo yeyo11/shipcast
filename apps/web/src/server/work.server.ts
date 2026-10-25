@@ -36,8 +36,8 @@ export async function startPublishing(launch: Launch): Promise<string> {
     const deadline = Date.now() + 20 * 60_000;
     for (;;) {
       const current = (await registry.get(launch.id))!;
-      const { publishers, sources } = await services();
-      const result = await publishLaunch(current, await brand(), { github: deps.github, registry, launchesRepo: deps.launchesRepo, publishers, search: sources.search });
+      const { publishers, sources, accounts } = await services();
+      const result = await publishLaunch(current, await brand(), { github: deps.github, registry, launchesRepo: deps.launchesRepo, publishers, search: sources.search, accounts });
       if (result.state === 'waiting') {
         log(`Waiting: ${result.reason}`);
         if (Date.now() > deadline) throw new Error(`still waiting after 20 minutes (${result.reason}); the next publish round will pick it up`);

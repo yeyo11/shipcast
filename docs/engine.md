@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:01:49.64325884Z
-updated_at: 2026-10-25T12:36:16.275716729Z
+created_at: 2026-10-25T12:53:15.018473682Z
+updated_at: 2026-10-25T13:34:52.336698606Z
 tags:
     - engine
     - registry
@@ -10,6 +10,7 @@ tags:
     - cli
     - architecture
     - postgres
+    - post-model
 ---
 # The engine
 
@@ -28,8 +29,12 @@ fakes and checked against the real service where it is safe to. It depends on `@
 `data/shipcast.db`). `Registry.connect(SHIPCAST_DATABASE_URL)` opens it with postgres.js and applies
 the migrations; the tests use `memoryRegistry()` from `@shipcast/engine/testing`, an in-process
 PGlite. The schema is `src/db/schema.ts`; `pnpm --filter @shipcast/engine db:generate` writes a change
-as a new SQL migration in `packages/engine/drizzle/`, committed and never edited once applied. Every
-method returns a promise. It is what makes "a launch happens once" hold:
+as a new SQL migration in `packages/engine/drizzle/`, committed and never edited once applied.
+`migrateDatabase` applies them in one transaction for either driver, and can stop at an older one
+(`upTo`), which the SQLite copy and the tests of a conversion use. The second migration,
+`0001_post_model`, converted every install in place to one row per piece and typed settings
+([decisions/post-model.md](decisions/post-model.md)). Every method returns a promise. It is what
+makes "a launch happens once" hold:
 
 - **`claim(launch)`** inserts a row unique on `(repo, ref)` and reports whether this call made it. A
   launch is claimed *before* anything is generated, so a second poll, a re-run, a manual launch of
@@ -40,18 +45,34 @@ method returns a promise. It is what makes "a launch happens once" hold:
   detail says why). Skipped and failed launches keep their row.
 - **Triggers**: `release`, `manual`, `public`, `enabled`, and `article` for an article written in the app.
 - **`lastPublishedRef(repo)`** feeds the pack inference: only `published` launches count.
-- **`recordPost`** is unique on `(launch, channel)`: the same piece is never published twice.
+- **Posts** are one row per published piece (`posts`, since 2026-10-25): the channel's `post`,
+  Instagram's `story` and `comment`, a newsletter `issue:<lang>`, a blog `article:<lang>`. Each has
+  its `account_id` (null for the blog, or an old piece that cannot be attributed; set to null when the
+  account is removed), `external_id`, `url`, `status` (`scheduled`, `live`, `edited`, `deleted`,
+  `failed`; `live` today), a nullable `content_hash` and `scheduled_at`, `published_at` and
+  `updated_at`. **`recordPost`** is unique on `(launch, channel, account, kind)` with `NULLS NOT
+  DISTINCT`, so the same piece is never published twice, and returns the row already there when it
+  is; `posts(launch, { channel?, kind? })` and `post(id)` read them.
 - **`recordMetrics`**, **`latestMetrics`** and **`metricHistory`** keep every metric reading
-  ([publishing.md](publishing.md#metrics)).
-- **Cursors** keep small pieces of state: polling, a channel's permanent failure
-  (`publish-failed:<launch>:<channel>`), the Instagram extras, each newsletter language sent.
+  ([publishing.md](publishing.md#metrics)). A reading of one piece points at it (`post_id`, read back
+  with `postMetrics`); the site-level sources (blog visits, search, Bing, GitHub) stay the launch's.
+  A launch's numbers add up its pieces' read at the same moment, so two newsletter issues are one
+  newsletter reading.
+- **Settings** (`settings`: `key`, a `jsonb` value, `updated_at`) hold what the owner chose, read
+  typed with `setting<T>(key)` and written with `setSetting(key, value)`: the automation mode and
+  interval today, the onboarding, AI settings and prompts next.
+- **Cursors** keep positions and state only: polling, a channel's permanent failure
+  (`publish-failed:<launch>:<channel>`), each article's index status, the last round and delivery.
   `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
+  `retryChannel` reopens a launch unless that channel already has its post.
 - **Accounts**: the accounts connected per brand ([accounts.md](accounts.md)); adding, making
   primary and removing one run in a transaction locked per network and brand, so each has one
   primary.
 
 An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
-([decisions/postgres.md](decisions/postgres.md#moving-an-install)).
+([decisions/postgres.md](decisions/postgres.md#moving-an-install)): the rows land in the first
+migration's schema, SQLite's column for column, and the later migrations convert them like any
+install's.
 
 ## Detecting launches
 
@@ -162,4 +183,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]]

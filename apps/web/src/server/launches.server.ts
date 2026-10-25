@@ -44,7 +44,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
     pullRequest,
     problem: launch.status === 'failed' ? (launch.detail ?? undefined) : undefined,
     createdAt: launch.createdAt,
-    posts: posts.map((p) => ({ channel: p.channel, url: p.url, publishedAt: p.publishedAt })),
+    posts: posts.map((p) => ({ id: p.id, channel: p.channel, kind: p.kind, url: p.url, publishedAt: p.publishedAt })),
     failures,
     headline: HEADLINE.flatMap(([source, name, label]) => {
       const found = metrics.find((m) => m.source === source && m.name === name);

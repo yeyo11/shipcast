@@ -20,14 +20,12 @@ export const listLaunches = createServerFn({ method: 'GET' }).handler(async () =
 export const getLaunch = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    const { registry, github, deps, brand } = await appContext();
+    const { registry, github, deps } = await appContext();
     const launch = await registry.get(data);
     if (!launch) return null;
-    const blog = (await registry.posts(launch.id)).find((p) => p.channel === 'blog');
-    const site = blog?.url ? (await brand()).site : undefined;
     // Each search engine's view of each language's article, as of the last metrics reading. Google
     // is always listed, as the engine that matters most; Bing once it has been read at all
-    const urls = blog?.url && site ? articleUrls(blog.externalId, blog.url, site) : [];
+    const urls = articleUrls(await registry.posts(launch.id, { channel: 'blog' }));
     const views = await Promise.all(
       urls.flatMap(({ lang, url }) =>
         (['google', 'bing'] as const).map(async (engine) => {
