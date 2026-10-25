@@ -22,6 +22,13 @@
       "when": 1792939368773,
       "tag": "0002_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792941265528,
+      "tag": "0003_jobs",
+      "breakpoints": true
     }
   ]
 }

@@ -83,7 +83,7 @@ export async function publishAgain(
   registry: Registry,
   launch: Launch,
   channel: Channel | undefined,
-  startPublishing: (launch: Launch) => Promise<string>,
+  startPublishing: (launch: Launch, retryChannel?: Channel) => Promise<string>,
 ): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
   if (channel) {
     await registry.deleteCursor(`publish-failed:${launch.id}:${channel}`);
@@ -91,5 +91,6 @@ export async function publishAgain(
   } else if (launch.status !== 'drafted') {
     return { ok: false, problem: `the launch is ${launch.status}` };
   }
-  return { ok: true, job: await startPublishing((await registry.get(launch.id))!) };
+  // The channel names the job ("Retrying devto for …"); the job forgets the failure again, harmlessly
+  return { ok: true, job: await startPublishing((await registry.get(launch.id))!, channel) };
 }

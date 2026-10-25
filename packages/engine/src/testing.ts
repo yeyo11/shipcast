@@ -9,23 +9,33 @@ import { Registry } from './registry.ts';
  * template and every registry is a clone of it, in a fraction of that.
  */
 
+export { connectPglite };
+
 let template: Promise<{ client: PGlite; close(): Promise<void> }> | undefined;
-const open: Registry[] = [];
+const open: Array<{ close(): Promise<void> }> = [];
 
 // Several PGlite instances left open keep the process alive, and `node --test` would wait forever
 after(async () => {
-  await Promise.all(open.splice(0).map((registry) => registry.close()));
+  await Promise.all(open.splice(0).map((each) => each.close()));
   if (template) await (await template).close();
 });
+
+/** A clone of a PGlite instance, closed when the test file ends */
+export async function clonePglite(client: PGlite): Promise<PGlite> {
+  // clone() is typed as the interface, but it is a PGlite, which is what Drizzle's driver takes
+  const clone = (await client.clone()) as PGlite;
+  open.push(clone);
+  return clone;
+}
+
+/** A registry over a PGlite whose registry schema is already migrated */
+export async function registryOn(client: PGlite): Promise<Registry> {
+  const { drizzle } = await import('drizzle-orm/pglite');
+  return new Registry(drizzle({ client }));
+}
 
 /** A fresh, empty registry, closed when the test file ends */
 export async function memoryRegistry(): Promise<Registry> {
   template ??= connectPglite();
-  const { client } = await template;
-  const { drizzle } = await import('drizzle-orm/pglite');
-  // clone() is typed as the interface, but it is a PGlite, which is what Drizzle's driver takes
-  const clone = (await client.clone()) as PGlite;
-  const registry = new Registry(drizzle({ client: clone }), () => clone.close());
-  open.push(registry);
-  return registry;
+  return registryOn(await clonePglite((await template).client));
 }

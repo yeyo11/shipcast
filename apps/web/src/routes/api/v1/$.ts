@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { FailureLimiter, handleApi, type ApiDeps } from '../../../server/api';
 import { appContext } from '../../../server/context.server';
+import { jobsView } from '../../../server/jobs.server';
 import { approve, startArticle, startLaunch, startPublishing } from '../../../server/work.server';
 
 // One per process, as the failures it counts are
@@ -15,7 +16,7 @@ async function deps(): Promise<ApiDeps> {
     launchesRepo: ctx.deps.launchesRepo,
     publicUrl: ctx.app.publicUrl,
     limiter,
-    jobs: async () => ctx.jobs.list().map((j) => ({ id: j.id, title: j.title, state: j.state, log: j.log.slice(-8), link: j.link ?? null, startedAt: j.startedAt })),
+    jobs: () => jobsView(ctx.registry),
     startLaunch,
     approve,
     startArticle,
