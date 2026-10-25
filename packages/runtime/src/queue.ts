@@ -24,6 +24,8 @@ export interface JobData {
   snapshots: { reason: string; accountId?: number };
   /** Wakes the publishing of a launch when one of its scheduled pieces is due */
   scheduled: { postId: number; launchId: number };
+  /** Every live post's comments read and drafted, or one comment's reply drafted again */
+  comments: { reason: string; commentId?: number };
 }
 
 export type QueueName = keyof JobData;
@@ -61,6 +63,8 @@ const QUEUES: Record<QueueName, QueueSpec> = {
   snapshots: { title: 'Syncing the accounts', policy: 'stately', retryLimit: 1, retryDelay: 30 * 60, expireInSeconds: 30 * 60, concurrency: 1 },
   // One per scheduled piece (its key), moved when the piece is: the post row holds the time, the job only wakes the publishing
   scheduled: { title: 'A scheduled post', policy: 'stately', retryLimit: 2, retryDelay: 60, expireInSeconds: 10 * 60, concurrency: 1 },
+  // No retries: a run drafts with the AI, and the next run, half an hour later, is the retry
+  comments: { title: 'Reading the comments', policy: 'stately', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
 };
 
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];

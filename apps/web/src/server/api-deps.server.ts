@@ -1,6 +1,7 @@
 import { FailureLimiter, type ApiDeps } from './api';
 import { appContext } from './context.server';
 import { jobsView } from './jobs.server';
+import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { editingDeps } from './posts.server';
 import { approve, armSchedule, startArticle, startLaunch, startPublishing } from './work.server';
 
@@ -24,5 +25,8 @@ export async function apiDeps(): Promise<ApiDeps> {
     startPublishing,
     editing: editingDeps,
     armSchedule,
+    comments: commentDeps,
+    checkComments,
+    redraftComment,
   };
 }

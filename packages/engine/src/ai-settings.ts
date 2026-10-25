@@ -12,6 +12,7 @@ import {
   isPromptId,
   LOCKED_ARTICLE_RULES,
   LOCKED_LAUNCH_RULES,
+  LOCKED_REPLY_RULES,
   PROMPT_IDS,
   templateProblems,
   type Prompt,
@@ -39,15 +40,20 @@ const TaskChoice = z.strictObject({
 export type TaskChoice = z.infer<typeof TaskChoice>;
 
 const AiSettings = z.strictObject({
-  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice }),
+  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice }),
   /** Replaces brand.yml's tone in every prompt when set */
   tone: z.string().trim().max(2000).optional(),
 });
 export type AiSettings = z.infer<typeof AiSettings>;
 
+// A client written before a task existed saves without it; that task keeps what it had
+const AiSettingsInput = AiSettings.extend({
+  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice.optional() }),
+});
+
 /** claudio for everything, as before the settings existed */
 export const DEFAULT_AI_SETTINGS: AiSettings = {
-  tasks: { pack: { provider: 'claudio' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' } },
+  tasks: { pack: { provider: 'claudio' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' }, replies: { provider: 'claudio' } },
 };
 
 export class InvalidAiSettings extends Error {}
@@ -79,9 +85,10 @@ export async function readAiSettings(registry: Registry): Promise<AiSettings> {
 }
 
 export async function writeAiSettings(registry: Registry, input: unknown): Promise<AiSettings> {
-  const parsed = AiSettings.safeParse(input);
+  const parsed = AiSettingsInput.safeParse(input);
   if (!parsed.success) throw new InvalidAiSettings(parsed.error.issues.map((i) => `${i.path.join('.') || 'settings'}: ${i.message}`).join('; '));
-  const settings = clean(parsed.data);
+  const replies = parsed.data.tasks.replies ?? (await readAiSettings(registry)).tasks.replies;
+  const settings = clean({ ...parsed.data, tasks: { ...parsed.data.tasks, replies } });
   await registry.setSetting(AI_SETTINGS_KEY, settings);
   return settings;
 }
@@ -95,8 +102,8 @@ export interface PromptVersion {
 export type PromptHistory = Partial<Record<PromptId, PromptVersion[]>>;
 
 /** The parts of the prompt that are never editable, shown read-only beside the editable ones */
-export function lockedPrompts(): { launchRules: readonly string[]; articleRules: readonly string[]; packSchema: Record<string, unknown> } {
-  return { launchRules: LOCKED_LAUNCH_RULES, articleRules: LOCKED_ARTICLE_RULES, packSchema: contentPackJsonSchema() };
+export function lockedPrompts(): { launchRules: readonly string[]; articleRules: readonly string[]; replyRules: readonly string[]; packSchema: Record<string, unknown> } {
+  return { launchRules: LOCKED_LAUNCH_RULES, articleRules: LOCKED_ARTICLE_RULES, replyRules: LOCKED_REPLY_RULES, packSchema: contentPackJsonSchema() };
 }
 
 export class LockedPrompt extends Error {}

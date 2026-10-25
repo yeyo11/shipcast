@@ -21,3 +21,4 @@ export * from './preflight.ts';
 export * from './article.ts';
 export * from './review.ts';
 export * from './stats.ts';
+export * from './comments.ts';

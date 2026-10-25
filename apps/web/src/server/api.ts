@@ -2,6 +2,19 @@ import { ConnectorError } from '@shipcast/connectors';
 import {
   CAPABILITIES,
   cancelScheduledPost,
+  COMMENT_CHANNELS,
+  COMMENT_STATUSES,
+  CommentRefused,
+  dismissComment,
+  editReplyDraft,
+  InvalidCommentSettings,
+  readCommentSettings,
+  REPLY_CAPABILITIES,
+  REPLY_MODES,
+  sendReply,
+  writeCommentSettings,
+  type CommentDeps,
+  type CommentStatus,
   deleteLaunchPosts,
   deletePost,
   editPost,
@@ -33,6 +46,7 @@ import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest } from './requests.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
+import { commentView, commentViews } from './comment-view.ts';
 
 /*
  * The REST API under /api/v1: stable routes for the MCP server and any other client, beside the
@@ -74,6 +88,12 @@ export interface ApiDeps {
   editing(): Promise<EditDeps>;
   /** Queues (or moves) the wake-up of each scheduled piece at its time */
   armSchedule(posts: Post[]): Promise<void>;
+  /** What sending a reply needs: each post's connectors, by the account it went out with */
+  comments(): Promise<CommentDeps>;
+  /** Queues a run of the comment assistant by hand */
+  checkComments(): Promise<WorkAnswer>;
+  /** Queues a fresh draft of one comment's reply */
+  redraftComment(commentId: number): Promise<WorkAnswer>;
 }
 
 /**
@@ -200,7 +220,7 @@ type JsonSchema = Record<string, unknown>;
 
 /** One route: how it is matched and served, and what the OpenAPI document says of it */
 export interface ApiRoute {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   /** OpenAPI's form, `/launches/{id}`, relative to /api/v1 */
   path: string;
   scope: ApiScope;
@@ -218,7 +238,30 @@ const PATH_PARAMS: Record<string, { description: string; schema: JsonSchema }> =
   channel: { description: 'A channel of launch.yml', schema: { type: 'string' } },
   postId: { description: 'The post id, as a launch lists its posts', schema: { type: 'integer', minimum: 1 } },
   accountId: { description: 'The account id, as /accounts lists them', schema: { type: 'integer', minimum: 1 } },
+  commentId: { description: 'The comment id, as GET /comments lists them', schema: { type: 'integer', minimum: 1 } },
 };
+
+function commentId(value: string | undefined): number {
+  return id(/^\d{1,10}$/.test(value ?? '') ? Number(value) : NaN, 'the comment id');
+}
+
+/** The comment assistant's refusals as the client's problem, a network's refusal as the network's (502) */
+async function onComments<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof CommentRefused) {
+      if (error.reason === 'not_found') throw new ApiError(404, 'not_found', error.message);
+      if (error.reason === 'invalid') throw new InvalidInput(error.message);
+      throw new ApiError(409, 'refused', error.message);
+    }
+    if (error instanceof InvalidCommentSettings) throw new InvalidInput(error.message);
+    if (error instanceof ConnectorError) throw new ApiError(502, 'upstream', error.message);
+    throw error;
+  }
+}
+
+const commentAnswer = { type: 'object', required: ['comment'], properties: { comment: { $ref: '#/components/schemas/Comment' } } };
 
 function postId(value: string | undefined): number {
   return id(/^\d{1,10}$/.test(value ?? '') ? Number(value) : NaN, 'the post id');
@@ -583,6 +626,127 @@ export const ROUTES: ApiRoute[] = [
       return json(200, { timezone: await onSchedule(() => saveTimezone(deps.registry, body.timezone)) });
     },
   },
+  {
+    method: 'GET',
+    path: '/comments',
+    scope: 'read',
+    operationId: 'listComments',
+    summary: 'The comments on Shipcast’s posts with their drafted replies, the newest first (the owner’s own left out)',
+    query: [
+      { name: 'status', description: 'Only comments in this state', schema: { type: 'string', enum: COMMENT_STATUSES } },
+      { name: 'channel', description: 'Only this channel’s', schema: { type: 'string', enum: COMMENT_CHANNELS } },
+      { name: 'launch', description: 'Only the comments on this launch’s posts', schema: { type: 'integer', minimum: 1 } },
+    ],
+    response: {
+      status: 200,
+      description: 'The comments, and what each channel can do',
+      schema: {
+        type: 'object',
+        required: ['comments', 'capabilities'],
+        properties: { comments: { type: 'array', items: ref('Comment') }, capabilities: { type: 'object', additionalProperties: ref('ReplyCapability') } },
+      },
+    },
+    async handle(deps, { url }) {
+      const status = url.searchParams.get('status');
+      if (status !== null && !(COMMENT_STATUSES as readonly string[]).includes(status)) throw new InvalidInput(`status is one of ${COMMENT_STATUSES.join(', ')}`);
+      const channel = url.searchParams.get('channel');
+      if (channel !== null && !(COMMENT_CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput(`channel is one of ${COMMENT_CHANNELS.join(', ')}`);
+      const launch = url.searchParams.get('launch');
+      const comments = await commentViews(deps.registry, {
+        own: false,
+        ...(status !== null && { status: status as CommentStatus }),
+        ...(channel !== null && { channel: channel as Channel }),
+        ...(launch !== null && { launchId: launchId(launch) }),
+      });
+      return json(200, { comments, capabilities: REPLY_CAPABILITIES });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/comments/check',
+    scope: 'write',
+    operationId: 'checkComments',
+    summary: 'Check comments now: read every live post’s comments and draft the new ones’ replies',
+    response: { status: 202, description: 'Accepted: a job reads and drafts', schema: ref('Accepted') },
+    async handle(deps) {
+      return refused(await deps.checkComments());
+    },
+  },
+  {
+    method: 'POST',
+    path: '/comments/{commentId}/draft',
+    scope: 'write',
+    operationId: 'redraftComment',
+    summary: 'Draft a comment’s reply again with the AI',
+    response: { status: 202, description: 'Accepted: a job drafts the reply', schema: ref('Accepted') },
+    async handle(deps, { params }) {
+      const answer = await deps.redraftComment(commentId(params.commentId));
+      if (!answer.ok && answer.problem === 'no such comment') throw new ApiError(404, 'not_found', answer.problem);
+      return refused(answer);
+    },
+  },
+  {
+    method: 'PATCH',
+    path: '/comments/{commentId}',
+    scope: 'write',
+    operationId: 'editReply',
+    summary: 'Write or edit a comment’s reply; it waits for approval',
+    body: { type: 'object', required: ['draft'], properties: { draft: { type: 'string', minLength: 1, description: 'The reply, within the channel’s limit' } } },
+    response: { status: 200, description: 'The comment with its new draft', schema: commentAnswer },
+    async handle(deps, { params, request }) {
+      const body = object(await readJson(request), 'the body');
+      if (typeof body.draft !== 'string' || body.draft.length > 5000) throw new InvalidInput('draft is the reply’s text');
+      const draft = body.draft;
+      return json(200, { comment: commentView(await onComments(() => editReplyDraft(commentId(params.commentId), draft, deps.registry))) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/comments/{commentId}/approve',
+    scope: 'write',
+    operationId: 'approveReply',
+    summary: 'Approve a comment’s reply: it is sent now, with the account the post went out with',
+    response: { status: 200, description: 'The comment, its reply sent', schema: commentAnswer },
+    async handle(deps, { params }) {
+      const id = commentId(params.commentId);
+      return json(200, { comment: commentView(await onComments(async () => sendReply(id, await deps.comments()))) });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/comments/{commentId}/dismiss',
+    scope: 'write',
+    operationId: 'dismissComment',
+    summary: 'Dismiss a comment: no reply is sent',
+    response: { status: 200, description: 'The comment, dismissed', schema: commentAnswer },
+    async handle(deps, { params }) {
+      return json(200, { comment: commentView(await onComments(() => dismissComment(commentId(params.commentId), deps.registry))) });
+    },
+  },
+  {
+    method: 'GET',
+    path: '/comment-settings',
+    scope: 'read',
+    operationId: 'getCommentSettings',
+    summary: 'Each channel’s reply mode: off, approval or auto',
+    response: { status: 200, description: 'The modes', schema: ref('CommentSettings') },
+    async handle(deps) {
+      return json(200, await readCommentSettings(deps.registry));
+    },
+  },
+  {
+    method: 'PUT',
+    path: '/comment-settings',
+    scope: 'write',
+    operationId: 'setCommentSettings',
+    summary: 'Set channels’ reply modes; a channel left out keeps its mode (auto on dev.to is approval: it cannot send)',
+    body: ref('CommentSettings'),
+    response: { status: 200, description: 'The modes, saved', schema: ref('CommentSettings') },
+    async handle(deps, { request }) {
+      const body = await readJson(request);
+      return json(200, await onComments(() => writeCommentSettings(deps.registry, body)));
+    },
+  },
 ];
 
 const compiled = ROUTES.map((route) => {
@@ -742,7 +906,7 @@ export function openApiDocument(publicUrl: string) {
             ? [400, 401, 403, 404, 429]
             : route.method === 'DELETE'
               ? [400, 401, 403, 404, 409, 429, 502]
-              : [400, 401, 403, 404, 409, 415, 429, ...(route.method === 'PATCH' ? [502] : [])],
+              : [400, 401, 403, 404, 409, 415, 429, ...(route.method === 'PATCH' || route.operationId === 'approveReply' ? [502] : [])],
         ),
       },
     };
@@ -764,11 +928,11 @@ export function openApiDocument(publicUrl: string) {
         E400: described('The input is not valid'),
         E401: described('No token, or one that is not valid or was revoked'),
         E403: described('The token lacks the scope this route needs'),
-        E404: described('No such launch or route'),
+        E404: described('No such launch, post, comment or route'),
         E409: described('Refused: launched already, a failing pre-flight, drafts that cannot merge…'),
         E415: described('The body is not JSON'),
         E429: described('Too many wrong tokens from this client; see Retry-After'),
-        E502: described('The network refused the edit or the delete; the message is what it said'),
+        E502: described('The network refused the edit, the delete or the reply; the message is what it said'),
       },
       schemas: {
         Error: {
@@ -890,6 +1054,39 @@ export function openApiDocument(publicUrl: string) {
             history: { type: 'object', properties: { posts: { type: 'integer' }, used: { type: 'integer' }, median: { type: ['number', 'null'] }, what: { type: ['string', 'null'] } } },
             audience: { type: 'boolean', description: 'Whether Instagram’s online-follower hours were used' },
           },
+        },
+        Comment: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            postId: { type: 'integer' },
+            launchId: { type: 'integer' },
+            channel: { type: 'string', enum: COMMENT_CHANNELS },
+            externalId: { type: 'string' },
+            author: { type: 'object', properties: { handle: { type: 'string' }, displayName: { type: ['string', 'null'] }, avatarUrl: { type: ['string', 'null'] } } },
+            text: { type: 'string' },
+            url: { type: ['string', 'null'] },
+            createdAt: { type: 'string' },
+            inReplyTo: { type: ['string', 'null'], description: 'The parent comment’s external id, inside a thread' },
+            own: { type: 'boolean' },
+            fetchedAt: { type: 'string' },
+            status: { type: 'string', enum: COMMENT_STATUSES },
+            classification: { type: ['string', 'null'], enum: ['question', 'feedback', 'praise', 'bug', 'spam', 'abuse', 'other', null] },
+            draft: { type: ['string', 'null'], description: 'The reply; null after drafting means the AI suggests dismissing it' },
+            note: { type: ['string', 'null'], description: 'The AI’s one line on why' },
+            problem: { type: ['string', 'null'] },
+            sentExternalId: { type: ['string', 'null'] },
+            sentUrl: { type: ['string', 'null'] },
+            sentAt: { type: ['string', 'null'] },
+            canReply: { type: 'boolean', description: 'Whether approving sends it from here' },
+            replyOn: { type: 'string', description: 'Where to reply by hand, when the network’s API cannot (dev.to)' },
+          },
+        },
+        ReplyCapability: { type: 'object', required: ['read', 'reply', 'note'], properties: { read: { type: 'boolean' }, reply: { type: 'boolean' }, note: { type: 'string' } } },
+        CommentSettings: {
+          type: 'object',
+          required: ['replies'],
+          properties: { replies: { type: 'object', properties: Object.fromEntries(COMMENT_CHANNELS.map((c) => [c, { type: 'string', enum: REPLY_MODES }])) } },
         },
         Job: {
           type: 'object',

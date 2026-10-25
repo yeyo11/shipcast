@@ -72,6 +72,29 @@ async function setup(): Promise<Setup> {
     armSchedule: async (posts) => {
       for (const p of posts) calls.push(`arm ${p.id} ${p.scheduledAt}`);
     },
+    comments: async () => ({
+      registry,
+      connectors: async (channel) =>
+        channel === 'mastodon'
+          ? {
+              replier: {
+                reply: async (target, text) => {
+                  if (text === 'refused') throw new ConnectorError('Mastodon', 'reply: 422 Validation failed', 422);
+                  sent.push(`reply ${channel} ${target.commentExternalId} ${text}`);
+                  return { externalId: 'r1', url: 'https://mastodon.example/r1' };
+                },
+              },
+            }
+          : {},
+    }),
+    checkComments: async () => {
+      calls.push('check comments');
+      return { ok: true, job: 'j6' };
+    },
+    redraftComment: async (id) => {
+      calls.push(`redraft ${id}`);
+      return (await registry.comment(id)) ? { ok: true, job: 'j7' } : { ok: false, problem: 'no such comment' };
+    },
   };
   const tokens = { registry, secrets };
   return {
@@ -412,4 +435,84 @@ test('the MCP endpoint’s bearer check: the API’s refusals, and the same limi
   for (let i = 0; i < 3; i++) assert.equal((await at('shipcast_9_wrong'))?.status, 401);
   assert.equal((await at(s.both))?.status, 429);
   assert.equal((await call(s.deps, 'GET', '/jobs', { token: s.both, headers: { [PEER_HEADER]: '10.0.0.9' } })).status, 429, 'one limit for both doors');
+});
+
+async function commented(registry: Registry) {
+  const { launch, mastodon } = await publishedLaunch(registry);
+  const { post: devto } = await registry.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
+  const add = async (postId: number, channel: 'mastodon' | 'devto', externalId: string, own = false) =>
+    (
+      await registry.recordComment({
+        postId,
+        channel,
+        externalId,
+        author: { handle: '@ana@fosstodon.org' },
+        text: 'Does it run on Windows?',
+        url: `https://${channel}.example/c/${externalId}`,
+        createdAt: `2026-10-2${externalId.length}T10:00:00.000Z`,
+        own,
+      })
+    ).comment;
+  return { launch, question: await add(mastodon.id, 'mastodon', '201'), other: await add(mastodon.id, 'mastodon', '2022'), own: await add(mastodon.id, 'mastodon', '20333', true), devto: await add(devto.id, 'devto', 'a1') };
+}
+
+test('comments are listed with the read scope, filtered, the owner’s own left out, and dev.to’s with where to answer', async () => {
+  const s = await setup();
+  const { launch } = await commented(s.registry);
+  const all = await call(s.deps, 'GET', '/comments', { token: s.read });
+  assert.equal(all.status, 200);
+  const listed = (await body(all)).comments as Array<{ externalId: string; canReply: boolean; replyOn?: string }>;
+  assert.deepEqual(listed.map((c) => c.externalId).sort(), ['201', '2022', 'a1']);
+  assert.deepEqual(listed.find((c) => c.externalId === 'a1'), { ...listed.find((c) => c.externalId === 'a1'), canReply: false, replyOn: 'https://devto.example/c/a1' });
+  const mastodon = await call(s.deps, 'GET', `/comments?channel=mastodon&status=new&launch=${launch.id}`, { token: s.read });
+  assert.equal(((await body(mastodon)).comments as unknown[]).length, 2);
+  assert.equal((await call(s.deps, 'GET', '/comments?status=nope', { token: s.read })).status, 400);
+  assert.equal((await call(s.deps, 'GET', '/comments?channel=telegram', { token: s.read })).status, 400);
+  assert.equal((await call(s.deps, 'POST', '/comments/check', { token: s.read })).status, 403, 'checking is a write');
+});
+
+test('a reply is edited, approved and sent with the write scope; what cannot be done is a 409, a bad draft a 400, a network refusal a 502', async () => {
+  const s = await setup();
+  const { question, other, own, devto } = await commented(s.registry);
+  assert.equal((await call(s.deps, 'POST', `/comments/${question.id}/approve`, { token: s.write })).status, 400, 'no draft yet');
+
+  const edited = await call(s.deps, 'PATCH', `/comments/${question.id}`, { token: s.write, body: { draft: 'Not yet: it is planned.' } });
+  assert.equal(edited.status, 200);
+  assert.equal(((await body(edited)).comment as { status: string }).status, 'draft-ready');
+  assert.equal((await call(s.deps, 'PATCH', `/comments/${question.id}`, { token: s.write, body: { draft: 'x'.repeat(401) } })).status, 400, 'over Mastodon’s limit');
+
+  const approved = await call(s.deps, 'POST', `/comments/${question.id}/approve`, { token: s.write });
+  assert.equal(approved.status, 200);
+  assert.deepEqual(s.sent, ['reply mastodon 201 Not yet: it is planned.']);
+  assert.equal(((await body(approved)).comment as { sentUrl: string }).sentUrl, 'https://mastodon.example/r1');
+  assert.equal((await call(s.deps, 'POST', `/comments/${question.id}/approve`, { token: s.write })).status, 409, 'sent once only');
+
+  await call(s.deps, 'PATCH', `/comments/${other.id}`, { token: s.write, body: { draft: 'refused' } });
+  assert.equal((await call(s.deps, 'POST', `/comments/${other.id}/approve`, { token: s.write })).status, 502);
+  assert.equal((await s.registry.comment(other.id))!.status, 'failed');
+
+  await call(s.deps, 'PATCH', `/comments/${devto.id}`, { token: s.write, body: { draft: 'Thanks!' } });
+  assert.equal((await call(s.deps, 'POST', `/comments/${devto.id}/approve`, { token: s.write })).status, 409, 'dev.to cannot reply');
+  assert.equal((await call(s.deps, 'PATCH', `/comments/${own.id}`, { token: s.write, body: { draft: 'x' } })).status, 409, 'your own comment');
+
+  const dismissed = await call(s.deps, 'POST', `/comments/${devto.id}/dismiss`, { token: s.write });
+  assert.equal(((await body(dismissed)).comment as { status: string }).status, 'dismissed');
+  assert.equal((await call(s.deps, 'POST', '/comments/999/dismiss', { token: s.write })).status, 404);
+  assert.equal((await call(s.deps, 'POST', '/comments/abc/dismiss', { token: s.write })).status, 400);
+});
+
+test('checking and drafting again are jobs; the reply modes are read and set', async () => {
+  const s = await setup();
+  const { question } = await commented(s.registry);
+  assert.deepEqual(await body(await call(s.deps, 'POST', '/comments/check', { token: s.write })), { job: 'j6' });
+  const redraft = await call(s.deps, 'POST', `/comments/${question.id}/draft`, { token: s.write });
+  assert.equal(redraft.status, 202);
+  assert.equal((await call(s.deps, 'POST', '/comments/999/draft', { token: s.write })).status, 404);
+  assert.deepEqual(s.calls, ['check comments', `redraft ${question.id}`, 'redraft 999']);
+
+  const modes = await body(await call(s.deps, 'GET', '/comment-settings', { token: s.read }));
+  assert.deepEqual(modes, { replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval' } });
+  const set = await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { bluesky: 'auto', devto: 'auto' } } });
+  assert.deepEqual(((await body(set)).replies as Record<string, string>), { mastodon: 'approval', bluesky: 'auto', instagram: 'approval', devto: 'approval' });
+  assert.equal((await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { mastodon: 'sometimes' } } })).status, 400);
 });

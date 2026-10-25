@@ -55,7 +55,7 @@ export const getAiSettings = createServerFn({ method: 'GET' }).handler(async () 
       versions: history[promptId] ?? [],
     })),
     variables: [...PROMPT_VARIABLES],
-    locked: { launchRules: [...locked.launchRules], articleRules: [...locked.articleRules], packSchema: JSON.stringify(locked.packSchema, null, 2) },
+    locked: { launchRules: [...locked.launchRules], articleRules: [...locked.articleRules], replyRules: [...locked.replyRules], packSchema: JSON.stringify(locked.packSchema, null, 2) },
     launches: (await ctx.registry.recent(50)).map((l) => ({ id: l.id, label: `${l.repo} ${l.ref.replace(/^article:/, '')} · ${l.status}` })),
   };
 });

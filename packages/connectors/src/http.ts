@@ -128,3 +128,69 @@ export interface Editable<Piece> {
 export interface Deletable {
   delete(externalId: string): Promise<void>;
 }
+
+/**
+ * A comment under one of the account's own posts, as the network gave it. `inReplyTo` is the parent
+ * comment's id when it answers another comment; a comment on the post itself has none.
+ */
+export interface Comment {
+  externalId: string;
+  author: { handle: string; displayName?: string; avatarUrl?: string };
+  /** Plain text: the networks that answer HTML have it turned into text */
+  text: string;
+  createdAt: string;
+  inReplyTo?: string;
+  /** Where a person opens it, when the network has an address for a comment */
+  url?: string;
+  /** Written by the account that published the post: the owner's own replies in the thread */
+  own: boolean;
+}
+
+/** A connector that reads the comments under a post it published */
+export interface CommentReader {
+  comments(postExternalId: string): Promise<Comment[]>;
+}
+
+/** What a reply answers: the post it is under, and the comment itself */
+export interface ReplyTarget {
+  postExternalId: string;
+  commentExternalId: string;
+  /** The comment author's handle, which Mastodon needs in the text to notify them */
+  authorHandle: string;
+}
+
+export interface SentReply {
+  externalId: string;
+  /** Instagram gives no address for a comment */
+  url?: string;
+}
+
+/** A connector that can answer a comment under its own post */
+export interface Replier {
+  /** `key` makes a retried send a no-op on the networks that take one (Mastodon) */
+  reply(target: ReplyTarget, text: string, options?: { key?: string; lang?: string }): Promise<SentReply>;
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+/**
+ * The text of a comment a network answers as HTML (Mastodon, dev.to): paragraphs and line breaks
+ * kept, tags dropped, entities decoded. It is never rendered as HTML again (the app prints it as
+ * text), so nothing here has to produce safe markup.
+ */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (whole, name: string) => {
+      if (name.startsWith('#')) {
+        const code = /^#x/i.test(name) ? Number.parseInt(name.slice(2), 16) : Number(name.slice(1));
+        // A code point out of range would throw; the entity is kept as written instead
+        return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+      }
+      return ENTITIES[name.toLowerCase()] ?? whole;
+    })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}

@@ -1,4 +1,19 @@
-import { checkProblem, ConnectorError, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import {
+  checkProblem,
+  ConnectorError,
+  json,
+  okCheck,
+  statsOf,
+  type Check,
+  type Comment,
+  type CommentReader,
+  type Metrics,
+  type ProfileStats,
+  type Published,
+  type Replier,
+  type ReplyTarget,
+  type SentReply,
+} from './http.ts';
 
 /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
 export type InstagramMedia = { kind: 'image' | 'video'; url: string };
@@ -28,7 +43,7 @@ export interface InstagramOptions {
  * Neither `edit` nor `delete`: the Graph API changes no caption of a published post and deletes no
  * post, only comments.
  */
-export class Instagram {
+export class Instagram implements CommentReader, Replier {
   readonly #user: string;
   readonly #token: string;
   readonly #fetch: typeof fetch;
@@ -36,6 +51,7 @@ export class Instagram {
   readonly #pollMs: number;
   readonly #timeoutMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
+  #username: Promise<string> | undefined;
 
   constructor(options: InstagramOptions) {
     this.#user = options.userId;
@@ -117,6 +133,76 @@ export class Instagram {
   /** A comment on one of the account's own posts; needs `instagram_business_manage_comments`. */
   async comment(mediaId: string, message: string): Promise<{ id: string }> {
     return this.#post<{ id: string }>(`/${mediaId}/comments`, { message }, 'comment');
+  }
+
+  /** The account's own username, read once: what tells the owner's replies from the others' */
+  async #ownName(): Promise<string> {
+    this.#username ??= this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then(
+      (me) => me.username,
+      (error: unknown) => {
+        this.#username = undefined;
+        throw error;
+      },
+    );
+    return this.#username;
+  }
+
+  /**
+   * Graph API refusals for a missing permission (#10, #200) and a token without the comments scope
+   * read as a code, never as what to do; this says it.
+   */
+  #permission(error: unknown): unknown {
+    if (error instanceof ConnectorError && /"code"\s*:\s*(10|200|3)\b|permission/i.test(error.message)) {
+      return new ConnectorError('Instagram', 'the account was connected without instagram_business_manage_comments: connect it again and allow comments', 403, false);
+    }
+    return error;
+  }
+
+  /**
+   * The comments under a post with their replies, a page of 50 at a time (at most ten pages). Needs
+   * `instagram_business_manage_comments`; without it the Graph API refuses, and this says so.
+   */
+  async comments(mediaId: string): Promise<Comment[]> {
+    type IgComment = { id: string; text?: string; timestamp: string; username?: string; from?: { id: string; username: string } };
+    type Page = { data: Array<IgComment & { replies?: { data: IgComment[] } }>; paging?: { cursors?: { after?: string }; next?: string } };
+    const own = await this.#ownName().catch((error: unknown) => {
+      throw this.#permission(error);
+    });
+    const out: Comment[] = [];
+    const add = (c: IgComment, parent?: string) => {
+      const username = c.username ?? c.from?.username ?? 'unknown';
+      out.push({ externalId: c.id, author: { handle: `@${username}` }, text: c.text ?? '', createdAt: c.timestamp, ...(parent && { inReplyTo: parent }), own: username === own });
+    };
+    let after: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      let answer: Page;
+      try {
+        answer = await this.#get<Page>(
+          `/${mediaId}/comments`,
+          { fields: 'id,text,timestamp,username,from,replies{id,text,timestamp,username,from}', limit: '50', ...(after && { after }) },
+          'read the comments',
+        );
+      } catch (error) {
+        throw this.#permission(error);
+      }
+      for (const comment of answer.data) {
+        add(comment);
+        for (const reply of comment.replies?.data ?? []) add(reply, comment.id);
+      }
+      after = answer.paging?.next ? answer.paging.cursors?.after : undefined;
+      if (!after) break;
+    }
+    return out;
+  }
+
+  /** A reply under a comment; Instagram threads it and notifies its author. Comments have no address of their own. */
+  async reply(target: ReplyTarget, text: string): Promise<SentReply> {
+    try {
+      const { id } = await this.#post<{ id: string }>(`/${target.commentExternalId}/replies`, { message: text }, 'reply');
+      return { externalId: id };
+    } catch (error) {
+      throw this.#permission(error);
+    }
   }
 
   /** The metrics Meta offers on a post; `views` replaced impressions in 2025. */
