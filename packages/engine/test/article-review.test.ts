@@ -174,7 +174,7 @@ test('reviewing reads the drafts from the pull request; edits land on its branch
   const review = await readReview(drafted, d);
   assert.deepEqual(review?.drafts.map((x) => [x.label, x.kind]), [['Article (en)', 'article'], ['Bluesky', 'channel'], ['og', 'image'], ['pack.json', 'data']]);
   assert.equal(review?.drafts[1]?.content, '# Bluesky\n\nhello');
-  assert.match(review?.drafts[2]?.url ?? '', /raw\.githubusercontent\.com\/yeyo11\/launches\/launch%2Fclaudio-v0\.9\.0\//);
+  assert.match(review?.drafts[2]?.url ?? '', /raw\.githubusercontent\.com\/yeyo11\/launches\/launch\/claudio-v0\.9\.0\/public\//);
 
   await editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', '# Bluesky\n\nedited', d);
   assert.deepEqual(github.updates[0], { branch: 'launch/claudio-v0.9.0', path: 'launches/claudio/v0.9.0/bluesky.md', content: '# Bluesky\n\nedited\n' });

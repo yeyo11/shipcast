@@ -74,7 +74,10 @@ export async function readReview(launch: Launch, deps: { github: ReviewGitHub; l
   for (const path of await deps.github.pullRequestFiles(deps.launchesRepo, number)) {
     const draft: Draft = describe(path, dir);
     if (draft.kind === 'article' || draft.kind === 'channel') draft.content = (await deps.github.fileAt(deps.launchesRepo, path, ref)) ?? '';
-    if (draft.kind === 'image' || draft.kind === 'video') draft.url = `https://raw.githubusercontent.com/${deps.launchesRepo}/${encodeURIComponent(ref === 'HEAD' ? 'main' : ref)}/${path}`;
+    // Raw URLs take the branch with its slashes as they are; an encoded one is a 404
+    if (draft.kind === 'image' || draft.kind === 'video') {
+      draft.url = `https://raw.githubusercontent.com/${deps.launchesRepo}/${(ref === 'HEAD' ? 'main' : ref).split('/').map(encodeURIComponent).join('/')}/${path}`;
+    }
     drafts.push(draft);
   }
   drafts.sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || a.path.localeCompare(b.path, 'en', { numeric: true }));
