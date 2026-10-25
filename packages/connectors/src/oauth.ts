@@ -104,10 +104,15 @@ export async function exchangeInstagramCode(
   const short = answer.access_token ? answer : answer.data?.[0];
   if (!short?.access_token) throw new ConnectorError('Instagram', 'the code exchange returned no access token');
   const query = new URLSearchParams({ grant_type: 'ig_exchange_token', client_id: app.appId, client_secret: app.appSecret, access_token: short.access_token });
-  const long = await json<{ access_token: string; expires_in: number }>(
-    'Instagram',
-    await http(`https://graph.instagram.com/access_token?${query}`),
-    'get a long-lived token',
-  );
+  const exchanged = await http(`https://graph.instagram.com/access_token?${query}`);
+  if (!exchanged.ok) {
+    // Which account Instagram issued the token for, and what it granted: the facts to compare with the dashboard
+    throw new ConnectorError(
+      'Instagram',
+      `get a long-lived token: ${exchanged.status} ${(await exchanged.text()).slice(0, 300)}; the code was issued for user ${short.user_id ?? 'unknown'} with ${short.permissions ?? 'no listed permissions'}`,
+      exchanged.status,
+    );
+  }
+  const long = await json<{ access_token: string; expires_in: number }>('Instagram', exchanged, 'get a long-lived token');
   return { userId: String(short.user_id), accessToken: long.access_token, expiresIn: long.expires_in };
 }
