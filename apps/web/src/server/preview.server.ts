@@ -66,6 +66,20 @@ export function fakePublishers(): Publishers {
   };
 }
 
+/**
+ * The safety net under everything else a preview runs (account syncs, the comment assistant's
+ * replies): reading goes through, and any request that would change something is answered with an
+ * empty success instead of leaving the machine. A connector that needs a real answer then fails,
+ * which is the safe way round.
+ */
+export const previewFetch: typeof fetch = async (input, init) => {
+  const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+  if (method === 'GET' || method === 'HEAD') return fetch(input, init);
+  const url = input instanceof Request ? input.url : String(input);
+  say(`would ${method} ${new URL(url).origin}${new URL(url).pathname}`);
+  return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+};
+
 /** The real services with their writing parts replaced: fake publishers, no notifier, no Search Console ping */
 export function previewServices(real: Services): Services {
   return { ...real, publishers: fakePublishers(), notifier: undefined, sources: { ...real.sources, search: undefined } };

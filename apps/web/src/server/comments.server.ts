@@ -1,13 +1,16 @@
 import type { CommentDeps } from '@shipcast/engine';
 import { BY_HAND, checkComments as queueCheck, commentConnectors, redraftComment as queueRedraft } from '@shipcast/runtime';
 import { appContext } from './context.server';
+import { fakeNetworks, previewFetch } from './preview.server';
 
 type Started = { ok: true; job: string } | { ok: false; problem: string };
 
 /** What sending a reply needs in the app: each post's connectors, built with the account it went out with */
 export async function commentDeps(): Promise<CommentDeps> {
   const ctx = await appContext();
-  return { registry: ctx.registry, connectors: commentConnectors({ env: process.env, brand: await ctx.brand(), registry: ctx.registry, secrets: ctx.secrets }) };
+  // A preview with fake networks sends no real reply (preview.server.ts)
+  const fetch = fakeNetworks() ? { fetch: previewFetch } : {};
+  return { registry: ctx.registry, connectors: commentConnectors({ env: process.env, brand: await ctx.brand(), registry: ctx.registry, secrets: ctx.secrets, ...fetch }) };
 }
 
 /** "Check comments now": a run by hand, whatever the automation mode */

@@ -38,6 +38,14 @@ export interface ReadingInput {
   takenAt: string;
 }
 
+/** What the page needs of a piece after a change, to update its row in place */
+export interface PieceState {
+  id: number;
+  status: string;
+  updatedAt: string;
+  scheduledAt: string | null;
+}
+
 /** An action a row offers: allowed, or refused with the reason the page shows beside it */
 export interface Action {
   allowed: boolean;
@@ -91,7 +99,7 @@ function pieceLabel(kind: string): string {
   return lang ? lang.toUpperCase() : kind;
 }
 
-const asStatus = (status: string): PieceStatus => (['live', 'edited', 'deleted', 'scheduled', 'failed'].includes(status) ? (status as PieceStatus) : 'live');
+export const asStatus = (status: string): PieceStatus => (['live', 'edited', 'deleted', 'scheduled', 'failed'].includes(status) ? (status as PieceStatus) : 'live');
 
 const DELETED = 'Deleted already. A launch happens once: Shipcast never publishes it again';
 
@@ -157,6 +165,53 @@ export function pieceRows(input: {
 export function withStatus(row: PieceRow, status: PieceStatus, updatedAt: string): PieceRow {
   if (status !== 'deleted') return { ...row, status, updatedAt };
   return { ...row, status, updatedAt, edit: { allowed: false, reason: DELETED, fields: [] }, remove: { ...row.remove, allowed: false, reason: DELETED } };
+}
+
+/* ---------- One row per channel ---------- */
+
+export type GroupTone = 'published' | 'partial' | 'failed' | 'scheduled' | 'deleted';
+
+/** A channel's row: its pieces, folded into a summary when there are several */
+export interface ChannelGroup {
+  channel: string;
+  pieces: PieceRow[];
+  /** `EN · ES`, `Post · Story · Comment`: the pieces at a glance while the row is folded */
+  summary: string;
+  state: { label: string; tone: GroupTone };
+  /** A row with a failed piece opens on its own, so the failure is seen */
+  failed: boolean;
+  /** The comments read under its pieces (the comment assistant's), shown as a count, never as rows */
+  replies: number;
+}
+
+const OUT: readonly PieceStatus[] = ['live', 'edited'];
+
+/** What a piece is called in its channel's summary */
+export const pieceName = (row: Pick<PieceRow, 'kind' | 'piece'>) => (row.kind === 'post' ? 'Post' : row.piece.charAt(0).toUpperCase() + row.piece.slice(1));
+
+/** The aggregate state of a channel's pieces: all out, some of them, failed, waiting for a time, or gone */
+export function groupState(pieces: readonly Pick<PieceRow, 'status'>[]): { label: string; tone: GroupTone } {
+  const total = pieces.length;
+  const count = (statuses: readonly PieceStatus[]) => pieces.filter((p) => statuses.includes(p.status)).length;
+  if (count(['failed']) > 0) return { label: 'Failed', tone: 'failed' };
+  if (count(['deleted']) === total) return { label: total === 1 ? 'Deleted' : 'All deleted', tone: 'deleted' };
+  if (count(['scheduled']) === total) return { label: 'Scheduled', tone: 'scheduled' };
+  const out = count(OUT);
+  if (out === total) {
+    if (total === 1) return { label: pieces[0]!.status === 'edited' ? 'Edited' : 'Published', tone: 'published' };
+    return { label: 'All published', tone: 'published' };
+  }
+  return { label: `${out} of ${total} published`, tone: 'partial' };
+}
+
+/** The rows grouped by channel, in the order each channel first appears */
+export function channelGroups(rows: readonly PieceRow[], replies: Readonly<Record<string, number>> = {}): ChannelGroup[] {
+  const groups = new Map<string, PieceRow[]>();
+  for (const row of rows) groups.set(row.channel, [...(groups.get(row.channel) ?? []), row]);
+  return [...groups].map(([channel, pieces]) => {
+    const state = groupState(pieces);
+    return { channel, pieces, summary: pieces.map(pieceName).join(' · '), state, failed: state.tone === 'failed', replies: replies[channel] ?? 0 };
+  });
 }
 
 /* ---------- Editing several pieces at once ---------- */
@@ -272,6 +327,25 @@ export function singleEditChanges(channel: string, fields: readonly EditField[],
   return Object.keys(changes).length === 0 ? undefined : changes;
 }
 
+/**
+ * What an edit form starts from: the piece's text as merged in the drafts' pull request, which is
+ * what went out unless it was edited since. Shipcast keeps no copy of a published post, so a piece
+ * with no draft starts empty. The front matter is not the text: its title is the title field.
+ */
+export function draftPrefill(drafts: ReadonlyArray<{ path: string; content?: string }>, row: Pick<PieceRow, 'channel' | 'kind'>): { text: string; title: string } {
+  const lang = /^article:(\w+)$/.exec(row.kind)?.[1];
+  const draft = drafts.find((d) => {
+    const name = d.path.split('/').at(-1) ?? '';
+    if (row.channel === 'blog') return lang !== undefined && d.path.startsWith(`src/content/posts/${lang}/`);
+    return name === `${row.channel}.md`;
+  });
+  const content = draft?.content ?? '';
+  const front = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(content);
+  if (!front) return { text: content.trim(), title: '' };
+  const title = /^title:\s*["']?(.*?)["']?\s*$/m.exec(front[1]!)?.[1] ?? '';
+  return { text: front[2]!.trim(), title };
+}
+
 /* ---------- Scheduling ---------- */
 
 /** A recommended time as the engine gives it */
@@ -315,16 +389,46 @@ export function countdown(at: string, now: Date): string {
   return `in ${Math.floor(hours / 24)} days ${hours % 24} h`;
 }
 
-/** A `datetime-local` value (the browser's own zone) as an instant with its offset, which the server requires */
-export function localInputToIso(value: string): string | undefined {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return undefined;
-  const at = new Date(value);
-  return Number.isNaN(at.getTime()) ? undefined : at.toISOString();
+/*
+ * Times on the page are the owner's zone (the setting the recommendations speak in), not the
+ * browser's: the chips, the picker and a scheduled piece all read the same clock, and the server
+ * renders the same text the browser does.
+ */
+
+/** The wall-clock parts of an instant in a zone */
+function wallParts(ms: number, timeZone: string): { y: number; mo: number; d: number; h: number; mi: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(ms))
+      .map((p) => [p.type, p.value]),
+  );
+  return { y: Number(parts.year), mo: Number(parts.month), d: Number(parts.day), h: Number(parts.hour) % 24, mi: Number(parts.minute) };
 }
 
-/** An instant as a `datetime-local` value in the browser's own zone */
-export function isoToLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/** A `datetime-local` value read as a wall-clock time in `timeZone`, as the instant (ISO, UTC) the server takes */
+export function zonedInputToIso(value: string, timeZone: string): string | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!m) return undefined;
+  const wanted = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+  if (Number.isNaN(wanted)) return undefined;
+  // The zone's offset at that moment, found by reading the guess back; twice, for a guess across a change of summer time
+  let at = wanted;
+  for (let i = 0; i < 2; i++) {
+    const p = wallParts(at, timeZone);
+    at += wanted - Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi);
+  }
+  return new Date(at).toISOString();
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** An instant as a `datetime-local` value on the wall clock of `timeZone` */
+export function isoToZonedInput(iso: string, timeZone: string): string {
+  const p = wallParts(Date.parse(iso), timeZone);
+  return `${p.y}-${pad2(p.mo)}-${pad2(p.d)}T${pad2(p.h)}:${pad2(p.mi)}`;
+}
+
+/** An instant for reading, in the owner's zone: `Tue 27 Oct, 17:00` */
+export function zonedLabel(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
 }

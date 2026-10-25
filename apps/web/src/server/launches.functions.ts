@@ -3,6 +3,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
 import { jobsView } from './jobs.server';
+import { launchPieces } from './pieces.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchDetail, launchView, publishAgain as publishAgainFor } from './launches.server';
 import { articleRequest, channelName, launchRequest } from './requests';
@@ -20,7 +21,15 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = await appContext();
     const launch = await registry.get(data);
     if (!launch) return null;
-    return { ...(await launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo })), jobs: await jobsView(registry, { launchId: launch.id }) };
+    const detail = await launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo });
+    const draftPaths = detail.review && !('error' in detail.review) ? detail.review.drafts.map((d) => d.path) : [];
+    return {
+      ...detail,
+      pieces: await launchPieces(registry, launch, { github, launchesRepo: deps.launchesRepo, draftPaths }),
+      jobs: await jobsView(registry, { launchId: launch.id }),
+      /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
+      fakeNetworks: fakeNetworks(),
+    };
   });
 
 export const saveDraft = createServerFn({ method: 'POST' })
