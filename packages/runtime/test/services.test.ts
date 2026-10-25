@@ -98,3 +98,15 @@ test('a connected Instagram account keeps its refreshed token in the keychain', 
   assert.equal(d.registry.account(account.id)?.settings.refreshedAt, '2026-10-05T00:00:00.000Z');
   assert.equal(d.registry.cursor(INSTAGRAM_TOKEN_KEY), undefined, 'nothing in the registry');
 });
+
+test('Telegram posts to its channel and tells the owner in their own chat', async () => {
+  const sent: string[] = [];
+  const http = (async (input: string | URL | Request, init?: RequestInit) => {
+    sent.push(`${String(input).split('/').at(-1)} ${JSON.parse(String(init?.body ?? '{}')).chat_id}`);
+    return Response.json({ ok: true, result: { message_id: 1, chat: { id: -1001, type: 'channel' } } });
+  }) as typeof fetch;
+  const services = await buildServices(deps({ TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '@mychannel', TELEGRAM_NOTIFY_CHAT_ID: '42' }, { fetch: http }));
+  assert.ok(services.configured.includes('telegram'));
+  await services.notifier?.notify('drafts are waiting');
+  assert.deepEqual(sent, ['sendMessage 42']);
+});

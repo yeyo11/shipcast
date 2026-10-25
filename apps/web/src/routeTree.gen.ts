@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
+import { Route as ApiLaunchesRouteImport } from './routes/api.launches'
 import { Route as AuthGithubRouteImport } from './routes/auth/github'
 import { Route as AuthInstagramRouteImport } from './routes/auth/instagram'
 import { Route as AuthLinkRouteImport } from './routes/auth/link'
@@ -49,6 +50,11 @@ const AppWriteRoute = AppWriteRouteImport.update({
   id: '/write',
   path: '/write',
   getParentRoute: () => AppRoute,
+} as any)
+const ApiLaunchesRoute = ApiLaunchesRouteImport.update({
+  id: '/api/launches',
+  path: '/api/launches',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthGithubRoute = AuthGithubRouteImport.update({
   id: '/auth/github',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/launch': typeof AppLaunchRoute
   '/write': typeof AppWriteRoute
+  '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/launch': typeof AppLaunchRoute
   '/write': typeof AppWriteRoute
+  '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/launch': typeof AppLaunchRoute
   '/_app/write': typeof AppWriteRoute
+  '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/launch'
     | '/write'
+    | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
     | '/auth/link'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/launch'
     | '/write'
+    | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
     | '/auth/link'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/launch'
     | '/_app/write'
+    | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
     | '/auth/link'
@@ -217,6 +229,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiLaunchesRoute: typeof ApiLaunchesRoute
   AuthGithubRoute: typeof AuthGithubRouteWithChildren
   AuthInstagramRoute: typeof AuthInstagramRouteWithChildren
   AuthLinkRoute: typeof AuthLinkRoute
@@ -260,6 +273,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/write'
       preLoaderRoute: typeof AppWriteRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/launches': {
+      id: '/api/launches'
+      path: '/api/launches'
+      fullPath: '/api/launches'
+      preLoaderRoute: typeof ApiLaunchesRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/github': {
       id: '/auth/github'
@@ -400,6 +420,7 @@ const AuthMastodonRouteWithChildren = AuthMastodonRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiLaunchesRoute: ApiLaunchesRoute,
   AuthGithubRoute: AuthGithubRouteWithChildren,
   AuthInstagramRoute: AuthInstagramRouteWithChildren,
   AuthLinkRoute: AuthLinkRoute,

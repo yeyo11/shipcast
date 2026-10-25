@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { Instagram, Telegram } from '@shipcast/connectors';
+import { Telegram, type Instagram } from '@shipcast/connectors';
 import { GitHubRest, type MetricSources, type Publishers, type Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, type Built, type Credentials } from './catalog.ts';
@@ -126,7 +126,10 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
   const telegram = (await built('telegram'))?.telegram;
   if (telegram) {
     publishers.telegram = telegram;
-    notifier = telegram;
+    // Notices go to the owner's own chat with the bot when one is set, not to the public channel
+    const found = await credentialsFor('telegram', deps);
+    const notifyChat = found?.credentials.settings.notifyChatId?.trim();
+    notifier = notifyChat && found ? new Telegram({ botToken: found.credentials.secrets.botToken!, chatId: notifyChat, fetch: deps.fetch }) : telegram;
     configured.push('telegram');
   }
   const discord = (await built('discord'))?.discord;

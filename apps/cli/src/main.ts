@@ -20,7 +20,6 @@ import {
 } from '@shipcast/engine';
 import { Channel, type Brand } from '@shipcast/schema';
 import { buildServices, ConfigError, KeychainStore, loadConfig, refreshInstagramToken, type SecretStore, type Services } from '@shipcast/runtime';
-import { serveDashboard } from './dashboard.ts';
 
 const USAGE = `Usage: shipcast <command>
 
@@ -34,10 +33,10 @@ const USAGE = `Usage: shipcast <command>
   publish [--retry <channel>]         Publish every drafted launch whose pull request is merged, once;
                                       --retry gives a channel that failed for good another chance
   metrics                             Read the numbers of every published launch now
-  dashboard [--port <port>] [--host <address>]
-                                      The launches and their numbers on http://127.0.0.1:<port> (default 4321);
-                                      --host 0.0.0.0 opens it to the local network, which it trusts (no login)
   status                              The latest launches and where they stand, and what is configured
+
+The launches, their channels and numbers, drafts to review and articles to write are in the web
+app: pnpm app (see docs/web-app.md).
 `;
 
 const METRICS_EVERY_MS = 6 * 3600 * 1000;
@@ -53,6 +52,11 @@ async function step(name: string, fn: () => Promise<void>): Promise<void> {
 
 /** GitHub asks pollers of the events API not to come back sooner than this (x-poll-interval). */
 const MIN_INTERVAL_S = 60;
+
+/** A line to the owner's Telegram, when it is connected; a failed notice never stops the watch */
+async function notify(services: Services, text: string): Promise<void> {
+  await services.notifier?.notify(text).catch(() => undefined);
+}
 
 function report(result: DraftResult): void {
   if (result.ok) {
@@ -81,7 +85,12 @@ function reportPublish(result: PublishResult): void {
 /** Publishes what is ready: each drafted launch whose pull request was merged and whose article is live. */
 async function publishReady(brand: Brand, services: Services, deps: PipelineDeps): Promise<void> {
   for (const launch of deps.registry.recent(100).filter((l) => l.status === 'drafted')) {
-    reportPublish(await publishLaunch(launch, brand, { github: deps.github, registry: deps.registry, launchesRepo: deps.launchesRepo, publishers: services.publishers }));
+    const result = await publishLaunch(launch, brand, { github: deps.github, registry: deps.registry, launchesRepo: deps.launchesRepo, publishers: services.publishers });
+    reportPublish(result);
+    if ((result.state === 'published' || result.state === 'partial') && (result.posted.length > 0 || result.problems.length > 0)) {
+      const name = `${launch.repo} ${launch.ref}`;
+      await notify(services, result.problems.length > 0 ? `Shipcast published ${name} in part: ${result.problems.join('; ')}` : `Shipcast published ${name}: ${result.posted.map((p) => p.url).join(' ')}`);
+    }
   }
 }
 
@@ -153,12 +162,8 @@ async function main(argv: string[]): Promise<number> {
       }
 
       case 'dashboard': {
-        const port = Number(values.port ?? 4321);
-        const host = values.host ?? '127.0.0.1';
-        const server = serveDashboard(registry, port, host);
-        console.log(`Dashboard on http://${host}:${port} (Ctrl+C to stop)`);
-        await new Promise<void>((r) => process.once('SIGINT', () => server.close(() => r())));
-        return 0;
+        console.error('The dashboard is now the web app: pnpm app');
+        return 2;
       }
 
       case 'launch': {
@@ -215,7 +220,11 @@ async function main(argv: string[]): Promise<number> {
         while (!stopping) {
           try {
             for (const outcome of await detect({ github, registry, brand })) {
-              if (outcome.result === 'claimed') report(await draftLaunch(outcome.launch, brand, deps));
+              if (outcome.result === 'claimed') {
+                const result = await draftLaunch(outcome.launch, brand, deps);
+                report(result);
+                await notify(services, result.ok ? `Shipcast drafted ${result.launch.repo} ${result.launch.ref}: ${result.pullRequest}` : `Shipcast could not draft ${result.launch.repo} ${result.launch.ref}: ${result.problems[0] ?? ''}`);
+              }
               else if (outcome.result === 'invalid-config') console.error(`${outcome.event.repo}: ${outcome.launch.detail}`);
             }
           } catch (error) {
