@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T14:07:50.460172283Z
-updated_at: 2026-10-25T15:17:26.116337982Z
+created_at: 2026-10-25T15:23:35.100765476Z
+updated_at: 2026-10-25T16:25:24.325879515Z
 tags:
     - publishing
     - connectors
@@ -12,14 +12,16 @@ tags:
     - instagram
     - post-model
     - job-queue
+    - edit-delete
 ---
 # Publishing, media and metrics
 
 What happens after the drafts pull request ([engine.md](engine.md)): the launch's media, publishing
-on every channel once the owner merges, and reading the numbers back. Built on 2026-10-24 in
-`packages/assets`, `packages/capture`, `packages/connectors`, `packages/engine` (`launch-assets.ts`,
-`publish.ts`, `newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`, `rounds.ts`,
-`work.ts`) and the [web app](web-app.md). Every connector is Shipcast's own, over `fetch`, with no SDK
+on every channel once the owner merges, editing and deleting what went out, and reading the numbers
+back. Built on 2026-10-24 in `packages/assets`, `packages/capture`, `packages/connectors`,
+`packages/engine` (`launch-assets.ts`, `publish.ts`, `edit.ts`, `newsletter.ts`, `metrics.ts`),
+`packages/runtime` (`services.ts`, `edits.ts`, `rounds.ts`, `work.ts`) and the
+[web app](web-app.md). Every connector is Shipcast's own, over `fetch`, with no SDK
 ([decisions/mvp-scope.md](decisions/mvp-scope.md) says why Postiz was dropped).
 
 ## The launch's media
@@ -90,7 +92,8 @@ Binary files go into the pull request as base64 blobs through the Git data API.
    piece is a row of its own, recorded as soon as it is out, with the connected account it went out
    with (none for credentials from `.env`), and the registry refuses a second piece of the same kind
    ([decisions/post-model.md](decisions/post-model.md)). A channel is done once it has its `post`,
-   whichever account published it; the newsletter once every language with a list has its issue:
+   whichever account published it and whatever its status since (edited or deleted); the newsletter
+   once every language with a list has its issue:
    - **dev.to** (`devto.ts`): the English article with `canonical_url` to the blog, `og.png` as the
      cover.
    - **Bluesky** (`bluesky.ts`): app password session, link facets counted in UTF-8 bytes, an external
@@ -131,6 +134,48 @@ is a `publish` job of the queue ([decisions/job-queue.md](decisions/job-queue.md
 attempt, and while the site has not deployed (or some channels will retry) the job is tried again 30
 seconds later, up to 40 times, so the 20-minute wait survives a restart. A launch has one publish job
 waiting at most, and the round leaves a launch with one alone.
+
+## After publishing: editing and deleting
+
+Added on 2026-10-25 (phase 9; why each choice is in
+[decisions/edit-delete.md](decisions/edit-delete.md)). A published piece is edited or deleted on its
+network with the account it went out with, from the engine (`edit.ts`) and the REST API
+([api.md](api.md)); the launch page's actions come next, on the same functions.
+
+What each channel can do is one static map, `CAPABILITIES`, read by the app and served at
+`GET /api/v1/capabilities`: `{ edit: 'yes' | 'no' | 'partial', delete: 'yes' | 'no' | 'unpublish',
+note, fields }`.
+
+| Channel | Edit | Delete | Fields |
+| --- | --- | --- | --- |
+| Mastodon | yes | yes | text, link, image |
+| Telegram | yes (text or caption; a photo's photo) | yes, within 48 hours | text, link, image |
+| Discord | yes, through the webhook | yes | text, link |
+| dev.to | yes | unpublish (no delete in its API) | text (the body), title, tags, link (canonical), image (cover) |
+| Hashnode | yes | yes | text (the body), title, tags, link (canonical), image (cover) |
+| Bluesky | no | yes | — |
+| Instagram | no | no | — |
+| Newsletter (sent) | no | no | — |
+| Blog | yes, by a commit | yes, by a commit | text (the body), title, tags |
+| Reddit, Hacker News, Product Hunt, LinkedIn, X | no | no | posted by hand, or not connected |
+
+- **One piece:** `editPost(postId, changes, deps)` and `deletePost(postId, deps)` read the row, refuse
+  what the network cannot do (with the capability's note) before any request, build the connector
+  with the row's account (`postEditors` in `packages/runtime/src/edits.ts`; `.env` for a row with
+  none), send it, and update the row: `edited` with the `content_hash` of what was sent, or
+  `deleted`, and `updated_at`. Only a channel's `post` and the blog's articles are edited or deleted;
+  a story, a comment or a newsletter issue is refused. A network that answers 404 to a delete counts
+  as deleted.
+- **A whole launch:** `editPosts(launchId, changes, channels?)` sends the shared fields (text, link,
+  image) to every live piece of the channels named, each network taking what it has (the text is the
+  post on Mastodon and Telegram with the link after it, the message on Discord, the body on dev.to,
+  Hashnode and the blog); `deleteLaunchPosts(launchId, channels?)` deletes them. Both answer one
+  outcome per piece and never let one failure stop the rest.
+- **The blog:** an edit rewrites `src/content/posts/<lang>/<slug>.md` on the launches repo's `main`
+  (the front matter kept as written, `updatedDate` set), a delete removes it, and the launch's media
+  folder only once no other language of the launch is left; each is one commit, which deploys the site.
+- **A launch happens once:** a deleted row stays, so the channel stays done and the piece is never
+  published again, even with the launch drafted again.
 
 ## The newsletter
 
@@ -180,7 +225,8 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
 launch and records each reading in the registry's `metrics` table, so every metric has a history and
 the web app shows the latest. A reading of a post or a newsletter issue points at that piece; the
 blog's, search's and GitHub's are the launch's, read for the URLs of its `article:<lang>` pieces. One
-source failing never stops the others.
+source failing never stops the others. A deleted piece is no longer read (it would only answer not
+found) and keeps the numbers it last had.
 
 | Source | What | From |
 | --- | --- | --- |
@@ -231,4 +277,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[api.md]]

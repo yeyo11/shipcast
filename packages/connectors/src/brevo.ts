@@ -27,7 +27,8 @@ interface GlobalStats {
 
 /**
  * Brevo's marketing API for the newsletter: a campaign created for one list and sent at once, its
- * numbers read back, and the size of a list, so an issue to nobody is never sent.
+ * numbers read back, and the size of a list, so an issue to nobody is never sent. Neither `edit` nor
+ * `delete`: a sent campaign is in the readers' inboxes, which no API reaches.
  */
 export class Brevo {
   readonly #key: string;

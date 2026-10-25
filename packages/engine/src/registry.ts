@@ -429,6 +429,20 @@ export class Registry {
     return row ? toPost(row) : undefined;
   }
 
+  /**
+   * Records what happened to a piece after it went out: edited, with the hash of what was sent, or
+   * deleted. The row stays either way, so the piece still counts as published and is never sent again.
+   */
+  async updatePost(id: number, change: { status: PostStatus; contentHash?: string | null }): Promise<Post> {
+    const [row] = await this.#db
+      .update(posts)
+      .set({ status: change.status, ...(change.contentHash !== undefined && { contentHash: change.contentHash }), updatedAt: nowIso })
+      .where(eq(posts.id, id))
+      .returning();
+    if (!row) throw new Error(`no post ${id}`);
+    return toPost(row);
+  }
+
   /** `postId` for a reading of one piece; without it the reading is the launch's, as a site-level source's is */
   async recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date, postId: number | null = null): Promise<void> {
     const at = takenAt.toISOString();

@@ -58,6 +58,9 @@ export interface PullRequestDraft {
   files: Array<{ path: string; content: string } | { path: string; bytes: Uint8Array }>;
 }
 
+/** A file in a commit made straight onto a branch: written, or removed */
+export type CommitFile = PullRequestDraft['files'][number] | { path: string; delete: true };
+
 /** The writes the engine makes on GitHub; a fake stands in for it in tests. */
 export interface GitHubWriter {
   /** Opens the pull request, or returns the open one for the same branch */
@@ -198,11 +201,14 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
 
   /** A release by tag; the draft flag lets the caller tell an unpublished one apart. */
   /** A commit with every file on top of a parent, through the Git data API: no clone, one commit */
-  async #commit(repo: string, parent: string, message: string, files: PullRequestDraft['files']): Promise<{ sha: string }> {
+  async #commit(repo: string, parent: string, message: string, files: CommitFile[]): Promise<{ sha: string }> {
     const parentCommit = (await this.#ok('GET', `/repos/${repo}/git/commits/${parent}`)) as { tree: { sha: string } };
     const entries = [];
     for (const file of files) {
-      if ('content' in file) {
+      if ('delete' in file) {
+        // A null sha in a tree built on the base tree is how the Git data API removes a path
+        entries.push({ path: file.path, mode: '100644', type: 'blob', sha: null });
+      } else if ('content' in file) {
         entries.push({ path: file.path, mode: '100644', type: 'blob', content: file.content });
       } else {
         const blob = (await this.#ok('POST', `/repos/${repo}/git/blobs`, {
@@ -220,11 +226,20 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
    * Commits files straight onto a branch, for what is published without a pull request. The ref is
    * moved without force, so a branch that moved meanwhile refuses the commit instead of losing work.
    */
-  async commitToBranch(repo: string, branch: string, message: string, files: PullRequestDraft['files']): Promise<{ sha: string }> {
+  async commitToBranch(repo: string, branch: string, message: string, files: CommitFile[]): Promise<{ sha: string }> {
     const head = (await this.#ok('GET', `/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`)) as { object: { sha: string } };
     const commit = await this.#commit(repo, head.object.sha, message, files);
     await this.#ok('PATCH', `/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, { sha: commit.sha, force: false });
     return commit;
+  }
+
+  /** Every file under a folder at a ref, by path; none when the folder is not there */
+  async filesUnder(repo: string, ref: string, folder: string): Promise<string[]> {
+    const { status, data } = await this.#json('GET', `/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
+    if (status === 404) return [];
+    if (status >= 300) throw new GitHubError(`GitHub could not list ${repo} at ${ref}: ${status}`, status);
+    const prefix = `${folder.replace(/\/+$/, '')}/`;
+    return ((data as { tree: Array<{ path: string; type: string }> }).tree ?? []).filter((e) => e.type === 'blob' && e.path.startsWith(prefix)).map((e) => e.path);
   }
 
   /** A pull request's branch and state, for reviewing its drafts */

@@ -25,6 +25,8 @@ export interface InstagramOptions {
  * Instagram through the Instagram API with Instagram Login: a media container from a public URL,
  * waited on until Instagram has fetched and processed it (a Reel takes a while), then published;
  * its insights read back for the metrics. The long-lived token is refreshed with `refreshToken`.
+ * Neither `edit` nor `delete`: the Graph API changes no caption of a published post and deletes no
+ * post, only comments.
  */
 export class Instagram {
   readonly #user: string;

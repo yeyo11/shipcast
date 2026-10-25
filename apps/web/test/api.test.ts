@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { ArticleInput, Launch, Registry, ReviewGitHub } from '@shipcast/engine';
+import { ConnectorError } from '@shipcast/connectors';
+import type { ArticleInput, Editors, Launch, Registry, ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { createApiToken, MemoryStore } from '@shipcast/runtime';
 import { FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
@@ -17,6 +18,8 @@ interface Setup {
   deps: ApiDeps;
   registry: Registry;
   calls: string[];
+  /** What the fake connectors were asked to edit or delete */
+  sent: string[];
   read: string;
   write: string;
   both: string;
@@ -26,6 +29,16 @@ async function setup(): Promise<Setup> {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
   const calls: string[] = [];
+  const sent: string[] = [];
+  const fake = (channel: string) => ({
+    edit: async (id: string, input: unknown) => {
+      if (id === 'refused') throw new ConnectorError('Mastodon', 'edit: 422 Text is too long', 422);
+      sent.push(`edit ${channel} ${id} ${JSON.stringify(input)}`);
+    },
+    delete: async (id: string) => {
+      sent.push(`delete ${channel} ${id}`);
+    },
+  });
   const deps: ApiDeps = {
     registry,
     secrets,
@@ -50,12 +63,17 @@ async function setup(): Promise<Setup> {
       calls.push(`publish ${launch.id} ${launch.status}`);
       return 'j5';
     },
+    editing: async () => ({
+      registry,
+      editors: async (channel) => ({ [channel]: channel === 'bluesky' ? { delete: fake('bluesky').delete } : fake(channel) }) as Editors,
+    }),
   };
   const tokens = { registry, secrets };
   return {
     deps,
     registry,
     calls,
+    sent,
     read: (await createApiToken(tokens, 'reader', ['read'])).token,
     write: (await createApiToken(tokens, 'writer', ['write'])).token,
     both: (await createApiToken(tokens, 'mcp', ['read', 'write'])).token,
@@ -235,4 +253,71 @@ test('the OpenAPI document is public and lists every route with its scope', asyn
     assert.deepEqual(operation.security, [{ bearer: [route.scope] }]);
   }
   assert.equal(new Set(ROUTES.map((r) => r.operationId)).size, ROUTES.length);
+});
+
+async function publishedLaunch(registry: Registry) {
+  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.setStatus(launch.id, 'published');
+  const record = async (channel: 'mastodon' | 'bluesky' | 'telegram', externalId: string) =>
+    (await registry.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
+  return { launch, mastodon: await record('mastodon', '111'), bluesky: await record('bluesky', 'at://did:plc:a/app.bsky.feed.post/1'), telegram: await record('telegram', '@c:5') };
+}
+
+test('a post is edited and deleted through the API with the write scope', async () => {
+  const s = await setup();
+  const { mastodon } = await publishedLaunch(s.registry);
+  assert.equal((await call(s.deps, 'PATCH', `/posts/${mastodon.id}`, { token: s.read, body: { text: 'x' } })).status, 403);
+
+  const edited = await call(s.deps, 'PATCH', `/posts/${mastodon.id}`, { token: s.write, body: { text: 'Fixed', link: 'https://site.dev/en/x/' } });
+  assert.equal(edited.status, 200);
+  assert.equal(((await body(edited)).post as { status: string }).status, 'edited');
+  assert.deepEqual(s.sent, ['edit mastodon 111 {"text":"Fixed\\n\\nhttps://site.dev/en/x/"}']);
+
+  const deleted = await call(s.deps, 'DELETE', `/posts/${mastodon.id}`, { token: s.write });
+  assert.equal(((await body(deleted)).post as { status: string }).status, 'deleted');
+  const again = await call(s.deps, 'DELETE', `/posts/${mastodon.id}`, { token: s.write });
+  assert.equal(again.status, 409);
+  assert.match(((await body(again)).error as { message: string }).message, /deleted already/);
+});
+
+test('what a network cannot do is a 409, a bad change a 400, a missing post a 404, the network refusing a 502', async () => {
+  const s = await setup();
+  const { bluesky, launch } = await publishedLaunch(s.registry);
+  const noEdit = await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: { text: 'x' } });
+  assert.equal(noEdit.status, 409);
+  assert.match(((await body(noEdit)).error as { message: string }).message, /Bluesky cannot edit/);
+  assert.equal((await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: {} })).status, 400);
+  assert.equal((await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: { link: 'javascript:alert(1)' } })).status, 400);
+  assert.equal((await call(s.deps, 'DELETE', '/posts/9999', { token: s.write })).status, 404);
+  assert.equal((await call(s.deps, 'DELETE', '/posts/abc', { token: s.write })).status, 400);
+  const refused = (await s.registry.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
+  const upstream = await call(s.deps, 'PATCH', `/posts/${refused.id}`, { token: s.write, body: { text: 'x'.repeat(600) } });
+  assert.equal(upstream.status, 502);
+  assert.match(((await body(upstream)).error as { message: string }).message, /Text is too long/);
+  assert.equal((await s.registry.post(refused.id))!.status, 'live');
+});
+
+test('a launch’s posts are edited and deleted at once, per channel, with what each one did', async () => {
+  const s = await setup();
+  const { launch, telegram } = await publishedLaunch(s.registry);
+  const edited = await call(s.deps, 'PATCH', `/launches/${launch.id}/posts`, { token: s.write, body: { text: 'Shared', channels: ['mastodon', 'bluesky'] } });
+  assert.equal(edited.status, 200);
+  assert.deepEqual(
+    ((await body(edited)).outcomes as Array<{ channel: string; ok: boolean; reason?: string }>).map((o) => `${o.channel} ${o.ok ? 'ok' : o.reason}`),
+    ['mastodon ok', 'bluesky unsupported'],
+  );
+  assert.equal((await call(s.deps, 'PATCH', `/launches/${launch.id}/posts`, { token: s.write, body: { text: 'x', channels: ['nope'] } })).status, 400);
+
+  const deleted = await call(s.deps, 'DELETE', `/launches/${launch.id}/posts?channels=bluesky,mastodon`, { token: s.write });
+  assert.deepEqual(((await body(deleted)).outcomes as Array<{ ok: boolean }>).map((o) => o.ok), [true, true]);
+  assert.equal((await s.registry.post(telegram.id))!.status, 'live', 'a channel not named is left alone');
+  assert.equal((await call(s.deps, 'DELETE', '/launches/999/posts', { token: s.write })).status, 404);
+});
+
+test('the capability map is readable with the read scope', async () => {
+  const s = await setup();
+  const response = await call(s.deps, 'GET', '/capabilities', { token: s.read });
+  const capabilities = (await body(response)).capabilities as Record<string, { edit: string; delete: string }>;
+  assert.deepEqual(capabilities.bluesky && [capabilities.bluesky.edit, capabilities.bluesky.delete], ['no', 'yes']);
+  assert.equal(capabilities.devto?.delete, 'unpublish');
 });

@@ -1,4 +1,23 @@
-import { json, checkProblem, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+
+export interface TelegramEdit {
+  /** The message's text, or its caption when it is a photo */
+  text: string;
+  /** A new photo in place of the one it has; only a photo message can change its photo */
+  imageUrl?: string;
+  parseMode?: 'HTML' | 'MarkdownV2';
+}
+
+/** `<chat>:<message>` as publish records it; a chat id never holds a colon (-100123 or @name) */
+function messageOf(externalId: string): { chat_id: string; message_id: number } {
+  const at = externalId.lastIndexOf(':');
+  const messageId = Number(externalId.slice(at + 1));
+  if (at <= 0 || !Number.isInteger(messageId)) throw new ConnectorError('Telegram', `${externalId} is not a <chat>:<message> id`, 400);
+  return { chat_id: externalId.slice(0, at), message_id: messageId };
+}
+
+/** What the Bot API said, for telling one 400 from another */
+const said = (error: unknown, words: RegExp) => error instanceof ConnectorError && error.status === 400 && words.test(error.message);
 
 export interface TelegramPost {
   /** 4096 characters at most; with an image it becomes the caption, which stops at 1024 */
@@ -26,9 +45,10 @@ function messageUrl(chatId: string, chat: SentMessage['chat'], messageId: number
 
 /**
  * Telegram through the Bot API: a post to a channel or group where the bot is an admin, and
- * notifications to the owner's own chat.
+ * notifications to the owner's own chat. A message the bot sent can be edited (text or caption, and
+ * a photo's photo) and deleted; Telegram refuses to delete one older than 48 hours.
  */
-export class Telegram {
+export class Telegram implements Editable<TelegramEdit>, Deletable {
   readonly #token: string;
   readonly #chatId: string;
   readonly #fetch: typeof fetch;
@@ -56,6 +76,40 @@ export class Telegram {
       ? await this.#call<SentMessage>('sendPhoto', 'publish', { chat_id: this.#chatId, photo: post.imageUrl, caption: post.text, ...parse })
       : await this.#call<SentMessage>('sendMessage', 'publish', { chat_id: this.#chatId, text: post.text, ...parse });
     return { externalId: `${this.#chatId}:${sent.message_id}`, url: messageUrl(this.#chatId, sent.chat, sent.message_id) };
+  }
+
+  /**
+   * The Bot API cannot read a message back, so whether it is text or a photo is learnt by trying:
+   * the text first, the caption when Telegram says there is no text. Sending what it already says is
+   * not a failure.
+   */
+  async edit(externalId: string, edit: TelegramEdit): Promise<void> {
+    const message = messageOf(externalId);
+    const parse = edit.parseMode ? { parse_mode: edit.parseMode } : {};
+    try {
+      if (edit.imageUrl) {
+        await this.#call('editMessageMedia', 'edit', { ...message, media: { type: 'photo', media: edit.imageUrl, caption: edit.text, ...parse } });
+        return;
+      }
+      try {
+        await this.#call('editMessageText', 'edit', { ...message, text: edit.text, ...parse });
+      } catch (error) {
+        if (!said(error, /no text in the message/i)) throw error;
+        await this.#call('editMessageCaption', 'edit', { ...message, caption: edit.text, ...parse });
+      }
+    } catch (error) {
+      if (said(error, /message is not modified/i)) return;
+      throw error;
+    }
+  }
+
+  /** A message that is gone already is what was asked for, so that answer is not a failure */
+  async delete(externalId: string): Promise<void> {
+    try {
+      await this.#call('deleteMessage', 'delete', messageOf(externalId));
+    } catch (error) {
+      if (!said(error, /message to delete not found/i)) throw error;
+    }
   }
 
   /** A message to the owner, without the preview card a link would unfold into. */
