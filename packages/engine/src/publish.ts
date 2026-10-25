@@ -6,6 +6,7 @@ import { isArticle, launchDir, parseInstagramDraft, projectSlug } from './drafts
 import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
+import { resubmitSitemap, type MetricSources } from './metrics.ts';
 import { loadProjects } from './pipeline.ts';
 import type { Launch, Registry } from './registry.ts';
 
@@ -52,6 +53,8 @@ export interface PublishDeps {
   publishers: Publishers;
   /** For the deployed site: whether the article is live, and the launch image's bytes */
   fetch?: typeof fetch;
+  /** Search Console, to have Google read the sitemap as soon as the article is live */
+  search?: MetricSources['search'];
 }
 
 export type PublishResult =
@@ -124,6 +127,10 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     if (!live) return { state: 'waiting', launch, reason: `${articleUrl} is not live yet` };
     // Both languages' slugs, so the metrics can read each article's visits
     const slugs = (['en', 'es'] as const).filter((l) => pack.article?.[l]).map((l) => `${l}:${pack.article![l]!.slug}`).join(',');
+    if (!registry.posts(launch.id).some((p) => p.channel === 'blog') && deps.search) {
+      // Not a channel: Google not hearing of the article yet never holds the launch back
+      await resubmitSitemap(registry, brand.site, deps.search, new Date(), true).catch(() => false);
+    }
     registry.recordPost({ launchId: launch.id, channel: 'blog', url: articleUrl, externalId: slugs });
   }
 

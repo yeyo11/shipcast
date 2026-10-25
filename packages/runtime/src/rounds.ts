@@ -43,7 +43,7 @@ export async function draftClaimed(launch: Launch, d: RoundDeps, services: Servi
 /** Publishes one drafted launch if it is ready, and tells the owner what went out */
 export async function publishOne(launch: Launch, d: RoundDeps, services: Services): Promise<PublishResult> {
   const log = d.log ?? (() => {});
-  const result = await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, publishers: services.publishers });
+  const result = await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, publishers: services.publishers, search: services.sources.search });
   if ((result.state === 'published' || result.state === 'partial') && (result.posted.length > 0 || result.problems.length > 0)) {
     for (const p of result.posted) log(`${name(launch)} on ${p.channel}: ${p.url}`);
     for (const p of result.problems) log(`${name(launch)}: ${p}`);

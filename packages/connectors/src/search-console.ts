@@ -7,11 +7,21 @@ export interface ServiceAccount {
   private_key: string;
 }
 
-const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+// Not the read-only scope: resubmitting the sitemap is a write. The service account still only
+// reaches the properties it was added to.
+const SCOPE = 'https://www.googleapis.com/auth/webmasters';
+
+/** Whether Google has a page in its index, from the URL Inspection API */
+export interface IndexStatus {
+  indexed: boolean;
+  /** Google's own words: "Submitted and indexed", "Discovered - currently not indexed", "URL is unknown to Google"… */
+  coverage: string;
+  lastCrawl?: string;
+}
 
 /**
- * Google Search Console through its Search Analytics API, read-only: clicks, impressions, CTR and
- * average position of one page. Authenticated as a service account added as a user of the property,
+ * Google Search Console: clicks, impressions, CTR and average position of one page (Search
+ * Analytics), whether a page is indexed (URL Inspection), and resubmitting the sitemap. Authenticated as a service account added as a user of the property,
  * with a JWT signed here (node:crypto) instead of a Google client library.
  */
 export class SearchConsole {
@@ -86,5 +96,35 @@ export class SearchConsole {
     return row
       ? { clicks: row.clicks, impressions: row.impressions, ctr: row.ctr, position: row.position }
       : { clicks: 0, impressions: 0 };
+  }
+
+  /** Whether Google has indexed one URL of the property; the API allows 2,000 inspections a day */
+  async inspect(url: string): Promise<IndexStatus> {
+    const response = await this.#fetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${await this.#accessToken()}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ inspectionUrl: url, siteUrl: this.#property }),
+    });
+    const { inspectionResult } = await json<{
+      inspectionResult?: { indexStatusResult?: { verdict?: string; coverageState?: string; lastCrawlTime?: string } };
+    }>('Search Console', response, 'inspect a URL');
+    const status = inspectionResult?.indexStatusResult;
+    return {
+      indexed: status?.verdict === 'PASS',
+      coverage: status?.coverageState ?? 'Unknown',
+      ...(status?.lastCrawlTime ? { lastCrawl: status.lastCrawlTime } : {}),
+    };
+  }
+
+  /**
+   * Asks Google to read the sitemap again. Google read it once, when it was added, and otherwise
+   * comes back on its own schedule, which leaves a new article unknown to it for days.
+   */
+  async submitSitemap(sitemapUrl: string): Promise<void> {
+    const response = await this.#fetch(
+      `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(this.#property)}/sitemaps/${encodeURIComponent(sitemapUrl)}`,
+      { method: 'PUT', headers: { authorization: `Bearer ${await this.#accessToken()}` } },
+    );
+    if (!response.ok) await json('Search Console', response, 'submit the sitemap');
   }
 }
