@@ -35,7 +35,7 @@ const byHand: DnsSolver = {
 };
 
 const certificate = await ensureCertificate(
-  { domain: new URL(app.publicUrl).hostname, dns: byHand, secrets: new KeychainStore(), dataDir: config.dataDir, log: console.log, staging: process.argv.includes('--staging') },
+  { domain: new URL(app.publicUrl).hostname, dns: byHand, secrets: new KeychainStore(config.keychainService), dataDir: config.dataDir, log: console.log, staging: process.argv.includes('--staging') },
   process.argv.includes('--force') ? new Date(Date.now() + 365 * 86_400_000) : new Date(),
 );
 console.log(`Certificate valid until ${certificate.expires.toISOString()}`);
