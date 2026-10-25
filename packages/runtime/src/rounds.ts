@@ -64,11 +64,11 @@ export async function publishOne(launch: Launch, d: RoundDeps, services: Service
  */
 export async function refreshInstagramAccounts(d: Pick<RoundDeps, 'registry' | 'secrets'>, now = new Date(), http?: typeof fetch): Promise<string[]> {
   const lines: string[] = [];
-  for (const account of d.registry.accounts({ network: 'instagram' })) {
+  for (const account of await d.registry.accounts({ network: 'instagram' })) {
     const remember = () => d.registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: now.toISOString() } });
     const last = account.settings.refreshedAt;
     if (!last) {
-      remember();
+      await remember();
       continue;
     }
     if (now.getTime() - Date.parse(last) < TOKEN_REFRESH_EVERY_MS) continue;
@@ -77,7 +77,7 @@ export async function refreshInstagramAccounts(d: Pick<RoundDeps, 'registry' | '
     try {
       const fresh = await new Instagram({ userId: account.settings.userId, accessToken: secrets.accessToken, fetch: http }).refreshToken();
       await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ ...secrets, accessToken: fresh.accessToken }), `instagram ${account.label}`);
-      remember();
+      await remember();
       lines.push(`Instagram token of ${account.label} refreshed; valid for ${Math.round(fresh.expiresIn / 86400)} more days`);
     } catch (error) {
       lines.push(`Instagram token of ${account.label} not refreshed: ${error instanceof Error ? error.message : String(error)}`);
@@ -115,7 +115,7 @@ export async function runRound(d: RoundDeps, options: { detect: boolean; now?: D
     });
   }
   await step('publish', log, async () => {
-    for (const launch of d.registry.recent(100).filter((l) => l.status === 'drafted')) await publishOne(launch, d, services);
+    for (const launch of (await d.registry.recent(100)).filter((l) => l.status === 'drafted')) await publishOne(launch, d, services);
   });
   await step('Instagram tokens', log, async () => {
     for (const line of await refreshInstagramAccounts(d, now)) log(line);
@@ -125,11 +125,11 @@ export async function runRound(d: RoundDeps, options: { detect: boolean; now?: D
       if (line) log(line);
     }
   });
-  const lastMetrics = Date.parse(d.registry.cursor(METRICS_AT_KEY) ?? '') || 0;
+  const lastMetrics = Date.parse((await d.registry.cursor(METRICS_AT_KEY)) ?? '') || 0;
   if (now.getTime() - lastMetrics >= METRICS_EVERY_MS) {
     await step('metrics', log, async () => {
       const result = await collectMetrics(d.registry, d.brand, services.sources);
-      d.registry.setCursor(METRICS_AT_KEY, now.toISOString());
+      await d.registry.setCursor(METRICS_AT_KEY, now.toISOString());
       log(`Metrics: ${result.readings} readings`);
       for (const problem of result.problems) log(`  ${problem}`);
     });

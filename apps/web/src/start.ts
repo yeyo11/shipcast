@@ -14,7 +14,7 @@ const requireSession = createMiddleware().server(async ({ request, pathname, nex
   if (PUBLIC.some((p) => p.test(pathname))) return next();
   const { appContext } = await import('./server/context.server');
   const { cookieOf, readSession, SESSION_COOKIE } = await import('./server/session.server');
-  const session = await readSession(appContext().secrets, cookieOf(request, SESSION_COOKIE));
+  const session = await readSession((await appContext()).secrets, cookieOf(request, SESSION_COOKIE));
   if (session) return next({ context: { login: session.login } });
   const isPage = request.method === 'GET' && (request.headers.get('accept') ?? '').includes('text/html');
   return isPage ? new Response(null, { status: 302, headers: { location: '/login' } }) : new Response('Sign in first', { status: 401 });

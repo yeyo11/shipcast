@@ -74,8 +74,8 @@ Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](d
 ## What you need
 
 - Node 24 and pnpm; on Linux, `libsecret-tools` for the keychain; ffmpeg for the demo video.
-- [claudio](https://github.com/yeyo11/claudio), which runs Claude Code as a service, as the AI provider
-  (`docker-compose.yml` here starts it).
+- [claudio](https://github.com/yeyo11/claudio), which runs Claude Code as a service, as the AI provider,
+  and PostgreSQL for the launch registry (`docker-compose.yml` here starts both; tests need neither).
 - A launches repo with an Astro blog that accepts Shipcast's articles
   ([docs/launches-repo.md](docs/launches-repo.md) describes the contract), and its `brand.yml`.
 - An account on each network you want, connected from the app or listed in `.env`
@@ -84,9 +84,14 @@ Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](d
 ```bash
 pnpm install
 cp .env.example .env             # fill in what you use
+docker compose up -d postgres    # the registry; `docker compose up -d` starts claudio too
 pnpm shipcast preflight owner/repo
 pnpm shipcast launch owner/repo  # or: pnpm app
 ```
+
+An install from before Postgres keeps its registry in `data/shipcast.db`: stop the app and the CLI,
+start Postgres, then `pnpm sqlite-to-postgres` copies every row into the database at
+`SHIPCAST_DATABASE_URL` ([docs/decisions/postgres.md](docs/decisions/postgres.md)).
 
 ## Channels
 
@@ -105,7 +110,7 @@ X, LinkedIn and Reddit are not supported.
 ## Built with
 
 TypeScript on Node 24 in a pnpm monorepo: `packages/schema` (Zod), `packages/engine` (the registry on
-`node:sqlite`, detection, generation, publishing), `packages/connectors` (one module per network over
+PostgreSQL through Drizzle, detection, generation, publishing), `packages/connectors` (one module per network over
 `fetch`, no SDKs), `packages/assets` (Satori and resvg), `packages/runtime` (accounts and keychain),
 `apps/cli` and `apps/web` (TanStack Start). The design, with every decision and the reasoning behind
 it, is in [docs/plans/shipcast.md](docs/plans/shipcast.md); where it stands, in

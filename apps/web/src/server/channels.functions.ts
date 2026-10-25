@@ -34,17 +34,17 @@ export const renameAccount = createServerFn({ method: 'POST' })
     const o = object(input, 'input');
     return { id: id(o.id), label: text(o.label, 'label', 200) };
   })
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
     const label = data.label.trim();
     if (!label) return { ok: false };
-    appContext().registry.updateAccount(data.id, { label });
+    await (await appContext()).registry.updateAccount(data.id, { label });
     return { ok: true };
   });
 
 export const makePrimary = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
-  .handler(({ data }) => {
-    appContext().registry.makePrimary(data);
+  .handler(async ({ data }) => {
+    await (await appContext()).registry.makePrimary(data);
     return { ok: true };
   });
 

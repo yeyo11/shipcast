@@ -19,18 +19,18 @@ const INTERVAL_KEY = 'automation:interval';
 export const LAST_ROUND_KEY = 'automation:last-round';
 export const LAST_DELIVERY_KEY = 'automation:last-delivery';
 
-export function readAutomation(registry: Registry): Automation {
-  const mode = registry.cursor(MODE_KEY);
-  const interval = Number(registry.cursor(INTERVAL_KEY));
+export async function readAutomation(registry: Registry): Promise<Automation> {
+  const mode = await registry.cursor(MODE_KEY);
+  const interval = Number(await registry.cursor(INTERVAL_KEY));
   return {
     mode: mode === 'webhook' || mode === 'off' ? mode : 'poll',
     intervalSeconds: Number.isFinite(interval) && interval >= MIN_INTERVAL_SECONDS ? interval : 300,
   };
 }
 
-export function writeAutomation(registry: Registry, automation: Automation): Automation {
-  registry.setCursor(MODE_KEY, automation.mode);
-  registry.setCursor(INTERVAL_KEY, String(Math.max(MIN_INTERVAL_SECONDS, Math.round(automation.intervalSeconds))));
+export async function writeAutomation(registry: Registry, automation: Automation): Promise<Automation> {
+  await registry.setCursor(MODE_KEY, automation.mode);
+  await registry.setCursor(INTERVAL_KEY, String(Math.max(MIN_INTERVAL_SECONDS, Math.round(automation.intervalSeconds))));
   return readAutomation(registry);
 }
 
@@ -41,13 +41,14 @@ export interface Happened {
   lines: string[];
 }
 
-export function record(registry: Registry, key: string, happened: Happened): void {
-  registry.setCursor(key, JSON.stringify({ ...happened, lines: happened.lines.slice(-20) }));
+export async function record(registry: Registry, key: string, happened: Happened): Promise<void> {
+  await registry.setCursor(key, JSON.stringify({ ...happened, lines: happened.lines.slice(-20) }));
 }
 
-export function lastHappened(registry: Registry, key: string): Happened | null {
+export async function lastHappened(registry: Registry, key: string): Promise<Happened | null> {
+  const raw = await registry.cursor(key);
   try {
-    return JSON.parse(registry.cursor(key) ?? 'null') as Happened | null;
+    return JSON.parse(raw ?? 'null') as Happened | null;
   } catch {
     return null;
   }

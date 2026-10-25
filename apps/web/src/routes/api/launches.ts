@@ -6,9 +6,12 @@ import { launchView } from '../../server/launches.server';
 export const Route = createFileRoute('/api/launches')({
   server: {
     handlers: {
-      GET: () => {
-        const { registry } = appContext();
-        return Response.json(registry.recent(100).map((l) => ({ ...launchView(registry, l), metrics: registry.latestMetrics(l.id) })));
+      GET: async () => {
+        const { registry } = await appContext();
+        const launches = await registry.recent(100);
+        return Response.json(
+          await Promise.all(launches.map(async (l) => ({ ...(await launchView(registry, l)), metrics: await registry.latestMetrics(l.id) }))),
+        );
       },
     },
   },

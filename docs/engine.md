@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T00:01:49.64325884Z
-updated_at: 2026-10-25T01:38:29.97518803Z
+updated_at: 2026-10-25T12:36:16.275716729Z
 tags:
     - engine
     - registry
@@ -9,6 +9,7 @@ tags:
     - pipeline
     - cli
     - architecture
+    - postgres
 ---
 # The engine
 
@@ -22,13 +23,18 @@ fakes and checked against the real service where it is safe to. It depends on `@
 
 ## The launch registry
 
-`Registry` (`registry.ts`) is a `node:sqlite` database (`data/shipcast.db`, gitignored) with numbered
-migrations (`PRAGMA user_version`; append only, never edit one). It is what makes "a launch happens
-once" hold:
+`Registry` (`registry.ts`) lives in **PostgreSQL**, reached through Drizzle ORM
+([decisions/postgres.md](decisions/postgres.md), since 2026-10-25; before, `node:sqlite` in
+`data/shipcast.db`). `Registry.connect(SHIPCAST_DATABASE_URL)` opens it with postgres.js and applies
+the migrations; the tests use `memoryRegistry()` from `@shipcast/engine/testing`, an in-process
+PGlite. The schema is `src/db/schema.ts`; `pnpm --filter @shipcast/engine db:generate` writes a change
+as a new SQL migration in `packages/engine/drizzle/`, committed and never edited once applied. Every
+method returns a promise. It is what makes "a launch happens once" hold:
 
 - **`claim(launch)`** inserts a row unique on `(repo, ref)` and reports whether this call made it. A
   launch is claimed *before* anything is generated, so a second poll, a re-run, a manual launch of
-  the same release or a crash halfway through never starts the same campaign twice.
+  the same release or a crash halfway through never starts the same campaign twice; two processes
+  claiming the same release at once get one winner.
 - **Statuses**: `detected`, `generating`, `drafted` (the detail is the pull request, or
   `direct:<sha> <commit URL>` when published without one), `published`, `skipped`, `failed` (the
   detail says why). Skipped and failed launches keep their row.
@@ -40,7 +46,12 @@ once" hold:
 - **Cursors** keep small pieces of state: polling, a channel's permanent failure
   (`publish-failed:<launch>:<channel>`), the Instagram extras, each newsletter language sent.
   `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
-- **Accounts** (migration 3): the accounts connected per brand ([accounts.md](accounts.md)).
+- **Accounts**: the accounts connected per brand ([accounts.md](accounts.md)); adding, making
+  primary and removing one run in a transaction locked per network and brand, so each has one
+  primary.
+
+An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
+([decisions/postgres.md](decisions/postgres.md#moving-an-install)).
 
 ## Detecting launches
 
@@ -136,9 +147,10 @@ open), and `approveLaunch` merges it with a squash, after which publishing follo
 
 The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. Configuration comes from
 `.env` (`GITHUB_TOKEN_PERSONAL`, `SHIPCAST_CLAUDIO_URL`, `SHIPCAST_CLAUDIO_TOKEN`,
-`SHIPCAST_LAUNCHES_REPO`, optional `SHIPCAST_DATA_DIR` and `SHIPCAST_MAX_BUDGET_USD`); every missing
-variable is reported at once. The networks' credentials come from connected accounts, with `.env` as a
-fallback ([accounts.md](accounts.md)).
+`SHIPCAST_LAUNCHES_REPO`, `SHIPCAST_DATABASE_URL`, optional `SHIPCAST_DATA_DIR` and
+`SHIPCAST_MAX_BUDGET_USD`); every missing variable is reported at once. The networks' credentials come
+from connected accounts, with `.env` as a fallback ([accounts.md](accounts.md)). Every command
+connects to Postgres first, so it must be running (`docker compose up -d postgres`).
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
 its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
@@ -150,4 +162,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]]

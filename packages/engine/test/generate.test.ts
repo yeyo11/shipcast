@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, LaunchConfig } from '@shipcast/schema';
-import { ANALYSIS_TOOLS, buildPrompt, generatePack, Registry, type AiProvider, type GenerateRequest, type Launch } from '../src/index.ts';
+import { ANALYSIS_TOOLS, buildPrompt, generatePack, type AiProvider, type GenerateRequest, type Launch } from '../src/index.ts';
 
 const brand = Brand.parse({
   id: 'personal',
@@ -20,8 +20,8 @@ const config = LaunchConfig.parse({
 });
 
 function launch(kind: Launch['kind'] = 'launch'): Launch {
-  const registry = new Registry(':memory:');
-  return registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind, brand: 'personal' }).launch;
+  const at = '2026-10-25T00:00:00.000Z';
+  return { id: 1, repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind, brand: 'personal', status: 'detected', detail: null, createdAt: at, updatedAt: at };
 }
 
 const article = { title: 'claudio', description: 'Claude Code as a service.', markdown: 'Body.' };

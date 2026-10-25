@@ -6,18 +6,26 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test \"test/**/*.test.ts\"",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
     "@shipcast/assets": "workspace:*",
     "@shipcast/capture": "workspace:*",
     "@shipcast/connectors": "workspace:*",
     "@shipcast/schema": "workspace:*",
+    "drizzle-orm": "^0.45.4",
     "marked": "^16.4.2",
+    "postgres": "^3.4.9",
     "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
   }
 }

@@ -101,7 +101,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     const state = await github.pullRequestState(deps.launchesRepo, number);
     if (state === 'open') return { state: 'waiting', launch, reason: 'the drafts pull request is open' };
     if (state === 'closed') {
-      return { state: 'skipped', launch: registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
+      return { state: 'skipped', launch: await registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
     }
   }
 
@@ -127,11 +127,11 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     if (!live) return { state: 'waiting', launch, reason: `${articleUrl} is not live yet` };
     // Both languages' slugs, so the metrics can read each article's visits
     const slugs = (['en', 'es'] as const).filter((l) => pack.article?.[l]).map((l) => `${l}:${pack.article![l]!.slug}`).join(',');
-    if (!registry.posts(launch.id).some((p) => p.channel === 'blog') && deps.search) {
+    if (!(await registry.posts(launch.id)).some((p) => p.channel === 'blog') && deps.search) {
       // Not a channel: Google not hearing of the article yet never holds the launch back
       await resubmitSitemap(registry, brand.site, deps.search, new Date(), true).catch(() => false);
     }
-    registry.recordPost({ launchId: launch.id, channel: 'blog', url: articleUrl, externalId: slugs });
+    await registry.recordPost({ launchId: launch.id, channel: 'blog', url: articleUrl, externalId: slugs });
   }
 
   const read = (path: string) => github.fileAt(deps.launchesRepo, path, 'HEAD');
@@ -150,7 +150,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     return ogJpeg;
   };
 
-  const already = new Set(registry.posts(launch.id).map((p) => p.channel));
+  const already = new Set((await registry.posts(launch.id)).map((p) => p.channel));
   const posted: Array<{ channel: Channel; url: string }> = [];
   const problems: string[] = [];
 
@@ -233,13 +233,13 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
 
             // The post is out: the story and the comment are extras, reported but never worth posting it twice
             const storyUrl = `${brand.site}${mediaPath(launch, STORY_FILE)}`;
-            if (ig.publishStory && !registry.cursor(extraKey(launch, 'story')) && (await live(storyUrl))) {
+            if (ig.publishStory && !(await registry.cursor(extraKey(launch, 'story'))) && (await live(storyUrl))) {
               await ig.publishStory({ kind: 'image', url: storyUrl }).then(
                 (story) => registry.setCursor(extraKey(launch, 'story'), story.externalId),
                 (error: unknown) => problems.push(`instagram story: ${error instanceof Error ? error.message : String(error)}`),
               );
             }
-            if (ig.comment && comment && !registry.cursor(extraKey(launch, 'comment'))) {
+            if (ig.comment && comment && !(await registry.cursor(extraKey(launch, 'comment')))) {
               await ig.comment(published.externalId, comment).then(
                 (made) => registry.setCursor(extraKey(launch, 'comment'), made.id),
                 (error: unknown) => problems.push(`instagram comment: ${error instanceof Error ? error.message : String(error)}`),
@@ -260,7 +260,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               const listId = settings.lists[lang];
               const fromPack = pack.newsletter![lang];
               if (!listId || !fromPack) continue;
-              const done = registry.cursor(issueKey(launch, lang));
+              const done = await registry.cursor(issueKey(launch, lang));
               if (done) {
                 sent.push(JSON.parse(done) as Published);
                 continue;
@@ -290,7 +290,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 listId,
                 // No tag: Brevo's free plan refuses a campaign that carries one
               });
-              registry.setCursor(issueKey(launch, lang), JSON.stringify(result));
+              await registry.setCursor(issueKey(launch, lang), JSON.stringify(result));
               sent.push(result);
             }
             if (sent.length === 0) {
@@ -305,7 +305,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   for (const channel of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[channel];
     if (mode === 'off' || mode === 'manual' || already.has(channel)) continue;
-    if (registry.cursor(failureKey(launch, channel))) continue;
+    if (await registry.cursor(failureKey(launch, channel))) continue;
     const run = publishers[channel];
     if (!run) {
       problems.push(`${channel}: no piece in the pack or no credentials configured`);
@@ -313,20 +313,22 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     }
     try {
       const result = await run();
-      registry.recordPost({ launchId: launch.id, channel, url: result.url, externalId: result.externalId });
+      await registry.recordPost({ launchId: launch.id, channel, url: result.url, externalId: result.externalId });
       posted.push({ channel, url: result.url });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retryable = !(error instanceof Error && 'retryable' in error) || (error as { retryable: boolean }).retryable;
-      if (!retryable) registry.setCursor(failureKey(launch, channel), message);
+      if (!retryable) await registry.setCursor(failureKey(launch, channel), message);
       problems.push(`${channel}: ${message}${retryable ? ' (will retry)' : ''}`);
     }
   }
 
-  const pending = PUBLISHED_BY_ENGINE.filter((c) => {
+  const postedNow = new Set((await registry.posts(launch.id)).map((p) => p.channel));
+  const pending: EngineChannel[] = [];
+  for (const c of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[c];
-    return mode !== 'off' && mode !== 'manual' && publishers[c] && !registry.posts(launch.id).some((p) => p.channel === c) && !registry.cursor(failureKey(launch, c));
-  });
-  if (pending.length > 0) return { state: 'partial', launch: registry.get(launch.id)!, posted, problems };
-  return { state: 'published', launch: registry.setStatus(launch.id, 'published', launch.detail), posted, problems };
+    if (mode !== 'off' && mode !== 'manual' && publishers[c] && !postedNow.has(c) && !(await registry.cursor(failureKey(launch, c)))) pending.push(c);
+  }
+  if (pending.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems };
+  return { state: 'published', launch: await registry.setStatus(launch.id, 'published', launch.detail), posted, problems };
 }

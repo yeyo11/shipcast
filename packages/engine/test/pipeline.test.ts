@@ -13,6 +13,7 @@ import {
   type GitHubWriter,
   type PullRequestDraft,
 } from '../src/index.ts';
+import { memoryRegistry } from '../src/testing.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n  reddit: off\n';
@@ -67,13 +68,13 @@ class FakeAi implements AiProvider {
   }
 }
 
-function setup(output: unknown = pack, files: Record<string, string> = {}) {
+async function setup(output: unknown = pack, files: Record<string, string> = {}) {
   const github = new FakeGitHub({
     'yeyo11/launches/brand.yml@HEAD': BRAND_YML,
     'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML,
     ...files,
   }, 'v0.9.0');
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const clones: string[] = [];
   const deps = {
     github,
@@ -92,13 +93,13 @@ function setup(output: unknown = pack, files: Record<string, string> = {}) {
 }
 
 test('the brand comes from the launches repo, validated', async () => {
-  const { github } = setup();
+  const { github } = await setup();
   assert.equal((await loadBrand(github, 'yeyo11/launches')).site, 'https://josegarrido.dev');
   await assert.rejects(loadBrand(new FakeGitHub({}), 'yeyo11/launches'), /has no brand.yml/);
 });
 
 test('the known projects come from the launches repo; without projects.yml there are none', async () => {
-  const { github } = setup(pack, { 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: "#2FD7A0"\n  motif: phone\n' });
+  const { github } = await setup(pack, { 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: "#2FD7A0"\n  motif: phone\n' });
   assert.equal((await loadProjects(github, 'yeyo11/launches'))['claudio']?.motif, 'phone');
   assert.deepEqual(await loadProjects(new FakeGitHub({}), 'yeyo11/launches'), {});
   const broken = new FakeGitHub({ 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: green\n  motif: phone\n' });
@@ -106,9 +107,9 @@ test('the known projects come from the launches repo; without projects.yml there
 });
 
 test('a claimed launch becomes a drafts pull request and is recorded as drafted', async () => {
-  const { github, registry, deps, clones } = setup();
+  const { github, registry, deps, clones } = await setup();
   const brand = await loadBrand(github, 'yeyo11/launches');
-  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
 
   const result = await draftLaunch(launch, brand, deps);
   assert.equal(result.ok, true);
@@ -124,24 +125,24 @@ test('a claimed launch becomes a drafts pull request and is recorded as drafted'
   assert.ok(!pr.files.some((f) => f.path.includes('instagram')), 'channels off in launch.yml get nothing');
   assert.ok(pr.files.some((f) => f.path === 'public/covers/claudio.jpg'), 'a project without a cover gets one');
   assert.ok(pr.files.some((f) => f.path === 'projects.yml' && 'content' in f && f.content.includes('/covers/claudio.jpg')));
-  const after = registry.get(launch.id)!;
+  const after = (await registry.get(launch.id))!;
   assert.equal(after.status, 'drafted');
   assert.equal(after.detail, 'https://github.com/yeyo11/launches/pull/1');
 });
 
 test('a pack that falls short fails the launch with the problems and the chat to read', async () => {
-  const { github, registry, deps } = setup({ ...pack, bluesky: undefined });
+  const { github, registry, deps } = await setup({ ...pack, bluesky: undefined });
   const brand = await loadBrand(github, 'yeyo11/launches');
-  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const result = await draftLaunch(launch, brand, deps);
   assert.equal(result.ok, false);
   assert.equal(github.opened.length, 0, 'no pull request for a pack that fails');
-  assert.equal(registry.get(launch.id)!.status, 'failed');
-  assert.match(registry.get(launch.id)!.detail ?? '', /bluesky: the pack has no bluesky\nclaudio chat: chat-1/);
+  assert.equal((await registry.get(launch.id))!.status, 'failed');
+  assert.match((await registry.get(launch.id))!.detail ?? '', /bluesky: the pack has no bluesky\nclaudio chat: chat-1/);
 });
 
 test('a manual launch takes the latest release and is claimed like any other', async () => {
-  const { github, registry } = setup();
+  const { github, registry } = await setup();
   const brand = await loadBrand(github, 'yeyo11/launches');
   const first = await claimManual('yeyo11/claudio', undefined, brand, { github, registry });
   assert.ok('claimed' in first && first.claimed);
@@ -150,19 +151,19 @@ test('a manual launch takes the latest release and is claimed like any other', a
   const again = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in again && !again.claimed, 'never twice, by hand or by the watcher');
 
-  registry.setStatus(first.launch.id, 'failed', 'could not clone');
+  await registry.setStatus(first.launch.id, 'failed', 'could not clone');
   const retry = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in retry && retry.claimed, 'a failed launch published nothing: by hand, it is retried');
   assert.equal(retry.launch.id, first.launch.id);
   assert.equal(retry.launch.status, 'detected');
 
-  registry.setStatus(first.launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/1');
+  await registry.setStatus(first.launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/1');
   const drafted = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in drafted && !drafted.claimed, 'a drafted launch is never drafted again');
 });
 
 test('a manual launch explains why it cannot start', async () => {
-  const { github, registry } = setup(pack, { 'yeyo11/off/.github/launch.yml@v1.0.0': 'enabled: true\nbrand: personal\ntriggers:\n  manual: false\n' });
+  const { github, registry } = await setup(pack, { 'yeyo11/off/.github/launch.yml@v1.0.0': 'enabled: true\nbrand: personal\ntriggers:\n  manual: false\n' });
   const brand = await loadBrand(github, 'yeyo11/launches');
   github.latest = undefined;
   assert.deepEqual(await claimManual('yeyo11/claudio', undefined, brand, { github, registry }), {

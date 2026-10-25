@@ -15,13 +15,13 @@ const page = (status: number, message: string) =>
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });
 
-const callbackUrl = () => `${appContext().app.publicUrl}/auth/github/callback`;
+const callbackUrl = (app: { publicUrl: string }) => `${app.publicUrl}/auth/github/callback`;
 
 /** Sends the browser to GitHub with a fresh state, remembered in a short-lived cookie */
-export function startGitHubSignIn(): Response {
-  const { app } = appContext();
+export async function startGitHubSignIn(): Promise<Response> {
+  const { app } = await appContext();
   const state = randomBytes(18).toString('base64url');
-  const query = new URLSearchParams({ client_id: app.github.clientId, redirect_uri: callbackUrl(), state, allow_signup: 'false' });
+  const query = new URLSearchParams({ client_id: app.github.clientId, redirect_uri: callbackUrl(app), state, allow_signup: 'false' });
   return redirect(`https://github.com/login/oauth/authorize?${query}`, [setCookie(STATE_COOKIE, state, 600)]);
 }
 
@@ -31,7 +31,7 @@ export function startGitHubSignIn(): Response {
  * session. The token itself is not kept: the app needs to know who, not to act as them.
  */
 export async function finishGitHubSignIn(request: Request): Promise<Response> {
-  const { app, secrets } = appContext();
+  const { app, secrets } = await appContext();
   const url = new URL(request.url);
   const state = url.searchParams.get('state');
   const code = url.searchParams.get('code');
@@ -43,7 +43,7 @@ export async function finishGitHubSignIn(request: Request): Promise<Response> {
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify({ client_id: app.github.clientId, client_secret: app.github.clientSecret, code, redirect_uri: callbackUrl() }),
+    body: JSON.stringify({ client_id: app.github.clientId, client_secret: app.github.clientSecret, code, redirect_uri: callbackUrl(app) }),
   });
   const token = (await tokenResponse.json()) as { access_token?: string; error_description?: string };
   if (!token.access_token) return page(502, `GitHub refused the sign-in: ${token.error_description ?? tokenResponse.status}.`);
@@ -61,7 +61,7 @@ export async function finishGitHubSignIn(request: Request): Promise<Response> {
 
 /** A console link signs in as the first allowed login: it is the owner at their own terminal */
 export async function redeemConsoleLink(request: Request): Promise<Response> {
-  const { app, secrets } = appContext();
+  const { app, secrets } = await appContext();
   const token = new URL(request.url).searchParams.get('token') ?? '';
   if (!consoleLinks().redeem(token)) return page(403, 'This sign-in link was used already or has expired. The app prints a new one when it starts.');
   const session = await createSession(secrets, app.allowedLogins[0]!);

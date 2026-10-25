@@ -7,11 +7,13 @@ const complete = {
   SHIPCAST_CLAUDIO_URL: 'http://localhost:8798',
   SHIPCAST_CLAUDIO_TOKEN: 'c',
   SHIPCAST_LAUNCHES_REPO: 'yeyo11/launches',
+  SHIPCAST_DATABASE_URL: 'postgres://shipcast:shipcast@127.0.0.1:5433/shipcast',
 };
 
 test('a complete environment gives the config, with the data and workspace under the working directory', () => {
   const config = loadConfig({ ...complete }, '/repo');
   assert.equal(config.launchesRepo, 'yeyo11/launches');
+  assert.equal(config.databaseUrl, 'postgres://shipcast:shipcast@127.0.0.1:5433/shipcast');
   assert.equal(config.dataDir, '/repo/data');
   assert.equal(config.workspaceHostDir, '/repo/workspace');
   assert.equal(config.workspaceProviderDir, '/workspace');
@@ -21,13 +23,14 @@ test('a complete environment gives the config, with the data and workspace under
 test('every missing variable is reported at once', () => {
   assert.throws(
     () => loadConfig({ SHIPCAST_CLAUDIO_URL: 'x' }, '/repo'),
-    (e) => e instanceof ConfigError && e.message === 'missing in .env: GITHUB_TOKEN_PERSONAL, SHIPCAST_CLAUDIO_TOKEN, SHIPCAST_LAUNCHES_REPO (see .env.example)',
+    (e) => e instanceof ConfigError && e.message === 'missing in .env: GITHUB_TOKEN_PERSONAL, SHIPCAST_CLAUDIO_TOKEN, SHIPCAST_LAUNCHES_REPO, SHIPCAST_DATABASE_URL (see .env.example)',
   );
 });
 
-test('a malformed launches repo or budget is refused', () => {
+test('a malformed launches repo, budget or database URL is refused', () => {
   assert.throws(() => loadConfig({ ...complete, SHIPCAST_LAUNCHES_REPO: 'launches' }, '/repo'), /owner\/name/);
   assert.throws(() => loadConfig({ ...complete, SHIPCAST_MAX_BUDGET_USD: '-1' }, '/repo'), /positive number/);
+  assert.throws(() => loadConfig({ ...complete, SHIPCAST_DATABASE_URL: 'data/shipcast.db' }, '/repo'), /postgres:\/\/ URL/);
   assert.equal(loadConfig({ ...complete, SHIPCAST_MAX_BUDGET_USD: '5' }, '/repo').maxBudgetUsd, 5);
 });
 

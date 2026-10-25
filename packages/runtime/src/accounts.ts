@@ -57,18 +57,18 @@ export async function connectAccount(
   const result = await check(input.network, input.credentials, brand, deps.fetch);
   if (!result.ok) return result;
   const label = input.label?.trim() || result.account;
-  const existing = deps.registry.accounts({ brand: input.brand, network: input.network }).find((a) => a.label === label);
+  const existing = (await deps.registry.accounts({ brand: input.brand, network: input.network })).find((a) => a.label === label);
   // Connecting the same account again (a new token, a reconnection) updates it instead of failing
   const account = existing
-    ? deps.registry.updateAccount(existing.id, { settings: input.credentials.settings })
-    : deps.registry.addAccount({ network: input.network, brand: input.brand, label, settings: input.credentials.settings });
+    ? await deps.registry.updateAccount(existing.id, { settings: input.credentials.settings })
+    : await deps.registry.addAccount({ network: input.network, brand: input.brand, label, settings: input.credentials.settings });
   await deps.secrets.set(accountSecretKey(account.id), JSON.stringify(input.credentials.secrets), `${info.name} ${label}`);
-  return { ok: true, account: deps.registry.recordCheck(account.id, result) };
+  return { ok: true, account: await deps.registry.recordCheck(account.id, result) };
 }
 
 /** Checks a connected account again and records the answer */
 export async function checkAccount(deps: AccountDeps, id: number): Promise<Account> {
-  const account = deps.registry.account(id);
+  const account = await deps.registry.account(id);
   if (!account) throw new MissingField(`no account ${id}`);
   const secrets = await getJson(deps.secrets, accountSecretKey(id));
   const result: Check = secrets
@@ -80,7 +80,7 @@ export async function checkAccount(deps: AccountDeps, id: number): Promise<Accou
 /** Disconnects an account: its row and its keychain entry both go */
 export async function disconnectAccount(deps: AccountDeps, id: number): Promise<void> {
   await deps.secrets.delete(accountSecretKey(id));
-  deps.registry.deleteAccount(id);
+  await deps.registry.deleteAccount(id);
 }
 
 /**
@@ -97,7 +97,7 @@ export async function importFromEnv(
   if (!brand) return [];
   const results: Array<{ network: string; result: Connected }> = [];
   for (const info of NETWORKS) {
-    if (info.auth === 'none' || deps.registry.accounts({ brand: brandId, network: info.id }).length > 0) continue;
+    if (info.auth === 'none' || (await deps.registry.accounts({ brand: brandId, network: info.id })).length > 0) continue;
     if (info.id === 'github') continue; // the engine's own token stays in .env: it is what Shipcast runs on
     let credentials: Credentials | undefined;
     try {

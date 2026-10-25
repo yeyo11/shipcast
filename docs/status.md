@@ -28,8 +28,9 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 - **`packages/schema`**: `launch.yml` ([launch-yml.md](launch-yml.md)), `brand.yml`
   ([brands.md](brands.md)), `projects.yml` (the project looks) and the content pack
   ([content-pack.md](content-pack.md)), with line-aware YAML errors and the pack's draft-07 JSON Schema.
-- **`packages/engine`** ([engine.md](engine.md)): the registry on `node:sqlite` (launches, posts,
-  cursors, metrics, accounts), detection from the account's public events, the pre-flight check,
+- **`packages/engine`** ([engine.md](engine.md)): the registry on PostgreSQL through Drizzle (launches,
+  posts, cursors, metrics, accounts; moved from `node:sqlite` on 2026-10-25,
+  [decisions/postgres.md](decisions/postgres.md)), detection from the account's public events, the pre-flight check,
   claudio as the AI provider, drafting to a pull request or straight onto main, articles written in
   the app, reviewing and approving, publishing once per channel, the newsletter and metrics
   ([publishing.md](publishing.md)).
@@ -65,7 +66,9 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
   projects' (claudio Q141856151, Shipcast Q141856152), created on 2026-10-25 from the owner's account
   with the conflict of interest disclosed, and linked from the blog's `Person`
   ([plans/search-presence.md](plans/search-presence.md)).
-- **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)).
+- **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)), and so does the registry's
+  Postgres (`docker compose up -d postgres`); an install with `data/shipcast.db` moves it with
+  `pnpm sqlite-to-postgres`.
 - **Search and analytics**: Search Console and Cloudflare Web Analytics on the blog; Shipcast
   resubmits the sitemap and tracks each article's index status ([search-indexing.md](search-indexing.md)).
 - **The newsletter** in Brevo, live on the blog ([publishing.md](publishing.md#the-newsletter)).
@@ -106,11 +109,11 @@ deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-cl
 
 [plans/after-mvp.md](plans/after-mvp.md), decided on 2026-10-25. Done the same day: the blog's
 work in parallel (on Cloudflare, SEO and AI readiness, speed), the article indexing brought forward,
-and the Wikidata items. Next is phase 6, the foundations, starting with Postgres and Drizzle and the
-post model; then the interface, AI, after publishing, engagement and reach. Waiting on the owner: the
+and the Wikidata items. Phase 6, the foundations, has its first piece, the registry on Postgres through Drizzle
+([decisions/postgres.md](decisions/postgres.md)); next is the post model; then the interface, AI, after publishing, engagement and reach. Waiting on the owner: the
 design of the blog's project pages and article index. The server deployment is postponed; until
 then the app runs on the owner's machine and does not start on its own after a reboot.
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]]

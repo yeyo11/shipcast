@@ -35,8 +35,8 @@ const SITEMAP_EVERY_MS = 24 * 3600 * 1000;
 export const sitemapUrl = (site: string) => `${site}/sitemap-index.xml`;
 
 /** Google's view of an article URL, as of the last reading; undefined until it is first read */
-export function indexStatus(registry: Registry, url: string): (IndexStatus & { checkedAt: string }) | undefined {
-  const raw = registry.cursor(indexStatusKey(url));
+export async function indexStatus(registry: Registry, url: string): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
+  const raw = await registry.cursor(indexStatusKey(url));
   return raw ? (JSON.parse(raw) as IndexStatus & { checkedAt: string }) : undefined;
 }
 
@@ -46,10 +46,10 @@ export function indexStatus(registry: Registry, url: string): (IndexStatus & { c
  */
 export async function resubmitSitemap(registry: Registry, site: string, search: NonNullable<MetricSources['search']>, now = new Date(), force = false): Promise<boolean> {
   if (!search.submitSitemap) return false;
-  const last = Date.parse(registry.cursor(SITEMAP_SUBMITTED_KEY) ?? '') || 0;
+  const last = Date.parse((await registry.cursor(SITEMAP_SUBMITTED_KEY)) ?? '') || 0;
   if (!force && now.getTime() - last < SITEMAP_EVERY_MS) return false;
   await search.submitSitemap(sitemapUrl(site));
-  registry.setCursor(SITEMAP_SUBMITTED_KEY, now.toISOString());
+  await registry.setCursor(SITEMAP_SUBMITTED_KEY, now.toISOString());
   return true;
 }
 
@@ -73,9 +73,9 @@ export function articleUrls(externalId: string | null | undefined, url: string, 
 export async function collectMetrics(registry: Registry, brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
   let readings = 0;
   const problems: string[] = [];
-  const record = (launchId: number, source: string, values: Record<string, number | undefined>) => {
+  const record = async (launchId: number, source: string, values: Record<string, number | undefined>) => {
     const clean = Object.fromEntries(Object.entries(values).filter((e): e is [string, number] => typeof e[1] === 'number'));
-    registry.recordMetrics(launchId, source, clean, now);
+    await registry.recordMetrics(launchId, source, clean, now);
     readings += Object.keys(clean).length;
   };
   const attempt = async (what: string, fn: () => Promise<void>) => {
@@ -87,12 +87,12 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
   };
 
   let unindexed = false;
-  const launches = registry.recent(500).filter((l) => l.status === 'published');
+  const launches = (await registry.recent(500)).filter((l) => l.status === 'published');
   for (const launch of launches) {
     const since = launch.createdAt.slice(0, 10);
     const until = day(now);
 
-    for (const post of registry.posts(launch.id)) {
+    for (const post of await registry.posts(launch.id)) {
       const reader = sources.posts?.[post.channel];
       if (reader && post.externalId && post.channel !== 'blog') {
         await attempt(`${launch.repo} ${launch.ref} ${post.channel}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!)));
@@ -108,13 +108,13 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
               values[`views_${v.lang}`] = (values[`views_${v.lang}`] ?? 0) + v.views;
               for (const [source, count] of Object.entries(v.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
             }
-            record(launch.id, 'blog', values);
+            await record(launch.id, 'blog', values);
           });
         }
         if (sources.search) {
           await attempt(`${launch.repo} ${launch.ref} search`, async () => {
             const found = await Promise.all(urls.map(({ url }) => sources.search!.pageMetrics(url, since, until)));
-            record(launch.id, 'search', {
+            await record(launch.id, 'search', {
               clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
               impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
             });
@@ -123,8 +123,8 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
           if (inspect) {
             await attempt(`${launch.repo} ${launch.ref} index status`, async () => {
               const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await inspect(url) })));
-              for (const { url, status } of statuses) registry.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
-              record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
+              for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+              await record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
               unindexed ||= statuses.some((s) => !s.status.indexed);
             });
           }
@@ -136,7 +136,7 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
     if (sources.github && !launch.ref.startsWith('article:')) {
       await attempt(`${launch.repo} GitHub`, async () => {
         const stats = await sources.github!.repoStats(launch.repo);
-        record(launch.id, 'github', { ...stats });
+        await record(launch.id, 'github', { ...stats });
       });
     }
   }
