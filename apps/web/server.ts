@@ -44,6 +44,8 @@ function toRequest(request: IncomingMessage, origin: string): Request {
     if (Array.isArray(value)) for (const v of value) headers.append(name, v);
     else if (value !== undefined) headers.set(name, value);
   }
+  // Who is calling, for the API's limit on wrong tokens: from the socket, never from what the client sent
+  headers.set('x-shipcast-peer', request.socket.remoteAddress ?? 'unknown');
   const method = request.method ?? 'GET';
   const body = method === 'GET' || method === 'HEAD' ? undefined : (Readable.toWeb(request) as ReadableStream<Uint8Array>);
   return new Request(new URL(request.url ?? '/', origin), { method, headers, body, duplex: 'half' } as RequestInit);

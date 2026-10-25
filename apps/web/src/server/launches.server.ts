@@ -1,4 +1,5 @@
-import type { Launch, Registry } from '@shipcast/engine';
+import { articleUrls, indexStatus, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
 function stateOf(launch: Launch, failures: number): { label: string; tone: Tone } {
@@ -51,4 +52,44 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
       return found ? [{ label, value: found.value }] : [];
     }),
   };
+}
+
+/**
+ * Everything a launch's page shows, and the REST API's launch: its pieces, the last reading of each
+ * number, each search engine's view of each language's article, and its drafts as they are now.
+ * Google is always listed, as the engine that matters most; Bing once it has been read at all.
+ */
+export async function launchDetail(registry: Registry, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
+  const urls = articleUrls(await registry.posts(launch.id, { channel: 'blog' }));
+  const views = await Promise.all(
+    urls.flatMap(({ lang, url }) =>
+      (['google', 'bing'] as const).map(async (engine) => {
+        const status = await indexStatus(registry, url, engine);
+        return { engine, lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
+      }),
+    ),
+  );
+  const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
+  const review = await readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+  const metrics = (await registry.latestMetrics(launch.id)).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
+  return { launch: await launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index };
+}
+
+/**
+ * Publishing again: a channel that failed for good gets another chance, or a merged launch is
+ * followed. Only this launch's failure is forgotten; the channel stays failed for any other launch.
+ */
+export async function publishAgain(
+  registry: Registry,
+  launch: Launch,
+  channel: Channel | undefined,
+  startPublishing: (launch: Launch) => Promise<string>,
+): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
+  if (channel) {
+    await registry.deleteCursor(`publish-failed:${launch.id}:${channel}`);
+    if (launch.status === 'published') await registry.setStatus(launch.id, 'drafted', launch.detail);
+  } else if (launch.status !== 'drafted') {
+    return { ok: false, problem: `the launch is ${launch.status}` };
+  }
+  return { ok: true, job: await startPublishing((await registry.get(launch.id))!) };
 }

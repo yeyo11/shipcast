@@ -15,6 +15,13 @@
       "when": 1792934379749,
       "tag": "0001_post_model",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792939368773,
+      "tag": "0002_api_tokens",
+      "breakpoints": true
     }
   ]
 }
