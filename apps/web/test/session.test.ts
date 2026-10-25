@@ -19,6 +19,14 @@ test('a session is signed: it reads back, and a changed or expired one does not'
   assert.equal(await readSession(new MemoryStore(), value, now), undefined, 'another key, another app');
 });
 
+test('a session carries the GitHub name and picture read at sign-in, signed with the login', async () => {
+  const secrets = new MemoryStore();
+  const now = Date.parse('2026-10-25T00:00:00Z');
+  const { value } = await createSession(secrets, 'yeyo11', now, { name: 'José', avatarUrl: 'https://avatars.githubusercontent.com/u/1' });
+  const session = await readSession(secrets, value, now);
+  assert.deepEqual([session?.login, session?.name, session?.avatarUrl], ['yeyo11', 'José', 'https://avatars.githubusercontent.com/u/1']);
+});
+
 test('cookies are HttpOnly, Secure and Lax, and read back by name', () => {
   assert.equal(setCookie('sc_session', 'a b', 60), 'sc_session=a%20b; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=60');
   const request = new Request('https://x', { headers: { cookie: 'other=1; sc_session=a%20b' } });

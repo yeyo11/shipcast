@@ -1,4 +1,13 @@
-import { checkProblem, json, type Check, type Metrics, type Published } from './http.ts';
+import { checkProblem, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+
+interface MastodonAccount {
+  acct: string;
+  display_name?: string;
+  avatar?: string;
+  followers_count?: number;
+  following_count?: number;
+  statuses_count?: number;
+}
 
 export interface MastodonPost {
   text: string;
@@ -43,15 +52,24 @@ export class Mastodon {
     return { externalId: created.id, url: created.url };
   }
 
+  async #me(what: string): Promise<MastodonAccount> {
+    const response = await this.#fetch(`${this.#instance}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${this.#token}` } });
+    return json<MastodonAccount>('Mastodon', response, what);
+  }
+
   /** The token's account; also proves the token may read, which the metrics need */
   async check(): Promise<Check> {
     try {
-      const response = await this.#fetch(`${this.#instance}/api/v1/accounts/verify_credentials`, { headers: { authorization: `Bearer ${this.#token}` } });
-      const me = await json<{ acct: string }>('Mastodon', response, 'check');
-      return { ok: true, account: `@${me.acct}@${new URL(this.#instance).host}` };
+      const me = await this.#me('check');
+      return okCheck(`@${me.acct}@${new URL(this.#instance).host}`, { avatarUrl: me.avatar, displayName: me.display_name });
     } catch (error) {
       return checkProblem(error);
     }
+  }
+
+  async profileStats(): Promise<ProfileStats> {
+    const me = await this.#me('read the profile');
+    return statsOf({ followers: me.followers_count, following: me.following_count, posts: me.statuses_count });
   }
 
   async metrics(externalId: string): Promise<Metrics> {

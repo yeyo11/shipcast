@@ -38,8 +38,55 @@ export async function json<T>(network: string, response: Response, what: string)
   }
 }
 
-/** Whether a credential works, in words a person can act on: what the Channels page shows. */
-export type Check = { ok: true; account: string } | { ok: false; problem: string };
+/**
+ * Whether a credential works, in words a person can act on: what the Channels page shows. A working
+ * one also brings the profile's picture and name when the same answer has them.
+ */
+export type Check = { ok: true; account: string; avatarUrl?: string; displayName?: string } | { ok: false; problem: string };
+
+/**
+ * An account's own numbers at one moment. Each is left out where the network does not give it;
+ * `extra` holds what only that network counts (a Telegram channel's members, GitHub's repos).
+ */
+export interface ProfileStats {
+  followers?: number;
+  following?: number;
+  posts?: number;
+  extra?: Record<string, number>;
+}
+
+/**
+ * The picture's URL, only when it is plain https: the app renders it in an <img>, so a `javascript:`
+ * or an `http:` address from a network's answer never reaches the page.
+ */
+export function imageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 2000) return undefined;
+  try {
+    return new URL(value).protocol === 'https:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keeps what is a number: networks answer null or leave a count out when it is hidden */
+export function counts(values: Record<string, unknown>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
+  return out;
+}
+
+/** Profile stats from a network's answer, leaving out what it did not count */
+export function statsOf(main: { followers?: unknown; following?: unknown; posts?: unknown }, extra: Record<string, unknown> = {}): ProfileStats {
+  const more = counts(extra);
+  return { ...counts(main), ...(Object.keys(more).length > 0 ? { extra: more } : {}) };
+}
+
+/** A working check with the profile's picture and name, each only when there is one */
+export function okCheck(account: string, profile: { avatarUrl?: unknown; displayName?: unknown } = {}): Check {
+  const avatarUrl = imageUrl(profile.avatarUrl);
+  const displayName = typeof profile.displayName === 'string' && profile.displayName.trim() ? profile.displayName.trim() : undefined;
+  return { ok: true, account, ...(avatarUrl && { avatarUrl }), ...(displayName && { displayName }) };
+}
 
 /**
  * Turns a failed check into a sentence: a status code means nothing to the person who has to fix the

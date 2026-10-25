@@ -7,7 +7,7 @@ import {
   mastodonAuthorizeUrl,
   registerMastodonApp,
 } from '@shipcast/connectors';
-import { connectAccount, credentialsFor, getJson, NETWORKS, type AccountDeps } from '@shipcast/runtime';
+import { connectAccount, credentialsFor, getJson, isStale, lastSynced, NETWORKS, type AccountDeps } from '@shipcast/runtime';
 import { appContext } from './context.server';
 
 export async function accountDeps(): Promise<AccountDeps> {
@@ -19,7 +19,14 @@ export async function accountDeps(): Promise<AccountDeps> {
 export async function channelsView() {
   const { registry, secrets, app, brand } = await appContext();
   const current = await brand();
-  const accounts = await registry.accounts();
+  const snapshots = await registry.lastSnapshots();
+  const now = new Date();
+  // Each account with its latest numbers and how fresh they are: the page warns about a stale one
+  const accounts = (await registry.accounts()).map((account) => {
+    const snapshot = snapshots.get(account.id) ?? null;
+    const syncedAt = lastSynced(account, snapshot?.takenAt);
+    return { ...account, snapshot, syncedAt, stale: isStale(syncedAt, now) };
+  });
   const fromEnv: string[] = [];
   for (const network of NETWORKS) {
     if (network.auth === 'none' || accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;

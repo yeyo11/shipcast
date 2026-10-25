@@ -20,6 +20,8 @@ export interface JobData {
   round: { reason: string };
   metrics: { reason: string };
   'instagram-tokens': { reason: string };
+  /** Every account's numbers, or one account's when it is synced by hand */
+  snapshots: { reason: string; accountId?: number };
 }
 
 export type QueueName = keyof JobData;
@@ -42,8 +44,9 @@ interface QueueSpec extends Omit<Queue, 'name'> {
 /*
  * Retries are for waiting, not for repeating work: a draft costs an AI run and fails into the
  * launch's own `failed` status, so it is never tried again on its own; a publish job's retries are
- * how it waits for a deploy. The round, the metrics and the token refresh are `stately`: one queued
- * and one running at most, whichever process sent them.
+ * how it waits for a deploy. The round, the metrics, the token refresh and the snapshots are
+ * `stately`: one queued and one running at most, whichever process sent them (per account, for a
+ * Sync now, which has its own key).
  */
 const QUEUES: Record<QueueName, QueueSpec> = {
   draft: { title: 'Drafting a launch', policy: 'standard', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
@@ -53,6 +56,7 @@ const QUEUES: Record<QueueName, QueueSpec> = {
   round: { title: 'Automation round', policy: 'stately', retryLimit: 0, expireInSeconds: 3600, concurrency: 1 },
   metrics: { title: 'Reading the numbers', policy: 'stately', retryLimit: 1, retryDelay: 15 * 60, expireInSeconds: 3600, concurrency: 1 },
   'instagram-tokens': { title: 'Refreshing Instagram tokens', policy: 'stately', retryLimit: 2, retryDelay: 3600, expireInSeconds: 15 * 60, concurrency: 1 },
+  snapshots: { title: 'Syncing the accounts', policy: 'stately', retryLimit: 1, retryDelay: 30 * 60, expireInSeconds: 30 * 60, concurrency: 1 },
 };
 
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];

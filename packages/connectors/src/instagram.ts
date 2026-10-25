@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, type Check, type Metrics, type Published } from './http.ts';
+import { checkProblem, ConnectorError, json, okCheck, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
 export type InstagramMedia = { kind: 'image' | 'video'; url: string };
@@ -132,15 +132,29 @@ export class Instagram {
   /** The token's account, which must be the configured one */
   async check(): Promise<Check> {
     try {
-      const me = await this.#get<{ user_id?: string; id: string; username: string }>('/me', { fields: 'user_id,username' }, 'check');
+      const me = await this.#get<{ user_id?: string; id: string; username: string; name?: string; profile_picture_url?: string }>(
+        '/me',
+        { fields: 'user_id,username,name,profile_picture_url' },
+        'check',
+      );
       // `user_id` is the professional account's id, the one media is published under; `id` is app-scoped
       if (me.user_id !== this.#user && me.id !== this.#user) {
         return { ok: false, problem: `the token belongs to @${me.username}, not to the account ${this.#user}` };
       }
-      return { ok: true, account: `@${me.username}` };
+      // The picture is a signed CDN address that expires after a few days: it is read again on every check
+      return okCheck(`@${me.username}`, { avatarUrl: me.profile_picture_url, displayName: me.name });
     } catch (error) {
       return checkProblem(error);
     }
+  }
+
+  async profileStats(): Promise<ProfileStats> {
+    const me = await this.#get<{ followers_count?: number; follows_count?: number; media_count?: number }>(
+      '/me',
+      { fields: 'followers_count,follows_count,media_count' },
+      'read the profile',
+    );
+    return statsOf({ followers: me.followers_count, following: me.follows_count, posts: me.media_count });
   }
 
   /** Swaps the long-lived token for a fresh one (valid 60 more days); allowed once it is 24 h old. */

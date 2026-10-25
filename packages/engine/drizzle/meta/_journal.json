@@ -29,6 +29,13 @@
       "when": 1792941265528,
       "tag": "0003_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792942542837,
+      "tag": "0004_account_snapshots",
+      "breakpoints": true
     }
   ]
 }

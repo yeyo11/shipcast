@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useToast } from '../../../components/Toasts';
-import { Notice } from '../../../components/ui';
+import { Avatar, Notice, when } from '../../../components/ui';
 import { connectWithForm, getChannels } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
 
@@ -141,9 +141,22 @@ function Connect() {
             ))}
           </ul>
           {network.accounts.length > 0 && (
-            <p className="muted">
-              Already connected: {network.accounts.map((a) => a.label).join(', ')}. Connecting the same account again replaces its credential.
-            </p>
+            <>
+              <ul className="list">
+                {network.accounts.map((a) => (
+                  <li key={a.id}>
+                    <span className="account-who">
+                      <Avatar src={a.avatarUrl} alt="" size={32} />
+                      <strong>{a.label}</strong>
+                    </span>
+                    <span className={a.stale ? 'stale' : 'muted'} style={{ fontSize: 14 }}>
+                      {a.syncedAt ? `synced ${when(a.syncedAt)}` : 'never synced'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="muted">Already connected. Connecting the same account again replaces its credential.</p>
+            </>
           )}
         </aside>
       </div>
