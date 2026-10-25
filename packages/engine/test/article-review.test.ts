@@ -152,6 +152,7 @@ test('an article keeps the owner’s words, gets its translation and pieces, and
   assert.equal(pr.branch, 'article/my-own-title');
   const en = pr.files.find((f) => f.path === 'src/content/posts/en/claudio.md');
   assert.match(en && 'content' in en ? en.content : '', /title: "My own title"[\s\S]*My own words\./);
+  assert.doesNotMatch(en && 'content' in en ? en.content : '', /^repo:/m, 'an article has no project repo');
   const config = pr.files.find((f) => f.path === 'articles/my-own-title/launch.yml');
   assert.match(config && 'content' in config ? config.content : '', /bluesky: approval/);
   assert.ok(pr.files.some((f) => f.path === 'articles/my-own-title/bluesky.md'));

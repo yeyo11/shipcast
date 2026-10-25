@@ -85,7 +85,8 @@ export function renderDrafts(
         `pubDate: ${date.toISOString().slice(0, 10)}`,
         `lang: ${lang}`,
         `translationKey: ${q(translationKey)}`,
-        `repo: ${q(pack.project.repo)}`,
+        // An article written in the app belongs to no project, so the blog shows no repo for it
+        ...(isArticle(launch) ? [] : [`repo: ${q(pack.project.repo)}`]),
         ...(pack.project.version ? [`version: ${q(pack.project.version)}`] : []),
         `tags: [${pack.article.tags.map(q).join(', ')}]`,
         ...(image ? [`image: ${q(image)}`] : []),
