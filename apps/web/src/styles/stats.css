@@ -1,0 +1,126 @@
+/*
+ * The charts and the Stats page (docs/decisions/charts.md): poster in the header, calm and dense in
+ * the work area. Role tokens only; the series colours are the --chart-* properties palette.ts writes,
+ * night on the root and day under [data-theme="day"].
+ */
+
+/* ---------- The control bar ---------- */
+
+.controls { display: grid; gap: 14px; padding: 18px 20px; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); }
+.controls-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px 16px; align-items: end; }
+.controls-range { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), max-content)); }
+.controls-toggles { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: end; }
+.controls-seg { grid-template-columns: max-content; }
+.controls-compare { align-self: end; }
+.controls .input[type="date"] { min-width: 0; }
+.stats-range { margin: 14px 4px 0; font-size: 14px; }
+@media (max-width: 560px) {
+  .controls { padding: 16px 14px; }
+  .controls-seg { grid-template-columns: minmax(0, 1fr); flex: 1 1 100%; }
+}
+
+/* The multiple combobox: chips inside the input, wrapping onto new lines rather than widening it */
+.ui-combo-multi { padding-left: 6px; flex-wrap: nowrap; }
+.ui-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; padding: 4px 0; }
+.ui-chips .ui-combo-input { flex: 1 1 80px; min-width: 80px; padding-left: 8px; }
+.ui-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; padding: 0 2px 0 12px; border-radius: var(--sc-radius-pill); background: var(--sc-text); color: var(--sc-ground); font: 600 13.5px/1 var(--sc-font-text); outline: none; }
+.ui-chip:focus-visible, .ui-chip[data-highlighted] { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.ui-chip-remove { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.ui-chip-remove:hover { background: color-mix(in srgb, var(--sc-ground) 22%, transparent); }
+@media (pointer: coarse) { .ui-chip { min-height: 40px; } .ui-chip-remove { width: 40px; height: 40px; } }
+
+/* ---------- KPIs ---------- */
+
+.kpis { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px; }
+.kpi { display: grid; gap: 6px; width: 100%; min-height: 96px; padding: 14px 16px; text-align: left; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: 18px; background: var(--sc-raised); color: var(--sc-text); cursor: pointer; font: inherit; }
+.kpi:hover { border-color: var(--sc-rail); }
+/* The charted family: outlined in the text colour with the small stamp, as what is pressed */
+.kpi[aria-pressed="true"] { border: 2px solid var(--sc-text); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
+.kpi-label { font: var(--sc-label); color: var(--sc-muted); }
+.kpi-value { font: 900 34px/0.95 var(--sc-font-display); letter-spacing: var(--sc-tracking-title); overflow-wrap: anywhere; }
+.kpi-delta { font: 600 13.5px/1.2 var(--sc-font-text); color: var(--sc-muted); }
+.kpi-delta.up, .kpi-delta.down { color: var(--sc-text); }
+.kpi-delta [aria-hidden] { font-size: 10px; }
+
+/* ---------- The chart ---------- */
+
+.chart-card { margin-top: 18px; padding: 20px 20px 16px; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); min-width: 0; }
+.chart-title { margin: 0 0 12px; font: 700 18px/1.3 var(--sc-font-text); }
+.chart-note { margin: 10px 0 0; font-size: 13px; }
+@media (max-width: 560px) { .chart-card { padding: 16px 12px 12px; border-radius: 18px; } }
+@media (pointer: coarse) { .chart-note { display: none; } }
+
+.chart { margin: 0; min-width: 0; }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-bottom: 10px; }
+.chart-tools { display: flex; gap: 8px; margin-left: auto; }
+.chart-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; min-width: 0; }
+.chart-legend li { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow-wrap: anywhere; }
+.chart-swatch { flex: none; display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.chart-swatch-line { flex: none; }
+.chart-box { position: relative; width: 100%; min-width: 0; }
+.chart-plot { position: relative; border-radius: 8px; }
+.chart-plot:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 4px; }
+.chart-svg { display: block; overflow: visible; }
+/* Horizontal drags brush and vertical ones still scroll the page on a phone */
+.chart-hit { touch-action: pan-y; }
+.chart-hit.zoomable { cursor: crosshair; }
+.chart-brush { fill: var(--sc-text); fill-opacity: .1; stroke: var(--sc-text); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.chart-crosshair { pointer-events: none; }
+
+/* The tooltip: the popups' look (page colour, text-colour outline, small stamp), dense */
+.chart-tooltip { position: absolute; top: 4px; z-index: 5; width: max-content; max-width: min(260px, calc(100% - 8px)); padding: 10px 12px; background: var(--sc-ground); color: var(--sc-text); border: 2px solid var(--sc-text); border-radius: 14px; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); pointer-events: none; font-size: 13px; }
+.chart-tooltip-title { margin: 0 0 6px; font: 700 13.5px/1.2 var(--sc-font-text); }
+.chart-tooltip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.chart-tooltip li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; }
+.chart-tooltip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-tooltip-value { font-family: var(--sc-font-mono); font-size: 12.5px; text-align: right; }
+.chart-tooltip-prev { grid-column: 2 / 4; color: var(--sc-muted); font-size: 12px; text-align: right; }
+.chart-tooltip-total { padding-top: 4px; border-top: 1px solid var(--sc-hairline); font-weight: 700; }
+
+/* ---------- Ranking ---------- */
+
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 14px 20px; margin: 56px 0 10px; }
+.section-head h2.ph { margin: 0; }
+.section-lead { margin: 0 0 14px; font-size: 14.5px; max-width: 720px; }
+.table-card { border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); padding: 6px 14px; min-width: 0; }
+.ranking-table th.num, .ranking-table td.num { text-align: right; white-space: nowrap; }
+.ranking-table td { vertical-align: middle; }
+.ranking-score { font-weight: 700; }
+.sort { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 2px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.sort:hover { color: var(--sc-text); }
+th[aria-sort] .sort { color: var(--sc-text); }
+.sort-mark { font-size: 12px; opacity: .8; }
+.who-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
+.who-channel { display: inline-flex; align-items: center; gap: 6px; font: var(--sc-label); }
+.who-channel .icon { width: 18px; height: 18px; }
+.who-cell a { display: inline-flex; align-items: center; min-height: 44px; }
+.who-out { font: var(--sc-label); color: var(--sc-muted); }
+.who-pieces { font-size: 13px; }
+.pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 14px; }
+/* A phone: each row a small block, the numbers in a grid of labelled cells under the name */
+@media (max-width: 760px) {
+  .table-card { padding: 4px 14px; }
+  .ranking-table, .ranking-table tbody, .ranking-table tr { display: block; }
+  .ranking-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ranking-table tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--sc-hairline); }
+  .ranking-table tr:last-child { border-bottom: 0; }
+  .ranking-table td { display: block; border: 0; padding: 0; }
+  .ranking-table td.num { text-align: left; font-size: 14px; }
+  .ranking-table td.num::before { content: attr(data-label); display: block; font: 600 12px/1.3 var(--sc-font-text); color: var(--sc-muted); }
+  .ranking-table td.ranking-who { grid-column: 1 / -1; grid-row: 1; }
+}
+
+/* ---------- Account growth ---------- */
+
+.growth-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.growth-card { display: grid; gap: 10px; padding: 18px 18px 12px; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); min-width: 0; }
+.growth-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.growth-network { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.growth-network .icon { width: 16px; height: 16px; }
+.growth-numbers { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
+.growth-numbers dt { font: var(--sc-label); color: var(--sc-muted); }
+.growth-numbers dd { margin: 0; font: 900 26px/1 var(--sc-font-display); letter-spacing: var(--sc-tracking-title); }
+.growth-change { font: 600 13.5px/1 var(--sc-font-text); letter-spacing: 0; color: var(--sc-muted); }
+.growth-synced { margin: 0; font-size: 13px; }
+
+.stats-loading { display: grid; justify-items: center; gap: 12px; padding: 48px 16px; }
