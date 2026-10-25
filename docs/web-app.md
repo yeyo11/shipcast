@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T01:37:26.046030761Z
-updated_at: 2026-10-25T04:21:51.530588819Z
+created_at: 2026-10-25T06:56:07.73564679Z
+updated_at: 2026-10-25T07:02:18.478832088Z
 tags:
     - web-app
     - dashboard
@@ -23,7 +23,7 @@ folder, so tokens, fonts, logo and channel glyphs have one copy.
 | --- | --- |
 | `pnpm app` | Builds the app and serves it on `SHIPCAST_PUBLIC_URL` over HTTPS (tailnet only), printing a one-time sign-in link |
 | `pnpm app:dev` | Vite's development server on `http://127.0.0.1:3000`, printing a one-time sign-in link |
-| `pnpm --filter @shipcast/web exec node scripts/certificate-by-hand.ts` | Gets the certificate without a Cloudflare token: it writes the challenge's TXT record to `data/tls/challenge.json` for someone to create, and waits for DNS to answer it |
+| `pnpm --filter @shipcast/web exec node scripts/certificate-by-hand.ts` | Gets the certificate without a Cloudflare token: it lists each challenge's TXT record in `data/tls/challenges.json` for someone to create, and waits for DNS to answer it |
 
 What `.env` needs is in `.env.example` under "The web app": the public URL, the GitHub OAuth App's
 id and secret, the allowed logins, and the Cloudflare token for the certificate.
@@ -33,28 +33,37 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
 - **The domain is private.** An A record of a subdomain of the owner's domain points at this
   machine's tailnet address, so only the owner's devices on the tailnet can reach it. The record is
   public DNS, but the address behind it answers no one outside the tailnet.
+- **The local network too, when asked** (2026-10-25). `SHIPCAST_APP_ALIASES` lists other https
+  origins the app answers on: a second subdomain whose A record points at the machine's address on
+  the owner's local network, for devices without Tailscale. The certificate carries every alias's
+  name, and a request is rebuilt on the origin its `Host` names, so the same-origin checks and the
+  session cookie follow the address the browser used. The app then listens on every interface
+  (`SHIPCAST_APP_HOST=0.0.0.0`). GitHub sign-in stays on the main address (its callback); on an alias,
+  sign in with a console link. The alias needs the machine to keep its local address (a reservation
+  in the router), and some routers refuse public names that answer with a private address.
 - **HTTPS with a real certificate.** Tailscale Serve only issues `*.ts.net` certificates, so the app
   gets its own from Let's Encrypt through the DNS challenge (`apps/web/tls.ts`, with `acme-client`): a
-  TXT record proves control, since no authority can reach a tailnet address. The record is placed by a
-  `DnsSolver`: Cloudflare's API with `SHIPCAST_TLS_CLOUDFLARE_TOKEN`, or by hand with
+  TXT record proves control, since no authority can reach a tailnet or local address. The record is
+  placed by a `DnsSolver`: Cloudflare's API with `SHIPCAST_TLS_CLOUDFLARE_TOKEN`, or by hand with
   `scripts/certificate-by-hand.ts`. The certificate lives in `data/tls/`, its key and the ACME account
-  key in the keychain. With the token it is renewed when less than 30 days remain, checked daily and
-  swapped in without a restart; without it, a valid certificate on disk is still served, and the app
-  says how many days it has left. The first one was obtained by hand on 2026-10-25, valid until
+  key in the keychain; it is requested again when it no longer covers every name. With the token it
+  is renewed when less than 30 days remain, checked daily and swapped in without a restart; without
+  it, a valid certificate on disk is still served, and the app says how many days it has left. The
+  current one was obtained by hand on 2026-10-25, for the tailnet and local names, valid until
   2027-01-23.
-- **The port.** The app listens on `127.0.0.1:8744` (8443 was taken on the owner's machine) and
-  `pnpm app` asks Tailscale Serve to forward the tailnet's port 443 to it as plain TCP, so TLS still
-  ends in the app. **On the owner's machine port 443 already serves another app through Tailscale
-  Serve**, which a TCP forward cannot share; until that is settled the app can be served on its own
-  port instead (`SHIPCAST_APP_HOST=<tailnet address>`, `SHIPCAST_APP_TAILSCALE=off` and the port in
-  `SHIPCAST_PUBLIC_URL`, as on 2026-10-25 at `:8744`), in which case the GitHub and Meta callbacks
-  must list that port too.
+- **The port.** The app listens on port 8744 (8443 was taken on the owner's machine) and `pnpm app`
+  asks Tailscale Serve to forward the tailnet's port 443 to it as plain TCP, so TLS still ends in the
+  app. **On the owner's machine port 443 already serves another app through Tailscale Serve**, which a
+  TCP forward cannot share; until that is settled the app is served on its own port
+  (`SHIPCAST_APP_TAILSCALE=off` and the port in `SHIPCAST_PUBLIC_URL`, as on 2026-10-25 at `:8744`),
+  in which case the GitHub and Meta callbacks must list that port too.
 - **Sign in with GitHub.** An OAuth App with the callback `/auth/github/callback`; the code is
   exchanged for a token used once to read the login, which must be in `SHIPCAST_ALLOWED_GITHUB`. The
   token is not kept. The session is the login and an expiry signed with HMAC-SHA256 (key in the
   keychain), in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie for 14 days.
 - **Console links.** The app prints a single-use sign-in link (15 minutes) when it starts: a way in
-  without GitHub for whoever reads the app's own terminal.
+  without GitHub for whoever reads the app's own terminal. Its token works on any of the app's
+  addresses.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
   `/login` and answers everything else with 401; Start's CSRF middleware refuses any change whose
   `Sec-Fetch-Site`, `Origin` or `Referer` is not the app's own. Server functions check the shape of
