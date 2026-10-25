@@ -1,24 +1,30 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import { ErrorPage, NotFoundPage } from '../components/Problems';
 import appCss from '../styles/app.css?url';
+import componentsCss from '../styles/components.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
-    meta: [{ charSet: 'utf-8' }, { name: 'viewport', content: 'width=device-width, initial-scale=1' }, { title: 'Shipcast' }, { name: 'robots', content: 'noindex' }],
+    meta: [{ charSet: 'utf-8' }, { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' }, { title: 'Shipcast' }, { name: 'robots', content: 'noindex' }],
     links: [
       { rel: 'icon', href: '/logo/favicon.svg' },
       { rel: 'stylesheet', href: '/tokens.css' },
       { rel: 'stylesheet', href: appCss },
+      { rel: 'stylesheet', href: componentsCss },
     ],
   }),
   shellComponent: Document,
   component: Outlet,
+  // Outside the shell (an address no section matches): the same pages, on their own
   notFoundComponent: () => (
-    <main className="wrap">
-      <h1 className="ph">Not here</h1>
-      <p className="muted">
-        Nothing lives at this address. <a href="/">Back to the launches</a>
-      </p>
+    <main className="wrap bare">
+      <NotFoundPage />
+    </main>
+  ),
+  errorComponent: (props) => (
+    <main className="wrap bare">
+      <ErrorPage {...props} />
     </main>
   ),
 });
@@ -30,7 +36,8 @@ function Document({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        {/* Isolated (components.css), so Base UI's portals at the end of the body (dialogs, menus, toasts) always sit above the app */}
+        <div className="app-root">{children}</div>
         <Scripts />
       </body>
     </html>

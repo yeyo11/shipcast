@@ -1,7 +1,9 @@
 import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { PageHead } from '../../../components/PageHead';
 import { useToast } from '../../../components/Toasts';
 import { Avatar, Notice, when } from '../../../components/ui';
+import { Select } from '../../../components/ui/Select';
 import { connectWithForm, getChannels } from '../../../server/channels.functions';
 import { channelIcon } from '../../../server/view';
 
@@ -37,18 +39,21 @@ function Connect() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            {icon && <img className="icon" src={icon} alt="" style={{ width: 64, height: 64 }} />}
+      <PageHead
+        title={
+          <span className="title-with-icon">
+            {icon && <img className="icon" src={icon} alt="" />}
             {network.name}
-          </h1>
-          <p>{network.howTo}</p>
-        </div>
-        <Link className="btn" to="/channels">
-          Back to channels
-        </Link>
-      </div>
+          </span>
+        }
+        action={
+          <Link className="btn" to="/channels">
+            Back to channels
+          </Link>
+        }
+      >
+        {network.howTo}
+      </PageHead>
       <div className="grid-2">
         <form
           className="form"
@@ -71,17 +76,13 @@ function Connect() {
           }}
         >
           {brands.length > 1 && (
-            <div className="field">
-              <label htmlFor="brand">Brand</label>
-              <select id="brand" className="select" value={brand} onChange={(e) => setBrand(e.target.value)}>
-                {brands.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-              <small>A launch only ever publishes with its own brand’s accounts.</small>
-            </div>
+            <Select
+              label="Brand"
+              options={brands.map((b) => ({ value: b.id, label: b.name }))}
+              value={brand}
+              onValueChange={setBrand}
+              help="A launch only ever publishes with its own brand’s accounts."
+            />
           )}
           {network.fields.map((field) => (
             <div className="field" key={field.key}>

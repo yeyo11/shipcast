@@ -1,7 +1,9 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Notice, Pill, when } from '../../components/ui';
+import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { getSettings, saveSettings } from '../../server/settings.functions';
 
 export const Route = createFileRoute('/_app/settings')({
@@ -43,15 +45,10 @@ function Settings() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Settings</h1>
-          <p>
-            What Shipcast needs besides <code>.env</code>, which holds only what it needs before anyone signs in. Public values are kept in the database, secrets in{' '}
-            {data.secretsKind}. A change applies to what runs next, without a restart.
-          </p>
-        </div>
-      </div>
+      <PageHead title="Settings">
+        What Shipcast needs besides <code>.env</code>, which holds only what it needs before anyone signs in. Public values are kept in the database, secrets in{' '}
+        {data.secretsKind}. A change applies to what runs next, without a restart.
+      </PageHead>
 
       {data.missing.length > 0 && <Notice tone="wait">Still to set: {data.missing.join(', ')}. Launching and drafting wait for them.</Notice>}
 
@@ -69,7 +66,7 @@ function Settings() {
               <input
                 id={`setting-${s.name}`}
                 className="input"
-                style={{ flex: 1 }}
+                style={{ flex: '1 1 220px', minWidth: 0 }}
                 type={s.secret ? 'password' : 'text'}
                 autoComplete="off"
                 placeholder={s.secret ? (s.set ? 'Set; type a new one to replace it' : 'Not set') : (s.value ?? 'Not set')}
@@ -77,16 +74,16 @@ function Settings() {
                 onChange={(e) => setEdits({ ...edits, [s.name]: e.target.value })}
               />
               {s.source === 'settings' || s.source === 'keychain' ? (
-                <button
+                <ConfirmButton
                   className="btn btn-small"
-                  type="button"
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm(`Clear ${s.label.toLowerCase()}?${s.secret ? '' : ` Now: ${s.value ?? ''}.`}`)) void save({ [s.name]: null });
-                  }}
+                  title={`Clear ${s.label.toLowerCase()}?`}
+                  description={s.secret ? 'The secret is deleted from the keychain; what needs it waits until a new one is set.' : `It is now ${s.value ?? 'empty'}; clearing it falls back to .env, if .env has it.`}
+                  confirm="Clear"
+                  onConfirm={() => save({ [s.name]: null })}
                 >
                   Clear
-                </button>
+                </ConfirmButton>
               ) : null}
             </div>
             <small>

@@ -1,12 +1,13 @@
 ---
 created_at: 2026-10-24T19:52:50.075846055Z
-updated_at: 2026-10-25T15:26:01.304278007Z
+updated_at: 2026-10-25T16:34:18.568476834Z
 tags:
     - plan
     - design-system
     - brand
     - decision
     - illustrations
+    - base-ui
 ---
 # Design system: Cartel
 
@@ -67,8 +68,34 @@ The set: NotFound, ServerError, Offline, EmptyLaunches, EmptyDrafts, NoAccounts,
 Shipped, PublishFailed, SignIn, Automation, and the onboarding steps OnboardBrand, OnboardAI,
 OnboardChannels, OnboardMeasure, OnboardAutomation. They are reviewed running at the hidden app route
 `/design/illustrations` (both themes, 320 and 160 px) and copied into `design/specimen.html` as static
-SVG by `pnpm illustrations:specimen`, so the specimen still opens from disk. They are not wired into
-the real pages yet: that comes with the Base UI work of the [goal after the MVP](goal-after-mvp.md).
+SVG by `pnpm illustrations:specimen`, so the specimen still opens from disk. Since 2026-10-25 the app
+uses NotFound (404), ServerError (the error boundary), EmptyLaunches, EmptyDrafts and NoAccounts (empty
+states), SignIn, Automation (its header) and OnboardMeasure (the Stats placeholder); the rest wait for
+their screens.
+
+## The component layer
+
+The app's interactive pieces are [Base UI](https://base-ui.com) wearing Cartel only, decided in
+[decisions/component-layer.md](../decisions/component-layer.md) (2026-10-25). No library theme: typed
+wrappers in `apps/web/src/components/ui/` (Dialog, ConfirmButton on AlertDialog, Combobox, Select,
+Menu, Tabs, Tooltip, Popover, Drawer, the command palette) and the toasts are styled in
+`apps/web/src/styles/components.css` with the role tokens, each state read from Base UI's data
+attributes (`data-open`, `data-highlighted`, `data-selected`, `data-active`, `data-starting-style`,
+`data-ending-style`).
+
+- **Popups** (lists, menus, popovers) are the page colour with a 2 px text-colour outline, 18 px
+  corners and the small stamp; a highlighted option is filled in the text colour, like the active
+  section in the navigation; every option is 44 px tall.
+- **Dialogs** carry the card's 2.5 px outline and the large stamp over a flat black dim (no blur); an
+  alert for something that cannot be undone has a red edge and a red confirming button that repeats
+  the verb. The drawer is a bottom sheet with the same outline.
+- **Tooltips** are small black labels with the rail as edge, for the full text of something clamped
+  or a shortcut, never the only place information lives.
+- **Motion** is a 180 ms slide or fade (`--ui-move`), zero under `prefers-reduced-motion`.
+
+They are reviewed running at the hidden app route `/design/components`. Section headers are the
+neutral band with the huge title and the yellow main action, the work area below calmer, as the
+[design direction](../decisions/app-design-direction.md) asks.
 
 ## Principles kept from the first plan
 
@@ -81,7 +108,7 @@ the real pages yet: that comes with the Base UI work of the [goal after the MVP]
   gradient, cyan for live work); Shipcast must be told apart from it at a glance, and from the
   personal site.
 - **State is never colour alone**, AA contrast in both themes, control borders at 3:1, visible focus,
-  usable at 360 px.
+  usable at 320 px (WCAG 2.2 reflow, checked by `apps/web/scripts/reflow-check.ts`).
 
 ## Surfaces, in the order they are needed
 
@@ -101,4 +128,4 @@ Claude Design briefs are withdrawn.
 
 ## Related
 
-[[plans/shipcast.md]] · [[status.md]] · [[personal-identity.md]] · [[brands.md]] · [[publishing.md]] · [[decisions/app-design-direction.md]] · [[plans/goal-after-mvp.md]]
+[[plans/shipcast.md]] · [[status.md]] · [[personal-identity.md]] · [[brands.md]] · [[publishing.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]]

@@ -32,10 +32,18 @@ async function main(): Promise<void> {
   const certificate = !tls ? undefined : token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
   if (!certificate || certificate.expires.getTime() < Date.now()) {
     const port = app.port;
-    await serve({ host: '127.0.0.1', port, origin: `http://127.0.0.1:${port}` });
+    /*
+     * A preview copy (TLS off) listens on SHIPCAST_APP_HOST, so the owner can open it over the tailnet
+     * from a phone; one address only, never every interface. Without a certificate by accident, plain
+     * HTTP stays on this machine.
+     */
+    if (!tls && (app.host === '0.0.0.0' || app.host === '::')) throw new ConfigError('SHIPCAST_APP_TLS=off serves plain HTTP: set SHIPCAST_APP_HOST to one address (the tailnet one), not every interface');
+    const host = tls ? '127.0.0.1' : app.host;
+    const origin = `http://${host.includes(':') ? `[${host}]` : host}:${port}`;
+    await serve({ host, port, origin, plainHttp: !tls });
     const why = tls ? 'no certificate and no SHIPCAST_TLS_CLOUDFLARE_TOKEN' : 'SHIPCAST_APP_TLS=off';
-    console.log(`Shipcast on http://127.0.0.1:${port} (${why}: plain HTTP, this machine only; GitHub sign-in needs ${app.publicUrl})`);
-    console.log(`Sign in: http://127.0.0.1:${port}${signInPath(consoleLinks().create())}`);
+    console.log(`Shipcast on ${origin} (${why}: plain HTTP${tls ? ', this machine only' : ''}; GitHub sign-in needs ${app.publicUrl})`);
+    console.log(`Sign in without GitHub, once: ${origin}${signInPath(consoleLinks().create())}`);
     return;
   }
 

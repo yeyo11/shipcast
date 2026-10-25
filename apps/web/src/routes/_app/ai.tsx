@@ -1,7 +1,9 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Pill, when } from '../../components/ui';
+import { Select } from '../../components/ui/Select';
 import { getAiSettings, previewAiPrompt, restoreAiPrompt, saveAiPrompt, saveAiSettings } from '../../server/ai.functions';
 
 export const Route = createFileRoute('/_app/ai')({
@@ -90,14 +92,12 @@ function Tasks({ data }: { data: Data }) {
           <fieldset key={task} className="field" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="label">{TASKS[task].label}</legend>
             <div className="row">
-              <select className="input" value={tasks[task].provider} onChange={(e) => set(task, { provider: e.target.value as ProviderId })} aria-label={`${TASKS[task].label}: provider`}>
-                {data.providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.connected ? '' : ' (not connected)'}
-                  </option>
-                ))}
-              </select>
+              <Select
+                label="Provider"
+                options={data.providers.map((p) => ({ value: p.id, label: p.name, hint: p.connected ? undefined : 'not connected' }))}
+                value={tasks[task].provider}
+                onValueChange={(provider) => set(task, { provider })}
+              />
               <input
                 className="input mono"
                 placeholder="the provider’s default model"
@@ -188,13 +188,12 @@ function Preview({ data }: { data: Data }) {
   return (
     <div className="form">
       <div className="row">
-        <select className="input" value={launchId} onChange={(e) => setLaunchId(Number(e.target.value))} aria-label="Launch">
-          {data.launches.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.label}
-            </option>
-          ))}
-        </select>
+        <Select
+          label="Launch"
+          options={data.launches.map((l) => ({ value: String(l.id), label: l.label }))}
+          value={launchId === undefined ? null : String(launchId)}
+          onValueChange={(id) => setLaunchId(Number(id))}
+        />
         <button
           className="btn"
           type="button"
@@ -227,12 +226,7 @@ function AiSettingsPage() {
   const data = Route.useLoaderData();
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">AI</h1>
-          <p>Which AI writes each task, in what tone, and with which prompts.</p>
-        </div>
-      </div>
+      <PageHead title="AI">Which AI writes each task, in what tone, and with which prompts.</PageHead>
 
       <h2 className="ph">Providers</h2>
       <Tasks data={data} />

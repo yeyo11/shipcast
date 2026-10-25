@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { SignIn as SignInArt } from '../components/illustrations';
 
 export const Route = createFileRoute('/login')({
   head: () => ({ meta: [{ title: 'Sign in · Shipcast' }] }),
@@ -9,7 +10,7 @@ function SignIn() {
   return (
     <main className="signin">
       <div className="poster">
-        <img src="/logo/mark.svg" alt="" width={72} height={72} />
+        <SignInArt width={300} className="signin-art" />
         <h1 className="ph">
           Ship<span>cast</span>
         </h1>
