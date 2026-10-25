@@ -104,10 +104,17 @@ export async function exchangeInstagramCode(
   const short = 'data' in answer ? answer.data[0] : answer;
   if (!short?.access_token) throw new ConnectorError('Instagram', 'the code exchange returned no access token');
   const query = new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: app.appSecret, access_token: short.access_token });
-  const long = await json<{ access_token: string; expires_in: number }>(
-    'Instagram',
-    await http(`https://graph.instagram.com/access_token?${query}`),
-    'get a long-lived token',
-  );
+  const exchanged = await http(`https://graph.instagram.com/access_token?${query}`);
+  if (!exchanged.ok) {
+    // Meta refuses this step for some accounts with no clear cause: say whether the short-lived token works at all
+    const me = await http(`https://graph.instagram.com/me?${new URLSearchParams({ fields: 'user_id,username', access_token: short.access_token })}`);
+    const body = await exchanged.text();
+    throw new ConnectorError(
+      'Instagram',
+      `get a long-lived token: ${exchanged.status} ${body.slice(0, 300)}; the short-lived token ${me.ok ? 'works' : `fails too (${me.status} ${(await me.text()).slice(0, 200)})`}; granted: ${'permissions' in short ? String((short as { permissions?: string }).permissions) : 'unknown'}`,
+      exchanged.status,
+    );
+  }
+  const long = await json<{ access_token: string; expires_in: number }>('Instagram', exchanged, 'get a long-lived token');
   return { userId: String(short.user_id), accessToken: long.access_token, expiresIn: long.expires_in };
 }
