@@ -97,3 +97,17 @@ test('Instagram: the code becomes a long-lived token in two steps', async () => 
   assert.equal(new URLSearchParams(String(calls[0]!.body)).get('code'), 'abc', 'the #_ Instagram appends is dropped');
   assert.equal(new URL(calls[1]!.url).searchParams.get('grant_type'), 'ig_exchange_token');
 });
+
+test('Instagram: a Business Login answer inside data is read too', async () => {
+  const calls: Call[] = [];
+  const http = fakeFetch(
+    [
+      ['POST https://api.instagram.com/oauth/access_token', () => Response.json({ data: [{ access_token: 'short', user_id: '178', permissions: 'instagram_business_basic' }] })],
+      ['GET https://graph.instagram.com/access_token?', () => Response.json({ access_token: 'long', expires_in: 5_184_000 })],
+    ],
+    calls,
+  );
+  const token = await exchangeInstagramCode({ appId: 'app', appSecret: 'sec' }, 'https://app.example/cb', 'abc', http);
+  assert.deepEqual(token, { userId: '178', accessToken: 'long', expiresIn: 5_184_000 });
+  assert.equal(new URL(calls[1]!.url).searchParams.get('access_token'), 'short');
+});

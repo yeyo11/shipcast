@@ -1,4 +1,4 @@
-import { json } from './http.ts';
+import { ConnectorError, json } from './http.ts';
 
 /**
  * The OAuth flows of the networks that offer one, as plain functions: the web app sends the owner's
@@ -90,7 +90,8 @@ export async function exchangeInstagramCode(
 ): Promise<{ userId: string; accessToken: string; expiresIn: number }> {
   // Instagram appends `#_` to the code it redirects with
   const clean = code.replace(/#_$/, '');
-  const short = await json<{ access_token: string; user_id: number | string }>(
+  type ShortToken = { access_token: string; user_id: number | string };
+  const answer = await json<ShortToken | { data: ShortToken[] }>(
     'Instagram',
     await http('https://api.instagram.com/oauth/access_token', {
       method: 'POST',
@@ -99,6 +100,9 @@ export async function exchangeInstagramCode(
     }),
     'exchange the code',
   );
+  // Business Login answers inside `data`; the older flow answered at the top level
+  const short = 'data' in answer ? answer.data[0] : answer;
+  if (!short?.access_token) throw new ConnectorError('Instagram', 'the code exchange returned no access token');
   const query = new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: app.appSecret, access_token: short.access_token });
   const long = await json<{ access_token: string; expires_in: number }>(
     'Instagram',
