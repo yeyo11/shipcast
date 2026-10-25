@@ -5,9 +5,9 @@ import { appContext } from './context.server';
 import { InvalidInput, object } from './input';
 
 export const getAutomation = createServerFn({ method: 'GET' }).handler(async () => {
-  const ctx = appContext();
+  const ctx = await appContext();
   return {
-    ...automationView(ctx),
+    ...(await automationView(ctx)),
     webhookUrl: `${ctx.app.publicUrl}/api/github/webhook`,
     hasSecret: Boolean(await ctx.secrets.get(WEBHOOK_SECRET_KEY)),
     launchesRepo: ctx.config.launchesRepo,
@@ -22,18 +22,18 @@ export const saveAutomation = createServerFn({ method: 'POST' })
     if (typeof o.intervalSeconds !== 'number' || !Number.isFinite(o.intervalSeconds)) throw new InvalidInput('the interval is a number of seconds');
     return { mode: o.mode as AutomationMode, intervalSeconds: o.intervalSeconds };
   })
-  .handler(({ data }) => writeAutomation(appContext().registry, data));
+  .handler(async ({ data }) => writeAutomation((await appContext()).registry, data));
 
 /** A new secret replaces the old one at once: GitHub's webhooks must be given the new one */
 export const rotateWebhookSecret = createServerFn({ method: 'POST' }).handler(async () => {
   const secret = newWebhookSecret();
-  await appContext().secrets.set(WEBHOOK_SECRET_KEY, secret, 'GitHub webhook secret');
+  await (await appContext()).secrets.set(WEBHOOK_SECRET_KEY, secret, 'GitHub webhook secret');
   return { secret };
 });
 
 export const runRoundNow = createServerFn({ method: 'POST' }).handler(async () => {
-  const ctx = appContext();
-  const started = !automationView(ctx).running;
+  const ctx = await appContext();
+  const started = !(await automationView(ctx)).running;
   if (started) void roundNow(ctx, 'by hand');
   return { started };
 });

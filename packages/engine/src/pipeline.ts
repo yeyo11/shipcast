@@ -50,10 +50,10 @@ export async function deliverDrafts(
       if (!deps.github.commitToBranch) return { ok: false, problem: 'this GitHub client cannot commit directly' };
       const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', drafts.message, asPublishedDirectly(drafts.files));
       const where = `https://github.com/${deps.launchesRepo}/commit/${commit.sha}`;
-      return { ok: true, launch: deps.registry.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`), where };
+      return { ok: true, launch: await deps.registry.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`), where };
     }
     const pr = await deps.github.openPullRequest({ repo: deps.launchesRepo, base: 'main', ...drafts });
-    return { ok: true, launch: deps.registry.setStatus(launch.id, 'drafted', pr.url), where: pr.url };
+    return { ok: true, launch: await deps.registry.setStatus(launch.id, 'drafted', pr.url), where: pr.url };
   } catch (error) {
     const what = options.direct ? 'commit the drafts to main' : 'open the drafts pull request';
     return { ok: false, problem: `could not ${what}: ${error instanceof Error ? error.message : String(error)}` };
@@ -96,13 +96,13 @@ export type DraftResult =
  */
 export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDeps, options: DraftOptions = {}): Promise<DraftResult> {
   const { github, registry } = deps;
-  const fail = (problems: string[]): DraftResult => ({
+  const fail = async (problems: string[]): Promise<DraftResult> => ({
     ok: false,
-    launch: registry.setStatus(launch.id, 'failed', problems.join('\n')),
+    launch: await registry.setStatus(launch.id, 'failed', problems.join('\n')),
     problems,
   });
 
-  registry.setStatus(launch.id, 'generating');
+  await registry.setStatus(launch.id, 'generating');
   const ref = launch.ref.startsWith('public:') ? 'HEAD' : launch.ref;
 
   const text = await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, ref);
@@ -171,12 +171,12 @@ export async function claimManual(
   const parsed = parseLaunchConfig(text);
   if (!parsed.ok) return { error: formatIssues(LAUNCH_CONFIG_PATH, parsed.issues) };
   if (!parsed.value.triggers.manual) return { error: `manual launches are turned off in ${repo}'s launch.yml` };
-  const kind = resolvePack(parsed.value, tag, deps.registry.lastPublishedRef(repo));
-  const claim = deps.registry.claim({ repo, ref: tag, trigger: 'manual', kind, brand: brand.id });
+  const kind = resolvePack(parsed.value, tag, await deps.registry.lastPublishedRef(repo));
+  const claim = await deps.registry.claim({ repo, ref: tag, trigger: 'manual', kind, brand: brand.id });
   // A failed launch published nothing, so asking for it again by hand retries it; one that is drafted,
   // published or skipped stays claimed, which is what keeps a campaign from happening twice
   if (!claim.claimed && claim.launch.status === 'failed') {
-    return { claimed: true, launch: deps.registry.setStatus(claim.launch.id, 'detected', `retried after: ${claim.launch.detail?.split('\n')[0] ?? 'a failure'}`) };
+    return { claimed: true, launch: await deps.registry.setStatus(claim.launch.id, 'detected', `retried after: ${claim.launch.detail?.split('\n')[0] ?? 'a failure'}`) };
   }
   return claim;
 }

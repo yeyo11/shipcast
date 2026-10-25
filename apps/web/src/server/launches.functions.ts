@@ -6,34 +6,37 @@ import { id, InvalidInput, list, object, text } from './input';
 import { launchView } from './launches.server';
 import { approve, startArticle, startLaunch, startPublishing } from './work.server';
 
-const jobsView = () =>
-  appContext()
-    .jobs.list()
+const jobsView = async () =>
+  (await appContext()).jobs
+    .list()
     .map((j) => ({ id: j.id, title: j.title, state: j.state, log: j.log.slice(-8), link: j.link ?? null, startedAt: j.startedAt }));
 
 export const listLaunches = createServerFn({ method: 'GET' }).handler(async () => {
-  const { registry } = appContext();
-  return { launches: registry.recent(60).map((l) => launchView(registry, l)), jobs: jobsView() };
+  const { registry } = await appContext();
+  const launches = await registry.recent(60);
+  return { launches: await Promise.all(launches.map((l) => launchView(registry, l))), jobs: await jobsView() };
 });
 
 export const getLaunch = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    const { registry, github, deps, brand } = appContext();
-    const launch = registry.get(data);
+    const { registry, github, deps, brand } = await appContext();
+    const launch = await registry.get(data);
     if (!launch) return null;
-    const blog = registry.posts(launch.id).find((p) => p.channel === 'blog');
+    const blog = (await registry.posts(launch.id)).find((p) => p.channel === 'blog');
     const site = blog?.url ? (await brand()).site : undefined;
     // Google's view of each language's article, as of the last metrics reading
     const index = blog?.url && site
-      ? articleUrls(blog.externalId, blog.url, site).map(({ lang, url }) => {
-          const status = indexStatus(registry, url);
-          return { lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
-        })
+      ? await Promise.all(
+          articleUrls(blog.externalId, blog.url, site).map(async ({ lang, url }) => {
+            const status = await indexStatus(registry, url);
+            return { lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
+          }),
+        )
       : [];
     const review = await readReview(launch, { github, launchesRepo: deps.launchesRepo }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-    const metrics = registry.latestMetrics(launch.id).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
-    return { launch: launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index, jobs: jobsView() };
+    const metrics = (await registry.latestMetrics(launch.id)).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
+    return { launch: await launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index, jobs: await jobsView() };
   });
 
 export const saveDraft = createServerFn({ method: 'POST' })
@@ -42,8 +45,8 @@ export const saveDraft = createServerFn({ method: 'POST' })
     return { id: id(o.id), path: text(o.path, 'path', 300), content: text(o.content, 'content', 200_000) };
   })
   .handler(async ({ data }) => {
-    const { registry, github, deps } = appContext();
-    const launch = registry.get(data.id);
+    const { registry, github, deps } = await appContext();
+    const launch = await registry.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
     try {
       await editDraft(launch, data.path, data.content, { github, launchesRepo: deps.launchesRepo });
@@ -65,36 +68,36 @@ export const publishAgain = createServerFn({ method: 'POST' })
     if (channel !== undefined && !(CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput('unknown channel');
     return { id: id(o.id), channel: channel as Channel | undefined };
   })
-  .handler(({ data }) => {
-    const { registry } = appContext();
-    const launch = registry.get(data.id);
+  .handler(async ({ data }) => {
+    const { registry } = await appContext();
+    const launch = await registry.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
     if (data.channel) {
       // Only this launch's failure is forgotten; the channel stays failed for any other launch
-      registry.deleteCursor(`publish-failed:${launch.id}:${data.channel}`);
-      if (launch.status === 'published') registry.setStatus(launch.id, 'drafted', launch.detail);
+      await registry.deleteCursor(`publish-failed:${launch.id}:${data.channel}`);
+      if (launch.status === 'published') await registry.setStatus(launch.id, 'drafted', launch.detail);
     } else if (launch.status !== 'drafted') {
       return { ok: false as const, problem: `the launch is ${launch.status}` };
     }
-    return { ok: true as const, job: startPublishing(registry.get(launch.id)!) };
+    return { ok: true as const, job: await startPublishing((await registry.get(launch.id))!) };
   });
 
 export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
-  const { github, brand } = appContext();
+  const { github, brand } = await appContext();
   const b = await brand();
   return { owner: b.github, repos: await github.userRepos(b.github) };
 });
 
 export const listReleases = createServerFn({ method: 'GET' })
   .validator((input: unknown) => text(input, 'repo', 140))
-  .handler(async ({ data }) => appContext().github.releases(data));
+  .handler(async ({ data }) => (await appContext()).github.releases(data));
 
 export const checkRepo = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
     return { repo: text(o.repo, 'repo', 140), ref: o.ref === undefined || o.ref === '' ? undefined : text(o.ref, 'ref', 140) };
   })
-  .handler(async ({ data }) => preflight(data.repo, data.ref, { github: appContext().github }));
+  .handler(async ({ data }) => preflight(data.repo, data.ref, { github: (await appContext()).github }));
 
 export const launchRepo = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {

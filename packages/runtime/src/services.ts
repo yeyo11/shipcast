@@ -50,7 +50,7 @@ export async function credentialsFor(
   id: string,
   deps: Pick<ServiceDeps, 'env' | 'brand' | 'registry' | 'secrets' | 'readFile'>,
 ): Promise<{ credentials: Credentials; origin: Origin } | undefined> {
-  const account = deps.registry.primaryAccount(deps.brand.id, id);
+  const account = await deps.registry.primaryAccount(deps.brand.id, id);
   if (account) {
     const secrets = await getJson(deps.secrets, accountSecretKey(account.id));
     if (secrets) return { credentials: { settings: account.settings, secrets }, origin: { kind: 'account', id: account.id } };
@@ -80,7 +80,7 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     let credentials = found.credentials;
     // A token Shipcast refreshed while it still came from .env lives in the registry
     if (id === 'instagram' && found.origin.kind === 'env') {
-      const fresh = registry.cursor(INSTAGRAM_TOKEN_KEY);
+      const fresh = await registry.cursor(INSTAGRAM_TOKEN_KEY);
       if (fresh) credentials = { ...credentials, secrets: { ...credentials.secrets, accessToken: fresh } };
     }
     try {
@@ -167,12 +167,14 @@ export async function refreshInstagramToken(
   if (!services.instagram) return undefined;
   const { connector, origin } = services.instagram;
   const { registry } = deps;
-  const account = origin.kind === 'account' ? registry.account(origin.id) : undefined;
-  const last = account ? account.settings.refreshedAt : registry.cursor(INSTAGRAM_REFRESHED_KEY);
-  const remember = (at: Date) =>
-    account ? registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } }) : registry.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
+  const account = origin.kind === 'account' ? await registry.account(origin.id) : undefined;
+  const last = account ? account.settings.refreshedAt : await registry.cursor(INSTAGRAM_REFRESHED_KEY);
+  const remember = async (at: Date): Promise<void> => {
+    if (account) await registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } });
+    else await registry.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
+  };
   if (!last) {
-    remember(now);
+    await remember(now);
     return undefined;
   }
   if (now.getTime() - Date.parse(last) < 30 * 24 * 3600 * 1000) return undefined;
@@ -181,8 +183,8 @@ export async function refreshInstagramToken(
     const secrets = (await getJson(deps.secrets, accountSecretKey(account.id))) ?? {};
     await deps.secrets.set(accountSecretKey(account.id), JSON.stringify({ ...secrets, accessToken: fresh.accessToken }), `${account.network} ${account.label}`);
   } else {
-    registry.setCursor(INSTAGRAM_TOKEN_KEY, fresh.accessToken);
+    await registry.setCursor(INSTAGRAM_TOKEN_KEY, fresh.accessToken);
   }
-  remember(now);
+  await remember(now);
   return `Instagram token refreshed; valid for ${Math.round(fresh.expiresIn / 86400)} more days`;
 }

@@ -21,6 +21,7 @@ import {
   type PullRequestDraft,
   type ReviewGitHub,
 } from '../src/index.ts';
+import { memoryRegistry } from '../src/testing.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n';
@@ -94,11 +95,11 @@ const launchPack = {
   mastodon: { lang: 'en', text: 'm' },
 };
 
-function deps(github: FakeGitHub, output: unknown = launchPack) {
+async function deps(github: FakeGitHub, output: unknown = launchPack) {
   return {
     github,
     ai: new FakeAi(output),
-    registry: new Registry(':memory:'),
+    registry: await memoryRegistry(),
     launchesRepo: 'yeyo11/launches',
     checkout: async () => ({ hostPath: '/h', providerPath: '/workspace/x' }),
     now: () => new Date('2026-10-25T00:00:00Z'),
@@ -108,19 +109,19 @@ function deps(github: FakeGitHub, output: unknown = launchPack) {
 
 test('published directly, the drafts go onto main in one commit and the launch says so', async () => {
   const github = new FakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML });
-  const d = deps(github);
+  const d = await deps(github);
   const brand = await loadBrand(github, 'yeyo11/launches');
-  const { launch } = d.registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  const { launch } = await d.registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
   const result = await draftLaunch(launch, brand, d, { direct: true });
   assert.ok(result.ok);
   assert.equal(github.opened.length, 0, 'no pull request');
   assert.equal(github.commits[0]?.branch, 'main');
-  assert.match(d.registry.get(launch.id)?.detail ?? '', /^direct:abc123 /);
+  assert.match((await d.registry.get(launch.id))?.detail ?? '', /^direct:abc123 /);
   const bluesky = github.commits[0]?.files.find((f) => f.path.endsWith('/bluesky.md'));
   assert.match(bluesky && 'content' in bluesky ? bluesky.content : '', /^> \*\*Published directly:\*\*/m, 'no merge to speak of');
 });
 
-test('an article lives under articles/, is claimed once, and turns on only the chosen channels', () => {
+test('an article lives under articles/, is claimed once, and turns on only the chosen channels', async () => {
   assert.equal(articleSlug('Árboles, ramas & Claude: ¿qué?'), 'arboles-ramas-claude-que');
   const brand = { id: 'personal' } as Parameters<typeof articleConfig>[0];
   const config = articleConfig(brand, ['bluesky', 'hackerNews']);
@@ -129,21 +130,21 @@ test('an article lives under articles/, is claimed once, and turns on only the c
   assert.equal(config.publishing.hackerNews, 'manual', 'drafts-only stays manual');
   assert.equal(config.publishing.devto, 'off');
 
-  const registry = new Registry(':memory:');
-  const first = claimArticle({ title: 'Hello there', markdown: 'x', lang: 'en', channels: [] }, brand as never, { registry, launchesRepo: 'yeyo11/launches' });
+  const registry = await memoryRegistry();
+  const first = await claimArticle({ title: 'Hello there', markdown: 'x', lang: 'en', channels: [] }, brand as never, { registry, launchesRepo: 'yeyo11/launches' });
   assert.ok(first.claimed);
   assert.ok(isArticle(first.launch));
   assert.equal(launchDir(first.launch), 'articles/hello-there');
-  assert.equal(claimArticle({ title: 'Hello there', markdown: 'y', lang: 'en', channels: [] }, brand as never, { registry, launchesRepo: 'yeyo11/launches' }).claimed, false);
+  assert.equal((await claimArticle({ title: 'Hello there', markdown: 'y', lang: 'en', channels: [] }, brand as never, { registry, launchesRepo: 'yeyo11/launches' })).claimed, false);
 });
 
 test('an article keeps the owner’s words, gets its translation and pieces, and carries its channels', async () => {
   const github = new FakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML });
   const pack = { ...launchPack, project: { name: 'x', repo: 'https://github.com/x/y' }, devto: undefined, mastodon: undefined };
-  const d = deps(github, pack);
+  const d = await deps(github, pack);
   const brand = await loadBrand(github, 'yeyo11/launches');
   const input = { title: 'My own title', markdown: 'My own words.', lang: 'en' as const, channels: ['bluesky' as const] };
-  const { launch } = claimArticle(input, brand, d);
+  const { launch } = await claimArticle(input, brand, d);
   const result = await draftArticle(launch, input, brand, d);
   assert.ok(result.ok, result.ok ? '' : result.problems.join('; '));
   const ai = d.ai.requests[0]!;
@@ -166,9 +167,9 @@ test('reviewing reads the drafts from the pull request; edits land on its branch
     'yeyo11/launches/launches/claudio/v0.9.0/bluesky.md@launch/claudio-v0.9.0': '# Bluesky\n\nhello',
     'yeyo11/launches/src/content/posts/en/claudio.md@launch/claudio-v0.9.0': '---\ntitle: x\n---\nbody',
   });
-  const registry = new Registry(':memory:');
-  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
-  const drafted = registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  const registry = await memoryRegistry();
+  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  const drafted = await registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
   const d = { github, launchesRepo: 'yeyo11/launches' };
 
   const review = await readReview(drafted, d);

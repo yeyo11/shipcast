@@ -22,7 +22,7 @@ const answer = (status: number, message: string) => Response.json({ message }, {
  * (GitHub gives up after ten seconds); drafting and publishing run as background work.
  */
 export async function receiveWebhook(request: Request): Promise<Response> {
-  const ctx = appContext();
+  const ctx = await appContext();
   const secret = await ctx.secrets.get(WEBHOOK_SECRET_KEY);
   if (!secret) return answer(503, 'webhooks are not set up in Shipcast: generate a secret in Automation');
   const body = await request.text();
@@ -30,8 +30,8 @@ export async function receiveWebhook(request: Request): Promise<Response> {
 
   const event = request.headers.get('x-github-event');
   const delivery = request.headers.get('x-github-delivery') ?? 'unknown';
-  const done = (status: number, summary: string, lines: string[] = []) => {
-    record(ctx.registry, LAST_DELIVERY_KEY, { at: new Date().toISOString(), summary: `${event ?? 'event'} ${delivery.slice(0, 8)}: ${summary}`, lines });
+  const done = async (status: number, summary: string, lines: string[] = []) => {
+    await record(ctx.registry, LAST_DELIVERY_KEY, { at: new Date().toISOString(), summary: `${event ?? 'event'} ${delivery.slice(0, 8)}: ${summary}`, lines });
     return answer(status, summary);
   };
 
@@ -43,7 +43,7 @@ export async function receiveWebhook(request: Request): Promise<Response> {
   }
   const action = webhookAction(event, payload, ctx.config.launchesRepo);
   if (action.kind === 'ping') return done(200, 'pong: the webhook reaches Shipcast');
-  if (readAutomation(ctx.registry).mode !== 'webhook') return done(200, 'received, but webhooks are turned off in Automation');
+  if ((await readAutomation(ctx.registry)).mode !== 'webhook') return done(200, 'received, but webhooks are turned off in Automation');
   if (action.kind === 'ignore') return done(200, `ignored: ${action.reason}`);
 
   const d = await roundDeps(ctx, () => {});
@@ -57,8 +57,8 @@ export async function receiveWebhook(request: Request): Promise<Response> {
     });
     return done(202, `claimed ${outcome.launch.repo} ${outcome.launch.ref}: drafting`);
   }
-  const launch = launchOfPullRequest(d, action.pullRequestUrl);
+  const launch = await launchOfPullRequest(d, action.pullRequestUrl);
   if (!launch) return done(200, 'a merge Shipcast has no drafted launch for');
-  startPublishing(launch);
+  await startPublishing(launch);
   return done(202, `publishing ${launch.repo} ${launch.ref}`);
 }

@@ -69,8 +69,8 @@ export function webhookAction(event: string | null, payload: Payload, launchesRe
 }
 
 /** The launch whose drafts are in that pull request */
-export function launchOfPullRequest(d: Pick<RoundDeps, 'registry'>, url: string): Launch | undefined {
-  return d.registry.recent(500).find((l) => l.status === 'drafted' && l.detail === url);
+export async function launchOfPullRequest(d: Pick<RoundDeps, 'registry'>, url: string): Promise<Launch | undefined> {
+  return (await d.registry.recent(500)).find((l) => l.status === 'drafted' && l.detail === url);
 }
 
 /** Claims the release a webhook announced, by the same rules as polling */

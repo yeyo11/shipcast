@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { checkout, Claudio, GitHubRest, loadBrand, Registry, type PipelineDeps } from '@shipcast/engine';
 import { KeychainStore, loadAppConfig, loadConfig, type AppConfig, type Config, type SecretStore } from '@shipcast/runtime';
@@ -34,15 +34,25 @@ export interface AppContext {
   brands(): Promise<Map<string, Brand>>;
 }
 
-let context: AppContext | undefined;
+let context: Promise<AppContext> | undefined;
 
-/** One context per process: one registry connection, one keychain, one job list. */
-export function appContext(): AppContext {
-  if (context) return context;
+/**
+ * One context per process: one registry connection, one keychain, one job list. A promise, since
+ * connecting to Postgres (and applying its migrations) is; every request after the first gets the
+ * same one, and a failed start is tried again by the next request instead of being kept.
+ */
+export function appContext(): Promise<AppContext> {
+  context ??= createContext().catch((error: unknown) => {
+    context = undefined;
+    throw error;
+  });
+  return context;
+}
+
+async function createContext(): Promise<AppContext> {
   const config = loadConfig(process.env, ROOT);
   const app = loadAppConfig(process.env);
-  mkdirSync(config.dataDir, { recursive: true });
-  const registry = new Registry(join(config.dataDir, 'shipcast.db'));
+  const registry = await Registry.connect(config.databaseUrl);
   const github = new GitHubRest({ token: config.githubToken });
   const deps: PipelineDeps = {
     github,
@@ -57,7 +67,7 @@ export function appContext(): AppContext {
     if (!cached || Date.now() - cached.at > 5 * 60_000) cached = { brand: await loadBrand(github, config.launchesRepo), at: Date.now() };
     return cached.brand;
   };
-  context = {
+  const ctx: AppContext = {
     config,
     app,
     registry,
@@ -72,6 +82,6 @@ export function appContext(): AppContext {
     },
   };
   // The rounds nobody starts by hand begin with the app
-  startAutomation(context);
-  return context;
+  startAutomation(ctx);
+  return ctx;
 }

@@ -6,10 +6,11 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { SiteCapture } from '@shipcast/capture';
 import { Brand, ContentPack, LaunchConfig, parseProjects } from '@shipcast/schema';
-import { buildAssets, carouselPieces, mediaPath, Registry } from '../src/index.ts';
+import { buildAssets, carouselPieces, mediaPath } from '../src/index.ts';
+import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'José Antonio Garrido', site: 'https://josegarrido.dev', github: 'yeyo11' });
-const launch = new Registry(':memory:').claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' }).launch;
+const launch = (await (await memoryRegistry()).claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
 const pack = ContentPack.parse({
   schemaVersion: 1,
   kind: 'launch',

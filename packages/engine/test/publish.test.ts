@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { draftBody, publishLaunch, Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+import { draftBody, publishLaunch, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const D = 'launches/claudio/v0.8.2';
@@ -72,8 +73,8 @@ function recorder() {
   return { calls, publishers };
 }
 
-function drafted(registry: Registry) {
-  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
+async function drafted(registry: Registry) {
+  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
   return registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/3');
 }
 
@@ -82,8 +83,8 @@ test('a draft body is what follows its mode line', () => {
 });
 
 test('nothing is published while the drafts pull request is open, nor before the site is live', async () => {
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   const open = await publishLaunch(launch, brand, { github: new FakeGitHub('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(open.state, 'waiting');
@@ -93,15 +94,15 @@ test('nothing is published while the drafts pull request is open, nor before the
 });
 
 test('a drafts pull request closed without merging skips the launch', async () => {
-  const registry = new Registry(':memory:');
-  const result = await publishLaunch(drafted(registry), brand, { github: new FakeGitHub('closed'), registry, launchesRepo: 'yeyo11/launches', publishers: {}, fetch: site(true) });
+  const registry = await memoryRegistry();
+  const result = await publishLaunch(await drafted(registry), brand, { github: new FakeGitHub('closed'), registry, launchesRepo: 'yeyo11/launches', publishers: {}, fetch: site(true) });
   assert.equal(result.state, 'skipped');
   assert.match(result.launch.detail ?? '', /closed without merging/);
 });
 
 test('after the merge every approval channel is published with the edited texts, once', async () => {
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
 
@@ -126,16 +127,16 @@ test('after the merge every approval channel is published with the edited texts,
     media: ['01', '02', '03', '04'].map((n) => ({ kind: 'image', url: `https://josegarrido.dev/launches/claudio/v0.8.2/instagram-${n}.jpg` })),
   });
 
-  assert.equal(registry.get(launch.id)!.status, 'published');
-  assert.deepEqual(registry.posts(launch.id).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'instagram', 'mastodon']);
+  assert.equal((await registry.get(launch.id))!.status, 'published');
+  assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'instagram', 'mastodon']);
 
-  await publishLaunch(registry.get(launch.id)!, brand, deps);
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
   assert.equal(calls.length, 4, 'a second round publishes nothing again');
 });
 
 test('a temporary failure leaves the launch partial and is retried; a permanent one is recorded and not retried', async () => {
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   let mastodonTries = 0;
   publishers.mastodon = {
@@ -157,7 +158,7 @@ test('a temporary failure leaves the launch partial and is retried; a permanent 
   assert.ok(first.state === 'partial' && first.problems.some((p) => p.startsWith('mastodon:') && p.endsWith('(will retry)')));
   assert.ok(first.state === 'partial' && first.problems.some((p) => p.startsWith('instagram:') && !p.endsWith('(will retry)')));
 
-  const second = await publishLaunch(registry.get(launch.id)!, brand, deps);
+  const second = await publishLaunch((await registry.get(launch.id))!, brand, deps);
   assert.equal(second.state, 'published', 'Mastodon went through; Instagram is not retried');
   assert.equal(mastodonTries, 2);
   assert.equal(calls.filter((c) => c.channel === 'devto').length, 1);
@@ -178,8 +179,8 @@ test('the newsletter sends one campaign per language with the edited issue, and 
     [`yeyo11/launches/${D}/newsletter-en.md@HEAD`]: '# Newsletter (en)\n\n> **Approval:** x\n\nSubject: Edited subject\nPreview: Edited preview\n\nEdited **issue**.\n',
     'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  newsletter: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
   };
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const sends: Array<{ listId: number; subject: string; previewText: string; html: string }> = [];
   const publishers: Publishers = {
     newsletter: {
@@ -197,9 +198,9 @@ test('the newsletter sends one campaign per language with the edited issue, and 
   assert.match(sends[0]!.html, /https:\/\/josegarrido\.dev\/en\/claudio\/\?ref=newsletter/);
   assert.match(sends[0]!.html, /\{\{ unsubscribe \}\}/);
   assert.ok(result.state === 'partial' || result.state === 'published');
-  assert.equal(registry.posts(launch.id).find((p) => p.channel === 'newsletter')?.externalId, '901');
+  assert.equal((await registry.posts(launch.id)).find((p) => p.channel === 'newsletter')?.externalId, '901');
 
-  await publishLaunch(registry.get(launch.id)!, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  await publishLaunch((await registry.get(launch.id))!, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(sends.length, 1, 'never sent twice');
 });
 
@@ -216,21 +217,21 @@ test('a newsletter with nobody subscribed is recorded once and not retried', asy
     [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, newsletter: { en: { subject: 's', previewText: 'p', markdown: 'm' } } }),
     'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  newsletter: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
   };
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   let reads = 0;
   const publishers: Publishers = { newsletter: { subscribers: async () => (reads++, 0), send: async () => assert.fail('nothing to send') } };
   const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   const first = await publishLaunch(launch, withNewsletter, deps);
   assert.ok(first.state !== 'waiting' && first.state !== 'skipped');
   assert.match(first.state === 'published' || first.state === 'partial' ? first.problems.join() : '', /no subscribers yet in the en list/);
-  await publishLaunch(registry.get(launch.id)!, withNewsletter, deps);
+  await publishLaunch((await registry.get(launch.id))!, withNewsletter, deps);
   assert.equal(reads, 1);
 });
 
 test('after the Instagram carousel, its story and the edited comment go out once; their failures never repost it', async () => {
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const done: string[] = [];
   let commentTries = 0;
   const publishers: Publishers = {
@@ -249,7 +250,7 @@ test('after the Instagram carousel, its story and the edited comment go out once
   const first = await publishLaunch(launch, brand, deps);
   assert.ok(first.state === 'published' && first.problems.some((p) => p.startsWith('instagram comment: Instagram: comment: 403')));
   assert.deepEqual(done, ['post', 'story instagram-story.jpg']);
-  assert.equal(registry.posts(launch.id).filter((p) => p.channel === 'instagram').length, 1);
+  assert.equal((await registry.posts(launch.id)).filter((p) => p.channel === 'instagram').length, 1);
 });
 
 test('Hashnode, Telegram and Discord are published with the edited drafts; Show HN and Product Hunt never are', async () => {
@@ -269,8 +270,8 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
     'yeyo11/claudio/.github/launch.yml@v0.8.2':
       'enabled: true\nbrand: personal\npublishing:\n  hashnode: approval\n  telegram: approval\n  discord: approval\n  hackerNews: manual\n  productHunt: manual\nreddit:\n  subreddits: [ClaudeAI]\n',
   };
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   const ok = (channel: string) => async (input: unknown) => {
     calls.push({ channel, input });
@@ -300,16 +301,16 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
       imageUrl: 'https://josegarrido.dev/launches/claudio/v0.8.2/og.png',
     },
   });
-  assert.deepEqual(registry.posts(launch.id).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
+  assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
   assert.ok(!calls.some((c) => c.channel === 'hackerNews' || c.channel === 'productHunt'));
 
-  await publishLaunch(registry.get(launch.id)!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  await publishLaunch((await registry.get(launch.id))!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(calls.length, 7, 'a second round publishes nothing again');
 });
 
 test('when the article goes live Google is asked to read the sitemap, once, and a failure there holds nothing back', async () => {
-  const registry = new Registry(':memory:');
-  const launch = drafted(registry);
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   const submitted: string[] = [];
   const search = {
@@ -326,6 +327,6 @@ test('when the article goes live Google is asked to read the sitemap, once, and 
   assert.equal(calls.length, 4);
   assert.deepEqual(submitted, ['https://josegarrido.dev/sitemap-index.xml']);
 
-  await publishLaunch(registry.get(launch.id)!, brand, deps);
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
   assert.equal(submitted.length, 1, 'the blog post was already recorded: not asked again');
 });

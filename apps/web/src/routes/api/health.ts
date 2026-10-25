@@ -5,8 +5,8 @@ import { appContext } from '../../server/context.server';
 export const Route = createFileRoute('/api/health')({
   server: {
     handlers: {
-      GET: () => {
-        appContext();
+      GET: async () => {
+        await appContext();
         return new Response('ok', { headers: { 'content-type': 'text/plain' } });
       },
     },

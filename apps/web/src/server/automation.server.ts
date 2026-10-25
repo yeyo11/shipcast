@@ -14,14 +14,14 @@ export async function roundNow(ctx: AppContext, reason: string): Promise<boolean
   if (running) return false;
   running = true;
   const lines: string[] = [];
-  const mode = readAutomation(ctx.registry).mode;
   try {
+    const mode = (await readAutomation(ctx.registry)).mode;
     await runRound(await roundDeps(ctx, (line) => lines.push(line)), { detect: mode === 'poll' || reason === 'by hand' });
   } catch (error) {
     lines.push(`the round failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     running = false;
-    record(ctx.registry, LAST_ROUND_KEY, { at: new Date().toISOString(), summary: lines.length ? `${reason}: ${lines.length} things happened` : `${reason}: nothing to do`, lines });
+    await record(ctx.registry, LAST_ROUND_KEY, { at: new Date().toISOString(), summary: lines.length ? `${reason}: ${lines.length} things happened` : `${reason}: nothing to do`, lines });
   }
   return true;
 }
@@ -34,19 +34,27 @@ export function startAutomation(ctx: AppContext): void {
   if (started) return;
   started = true;
   const tick = async () => {
-    const automation = readAutomation(ctx.registry);
-    if (automation.mode !== 'off') await roundNow(ctx, automation.mode === 'poll' ? 'polling' : 'maintenance');
-    setTimeout(() => void tick(), readAutomation(ctx.registry).intervalSeconds * 1000).unref();
+    // The next tick is set whatever happens to this one: a database that is down for a moment must
+    // not stop the rounds for good
+    let interval = 300;
+    try {
+      const automation = await readAutomation(ctx.registry);
+      if (automation.mode !== 'off') await roundNow(ctx, automation.mode === 'poll' ? 'polling' : 'maintenance');
+      interval = (await readAutomation(ctx.registry)).intervalSeconds;
+    } catch (error) {
+      console.error(`automation round failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    setTimeout(() => void tick(), interval * 1000).unref();
   };
   // A first round shortly after start, so a restart never waits a whole interval
   setTimeout(() => void tick(), 15_000).unref();
 }
 
-export function automationView(ctx: AppContext) {
+export async function automationView(ctx: AppContext) {
   return {
-    ...readAutomation(ctx.registry),
+    ...(await readAutomation(ctx.registry)),
     running,
-    lastRound: lastHappened(ctx.registry, LAST_ROUND_KEY),
-    lastDelivery: lastHappened(ctx.registry, LAST_DELIVERY_KEY),
+    lastRound: await lastHappened(ctx.registry, LAST_ROUND_KEY),
+    lastDelivery: await lastHappened(ctx.registry, LAST_DELIVERY_KEY),
   };
 }

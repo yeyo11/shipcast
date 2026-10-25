@@ -7,6 +7,9 @@ export interface Config {
   claudioUrl: string;
   claudioToken: string;
   launchesRepo: string;
+  /** The Postgres the registry lives in, `postgres://user:password@host:port/database` */
+  databaseUrl: string;
+  /** Files Shipcast keeps on disk, such as the TLS certificate; the registry is in Postgres */
   dataDir: string;
   workspaceHostDir: string;
   workspaceProviderDir: string;
@@ -34,6 +37,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     claudioUrl: need('SHIPCAST_CLAUDIO_URL'),
     claudioToken: need('SHIPCAST_CLAUDIO_TOKEN'),
     launchesRepo: need('SHIPCAST_LAUNCHES_REPO'),
+    databaseUrl: need('SHIPCAST_DATABASE_URL'),
     dataDir: resolve(cwd, env.SHIPCAST_DATA_DIR?.trim() || 'data'),
     // claudio mounts the repo's ./workspace as /workspace (docker-compose.yml)
     workspaceHostDir: resolve(cwd, 'workspace'),
@@ -44,6 +48,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   if (!/^[\w.-]+\/[\w.-]+$/.test(config.launchesRepo)) {
     throw new ConfigError(`SHIPCAST_LAUNCHES_REPO must be owner/name, not "${config.launchesRepo}"`);
   }
+  // Not echoed back: the URL carries the database password
+  if (!/^postgres(ql)?:\/\//.test(config.databaseUrl)) throw new ConfigError('SHIPCAST_DATABASE_URL must be a postgres:// URL');
   if (config.maxBudgetUsd !== undefined && !(config.maxBudgetUsd > 0)) {
     throw new ConfigError('SHIPCAST_MAX_BUDGET_USD must be a positive number');
   }

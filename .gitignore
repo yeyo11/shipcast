@@ -17,7 +17,7 @@ workspace/
 .playwright-mcp/
 # Owner-specific notes (machine, accounts, credential status): indexed by pando, never published
 docs/internal/
-# The launch registry and other local state of the engine (SHIPCAST_DATA_DIR)
+# Local state of the engine (SHIPCAST_DATA_DIR): the TLS certificate, and an old SQLite registry
 data/
 # TanStack Start's scratch folder
 .tanstack/

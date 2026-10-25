@@ -1,9 +1,11 @@
-# claudio, Shipcast's AI provider (https://github.com/yeyo11/claudio), as an instance of its own:
+# What the engine needs beside it: claudio, Shipcast's AI provider (https://github.com/yeyo11/claudio),
+# as an instance of its own, and the Postgres the launch registry lives in:
 #
 #   docker compose up -d
 #
 # Then open http://localhost:8798, sign in with CLAUDIO_AUTH_TOKEN and sign in to Claude in the setup
-# assistant (docs/claudio.md). The engine runs on the host and reaches it at SHIPCAST_CLAUDIO_URL.
+# assistant (docs/claudio.md). The engine runs on the host and reaches claudio at SHIPCAST_CLAUDIO_URL
+# and Postgres at SHIPCAST_DATABASE_URL.
 name: shipcast # volumes are shipcast_*, whatever folder this is started from
 
 services:
@@ -27,6 +29,29 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s # time for SIGTERM to stop the chats and close the store
 
+  postgres:
+    # Pinned to a major: a new major needs a dump and a restore, never just a newer image
+    image: postgres:17
+    # The credentials the database is created with on its first start; SHIPCAST_DATABASE_URL must
+    # carry the same. Only reachable from this machine, so the defaults are safe as they are
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shipcast}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shipcast}
+      POSTGRES_DB: ${POSTGRES_DB:-shipcast}
+    ports:
+      # Loopback only. 5433, not 5432, so it can run beside a Postgres of the machine's own
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # the registry: launches, posts, accounts, metrics
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    stop_grace_period: 30s # time for a clean shutdown, so the next start needs no recovery
+
 volumes:
   claude-config:
   claudio-data:
+  postgres-data:

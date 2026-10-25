@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';
-import { Registry } from '@shipcast/engine';
+import { memoryRegistry } from '@shipcast/engine/testing';
 import {
   accountSecretKey,
   lastHappened,
@@ -48,33 +48,33 @@ test('deliveries become actions: claim a release, publish a merge, ignore the re
   assert.equal(webhookAction('star', {}, 'yeyo11/launches').kind, 'ignore');
 });
 
-test('a merged pull request finds its drafted launch', () => {
-  const registry = new Registry(':memory:');
-  const { launch } = registry.claim({ repo: 'yeyo11/claudio', ref: 'v1', trigger: 'release', kind: 'launch', brand: 'personal' });
-  registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
-  assert.equal(launchOfPullRequest({ registry }, 'https://github.com/yeyo11/launches/pull/9')?.id, launch.id);
-  assert.equal(launchOfPullRequest({ registry }, 'https://github.com/yeyo11/launches/pull/10'), undefined);
+test('a merged pull request finds its drafted launch', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
+  assert.equal((await launchOfPullRequest({ registry }, 'https://github.com/yeyo11/launches/pull/9'))?.id, launch.id);
+  assert.equal(await launchOfPullRequest({ registry }, 'https://github.com/yeyo11/launches/pull/10'), undefined);
 });
 
-test('automation settings default to polling every five minutes and never under a minute', () => {
-  const registry = new Registry(':memory:');
-  assert.deepEqual(readAutomation(registry), { mode: 'poll', intervalSeconds: 300 });
-  assert.deepEqual(writeAutomation(registry, { mode: 'webhook', intervalSeconds: 10 }), { mode: 'webhook', intervalSeconds: 60 });
-  record(registry, 'automation:last-round', { at: 'now', summary: 's', lines: Array.from({ length: 30 }, (_, i) => String(i)) });
-  assert.equal(lastHappened(registry, 'automation:last-round')?.lines.length, 20);
+test('automation settings default to polling every five minutes and never under a minute', async () => {
+  const registry = await memoryRegistry();
+  assert.deepEqual(await readAutomation(registry), { mode: 'poll', intervalSeconds: 300 });
+  assert.deepEqual(await writeAutomation(registry, { mode: 'webhook', intervalSeconds: 10 }), { mode: 'webhook', intervalSeconds: 60 });
+  await record(registry, 'automation:last-round', { at: 'now', summary: 's', lines: Array.from({ length: 30 }, (_, i) => String(i)) });
+  assert.equal((await lastHappened(registry, 'automation:last-round'))?.lines.length, 20);
 });
 
 test('every Instagram account refreshes its own token when it is 30 days old', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const fresh = registry.addAccount({ network: 'instagram', brand: 'personal', label: 'new', settings: { userId: '1' } });
-  const old = registry.addAccount({ network: 'instagram', brand: 'personal', label: 'old', settings: { userId: '2', refreshedAt: '2026-09-01T00:00:00.000Z' } });
+  const fresh = await registry.addAccount({ network: 'instagram', brand: 'personal', label: 'new', settings: { userId: '1' } });
+  const old = await registry.addAccount({ network: 'instagram', brand: 'personal', label: 'old', settings: { userId: '2', refreshedAt: '2026-09-01T00:00:00.000Z' } });
   await secrets.set(accountSecretKey(old.id), JSON.stringify({ accessToken: 'old-token' }), 'x');
   const http = (async () => Response.json({ access_token: 'new-token', expires_in: 5_184_000 })) as typeof fetch;
 
   const lines = await refreshInstagramAccounts({ registry, secrets }, new Date('2026-10-25T00:00:00Z'), http);
   assert.deepEqual(lines, ['Instagram token of old refreshed; valid for 60 more days']);
   assert.equal(JSON.parse((await secrets.get(accountSecretKey(old.id)))!).accessToken, 'new-token');
-  assert.equal(registry.account(old.id)?.settings.refreshedAt, '2026-10-25T00:00:00.000Z');
-  assert.equal(registry.account(fresh.id)?.settings.refreshedAt, '2026-10-25T00:00:00.000Z', 'a first sight only records the date');
+  assert.equal((await registry.account(old.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z');
+  assert.equal((await registry.account(fresh.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z', 'a first sight only records the date');
 });

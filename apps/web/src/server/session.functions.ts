@@ -5,6 +5,6 @@ import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
 
 /** Who is signed in; the middleware already turned away anyone who is not */
 export const whoAmI = createServerFn({ method: 'GET' }).handler(async () => {
-  const session = await readSession(appContext().secrets, cookieOf(getRequest(), SESSION_COOKIE));
+  const session = await readSession((await appContext()).secrets, cookieOf(getRequest(), SESSION_COOKIE));
   return { login: session?.login ?? '' };
 });

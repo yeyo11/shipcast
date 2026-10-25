@@ -11,15 +11,15 @@ import { connectAccount, credentialsFor, getJson, NETWORKS, type AccountDeps } f
 import { appContext } from './context.server';
 
 export async function accountDeps(): Promise<AccountDeps> {
-  const { registry, secrets, brands } = appContext();
+  const { registry, secrets, brands } = await appContext();
   return { registry, secrets, brands: await brands() };
 }
 
 /** Everything the Channels page shows: the catalog, each network's accounts, and what still comes from .env */
 export async function channelsView() {
-  const { registry, secrets, app, brand } = appContext();
+  const { registry, secrets, app, brand } = await appContext();
   const current = await brand();
-  const accounts = registry.accounts();
+  const accounts = await registry.accounts();
   const fromEnv: string[] = [];
   for (const network of NETWORKS) {
     if (network.auth === 'none' || accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;
@@ -58,7 +58,7 @@ const connected = (account: { id: number; identity: string | null; label: string
 
 /** Mastodon: register Shipcast on the instance once (its client is kept in the keychain), then authorise */
 export async function startMastodon(request: Request): Promise<Response> {
-  const { app, secrets } = appContext();
+  const { app, secrets } = await appContext();
   const url = new URL(request.url);
   const brand = url.searchParams.get('brand') ?? 'personal';
   let instance: string;
@@ -84,7 +84,7 @@ export async function startMastodon(request: Request): Promise<Response> {
 }
 
 export async function finishMastodon(request: Request): Promise<Response> {
-  const { app, secrets } = appContext();
+  const { app, secrets } = await appContext();
   const url = new URL(request.url);
   const flow = pending.get(url.searchParams.get('state') ?? '');
   pending.delete(url.searchParams.get('state') ?? '');
@@ -108,8 +108,8 @@ export async function finishMastodon(request: Request): Promise<Response> {
 }
 
 /** Instagram Login: needs the app id and secret of the owner's Meta app in .env */
-export function startInstagram(request: Request): Response {
-  const { app } = appContext();
+export async function startInstagram(request: Request): Promise<Response> {
+  const { app } = await appContext();
   if (!app.instagram) return back('instagram', 'Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to .env, then restart the app.');
   const url = new URL(request.url);
   const state = remember({ network: 'instagram', brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
@@ -117,7 +117,7 @@ export function startInstagram(request: Request): Response {
 }
 
 export async function finishInstagram(request: Request): Promise<Response> {
-  const { app } = appContext();
+  const { app } = await appContext();
   const url = new URL(request.url);
   const flow = pending.get(url.searchParams.get('state') ?? '');
   pending.delete(url.searchParams.get('state') ?? '');

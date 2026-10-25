@@ -15,7 +15,7 @@ import { appContext } from './context.server';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function services(): Promise<Services> {
-  const { registry, github, secrets, brand } = appContext();
+  const { registry, github, secrets, brand } = await appContext();
   return buildServices({ env: process.env, brand: await brand(), registry, github, secrets });
 }
 
@@ -29,13 +29,13 @@ async function notify(text: string): Promise<void> {
  * Publishes a launch once its drafts are on main: the site must deploy before the channels can link
  * to it, so this waits, trying every 30 seconds for up to 20 minutes, like a watch round would.
  */
-export function startPublishing(launch: Launch): string {
-  const { jobs, registry, deps, brand } = appContext();
+export async function startPublishing(launch: Launch): Promise<string> {
+  const { jobs, registry, deps, brand } = await appContext();
   const name = `${launch.repo.split('/')[1]} ${launch.ref.replace(/^article:/, '')}`;
   return jobs.start(`Publishing ${name}`, async (log) => {
     const deadline = Date.now() + 20 * 60_000;
     for (;;) {
-      const current = registry.get(launch.id)!;
+      const current = (await registry.get(launch.id))!;
       const { publishers, sources } = await services();
       const result = await publishLaunch(current, await brand(), { github: deps.github, registry, launchesRepo: deps.launchesRepo, publishers, search: sources.search });
       if (result.state === 'waiting') {
@@ -67,7 +67,7 @@ export function startPublishing(launch: Launch): string {
 
 /** Drafts a repo's launch after its pre-flight passes; publishing directly goes on to publish */
 export async function startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
-  const { jobs, deps, github, brand } = appContext();
+  const { jobs, deps, github, brand } = await appContext();
   const check = await preflight(repo, ref, { github });
   if (!check.ok) return { ok: false, problem: check.checks.filter((c) => !c.ok && c.required).map((c) => c.detail).join(' ') };
   const b = await brand();
@@ -80,7 +80,7 @@ export async function startLaunch(repo: string, ref: string | undefined, direct:
     if (!result.ok) throw new Error(result.problems.join('\n'));
     log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
     if (result.costUsd !== null) log(`AI cost: $${result.costUsd.toFixed(2)}`);
-    if (direct) startPublishing(result.launch);
+    if (direct) await startPublishing(result.launch);
     else await notify(`Shipcast drafted ${repo} ${claim.launch.ref}: review the drafts at ${result.pullRequest}`);
     self.link = `/launches/${claim.launch.id}`;
     return self.link;
@@ -90,16 +90,16 @@ export async function startLaunch(repo: string, ref: string | undefined, direct:
 
 /** Drafts an article written in the app; publishing directly goes on to publish */
 export async function startArticle(input: ArticleInput, direct: boolean): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
-  const { jobs, deps, brand } = appContext();
+  const { jobs, deps, brand } = await appContext();
   const b = await brand();
-  const claim = claimArticle(input, b, deps);
+  const claim = await claimArticle(input, b, deps);
   if (!claim.claimed && claim.launch.status !== 'failed') return { ok: false, problem: `An article titled like this exists already (${claim.launch.status}). Change the title.` };
   const job = jobs.start(`Writing the pieces for “${input.title}”`, async (log, self) => {
     log('Translating the article and writing each channel’s piece…');
     const result = await draftArticle(claim.launch, input, b, deps, { direct });
     if (!result.ok) throw new Error(result.problems.join('\n'));
     log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
-    if (direct) startPublishing(result.launch);
+    if (direct) await startPublishing(result.launch);
     else await notify(`Shipcast drafted the article “${input.title}”: review it at ${result.pullRequest}`);
     self.link = `/launches/${claim.launch.id}`;
     return self.link;
@@ -109,13 +109,13 @@ export async function startArticle(input: ArticleInput, direct: boolean): Promis
 
 /** Approving merges the pull request; publishing follows in the background */
 export async function approve(launchId: number): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
-  const { registry, deps, github } = appContext();
-  const launch = registry.get(launchId);
+  const { registry, deps, github } = await appContext();
+  const launch = await registry.get(launchId);
   if (!launch) return { ok: false, problem: 'no such launch' };
   try {
     await approveLaunch(launch, { github, launchesRepo: deps.launchesRepo });
   } catch (error) {
     return { ok: false, problem: error instanceof Error ? error.message : String(error) };
   }
-  return { ok: true, job: startPublishing(launch) };
+  return { ok: true, job: await startPublishing(launch) };
 }

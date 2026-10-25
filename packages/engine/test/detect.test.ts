@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
-import { detect, Registry, type EventsPage, type GitHubEvent, type GitHubSource } from '../src/index.ts';
+import { detect, type EventsPage, type GitHubEvent, type GitHubSource } from '../src/index.ts';
+import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
 
@@ -37,7 +38,7 @@ class FakeGitHub implements GitHubSource {
 }
 
 test('a published release of an enabled repo is claimed, with the pack inferred from the version', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const github = new FakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': VALID },
@@ -51,9 +52,9 @@ test('a published release of an enabled repo is claimed, with the pack inferred 
 });
 
 test('the next major after a published launch is a major pack', async () => {
-  const registry = new Registry(':memory:');
-  const first = registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  registry.setStatus(first.launch.id, 'published');
+  const registry = await memoryRegistry();
+  const first = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.setStatus(first.launch.id, 'published');
   const github = new FakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': VALID },
@@ -64,7 +65,7 @@ test('the next major after a published launch is a major pack', async () => {
 });
 
 test('repos without launch.yml, disabled ones and pre-releases are ignored without a record', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const github = new FakeGitHub(
     [
       {
@@ -84,11 +85,11 @@ test('repos without launch.yml, disabled ones and pre-releases are ignored witho
     outcomes.map((o) => (o.result === 'ignored' ? o.reason : o.result)),
     ['no .github/launch.yml', 'launch.yml has enabled: false', 'a pre-release'],
   );
-  assert.equal(registry.find('yeyo11/plain', 'v1.0.0'), undefined);
+  assert.equal(await registry.find('yeyo11/plain', 'v1.0.0'), undefined);
 });
 
 test('a launch.yml for another brand is refused: brands never mix', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const github = new FakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/tool', 'v1.0.0')] }],
     { 'yeyo11/tool@v1.0.0': 'enabled: true\nbrand: company\n' },
@@ -99,20 +100,20 @@ test('a launch.yml for another brand is refused: brands never mix', async () => 
 });
 
 test('an invalid launch.yml is recorded as failed with its line, and not retried', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const github = new FakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  reddit: auto\n' },
   );
   const [outcome] = await detect({ github, registry, brand });
   assert.equal(outcome?.result, 'invalid-config');
-  const launch = registry.find('yeyo11/claudio', 'v0.9.0');
+  const launch = await registry.find('yeyo11/claudio', 'v0.9.0');
   assert.equal(launch?.status, 'failed');
   assert.match(launch?.detail ?? '', /^\.github\/launch\.yml:4:\d+ publishing\.reddit: /);
 });
 
 test('events already seen are skipped, and a 304 costs nothing', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const github = new FakeGitHub(
     [
       { notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] },
@@ -142,13 +143,13 @@ test('events already seen are skipped, and a 304 costs nothing', async () => {
 });
 
 test('a repo made public launches only when launch.yml enables that trigger', async () => {
-  const registry = new Registry(':memory:');
+  const registry = await memoryRegistry();
   const event: GitHubEvent = { id: '200', type: 'public', repo: 'yeyo11/new', at: '2026-10-24T11:00:00Z' };
   const off = new FakeGitHub([{ notModified: false, etag: 'W/"1"', events: [event] }], { 'yeyo11/new@HEAD': VALID });
   const [ignored] = await detect({ github: off, registry, brand });
   assert.equal(ignored?.result, 'ignored');
 
-  const registry2 = new Registry(':memory:');
+  const registry2 = await memoryRegistry();
   const on = new FakeGitHub([{ notModified: false, etag: 'W/"1"', events: [event] }], {
     'yeyo11/new@HEAD': `${VALID}triggers:\n  public: true\n`,
   });

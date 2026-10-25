@@ -25,11 +25,13 @@ const HEADLINE: Array<[string, string, string]> = [
   ['newsletter', 'clicks', 'newsletter clicks'],
 ];
 
-export function launchView(registry: Registry, launch: Launch): LaunchView {
-  const failures = registry
-    .cursorsWithPrefix(`publish-failed:${launch.id}:`)
-    .map((c) => ({ channel: c.key.split(':')[2] ?? '', message: c.value }));
-  const metrics = registry.latestMetrics(launch.id);
+export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
+  const [cursors, metrics, posts] = await Promise.all([
+    registry.cursorsWithPrefix(`publish-failed:${launch.id}:`),
+    registry.latestMetrics(launch.id),
+    registry.posts(launch.id),
+  ]);
+  const failures = cursors.map((c) => ({ channel: c.key.split(':')[2] ?? '', message: c.value }));
   const pullRequest = launch.detail?.match(/https:\/\/github\.com\/\S+\/pull\/\d+/)?.[0];
   return {
     id: launch.id,
@@ -42,7 +44,7 @@ export function launchView(registry: Registry, launch: Launch): LaunchView {
     pullRequest,
     problem: launch.status === 'failed' ? (launch.detail ?? undefined) : undefined,
     createdAt: launch.createdAt,
-    posts: registry.posts(launch.id).map((p) => ({ channel: p.channel, url: p.url, publishedAt: p.publishedAt })),
+    posts: posts.map((p) => ({ channel: p.channel, url: p.url, publishedAt: p.publishedAt })),
     failures,
     headline: HEADLINE.flatMap(([source, name, label]) => {
       const found = metrics.find((m) => m.source === source && m.name === name);

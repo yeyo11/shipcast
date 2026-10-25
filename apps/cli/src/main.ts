@@ -1,5 +1,3 @@
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   checkout,
@@ -76,12 +74,12 @@ function reportPublish(result: PublishResult): void {
 /** Publishes what is ready: each drafted launch whose pull request was merged and whose article is live. */
 async function publishReady(round: RoundDeps): Promise<void> {
   const services = await buildServices({ env: round.env, brand: round.brand, registry: round.registry, github: round.github, secrets: round.secrets });
-  for (const launch of round.registry.recent(100).filter((l) => l.status === 'drafted')) reportPublish(await publishOne(launch, round, services));
+  for (const launch of (await round.registry.recent(100)).filter((l) => l.status === 'drafted')) reportPublish(await publishOne(launch, round, services));
 }
 
 async function readMetrics(brand: Brand, services: Services, registry: Registry): Promise<void> {
   const result = await collectMetrics(registry, brand, services.sources);
-  registry.setCursor(METRICS_AT_KEY, new Date().toISOString());
+  await registry.setCursor(METRICS_AT_KEY, new Date().toISOString());
   console.log(`Metrics: ${result.readings} readings`);
   for (const problem of result.problems) console.error(`  ${problem}`);
 }
@@ -100,8 +98,7 @@ async function main(argv: string[]): Promise<number> {
 
   const config = loadConfig();
   const secrets: SecretStore = new KeychainStore();
-  mkdirSync(config.dataDir, { recursive: true });
-  const registry = new Registry(join(config.dataDir, 'shipcast.db'));
+  const registry = await Registry.connect(config.databaseUrl);
   const github = new GitHubRest({ token: config.githubToken });
   const deps: PipelineDeps = {
     github,
@@ -115,7 +112,7 @@ async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case 'status': {
-        const launches = registry.recent();
+        const launches = await registry.recent();
         if (launches.length === 0) console.log('No launches yet.');
         for (const l of launches) {
           console.log(`${l.createdAt.slice(0, 16).replace('T', ' ')}  ${l.repo} ${l.ref}  ${l.kind}  ${l.status}${l.detail ? `  ${l.detail.split('\n')[0]}` : ''}`);
@@ -133,7 +130,7 @@ async function main(argv: string[]): Promise<number> {
             console.error(`--retry needs a channel, not "${values.retry}"`);
             return 2;
           }
-          for (const l of registry.retryChannel(channel.data)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
+          for (const l of await registry.retryChannel(channel.data)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
         }
         const brand = await loadBrand(github, config.launchesRepo);
         await publishReady({ env: process.env, registry, github, secrets, brand, pipeline: deps });
@@ -215,7 +212,7 @@ async function main(argv: string[]): Promise<number> {
         return 2;
     }
   } finally {
-    registry.close();
+    await registry.close();
   }
 }
 

@@ -1,5 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
+import { and, asc, count, desc, eq, like, sql, type SQL } from 'drizzle-orm';
 import type { Channel, PackKind } from '@shipcast/schema';
+import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
+import { accounts, cursors, launches, metrics, nowIso, posts } from './db/schema.ts';
 
 /** What started a launch; the launch.yml `triggers` decide which of these are honoured. An `article` is written in the app, not released. */
 export type Trigger = 'release' | 'manual' | 'public' | 'enabled' | 'article';
@@ -42,62 +44,6 @@ export interface NewLaunch {
   brand: string;
 }
 
-/**
- * Each entry upgrades the schema by one version (`PRAGMA user_version`). Append only: an edited
- * migration would never run again on a database that already passed it.
- */
-const MIGRATIONS = [
-  `CREATE TABLE launches (
-     id INTEGER PRIMARY KEY,
-     repo TEXT NOT NULL,
-     ref TEXT NOT NULL,
-     trigger TEXT NOT NULL,
-     kind TEXT NOT NULL,
-     brand TEXT NOT NULL,
-     status TEXT NOT NULL,
-     detail TEXT,
-     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-     UNIQUE (repo, ref)
-   );
-   CREATE TABLE posts (
-     launch_id INTEGER NOT NULL REFERENCES launches (id),
-     channel TEXT NOT NULL,
-     url TEXT,
-     external_id TEXT,
-     published_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-     PRIMARY KEY (launch_id, channel)
-   );
-   CREATE TABLE cursors (
-     key TEXT PRIMARY KEY,
-     value TEXT NOT NULL
-   );`,
-  // Every reading is kept, so the dashboard shows how a launch grew, not only where it stands
-  `CREATE TABLE metrics (
-     launch_id INTEGER NOT NULL REFERENCES launches (id),
-     source TEXT NOT NULL,
-     name TEXT NOT NULL,
-     value REAL NOT NULL,
-     taken_at TEXT NOT NULL
-   );
-   CREATE INDEX metrics_by_launch ON metrics (launch_id, source, name, taken_at);`,
-  // Accounts connected from the app: public settings here, secrets in the keychain under `account:<id>`
-  `CREATE TABLE accounts (
-     id INTEGER PRIMARY KEY,
-     network TEXT NOT NULL,
-     brand TEXT NOT NULL,
-     label TEXT NOT NULL,
-     settings TEXT NOT NULL DEFAULT '{}',
-     is_primary INTEGER NOT NULL DEFAULT 0,
-     status TEXT NOT NULL DEFAULT 'unchecked',
-     identity TEXT,
-     problem TEXT,
-     checked_at TEXT,
-     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-     UNIQUE (network, brand, label)
-   );`,
-];
-
 export type AccountStatus = 'unchecked' | 'ok' | 'failed';
 
 /**
@@ -121,36 +67,6 @@ export interface Account {
   createdAt: string;
 }
 
-interface AccountRow {
-  id: number;
-  network: string;
-  brand: string;
-  label: string;
-  settings: string;
-  is_primary: number;
-  status: string;
-  identity: string | null;
-  problem: string | null;
-  checked_at: string | null;
-  created_at: string;
-}
-
-function toAccount(row: AccountRow): Account {
-  return {
-    id: row.id,
-    network: row.network,
-    brand: row.brand,
-    label: row.label,
-    settings: JSON.parse(row.settings) as Record<string, string>,
-    primary: row.is_primary === 1,
-    status: row.status as AccountStatus,
-    identity: row.identity,
-    problem: row.problem,
-    checkedAt: row.checked_at,
-    createdAt: row.created_at,
-  };
-}
-
 /** One number read from one source for one launch, at one moment. */
 export interface MetricReading {
   launchId: number;
@@ -161,20 +77,23 @@ export interface MetricReading {
   takenAt: string;
 }
 
-interface LaunchRow {
-  id: number;
-  repo: string;
-  ref: string;
-  trigger: string;
-  kind: string;
-  brand: string;
-  status: string;
-  detail: string | null;
-  created_at: string;
-  updated_at: string;
+function toAccount(row: typeof accounts.$inferSelect): Account {
+  return {
+    id: row.id,
+    network: row.network,
+    brand: row.brand,
+    label: row.label,
+    settings: JSON.parse(row.settings) as Record<string, string>,
+    primary: row.isPrimary === 1,
+    status: row.status as AccountStatus,
+    identity: row.identity,
+    problem: row.problem,
+    checkedAt: row.checkedAt,
+    createdAt: row.createdAt,
+  };
 }
 
-function toLaunch(row: LaunchRow): Launch {
+function toLaunch(row: typeof launches.$inferSelect): Launch {
   return {
     id: row.id,
     repo: row.repo,
@@ -184,174 +103,194 @@ function toLaunch(row: LaunchRow): Launch {
     brand: row.brand,
     status: row.status as LaunchStatus,
     detail: row.detail,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
+
+const reading = {
+  launchId: metrics.launchId,
+  source: metrics.source,
+  name: metrics.name,
+  value: metrics.value,
+  takenAt: metrics.takenAt,
+};
 
 /**
  * The launch registry: the record that makes "a launch happens once" hold. A release is claimed
  * before anything is generated, and the claim is a unique row, so a second poll, a re-run or a
  * crash halfway through never starts the same campaign twice.
+ *
+ * It lives in Postgres, which the app, the CLI and the scheduler write to at once: what SQLite's
+ * single writer made atomic for free is a transaction here.
  */
 export class Registry {
-  readonly #db: DatabaseSync;
+  readonly #db: Database;
+  readonly #close: () => Promise<void>;
 
-  constructor(path: string) {
-    this.#db = new DatabaseSync(path);
-    this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-    this.#migrate();
+  /** Over a database whose schema is already migrated; `connect` and `memory` are the way in */
+  constructor(db: Database, close: () => Promise<void> = async () => {}) {
+    this.#db = db;
+    this.#close = close;
   }
 
-  #migrate(): void {
-    const { user_version: current } = this.#db.prepare('PRAGMA user_version').get() as { user_version: number };
-    for (let version = current; version < MIGRATIONS.length; version++) {
-      this.#db.exec('BEGIN');
-      try {
-        this.#db.exec(MIGRATIONS[version]!);
-        this.#db.exec(`PRAGMA user_version = ${version + 1}`);
-        this.#db.exec('COMMIT');
-      } catch (error) {
-        this.#db.exec('ROLLBACK');
-        throw error;
-      }
-    }
+  /** The registry on a Postgres server (`SHIPCAST_DATABASE_URL`), its migrations applied */
+  static async connect(url: string): Promise<Registry> {
+    const { db, close } = await connectPostgres(url);
+    return new Registry(db, close);
+  }
+
+  /**
+   * The registry on PGlite, a real Postgres in this process: in memory and fresh on every call, or
+   * kept in `dataDir`. What the tests run on, with no server to start.
+   */
+  static async memory(dataDir?: string): Promise<Registry> {
+    const { db, close } = await connectPglite(dataDir);
+    return new Registry(db, close);
+  }
+
+  /** Runs `work` in one transaction, on a registry over it; a nested call becomes a savepoint */
+  #transaction<T>(work: (registry: Registry) => Promise<T>): Promise<T> {
+    return this.#db.transaction((tx) => work(new Registry(tx)));
+  }
+
+  /**
+   * Serialises the writers of one network and brand's accounts until the transaction ends: under
+   * read committed, two transactions could each see no primary and both insert one.
+   */
+  async #lockAccounts(brand: string, network: string): Promise<void> {
+    await this.#db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`accounts:${network}:${brand}`}))`);
   }
 
   /**
    * Records a launch unless one exists for the same repo and ref. `claimed: false` returns the
    * existing launch, whatever its status: the caller does nothing with a release it did not claim.
+   * `ON CONFLICT` waits for a concurrent claim of the same release to commit, so only one wins.
    */
-  claim(launch: NewLaunch): { claimed: boolean; launch: Launch } {
-    const inserted = this.#db
-      .prepare(
-        `INSERT INTO launches (repo, ref, trigger, kind, brand, status)
-         VALUES (?, ?, ?, ?, ?, 'detected')
-         ON CONFLICT (repo, ref) DO NOTHING`,
-      )
-      .run(launch.repo, launch.ref, launch.trigger, launch.kind, launch.brand);
-    return { claimed: inserted.changes === 1, launch: this.find(launch.repo, launch.ref)! };
+  async claim(launch: NewLaunch): Promise<{ claimed: boolean; launch: Launch }> {
+    const [inserted] = await this.#db
+      .insert(launches)
+      .values({ repo: launch.repo, ref: launch.ref, trigger: launch.trigger, kind: launch.kind, brand: launch.brand, status: 'detected' })
+      .onConflictDoNothing({ target: [launches.repo, launches.ref] })
+      .returning();
+    if (inserted) return { claimed: true, launch: toLaunch(inserted) };
+    return { claimed: false, launch: (await this.find(launch.repo, launch.ref))! };
   }
 
-  find(repo: string, ref: string): Launch | undefined {
-    const row = this.#db.prepare('SELECT * FROM launches WHERE repo = ? AND ref = ?').get(repo, ref);
-    return row ? toLaunch(row as unknown as LaunchRow) : undefined;
+  async find(repo: string, ref: string): Promise<Launch | undefined> {
+    const [row] = await this.#db
+      .select()
+      .from(launches)
+      .where(and(eq(launches.repo, repo), eq(launches.ref, ref)));
+    return row ? toLaunch(row) : undefined;
   }
 
-  get(id: number): Launch | undefined {
-    const row = this.#db.prepare('SELECT * FROM launches WHERE id = ?').get(id);
-    return row ? toLaunch(row as unknown as LaunchRow) : undefined;
+  async get(id: number): Promise<Launch | undefined> {
+    const [row] = await this.#db.select().from(launches).where(eq(launches.id, id));
+    return row ? toLaunch(row) : undefined;
   }
 
   /** The newest launches first, for `shipcast status`. */
-  recent(limit = 20): Launch[] {
-    const rows = this.#db.prepare('SELECT * FROM launches ORDER BY created_at DESC, id DESC LIMIT ?').all(limit);
-    return (rows as unknown as LaunchRow[]).map(toLaunch);
+  async recent(limit = 20): Promise<Launch[]> {
+    const rows = await this.#db.select().from(launches).orderBy(desc(launches.createdAt), desc(launches.id)).limit(limit);
+    return rows.map(toLaunch);
   }
 
-  setStatus(id: number, status: LaunchStatus, detail: string | null = null): Launch {
-    const result = this.#db
-      .prepare(
-        `UPDATE launches SET status = ?, detail = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         WHERE id = ?`,
-      )
-      .run(status, detail, id);
-    if (result.changes !== 1) throw new Error(`no launch with id ${id}`);
-    return this.get(id)!;
+  async setStatus(id: number, status: LaunchStatus, detail: string | null = null): Promise<Launch> {
+    const [row] = await this.#db.update(launches).set({ status, detail, updatedAt: nowIso }).where(eq(launches.id, id)).returning();
+    if (!row) throw new Error(`no launch with id ${id}`);
+    return toLaunch(row);
   }
 
   /**
    * The ref of the repo's last launch that reached its audience, to infer the next pack: a project
    * that never launched gets the `launch` pack, whatever its version number says.
    */
-  lastPublishedRef(repo: string): string | undefined {
-    const row = this.#db
-      .prepare(
-        `SELECT ref FROM launches WHERE repo = ? AND status = 'published'
-         ORDER BY created_at DESC, id DESC LIMIT 1`,
-      )
-      .get(repo) as { ref: string } | undefined;
+  async lastPublishedRef(repo: string): Promise<string | undefined> {
+    const [row] = await this.#db
+      .select({ ref: launches.ref })
+      .from(launches)
+      .where(and(eq(launches.repo, repo), eq(launches.status, 'published')))
+      .orderBy(desc(launches.createdAt), desc(launches.id))
+      .limit(1);
     return row?.ref;
   }
 
   /** One post per launch and channel: publishing the same piece twice is refused, not repeated. */
-  recordPost(post: Omit<Post, 'publishedAt'>): { recorded: boolean } {
-    const result = this.#db
-      .prepare(
-        `INSERT INTO posts (launch_id, channel, url, external_id) VALUES (?, ?, ?, ?)
-         ON CONFLICT (launch_id, channel) DO NOTHING`,
-      )
-      .run(post.launchId, post.channel, post.url, post.externalId);
-    return { recorded: result.changes === 1 };
+  async recordPost(post: Omit<Post, 'publishedAt'>): Promise<{ recorded: boolean }> {
+    const inserted = await this.#db
+      .insert(posts)
+      .values({ launchId: post.launchId, channel: post.channel, url: post.url, externalId: post.externalId })
+      .onConflictDoNothing({ target: [posts.launchId, posts.channel] })
+      .returning({ launchId: posts.launchId });
+    return { recorded: inserted.length === 1 };
   }
 
-  posts(launchId: number): Post[] {
-    const rows = this.#db
-      .prepare('SELECT * FROM posts WHERE launch_id = ? ORDER BY published_at, channel')
-      .all(launchId) as unknown as Array<{
-      launch_id: number;
-      channel: string;
-      url: string | null;
-      external_id: string | null;
-      published_at: string;
-    }>;
-    return rows.map((r) => ({
-      launchId: r.launch_id,
-      channel: r.channel as Channel,
-      url: r.url,
-      externalId: r.external_id,
-      publishedAt: r.published_at,
-    }));
+  async posts(launchId: number): Promise<Post[]> {
+    const rows = await this.#db
+      .select()
+      .from(posts)
+      .where(eq(posts.launchId, launchId))
+      .orderBy(asc(posts.publishedAt), asc(posts.channel));
+    return rows.map((r) => ({ launchId: r.launchId, channel: r.channel as Channel, url: r.url, externalId: r.externalId, publishedAt: r.publishedAt }));
   }
 
-  recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date): void {
-    const insert = this.#db.prepare('INSERT INTO metrics (launch_id, source, name, value, taken_at) VALUES (?, ?, ?, ?, ?)');
+  async recordMetrics(launchId: number, source: string, values: Record<string, number>, takenAt: Date): Promise<void> {
     const at = takenAt.toISOString();
-    for (const [name, value] of Object.entries(values)) {
-      if (Number.isFinite(value)) insert.run(launchId, source, name, value, at);
-    }
+    const rows = Object.entries(values)
+      .filter(([, value]) => Number.isFinite(value))
+      .map(([name, value]) => ({ launchId, source, name, value, takenAt: at }));
+    if (rows.length > 0) await this.#db.insert(metrics).values(rows);
   }
 
   /** The newest reading of every metric of a launch. */
-  latestMetrics(launchId: number): MetricReading[] {
-    const rows = this.#db
-      .prepare(
-        `SELECT m.launch_id, m.source, m.name, m.value, m.taken_at FROM metrics m
-         JOIN (SELECT source, name, MAX(taken_at) AS at FROM metrics WHERE launch_id = ? GROUP BY source, name) last
-           ON last.source = m.source AND last.name = m.name AND last.at = m.taken_at
-         WHERE m.launch_id = ? ORDER BY m.source, m.name`,
-      )
-      .all(launchId, launchId) as unknown as Array<{ launch_id: number; source: string; name: string; value: number; taken_at: string }>;
-    return rows.map((r) => ({ launchId: r.launch_id, source: r.source, name: r.name, value: r.value, takenAt: r.taken_at }));
+  async latestMetrics(launchId: number): Promise<MetricReading[]> {
+    const last = this.#db
+      .select({ source: metrics.source, name: metrics.name, at: sql<string>`max(${metrics.takenAt})`.as('at') })
+      .from(metrics)
+      .where(eq(metrics.launchId, launchId))
+      .groupBy(metrics.source, metrics.name)
+      .as('last');
+    return this.#db
+      .select(reading)
+      .from(metrics)
+      .innerJoin(last, and(eq(last.source, metrics.source), eq(last.name, metrics.name), eq(last.at, metrics.takenAt)))
+      .where(eq(metrics.launchId, launchId))
+      .orderBy(asc(metrics.source), asc(metrics.name));
   }
 
   /** Every reading of one metric of a launch, oldest first: its curve. */
-  metricHistory(launchId: number, source: string, name: string): MetricReading[] {
-    const rows = this.#db
-      .prepare('SELECT launch_id, source, name, value, taken_at FROM metrics WHERE launch_id = ? AND source = ? AND name = ? ORDER BY taken_at')
-      .all(launchId, source, name) as unknown as Array<{ launch_id: number; source: string; name: string; value: number; taken_at: string }>;
-    return rows.map((r) => ({ launchId: r.launch_id, source: r.source, name: r.name, value: r.value, takenAt: r.taken_at }));
+  async metricHistory(launchId: number, source: string, name: string): Promise<MetricReading[]> {
+    return this.#db
+      .select(reading)
+      .from(metrics)
+      .where(and(eq(metrics.launchId, launchId), eq(metrics.source, source), eq(metrics.name, name)))
+      .orderBy(asc(metrics.takenAt));
   }
 
   /** Small pieces of polling state, such as the ETag of the last events page. */
-  cursor(key: string): string | undefined {
-    const row = this.#db.prepare('SELECT value FROM cursors WHERE key = ?').get(key) as { value: string } | undefined;
+  async cursor(key: string): Promise<string | undefined> {
+    const [row] = await this.#db.select({ value: cursors.value }).from(cursors).where(eq(cursors.key, key));
     return row?.value;
   }
 
-  setCursor(key: string, value: string): void {
-    this.#db
-      .prepare('INSERT INTO cursors (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
-      .run(key, value);
+  async setCursor(key: string, value: string): Promise<void> {
+    await this.#db.insert(cursors).values({ key, value }).onConflictDoUpdate({ target: cursors.key, set: { value } });
   }
 
-  deleteCursor(key: string): void {
-    this.#db.prepare('DELETE FROM cursors WHERE key = ?').run(key);
+  async deleteCursor(key: string): Promise<void> {
+    await this.#db.delete(cursors).where(eq(cursors.key, key));
   }
 
   /** Every cursor whose key starts with a prefix, such as the failures of one launch (`publish-failed:12:`) */
-  cursorsWithPrefix(prefix: string): Array<{ key: string; value: string }> {
-    return this.#db.prepare("SELECT key, value FROM cursors WHERE key LIKE ? || '%' ORDER BY key").all(prefix) as Array<{ key: string; value: string }>;
+  async cursorsWithPrefix(prefix: string): Promise<Array<{ key: string; value: string }>> {
+    // starts_with, not LIKE: a `_` in the prefix is a character, not a wildcard. Ordered bytewise, as
+    // SQLite did, whatever collation the database was created with
+    return this.#db
+      .select({ key: cursors.key, value: cursors.value })
+      .from(cursors)
+      .where(sql`starts_with(${cursors.key}, ${prefix})`)
+      .orderBy(sql`${cursors.key} COLLATE "C"`);
   }
 
   /**
@@ -359,89 +298,131 @@ export class Registry {
    * failure is forgotten and its launch goes back to `drafted`, so the next publish round tries that
    * channel again. Channels already posted stay posted; the registry never posts one twice.
    */
-  retryChannel(channel: Channel): Launch[] {
-    const keys = this.#db.prepare("SELECT key FROM cursors WHERE key LIKE 'publish-failed:%:' || ?").all(channel) as Array<{ key: string }>;
-    const reopened: Launch[] = [];
-    for (const { key } of keys) {
-      const id = Number(key.split(':')[1]);
-      this.#db.prepare('DELETE FROM cursors WHERE key = ?').run(key);
-      const launch = this.get(id);
-      if (launch && !this.posts(id).some((p) => p.channel === channel)) reopened.push(this.setStatus(id, 'drafted', launch.detail));
-    }
-    return reopened;
+  async retryChannel(channel: Channel): Promise<Launch[]> {
+    return this.#transaction(async (tx) => {
+      const keys = await tx.#db
+        .select({ key: cursors.key })
+        .from(cursors)
+        .where(like(cursors.key, `publish-failed:%:${channel}`));
+      const reopened: Launch[] = [];
+      for (const { key } of keys) {
+        const id = Number(key.split(':')[1]);
+        await tx.deleteCursor(key);
+        const launch = await tx.get(id);
+        if (launch && !(await tx.posts(id)).some((p) => p.channel === channel)) reopened.push(await tx.setStatus(id, 'drafted', launch.detail));
+      }
+      return reopened;
+    });
   }
 
-  accounts(filter: { brand?: string; network?: string } = {}): Account[] {
-    const rows = this.#db
-      .prepare('SELECT * FROM accounts WHERE (?1 IS NULL OR brand = ?1) AND (?2 IS NULL OR network = ?2) ORDER BY network, brand, is_primary DESC, label')
-      .all(filter.brand ?? null, filter.network ?? null) as unknown as AccountRow[];
+  async accounts(filter: { brand?: string; network?: string } = {}): Promise<Account[]> {
+    const where: SQL[] = [];
+    if (filter.brand !== undefined) where.push(eq(accounts.brand, filter.brand));
+    if (filter.network !== undefined) where.push(eq(accounts.network, filter.network));
+    const rows = await this.#db
+      .select()
+      .from(accounts)
+      .where(and(...where))
+      .orderBy(asc(accounts.network), asc(accounts.brand), desc(accounts.isPrimary), asc(accounts.label));
     return rows.map(toAccount);
   }
 
-  account(id: number): Account | undefined {
-    const row = this.#db.prepare('SELECT * FROM accounts WHERE id = ?').get(id);
-    return row ? toAccount(row as unknown as AccountRow) : undefined;
+  async account(id: number): Promise<Account | undefined> {
+    const [row] = await this.#db.select().from(accounts).where(eq(accounts.id, id));
+    return row ? toAccount(row) : undefined;
   }
 
   /** The account a brand publishes with on a network, if it has one */
-  primaryAccount(brand: string, network: string): Account | undefined {
-    const row = this.#db.prepare('SELECT * FROM accounts WHERE brand = ? AND network = ? AND is_primary = 1').get(brand, network);
-    return row ? toAccount(row as unknown as AccountRow) : undefined;
+  async primaryAccount(brand: string, network: string): Promise<Account | undefined> {
+    const [row] = await this.#db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.brand, brand), eq(accounts.network, network), eq(accounts.isPrimary, 1)))
+      .limit(1);
+    return row ? toAccount(row) : undefined;
   }
 
   /** A new account; the first one of its network and brand becomes the primary */
-  addAccount(account: { network: string; brand: string; label: string; settings: Record<string, string> }): Account {
-    const first = this.accounts({ brand: account.brand, network: account.network }).length === 0;
-    const result = this.#db
-      .prepare('INSERT INTO accounts (network, brand, label, settings, is_primary) VALUES (?, ?, ?, ?, ?)')
-      .run(account.network, account.brand, account.label, JSON.stringify(account.settings), first ? 1 : 0);
-    return this.account(Number(result.lastInsertRowid))!;
+  async addAccount(account: { network: string; brand: string; label: string; settings: Record<string, string> }): Promise<Account> {
+    return this.#transaction(async (tx) => {
+      await tx.#lockAccounts(account.brand, account.network);
+      const [existing] = await tx.#db
+        .select({ n: count() })
+        .from(accounts)
+        .where(and(eq(accounts.brand, account.brand), eq(accounts.network, account.network)));
+      const [row] = await tx.#db
+        .insert(accounts)
+        .values({
+          network: account.network,
+          brand: account.brand,
+          label: account.label,
+          settings: JSON.stringify(account.settings),
+          isPrimary: existing?.n === 0 ? 1 : 0,
+        })
+        .returning();
+      return toAccount(row!);
+    });
   }
 
-  updateAccount(id: number, change: { label?: string; settings?: Record<string, string> }): Account {
-    const current = this.account(id);
+  async updateAccount(id: number, change: { label?: string; settings?: Record<string, string> }): Promise<Account> {
+    const current = await this.account(id);
     if (!current) throw new Error(`no account with id ${id}`);
-    this.#db
-      .prepare('UPDATE accounts SET label = ?, settings = ? WHERE id = ?')
-      .run(change.label ?? current.label, JSON.stringify(change.settings ?? current.settings), id);
-    return this.account(id)!;
+    const [row] = await this.#db
+      .update(accounts)
+      .set({ label: change.label ?? current.label, settings: JSON.stringify(change.settings ?? current.settings) })
+      .where(eq(accounts.id, id))
+      .returning();
+    if (!row) throw new Error(`no account with id ${id}`);
+    return toAccount(row);
   }
 
-  recordCheck(id: number, check: { ok: true; account: string } | { ok: false; problem: string }, at = new Date()): Account {
-    this.#db
-      .prepare('UPDATE accounts SET status = ?, identity = ?, problem = ?, checked_at = ? WHERE id = ?')
-      .run(check.ok ? 'ok' : 'failed', check.ok ? check.account : null, check.ok ? null : check.problem, at.toISOString(), id);
-    return this.account(id)!;
+  async recordCheck(id: number, check: { ok: true; account: string } | { ok: false; problem: string }, at = new Date()): Promise<Account> {
+    const [row] = await this.#db
+      .update(accounts)
+      .set({
+        status: check.ok ? 'ok' : 'failed',
+        identity: check.ok ? check.account : null,
+        problem: check.ok ? null : check.problem,
+        checkedAt: at.toISOString(),
+      })
+      .where(eq(accounts.id, id))
+      .returning();
+    if (!row) throw new Error(`no account with id ${id}`);
+    return toAccount(row);
   }
 
   /** Makes one account the one its brand publishes with on that network */
-  makePrimary(id: number): Account {
-    const account = this.account(id);
+  async makePrimary(id: number): Promise<Account> {
+    const account = await this.account(id);
     if (!account) throw new Error(`no account with id ${id}`);
-    this.#db.exec('BEGIN');
-    try {
-      this.#db.prepare('UPDATE accounts SET is_primary = 0 WHERE brand = ? AND network = ?').run(account.brand, account.network);
-      this.#db.prepare('UPDATE accounts SET is_primary = 1 WHERE id = ?').run(id);
-      this.#db.exec('COMMIT');
-    } catch (error) {
-      this.#db.exec('ROLLBACK');
-      throw error;
-    }
-    return this.account(id)!;
+    return this.#transaction(async (tx) => {
+      await tx.#lockAccounts(account.brand, account.network);
+      await tx.#db
+        .update(accounts)
+        .set({ isPrimary: 0 })
+        .where(and(eq(accounts.brand, account.brand), eq(accounts.network, account.network)));
+      const [row] = await tx.#db.update(accounts).set({ isPrimary: 1 }).where(eq(accounts.id, id)).returning();
+      // Deleted between the read and the lock: the rollback leaves the old primary in place
+      if (!row) throw new Error(`no account with id ${id}`);
+      return toAccount(row);
+    });
   }
 
   /** Removes an account; when it was the primary, the next one of its network and brand takes over */
-  deleteAccount(id: number): void {
-    const account = this.account(id);
+  async deleteAccount(id: number): Promise<void> {
+    const account = await this.account(id);
     if (!account) return;
-    this.#db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
-    if (account.primary) {
-      const next = this.accounts({ brand: account.brand, network: account.network })[0];
-      if (next) this.makePrimary(next.id);
-    }
+    await this.#transaction(async (tx) => {
+      await tx.#lockAccounts(account.brand, account.network);
+      const [deleted] = await tx.#db.delete(accounts).where(eq(accounts.id, id)).returning({ primary: accounts.isPrimary });
+      if (deleted?.primary === 1) {
+        const [next] = await tx.accounts({ brand: account.brand, network: account.network });
+        if (next) await tx.makePrimary(next.id);
+      }
+    });
   }
 
-  close(): void {
-    this.#db.close();
+  async close(): Promise<void> {
+    await this.#close();
   }
 }
