@@ -21,6 +21,7 @@ import { id, InvalidInput, object } from './input.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest } from './requests.ts';
+import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 
 /*
  * The REST API under /api/v1: stable routes for the MCP server and any other client, beside the
@@ -201,6 +202,7 @@ const PATH_PARAMS: Record<string, { description: string; schema: JsonSchema }> =
   id: { description: 'The launch id', schema: { type: 'integer', minimum: 1 } },
   channel: { description: 'A channel of launch.yml', schema: { type: 'string' } },
   postId: { description: 'The post id, as a launch lists its posts', schema: { type: 'integer', minimum: 1 } },
+  accountId: { description: 'The account id, as /accounts lists them', schema: { type: 'integer', minimum: 1 } },
 };
 
 function postId(value: string | undefined): number {
@@ -438,6 +440,7 @@ export const ROUTES: ApiRoute[] = [
       return json(200, { outcomes: await onPosts(async () => deleteLaunchPosts(launch.id, channels, await deps.editing())) });
     },
   },
+  ...STATS_ROUTES,
 ];
 
 const compiled = ROUTES.map((route) => {
@@ -682,6 +685,7 @@ export function openApiDocument(publicUrl: string) {
             startedAt: { type: 'string' },
           },
         },
+        ...STATS_SCHEMAS,
       },
     },
   };
