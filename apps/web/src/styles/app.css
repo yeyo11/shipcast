@@ -176,6 +176,15 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .account-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .stale { color: var(--sc-failure); font-weight: 700; }
 
+/* The illustrations' review page (/design/illustrations): each panel sets its own theme, so night and
+   day sit side by side whatever the page is in */
+.illo-gallery { list-style: none; margin: 0; padding: 0; display: grid; gap: 40px; }
+.illo-name { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-bottom: 14px; }
+.illo-name h2.ph { margin: 0; font-size: 30px; }
+.illo-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 540px), 1fr)); gap: 16px; }
+.illo-theme { position: relative; display: flex; flex-wrap: wrap; gap: 28px; align-items: end; padding: 28px 28px 24px; background: var(--sc-ground); color: var(--sc-text); border: var(--sc-border-control) solid var(--sc-rail); border-radius: var(--sc-radius-card); }
+.illo-tag { position: absolute; top: 14px; right: 18px; font: var(--sc-label); color: var(--sc-muted); }
+
 /* Lenis's own rules (lenis/dist/lenis.css, MIT), for the smooth scrolling of SmoothScroll.tsx */
 html.lenis, html.lenis body { height: auto; }
 .lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
