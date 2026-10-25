@@ -24,7 +24,9 @@ async function main(): Promise<void> {
   const secrets = new KeychainStore();
   const domain = new URL(app.publicUrl).hostname;
   const token = app.tlsCloudflareToken;
-  const options = { domain, secrets, dataDir: config.dataDir, log: console.log };
+  // The app's address on the local network, if it has one: another https origin on the same certificate
+  const aliases = (process.env.SHIPCAST_APP_ALIASES ?? '').split(',').map((a) => a.trim().replace(/\/+$/, '')).filter(Boolean);
+  const options = { domain, altNames: aliases.map((a) => new URL(a).hostname), secrets, dataDir: config.dataDir, log: console.log };
 
   const certificate = token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
   if (!certificate || certificate.expires.getTime() < Date.now()) {
@@ -35,7 +37,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const server = await serve({ host: app.host, port: app.port, origin: app.publicUrl, tls: certificate });
+  const server = await serve({ host: app.host, port: app.port, origin: app.publicUrl, aliases, tls: certificate });
   if (process.env.SHIPCAST_APP_TAILSCALE !== 'off') {
     try {
       await run('tailscale', ['serve', '--bg', '--tcp', '443', `tcp://${app.host}:${app.port}`]);
@@ -43,7 +45,7 @@ async function main(): Promise<void> {
       console.error(`Tailscale Serve did not forward port 443 (${error instanceof Error ? error.message : String(error)}); run: tailscale serve --bg --tcp 443 tcp://${app.host}:${app.port}`);
     }
   }
-  console.log(`Shipcast on ${app.publicUrl} (tailnet only); certificate valid until ${certificate.expires.toISOString().slice(0, 10)}`);
+  console.log(`Shipcast on ${[app.publicUrl, ...aliases].join(' and ')}; certificate valid until ${certificate.expires.toISOString().slice(0, 10)}`);
   console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(consoleLinks().create())}`);
 
   if (!token) {
