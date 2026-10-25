@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
-import { Route as ApiLaunchesRouteImport } from './routes/api.launches'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiLaunchesRouteImport } from './routes/api/launches'
 import { Route as AuthGithubRouteImport } from './routes/auth/github'
 import { Route as AuthInstagramRouteImport } from './routes/auth/instagram'
 import { Route as AuthLinkRouteImport } from './routes/auth/link'
@@ -23,6 +25,7 @@ import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
 import { Route as AppLaunchesIdRouteImport } from './routes/_app/launches/$id'
+import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.callback'
 import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagram.callback'
 import { Route as AuthMastodonCallbackRouteImport } from './routes/auth/mastodon.callback'
@@ -41,6 +44,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAutomationRoute = AppAutomationRouteImport.update({
+  id: '/automation',
+  path: '/automation',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLaunchRoute = AppLaunchRouteImport.update({
   id: '/launch',
   path: '/launch',
@@ -50,6 +58,11 @@ const AppWriteRoute = AppWriteRouteImport.update({
   id: '/write',
   path: '/write',
   getParentRoute: () => AppRoute,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiLaunchesRoute = ApiLaunchesRouteImport.update({
   id: '/api/launches',
@@ -96,6 +109,11 @@ const AppLaunchesIdRoute = AppLaunchesIdRouteImport.update({
   path: '/launches/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiGithubWebhookRoute = ApiGithubWebhookRouteImport.update({
+  id: '/api/github/webhook',
+  path: '/api/github/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -115,8 +133,10 @@ const AuthMastodonCallbackRoute = AuthMastodonCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
   '/write': typeof AppWriteRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
@@ -125,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/launches/$id': typeof AppLaunchesIdRoute
+  '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
@@ -132,8 +153,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
   '/write': typeof AppWriteRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
@@ -143,6 +166,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/launches/$id': typeof AppLaunchesIdRoute
+  '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
@@ -152,8 +176,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/automation': typeof AppAutomationRoute
   '/_app/launch': typeof AppLaunchRoute
   '/_app/write': typeof AppWriteRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
@@ -163,6 +189,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
   '/_app/launches/$id': typeof AppLaunchesIdRoute
+  '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
@@ -173,8 +200,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/automation'
     | '/launch'
     | '/write'
+    | '/api/health'
     | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
@@ -183,6 +212,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/channels/$network'
     | '/launches/$id'
+    | '/api/github/webhook'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/mastodon/callback'
@@ -190,8 +220,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/automation'
     | '/launch'
     | '/write'
+    | '/api/health'
     | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
@@ -201,6 +233,7 @@ export interface FileRouteTypes {
     | '/'
     | '/channels/$network'
     | '/launches/$id'
+    | '/api/github/webhook'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/mastodon/callback'
@@ -209,8 +242,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/automation'
     | '/_app/launch'
     | '/_app/write'
+    | '/api/health'
     | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
@@ -220,6 +255,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/channels/$network'
     | '/_app/launches/$id'
+    | '/api/github/webhook'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/mastodon/callback'
@@ -229,12 +265,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiLaunchesRoute: typeof ApiLaunchesRoute
   AuthGithubRoute: typeof AuthGithubRouteWithChildren
   AuthInstagramRoute: typeof AuthInstagramRouteWithChildren
   AuthLinkRoute: typeof AuthLinkRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
   AuthMastodonRoute: typeof AuthMastodonRouteWithChildren
+  ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -260,6 +298,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/automation': {
+      id: '/_app/automation'
+      path: '/automation'
+      fullPath: '/automation'
+      preLoaderRoute: typeof AppAutomationRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/launch': {
       id: '/_app/launch'
       path: '/launch'
@@ -273,6 +318,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/write'
       preLoaderRoute: typeof AppWriteRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/launches': {
       id: '/api/launches'
@@ -337,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/github/webhook': {
+      id: '/api/github/webhook'
+      path: '/api/github/webhook'
+      fullPath: '/api/github/webhook'
+      preLoaderRoute: typeof ApiGithubWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/github/callback': {
       id: '/auth/github/callback'
       path: '/callback'
@@ -362,6 +421,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAutomationRoute: typeof AppAutomationRoute
   AppLaunchRoute: typeof AppLaunchRoute
   AppWriteRoute: typeof AppWriteRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -371,6 +431,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAutomationRoute: AppAutomationRoute,
   AppLaunchRoute: AppLaunchRoute,
   AppWriteRoute: AppWriteRoute,
   AppIndexRoute: AppIndexRoute,
@@ -420,12 +481,14 @@ const AuthMastodonRouteWithChildren = AuthMastodonRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiLaunchesRoute: ApiLaunchesRoute,
   AuthGithubRoute: AuthGithubRouteWithChildren,
   AuthInstagramRoute: AuthInstagramRouteWithChildren,
   AuthLinkRoute: AuthLinkRoute,
   AuthLogoutRoute: AuthLogoutRoute,
   AuthMastodonRoute: AuthMastodonRouteWithChildren,
+  ApiGithubWebhookRoute: ApiGithubWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

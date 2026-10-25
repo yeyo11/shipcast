@@ -13,6 +13,7 @@ const SECTIONS = [
   { to: '/launch', label: 'Launch a repo' },
   { to: '/write', label: 'Write' },
   { to: '/channels', label: 'Channels' },
+  { to: '/automation', label: 'Automation' },
 ] as const;
 
 function Shell() {

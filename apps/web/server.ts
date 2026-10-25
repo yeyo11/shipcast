@@ -88,6 +88,8 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
   };
   const server = options.tls ? createHttps({ key: options.tls.key, cert: options.tls.cert }, handler) : createHttp(handler);
   await new Promise<void>((done) => server.listen(options.port, options.host, done));
+  // The app's context, and with it the rounds nobody starts by hand, begins now rather than at the first visit
+  void entry.default.fetch(new Request(`${options.origin}/api/health`)).catch(() => undefined);
   return {
     close: () => new Promise((done) => server.close(() => done())),
     // A renewed certificate is swapped in without dropping connections

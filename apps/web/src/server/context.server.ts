@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { checkout, Claudio, GitHubRest, loadBrand, Registry, type PipelineDeps } from '@shipcast/engine';
 import { KeychainStore, loadAppConfig, loadConfig, type AppConfig, type Config, type SecretStore } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
+import { startAutomation } from './automation.server';
 import { Jobs } from './jobs.server';
 
 /**
@@ -70,5 +71,7 @@ export function appContext(): AppContext {
       return new Map([[b.id, b]]);
     },
   };
+  // The rounds nobody starts by hand begin with the app
+  startAutomation(context);
   return context;
 }

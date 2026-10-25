@@ -1,7 +1,10 @@
 import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/react-start';
 
-/** Paths anyone may open: signing in, and the static files the sign-in page needs */
-const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/];
+/** GitHub's deliveries: no session and no same-origin, since GitHub sends them; their signature is checked instead */
+const WEBHOOK = '/api/github/webhook';
+
+/** Paths anyone may open: signing in, the static files the sign-in page needs, the health check and GitHub's webhook */
+const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/];
 
 /**
  * Every other request needs a session. A page without one goes to the sign-in page; anything else
@@ -18,6 +21,6 @@ const requireSession = createMiddleware().server(async ({ request, pathname, nex
 });
 
 /** Anything that changes something must come from the app's own pages */
-const sameOrigin = createCsrfMiddleware({ filter: ({ request }) => request.method !== 'GET' && request.method !== 'HEAD' });
+const sameOrigin = createCsrfMiddleware({ filter: ({ request, pathname }) => request.method !== 'GET' && request.method !== 'HEAD' && pathname !== WEBHOOK });
 
 export const startInstance = createStart(() => ({ requestMiddleware: [sameOrigin, requireSession] }));
