@@ -8,6 +8,13 @@
       "when": 1792930363802,
       "tag": "0000_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792934379749,
+      "tag": "0001_post_model",
+      "breakpoints": true
     }
   ]
 }

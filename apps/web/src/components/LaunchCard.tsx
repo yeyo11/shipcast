@@ -1,13 +1,15 @@
 import { Link } from '@tanstack/react-router';
-import type { LaunchView } from '../server/view';
+import { pieceName, type LaunchView } from '../server/view';
 import { ChannelName, number, Pill, when } from './ui';
 
 /** A launch as the specimen's launch card: black, a yellow stamp, one row per channel */
 export function LaunchCard({ launch }: { launch: LaunchView }) {
   const failed = new Map(launch.failures.map((f) => [f.channel, f.message]));
   const rows = [
-    ...launch.posts.map((p) => ({ channel: p.channel, url: p.url, failure: undefined as string | undefined })),
-    ...launch.failures.filter((f) => !launch.posts.some((p) => p.channel === f.channel)).map((f) => ({ channel: f.channel, url: null, failure: f.message })),
+    ...launch.posts.map((p) => ({ key: String(p.id), channel: p.channel, piece: pieceName(p.kind), url: p.url, failure: undefined as string | undefined })),
+    ...launch.failures
+      .filter((f) => !launch.posts.some((p) => p.channel === f.channel))
+      .map((f) => ({ key: `failed:${f.channel}`, channel: f.channel, piece: '', url: null, failure: f.message })),
   ];
   return (
     <article className="launch">
@@ -28,9 +30,10 @@ export function LaunchCard({ launch }: { launch: LaunchView }) {
       {rows.length > 0 ? (
         <ol>
           {rows.map((row) => (
-            <li key={row.channel}>
+            <li key={row.key}>
               <ChannelName channel={row.channel} />
               <span className="post">
+                {row.piece && <span className="mono">{row.piece} </span>}
                 {row.url ? (
                   <a href={row.url} target="_blank" rel="noreferrer">
                     {row.url.replace(/^https:\/\//, '')}

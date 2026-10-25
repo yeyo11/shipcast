@@ -1,10 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { doublePrecision, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import { doublePrecision, index, integer, jsonb, pgTable, text, unique } from 'drizzle-orm/pg-core';
 
 /*
- * The registry's tables, column for column as they were on node:sqlite, so scripts/sqlite-to-postgres.ts
- * copies every row as it is. Timestamps stay ISO 8601 text in UTC with milliseconds: rows are ordered
- * and compared by them, and moving to timestamptz is a change of its own.
+ * The registry's tables. The first migration mirrors node:sqlite's column for column, so
+ * scripts/sqlite-to-postgres.ts copies every row as it is and the later migrations convert it like any
+ * other install. Timestamps stay ISO 8601 text in UTC with milliseconds: rows are ordered and compared
+ * by them, and moving to timestamptz is a change of its own.
  */
 
 /** What SQLite's `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')` wrote, fixed for the statement as SQLite's 'now' was, so old and new rows sort together */
@@ -28,21 +29,34 @@ export const launches = pgTable(
   (t) => [unique('launches_repo_ref_unique').on(t.repo, t.ref)],
 );
 
+// One row per published piece: the post itself, an Instagram story or comment, one newsletter issue
+// or one blog article per language. See docs/decisions/post-model.md
 export const posts = pgTable(
   'posts',
   {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
     launchId: integer('launch_id')
       .notNull()
       .references(() => launches.id),
     channel: text('channel').notNull(),
-    url: text('url'),
+    // Null for a piece no account published (the blog) or an old one that cannot be attributed; an
+    // account removed later leaves its pieces in place
+    accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+    kind: text('kind').notNull(),
     externalId: text('external_id'),
+    url: text('url'),
+    status: text('status').notNull().default('live'),
+    contentHash: text('content_hash'),
+    scheduledAt: text('scheduled_at'),
     publishedAt: text('published_at').notNull().default(nowIso),
+    updatedAt: text('updated_at').notNull().default(nowIso),
   },
-  // One post per launch and channel: publishing the same piece twice is refused
-  (t) => [primaryKey({ columns: [t.launchId, t.channel] })],
+  // A launch happens once, piece by piece. Nulls not distinct: two blog articles with no account
+  // would otherwise both be accepted, since NULL never equals NULL
+  (t) => [unique('posts_piece_unique').on(t.launchId, t.channel, t.accountId, t.kind).nullsNotDistinct()],
 );
 
+// Positions and polling state (ETags, last ids, last checks); what the owner chooses is in settings
 export const cursors = pgTable('cursors', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
@@ -55,13 +69,15 @@ export const metrics = pgTable(
     launchId: integer('launch_id')
       .notNull()
       .references(() => launches.id),
+    // The piece a reading is of; null for a site-level source (blog visits, search, Bing, GitHub)
+    postId: integer('post_id').references(() => posts.id),
     source: text('source').notNull(),
     name: text('name').notNull(),
     // SQLite's REAL is an 8-byte float; Postgres' `real` is 4 bytes and would round the readings
     value: doublePrecision('value').notNull(),
     takenAt: text('taken_at').notNull(),
   },
-  (t) => [index('metrics_by_launch').on(t.launchId, t.source, t.name, t.takenAt)],
+  (t) => [index('metrics_by_launch').on(t.launchId, t.source, t.name, t.takenAt), index('metrics_by_post').on(t.postId)],
 );
 
 // Accounts connected from the app: public settings here, secrets in the keychain under `account:<id>`
@@ -84,3 +100,11 @@ export const accounts = pgTable(
   },
   (t) => [unique('accounts_network_brand_label_unique').on(t.network, t.brand, t.label)],
 );
+
+// What the owner chose (automation, and next the onboarding, AI and prompts), as JSON the registry
+// reads back typed; cursors keep only positions and state
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: text('updated_at').notNull().default(nowIso),
+});

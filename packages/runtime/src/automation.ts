@@ -14,14 +14,15 @@ export interface Automation {
 }
 
 export const MIN_INTERVAL_SECONDS = 60;
+// Settings: what the owner chose. The last round and delivery are state, so they stay cursors
 const MODE_KEY = 'automation:mode';
 const INTERVAL_KEY = 'automation:interval';
 export const LAST_ROUND_KEY = 'automation:last-round';
 export const LAST_DELIVERY_KEY = 'automation:last-delivery';
 
 export async function readAutomation(registry: Registry): Promise<Automation> {
-  const mode = await registry.cursor(MODE_KEY);
-  const interval = Number(await registry.cursor(INTERVAL_KEY));
+  const mode = await registry.setting<AutomationMode>(MODE_KEY);
+  const interval = Number(await registry.setting<number>(INTERVAL_KEY));
   return {
     mode: mode === 'webhook' || mode === 'off' ? mode : 'poll',
     intervalSeconds: Number.isFinite(interval) && interval >= MIN_INTERVAL_SECONDS ? interval : 300,
@@ -29,8 +30,8 @@ export async function readAutomation(registry: Registry): Promise<Automation> {
 }
 
 export async function writeAutomation(registry: Registry, automation: Automation): Promise<Automation> {
-  await registry.setCursor(MODE_KEY, automation.mode);
-  await registry.setCursor(INTERVAL_KEY, String(Math.max(MIN_INTERVAL_SECONDS, Math.round(automation.intervalSeconds))));
+  await registry.setSetting<AutomationMode>(MODE_KEY, automation.mode);
+  await registry.setSetting<number>(INTERVAL_KEY, Math.max(MIN_INTERVAL_SECONDS, Math.round(automation.intervalSeconds)));
   return readAutomation(registry);
 }
 

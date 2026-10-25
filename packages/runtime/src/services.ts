@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { Telegram, type Instagram } from '@shipcast/connectors';
 import { GitHubRest, type MetricSources, type Publishers, type Registry } from '@shipcast/engine';
-import type { Brand } from '@shipcast/schema';
-import { buildConnector, credentialsFromEnv, type Built, type Credentials } from './catalog.ts';
+import type { Brand, Channel } from '@shipcast/schema';
+import { buildConnector, credentialsFromEnv, NETWORKS, type Built, type Credentials } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
 
 /** Where a refreshed Instagram token is kept when it came from `.env`: in the registry, never in a file in the repo. */
@@ -35,6 +35,8 @@ export interface Services {
   /** Which channels and sources have credentials, for `shipcast status` and the first run */
   configured: string[];
   origins: Record<string, Origin>;
+  /** The connected account each channel publishes with, so its pieces record it; a channel on `.env` has none */
+  accounts: Partial<Record<Channel, number>>;
 }
 
 /**
@@ -156,7 +158,12 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     sources.bing = bing;
     configured.push('bing webmaster');
   }
-  return { publishers, sources, instagram, notifier, configured, origins };
+  const accounts: Partial<Record<Channel, number>> = {};
+  for (const network of NETWORKS) {
+    const origin = origins[network.id];
+    if (network.channel && origin?.kind === 'account') accounts[network.channel] = origin.id;
+  }
+  return { publishers, sources, instagram, notifier, configured, origins, accounts };
 }
 
 /**

@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PGlite } from '@electric-sql/pglite';
-import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
+import { PgDialect, type PgDatabase, type PgQueryResultHKT } from 'drizzle-orm/pg-core';
 
 /** A Drizzle database on either driver: postgres.js for a server, PGlite in-process */
 export type Database = PgDatabase<PgQueryResultHKT>;
@@ -16,14 +18,37 @@ export const migrationsFolder = join(import.meta.dirname, '..', '..', 'drizzle')
 // Any constant; it only has to be the same for every process that migrates this database
 const MIGRATION_LOCK = 7_461_726;
 
+/** The schema node:sqlite's registry had, which a copy of it lands in before the rest convert it */
+export const FIRST_MIGRATION = '0000_registry';
+
+export interface MigrateOptions {
+  /** Stop after this migration (its tag, as in drizzle/meta/_journal.json): an older schema, for the SQLite copy and for tests of a conversion */
+  upTo?: string;
+}
+
+/**
+ * Applies the migrations not yet applied, in one transaction, as Drizzle's migrators do; the same
+ * for both drivers, and able to stop at an older one, which theirs are not.
+ */
+export async function migrateDatabase(db: Database, options: MigrateOptions = {}): Promise<void> {
+  let migrations = readMigrationFiles({ migrationsFolder });
+  if (options.upTo !== undefined) {
+    const journal = JSON.parse(readFileSync(join(migrationsFolder, 'meta', '_journal.json'), 'utf8')) as { entries: Array<{ tag: string }> };
+    const last = journal.entries.findIndex((e) => e.tag === options.upTo);
+    if (last < 0) throw new Error(`no migration ${options.upTo}`);
+    migrations = migrations.slice(0, last + 1);
+  }
+  // The session's schema generic differs from what migrate() declares, though it never reads it
+  await new PgDialect().migrate(migrations, db._.session as Parameters<PgDialect['migrate']>[1], { migrationsFolder });
+}
+
 /**
  * Opens a Postgres server at a `postgres://` URL and brings its schema up to date. The migrator records
  * what it applied in `drizzle.__drizzle_migrations`, so a second start applies nothing.
  */
-export async function connectPostgres(url: string): Promise<Connection> {
+export async function connectPostgres(url: string, migrateOptions: MigrateOptions = {}): Promise<Connection> {
   const { default: postgres } = await import('postgres');
   const { drizzle } = await import('drizzle-orm/postgres-js');
-  const { migrate } = await import('drizzle-orm/postgres-js/migrator');
   // `onnotice` off: every idempotent `CREATE … IF NOT EXISTS` of the migrator would print a notice
   const options = { onnotice: () => {} };
 
@@ -32,7 +57,7 @@ export async function connectPostgres(url: string): Promise<Connection> {
   const migrator = postgres(url, { ...options, max: 1 });
   try {
     await migrator`SELECT pg_advisory_lock(${MIGRATION_LOCK})`;
-    await migrate(drizzle({ client: migrator }), { migrationsFolder });
+    await migrateDatabase(drizzle({ client: migrator }), migrateOptions);
   } finally {
     await migrator.end();
   }
@@ -45,12 +70,11 @@ export async function connectPostgres(url: string): Promise<Connection> {
  * A real Postgres compiled to WASM, in this process: in memory without a directory, so tests need no
  * server or docker. Loaded on demand, so a process on a server never loads the WASM.
  */
-export async function connectPglite(dataDir?: string): Promise<Connection & { client: PGlite }> {
+export async function connectPglite(dataDir?: string, options: MigrateOptions = {}): Promise<Connection & { client: PGlite }> {
   const { PGlite } = await import('@electric-sql/pglite');
   const { drizzle } = await import('drizzle-orm/pglite');
-  const { migrate } = await import('drizzle-orm/pglite/migrator');
   const client = new PGlite(dataDir);
   const db = drizzle({ client });
-  await migrate(db, { migrationsFolder });
+  await migrateDatabase(db, options);
   return { db, client, close: () => client.close() };
 }

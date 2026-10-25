@@ -10,7 +10,8 @@ const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://jo
 async function published(registry: Registry) {
   const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
-  await registry.recordPost({ launchId: launch.id, channel: 'blog', url: 'https://josegarrido.dev/en/claudio/', externalId: 'en:claudio,es:claudio-como-servicio' });
+  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
+  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:es', url: 'https://josegarrido.dev/es/claudio-como-servicio/', externalId: 'claudio-como-servicio' });
   await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
   await registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://bsky.app/x', externalId: 'at://x' });
   return launch;
@@ -155,4 +156,30 @@ test("Bing's clicks, impressions and crawl state are kept apart from Google's", 
   assert.equal(latest['search.indexed'], 2, "Google's own numbers are untouched");
   assert.equal((await indexStatus(registry, 'https://josegarrido.dev/en/claudio/', 'bing'))?.coverage, 'Crawled on 2026-10-29');
   assert.equal((await indexStatus(registry, 'https://josegarrido.dev/en/claudio/'))?.coverage, 'Submitted and indexed');
+});
+
+test('each piece is read on its own and its readings point at it; the launch adds them up', async () => {
+  const registry = await memoryRegistry();
+  const launch = await published(registry);
+  const en = (await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:en', url: 'https://brevo/8', externalId: '8' })).post;
+  const es = (await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:es', url: 'https://brevo/9', externalId: '9' })).post;
+  await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', url: 'https://ig/p/1', externalId: 'p1' });
+  await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' });
+  const asked: string[] = [];
+  await collectMetrics(
+    registry,
+    brand,
+    {
+      posts: {
+        newsletter: { metrics: async (id) => (asked.push(`newsletter ${id}`), { clicks: id === '8' ? 5 : 2 }) },
+        instagram: { metrics: async (id) => (asked.push(`instagram ${id}`), { likes: 7 }) },
+      },
+    },
+    new Date('2026-10-30T12:00:00Z'),
+  );
+  assert.deepEqual(asked.sort(), ['instagram p1', 'newsletter 8', 'newsletter 9'], 'one campaign per issue; a story has no post numbers');
+  assert.deepEqual((await registry.postMetrics(en.id)).map((m) => `${m.name}=${m.value}`), ['clicks=5']);
+  assert.deepEqual((await registry.postMetrics(es.id)).map((m) => `${m.name}=${m.value}`), ['clicks=2']);
+  assert.equal((await registry.latestMetrics(launch.id)).find((m) => m.source === 'newsletter')?.value, 7, 'both issues together');
+  assert.deepEqual((await registry.metricHistory(launch.id, 'newsletter', 'clicks')).map((m) => m.value), [7]);
 });
