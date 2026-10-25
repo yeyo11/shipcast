@@ -6,7 +6,7 @@
 
 * { box-sizing: border-box; }
 html { background: var(--sc-ground); color: var(--sc-text); }
-body { margin: 0; font: var(--sc-body); letter-spacing: -0.005em; overflow-x: clip; min-height: 100vh; }
+body { margin: 0; font: var(--sc-body); letter-spacing: -0.005em; overflow-x: clip; min-height: 100vh; min-height: 100dvh; }
 a { color: inherit; text-underline-offset: 3px; }
 :focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 3px; }
 code, .mono { font-family: var(--sc-font-mono); font-size: 0.92em; }
@@ -88,8 +88,13 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 @media (max-width: 760px) {
   .launch { box-shadow: 6px 6px 0 var(--sc-yellow); }
   .launch-head, .launch ol { padding-inline: 18px; }
-  .launch li { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; }
-  .launch .post { display: none; }
+  /* Several rows share a channel (a blog article per language, a post with its story and comment):
+     the piece and its link sit under the channel's name, or the rows would look identical */
+  .launch li { grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; padding-block: 10px; min-height: 58px; }
+  .launch li > :first-child { grid-column: 1; grid-row: 1 / span 2; }
+  .launch .ch { grid-column: 2; grid-row: 1; font-size: 20px; }
+  .launch .post { grid-column: 2; grid-row: 2; font-size: 13px; }
+  .launch li > .pill { grid-column: 3; grid-row: 1 / span 2; }
 }
 
 /* Bands */
@@ -145,7 +150,8 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .thumbs img { height: 180px; border-radius: 12px; border: 2px solid var(--sc-hairline); }
 
 /* The sign-in page */
-.signin { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+/* dvh: on a phone 100vh counts the browser's toolbar, which makes a page that should fit scroll */
+.signin { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
 .signin .poster { width: min(100%, 620px); text-align: center; }
 .signin h1 { font-size: clamp(64px, 14vw, 150px); }
 .signin h1 span { color: var(--sc-yellow); }
