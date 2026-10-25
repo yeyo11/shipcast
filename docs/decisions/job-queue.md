@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:11:32.114567068Z
-updated_at: 2026-10-25T15:11:32.114567068Z
+created_at: 2026-10-25T15:18:39.160320016Z
+updated_at: 2026-10-25T15:18:39.160320016Z
 tags:
     - decision
     - job-queue
@@ -77,7 +77,7 @@ by their launch, so asking to publish twice returns the job already waiting.
 ## What is kept for the app
 
 pg-boss's tables are its own, change with its versions and are emptied by its retention, so the app
-reads a registry table instead: `jobs` (migration `0002_jobs`), one row per pg-boss job, keyed by its
+reads a registry table instead: `jobs` (migration `0003_jobs`), one row per pg-boss job, keyed by its
 id, with the title, the launch, the state (`created`, `active`, `retry`, `completed`, `failed`), the
 attempts, the last 40 log lines, the link, and the created, started and ended times. The wrapper
 around every handler writes it at each transition; a job a schedule sent gets its row when it starts.
@@ -85,7 +85,8 @@ At start the queue reconciles the rows still waiting or running with pg-boss, so
 deleted is not left showing "running". The round prunes rows that ended over a fortnight ago.
 
 The Launches page lists the last day's jobs (rounds only while running or failed; the Automation page
-has the last round), a launch's page its own, and `/api/launches` each launch's.
+has the last round), a launch's page its own, `/api/launches` each launch's, and the REST API's
+`GET /jobs` the last day's ([api.md](../api.md)).
 
 ## Stopping
 
@@ -94,4 +95,4 @@ A job still running then stays active in pg-boss until it expires, and is tried 
 
 ## Related
 
-[[decisions/postgres.md]] · [[decisions/post-model.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[engine.md]] · [[web-app.md]] · [[publishing.md]]
+[[decisions/postgres.md]] · [[decisions/post-model.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[engine.md]] · [[web-app.md]] · [[publishing.md]] · [[api.md]]

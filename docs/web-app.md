@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T10:29:18.377863921Z
-updated_at: 2026-10-25T14:58:58.613292179Z
+created_at: 2026-10-25T15:12:37.785714949Z
+updated_at: 2026-10-25T15:19:13.655478099Z
 tags:
     - web-app
     - dashboard
@@ -11,6 +11,7 @@ tags:
     - automation
     - webhooks
     - api
+    - job-queue
 ---
 # The web app
 
@@ -71,16 +72,17 @@ move to a VPS or server; until then it runs on the owner's machine.
 ## Sections
 
 - **Launches** (`/`): every launch as the specimen's launch card (state pill, one row per channel
-  with its post), what is waiting for the owner on a yellow band, and the work running in the
-  background, refreshed while something runs. `/api/launches` gives the same as JSON behind the
-  session; scripts and the MCP server use the [REST API](api.md) instead.
+  with its post), what is waiting for the owner on a yellow band, and the last day's jobs of the
+  queue, refreshed while something runs. `/api/launches` gives the same as JSON behind the session,
+  with each launch's jobs; scripts and the MCP server use the [REST API](api.md) instead.
 - **A launch** (`/launches/<id>`): its drafts read from the pull request's branch, each article and
   channel text editable (a save is a commit on that branch), the media, **Approve and publish**
-  (merges the pull request with a squash, then publishes in the background, waiting for the site to
-  deploy), failed channels with **Try again** (that launch only), and the latest numbers by source.
+  (merges the pull request with a squash, then queues the publishing, which waits for the site to
+  deploy), failed channels with **Try again** (that launch only, as a job of its own), the launch's
+  jobs, and the latest numbers by source.
 - **Launch a repo** (`/launch`): the owner's repos and their releases, the
   [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice, and the choice
-  between reviewing the drafts first or publishing without review. Drafting runs in the background.
+  between reviewing the drafts first or publishing without review. Drafting is a job of the queue.
 - **Write** (`/write`): an article in the owner's words, in Spanish or English; the channels it
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
   directly. See [articles](engine.md#articles-written-in-the-app).
@@ -97,27 +99,32 @@ reduced motion.
 
 ## Automation
 
-Added on 2026-10-25 ([plans/mvp-close.md](plans/mvp-close.md)). From its start the app runs the
-shared round ([publishing.md](publishing.md#the-rounds-and-the-shipcast-command)) on its own timer, so
-nothing depends on a terminal running `watch`; `server.ts` warms the app's context through
-`/api/health` as soon as it listens, and the first round runs 15 seconds later.
+Added on 2026-10-25 ([plans/mvp-close.md](plans/mvp-close.md)); on the job queue since phase 6
+([decisions/job-queue.md](decisions/job-queue.md)). The app is a worker of the queue from its start,
+so nothing depends on a terminal running `watch`; `server.ts` warms the app's context through
+`/api/health` as soon as it listens, and the first round runs 15 seconds later. Each round sends the
+next one an interval later; a round is a singleton across processes, so the app and `shipcast watch`
+never run the same round twice.
 
 - **The mode**, chosen in the page and kept in the registry: **Rounds** (polling the account's events
   every interval, at least 60 seconds), **GitHub webhooks** (GitHub's deliveries claim releases and
-  merges as they happen; the timer still publishes what is ready, refreshes tokens and reads the
-  metrics), or **Off** (only the owner's actions). Rounds is the default.
+  merges as they happen; the rounds still publish what is ready), or **Off** (only the owner's
+  actions: no rounds, and the scheduled metric reads and token refreshes skip). Rounds is the
+  default. The metrics are read every six hours and the Instagram tokens checked daily, as jobs of
+  their own on cron schedules. Saving the settings moves the next round to 15 seconds later.
 - **The webhook** (`POST /api/github/webhook`): trusted only with a valid `X-Hub-Signature-256`
   (HMAC-SHA256 of the exact body with the shared secret, compared in constant time), acted on only
-  while webhooks are the chosen mode, answered at once (GitHub gives up after ten seconds) while
-  drafting and publishing run in the background. A `ping` answers; a published release is claimed by
-  the same rules as polling (`claimEvent`, so a release is never launched twice whichever way it
-  arrives); a repo made public likewise; a merged pull request in the launches repo publishes its
+  while webhooks are the chosen mode, answered at once (GitHub gives up after ten seconds) with the
+  work queued as a `delivery` job. A `ping` answers; a published release is claimed by the same rules
+  as polling (`claimEvent`, so a release is never launched twice whichever way it arrives) and then
+  drafted; a repo made public likewise; a merged pull request in the launches repo publishes its
   launch. Everything else is answered and ignored with its reason.
 - **The secret** is generated in the page (32 random bytes), kept in the keychain, shown once and
   rotatable; the page gives the payload URL, the content type and what to tick on GitHub: per repo
   (the owner's are user accounts), *Releases* (and *Repositories* for a repo going public), and
   *Pull requests* on the launches repo.
-- **What happened**: the last round and the last delivery, with their lines; and **Run a round now**.
+- **What happened**: the last round and the last delivery, with their lines; and **Run a round now**,
+  which moves the round already queued to now (refused while one is running, in any process).
 - GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
   deliveries (a ping, an ignored event, a bad signature, a merge with no launch) answered as expected
   on 2026-10-25.
@@ -136,13 +143,16 @@ nothing depends on a terminal running `watch`; `server.ts` warms the app's conte
   function; the server converts requests, serves `dist/client` with long caching for hashed assets,
   and terminates TLS. No Nitro.
 - **One context per process** (`src/server/context.server.ts`): the configuration, the registry,
-  the GitHub client, the keychain and the brand (read from the launches repo every five minutes); it
-  starts the automation timer. The repo's root is found by its `pnpm-workspace.yaml` from where the
-  app runs, not from the module's path, which differs between development and the bundle.
-- **Background jobs** (`src/server/jobs.server.ts`) run in the app's process and are kept in memory:
-  drafting (minutes of AI work) and publishing (waiting for the deploy, up to 20 minutes, then the
-  next round picks it up). The registry holds what matters, so a restart loses only the progress
-  lines.
+  the GitHub client, the keychain, the brand (read from the launches repo every five minutes) and the
+  job queue, whose workers it starts and stops on SIGTERM or SIGINT. The repo's root is found by its
+  `pnpm-workspace.yaml` from where the app runs, not from the module's path, which differs between
+  development and the bundle.
+- **Jobs are durable** ([decisions/job-queue.md](decisions/job-queue.md)): drafting, publishing, an
+  article, a channel's retry and a delivery are pg-boss jobs on the registry's Postgres
+  (`src/server/work.server.ts` sends them, `@shipcast/runtime` runs them). A job sent before a restart
+  runs after it; the wait for a deploy is a retry every 30 seconds for 20 minutes. The pages and the
+  REST API's `/jobs` read the registry's `jobs` rows (`src/server/jobs.server.ts`): title, state,
+  attempts, log lines, link.
 - **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
   `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
   OpenAPI document is built from it. Requests that start work are checked by the same functions as
@@ -150,4 +160,4 @@ nothing depends on a terminal running `watch`; `server.ts` warms the app's conte
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[status.md]]
