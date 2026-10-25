@@ -183,6 +183,26 @@ test('a row whose job the queue no longer has is not left running after a start'
   assert.deepEqual(row?.log, ['The queue no longer has this job']);
 });
 
+test('a launch left generating by a draft that was cut short is failed at a start, so it can be launched again', async () => {
+  const db = await database();
+  // The first process: one draft is cut short (its launch generating, its job gone), another is still
+  // queued, waiting for a worker
+  const first = queueOn(db);
+  await first.start();
+  const cut = await launch(db.registry);
+  await db.registry.setStatus(cut, 'generating');
+  const { launch: queued } = await db.registry.claim({ repo: 'yeyo11/shipcast', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await first.send('draft', { launchId: queued.id }, { launchId: queued.id });
+  await db.registry.setStatus(queued.id, 'generating');
+  await first.stop(1000);
+
+  await queueOn(db).start();
+  const failed = await db.registry.get(cut);
+  assert.equal(failed?.status, 'failed');
+  assert.match(failed?.detail ?? '', /interrupted/);
+  assert.equal((await db.registry.get(queued.id))?.status, 'generating');
+});
+
 test('the handlers of a publish job retry a channel only once and leave a launch that is not drafted', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
