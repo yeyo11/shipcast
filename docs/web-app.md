@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:23:29.546831053Z
-updated_at: 2026-10-25T15:53:12.415229662Z
+created_at: 2026-10-25T16:02:41.924003579Z
+updated_at: 2026-10-25T16:26:32.086908211Z
 tags:
     - web-app
     - dashboard
@@ -13,6 +13,8 @@ tags:
     - api
     - job-queue
     - ai
+    - github-app
+    - settings
 ---
 # The web app
 
@@ -30,9 +32,11 @@ folder is the app's public folder, so tokens, fonts, logo and channel glyphs hav
 | `pnpm app:dev` | Vite's development server on `http://127.0.0.1:3000`, printing a one-time sign-in link |
 | `pnpm --filter @shipcast/web exec node scripts/certificate-by-hand.ts` | Gets the certificate without a Cloudflare token: it writes the challenge's TXT record to `data/tls/challenge.json` for someone to create, and waits for DNS to answer it |
 
-What `.env` needs is in `.env.example` under "The web app": the public URL, the GitHub OAuth App's
-id and secret, the allowed logins, and the Cloudflare token for the certificate. The app is meant to
-move to a VPS or server; until then it runs on the owner's machine.
+`.env` holds only the **bootstrap** (`.env.example`): the database, the public URL, host and port,
+the GitHub App, the allowed logins and the Cloudflare token for the certificate. Everything else is
+set in the **Settings** page ([decisions/github-app.md](decisions/github-app.md)), so the app starts
+and signs in with nothing else configured. The app is meant to move to a VPS or server; until then it
+runs on the owner's machine.
 
 ## How it reaches the owner, and only the owner
 
@@ -55,10 +59,13 @@ move to a VPS or server; until then it runs on the owner's machine.
   owner's machine) and `pnpm app` runs `tailscale serve --bg --tcp 443 tcp://127.0.0.1:8744`: a plain
   TCP forward, so TLS still ends in the app. A TCP forward cannot share the tailnet's port 443 with a
   Tailscale Serve web handler: another app served on 443 has to move to another port first.
-- **Sign in with GitHub.** An OAuth App with the callback `/auth/github/callback`; the code is
-  exchanged for a token used once to read the login, which must be in `SHIPCAST_ALLOWED_GITHUB`. The
-  token is not kept. The session is the login and an expiry signed with HMAC-SHA256 (key in the
-  keychain), in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie for 14 days.
+- **Sign in with GitHub, through the GitHub App.** The App's client id and secret, on the callback
+  `/auth/github/callback`; the login must be in `SHIPCAST_ALLOWED_GITHUB`. The user token (8 hours)
+  and its refresh token (6 months) are then kept in the keychain and refreshed on their own
+  ([decisions/github-app.md](decisions/github-app.md)). Without an App in `.env` the old OAuth App
+  (`SHIPCAST_GITHUB_CLIENT_ID`, `SHIPCAST_GITHUB_CLIENT_SECRET`) is used, and its token is used once
+  and dropped. The session is the login and an expiry signed with HMAC-SHA256 (key in the keychain),
+  in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie for 14 days.
 - **Console links.** The app prints a single-use sign-in link (15 minutes) when it starts: a way in
   without GitHub for whoever reads the app's own terminal.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
@@ -94,6 +101,7 @@ move to a VPS or server; until then it runs on the owner's machine.
 - **AI** (`/ai`): below.
 - **API** (`/tokens`): the REST API's tokens, created with a name and scopes (`read`, `write`), shown
   once, listed with when each was last used, and revoked. See [api.md](api.md).
+- **Settings** (`/settings`): below.
 
 Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Waiting for you on
 yellow), and every error is explained for a person, with the original text folded under Details
@@ -118,21 +126,23 @@ never run the same round twice.
   default. The metrics are read every six hours and the Instagram tokens checked daily, as jobs of
   their own on cron schedules. Saving the settings moves the next round to 15 seconds later.
 - **The webhook** (`POST /api/github/webhook`): trusted only with a valid `X-Hub-Signature-256`
-  (HMAC-SHA256 of the exact body with the shared secret, compared in constant time), acted on only
-  while webhooks are the chosen mode, answered at once (GitHub gives up after ten seconds) with the
-  work queued as a `delivery` job. A `ping` answers; a published release is claimed by the same rules
-  as polling (`claimEvent`, so a release is never launched twice whichever way it arrives) and then
-  drafted; a repo made public likewise; a merged pull request in the launches repo publishes its
-  launch. Everything else is answered and ignored with its reason.
-- **The secret** is generated in the page (32 random bytes), kept in the keychain, shown once and
-  rotatable; the page gives the payload URL, the content type and what to tick on GitHub: per repo
-  (the owner's are user accounts), *Releases* (and *Repositories* for a repo going public), and
-  *Pull requests* on the launches repo.
+  (HMAC-SHA256 of the exact body, compared in constant time) made with the GitHub App's webhook
+  secret or the per-repo secret below; acted on only while webhooks are the chosen mode, answered at
+  once (GitHub gives up after ten seconds) with the work queued as a `delivery` job. A `ping`
+  answers; the App's `installation` and `installation_repositories` events make Shipcast look its
+  installation up again, in any mode; a published release is claimed by the same rules as polling
+  (`claimEvent`, so a release is never launched twice whichever way it arrives) and then drafted; a
+  repo made public likewise; a merged pull request in the launches repo publishes its launch.
+  Everything else is answered and ignored with its reason.
+- **The GitHub App delivers for every repo it is installed on**, so nothing is set per repo. The
+  per-repo secret from before the App is still generated in the page (32 random bytes), kept in the
+  keychain, shown once and rotatable, with the payload URL, the content type and what to tick on
+  GitHub for a webhook set by hand.
 - **What happened**: the last round and the last delivery, with their lines; and **Run a round now**,
   which moves the round already queued to now (refused while one is running, in any process).
 - GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
-  deliveries (a ping, an ignored event, a bad signature, a merge with no launch) answered as expected
-  on 2026-10-25.
+  deliveries (a ping, an ignored event, a bad signature, a merge with no launch, an installation
+  change) answered as expected on 2026-10-25.
 
 ## AI
 
@@ -154,6 +164,22 @@ Cartel markup until the redesign (`src/routes/_app/ai.tsx`, `src/server/ai.funct
 The selection actions and side chat of the writing assistant come later, with the redesign
 ([decisions/app-design-direction.md](decisions/app-design-direction.md)).
 
+## Settings
+
+Added on 2026-10-25 ([decisions/github-app.md](decisions/github-app.md)), a plain page in today's
+Cartel markup (`src/routes/_app/settings.tsx`, `src/server/settings.functions.ts`):
+
+- **Each setting** that is not the bootstrap: the launches repo, claudio's URL and token, the AI
+  budget per generation, the Instagram app id and secret. Each says where its value comes from (saved
+  here, the keychain, or `.env` until it is saved here); secrets are shown as set or not, never sent
+  to the page. A save checks every value first (the launches repo is `owner/name`, claudio's URL is
+  `http(s)://`, the budget a positive number), applies to what runs next without a restart, and a
+  **Clear** removes a saved one. What is still missing is listed at the top; a page that needs a
+  missing setting says which one and to set it here.
+- **GitHub**: how the engine reaches it (the App, whose commits are by `<slug>[bot]`, or the old
+  token), the App's installation (account, all or selected repos, permissions), how the owner signs
+  in, and the owner's user token with its expiry (refreshed on the page's own read when due).
+
 ## How it is built
 
 - **TanStack Start** (React 19, Vite 8), file routes in `src/routes/`, pages under the `_app`
@@ -167,11 +193,13 @@ The selection actions and side chat of the writing assistant come later, with th
 - **Production runs Node's own server** (`apps/web/server.ts`): the built Start handler is a `fetch`
   function; the server converts requests, serves `dist/client` with long caching for hashed assets,
   and terminates TLS. No Nitro.
-- **One context per process** (`src/server/context.server.ts`): the configuration, the registry,
-  the GitHub client, the keychain, the brand (read from the launches repo every five minutes), the
-  AI settings' provider for each task (read before each AI call) and the job queue, whose workers it
-  starts and stops on SIGTERM or SIGINT. The repo's root is found by its `pnpm-workspace.yaml` from
-  where the app runs, not from the module's path, which differs between development and the bundle.
+- **One context per process** (`src/server/context.server.ts`), built by the runtime the CLI shares
+  (`createRuntime` in `@shipcast/runtime`): the bootstrap, the registry, the keychain, the settings
+  (with the one-time import from `.env` at start), the GitHub client on the App's installation
+  tokens, the brand (read from the launches repo every five minutes), the AI settings' provider for
+  each task (read before each AI call) and the job queue, whose workers it starts and stops on
+  SIGTERM or SIGINT. The repo's root is found by its `pnpm-workspace.yaml` from where the app runs,
+  not from the module's path, which differs between development and the bundle.
 - **Jobs are durable** ([decisions/job-queue.md](decisions/job-queue.md)): drafting, publishing, an
   article, a channel's retry and a delivery are pg-boss jobs on the registry's Postgres
   (`src/server/work.server.ts` sends them, `@shipcast/runtime` runs them). A job sent before a restart
@@ -185,4 +213,4 @@ The selection actions and side chat of the writing assistant come later, with th
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[status.md]]

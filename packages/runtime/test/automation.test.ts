@@ -11,6 +11,7 @@ import {
   readAutomation,
   record,
   refreshInstagramAccounts,
+  verifyAnySignature,
   verifySignature,
   webhookAction,
   writeAutomation,
@@ -26,6 +27,24 @@ test('a delivery is trusted only with the HMAC of its exact body', () => {
   assert.equal(verifySignature('another', body, signature), false, 'another secret');
   assert.equal(verifySignature(secret, body, null), false, 'no signature');
   assert.equal(verifySignature(secret, body, 'sha1=abc'), false, 'the old SHA-1 header');
+});
+
+test('a delivery signed with the GitHub App’s secret or the per-repo one is trusted, and only those', () => {
+  const body = '{"action":"published"}';
+  const sign = (secret: string) => `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
+  const accepted = ['app-secret', 'repo-secret'];
+  assert.ok(verifyAnySignature(accepted, body, sign('app-secret')), 'the App’s deliveries');
+  assert.ok(verifyAnySignature(accepted, body, sign('repo-secret')), 'a webhook set per repo before the App');
+  assert.equal(verifyAnySignature(accepted, body, sign('other')), false);
+  assert.equal(verifyAnySignature([undefined, 'repo-secret'], body, sign('app-secret')), false, 'no App secret configured');
+  assert.equal(verifyAnySignature([undefined, ''], body, sign('')), false, 'an empty secret never verifies');
+});
+
+test('the App’s installation events say its cached installation is stale', () => {
+  const installed = webhookAction('installation', { action: 'created', installation: { id: 1, account: { login: 'yeyo11' } } }, 'yeyo11/launches');
+  assert.deepEqual(installed, { kind: 'installation', summary: "the GitHub App's installation created on yeyo11" });
+  const repos = webhookAction('installation_repositories', { action: 'added', installation: { id: 1, account: { login: 'yeyo11' } }, repositories_added: [{}, {}] }, 'yeyo11/launches');
+  assert.deepEqual(repos, { kind: 'installation', summary: "the GitHub App's installation on yeyo11: 2 repos added, 0 removed" });
 });
 
 test('deliveries become actions: claim a release, publish a merge, ignore the rest', () => {

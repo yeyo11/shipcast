@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T06:56:09.686214154Z
-updated_at: 2026-10-25T15:46:08.417948158Z
+created_at: 2026-10-25T15:53:55.538251263Z
+updated_at: 2026-10-25T16:27:02.453645394Z
 tags:
     - accounts
     - channels
@@ -10,6 +10,7 @@ tags:
     - brands
     - snapshots
     - avatars
+    - github-app
 ---
 # Accounts and channels
 
@@ -41,6 +42,11 @@ from. A new network is a connector in `packages/connectors` plus one entry here 
 | Google Search Console | service account JSON key | — | clicks, impressions |
 | Hacker News, Product Hunt | nothing: drafts only | — | — |
 
+**GitHub as an account is only the metrics' source.** The engine reaches GitHub through the GitHub
+App ([decisions/github-app.md](decisions/github-app.md)), which reads stars, forks and watchers too;
+a repo's traffic needs Administration: read, which the App is not granted, so it comes from a
+connected GitHub account with that permission, or from `GITHUB_TOKEN_PERSONAL` while it is in `.env`.
+
 ## Accounts
 
 The registry's `accounts` table (migration 3) holds, per account: network, brand, label, public
@@ -59,9 +65,11 @@ the identity the network reported, the problem if it failed, and its profile pic
   ("the token belongs to another account", "rejected: wrong, revoked or expired", "lacks a
   permission"), not as a status code. Connecting the same account again replaces its credential.
 - **Import from .env.** One button checks every credential `.env` holds and moves it into the
-  keychain as a connected account; the engine's own GitHub token stays in `.env`. Run on
-  2026-10-25: six networks moved; Mastodon's token in `.env` turned out to be invalid and needs
-  connecting again through OAuth.
+  keychain as a connected account; `GITHUB_TOKEN_PERSONAL` stays in `.env`, since without a GitHub App
+  the engine still runs on it. Run on 2026-10-25: six networks moved; Mastodon's token in `.env`
+  turned out to be invalid and needs connecting again through OAuth. The app-level settings that
+  were in `.env` (the launches repo, claudio, the Instagram app) are imported on their own at start,
+  into the Settings page ([decisions/github-app.md](decisions/github-app.md)).
 
 ## Pictures, numbers and freshness
 
@@ -96,7 +104,10 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
 command-line tools, so there is no native module: `secret-tool` (libsecret: GNOME Keyring, KWallet)
 on Linux, with the value on stdin, and `security` on macOS. On Linux it needs `libsecret-tools` and
 an unlocked session keyring, which is why the app runs in the owner's desktop session. Besides the
-accounts it keeps the app's session key, the TLS and ACME keys, and each Mastodon instance's client.
+accounts it keeps the app's session key, the TLS and ACME keys, each Mastodon instance's client, the
+owner's GitHub user token (`app:github-user`), claudio's token and the Instagram app secret. Entries
+are under the service `shipcast`, or `SHIPCAST_KEYCHAIN_SERVICE`, so a second install or a test copy
+keeps its own.
 
 ## OAuth flows
 
@@ -107,12 +118,12 @@ state (ten minutes, in memory) and the client credentials.
   names (`POST /api/v1/apps`, scopes `read:accounts read:statuses write:statuses write:media`) the
   first time, keeps that client in the keychain, and sends the owner to authorise. The token does not
   expire.
-- **Instagram Login** needs the Instagram app id and secret of the owner's Meta app in `.env`
-  (`INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`) and the callback listed exactly in its business login
-  settings. The code becomes a short-lived token, swapped at once for a 60-day one, refreshed every
-  30 days into the keychain.
+- **Instagram Login** needs the Instagram app id and secret of the owner's Meta app, set in the
+  Settings page (imported from `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` in `.env` on an older
+  install), and the callback listed exactly in its business login settings. The code becomes a
+  short-lived token, swapped at once for a 60-day one, refreshed every 30 days into the keychain.
 - Callbacks are behind the session: the `SameSite=Lax` cookie comes along on the redirect back.
 
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]]

@@ -14,12 +14,13 @@ import type { Brand } from '@shipcast/schema';
 import { credentialsFor } from './services.ts';
 import type { SecretStore } from './secrets.ts';
 
-/** What choosing a task's provider needs: the settings, the keychain, and claudio's address from `.env` */
+/** What choosing a task's provider needs: the settings, the keychain, and claudio's address and token from the settings */
 export interface AiDeps {
   env: NodeJS.ProcessEnv;
   registry: Registry;
   secrets: SecretStore;
-  claudio: { url: string; token: string };
+  /** Read when claudio is chosen; throws SettingMissing when its URL or token is not set */
+  claudio: () => { url: string; token: string };
   brand(): Promise<Brand>;
   fetch?: typeof fetch;
 }
@@ -29,11 +30,11 @@ export class AiNotConnected extends Error {}
 const NAMES: Record<AiProviderId, string> = { claudio: 'claudio', anthropic: 'Anthropic API', openaiCompatible: 'OpenAI-compatible' };
 
 /**
- * A provider by id. claudio keeps its URL and token in `.env` for now; the Anthropic API and an
+ * A provider by id. claudio's URL and token are settings (the token in the keychain); the Anthropic API and an
  * OpenAI-compatible server are connected accounts, their keys in the keychain like any network's.
  */
 export async function providerFor(id: AiProviderId, deps: AiDeps): Promise<AiProvider> {
-  if (id === 'claudio') return new Claudio({ url: deps.claudio.url, token: deps.claudio.token, fetch: deps.fetch });
+  if (id === 'claudio') return new Claudio({ ...deps.claudio(), fetch: deps.fetch });
   const found = await credentialsFor(id, { env: deps.env, brand: await deps.brand(), registry: deps.registry, secrets: deps.secrets });
   if (!found) throw new AiNotConnected(`the ${NAMES[id]} is chosen in the AI settings but no account is connected: connect one on the Channels page`);
   const { settings, secrets } = found.credentials;

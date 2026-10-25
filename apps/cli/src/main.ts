@@ -1,39 +1,29 @@
 import { parseArgs } from 'node:util';
-import {
-  checkout,
-  claimManual,
-  Claudio,
-  draftLaunch,
-  GitHubRest,
-  loadBrand,
-  preflight,
-  Registry,
-  type Preflight,
-  type DraftResult,
-  type PipelineDeps,
-  type PublishResult,
-} from '@shipcast/engine';
+import { resolve } from 'node:path';
+import { claimManual, draftLaunch, preflight, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
-  aiSetup,
   buildServices,
   BY_HAND,
   ConfigError,
   createApiToken,
+  createRuntime,
   InvalidScopes,
-  KeychainStore,
-  loadConfig,
   MIN_INTERVAL_SECONDS,
   parseScopes,
   publishOne,
   readAutomation,
+  SettingMissing,
+  SETTINGS,
   startWorking,
   WorkQueue,
   workHandlers,
   writeAutomation,
   type RoundDeps,
-  type SecretStore,
 } from '@shipcast/runtime';
+
+/** The repo's root, where `.env` is: two folders up from this file */
+const ROOT = resolve(import.meta.dirname, '../../..');
 
 const USAGE = `Usage: shipcast <command>
 
@@ -102,25 +92,9 @@ async function main(argv: string[]): Promise<number> {
     return command ? 0 : 1;
   }
 
-  const config = loadConfig();
-  const secrets: SecretStore = new KeychainStore();
-  const registry = await Registry.connect(config.databaseUrl);
-  const github = new GitHubRest({ token: config.githubToken });
-  const deps: PipelineDeps = {
-    github,
-    ai: new Claudio({ url: config.claudioUrl, token: config.claudioToken }),
-    aiSetup: aiSetup({
-      env: process.env,
-      registry,
-      secrets,
-      claudio: { url: config.claudioUrl, token: config.claudioToken },
-      brand: () => loadBrand(github, config.launchesRepo),
-    }),
-    registry,
-    launchesRepo: config.launchesRepo,
-    checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir }, repo, ref),
-    maxBudgetUsd: config.maxBudgetUsd,
-  };
+  const runtime = await createRuntime({ root: ROOT, log: (line) => console.error(line) });
+  const { config, registry, github, secrets, settings, pipeline: deps } = runtime;
+  const loadBrandNow = () => runtime.brand();
 
   try {
     switch (command) {
@@ -130,9 +104,26 @@ async function main(argv: string[]): Promise<number> {
         for (const l of launches) {
           console.log(`${l.createdAt.slice(0, 16).replace('T', ' ')}  ${l.repo} ${l.ref}  ${l.kind}  ${l.status}${l.detail ? `  ${l.detail.split('\n')[0]}` : ''}`);
         }
-        const brand = await loadBrand(github, config.launchesRepo);
+        const access = runtime.access;
+        if (access.kind === 'app') {
+          const installation = await runtime.githubApp!.installation().then(
+            (i) => `installed on ${i.account} (${i.repositorySelection === 'all' ? 'all repositories' : 'selected repositories'})`,
+            (error: unknown) => (error instanceof Error ? error.message : String(error)),
+          );
+          console.log(`\nGitHub: the App${access.slug ? ` ${access.slug}` : ''}, ${installation}; commits by ${access.bot ?? 'its bot'}`);
+          const user = (await runtime.userTokens!.token()) ? await runtime.userTokens!.stored() : undefined;
+          console.log(`GitHub user token: ${user ? `@${user.login}${user.expiresAt ? `, valid until ${user.expiresAt.slice(0, 16).replace('T', ' ')} UTC` : ''}` : 'none yet (it is kept when the owner signs in to the app)'}`);
+        } else {
+          console.log('\nGitHub: GITHUB_TOKEN_PERSONAL (no GitHub App in .env)');
+        }
+        const missing = settings.missing();
+        if (missing.length > 0) {
+          console.log(`Settings still to set in the app's Settings page: ${missing.map((n) => SETTINGS[n].label).join(', ')}`);
+          return 0;
+        }
+        const brand = await loadBrandNow();
         const services = await buildServices({ env: process.env, brand, registry, github, secrets });
-        console.log(`\nConfigured: ${services.configured.join(', ')}`);
+        console.log(`Configured: ${services.configured.join(', ')}`);
         return 0;
       }
 
@@ -145,14 +136,14 @@ async function main(argv: string[]): Promise<number> {
           }
           for (const l of await registry.retryChannel(channel.data)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
         }
-        const brand = await loadBrand(github, config.launchesRepo);
+        const brand = await loadBrandNow();
         await publishReady({ env: process.env, registry, github, secrets, brand, pipeline: deps });
         return 0;
       }
 
       case 'metrics': {
         // A job of the queue, sent and worked here, so the app lists it like any other reading
-        const brand = await loadBrand(github, config.launchesRepo);
+        const brand = await loadBrandNow();
         const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5 });
         try {
           const id = await queue.send('metrics', { reason: BY_HAND }, { title: 'Reading the numbers, by hand', singletonKey: BY_HAND });
@@ -178,7 +169,7 @@ async function main(argv: string[]): Promise<number> {
           console.error(`sync takes an account id, not "${rest[0]}"`);
           return 2;
         }
-        const brand = await loadBrand(github, config.launchesRepo);
+        const brand = await loadBrandNow();
         const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5 });
         try {
           const id = await queue.send(
@@ -218,7 +209,7 @@ async function main(argv: string[]): Promise<number> {
           console.error(`${repo} is not ready to launch: fix the checks marked FAIL`);
           return 1;
         }
-        const brand = await loadBrand(github, config.launchesRepo);
+        const brand = await loadBrandNow();
         const claim = await claimManual(repo, values.ref, brand, deps);
         if ('error' in claim) {
           console.error(claim.error);
@@ -247,7 +238,7 @@ async function main(argv: string[]): Promise<number> {
       }
 
       case 'watch': {
-        const brand = await loadBrand(github, config.launchesRepo);
+        const brand = await loadBrandNow();
         const services = await buildServices({ env: process.env, brand, registry, github, secrets });
         // The cadence is the Automation setting, shared with the app: --interval changes it
         if (values.interval !== undefined) {
@@ -261,8 +252,8 @@ async function main(argv: string[]): Promise<number> {
         const automation = await readAutomation(registry);
         const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch' });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
-        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: async () => brand }, { firstRoundInSeconds: 0 });
-        console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${config.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh }, { firstRoundInSeconds: 0 });
+        console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
         if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');
         console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);
         await new Promise<void>((resolve) => {
@@ -320,7 +311,7 @@ async function main(argv: string[]): Promise<number> {
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
   (error: unknown) => {
-    console.error(error instanceof ConfigError || error instanceof InvalidScopes ? error.message : error);
+    console.error(error instanceof ConfigError || error instanceof InvalidScopes || error instanceof SettingMissing ? error.message : error);
     process.exit(1);
   },
 );

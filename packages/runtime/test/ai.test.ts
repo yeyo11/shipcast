@@ -8,7 +8,7 @@ import { accountSecretKey, aiSetup, AiNotConnected, buildConnector, MemoryStore,
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
 async function deps(): Promise<AiDeps> {
-  return { env: {}, registry: await memoryRegistry(), secrets: new MemoryStore(), claudio: { url: 'http://claudio:8798', token: 't' }, brand: async () => brand };
+  return { env: {}, registry: await memoryRegistry(), secrets: new MemoryStore(), claudio: () => ({ url: 'http://claudio:8798', token: 't' }), brand: async () => brand };
 }
 
 test('each task gets the provider, model, prompts and tone its settings choose', async () => {

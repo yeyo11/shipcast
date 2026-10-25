@@ -4,6 +4,7 @@ import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
 import { notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
+import { SettingMissing } from './settings.ts';
 import { buildServices, type Services } from './services.ts';
 import { takeSnapshots } from './snapshots.ts';
 import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
@@ -20,6 +21,8 @@ export interface WorkDeps {
   services?: (brand: Brand) => Promise<Services>;
   /** What the accounts' syncs reach the networks with; fetch unless a test gives its own */
   fetch?: typeof fetch;
+  /** Reads the settings again, before each round, so a change made in the app reaches every worker */
+  refresh?: () => Promise<void>;
 }
 
 /** The one key of the round queue: whichever process sends a round, there is one queued and one running at most */
@@ -188,6 +191,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
      * saving the settings or starting a process sends a round again.
      */
     async round({ reason }, job) {
+      await d.refresh?.();
       const automation = await readAutomation(registry);
       if (automation.mode === 'off' && reason !== BY_HAND) {
         job.log('Automation is off: no round');
@@ -199,8 +203,17 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
         job.log(line);
       };
       try {
+        let brand: Brand;
+        try {
+          brand = await d.brand();
+        } catch (error) {
+          // Nothing to watch or publish yet: the round says why and the chain goes on, so it starts once the setting is saved
+          if (!(error instanceof SettingMissing)) throw error;
+          log(error.message);
+          return;
+        }
         await runRound(
-          { env: d.env, registry, github: d.github, secrets: d.secrets, brand: await d.brand(), pipeline: d.pipeline, log },
+          { env: d.env, registry, github: d.github, secrets: d.secrets, brand, pipeline: d.pipeline, log },
           {
             detect: automation.mode === 'poll' || reason === BY_HAND,
             draft: async (claimed) => {

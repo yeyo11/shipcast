@@ -1,5 +1,6 @@
 export * from './registry.ts';
 export * from './github.ts';
+export * from './github-app.ts';
 export * from './detect.ts';
 export * from './ai.ts';
 export * from './ai-settings.ts';

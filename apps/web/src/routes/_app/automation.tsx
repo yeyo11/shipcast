@@ -159,6 +159,12 @@ function Automation() {
             </div>
             <aside className="card">
               <h3 className="ph">On GitHub</h3>
+              {data.appWebhooks && (
+                <p>
+                  The GitHub App delivers releases, repositories and pull requests for every repo it is installed on, signed with its own secret: nothing to set per repo.
+                  A webhook set by hand as below keeps working too.
+                </p>
+              )}
               <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
                 <li>
                   In each repo you launch (on {data.owner}’s account, webhooks are set per repo): Settings → Webhooks → Add webhook.

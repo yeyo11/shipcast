@@ -469,6 +469,10 @@ export function credentialsFromEnv(id: string, env: NodeJS.ProcessEnv, brand: Br
         : undefined;
     case 'searchConsole':
       return has('GOOGLE_SERVICE_ACCOUNT_FILE') ? { settings: {}, secrets: { serviceAccount: readFile(env.GOOGLE_SERVICE_ACCOUNT_FILE!) } } : undefined;
+    case 'github':
+      // The token the engine ran on before the GitHub App: with the App it is only the metrics'
+      // source, since a repo's traffic needs Administration: read, which the App is not granted
+      return has('GITHUB_TOKEN_PERSONAL') ? { settings: {}, secrets: { token: env.GITHUB_TOKEN_PERSONAL! } } : undefined;
     case 'bingWebmaster':
       return has('BING_WEBMASTER_API_KEY') ? { settings: {}, secrets: { apiKey: env.BING_WEBMASTER_API_KEY! } } : undefined;
     default:

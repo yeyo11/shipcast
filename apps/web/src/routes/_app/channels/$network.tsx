@@ -121,7 +121,7 @@ function Connect() {
             <input id="label" className="input" placeholder="The account’s own name, if left empty" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           {network.id === 'instagram' && !instagramOAuth ? (
-            <Notice tone="bad">Instagram Login needs INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET in .env, then a restart of the app.</Notice>
+            <Notice tone="bad">Instagram Login needs the Instagram app id and secret: set them in <a href="/settings">Settings</a>.</Notice>
           ) : (
             <div className="row">
               <button className="btn btn-primary" type="submit" disabled={busy}>
