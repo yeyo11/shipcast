@@ -110,7 +110,11 @@ function AccountRow({ account, brands }: { account: AccountView; brands: Data['b
 function NetworkCard({ network, brands }: { network: NetworkView; brands: Data['brands'] }) {
   const icon = channelIcon(network.channel ?? network.id) ?? channelIcon(network.id);
   const uses =
-    network.auth === 'none' ? 'Drafts for you to post' : [network.channel ? 'publishes' : null, network.metrics ? 'reads numbers' : null].filter(Boolean).join(' · ');
+    network.auth === 'none'
+      ? 'Drafts for you to post'
+      : network.ai
+        ? 'AI provider, chosen per task in the AI settings'
+        : [network.channel ? 'publishes' : null, network.metrics ? 'reads numbers' : null].filter(Boolean).join(' · ');
   const failed = network.accounts.some((a) => a.status === 'failed');
   return (
     <article className={`card${failed ? ' failed' : ''}`} style={{ gridColumn: network.accounts.length > 0 ? '1 / -1' : undefined }}>

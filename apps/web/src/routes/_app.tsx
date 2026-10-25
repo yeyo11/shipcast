@@ -14,6 +14,7 @@ const SECTIONS = [
   { to: '/write', label: 'Write' },
   { to: '/channels', label: 'Channels' },
   { to: '/automation', label: 'Automation' },
+  { to: '/ai', label: 'AI' },
   { to: '/tokens', label: 'API' },
 ] as const;
 

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T13:30:35.39622807Z
-updated_at: 2026-10-24T13:30:35.39622807Z
+created_at: 2026-10-24T14:26:53.041915405Z
+updated_at: 2026-10-25T15:51:34.592518919Z
 tags:
     - claudio
     - ai-provider
@@ -15,6 +15,10 @@ which runs Claude Code as a service with a REST API. Shipcast runs **an instance
 or another project's container: its data, sign-in and workspace stay separate, and the version it
 runs is the one the engine was written against. Decided on 2026-10-24 by the owner, who configures
 the instance.
+
+Since 2026-10-25 claudio is one of three providers behind the engine's `AiProvider` interface, chosen
+per task in the AI settings; it is the default for every task
+([decisions/ai-providers.md](decisions/ai-providers.md)).
 
 ## Setting it up
 
@@ -35,6 +39,20 @@ the instance.
 3. Open <http://localhost:8798>, sign in with that token, and sign in to Claude in the setup
    assistant (a Claude account, or a pay-per-use API key).
 
+## How Shipcast talks to it
+
+- **Structured work, on claudio's REST API.** The content pack and an article's distribution
+  (`generateObject`) start a chat with `POST /api/chats`: the prompt, the `cwd` of the clone under
+  `/workspace`, `jsonSchema`, read-only `allowedTools` and `permissionMode: 'dontAsk'`; the answer is
+  the input of Claude Code's `StructuredOutput` tool, and the chat is stopped after it. This is what
+  lets Claude Code explore the released code itself, so it stays on the REST API.
+- **Streamed text, on its OpenAI-compatible surface.** `streamText`, for the writing assistant, goes
+  through `@ai-sdk/openai-compatible` with the base URL `<claudio>/api/v1`. That surface is designed in
+  claudio but not built yet (2026-10-25: the instance answers 404), so it works once claudio ships it.
+- **Models.** A model chosen in the AI settings is passed as claudio's own model value (`default`,
+  `opus`, `fable`, `sonnet`…, from `GET /api/providers/claude-code/models`); without one, claudio's
+  default.
+
 ## How the compose file is built, and why
 
 - **Image pinned to `ghcr.io/yeyo11/claudio:0.8.1`.** The engine depends on claudio's API; moving the
@@ -50,4 +68,4 @@ the instance.
 
 ## Related
 
-[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[status.md]]
+[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[decisions/ai-providers.md]] · [[engine.md]] · [[status.md]]

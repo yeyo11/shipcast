@@ -47,6 +47,8 @@ export interface Network {
   permissions: string[];
   /** Where the credential comes from */
   howTo: string;
+  /** An AI provider the AI settings can choose, rather than a channel or a source of numbers */
+  ai?: boolean;
 }
 
 export const NETWORKS: readonly Network[] = [
@@ -194,6 +196,30 @@ export const NETWORKS: readonly Network[] = [
     howTo: 'Bing Webmaster Tools › Settings › API Access › Generate API Key, for a user who has verified the site.',
   },
   {
+    id: 'anthropic',
+    name: 'Anthropic API',
+    metrics: false,
+    auth: 'form',
+    ai: true,
+    fields: [{ key: 'apiKey', label: 'API key', secret: true, placeholder: 'sk-ant-…' }],
+    permissions: ['Writes the content pack, the article’s translation and pieces, or the writing assistant’s text, for the tasks the AI settings give it'],
+    howTo: 'Claude Console → Settings → API keys → Create key. Then choose it per task in the AI settings.',
+  },
+  {
+    id: 'openaiCompatible',
+    name: 'OpenAI-compatible server',
+    metrics: false,
+    auth: 'form',
+    ai: true,
+    fields: [
+      { key: 'baseUrl', label: 'Base URL', secret: false, placeholder: 'http://localhost:11434/v1', help: 'Where its /chat/completions lives' },
+      { key: 'model', label: 'Model', secret: false, placeholder: 'qwen3-coder', help: 'Used when a task in the AI settings names none' },
+      { key: 'apiKey', label: 'API key', secret: true, optional: true, help: 'Only if the server asks for one' },
+    ],
+    permissions: ['Writes text for the tasks the AI settings give it, through the chat completions API with a JSON Schema answer'],
+    howTo: 'Any server that speaks OpenAI’s chat completions (a local model through Ollama, llama.cpp or vLLM, or a hosted one). Then choose it per task in the AI settings.',
+  },
+  {
     id: 'hackerNews',
     name: 'Hacker News',
     channel: 'hackerNews',
@@ -241,6 +267,34 @@ async function checkGitHub(token: string, http: typeof fetch): Promise<Check> {
     });
     const user = await json<{ login: string }>('GitHub', response, 'check');
     return { ok: true, account: `@${user.login}` };
+  } catch (error) {
+    return checkProblem(error);
+  }
+}
+
+/** An Anthropic key, checked by listing the models it may use */
+async function checkAnthropic(apiKey: string, http: typeof fetch): Promise<Check> {
+  try {
+    const response = await http('https://api.anthropic.com/v1/models?limit=1', { headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' } });
+    await json<unknown>('Anthropic', response, 'check');
+    return { ok: true, account: 'Anthropic API' };
+  } catch (error) {
+    return checkProblem(error);
+  }
+}
+
+/** An OpenAI-compatible server, checked by its model list; the account is named by its host and model */
+async function checkOpenAiCompatible(baseUrl: string, model: string, apiKey: string | undefined, http: typeof fetch): Promise<Check> {
+  let url: URL;
+  try {
+    url = new URL(`${baseUrl.replace(/\/+$/, '')}/models`);
+  } catch {
+    return { ok: false, problem: `${baseUrl} is not a URL` };
+  }
+  try {
+    const response = await http(url, { headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {} });
+    await json<unknown>('The OpenAI-compatible server', response, 'check');
+    return { ok: true, account: `${model} on ${url.host}` };
   } catch (error) {
     return checkProblem(error);
   }
@@ -325,6 +379,16 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     case 'bingWebmaster': {
       const bing = new BingWebmaster({ apiKey: v('apiKey'), site: `${new URL(brand.site).origin}/`, fetch: http });
       return { bing, check: () => bing.check() };
+    }
+    // The AI providers are built by the AI settings (ai.ts); here they are only checked
+    case 'anthropic': {
+      const apiKey = v('apiKey');
+      return { check: () => checkAnthropic(apiKey, http) };
+    }
+    case 'openaiCompatible': {
+      const baseUrl = v('baseUrl');
+      const model = v('model');
+      return { check: () => checkOpenAiCompatible(baseUrl, model, all.apiKey || undefined, http) };
     }
     default:
       throw new MissingField(`${id} has nothing to connect`);

@@ -15,7 +15,7 @@ import {
   Registry,
   type AiProvider,
   type EventsPage,
-  type GenerateRequest,
+  type ObjectRequest,
   type GitHubSource,
   type GitHubWriter,
   type PullRequestDraft,
@@ -72,12 +72,14 @@ class FakeGitHub implements GitHubSource, GitHubWriter, ReviewGitHub {
 }
 
 class FakeAi implements AiProvider {
-  requests: GenerateRequest[] = [];
+  requests: ObjectRequest[] = [];
   output: unknown;
   constructor(output: unknown) {
     this.output = output;
   }
-  async generate(request: GenerateRequest) {
+  readonly id = 'test' as const;
+  async *streamText() {}
+  async generateObject(request: ObjectRequest) {
     this.requests.push(request);
     return { output: this.output, chatId: 'c', costUsd: 0.1 };
   }

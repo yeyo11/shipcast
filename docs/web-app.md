@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:12:37.785714949Z
-updated_at: 2026-10-25T15:19:13.655478099Z
+created_at: 2026-10-25T15:23:29.546831053Z
+updated_at: 2026-10-25T15:53:12.415229662Z
 tags:
     - web-app
     - dashboard
@@ -12,6 +12,7 @@ tags:
     - webhooks
     - api
     - job-queue
+    - ai
 ---
 # The web app
 
@@ -87,8 +88,10 @@ move to a VPS or server; until then it runs on the owner's machine.
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
   directly. See [articles](engine.md#articles-written-in-the-app).
 - **Channels** (`/channels`): see [accounts.md](accounts.md). A newly connected account lands on the
-  list, scrolled to and focused.
+  list, scrolled to and focused. The **Anthropic API** and an **OpenAI-compatible server** are
+  connected here too, as AI providers.
 - **Automation** (`/automation`): below.
+- **AI** (`/ai`): below.
 - **API** (`/tokens`): the REST API's tokens, created with a name and scopes (`read`, `write`), shown
   once, listed with when each was last used, and revoked. See [api.md](api.md).
 
@@ -96,6 +99,8 @@ Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Wait
 yellow), and every error is explained for a person, with the original text folded under Details
 (`src/components/errors.ts`). Scrolling is smoothed by Lenis, off for anyone who asks the system for
 reduced motion.
+
+**AI cost is never shown**, in any page or in the CLI ([decisions/ai-providers.md](decisions/ai-providers.md)).
 
 ## Automation
 
@@ -129,6 +134,26 @@ never run the same round twice.
   deliveries (a ping, an ignored event, a bad signature, a merge with no launch) answered as expected
   on 2026-10-25.
 
+## AI
+
+Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md)), a plain page in today's
+Cartel markup until the redesign (`src/routes/_app/ai.tsx`, `src/server/ai.functions.ts`):
+
+- **Providers**: per task (the launch content pack, an article's distribution, the writing
+  assistant) a provider (claudio, the Anthropic API, an OpenAI-compatible server; the ones without a
+  connected account say so) and a model, empty for the provider's default. And the **tone**, which
+  replaces `brand.yml`'s in every prompt when set.
+- **Prompts**: each channel's brief, each kind of pack's brief and the article's translation, as
+  templates with `{{variables}}`. A save is a new version; the versions are listed with their dates
+  and any of them, or the default, can be restored.
+- **Locked**: the rules that keep generated text true to the code (and to the article), and the
+  content pack's JSON Schema, shown read-only.
+- **Preview**: the final system prompt and prompt a past launch would get with the saved prompts and
+  tone, rendered without calling an AI.
+
+The selection actions and side chat of the writing assistant come later, with the redesign
+([decisions/app-design-direction.md](decisions/app-design-direction.md)).
+
 ## How it is built
 
 - **TanStack Start** (React 19, Vite 8), file routes in `src/routes/`, pages under the `_app`
@@ -143,10 +168,10 @@ never run the same round twice.
   function; the server converts requests, serves `dist/client` with long caching for hashed assets,
   and terminates TLS. No Nitro.
 - **One context per process** (`src/server/context.server.ts`): the configuration, the registry,
-  the GitHub client, the keychain, the brand (read from the launches repo every five minutes) and the
-  job queue, whose workers it starts and stops on SIGTERM or SIGINT. The repo's root is found by its
-  `pnpm-workspace.yaml` from where the app runs, not from the module's path, which differs between
-  development and the bundle.
+  the GitHub client, the keychain, the brand (read from the launches repo every five minutes), the
+  AI settings' provider for each task (read before each AI call) and the job queue, whose workers it
+  starts and stops on SIGTERM or SIGINT. The repo's root is found by its `pnpm-workspace.yaml` from
+  where the app runs, not from the module's path, which differs between development and the bundle.
 - **Jobs are durable** ([decisions/job-queue.md](decisions/job-queue.md)): drafting, publishing, an
   article, a channel's retry and a delivery are pg-boss jobs on the registry's Postgres
   (`src/server/work.server.ts` sends them, `@shipcast/runtime` runs them). A job sent before a restart
@@ -160,4 +185,4 @@ never run the same round twice.
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[status.md]]

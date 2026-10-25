@@ -15,6 +15,7 @@ import {
 } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
+  aiSetup,
   buildServices,
   BY_HAND,
   ConfigError,
@@ -61,7 +62,6 @@ app: pnpm app (see docs/web-app.md).
 function report(result: DraftResult): void {
   if (result.ok) {
     console.log(`Drafted ${result.launch.repo} ${result.launch.ref}: ${result.pullRequest}`);
-    if (result.costUsd !== null) console.log(`AI cost: $${result.costUsd.toFixed(2)}`);
   } else {
     console.error(`Launch of ${result.launch.repo} ${result.launch.ref} failed:\n${result.problems.map((p) => `  ${p}`).join('\n')}`);
   }
@@ -107,6 +107,13 @@ async function main(argv: string[]): Promise<number> {
   const deps: PipelineDeps = {
     github,
     ai: new Claudio({ url: config.claudioUrl, token: config.claudioToken }),
+    aiSetup: aiSetup({
+      env: process.env,
+      registry,
+      secrets,
+      claudio: { url: config.claudioUrl, token: config.claudioToken },
+      brand: () => loadBrand(github, config.launchesRepo),
+    }),
     registry,
     launchesRepo: config.launchesRepo,
     checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir }, repo, ref),

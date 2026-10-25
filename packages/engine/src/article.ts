@@ -12,8 +12,8 @@ import {
 import { stringify } from 'yaml';
 import { launchDir, renderDrafts } from './drafts.ts';
 import { buildAssets } from './launch-assets.ts';
-import { deliverDrafts, readProjects, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
-import { channelBrief } from './prompt.ts';
+import { deliverDrafts, readProjects, setupFor, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
+import { buildArticlePrompt } from './prompt.ts';
 import type { Launch } from './registry.ts';
 
 /** An article written in the app: the owner's own words, in one language, and where it should go. */
@@ -53,82 +53,59 @@ export function claimArticle(input: ArticleInput, brand: Brand, deps: Pick<Pipel
   return deps.registry.claim({ repo: deps.launchesRepo, ref: `article:${articleSlug(input.title)}`, trigger: 'article', kind: 'launch', brand: brand.id });
 }
 
-function articlePrompt(input: ArticleInput, brand: Brand, config: LaunchConfig, repo: string): { prompt: string; system: string } {
-  const other = brand.languages.blog.filter((l) => l !== input.lang);
-  const pieces = (Object.keys(config.publishing) as Channel[])
-    .filter((c) => config.publishing[c] !== 'off')
-    .map((c) => channelBrief(c, brand, config))
-    .filter((p): p is string => p !== undefined)
-    .map((p) => `- ${p}`)
-    .join('\n');
-  const system = [
-    `You prepare the distribution of an article ${brand.displayName} wrote, published under their name.`,
-    brand.tone ? `How to write: ${brand.tone}` : 'How to write: first person, direct and technical, no hype.',
-    'The article is the source of truth: every piece says only what the article says. Never add claims, numbers, features or links it does not contain.',
-    'Each channel gets its own text, written for that channel; never paste the same copy twice.',
-  ].join('\n');
-  const prompt = [
-    `Here is the article, written in ${input.lang === 'en' ? 'English' : 'Spanish'}.`,
-    '',
-    `Title: ${input.title}`,
-    '',
-    input.markdown.trim(),
-    '',
-    '---',
-    '',
-    `Fill \`analysis\` briefly: summary is the article in one sentence; implemented, planned, documentedOnly and limitations are empty lists.`,
-    `In \`article\`, the ${input.lang} version is the article above with its title (copy them; they are replaced by the owner's text anyway) and a description and slug in that language.`,
-    other.length > 0
-      ? `Translate it faithfully into ${other.map((l) => (l === 'en' ? 'English' : 'Spanish')).join(' and ')} as the other version${other.length > 1 ? 's' : ''}, with ${other.length > 1 ? 'their' : 'its'} own title, description and slug in that language. Keep the author's voice and every link; translate nothing else into it.`
-      : '',
-    '',
-    'Then write these pieces:',
-    pieces,
-    '',
-    `Set kind to "launch" and project to { name: the article's title, repo: "https://github.com/${repo}" }. Answer only through the structured output.`,
-  ]
-    .filter((line) => line !== '')
-    .join('\n');
-  return { prompt, system };
+/**
+ * The article's content pack, and nothing else: the AI translates it and writes each channel's piece,
+ * and the owner's words replace the AI's copy of them. No GitHub, no registry: what a draft and a
+ * dry run share.
+ */
+export async function generateArticlePack(
+  input: ArticleInput,
+  brand: Brand,
+  deps: Pick<PipelineDeps, 'ai' | 'aiSetup' | 'aiWorkdir' | 'maxBudgetUsd' | 'launchesRepo'>,
+): Promise<{ ok: true; pack: ContentPack; config: LaunchConfig } | { ok: false; problems: string[] }> {
+  const config = articleConfig(brand, input.channels);
+  let result;
+  try {
+    const setup = await setupFor(deps, 'article');
+    const { prompt, system } = buildArticlePrompt(input, brand, config, deps.launchesRepo, { prompts: setup.prompts, tone: setup.tone });
+    result = await setup.provider.generateObject({
+      prompt,
+      appendSystemPrompt: system,
+      cwd: deps.aiWorkdir ?? '/workspace',
+      jsonSchema: contentPackJsonSchema(),
+      allowedTools: [],
+      model: setup.model,
+      maxBudgetUsd: deps.maxBudgetUsd,
+    });
+  } catch (error) {
+    return { ok: false, problems: [error instanceof Error ? error.message : String(error)] };
+  }
+  const parsed = ContentPack.safeParse(result.output);
+  if (!parsed.success) return { ok: false, problems: parsed.error.issues.map((i) => `${i.path.join('.') || 'pack'}: ${i.message}`) };
+
+  const pack = parsed.data;
+  pack.kind = 'launch';
+  pack.project = { name: input.title, repo: `https://github.com/${deps.launchesRepo}` };
+  const own = pack.article?.[input.lang];
+  if (!pack.article || !own) return { ok: false, problems: [`the AI returned no ${input.lang} version of the article`] };
+  // The owner's words are published as they wrote them; only the other languages are the AI's
+  pack.article[input.lang] = { ...own, title: input.title, markdown: input.markdown.trim() };
+  const problems = missingPieces(pack, config, brand);
+  return problems.length > 0 ? { ok: false, problems } : { ok: true, pack, config };
 }
 
 /**
- * Takes an article written in the app to its drafts: the AI translates it and writes each channel's
- * piece, the owner's words replace the AI's copy of them, the media are drawn, and the drafts go to a
- * pull request or, published directly, onto main.
+ * Takes an article written in the app to its drafts: its content pack, the media drawn, and the
+ * drafts to a pull request or, published directly, onto main.
  */
 export async function draftArticle(launch: Launch, input: ArticleInput, brand: Brand, deps: PipelineDeps, options: DraftOptions = {}): Promise<DraftResult> {
   const { registry } = deps;
   const fail = async (problems: string[]): Promise<DraftResult> => ({ ok: false, launch: await registry.setStatus(launch.id, 'failed', problems.join('\n')), problems });
   await registry.setStatus(launch.id, 'generating');
 
-  const config = articleConfig(brand, input.channels);
-  const { prompt, system } = articlePrompt(input, brand, config, deps.launchesRepo);
-  let result;
-  try {
-    result = await deps.ai.generate({
-      prompt,
-      appendSystemPrompt: system,
-      cwd: deps.aiWorkdir ?? '/workspace',
-      jsonSchema: contentPackJsonSchema(),
-      allowedTools: [],
-      maxBudgetUsd: deps.maxBudgetUsd,
-    });
-  } catch (error) {
-    return fail([error instanceof Error ? error.message : String(error)]);
-  }
-  const parsed = ContentPack.safeParse(result.output);
-  if (!parsed.success) return fail(parsed.error.issues.map((i) => `${i.path.join('.') || 'pack'}: ${i.message}`));
-
-  const pack = parsed.data;
-  pack.kind = 'launch';
-  pack.project = { name: input.title, repo: `https://github.com/${deps.launchesRepo}` };
-  const own = pack.article?.[input.lang];
-  if (!pack.article || !own) return fail([`the AI returned no ${input.lang} version of the article`]);
-  // The owner's words are published as they wrote them; only the other languages are the AI's
-  pack.article[input.lang] = { ...own, title: input.title, markdown: input.markdown.trim() };
-  const problems = missingPieces(pack, config, brand);
-  if (problems.length > 0) return fail(problems);
+  const generated = await generateArticlePack(input, brand, deps);
+  if (!generated.ok) return fail(generated.problems);
+  const { pack, config } = generated;
 
   let known;
   try {
@@ -167,5 +144,5 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
     options,
   );
   if (!delivered.ok) return fail([delivered.problem]);
-  return { ok: true, launch: delivered.launch, pullRequest: delivered.where, costUsd: result.costUsd };
+  return { ok: true, launch: delivered.launch, pullRequest: delivered.where };
 }
