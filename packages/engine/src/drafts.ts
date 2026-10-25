@@ -79,6 +79,8 @@ export function renderDrafts(
   date: Date,
   /** The launch image's site path, for the article's front matter */
   image?: string,
+  /** Site paths of the deployed project's desktop screenshots, the first shown inside the article */
+  screenshots: readonly string[] = [],
 ): DraftFile[] {
   const files: DraftFile[] = [];
   const dir = launchDir(launch);
@@ -102,10 +104,10 @@ export function renderDrafts(
         ...(isArticle(launch) ? [] : [`repo: ${q(pack.project.repo)}`]),
         ...(pack.project.version ? [`version: ${q(pack.project.version)}`] : []),
         `tags: [${pack.article.tags.map(q).join(', ')}]`,
-        ...(image ? [`image: ${q(image)}`] : []),
+        ...(image ? [`image: ${q(image)}`, `imageAlt: ${q(version.imageAlt ?? `${pack.project.name}: ${version.title}`)}`] : []),
         '---',
       ].join('\n');
-      files.push({ path: `src/content/posts/${lang}/${version.slug}.md`, content: `${frontMatter}\n\n${version.markdown.trim()}\n` });
+      files.push({ path: `src/content/posts/${lang}/${version.slug}.md`, content: `${frontMatter}\n\n${withScreenshot(version.markdown.trim(), screenshots[0], pack.project.name, lang)}\n` });
     }
   }
 
@@ -268,4 +270,25 @@ export function pullRequestBody(pack: ContentPack, launch: Launch, config: Launc
     '',
     channels,
   ].join('\n');
+}
+
+/**
+ * Puts the deployed project's first screenshot after the article's opening paragraph, where a reader
+ * (and an image search) meets it with the paragraph that says what the project is.
+ */
+export function withScreenshot(markdown: string, screenshot: string | undefined, project: string, lang: 'en' | 'es'): string {
+  if (!screenshot || markdown.includes(screenshot)) return markdown;
+  const alt = lang === 'es' ? `${project}, captura de pantalla` : `${project}, screenshot`;
+  const end = markdown.indexOf('\n\n');
+  const image = `![${alt}](${screenshot})`;
+  return end === -1 ? `${markdown}\n\n${image}` : `${markdown.slice(0, end)}\n\n${image}${markdown.slice(end)}`;
+}
+
+/** The site paths of the desktop screenshots among a launch's media files, the home page first */
+export function screenshotPaths(files: readonly DraftFile[]): string[] {
+  return files
+    .map((f) => f.path)
+    .filter((p) => /^public\/.+\/screenshots\/[a-z0-9-]+-desktop\.png$/.test(p))
+    .map((p) => p.slice('public'.length))
+    .sort((a, b) => Number(!a.includes('/screenshots/home-')) - Number(!b.includes('/screenshots/home-')));
 }

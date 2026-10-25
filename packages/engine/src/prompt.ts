@@ -38,7 +38,7 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
     'This is a major version of a project that has launched before. The article explains what is new and what changed for people already using it; it does not reintroduce the whole project.',
   'pack.minor': 'This is a minor version. Prefer improved release notes; social posts stay short and only mention what a user would notice.',
   'channel.blog':
-    "article: the canonical post, one version per language ({{blogLanguages}}). Each version has its own slug, written in its language's words (the English one in English, the Spanish one in Spanish), and lives at {{site}}/<lang>/<that slug>/. Markdown body without front matter and without a top-level heading. Description at most {{limit.articleDescription}} characters.",
+    "article: the canonical post, one version per language ({{blogLanguages}}). Each version has its own slug, written in its language's words (the English one in English, the Spanish one in Spanish), and lives at {{site}}/<lang>/<that slug>/. Markdown body without front matter and without a top-level heading. Description at most {{limit.articleDescription}} characters. For search engines and assistants: the body's first paragraph says in one or two plain sentences what the project is and does; headings are phrased as the questions a reader asks where that reads naturally; imageAlt describes the launch image in that language (at most {{limit.imageAlt}} characters).",
   'channel.devto':
     'devto: 1 to {{limit.devtoTags}} lowercase tags. dev.to republishes the English article with the blog as canonical URL, so write nothing else for it.',
   'channel.bluesky':

@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-25T00:01:50.934646193Z
-updated_at: 2026-10-25T01:38:56.388809955Z
+created_at: 2026-10-25T06:55:46.001035981Z
+updated_at: 2026-10-25T18:58:05.691237288Z
 tags:
     - schema
     - content-pack
     - ai
     - decision
+    - seo
 ---
 # The content pack
 
@@ -24,7 +25,7 @@ Claude Code's `--json-schema` refused draft 2020-12 on the first launch.
 | `kind` | `launch`, `major` or `minor` ([launch-yml.md](launch-yml.md)) |
 | `project` | `name`, `repo` URL, optional `version` (the release tag) |
 | `analysis` | `summary`, `implemented` (at least one), `planned`, `documentedOnly`, `limitations` |
-| `article` | `tags`, and an `en` and/or `es` version, each with its own `slug`, `title`, `description` (≤ 200) and `markdown` |
+| `article` | `tags`, and an `en` and/or `es` version, each with its own `slug`, `title`, `description` (≤ 200), `markdown` and an optional `imageAlt` (≤ 140) |
 | `devto` | `tags` (1–4, lowercase letters and digits); dev.to republishes the English article with the blog as canonical URL |
 | `hashnode` | `tags` (1–5); Hashnode republishes the English article with the blog as its original URL |
 | `bluesky` | `lang`, `text` (≤ 300 graphemes) |
@@ -51,8 +52,30 @@ with `hreflang`, and never two languages on one page.
 
 The blog pairs the two versions by `translationKey`, which Shipcast sets to the English slug (the
 Spanish one when there is no English version). `articleUrl(pack, site, lang)` builds a version's URL;
-every channel links the URL of its language. The blog post in the registry records both slugs
-(`en:<slug>,es:<slug>`) so the metrics read each article by its own path.
+every channel links the URL of its language. Once published, the registry keeps one `article:<lang>`
+piece per language with its own URL ([decisions/post-model.md](decisions/post-model.md)), so the
+metrics and the index status read each article by its own path.
+
+## Written for search engines and assistants
+
+Added on 2026-10-25 ([plans/goal-after-mvp.md](plans/goal-after-mvp.md), milestone 4), from the
+blog's SEO and AI-readiness review ([launches-repo.md](launches-repo.md)):
+
+- **An opening that answers**: the article's first paragraph says in one or two plain sentences what
+  the project is and does: the passage a search engine shows and an assistant quotes.
+- **Headings as questions** where that reads naturally ("How do I install it?").
+- **The launch image's alt text** per language (`imageAlt`), written by the AI and set in the
+  article's front matter, where the blog uses it for `og:image:alt` and the image's `alt`; without one
+  from the AI, the project's name and the title.
+- **The project inside the article**: when `launch.yml` names the deployed project
+  ([launch-yml.md](launch-yml.md)), its first desktop screenshot (the home page first) goes after the
+  opening paragraph, with alt text in the article's language, so the article shows what it talks about.
+- **`updatedDate`** is set when an article is edited after publishing
+  ([decisions/edit-delete.md](decisions/edit-delete.md)).
+
+The first three are part of the blog's brief, an editable prompt in the AI settings
+([decisions/ai-providers.md](decisions/ai-providers.md)), and of the schema's field descriptions,
+which travel with the pack's schema.
 
 ## The analysis comes first
 
@@ -87,4 +110,4 @@ News's 80.
 
 ## Related
 
-[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]]
+[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]]
