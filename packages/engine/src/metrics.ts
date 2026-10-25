@@ -1,4 +1,4 @@
-import type { Metrics, PageVisits } from '@shipcast/connectors';
+import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
 import type { Brand, Channel } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { Registry } from './registry.ts';
@@ -9,8 +9,12 @@ export interface MetricSources {
   posts?: Partial<Record<Channel, { metrics(externalId: string): Promise<Metrics> }>>;
   /** The blog's visits per article path, by source */
   blog?: { pageVisits(path: string, since: string, until: string): Promise<PageVisits> };
-  /** Google search numbers per article URL */
-  search?: { pageMetrics(url: string, since: string, until: string): Promise<Metrics> };
+  /** Google search numbers per article URL, whether Google indexed it, and resubmitting the sitemap */
+  search?: {
+    pageMetrics(url: string, since: string, until: string): Promise<Metrics>;
+    inspect?(url: string): Promise<IndexStatus>;
+    submitSitemap?(sitemapUrl: string): Promise<void>;
+  };
   /** The launched repo's stars, forks and traffic */
   github?: { repoStats(repo: string): Promise<RepoStats> };
 }
@@ -22,11 +26,38 @@ export interface CollectResult {
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
+/** Where Google's view of one article URL is kept, as of the last reading */
+export const indexStatusKey = (url: string) => `index-status:${url}`;
+/** When the sitemap was last resubmitted, so it is asked for at most once a day */
+export const SITEMAP_SUBMITTED_KEY = 'sitemap-submitted-at';
+const SITEMAP_EVERY_MS = 24 * 3600 * 1000;
+
+export const sitemapUrl = (site: string) => `${site}/sitemap-index.xml`;
+
+/** Google's view of an article URL, as of the last reading; undefined until it is first read */
+export function indexStatus(registry: Registry, url: string): (IndexStatus & { checkedAt: string }) | undefined {
+  const raw = registry.cursor(indexStatusKey(url));
+  return raw ? (JSON.parse(raw) as IndexStatus & { checkedAt: string }) : undefined;
+}
+
+/**
+ * Resubmits the sitemap, unless that was done in the last day. Google ignores frequent resubmits of
+ * an unchanged sitemap, and a new article is what changes it.
+ */
+export async function resubmitSitemap(registry: Registry, site: string, search: NonNullable<MetricSources['search']>, now = new Date(), force = false): Promise<boolean> {
+  if (!search.submitSitemap) return false;
+  const last = Date.parse(registry.cursor(SITEMAP_SUBMITTED_KEY) ?? '') || 0;
+  if (!force && now.getTime() - last < SITEMAP_EVERY_MS) return false;
+  await search.submitSitemap(sitemapUrl(site));
+  registry.setCursor(SITEMAP_SUBMITTED_KEY, now.toISOString());
+  return true;
+}
+
 /**
  * The article's URL in each language. The blog post records both slugs (`en:a-slug,es:un-slug`),
  * since each language has its own; an older record with one slug shared by both is read too.
  */
-function articleUrls(externalId: string | null | undefined, url: string, site: string): Array<{ lang: string; url: string }> {
+export function articleUrls(externalId: string | null | undefined, url: string, site: string): Array<{ lang: string; url: string }> {
   const pairs = (externalId ?? '').split(',').map((p) => /^(en|es):(.+)$/.exec(p)).filter((m): m is RegExpExecArray => m !== null);
   if (pairs.length > 0) return pairs.map(([, lang, slug]) => ({ lang: lang!, url: `${site}/${lang}/${slug}/` }));
   return [
@@ -55,6 +86,7 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
     }
   };
 
+  let unindexed = false;
   const launches = registry.recent(500).filter((l) => l.status === 'published');
   for (const launch of launches) {
     const since = launch.createdAt.slice(0, 10);
@@ -87,6 +119,15 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
               impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
             });
           });
+          const inspect = sources.search.inspect?.bind(sources.search);
+          if (inspect) {
+            await attempt(`${launch.repo} ${launch.ref} index status`, async () => {
+              const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await inspect(url) })));
+              for (const { url, status } of statuses) registry.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+              record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
+              unindexed ||= statuses.some((s) => !s.status.indexed);
+            });
+          }
         }
       }
     }
@@ -99,5 +140,7 @@ export async function collectMetrics(registry: Registry, brand: Brand, sources: 
       });
     }
   }
+  // An article Google still lacks is the one case where asking it to read the sitemap again helps
+  if (unindexed && sources.search) await attempt('sitemap', async () => void (await resubmitSitemap(registry, brand.site, sources.search!, now)));
   return { readings, problems };
 }

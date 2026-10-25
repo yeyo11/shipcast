@@ -94,6 +94,37 @@ test('Search Console signs a service-account JWT, exchanges it once, and reads o
   assert.ok(verified, 'the JWT is signed with the service account key');
   const claims = JSON.parse(Buffer.from(payload!, 'base64url').toString()) as { iss: string; scope: string; aud: string };
   assert.equal(claims.iss, 'shipcast@project.iam.gserviceaccount.com');
-  assert.equal(claims.scope, 'https://www.googleapis.com/auth/webmasters.readonly', 'read-only');
+  assert.equal(claims.scope, 'https://www.googleapis.com/auth/webmasters', 'resubmitting the sitemap is a write');
   assert.equal(calls[1]!.headers.authorization, 'Bearer goog');
+});
+
+test('Search Console tells whether a URL is indexed and resubmits the sitemap', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const calls: Call[] = [];
+  const sc = new SearchConsole({
+    serviceAccount: { client_email: 'shipcast@project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() },
+    property: 'sc-domain:josegarrido.dev',
+    fetch: fakeFetch(
+      [
+        ['POST https://oauth2.googleapis.com/token', () => Response.json({ access_token: 'goog', expires_in: 3600 })],
+        [
+          'POST https://searchconsole.googleapis.com/v1/urlInspection/index:inspect',
+          () =>
+            Response.json(
+              (JSON.parse(String(calls.at(-1)!.body)) as { inspectionUrl: string }).inspectionUrl.includes('/en/')
+                ? { inspectionResult: { indexStatusResult: { verdict: 'PASS', coverageState: 'Submitted and indexed', lastCrawlTime: '2026-10-25T10:32:27Z' } } }
+                : { inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: 'URL is unknown to Google' } } },
+            ),
+        ],
+        ['PUT https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Ajosegarrido.dev/sitemaps/https%3A%2F%2Fjosegarrido.dev%2Fsitemap-index.xml', () => new Response(null, { status: 204 })],
+      ],
+      calls,
+    ),
+  });
+
+  assert.deepEqual(await sc.inspect('https://josegarrido.dev/en/claudio/'), { indexed: true, coverage: 'Submitted and indexed', lastCrawl: '2026-10-25T10:32:27Z' });
+  assert.deepEqual(await sc.inspect('https://josegarrido.dev/es/claudio/'), { indexed: false, coverage: 'URL is unknown to Google' });
+  assert.deepEqual(JSON.parse(String(calls[1]!.body)), { inspectionUrl: 'https://josegarrido.dev/en/claudio/', siteUrl: 'sc-domain:josegarrido.dev' });
+  await sc.submitSitemap('https://josegarrido.dev/sitemap-index.xml');
+  assert.equal(calls.at(-1)!.method, 'PUT');
 });

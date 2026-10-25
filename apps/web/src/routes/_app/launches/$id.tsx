@@ -73,7 +73,7 @@ function LaunchPage() {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const { launch, review, metrics, jobs } = data;
+  const { launch, review, metrics, index, jobs } = data;
   const running = jobs.some((j) => j.state === 'running') || launch.status === 'generating';
   useEffect(() => {
     if (!running) return;
@@ -214,6 +214,35 @@ function LaunchPage() {
               ),
             )}
           </div>
+        </>
+      )}
+
+      {index.length > 0 && (
+        <>
+          <h2 className="ph">On Google</h2>
+          <table className="table">
+            <tbody>
+              {index.map((i) => (
+                <tr key={i.url}>
+                  <th scope="row">
+                    <a href={i.url} target="_blank" rel="noreferrer">
+                      {i.lang === 'es' ? 'Spanish' : 'English'}
+                    </a>
+                  </th>
+                  <td>
+                    {i.indexed === null ? (
+                      <span className="muted">Not checked yet: the next metrics reading asks Google</span>
+                    ) : (
+                      <>
+                        <Pill tone={i.indexed ? 'published' : 'waiting'}>{i.indexed ? 'Indexed' : 'Not indexed yet'}</Pill> <span className="muted">{i.coverage}</span>
+                      </>
+                    )}
+                  </td>
+                  <td className="muted">{i.checkedAt ? `checked ${when(i.checkedAt)}` : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
 

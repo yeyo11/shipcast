@@ -1,4 +1,4 @@
-import { editDraft, preflight, readReview } from '@shipcast/engine';
+import { articleUrls, editDraft, indexStatus, preflight, readReview } from '@shipcast/engine';
 import { CHANNELS, type Channel } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
@@ -19,12 +19,21 @@ export const listLaunches = createServerFn({ method: 'GET' }).handler(async () =
 export const getLaunch = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    const { registry, github, deps } = appContext();
+    const { registry, github, deps, brand } = appContext();
     const launch = registry.get(data);
     if (!launch) return null;
+    const blog = registry.posts(launch.id).find((p) => p.channel === 'blog');
+    const site = blog?.url ? (await brand()).site : undefined;
+    // Google's view of each language's article, as of the last metrics reading
+    const index = blog?.url && site
+      ? articleUrls(blog.externalId, blog.url, site).map(({ lang, url }) => {
+          const status = indexStatus(registry, url);
+          return { lang, url, indexed: status?.indexed ?? null, coverage: status?.coverage ?? null, checkedAt: status?.checkedAt ?? null };
+        })
+      : [];
     const review = await readReview(launch, { github, launchesRepo: deps.launchesRepo }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
     const metrics = registry.latestMetrics(launch.id).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
-    return { launch: launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, jobs: jobsView() };
+    return { launch: launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index, jobs: jobsView() };
   });
 
 export const saveDraft = createServerFn({ method: 'POST' })

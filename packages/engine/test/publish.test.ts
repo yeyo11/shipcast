@@ -306,3 +306,26 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
   await publishLaunch(registry.get(launch.id)!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(calls.length, 7, 'a second round publishes nothing again');
 });
+
+test('when the article goes live Google is asked to read the sitemap, once, and a failure there holds nothing back', async () => {
+  const registry = new Registry(':memory:');
+  const launch = drafted(registry);
+  const { calls, publishers } = recorder();
+  const submitted: string[] = [];
+  const search = {
+    pageMetrics: async () => ({}),
+    submitSitemap: async (url: string) => {
+      submitted.push(url);
+      throw new Error('Search Console: submit the sitemap: 503');
+    },
+  };
+  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), search };
+
+  const result = await publishLaunch(launch, brand, deps);
+  assert.equal(result.state, 'published');
+  assert.equal(calls.length, 4);
+  assert.deepEqual(submitted, ['https://josegarrido.dev/sitemap-index.xml']);
+
+  await publishLaunch(registry.get(launch.id)!, brand, deps);
+  assert.equal(submitted.length, 1, 'the blog post was already recorded: not asked again');
+});

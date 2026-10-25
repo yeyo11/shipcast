@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
 import type { PageVisits } from '@shipcast/connectors';
-import { collectMetrics, Registry, type MetricSources } from '../src/index.ts';
+import { collectMetrics, indexStatus, Registry, SITEMAP_SUBMITTED_KEY, type MetricSources } from '../src/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
@@ -83,4 +83,51 @@ test('launches not yet published are not read', async () => {
   let reads = 0;
   await collectMetrics(registry, brand, { github: { repoStats: async () => (reads++, { stars: 1, forks: 0, watchers: 0 }) } });
   assert.equal(reads, 0);
+});
+
+test("Google's view of each language is kept, and an article it lacks has the sitemap resubmitted once a day", async () => {
+  const registry = new Registry(':memory:');
+  const launch = published(registry);
+  const submitted: string[] = [];
+  const sources: MetricSources = {
+    search: {
+      pageMetrics: async () => ({ clicks: 0, impressions: 0 }),
+      inspect: async (url) =>
+        url.includes('/en/')
+          ? { indexed: true, coverage: 'Submitted and indexed', lastCrawl: '2026-10-29T08:00:00Z' }
+          : { indexed: false, coverage: 'URL is unknown to Google' },
+      submitSitemap: async (url) => void submitted.push(url),
+    },
+  };
+
+  await collectMetrics(registry, brand, sources, new Date('2026-10-30T12:00:00Z'));
+  assert.deepEqual(indexStatus(registry, 'https://josegarrido.dev/en/claudio/'), {
+    indexed: true,
+    coverage: 'Submitted and indexed',
+    lastCrawl: '2026-10-29T08:00:00Z',
+    checkedAt: '2026-10-30T12:00:00.000Z',
+  });
+  assert.equal(indexStatus(registry, 'https://josegarrido.dev/es/claudio-como-servicio/')?.coverage, 'URL is unknown to Google');
+  assert.equal(registry.latestMetrics(launch.id).find((m) => m.name === 'indexed')?.value, 1);
+  assert.deepEqual(submitted, ['https://josegarrido.dev/sitemap-index.xml']);
+
+  await collectMetrics(registry, brand, sources, new Date('2026-10-30T18:00:00Z'));
+  assert.equal(submitted.length, 1, 'not again the same day');
+  await collectMetrics(registry, brand, sources, new Date('2026-10-31T13:00:00Z'));
+  assert.equal(submitted.length, 2, 'again the next day, while Google still lacks it');
+  assert.equal(registry.cursor(SITEMAP_SUBMITTED_KEY), '2026-10-31T13:00:00.000Z');
+});
+
+test('with every article indexed the sitemap is left alone', async () => {
+  const registry = new Registry(':memory:');
+  published(registry);
+  const submitted: string[] = [];
+  await collectMetrics(registry, brand, {
+    search: {
+      pageMetrics: async () => ({ clicks: 0, impressions: 0 }),
+      inspect: async () => ({ indexed: true, coverage: 'Submitted and indexed' }),
+      submitSitemap: async (url) => void submitted.push(url),
+    },
+  });
+  assert.deepEqual(submitted, []);
 });
