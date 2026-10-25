@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:57:18.123643992Z
-updated_at: 2026-10-25T01:42:13.402893333Z
+created_at: 2026-10-25T06:55:49.65731204Z
+updated_at: 2026-10-25T09:52:57.304970814Z
 tags:
     - schema
     - launch-yml
@@ -47,13 +47,33 @@ publishing:              # auto | approval | manual | off, per channel
   reddit: manual         # off by default since 2026-10-25
 
 assets:
-  demo: docs/demo.gif    # path in the repo or URL; every launch needs one
+  demo: docs/demo.gif    # path in the repo or URL of a GIF; or record one from `site`
+  site: https://claudio.example   # the deployed project: screenshots, and the demo when there is no GIF
+  tour:                  # optional, at most 12 steps, one action each
+    - wait: 1000         # ms, 100 to 5000
+    - scroll: 600        # pixels down (negative goes up), or `bottom`
+    - click: "#start"    # a CSS selector
+    - goto: /docs        # a path on the same site
+  screenshots:           # optional, 1 to 6 pages; the site's root when absent
+    - path: /
+    - path: /docs/start
+      name: start        # optional; taken from the path otherwise ("/" is "home")
 
 reddit:
   subreddits: [ClaudeAI, node]   # names without r/; only read when reddit is turned on
 ```
 
 The smallest valid file is `enabled: true` and `brand: personal`; everything else has a default.
+
+## The demo and the deployed project
+
+Added on 2026-10-25 ([plans/mvp-close.md](plans/mvp-close.md)). Every launch needs a demo, which
+becomes the Instagram carousel's video: either a GIF committed to the repo (`assets.demo`), or the
+deployed project (`assets.site`), which Shipcast opens in headless Chromium through Playwright
+([publishing.md](publishing.md#the-launchs-media)). With a site it takes screenshots (desktop and
+mobile) of the listed pages, and, when there is no `assets.demo`, records the tour as the demo GIF.
+Without a tour it records the default one: a pause, a slow scroll to the bottom and back to the top.
+The pre-flight check accepts a site that answers in place of a committed demo.
 
 ## Publishing modes
 
@@ -82,6 +102,7 @@ channels chosen there are written beside its drafts ([engine.md](engine.md#artic
 - **Channels are named ahead of their connectors.** `CHANNELS` lists every channel of the plan, so a
   file written today stays valid; turning on one without a connector yet is caught when the pack is
   checked (`missingPieces`, see [content-pack.md](content-pack.md)).
+- **A site is https, and a tour stays on it**: a `goto` to another origin is refused.
 
 ## Which pack a release gets
 
@@ -92,4 +113,4 @@ that is not semver gets `minor`, the quiet choice.
 
 ## Related
 
-[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]]
+[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]]

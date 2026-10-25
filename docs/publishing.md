@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T00:57:14.502862567Z
-updated_at: 2026-10-25T01:41:40.20005951Z
+created_at: 2026-10-25T06:56:05.745001796Z
+updated_at: 2026-10-25T09:54:04.440289878Z
 tags:
     - publishing
     - connectors
@@ -15,10 +15,10 @@ tags:
 
 What happens after the drafts pull request ([engine.md](engine.md)): the launch's media, publishing
 on every channel once the owner merges, and reading the numbers back. Built on 2026-10-24 in
-`packages/assets`, `packages/connectors`, `packages/engine` (`launch-assets.ts`, `publish.ts`,
-`newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`) and the [web app](web-app.md). Every connector is
-Shipcast's own, over `fetch`, with no SDK ([decisions/mvp-scope.md](decisions/mvp-scope.md) says why
-Postiz was dropped).
+`packages/assets`, `packages/capture`, `packages/connectors`, `packages/engine` (`launch-assets.ts`,
+`publish.ts`, `newsletter.ts`, `metrics.ts`), `packages/runtime` (`services.ts`, `rounds.ts`) and the
+[web app](web-app.md). Every connector is Shipcast's own, over `fetch`, with no SDK
+([decisions/mvp-scope.md](decisions/mvp-scope.md) says why Postiz was dropped).
 
 ## The launch's media
 
@@ -47,16 +47,27 @@ Postiz was dropped).
   1. `instagram-01.jpg`, the cover: the project's drawn cover when the site has one
      (`<site>/covers/<project>.jpg`), otherwise the house illustration (`renderIllustration`), with
      the article's headline on the project's colour and the pack's one-line summary.
-  2. `instagram-02.mp4`, the demo, when `launch.yml` names `assets.demo`: the GIF laid over a backdrop
-     ("See it run" on the project's colour) by `demoOnBackdrop` through **ffmpeg** — H.264 yuv420p at
-     30 fps with a silent AAC track, between 3 and 60 seconds. A demo that is named but missing, or
-     that points outside the repo, fails the launch. ffmpeg must be on `PATH`.
+  2. `instagram-02.mp4`, the demo, when the launch has one (a GIF in `assets.demo`, or one recorded
+     from `assets.site`): the GIF laid over a backdrop ("See it run" on the project's colour) by
+     `demoOnBackdrop` through **ffmpeg** — H.264 yuv420p at 30 fps with a silent AAC track, between 3
+     and 60 seconds. A demo that is named but missing, or that points outside the repo, fails the
+     launch. ffmpeg must be on `PATH`.
   3. One slide per feature (2 or 3, written by Claude: a short title and one sentence).
   4. The closing slide, "The full write-up is in my bio", with the brand's `avatar` from `brand.yml`.
 
   `instagram-story.jpg` (1080×1920) is the cover with "Link in bio": the API cannot add a link
   sticker, so the owner chose a story without one over posting it by hand. The slides' texts are
   drawn into the images; only the caption and the comment are edited in the drafts pull request.
+
+- **The deployed project, through Playwright** (2026-10-25), when `launch.yml` names `assets.site`
+  ([launch-yml.md](launch-yml.md#the-demo-and-the-deployed-project)): `@shipcast/capture` opens it in
+  headless Chromium, takes screenshots (desktop 1440×900, mobile 390×844 at 2x, the first screen of
+  each listed page) into `public/<media dir>/screenshots/<name>-<viewport>.png`, and, when the repo
+  has no demo GIF, records the tour at 1280×800 and turns it into `demo.gif` with ffmpeg (800 wide,
+  10 fps, one palette, at most 12 seconds: about 3 MB for the default tour of a real site), which
+  feeds the carousel's video like a committed GIF. A failed capture fails the launch. Chromium comes
+  from Playwright's own install (`npx playwright install chromium` on the machine that runs Shipcast);
+  the test suite never launches a browser.
 
 Binary files go into the pull request as base64 blobs through the Git data API.
 
@@ -91,9 +102,8 @@ Binary files go into the pull request as base64 blobs through the Git data API.
      specific hashtags) after a `---` line.
    - **The newsletter** (`brevo.ts`): one Brevo campaign per language, described below.
    - **Hashnode** (`hashnode.ts`, 2026-10-25): the English article with `originalArticleURL` set to the
-     blog, `og.png` as the cover, tags from the merged `hashnode.md`. Its GraphQL calls were written
-     without a live check (its API endpoint was moving when it was built) and Hashnode's API may need
-     the publication on its Pro plan: the first real post confirms both.
+     blog, `og.png` as the cover, tags from the merged `hashnode.md`. Hashnode's API needs a paid Pro
+     plan since 2026-05-13, so the owner left it out; the connector is built and tested with fakes only.
    - **Telegram** (`telegram.ts`): the edited `telegram.md` as the caption of `og.jpg`, to the channel;
      its link is `t.me/<channel>/<id>`, or `t.me/c/<id>/<id>` for a private one.
    - **Discord** (`discord.ts`): the edited `discord.md` through a webhook, with an embed of the article
@@ -175,20 +185,24 @@ Two limits found while building it:
 - **GitHub traffic needs push access**: a fine-grained token needs "Administration: read" on the
   repo; without it only the public numbers are recorded.
 
-## The shipcast command
+## The rounds and the shipcast command
 
 `buildServices` (`packages/runtime/src/services.ts`) builds the connectors from the brand's connected
 accounts, with `.env` as the fallback for the brand it speaks for ([accounts.md](accounts.md)); a
 network without its credential is left out, never half-configured, and `shipcast status` lists what
-is on. The newsletter also needs the `newsletter` block in `brand.yml`. The Instagram token lasts 60
-days: `watch` refreshes it every 30 (never on the first run, since Meta refuses to refresh a token
-younger than 24 hours) and keeps the fresh one where it came from (the account's keychain entry, or
-the registry for a token from `.env`). With Telegram connected, `watch` and the app tell the owner's
-own chat with the bot when drafts wait, when a launch is published and when it fails.
+is on. The newsletter also needs the `newsletter` block in `brand.yml`. With Telegram connected, the
+owner's own chat with the bot hears when drafts wait, when a launch is published and when it fails.
+
+The round (`runRound` in `packages/runtime/src/rounds.ts`, 2026-10-25) is shared: claim new releases
+(when polling), publish every drafted launch that is ready, refresh every connected Instagram
+account's token that is 30 days old (they last 60; Meta refuses to refresh one younger than a day, so
+a first sight only records the date), and read the metrics every 6 hours. The web app runs it on its
+own timer, or takes GitHub webhooks instead ([web-app.md](web-app.md#automation)); `watch` runs it
+from a terminal.
 
 | Command | Does |
 | --- | --- |
-| `watch` | Each round: detect and draft, publish what is ready, refresh the Instagram token when due, and read the metrics every 6 hours. Run by hand: the owner declined running it as a service |
+| `watch` | The round, every interval (default 300 s, never under 60) |
 | `publish [--retry <channel>]` | Publishes every drafted launch that is ready, once; `--retry` gives a channel that failed for good another chance |
 | `metrics` | Reads every source now |
 
@@ -197,4 +211,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]]

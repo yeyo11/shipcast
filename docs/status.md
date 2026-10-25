@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T08:12:11.885265669Z
-updated_at: 2026-10-25T09:19:51.949377925Z
+created_at: 2026-10-25T09:19:55.287756457Z
+updated_at: 2026-10-25T09:57:35.270856707Z
 tags:
     - status
     - roadmap
@@ -12,7 +12,9 @@ tags:
 **Phases 0 to 5 done; Shipcast v0.1.0 was launched with Shipcast, from its app, on 2026-10-25.** The
 same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in
 the keychain, the phase 5 channels and what the MVP had left ([its outcome](plans/goal-finish.md#outcome-2026-10-25)).
-The app is live at its address, signed in with GitHub, with Instagram connected through its OAuth.
+The app is live at its address, signed in with GitHub, with Instagram connected through its OAuth;
+it runs its own rounds or takes GitHub webhooks, and phase 3 records the demo and screenshots of a
+deployed project with Playwright. Closing the MVP is [its own plan](plans/mvp-close.md).
 
 ## What exists
 
@@ -35,16 +37,20 @@ The app is live at its address, signed in with GitHub, with Instagram connected 
   connector, and the Mastodon and Instagram OAuth flows.
 - **`packages/assets`**: the launch image, the Instagram carousel and story, generated covers, and the
   demo as a video, in the blog's editorial identity.
+- **`packages/capture`**: screenshots and the demo GIF of a deployed project, through Playwright and
+  ffmpeg.
 - **`packages/runtime`** ([accounts.md](accounts.md)): configuration, the OS keychain, accounts per
-  brand, the network catalog and the connectors built from them, shared by the CLI and the app.
+  brand, the network catalog and the connectors built from them, the shared round, the GitHub webhook
+  handling and the automation settings, shared by the CLI and the app.
 - **`apps/cli`**: `launch` (after the pre-flight), `preflight`, `watch`, `publish [--retry]`,
   `metrics`, `status`.
 - **`apps/web`** ([web-app.md](web-app.md), [decisions/web-app-stack.md](decisions/web-app-stack.md)):
   TanStack Start in Cartel; GitHub sign-in limited to the owner, signed sessions, same-origin checks;
   Launches, a launch's review (edit, approve, retry), Launch a repo, Write, and Channels (every
   integration, its accounts and permissions, connect by form or OAuth, check, rename, disconnect,
-  several accounts per channel and brand, import from `.env`); outcomes and errors as toasts in Cartel,
-  explained for a person. It replaced the CLI's dashboard.
+  several accounts per channel and brand, import from `.env`), and Automation (rounds, GitHub webhooks
+  or off, the webhook's secret); outcomes and errors as toasts in Cartel, explained for a person;
+  smooth scrolling. It replaced the CLI's dashboard.
 
 ## Services
 
@@ -71,8 +77,8 @@ The app is live at its address, signed in with GitHub, with Instagram connected 
   Mastodon, Instagram (republished the same day as a carousel with its story and comment) and the
   newsletter. Judged a success by the owner, Instagram the weakest result, hence the carousel.
 - **A test article written in the app and published without a pull request** (2026-10-25): the blog
-  in both languages (the Spanish exactly as written, the English translated) and Bluesky. A test, for
-  the owner to delete.
+  in both languages (the Spanish exactly as written, the English translated) and Bluesky; removed
+  from the blog the same day.
 - **Shipcast v0.1.0** (2026-10-25), the goal's final test, launched from the app: release, pre-flight,
   drafts reviewed in the app (launches#2, AI cost $0.32) and approved there; out on the blog in both
   languages, dev.to, Bluesky, Instagram (carousel, story, comment) and the newsletter in both
@@ -90,14 +96,14 @@ The app is live at its address, signed in with GitHub, with Instagram connected 
 
 ## Next
 
-- **The app runs no rounds of its own.** Detecting releases, publishing a launch merged on GitHub,
-  reading the metrics every 6 hours and refreshing the Instagram tokens happen only while
-  `pnpm shipcast watch` runs, or when an action in the app starts them. Making the app run those
-  rounds, and keeping it running across reboots, is the next decision.
-- Closing the MVP: work moves to pull requests ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)).
-- Phase 6 ([plans/shipcast.md](plans/shipcast.md#roadmap)): other AI providers, the GitHub Action
-  mode, documentation and a one-command install; and the company brand's own setup.
+- Closing the MVP ([plans/mvp-close.md](plans/mvp-close.md)): what is left is the switch to pull
+  requests ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)).
+- The app on a VPS or server, which also lets GitHub's webhooks reach it.
+- Phase 6, after the MVP, as steps of a setup wizard: the AI providers through the Vercel AI SDK
+  (claudio through its OpenAI-compatible API), the GitHub Action mode, documentation, a blog template
+  and a one-command install. The company brand of the founding plan is dropped: the brand is the
+  owner's own, josegarridodev.
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]
+[[plans/shipcast.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]]

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T01:52:30.790442949Z
-updated_at: 2026-10-25T04:15:49.644303841Z
+created_at: 2026-10-25T06:55:59.910066905Z
+updated_at: 2026-10-25T09:55:48.545205562Z
 tags:
     - plan
     - architecture
@@ -198,16 +198,17 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 - [x] ~~X~~ and ~~LinkedIn~~: dropped for good by the owner on 2026-10-24
 - [x] Instagram, added to the MVP: a carousel, its story and a comment (2026-10-25)
 - [x] Brand separation: accounts per brand, a launch only uses its own brand's, `.env` speaks for
-      one brand only (2026-10-25); only the personal brand is set up
+      one brand only (2026-10-25). One brand, the owner's own (josegarridodev); the company brand
+      of the founding plan was dropped on 2026-10-25
 - [x] Spanish and English versions, each with its own URL
 - [x] Telegram notifications: drafts waiting, published, failed (2026-10-25)
 - [x] `auto`, `approval` and `manual` modes per channel
 
 ### Phase 3: assets
 
-- [x] Mandatory demo GIF, as a video in the Instagram carousel (made by VHS or Playwright: not yet)
+- [x] Mandatory demo GIF, as a video in the Instagram carousel; recorded from the deployed project with Playwright when the repo has none (2026-10-25)
 - [x] Generated OG image, Instagram slides and story; covers per project, drawn or generated (2026-10-25)
-- [ ] Automatic screenshots of deployed demos
+- [x] Automatic screenshots of deployed demos, desktop and mobile, with Playwright (2026-10-25)
 
 ### Phase 4: dashboard and metrics
 
@@ -219,6 +220,7 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
       Cloudflare Web Analytics drops the query string
 - [x] Approval and editing from the app, retrying a channel, launching a repo, writing an article
 - [x] Channels: every integration, its accounts and OAuth, connecting a new one, publishing from the app
+- [x] Automation: the app runs its own rounds, or takes GitHub webhooks signed with their secret (2026-10-25)
 
 ### Phase 5: communities and extra channels
 
@@ -228,6 +230,10 @@ blog and dev.to, and also on Bluesky, Mastodon, Instagram and the newsletter.
 - [x] Personal style guide for the AI: the brand's `tone` in `brand.yml`, refined after the first launch
 
 ### Phase 6: a product for other developers
+
+After the MVP, as steps of a setup wizard ([plans/mvp-close.md](mvp-close.md)): the AI providers
+through the Vercel AI SDK, with claudio reached through its OpenAI-compatible API by the SDK's
+adapter.
 
 - [ ] Swappable AI providers: claudio, the Anthropic API and the Claude Code Action
 - [ ] GitHub Action mode, with no local machine, alongside the local mode
@@ -257,4 +263,4 @@ phase 6, as the goal's final test.
 
 ## Related
 
-[[status.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]
+[[status.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[web-app.md]] · [[knowledge-base.md]] · [[launch-yml]] · [[content-pack]] · [[launch-registry]] · [[decisions/mvp-scope.md]] · [[publishing.md]] · [[engine.md]]

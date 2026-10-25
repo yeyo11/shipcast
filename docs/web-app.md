@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T08:08:27.044938411Z
-updated_at: 2026-10-25T08:11:30.628046413Z
+created_at: 2026-10-25T08:11:32.642536429Z
+updated_at: 2026-10-25T09:54:41.582497375Z
 tags:
     - web-app
     - dashboard
@@ -8,14 +8,16 @@ tags:
     - auth
     - tls
     - decision
+    - automation
+    - webhooks
 ---
 # The web app
 
 Built on 2026-10-25 for the [goal](plans/goal-finish.md): `apps/web`, the place to see the launches
-and their numbers, connect the channels, review and approve drafts, launch a repo and write an
-article. It replaced the CLI's plain dashboard; the CLI keeps every other command. The look is
-Cartel ([plans/design-system.md](plans/design-system.md)): the `design/` folder is the app's public
-folder, so tokens, fonts, logo and channel glyphs have one copy.
+and their numbers, connect the channels, review and approve drafts, launch a repo, write an article
+and choose how the work runs on its own. It replaced the CLI's plain dashboard; the CLI keeps every
+other command. The look is Cartel ([plans/design-system.md](plans/design-system.md)): the `design/`
+folder is the app's public folder, so tokens, fonts, logo and channel glyphs have one copy.
 
 ## Running it
 
@@ -26,7 +28,8 @@ folder, so tokens, fonts, logo and channel glyphs have one copy.
 | `pnpm --filter @shipcast/web exec node scripts/certificate-by-hand.ts` | Gets the certificate without a Cloudflare token: it writes the challenge's TXT record to `data/tls/challenge.json` for someone to create, and waits for DNS to answer it |
 
 What `.env` needs is in `.env.example` under "The web app": the public URL, the GitHub OAuth App's
-id and secret, the allowed logins, and the Cloudflare token for the certificate.
+id and secret, the allowed logins, and the Cloudflare token for the certificate. The app is meant to
+move to a VPS or server; until then it runs on the owner's machine.
 
 ## How it reaches the owner, and only the owner
 
@@ -42,7 +45,9 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
   `data/tls/`, its key and the ACME account key in the keychain; it is renewed when less than 30 days
   remain, checked daily and swapped in without a restart. Without a token a valid certificate on disk
   is still served, and the app says how many days it has left. Since 2026-10-25 the token is set and
-  the certificate renews itself.
+  the certificate renews itself. `acme-client` pulls `node-forge`, whose advisory GHSA-86w9-cpqp-85rv
+  is in a path Shipcast never takes (it signs with Node's own crypto): `pnpm audit` ignores it, with
+  the reason, in `pnpm-workspace.yaml`.
 - **Port 443 through Tailscale Serve.** The app listens on `127.0.0.1:8744` (8443 was taken on the
   owner's machine) and `pnpm app` runs `tailscale serve --bg --tcp 443 tcp://127.0.0.1:8744`: a plain
   TCP forward, so TLS still ends in the app. A TCP forward cannot share the tailnet's port 443 with a
@@ -56,7 +61,8 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
   `/login` and answers everything else with 401; Start's CSRF middleware refuses any change whose
   `Sec-Fetch-Site`, `Origin` or `Referer` is not the app's own. Server functions check the shape of
-  their input (`src/server/input.ts`) before using it.
+  their input (`src/server/input.ts`) before using it. Two paths are public on purpose: `/api/health`
+  (it answers `ok` and nothing else) and the GitHub webhook, which carries its own proof.
 
 ## Sections
 
@@ -73,7 +79,41 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
 - **Write** (`/write`): an article in the owner's words, in Spanish or English; the channels it
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
   directly. See [articles](engine.md#articles-written-in-the-app).
-- **Channels** (`/channels`): see [accounts.md](accounts.md).
+- **Channels** (`/channels`): see [accounts.md](accounts.md). A newly connected account lands on the
+  list, scrolled to and focused.
+- **Automation** (`/automation`): below.
+
+Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Waiting for you on
+yellow), and every error is explained for a person, with the original text folded under Details
+(`src/components/errors.ts`). Scrolling is smoothed by Lenis, off for anyone who asks the system for
+reduced motion.
+
+## Automation
+
+Added on 2026-10-25 ([plans/mvp-close.md](plans/mvp-close.md)). From its start the app runs the
+shared round ([publishing.md](publishing.md#the-rounds-and-the-shipcast-command)) on its own timer, so
+nothing depends on a terminal running `watch`; `server.ts` warms the app's context through
+`/api/health` as soon as it listens, and the first round runs 15 seconds later.
+
+- **The mode**, chosen in the page and kept in the registry: **Rounds** (polling the account's events
+  every interval, at least 60 seconds), **GitHub webhooks** (GitHub's deliveries claim releases and
+  merges as they happen; the timer still publishes what is ready, refreshes tokens and reads the
+  metrics), or **Off** (only the owner's actions). Rounds is the default.
+- **The webhook** (`POST /api/github/webhook`): trusted only with a valid `X-Hub-Signature-256`
+  (HMAC-SHA256 of the exact body with the shared secret, compared in constant time), acted on only
+  while webhooks are the chosen mode, answered at once (GitHub gives up after ten seconds) while
+  drafting and publishing run in the background. A `ping` answers; a published release is claimed by
+  the same rules as polling (`claimEvent`, so a release is never launched twice whichever way it
+  arrives); a repo made public likewise; a merged pull request in the launches repo publishes its
+  launch. Everything else is answered and ignored with its reason.
+- **The secret** is generated in the page (32 random bytes), kept in the keychain, shown once and
+  rotatable; the page gives the payload URL, the content type and what to tick on GitHub: per repo
+  (the owner's are user accounts), *Releases* (and *Repositories* for a repo going public), and
+  *Pull requests* on the launches repo.
+- **What happened**: the last round and the last delivery, with their lines; and **Run a round now**.
+- GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
+  deliveries (a ping, an ignored event, a bad signature, a merge with no launch) answered as expected
+  on 2026-10-25.
 
 ## How it is built
 
@@ -82,23 +122,21 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
   `*.server.ts`.
 - **The engine is not bundled.** The workspace packages are external to the server build and run
   through Node's own TypeScript support, as they do for the CLI, so the native and wasm renderers of
-  `@shipcast/assets` never go through Vite. Client dependency discovery is turned off for the same
-  reason (it would crawl from the routes into the engine's source). A consequence in development: a
-  change to an engine package needs a restart of `pnpm app:dev`.
+  `@shipcast/assets` and Playwright never go through Vite. Client dependency discovery is turned off
+  for the same reason. A consequence in development: a change to an engine package needs a restart
+  of `pnpm app:dev`.
 - **Production runs Node's own server** (`apps/web/server.ts`): the built Start handler is a `fetch`
   function; the server converts requests, serves `dist/client` with long caching for hashed assets,
   and terminates TLS. No Nitro.
 - **One context per process** (`src/server/context.server.ts`): the configuration, the registry,
-  the GitHub client, the keychain and the brand (read from the launches repo every five minutes). The
-  repo's root is found by its `pnpm-workspace.yaml` from where the app runs, not from the module's
-  path, which differs between development and the bundle.
+  the GitHub client, the keychain and the brand (read from the launches repo every five minutes); it
+  starts the automation timer. The repo's root is found by its `pnpm-workspace.yaml` from where the
+  app runs, not from the module's path, which differs between development and the bundle.
 - **Background jobs** (`src/server/jobs.server.ts`) run in the app's process and are kept in memory:
   drafting (minutes of AI work) and publishing (waiting for the deploy, up to 20 minutes, then the
-  next publish round picks it up). The registry holds what matters, so a restart loses only the
-  progress lines.
-- **Notices.** With Telegram connected, the owner's own chat with the bot hears when drafts wait,
-  when a launch is published and when it fails; `watch` does the same.
+  next round picks it up). The registry holds what matters, so a restart loses only the progress
+  lines.
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[plans/goal-finish.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[status.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[status.md]]
