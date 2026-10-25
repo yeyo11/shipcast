@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, LaunchConfig } from '@shipcast/schema';
-import { ANALYSIS_TOOLS, buildPrompt, generatePack, type AiProvider, type GenerateRequest, type Launch } from '../src/index.ts';
+import { ANALYSIS_TOOLS, buildPrompt, generatePack, type AiProvider, type ObjectRequest, type Launch } from '../src/index.ts';
 
 const brand = Brand.parse({
   id: 'personal',
@@ -42,12 +42,14 @@ const goodPack = {
 };
 
 class FakeAi implements AiProvider {
-  requests: GenerateRequest[] = [];
+  requests: ObjectRequest[] = [];
   answer: unknown;
   constructor(answer: unknown) {
     this.answer = answer;
   }
-  async generate(request: GenerateRequest) {
+  readonly id = 'test' as const;
+  async *streamText() {}
+  async generateObject(request: ObjectRequest) {
     this.requests.push(request);
     if (this.answer instanceof Error) throw this.answer;
     return { output: this.answer, chatId: 'chat-1', costUsd: 0.5 };

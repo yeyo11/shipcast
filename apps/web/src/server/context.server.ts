@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { checkout, Claudio, GitHubRest, loadBrand, Registry, type PipelineDeps } from '@shipcast/engine';
-import { KeychainStore, loadAppConfig, loadConfig, startWorking, WorkQueue, type AppConfig, type Config, type SecretStore, type WorkDeps } from '@shipcast/runtime';
+import { aiSetup, KeychainStore, loadAppConfig, loadConfig, startWorking, WorkQueue, type AppConfig, type Config, type SecretStore, type WorkDeps } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
 
 /**
@@ -53,9 +53,18 @@ async function createContext(): Promise<AppContext> {
   const app = loadAppConfig(process.env);
   const registry = await Registry.connect(config.databaseUrl);
   const github = new GitHubRest({ token: config.githubToken });
+  const secrets = new KeychainStore();
   const deps: PipelineDeps = {
     github,
     ai: new Claudio({ url: config.claudioUrl, token: config.claudioToken }),
+    aiSetup: aiSetup({
+      env: process.env,
+      registry,
+      secrets,
+      claudio: { url: config.claudioUrl, token: config.claudioToken },
+      // Read when an AI call is made, by then `brand` below exists
+      brand: () => brand(),
+    }),
     registry,
     launchesRepo: config.launchesRepo,
     checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir }, repo, ref),
@@ -66,7 +75,6 @@ async function createContext(): Promise<AppContext> {
     if (!cached || Date.now() - cached.at > 5 * 60_000) cached = { brand: await loadBrand(github, config.launchesRepo), at: Date.now() };
     return cached.brand;
   };
-  const secrets = new KeychainStore();
   const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app' });
   const work: WorkDeps = { env: process.env, registry, github, secrets, pipeline: deps, brand };
   const ctx: AppContext = {

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:23:25.950065749Z
-updated_at: 2026-10-25T15:46:55.225431769Z
+created_at: 2026-10-25T15:47:19.702052489Z
+updated_at: 2026-10-25T15:52:28.845545328Z
 tags:
     - engine
     - registry
@@ -12,6 +12,7 @@ tags:
     - postgres
     - post-model
     - job-queue
+    - ai
     - snapshots
 ---
 # The engine
@@ -63,7 +64,7 @@ makes "a launch happens once" hold:
   newsletter reading.
 - **Settings** (`settings`: `key`, a `jsonb` value, `updated_at`) hold what the owner chose, read
   typed with `setting<T>(key)` and written with `setSetting(key, value)`: the automation mode and
-  interval today, the onboarding, AI settings and prompts next.
+  interval, the AI settings (`ai`) and the prompts' versions (`prompts`) today, the onboarding next.
 - **Cursors** keep positions and state only: polling, a channel's permanent failure
   (`publish-failed:<launch>:<channel>`), each article's index status, the last round and delivery.
   `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
@@ -113,13 +114,31 @@ tag, or the latest), a **valid `launch.yml`** with `enabled: true`, a **license*
 the app's Launch a repo page run it first and stop when a required check fails; `shipcast preflight`
 runs it alone.
 
-## The AI provider: claudio
+## The AI providers
 
-`Claudio` (`claudio.ts`) implements `AiProvider.generate()` against claudio's REST API
-([claudio.md](claudio.md)): `POST /api/chats` with the prompt, the `cwd` (a path under claudio's
-`/workspace`), `jsonSchema`, `allowedTools` and `permissionMode: 'dontAsk'`; poll until the main agent
-calls **`StructuredOutput`**, whose `input` is the answer; then **stop the chat**. Failures, a turn
-without `StructuredOutput` and the timeout raise `ClaudioError` with the chat id.
+`AiProvider` (`ai.ts`, 2026-10-25) is the one interface every AI call goes through:
+`generateObject(request)` for a schema-bound answer (the content pack, an article's distribution) and
+`streamText(request)` for the coming writing assistant. Three providers implement it
+([decisions/ai-providers.md](decisions/ai-providers.md)):
+
+- **`Claudio`** (`claudio.ts`, [claudio.md](claudio.md)): `generateObject` on claudio's REST API,
+  `POST /api/chats` with the prompt, the `cwd` (a path under claudio's `/workspace`), `jsonSchema`,
+  `allowedTools` and `permissionMode: 'dontAsk'`; poll until the main agent calls
+  **`StructuredOutput`**, whose `input` is the answer; then **stop the chat**. Failures, a turn without
+  `StructuredOutput` and the timeout raise `ClaudioError` with the chat id. `streamText` goes through
+  claudio's OpenAI-compatible `/api/v1` with `@ai-sdk/openai-compatible`.
+- **`SdkProvider`** on the Vercel AI SDK: `anthropicProvider` (`@ai-sdk/anthropic`, default
+  `claude-opus-5-5`) and `openAiCompatibleProvider` (any chat-completions server). `generateObject` is
+  `generateText` with `Output.object` over the pack's JSON Schema; with a checkout on this machine
+  the model gets read-only `repoTools` (`list_files`, `read_file`, `search`, `git_log`), confined to
+  the checkout.
+
+Which provider and model each task uses (`pack`, `article`, `assistant`), the tone override and the
+edited prompts are the **AI settings** (`ai-settings.ts`): `readAiSettings`/`writeAiSettings`,
+`savePrompt`/`restorePrompt`/`promptHistory`/`currentPrompts`, `previewPrompt` (a past launch's final
+prompt, no AI call) and `lockedPrompts`. The pipeline asks `PipelineDeps.aiSetup(task)` before each AI
+call (built by `aiSetup` in `@shipcast/runtime` from the settings and the keychain); without it,
+`PipelineDeps.ai` and the prompts in code are used.
 
 ## From a claimed launch to its drafts
 
@@ -128,10 +147,12 @@ without `StructuredOutput` and the timeout raise `ClaudioError` with the chat id
 1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's.
 2. **A fresh shallow clone** of the release (`workspace.ts`): `workspace/<owner>__<repo>@<ref>`, which
    claudio sees as `/workspace/...`; recreated every time so no run leaks into the next.
-3. **The content pack** (`generate.ts`, `prompt.ts`): a system prompt with the brand's name and tone
-   and the truth rule (only what the code implements is presented as working; no invented commands
-   or numbers; a different text per channel), and a prompt with the pack's brief and one brief per
-   active channel (`channelBrief`), with its limits and links. Tools are read-only. The answer is
+3. **The content pack** (`generate.ts`, `prompt.ts`), with the `pack` task's provider and model: a
+   system prompt with the brand's name and tone (the settings' override, else `brand.yml`'s) closed by
+   the **locked** truth rules (only what the code implements is presented as working; no invented
+   commands or numbers; a different text per channel), and a prompt with the pack's brief and one
+   brief per active channel (`channelBrief`), with its limits and links. Briefs are templates the
+   owner may edit (`DEFAULT_PROMPTS`, `{{site}}`, `{{limit.…}}`). Tools are read-only. The answer is
    accepted only when it validates, matches the launch and `missingPieces` is empty.
 4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, a readable
    draft per channel at `launches/<project>/<ref>/<channel>.md` saying its mode, and `pack.json`; the
@@ -157,10 +178,12 @@ queue, never retried on its own since it costs an AI run.
 - **Its channels** are the owner's choice in the app (`articleConfig`: the blog and the chosen ones on,
   drafts-only communities manual, the rest off), written as `articles/<slug>/launch.yml` beside its
   drafts, which is where publishing reads them.
-- **The AI translates and distributes, never rewrites** (`draftArticle`): it gets the article and the
-  channels' briefs, no tools, and returns a pack; the owner's title and text then replace the AI's
-  copy of them, so only the other languages and the channels' pieces are the AI's. The truth rule
-  becomes "only what the article says".
+- **The AI translates and distributes, never rewrites** (`generateArticlePack`, with the `article`
+  task's provider): it gets the article (`buildArticlePrompt`) and the channels' briefs, no tools, and
+  returns a pack; the owner's title and text then replace the AI's copy of them, so only the other
+  languages and the channels' pieces are the AI's. The locked truth rule becomes "only what the
+  article says". `generateArticlePack` touches neither GitHub nor the registry; `draftArticle` adds
+  the media and the delivery.
 - An article draws no project cover, counts no GitHub stars, and takes its colour from its slug.
 
 ## Reviewing and approving
@@ -187,9 +210,11 @@ open), and `approveLaunch` merges it with a squash, after which publishing follo
 The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. Configuration comes from
 `.env` (`GITHUB_TOKEN_PERSONAL`, `SHIPCAST_CLAUDIO_URL`, `SHIPCAST_CLAUDIO_TOKEN`,
 `SHIPCAST_LAUNCHES_REPO`, `SHIPCAST_DATABASE_URL`, optional `SHIPCAST_DATA_DIR` and
-`SHIPCAST_MAX_BUDGET_USD`); every missing variable is reported at once. The networks' credentials come
-from connected accounts, with `.env` as a fallback ([accounts.md](accounts.md)). Every command
-connects to Postgres first, so it must be running (`docker compose up -d postgres`).
+`SHIPCAST_MAX_BUDGET_USD`); every missing variable is reported at once. The networks' credentials, and
+the Anthropic and OpenAI-compatible providers', come from connected accounts, with `.env` as a
+fallback for the networks ([accounts.md](accounts.md)). The command uses the AI settings like the app,
+and prints no AI cost. Every command connects to Postgres first, so it must be running
+(`docker compose up -d postgres`).
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
 its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
@@ -201,4 +226,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]]

@@ -1,5 +1,5 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
-import type { AiProvider } from './claudio.ts';
+import type { AiProvider, AiSetup, AiTask } from './ai.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, launchDir, projectSlug, pullRequestBody, renderDrafts, type DraftFile } from './drafts.ts';
 import { generatePack } from './generate.ts';
@@ -11,7 +11,10 @@ import type { Checkout } from './workspace.ts';
 
 export interface PipelineDeps {
   github: GitHubSource & GitHubWriter;
+  /** The provider every task falls back on when there are no AI settings to read */
   ai: AiProvider;
+  /** What a task runs with, read from the AI settings each time, so an edit applies to the next draft */
+  aiSetup?: (task: AiTask) => Promise<AiSetup>;
   registry: Registry;
   /** The repo whose blog and drafts this engine writes to, e.g. `yeyo11/launches` */
   launchesRepo: string;
@@ -25,6 +28,11 @@ export interface PipelineDeps {
   capture?: SiteCapture;
   /** A folder the AI provider can work in when there is no repo to clone (an article); its workspace root */
   aiWorkdir?: string;
+}
+
+/** A task's provider, model and prompts: the settings', or the default provider with the prompts in code */
+export async function setupFor(deps: Pick<PipelineDeps, 'ai' | 'aiSetup'>, task: AiTask): Promise<AiSetup> {
+  return deps.aiSetup ? deps.aiSetup(task) : { provider: deps.ai, prompts: {} };
 }
 
 export interface DraftOptions {
@@ -86,7 +94,7 @@ export async function loadProjects(github: GitHubSource, launchesRepo: string): 
 }
 
 export type DraftResult =
-  | { ok: true; launch: Launch; pullRequest: string; costUsd: number | null }
+  | { ok: true; launch: Launch; pullRequest: string }
   | { ok: false; launch: Launch; problems: string[] };
 
 /**
@@ -119,7 +127,23 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     return fail([`could not clone ${launch.repo} at ${ref}: ${error instanceof Error ? error.message : String(error)}`]);
   }
 
-  const generated = await generatePack({ ai: deps.ai, launch, config, brand, checkout, maxBudgetUsd: deps.maxBudgetUsd });
+  let setup: AiSetup;
+  try {
+    setup = await setupFor(deps, 'pack');
+  } catch (error) {
+    return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
+  }
+  const generated = await generatePack({
+    ai: setup.provider,
+    model: setup.model,
+    prompts: setup.prompts,
+    tone: setup.tone,
+    launch,
+    config,
+    brand,
+    checkout,
+    maxBudgetUsd: deps.maxBudgetUsd,
+  });
   if (!generated.ok) {
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }
@@ -151,7 +175,7 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     options,
   );
   if (!delivered.ok) return fail([delivered.problem]);
-  return { ok: true, launch: delivered.launch, pullRequest: delivered.where, costUsd: generated.costUsd };
+  return { ok: true, launch: delivered.launch, pullRequest: delivered.where };
 }
 
 /**

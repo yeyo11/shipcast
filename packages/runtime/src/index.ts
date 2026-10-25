@@ -9,4 +9,5 @@ export * from './automation.ts';
 export * from './api-tokens.ts';
 export * from './queue.ts';
 export * from './work.ts';
+export * from './ai.ts';
 export * from './snapshots.ts';

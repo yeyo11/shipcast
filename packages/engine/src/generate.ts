@@ -1,15 +1,17 @@
 import { ContentPack, contentPackJsonSchema, missingPieces, type Brand, type LaunchConfig } from '@shipcast/schema';
-import type { AiProvider } from './claudio.ts';
-import { ANALYSIS_TOOLS, buildPrompt } from './prompt.ts';
+import type { AiProvider } from './ai.ts';
+import { ANALYSIS_TOOLS, buildPrompt, type PromptOptions } from './prompt.ts';
 import type { Launch } from './registry.ts';
 import type { Checkout } from './workspace.ts';
 
 export type Generated =
-  | { ok: true; pack: ContentPack; chatId: string; costUsd: number | null }
+  | { ok: true; pack: ContentPack; chatId: string | undefined }
   | { ok: false; problems: string[]; chatId: string | undefined };
 
-export interface GenerateOptions {
+export interface GenerateOptions extends PromptOptions {
   ai: AiProvider;
+  /** The model the settings chose for this task; the provider's default without one */
+  model?: string;
   launch: Launch;
   config: LaunchConfig;
   brand: Brand;
@@ -25,16 +27,18 @@ export interface GenerateOptions {
  */
 export async function generatePack(options: GenerateOptions): Promise<Generated> {
   const { ai, launch, config, brand, checkout } = options;
-  const { prompt, system } = buildPrompt(launch, config, brand);
+  const { prompt, system } = buildPrompt(launch, config, brand, { prompts: options.prompts, tone: options.tone });
 
   let result;
   try {
-    result = await ai.generate({
+    result = await ai.generateObject({
       prompt,
       appendSystemPrompt: system,
       cwd: checkout.providerPath,
+      hostDir: checkout.hostPath,
       jsonSchema: contentPackJsonSchema(),
       allowedTools: ANALYSIS_TOOLS,
+      model: options.model,
       maxBudgetUsd: options.maxBudgetUsd,
     });
   } catch (error) {
@@ -59,7 +63,5 @@ export async function generatePack(options: GenerateOptions): Promise<Generated>
   }
   problems.push(...missingPieces(pack, config, brand));
 
-  return problems.length > 0
-    ? { ok: false, problems, chatId: result.chatId }
-    : { ok: true, pack, chatId: result.chatId, costUsd: result.costUsd };
+  return problems.length > 0 ? { ok: false, problems, chatId: result.chatId } : { ok: true, pack, chatId: result.chatId };
 }

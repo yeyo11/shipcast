@@ -1,30 +1,5 @@
-/** One request for structured work: a prompt run in a directory, answering with JSON of a schema. */
-export interface GenerateRequest {
-  prompt: string;
-  /** Where the agent runs, as the provider sees it (claudio: a path under its `/workspace`) */
-  cwd: string;
-  /** The JSON Schema the answer must follow */
-  jsonSchema: Record<string, unknown>;
-  /** Tools the agent may use; anything else is denied, never asked about */
-  allowedTools: string[];
-  appendSystemPrompt?: string;
-  model?: string;
-  maxBudgetUsd?: number;
-  maxTurns?: number;
-}
-
-export interface GenerateResult {
-  /** The answer, as the model produced it: the caller validates it against its own schema */
-  output: unknown;
-  /** Where to read the whole conversation */
-  chatId: string;
-  costUsd: number | null;
-}
-
-/** An AI provider for Shipcast. claudio is the first; the Anthropic API and others come in phase 6. */
-export interface AiProvider {
-  generate(request: GenerateRequest): Promise<GenerateResult>;
-}
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { SdkProvider, type AiProvider, type ObjectRequest, type ObjectResult, type TextRequest } from './ai.ts';
 
 export class ClaudioError extends Error {
   readonly chatId: string | undefined;
@@ -64,17 +39,22 @@ export interface ClaudioOptions {
 }
 
 /**
- * claudio as Shipcast's AI provider: one chat per generation, started with `jsonSchema`, read until
- * the model answers through Claude Code's `StructuredOutput` tool, then stopped. claudio keeps a
- * finished chat's process alive for a follow-up, so stopping it is what frees the slot.
+ * claudio as Shipcast's AI provider. Structured work goes through claudio's own REST API: one chat
+ * per generation, started in the checked-out repo with `jsonSchema` and read-only tools, read until
+ * the model answers through Claude Code's `StructuredOutput` tool, then stopped (claudio keeps a
+ * finished chat's process alive for a follow-up, so stopping it is what frees the slot). That path
+ * is what lets Claude Code explore the repo itself. Streamed text, for the writing assistant, goes
+ * through claudio's OpenAI-compatible surface at `/api/v1` (docs/decisions/ai-providers.md).
  */
 export class Claudio implements AiProvider {
+  readonly id = 'claudio' as const;
   readonly #url: string;
   readonly #token: string;
   readonly #fetch: typeof fetch;
   readonly #pollMs: number;
   readonly #timeoutMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
+  readonly #text: SdkProvider;
 
   constructor(options: ClaudioOptions) {
     this.#url = options.url.replace(/\/+$/, '');
@@ -83,6 +63,13 @@ export class Claudio implements AiProvider {
     this.#pollMs = options.pollMs ?? 3000;
     this.#timeoutMs = options.timeoutMs ?? 30 * 60_000;
     this.#sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    const openai = createOpenAICompatible({ name: 'claudio', baseURL: `${this.#url}/api/v1`, apiKey: this.#token, fetch: this.#fetch });
+    // Without a model in the settings, claudio's own default: its model catalog names it `default`
+    this.#text = new SdkProvider({ id: 'claudio', model: (id) => openai(id ?? 'default') });
+  }
+
+  streamText(request: TextRequest): AsyncIterable<string> {
+    return this.#text.streamText(request);
   }
 
   async #call(method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> {
@@ -101,7 +88,7 @@ export class Claudio implements AiProvider {
     return response.json();
   }
 
-  async generate(request: GenerateRequest): Promise<GenerateResult> {
+  async generateObject(request: ObjectRequest): Promise<ObjectResult> {
     const started = (await this.#call('POST', '/chats', {
       prompt: request.prompt,
       cwd: request.cwd,

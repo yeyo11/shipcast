@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Claudio, ClaudioError, type GenerateRequest } from '../src/index.ts';
+import { Claudio, ClaudioError, type ObjectRequest } from '../src/index.ts';
 
 interface Call {
   method: string;
@@ -37,7 +37,7 @@ function view(state: string, opts: { output?: unknown; outcome?: string | null; 
   };
 }
 
-const request: GenerateRequest = {
+const request: ObjectRequest = {
   prompt: 'Analyse the repo',
   cwd: '/workspace/claudio',
   jsonSchema: { type: 'object' },
@@ -51,7 +51,7 @@ function client(views: unknown[], calls: Call[]) {
 
 test('a generation starts a chat with the schema and read-only tools, waits for the answer and stops the chat', async () => {
   const calls: Call[] = [];
-  const result = await client([view('working'), view('working'), view('idle', { output: { ok: true } })], calls).generate(request);
+  const result = await client([view('working'), view('working'), view('idle', { output: { ok: true } })], calls).generateObject(request);
 
   assert.deepEqual(result, { output: { ok: true }, chatId: 'chat-1', costUsd: 0.08 });
   const start = calls[0]!;
@@ -70,7 +70,7 @@ test('a generation starts a chat with the schema and read-only tools, waits for 
 test('a failed execution raises with the chat id, and the chat is still stopped', async () => {
   const calls: Call[] = [];
   await assert.rejects(
-    client([view('idle', { outcome: 'failed', error: 'rate limit' })], calls).generate(request),
+    client([view('idle', { outcome: 'failed', error: 'rate limit' })], calls).generateObject(request),
     (e) => e instanceof ClaudioError && e.chatId === 'chat-1' && /rate limit/.test(e.message),
   );
   assert.equal(calls.at(-1)?.path, '/api/chats/chat-1/stop');
@@ -79,7 +79,7 @@ test('a failed execution raises with the chat id, and the chat is still stopped'
 test('a chat that ends without calling StructuredOutput is an error, not an empty answer', async () => {
   const calls: Call[] = [];
   await assert.rejects(
-    client([view('idle', { outcome: 'completed', alive: false })], calls).generate(request),
+    client([view('idle', { outcome: 'completed', alive: false })], calls).generateObject(request),
     /without a structured answer/,
   );
 });
@@ -88,7 +88,7 @@ test('a live chat whose turn ended with words but no StructuredOutput is caught 
   const calls: Call[] = [];
   const talked = view('idle');
   talked.entries.push({ role: 'assistant', isSidechain: false, blocks: [{ type: 'text' }] });
-  await assert.rejects(client([talked], calls).generate(request), /without a structured answer/);
+  await assert.rejects(client([talked], calls).generateObject(request), /without a structured answer/);
 });
 
 test('a chat that never answers is stopped at the timeout', async () => {
@@ -101,7 +101,7 @@ test('a chat that never answers is stopped at the timeout', async () => {
     timeoutMs: -1,
     sleep: async () => {},
   });
-  await assert.rejects(slow.generate(request), /took longer than/);
+  await assert.rejects(slow.generateObject(request), /took longer than/);
   assert.equal(calls.at(-1)?.path, '/api/chats/chat-1/stop');
 });
 
@@ -109,6 +109,6 @@ test('an answer from a subagent is not taken for the main agent’s', async () =
   const calls: Call[] = [];
   const sidechain = view('working');
   sidechain.entries.push({ role: 'assistant', isSidechain: true, blocks: [{ type: 'tool_use', name: 'StructuredOutput', input: { wrong: 1 } }] });
-  const result = await client([sidechain, view('idle', { output: { right: 1 } })], calls).generate(request);
+  const result = await client([sidechain, view('idle', { output: { right: 1 } })], calls).generateObject(request);
   assert.deepEqual(result.output, { right: 1 });
 });

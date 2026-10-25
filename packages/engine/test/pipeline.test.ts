@@ -8,7 +8,7 @@ import {
   Registry,
   type AiProvider,
   type EventsPage,
-  type GenerateRequest,
+  type ObjectRequest,
   type GitHubSource,
   type GitHubWriter,
   type PullRequestDraft,
@@ -58,11 +58,13 @@ const pack = {
 
 class FakeAi implements AiProvider {
   output: unknown;
-  requests: GenerateRequest[] = [];
+  requests: ObjectRequest[] = [];
   constructor(output: unknown) {
     this.output = output;
   }
-  async generate(request: GenerateRequest) {
+  readonly id = 'test' as const;
+  async *streamText() {}
+  async generateObject(request: ObjectRequest) {
     this.requests.push(request);
     return { output: this.output, chatId: 'chat-1', costUsd: 0.4 };
   }

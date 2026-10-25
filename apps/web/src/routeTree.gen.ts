@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
@@ -45,6 +46,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAiRoute = AppAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAutomationRoute = AppAutomationRouteImport.update({
@@ -151,6 +157,7 @@ const AuthMastodonCallbackRoute = AuthMastodonCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
   '/tokens': typeof AppTokensRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/launch': typeof AppLaunchRoute
   '/tokens': typeof AppTokensRoute
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/launch': typeof AppLaunchRoute
   '/_app/tokens': typeof AppTokensRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/ai'
     | '/automation'
     | '/launch'
     | '/tokens'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/ai'
     | '/automation'
     | '/launch'
     | '/tokens'
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/ai'
     | '/_app/automation'
     | '/_app/launch'
     | '/_app/tokens'
@@ -333,6 +345,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ai': {
+      id: '/_app/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AppAiRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/automation': {
@@ -479,6 +498,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppAiRoute: typeof AppAiRoute
   AppAutomationRoute: typeof AppAutomationRoute
   AppLaunchRoute: typeof AppLaunchRoute
   AppTokensRoute: typeof AppTokensRoute
@@ -491,6 +511,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAiRoute: AppAiRoute,
   AppAutomationRoute: AppAutomationRoute,
   AppLaunchRoute: AppLaunchRoute,
   AppTokensRoute: AppTokensRoute,
