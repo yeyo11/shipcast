@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
+import { SmoothScroll } from '../components/SmoothScroll';
 import { ToastProvider } from '../components/Toasts';
 import { whoAmI } from '../server/session.functions';
 
@@ -18,6 +19,7 @@ function Shell() {
   const { login } = Route.useLoaderData();
   return (
     <ToastProvider>
+      <SmoothScroll />
       <header className="top wrap">
         <Link to="/" className="lockup" aria-label="Shipcast, the launches">
           <img src="/logo/mark.svg" alt="" />

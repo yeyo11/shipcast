@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useLenis } from 'lenis/react';
+import { useEffect, useRef, useState } from 'react';
 import { useToast } from '../../../components/Toasts';
 import { Pill, Problem, when } from '../../../components/ui';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount } from '../../../server/channels.functions';
@@ -158,6 +159,10 @@ function Channels() {
   const toast = useToast();
   const navigate = useNavigate();
   const search = Route.useSearch();
+  // Read through a ref: Lenis starting up must not run the arrival effect, and its toast, twice
+  const smooth = useLenis();
+  const lenis = useRef(smooth);
+  lenis.current = smooth;
   const [busy, setBusy] = useState(false);
   // Just connected: say so, then bring the new account into view and give it the focus
   useEffect(() => {
@@ -168,7 +173,9 @@ function Channels() {
     void navigate({ to: '/channels', search: {}, replace: true, resetScroll: false }).then(() => {
       const row = focus ? document.getElementById(`account-${focus}`) : null;
       if (!row) return;
-      row.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      // With smooth scrolling on, Lenis owns the scroll position; without it, the browser's own scroll
+      if (lenis.current) lenis.current.scrollTo(row, { offset: -(window.innerHeight - row.offsetHeight) / 2 });
+      else row.scrollIntoView({ block: 'center' });
       row.focus({ preventScroll: true });
     });
   }, [search.connected, search.focus, navigate, toast]);
