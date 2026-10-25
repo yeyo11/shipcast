@@ -213,6 +213,48 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     })) as { number: number; html_url: string };
     return { number: pr.number, url: pr.html_url, created: true };
   }
+
+  /** A release by tag; the draft flag lets the caller tell an unpublished one apart. */
+  async releaseByTag(repo: string, tag: string): Promise<{ tag: string; url: string; draft: boolean } | undefined> {
+    const { status, data } = await this.#json('GET', `/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`);
+    if (status === 404) return undefined;
+    if (status >= 300) throw new GitHubError(`GitHub release ${tag} of ${repo}: ${status}`, status);
+    const release = data as { tag_name: string; html_url: string; draft: boolean };
+    return { tag: release.tag_name, url: release.html_url, draft: release.draft };
+  }
+
+  /** undefined when the repo has no license; `spdx` is undefined when GitHub does not recognise it. */
+  async license(repo: string): Promise<{ spdx: string | undefined } | undefined> {
+    const { status, data } = await this.#json('GET', `/repos/${repo}/license`);
+    if (status === 404) return undefined;
+    if (status >= 300) throw new GitHubError(`GitHub license of ${repo}: ${status}`, status);
+    // GitHub reports NOASSERTION for a license file it cannot match to a known one
+    const spdx = (data as { license?: { spdx_id?: string | null } | null }).license?.spdx_id;
+    return { spdx: spdx && spdx !== 'NOASSERTION' ? spdx : undefined };
+  }
+
+  async hasReadme(repo: string, ref: string): Promise<boolean> {
+    const query = ref === 'HEAD' ? '' : `?ref=${encodeURIComponent(ref)}`;
+    const { status } = await this.#json('GET', `/repos/${repo}/readme${query}`);
+    if (status === 404) return false;
+    if (status >= 300) throw new GitHubError(`GitHub readme of ${repo}@${ref}: ${status}`, status);
+    return true;
+  }
+
+  /** Whether a path exists at a ref, without downloading it (a demo GIF can be large). */
+  async pathExists(repo: string, path: string, ref: string): Promise<boolean> {
+    const query = ref === 'HEAD' ? '' : `?ref=${encodeURIComponent(ref)}`;
+    const { status } = await this.#json('GET', `/repos/${repo}/contents/${path}${query}`);
+    if (status === 404) return false;
+    if (status >= 300) throw new GitHubError(`GitHub ${repo}/${path}@${ref}: ${status}`, status);
+    return true;
+  }
+
+  /** The status a URL answers to HEAD; no token is sent, since the URL is not GitHub's API. */
+  async head(url: string): Promise<number> {
+    const response = await this.#fetch(url, { method: 'HEAD', headers: { 'user-agent': 'shipcast' }, redirect: 'follow' });
+    return response.status;
+  }
 }
 
 function toEvent(raw: RawEvent): GitHubEvent[] {

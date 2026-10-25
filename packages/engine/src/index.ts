@@ -11,3 +11,4 @@ export * from './pipeline.ts';
 export * from './publish.ts';
 export * from './metrics.ts';
 export * from './newsletter.ts';
+export * from './preflight.ts';
