@@ -19,3 +19,5 @@ workspace/
 docs/internal/
 # The launch registry and other local state of the engine (SHIPCAST_DATA_DIR)
 data/
+# TanStack Start's scratch folder
+.tanstack/
