@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T01:37:26.046030761Z
-updated_at: 2026-10-25T04:21:51.530588819Z
+created_at: 2026-10-25T08:08:27.044938411Z
+updated_at: 2026-10-25T08:11:30.628046413Z
 tags:
     - web-app
     - dashboard
@@ -30,25 +30,23 @@ id and secret, the allowed logins, and the Cloudflare token for the certificate.
 
 ## How it reaches the owner, and only the owner
 
-- **The domain is private.** An A record of a subdomain of the owner's domain points at this
-  machine's tailnet address, so only the owner's devices on the tailnet can reach it. The record is
-  public DNS, but the address behind it answers no one outside the tailnet.
+- **One private address: `https://shipcast.josegarrido.dev`.** Its A record points at this machine's
+  tailnet address, so only the owner's devices on the tailnet can reach it. The record is public DNS,
+  but the address behind it answers no one outside the tailnet. A local-network address was tried
+  on 2026-10-25 and removed: the app has one address.
 - **HTTPS with a real certificate.** Tailscale Serve only issues `*.ts.net` certificates, so the app
   gets its own from Let's Encrypt through the DNS challenge (`apps/web/tls.ts`, with `acme-client`): a
-  TXT record proves control, since no authority can reach a tailnet address. The record is placed by a
-  `DnsSolver`: Cloudflare's API with `SHIPCAST_TLS_CLOUDFLARE_TOKEN`, or by hand with
-  `scripts/certificate-by-hand.ts`. The certificate lives in `data/tls/`, its key and the ACME account
-  key in the keychain. With the token it is renewed when less than 30 days remain, checked daily and
-  swapped in without a restart; without it, a valid certificate on disk is still served, and the app
-  says how many days it has left. The first one was obtained by hand on 2026-10-25, valid until
-  2027-01-23.
-- **The port.** The app listens on `127.0.0.1:8744` (8443 was taken on the owner's machine) and
-  `pnpm app` asks Tailscale Serve to forward the tailnet's port 443 to it as plain TCP, so TLS still
-  ends in the app. **On the owner's machine port 443 already serves another app through Tailscale
-  Serve**, which a TCP forward cannot share; until that is settled the app can be served on its own
-  port instead (`SHIPCAST_APP_HOST=<tailnet address>`, `SHIPCAST_APP_TAILSCALE=off` and the port in
-  `SHIPCAST_PUBLIC_URL`, as on 2026-10-25 at `:8744`), in which case the GitHub and Meta callbacks
-  must list that port too.
+  TXT record proves control, since no authority can reach a tailnet address. The record is placed by
+  a `DnsSolver`: Cloudflare's API with `SHIPCAST_TLS_CLOUDFLARE_TOKEN` (Zone DNS edit on the zone), or
+  by hand with `scripts/certificate-by-hand.ts` when there is no token. The certificate lives in
+  `data/tls/`, its key and the ACME account key in the keychain; it is renewed when less than 30 days
+  remain, checked daily and swapped in without a restart. Without a token a valid certificate on disk
+  is still served, and the app says how many days it has left. Since 2026-10-25 the token is set and
+  the certificate renews itself.
+- **Port 443 through Tailscale Serve.** The app listens on `127.0.0.1:8744` (8443 was taken on the
+  owner's machine) and `pnpm app` runs `tailscale serve --bg --tcp 443 tcp://127.0.0.1:8744`: a plain
+  TCP forward, so TLS still ends in the app. A TCP forward cannot share the tailnet's port 443 with a
+  Tailscale Serve web handler: another app served on 443 has to move to another port first.
 - **Sign in with GitHub.** An OAuth App with the callback `/auth/github/callback`; the code is
   exchanged for a token used once to read the login, which must be in `SHIPCAST_ALLOWED_GITHUB`. The
   token is not kept. The session is the login and an expiry signed with HMAC-SHA256 (key in the

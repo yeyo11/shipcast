@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T01:51:00.154801285Z
-updated_at: 2026-10-25T04:15:03.495559848Z
+created_at: 2026-10-25T06:56:01.750214688Z
+updated_at: 2026-10-25T08:12:09.761328351Z
 tags:
     - status
     - roadmap
@@ -12,7 +12,7 @@ tags:
 **Phases 0 to 5 done; Shipcast v0.1.0 was launched with Shipcast, from its app, on 2026-10-25.** The
 same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app, accounts per brand in
 the keychain, the phase 5 channels and what the MVP had left ([its outcome](plans/goal-finish.md#outcome-2026-10-25)).
-The app's own address (HTTPS on the owner's domain) waits on one credential.
+The app has its certificate (renewed by itself); its address waits on the tailnet's port 443.
 
 ## What exists
 
@@ -54,10 +54,12 @@ The app's own address (HTTPS on the owner's domain) waits on one credential.
 - **claudio** runs from `docker-compose.yml` ([claudio.md](claudio.md)).
 - **Search and analytics**: Search Console and Cloudflare Web Analytics on the blog.
 - **The newsletter** in Brevo, live on the blog ([publishing.md](publishing.md#the-newsletter)).
-- **The app's address**: an A record of a subdomain of the owner's domain at this machine's tailnet
-  address (2026-10-25), and a GitHub OAuth App for the sign-in; the certificate waits on a token.
-- **Credentials**: on 2026-10-25 six networks moved from `.env` into the keychain through the app's
-  import (dev.to, Bluesky, Instagram, Brevo, Cloudflare, Search Console), each checked live. Accounts,
+- **The app's address**: `https://shipcast.josegarrido.dev`, an A record at this machine's tailnet
+  address, a GitHub OAuth App for the sign-in, and a Let's Encrypt certificate renewed through the
+  Cloudflare token (2026-10-25).
+- **Credentials**: on 2026-10-25 every network moved from `.env` into the keychain as a connected
+  account, each checked live: dev.to, Bluesky, Instagram, Brevo, Cloudflare, Search Console, then
+  Mastodon (a new token), Telegram (a bot posting to the owner's channel) and Discord (a webhook). Accounts,
   expiry dates and machine details are in the owner's local notes, not in the public docs.
 
 ## Launches so far
@@ -71,25 +73,26 @@ The app's own address (HTTPS on the owner's domain) waits on one credential.
 - **Shipcast v0.1.0** (2026-10-25), the goal's final test, launched from the app: release, pre-flight,
   drafts reviewed in the app (launches#2, AI cost $0.32) and approved there; out on the blog in both
   languages, dev.to, Bluesky, Instagram (carousel, story, comment) and the newsletter in both
-  languages, with the metrics read from every source. Mastodon failed on its invalid token and waits
-  for **Try again** once it is reconnected.
+  languages, with the metrics read from every source. Mastodon failed on its old token and went out
+  the same day once the new one was connected. Telegram and Discord got a live post and the owner's
+  notices the same day; they were not in Shipcast's `launch.yml` for this launch.
+- **The first reply**: a question on Mastodon about how claudio's parallel agents handle merge
+  conflicts, answered from claudio's code (2026-10-25).
 
 ## Waiting on the owner
 
-- **A Cloudflare token with Zone DNS edit** (`SHIPCAST_TLS_CLOUDFLARE_TOKEN`): the app's certificate,
-  and with it GitHub sign-in and OAuth on the real address.
-- **The Instagram app secret** (`INSTAGRAM_APP_SECRET`) for Instagram Login from the app.
-- **A new Mastodon token**: the one in `.env` is invalid (the network answers "the access token is
-  invalid"); connect it again from the app, by OAuth or by pasting a token.
-- **Phase 5 accounts**: a Telegram bot and channel and a Discord webhook. Each connector is built and
-  tested with fakes; each gets its real test once connected. **Hashnode's API needs its paid Pro plan**
-  since 2026-05-13 (against the MVP's "no paid APIs"): the owner decides whether to pay for it.
+- **The tailnet's port 443**: Tailscale running on this machine, and the other app it serves on 443
+  moved to another port, so `pnpm app` can forward 443 to Shipcast.
+- **Signing in with GitHub and connecting Instagram by OAuth** on the real address, which only the
+  owner's own sessions can do; the Instagram app secret is in place.
+- **Hashnode is out for now** (the owner's decision, 2026-10-25): its API needs a paid Pro plan since
+  2026-05-13; the connector stays ready.
 - Try the app running and validate its design (built in Cartel, as approved).
 - Upload Shipcast's social preview (`design/social-preview.png`) to the GitHub repo settings.
 
 ## Next
 
-- The app on its address, once the certificate's token is in `.env`.
+- The app on its address, once port 443 is free.
 - Phase 6 ([plans/shipcast.md](plans/shipcast.md#roadmap)): other AI providers, the GitHub Action
   mode, documentation and a one-command install; and the company brand's own setup.
 
