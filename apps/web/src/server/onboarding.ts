@@ -132,3 +132,54 @@ export function minimalBrand(input: { id: string; displayName: string; site: str
     '',
   ].join('\n');
 }
+
+/** The fields of the minimal brand.yml the onboarding writes */
+export type BrandField = 'displayName' | 'site' | 'github' | 'languages';
+export type BrandFieldProblems = Partial<Record<BrandField, string>>;
+
+const BRAND_FIELD_PROBLEM: Record<BrandField, string> = {
+  displayName: 'Write your name as it signs the launches.',
+  site: 'Write the blog’s full address, starting with https:// (for example https://example.com).',
+  github: 'Write your GitHub login only, without the URL (for example octocat).',
+  languages: 'Choose at least one language.',
+};
+
+/**
+ * The brand form checked before anything goes to the server, with the same rules the brand.yml
+ * schema applies, said per field in plain words: the schema's own messages name YAML lines the
+ * person never saw.
+ */
+export function checkBrandForm(form: { displayName: string; site: string; github: string; languages: readonly string[] }): BrandFieldProblems {
+  const problems: BrandFieldProblems = {};
+  if (!form.displayName.trim()) problems.displayName = BRAND_FIELD_PROBLEM.displayName;
+  if (!isFullHttpsUrl(form.site.trim())) problems.site = BRAND_FIELD_PROBLEM.site;
+  if (!/^[A-Za-z0-9-]+$/.test(form.github.trim())) problems.github = BRAND_FIELD_PROBLEM.github;
+  if (form.languages.length === 0) problems.languages = BRAND_FIELD_PROBLEM.languages;
+  return problems;
+}
+
+function isFullHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    // A host with a dot: "https://blog" parses, but no blog lives there
+    return url.protocol === 'https:' && url.hostname.includes('.') && !url.hostname.startsWith('.') && !url.hostname.endsWith('.');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The brand.yml schema's issues, mapped to the form field each belongs to (the brand id is derived
+ * from the GitHub login, so its issue is the login's). What belongs to no field is kept apart.
+ */
+export function brandIssuesByField(issues: ReadonlyArray<{ path: string; message: string }>): { fields: BrandFieldProblems; other: string[] } {
+  const fields: BrandFieldProblems = {};
+  const other: string[] = [];
+  for (const issue of issues) {
+    const top = issue.path.split('.')[0] ?? '';
+    const field: BrandField | undefined = top === 'id' ? 'github' : top === 'displayName' || top === 'site' || top === 'github' || top === 'languages' ? top : undefined;
+    if (field) fields[field] = BRAND_FIELD_PROBLEM[field];
+    else other.push(issue.message);
+  }
+  return { fields, other };
+}

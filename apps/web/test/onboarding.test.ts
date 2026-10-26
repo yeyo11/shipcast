@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseBrand } from '@shipcast/schema';
-import { after, answerTour, complete, finish, initialState, minimalBrand, readState, reconcile, remaining, resumeAt, setAside, skip, STEPS, type Detected } from '../src/server/onboarding.ts';
+import { after, answerTour, brandIssuesByField, checkBrandForm, complete, finish, initialState, minimalBrand, readState, reconcile, remaining, resumeAt, setAside, skip, STEPS, type Detected } from '../src/server/onboarding.ts';
 
 const none: Detected = { brand: false, ai: false, channels: false, measure: false, automation: false };
 const now = new Date('2026-10-26T10:00:00.000Z');
@@ -87,4 +87,33 @@ test('the minimal brand.yml validates', () => {
   assert.ok(parsed.ok, yaml);
   assert.equal(parsed.ok && parsed.value.displayName, 'Jo "the dev"');
   assert.equal(parsed.ok && parsed.value.site, 'https://example.dev');
+});
+
+test('the brand form is checked per field before the server sees it, in plain words', () => {
+  const empty = checkBrandForm({ displayName: ' ', site: 'https://', github: '', languages: [] });
+  assert.deepEqual(Object.keys(empty).sort(), ['displayName', 'github', 'languages', 'site']);
+  assert.ok(!Object.values(empty).some((m) => /brand\.yml|\d+:\d+/.test(m ?? '')), 'no YAML lines in what the person reads');
+  assert.equal(checkBrandForm({ displayName: 'Ada', site: 'http://ada.dev', github: 'ada', languages: ['en'] }).site !== undefined, true, 'https only');
+  assert.equal(checkBrandForm({ displayName: 'Ada', site: 'https://blog', github: 'ada', languages: ['en'] }).site !== undefined, true, 'a host with a dot');
+  assert.equal(checkBrandForm({ displayName: 'Ada', site: 'https://ada', github: 'https://github.com/ada', languages: ['en'] }).github !== undefined, true);
+  assert.deepEqual(checkBrandForm({ displayName: 'Ada', site: 'https://ada.dev/', github: 'ada-l', languages: ['es'] }), {});
+});
+
+test('a server-side brand.yml issue lands on the field it belongs to', () => {
+  const { fields, other } = brandIssuesByField([
+    { path: 'displayName', message: 'Too small: expected string to have >=1 characters' },
+    { path: 'site', message: 'the site is its full https:// URL' },
+    { path: 'id', message: 'a brand id is lowercase letters, digits and hyphens' },
+    { path: 'languages.blog', message: 'Too small' },
+    { path: 'tone', message: 'odd' },
+  ]);
+  assert.deepEqual(Object.keys(fields).sort(), ['displayName', 'github', 'languages', 'site']);
+  assert.ok(!fields.displayName?.includes('>='), 'plain words, not the schema’s');
+  assert.deepEqual(other, ['odd']);
+});
+
+test('the minimal brand.yml of a valid form parses', () => {
+  const form = { displayName: 'Ada', site: 'https://ada.dev', github: 'ada', languages: ['en'] };
+  assert.deepEqual(checkBrandForm(form), {});
+  assert.equal(parseBrand(minimalBrand({ id: 'ada', ...form })).ok, true);
 });

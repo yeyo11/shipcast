@@ -15,7 +15,20 @@
 /* Started near the top, never centred in the empty height: the form is what the step is for */
 .onb-main { width: min(100% - 32px, 560px); margin-inline: auto; padding-block: clamp(20px, 4vw, 40px) 56px; display: grid; justify-items: center; align-content: start; text-align: center; }
 .onb-art svg { display: block; width: min(220px, 56vw); height: auto; }
-.onb-count { margin: 16px 0 8px; font: var(--sc-label); color: var(--sc-muted); }
+/* "Step n of 5" opens the list of the steps: going back to any step reached, in one press */
+.onb-steps { margin: 16px 0 8px; position: relative; }
+.onb-steps summary.onb-count { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border-radius: var(--sc-radius-pill); font: var(--sc-label); color: var(--sc-muted); cursor: pointer; list-style: none; }
+.onb-steps summary.onb-count::-webkit-details-marker { display: none; }
+.onb-steps summary.onb-count::after { content: ''; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); }
+.onb-steps[open] summary.onb-count::after { transform: translateY(2px) rotate(-135deg); }
+.onb-steps summary.onb-count:hover { color: var(--sc-text); background: var(--sc-raised); }
+.onb-steps ol { list-style: none; margin: 8px auto 0; padding: 8px; width: min(320px, calc(100vw - 32px)); display: grid; gap: 2px; text-align: left; background: var(--sc-raised); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); }
+.onb-steps li > a, .onb-steps-later { display: flex; gap: 12px; align-items: center; min-height: 44px; padding: 6px 10px; border-radius: 12px; color: var(--sc-text); text-decoration: none; font-weight: 600; }
+.onb-steps li > a:hover { background: var(--sc-ground); }
+.onb-steps li > a[aria-current] { background: var(--sc-ground); box-shadow: inset 0 0 0 2px var(--sc-yellow); }
+.onb-steps-later { color: var(--sc-muted); }
+.onb-steps-num { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 50%; border: 2px solid var(--sc-rail); font: 700 12px/1 var(--sc-font-text); }
+.onb-steps li[data-state='done'] .onb-steps-num { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .onb-title { font-size: clamp(36px, 9vw, 64px); overflow-wrap: anywhere; outline: none; }
 .onb-lead { margin: 14px 0 24px; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 52ch; }
 .onb-form { width: 100%; display: grid; gap: 16px; text-align: left; }
@@ -23,16 +36,26 @@
 .onb-step .form { max-width: none; }
 .onb-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: center; margin-top: 12px; padding-top: 20px; border-top: 1px solid var(--sc-hairline); }
 .onb-skip { min-height: 44px; }
+.onb-hint { flex-basis: 100%; margin: 0; text-align: center; font: var(--sc-label); color: var(--sc-muted); }
 .onb-note { margin: 20px 0 0; font-size: 14px; }
 .onb-done { display: flex; gap: 10px; align-items: center; margin: 0; font-weight: 600; }
 .onb-sub { display: grid; gap: 14px; padding: 20px; border: var(--sc-border-card) dashed var(--sc-rail); border-radius: var(--sc-radius-card); }
-.onb-sub h3 { margin: 0; font: var(--sc-heading); }
+/* The heading token is a 48 px poster line, too big for a box inside the 560 px column */
+.onb-sub h3 { margin: 0; font: 900 24px/1 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); }
 .onb-sub p { margin: 0; }
 .onb-fieldset { border: 0; padding: 0; margin: 0; }
 .onb-networks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .onb-networks li { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; min-height: 52px; padding: 6px 14px; border-radius: 14px; background: var(--sc-raised); }
 .onb-networks li.muted { background: transparent; padding-inline: 0; }
 .onb-network-name { font-weight: 600; }
+/*
+ * Toasts go to the top while the onboarding is open on a narrow screen: at the bottom (where the
+ * app's bottom bar would be) a failure, which stays until closed, sits right over Back and Continue.
+ */
+@media (max-width: 1000px) {
+  body:has(.onb) .toasts { top: 12px; bottom: auto; right: 16px; flex-direction: column; }
+  body:has(.onb) .toast[data-starting-style] { transform: translateY(-12px); }
+}
 /* On a phone the bar takes a row of its own under the lockup and "Finish later" */
 @media (max-width: 520px) {
   .onb-top { flex-wrap: wrap; }

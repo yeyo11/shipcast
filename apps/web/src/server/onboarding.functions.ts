@@ -6,6 +6,8 @@ import { appContext, type AppContext } from './context.server';
 import { InvalidInput, object, text } from './input';
 import {
   answerTour,
+  brandIssuesByField,
+  checkBrandForm,
   complete,
   finish,
   initialState,
@@ -16,6 +18,7 @@ import {
   reconcile,
   setAside,
   skip,
+  type BrandFieldProblems,
   type Detected,
   type OnboardingState,
 } from './onboarding';
@@ -190,17 +193,29 @@ function brandInput(input: unknown) {
   const github = text(o.github, 'github', 60).trim();
   const languages = Array.isArray(o.languages) ? o.languages.filter((l): l is string => l === 'en' || l === 'es') : [];
   const id = github.toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'personal';
-  return { repo: text(o.repo, 'repo', 140), id, displayName, site, github, languages: languages.length > 0 ? languages : ['en'] };
+  return { repo: text(o.repo, 'repo', 140), id, displayName, site, github, languages };
+}
+
+type BrandFormFailure = { ok: false; problem: string; fields: BrandFieldProblems };
+
+/**
+ * The form checked with the page's rules, then the file with the schema's, every problem mapped to
+ * its field in plain words; the page already checked, so this only answers a form sent around it.
+ */
+function checkBrand(data: ReturnType<typeof brandInput>): { ok: true; yaml: string } | BrandFormFailure {
+  const fields = checkBrandForm(data);
+  if (Object.keys(fields).length > 0) return { ok: false, problem: 'Some fields need a fix.', fields };
+  const yaml = minimalBrand(data);
+  const parsed = parseBrand(yaml);
+  if (parsed.ok) return { ok: true, yaml };
+  const mapped = brandIssuesByField(parsed.issues);
+  return { ok: false, problem: mapped.other.length > 0 ? mapped.other.join('; ') : 'Some fields need a fix.', fields: mapped.fields };
 }
 
 /** The brand.yml that would be committed, checked: shown to the owner as a diff before anything is written */
 export const proposeBrand = createServerFn({ method: 'POST' })
   .validator(brandInput)
-  .handler(async ({ data }) => {
-    const yaml = minimalBrand(data);
-    const parsed = parseBrand(yaml);
-    return parsed.ok ? { ok: true as const, yaml } : { ok: false as const, problem: formatIssues('brand.yml', parsed.issues) };
-  });
+  .handler(async ({ data }) => checkBrand(data));
 
 /**
  * Commits the proposed brand.yml to the launches repo's default branch, through the App. Never over
@@ -210,9 +225,9 @@ export const createBrand = createServerFn({ method: 'POST' })
   .validator(brandInput)
   .handler(async ({ data }) => {
     const ctx = await appContext();
-    const yaml = minimalBrand(data);
-    const parsed = parseBrand(yaml);
-    if (!parsed.ok) return { ok: false as const, problem: formatIssues('brand.yml', parsed.issues) };
+    const checked = checkBrand(data);
+    if (!checked.ok) return checked;
+    const yaml = checked.yaml;
     try {
       if ((await ctx.github.fileAt(data.repo, 'brand.yml', 'HEAD')) !== undefined) return { ok: false as const, problem: `${data.repo} has a brand.yml already: edit it on GitHub` };
       const branch = await ctx.github.defaultBranch(data.repo);
