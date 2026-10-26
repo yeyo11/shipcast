@@ -37,6 +37,11 @@ export function parseDiscussionDraft(body: string, fallback: { title: string; bo
   return { title, body: text || fallback.body };
 }
 
+/** Each subreddit's post is a draft of its own, edited like a discussion: a title line, then the body */
+export function redditDraftFile(subreddit: string): string {
+  return `reddit-${subreddit.toLowerCase()}.md`;
+}
+
 /** `yeyo11/claudio` → `claudio` */
 export function projectSlug(repo: string): string {
   return repo.split('/').at(-1)!.toLowerCase();
@@ -192,13 +197,9 @@ export function renderDrafts(
     });
   }
   if (pack.reddit && mode('reddit') !== 'off') {
-    pack.reddit.forEach((post, i) => {
-      const name = post.subreddit ? `r/${post.subreddit}` : 'a subreddit to choose';
-      files.push({
-        path: `${dir}/reddit-${post.subreddit?.toLowerCase() ?? i + 1}.md`,
-        content: draft(`Reddit, ${name}`, mode('reddit'), `**${post.title}**\n\n${post.body}`),
-      });
-    });
+    for (const post of pack.reddit) {
+      files.push({ path: `${dir}/${redditDraftFile(post.subreddit)}`, content: draft(`Reddit, r/${post.subreddit}`, mode('reddit'), discussionDraft(post)) });
+    }
   }
   if (pack.newsletter && mode('newsletter') !== 'off') {
     for (const lang of ['en', 'es'] as const) {

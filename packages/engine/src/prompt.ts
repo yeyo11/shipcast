@@ -49,7 +49,7 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
   'channel.instagram':
     'instagram: a carousel in English{{demoNote}}. A summary of one line for the cover (at most {{limit.instagramSummary}} characters); 2 or 3 slides, each one implemented feature with a short title (at most {{limit.instagramSlideTitle}} characters) and one concrete sentence (at most {{limit.instagramSlideText}}); and a short caption: a one-line hook, two or three lines on what it is, "link in bio" (links are not clickable there, so no URL), and at most {{limit.instagramHashtags}} specific hashtags, never generic ones.',
   'channel.reddit':
-    'reddit: {{redditTarget}}. Write each for that community: what was built and why, plain and honest, never an ad. Link the article with ?ref=reddit. The owner posts these by hand.',
+    'reddit: {{redditTarget}}. Each is a text post with a title and a Markdown body, written for that community: what was built and why, plain and honest, never an ad, following what that subreddit allows. The body links the article with ?ref=reddit. Shipcast posts them from the owner\'s account.',
   'channel.hashnode':
     'hashnode: 1 to {{limit.hashnodeTags}} lowercase tags (letters and digits only). Hashnode republishes the English article with the blog as the original URL, so write nothing else for it.',
   'channel.telegram':
@@ -119,7 +119,7 @@ export function promptVariables(brand: Brand, config: LaunchConfig, extra: Recor
     site: brand.site,
     blogLanguages: brand.languages.blog.join(' and '),
     newsletterLanguages: Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and '),
-    redditTarget: subs.length > 0 ? `one draft for each of r/${subs.join(', r/')}` : 'one or two drafts, suggesting fitting subreddits',
+    redditTarget: subs.length > 0 ? `one post for each of r/${subs.join(', r/')}` : 'one or two posts, each naming a fitting subreddit',
     demoNote: hasDemo(config) ? ' (the demo plays as its second slide)' : '',
     otherLanguages: 'the other blog languages',
     ...Object.fromEntries(Object.entries(LIMITS).map(([key, value]) => [`limit.${key}`, String(value)])),

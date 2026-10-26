@@ -128,7 +128,7 @@ function Connect() {
           </div>
           {network.id in oauthReady && !oauthReady[network.id] ? (
             <Notice tone="bad">
-              Connecting {network.name} needs your {network.id === 'linkedin' ? 'LinkedIn app’s client id and secret' : `${network.name} app id and secret`}: set them in <a href="/settings">Settings</a>.
+              Connecting {network.name} needs your {network.id === 'linkedin' || network.id === 'reddit' ? `${network.name} app’s client id and secret` : `${network.name} app id and secret`}: set them in <a href="/settings">Settings</a>.
             </Notice>
           ) : (
             <div className="row">

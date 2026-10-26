@@ -22,6 +22,9 @@ export interface SettingsValues {
   /** The owner's LinkedIn app (Sign In with LinkedIn using OpenID Connect and Share on LinkedIn) */
   linkedinClientId: string | undefined;
   linkedinClientSecret: string | undefined;
+  /** The owner's Reddit app, a "web app" whose API access Reddit has approved */
+  redditClientId: string | undefined;
+  redditClientSecret: string | undefined;
 }
 
 export type SettingName = keyof SettingsValues;
@@ -74,6 +77,12 @@ export const SETTINGS: Record<SettingName, Definition> = {
     store: { kind: 'secret', key: 'app:linkedin-client-secret', label: 'LinkedIn client secret' },
     label: 'The LinkedIn client secret',
   },
+  redditClientId: { env: 'REDDIT_CLIENT_ID', store: { kind: 'setting', key: 'reddit-client-id' }, label: 'The Reddit client id' },
+  redditClientSecret: {
+    env: 'REDDIT_CLIENT_SECRET',
+    store: { kind: 'secret', key: 'app:reddit-client-secret', label: 'Reddit client secret' },
+    label: 'The Reddit client secret',
+  },
 };
 
 const NAMES = Object.keys(SETTINGS) as SettingName[];
@@ -122,6 +131,8 @@ function parse(values: Partial<Record<SettingName, string>>): SettingsValues {
     threadsAppSecret: values.threadsAppSecret,
     linkedinClientId: values.linkedinClientId,
     linkedinClientSecret: values.linkedinClientSecret,
+    redditClientId: values.redditClientId,
+    redditClientSecret: values.redditClientSecret,
   };
 }
 

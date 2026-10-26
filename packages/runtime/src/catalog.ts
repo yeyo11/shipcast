@@ -10,6 +10,7 @@ import {
   Instagram,
   json,
   LinkedIn,
+  Reddit,
   Mastodon,
   okCheck,
   SearchConsole,
@@ -140,6 +141,20 @@ export const NETWORKS: readonly Network[] = [
       'No numbers and no comments: LinkedIn keeps them behind its Community Management API, for approved companies only',
     ],
     howTo: 'Needs your LinkedIn app with Sign In with LinkedIn using OpenID Connect and Share on LinkedIn, its client id and secret set in Settings. The token lasts 60 days; connect again when it runs out.',
+  },
+  {
+    id: 'reddit',
+    name: 'Reddit',
+    channel: 'reddit',
+    metrics: false,
+    auth: 'oauth',
+    fields: [],
+    permissions: [
+      'Publishes one text post per subreddit in launch.yml, linking the article, and deletes it when you ask (submit)',
+      'Reads your own submissions, to find a post whose answer was lost instead of posting it twice (read)',
+      'Reads your name, picture and karma (identity)',
+    ],
+    howTo: 'Needs your Reddit app (a "web app" at reddit.com/prefs/apps, whose API access Reddit has approved), its client id and secret set in Settings, and its redirect uri set to this app’s /auth/reddit/callback. Shipcast sends you to Reddit to authorise it once; the account stays connected.',
   },
   {
     id: 'brevo',
@@ -343,6 +358,7 @@ export interface Built {
   instagram?: Instagram;
   threads?: Threads;
   linkedin?: LinkedIn;
+  reddit?: Reddit;
   brevo?: Brevo;
   hashnode?: Hashnode;
   telegram?: Telegram;
@@ -384,6 +400,11 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     case 'linkedin': {
       const linkedin = new LinkedIn({ personId: v('personId'), accessToken: v('accessToken'), expiresAt: all.expiresAt || undefined, fetch: http });
       return { linkedin, check: () => linkedin.check() };
+    }
+    case 'reddit': {
+      // The app's client is kept with the account: the refresh token is only good with the app that issued it
+      const reddit = new Reddit({ clientId: v('clientId'), clientSecret: v('clientSecret'), refreshToken: v('refreshToken'), username: v('username'), fetch: http });
+      return { reddit, check: () => reddit.check(), profileStats: () => reddit.profileStats() };
     }
     case 'brevo': {
       const brevo = new Brevo({ apiKey: v('apiKey'), fetch: http });

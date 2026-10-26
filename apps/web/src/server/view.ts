@@ -22,9 +22,10 @@ export interface LaunchView {
   headline: Array<{ label: string; value: number }>;
 }
 
-/** A piece beside its channel's name: nothing for the post itself, the language for an article or an issue */
+/** A piece beside its channel's name: nothing for the post itself, the language for an article or an issue, the subreddit for a Reddit post */
 export function pieceName(kind: string): string {
   if (kind === 'post') return '';
+  if (kind.startsWith('post:')) return `r/${kind.slice('post:'.length)}`;
   const lang = /^(?:article|issue):(\w+)$/.exec(kind)?.[1];
   return lang ? lang.toUpperCase() : kind;
 }

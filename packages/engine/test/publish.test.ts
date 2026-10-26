@@ -109,7 +109,7 @@ test('after the merge every approval channel is published with the edited texts,
 
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published');
-  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit has no publisher here');
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit is off unless launch.yml turns it on');
 
   const input = (channel: string) => calls.find((c) => c.channel === channel)!.input as Record<string, unknown>;
   assert.deepEqual(input('devto'), {
@@ -632,4 +632,68 @@ test('an article written in the app opens no discussion: it belongs to no projec
   const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(result.state, 'published');
   assert.equal(calls.length, 0);
+});
+
+test('Reddit gets one post per subreddit from its edited draft, linking the article, each recorded once', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, reddit: [{ subreddit: 'ClaudeAI', title: 'AI title', body: 'AI body' }, { subreddit: 'selfhosted', title: 'Self', body: 'Body https://josegarrido.dev/en/claudio/?ref=reddit' }] }),
+    [`yeyo11/launches/${D}/reddit-claudeai.md@HEAD`]: '# Reddit, r/ClaudeAI\n\n> **Approval:** x\n\nTitle: Edited title for r/ClaudeAI\n\n---\n\nEdited body.\n',
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  reddit: approval\nreddit:\n  subreddits: [ClaudeAI, selfhosted]\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  const sent: Array<{ subreddit: string; title: string; text: string }> = [];
+  publishers.reddit = {
+    publish: async (p) => {
+      sent.push(p);
+      return { externalId: `t3_${p.subreddit}`, url: `https://www.reddit.com/r/${p.subreddit}/comments/1/` };
+    },
+    find: async () => assert.fail('nothing was attempted before'),
+  };
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const result = await publishLaunch(launch, brand, deps);
+  assert.equal(result.state, 'published', JSON.stringify(result));
+  assert.deepEqual(sent, [
+    { subreddit: 'ClaudeAI', title: 'Edited title for r/ClaudeAI', text: 'Edited body.\n\nhttps://josegarrido.dev/en/claudio/?ref=reddit' },
+    { subreddit: 'selfhosted', title: 'Self', text: 'Body https://josegarrido.dev/en/claudio/?ref=reddit' },
+  ]);
+  const rows = (await registry.posts(launch.id, { channel: 'reddit' })).map((p) => [p.kind, p.externalId]);
+  assert.deepEqual(rows, [['post:claudeai', 't3_ClaudeAI'], ['post:selfhosted', 't3_selfhosted']]);
+
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.equal(sent.length, 2, 'a second round posts nothing again');
+  assert.ok(calls.length > 0);
+});
+
+test('a Reddit post whose answer was lost is found instead of posted twice, and a refused subreddit never holds back the others', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, reddit: [{ subreddit: 'ClaudeAI', title: 'One', body: 'b' }, { subreddit: 'strict', title: 'Two', body: 'b' }, { subreddit: 'selfhosted', title: 'Three', body: 'b' }] }),
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  reddit: approval\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { publishers } = recorder();
+  // The first round's submit to r/ClaudeAI reached Reddit, but its answer never came back
+  await registry.setCursor(`reddit-attempt:${launch.id}:claudeai`, '2026-10-27T10:00:00.000Z');
+  const submitted: string[] = [];
+  publishers.reddit = {
+    publish: async (p) => {
+      if (p.subreddit === 'strict') throw new ConnectorError('Reddit', 'r/strict refused the post: Your post must contain post flair.', 400, false);
+      submitted.push(p.subreddit);
+      return { externalId: `t3_${p.subreddit}`, url: `https://www.reddit.com/r/${p.subreddit}/comments/1/` };
+    },
+    find: async (p, since) => {
+      assert.equal(since.toISOString(), '2026-10-27T10:00:00.000Z');
+      return p.subreddit === 'ClaudeAI' ? { externalId: 't3_lost', url: 'https://www.reddit.com/r/ClaudeAI/comments/lost/' } : undefined;
+    },
+  };
+  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  assert.deepEqual(submitted, ['selfhosted'], 'r/ClaudeAI was found, not submitted again');
+  assert.deepEqual((await registry.posts(launch.id, { channel: 'reddit' })).map((p) => p.externalId).sort(), ['t3_lost', 't3_selfhosted']);
+  assert.ok(result.state === 'published' || result.state === 'partial');
+  const problems = result.state === 'published' || result.state === 'partial' ? result.problems : [];
+  assert.ok(problems.some((p) => /reddit: .*r\/strict refused the post/.test(p) && !p.includes('will retry')), JSON.stringify(problems));
 });

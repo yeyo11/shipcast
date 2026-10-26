@@ -72,9 +72,9 @@ export interface Launch {
 
 /**
  * What a piece is: the channel's post itself, Instagram's story or first comment after it, one
- * newsletter issue or one blog article per language.
+ * newsletter issue or one blog article per language, or one Reddit post per subreddit (`post:<subreddit>`).
  */
-export type PostKind = 'post' | 'story' | 'comment' | `issue:${Language}` | `article:${Language}`;
+export type PostKind = 'post' | 'story' | 'comment' | `issue:${Language}` | `article:${Language}` | `post:${string}`;
 
 /**
  * `scheduled` is a piece waiting for its time (no external id yet, see docs/scheduling.md); `live`

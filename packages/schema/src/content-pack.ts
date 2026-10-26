@@ -214,7 +214,7 @@ export const ContentPack = z
     reddit: z
       .array(
         z.strictObject({
-          subreddit: z.string().regex(/^[A-Za-z0-9_]{2,21}$/).optional().describe('Without r/; suggest one when none is configured'),
+          subreddit: z.string().regex(/^[A-Za-z0-9_]{2,21}$/).describe('Without r/: one of launch.yml\'s, or one you suggest when it lists none'),
           title: z.string().min(1).max(LIMITS.redditTitle),
           body: z
             .string()

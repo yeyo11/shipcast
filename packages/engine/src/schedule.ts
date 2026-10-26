@@ -54,8 +54,11 @@ export async function saveTimezone(registry: Registry, name: unknown): Promise<s
   return name;
 }
 
-/** The channels a time can be set for: those the engine publishes itself (not the blog) */
-export const SCHEDULABLE_CHANNELS: readonly Channel[] = PUBLISHED_BY_ENGINE;
+/**
+ * The channels a time can be set for: those the engine publishes itself, but not the blog, published
+ * by the merge, nor Reddit, whose launch is one post per subreddit and a schedule is one row per channel
+ */
+export const SCHEDULABLE_CHANNELS: readonly Channel[] = PUBLISHED_BY_ENGINE.filter((c) => c !== 'reddit');
 
 /** How far ahead a time may be: a launch's pieces belong to its week, and pg-boss keeps a queued job a fortnight past its start */
 export const MAX_SCHEDULE_DAYS = 60;

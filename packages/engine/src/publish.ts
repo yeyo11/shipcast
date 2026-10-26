@@ -2,7 +2,7 @@ import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/co
 import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectSlug } from './drafts.ts';
+import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
@@ -46,10 +46,21 @@ export interface Publishers {
   linkedin?: {
     publish(p: { text: string; article: { url: string; title: string; description: string; thumbnail?: { bytes: Uint8Array; mimeType: string } } }): Promise<Published>;
   };
+  /** One post per subreddit; `find` answers whether a post whose answer was lost is up after all */
+  reddit?: {
+    publish(p: { subreddit: string; title: string; text: string }): Promise<Published>;
+    find(p: { subreddit: string; title: string }, since: Date): Promise<Published | undefined>;
+  };
 }
 
-/** Channels the engine publishes to itself; the blog is published by the merge, Reddit by hand. */
-export const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord', 'githubDiscussions', 'threads', 'linkedin'] as const;
+/** Channels the engine publishes to itself; the blog is published by the merge. */
+export const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord', 'githubDiscussions', 'threads', 'linkedin', 'reddit'] as const;
+
+/** A subreddit's piece of a launch: Reddit gets one post per subreddit, as the newsletter one issue per language */
+export const redditKind = (subreddit: string): `post:${string}` => `post:${subreddit.toLowerCase()}`;
+
+/** Set before a submit and kept: a retry asks Reddit for the post first instead of submitting it again */
+const redditAttemptKey = (launchId: number, subreddit: string) => `reddit-attempt:${launchId}:${subreddit.toLowerCase()}`;
 type EngineChannel = (typeof PUBLISHED_BY_ENGINE)[number];
 
 /** A cancelled scheduled piece is not published at all: the publish step skips its channel, as it skips a permanent failure */
@@ -188,10 +199,13 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   // The languages with a list and an issue in the pack: the newsletter is out once each has its issue
   const issueLanguages = (['en', 'es'] as const).filter((lang) => brand.newsletter?.lists[lang] && pack.newsletter?.[lang]);
   // Whatever account a piece went out with: a launch whose account changed since is not posted again
+  const subreddits = (pack.reddit ?? []).map((r) => r.subreddit);
   const done = (pieces: Post[], channel: EngineChannel) =>
     channel === 'newsletter'
       ? issueLanguages.length > 0 && issueLanguages.every((lang) => pieces.some((p) => p.channel === channel && p.kind === `issue:${lang}`))
-      : pieces.some((p) => p.channel === channel && p.kind === 'post' && p.status !== 'scheduled');
+      : channel === 'reddit'
+        ? subreddits.length > 0 && subreddits.every((sub) => pieces.some((p) => p.channel === 'reddit' && p.kind === redditKind(sub)))
+        : pieces.some((p) => p.channel === channel && p.kind === 'post' && p.status !== 'scheduled');
   // A channel whose piece waits for a time still to come is neither done nor pending: it never holds the others back
   const later = (pieces: Post[], channel: EngineChannel) => pieces.map((p) => (p.channel === channel ? waitsUntil(p, now) : undefined)).find((at) => at !== undefined);
   const pieces = await registry.posts(launch.id);
@@ -291,6 +305,39 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               image: { bytes: await image(), mimeType: 'image/jpeg', filename: 'og.jpg', description: `${pack.project.name}: ${description}` },
               idempotencyKey: `shipcast-${launch.id}-mastodon`,
             })
+        : undefined,
+    // One post per subreddit, each recorded as it goes out; a refusal in one never holds back the others
+    reddit:
+      deps.publishers.reddit && pack.reddit
+        ? async () => {
+            const reddit = deps.publishers.reddit!;
+            const failures: ConnectorError[] = [];
+            for (const piece of pack.reddit!) {
+              const kind = redditKind(piece.subreddit);
+              if (pieces.some((p) => p.channel === 'reddit' && p.kind === kind)) continue;
+              const { title, body } = parseDiscussionDraft(draftBody((await read(`${dir}/${redditDraftFile(piece.subreddit)}`)) ?? ''), piece);
+              const link = `${articleUrl}?ref=reddit`;
+              const text = body.includes(articleUrl) ? body : `${body}\n\n${link}`;
+              try {
+                // A submit whose answer was lost may be up: look for it before submitting again
+                const attempted = await registry.cursor(redditAttemptKey(launch.id, piece.subreddit));
+                let result = attempted ? await reddit.find({ subreddit: piece.subreddit, title }, new Date(attempted)) : undefined;
+                if (!result) {
+                  await registry.setCursor(redditAttemptKey(launch.id, piece.subreddit), new Date().toISOString());
+                  result = await reddit.publish({ subreddit: piece.subreddit, title, text });
+                }
+                await registry.recordPost({ launchId: launch.id, channel: 'reddit', kind, accountId: accountOf('reddit'), externalId: result.externalId, url: result.url });
+                posted.push({ channel: 'reddit', url: result.url });
+              } catch (error) {
+                failures.push(error instanceof ConnectorError ? error : new ConnectorError('Reddit', error instanceof Error ? error.message : String(error)));
+              }
+            }
+            if (failures.length > 0) {
+              // Tried again only when every failure can be: a refused subreddit waits for Try again
+              throw new ConnectorError('Reddit', failures.map((f) => f.message.replace(/^Reddit: /, '')).join('; '), undefined, failures.every((f) => f.retryable));
+            }
+            return undefined;
+          }
         : undefined,
     instagram:
       deps.publishers.instagram && pack.instagram

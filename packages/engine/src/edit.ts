@@ -27,7 +27,6 @@ export interface Capability {
   fields: EditField[];
 }
 
-const NOT_PUBLISHED: Capability = { edit: 'no', delete: 'no', note: 'Shipcast drafts this channel; it is posted by hand, so it is edited there too', fields: [] };
 
 /** What each channel can do with a published piece: the map the app and the API read. */
 export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
@@ -65,7 +64,12 @@ export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
     fields: [],
   },
   newsletter: { edit: 'no', delete: 'no', note: 'A sent campaign is in the readers’ inboxes already', fields: [] },
-  reddit: NOT_PUBLISHED,
+  reddit: {
+    edit: 'no',
+    delete: 'yes',
+    note: 'Each subreddit’s post can be deleted; a Reddit title can never change, and editing the body is not built',
+    fields: [],
+  },
   githubDiscussions: {
     edit: 'yes',
     delete: 'yes',
@@ -129,6 +133,7 @@ export interface Editors {
   githubDiscussions?: { edit(id: string, e: { title?: string; body?: string }): Promise<void>; delete(id: string): Promise<void> };
   threads?: { delete(id: string): Promise<void> };
   linkedin?: { delete(id: string): Promise<void> };
+  reddit?: { delete(id: string): Promise<void> };
 }
 
 /** The launches repo, for the blog's articles: read a file, commit onto a branch, list a folder */
@@ -184,9 +189,10 @@ function fieldsOf(changes: PostChanges): EditField[] {
   return fields;
 }
 
-/** A post's own piece, or a blog article; a story, a comment or a newsletter issue is not edited from here */
+/** A post's own piece, a blog article or a subreddit's post; a story, a comment or a newsletter issue is not edited from here */
 function isMain(post: Post): boolean {
-  return post.channel === 'blog' ? post.kind.startsWith('article:') : post.kind === 'post';
+  if (post.channel === 'blog') return post.kind.startsWith('article:');
+  return post.channel === 'reddit' ? post.kind.startsWith('post:') : post.kind === 'post';
 }
 
 function describe(post: Post): string {
@@ -391,7 +397,8 @@ export async function deletePost(postId: number, deps: EditDeps): Promise<Post> 
       case 'bluesky':
       case 'githubDiscussions':
       case 'threads':
-      case 'linkedin': {
+      case 'linkedin':
+      case 'reddit': {
         const editor = editorOf(editors, post.channel, post);
         await take(() => editor.delete(id));
         break;

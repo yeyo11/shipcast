@@ -31,6 +31,7 @@ import { Route as AuthLinkRouteImport } from './routes/auth/link'
 import { Route as AuthLinkedinRouteImport } from './routes/auth/linkedin'
 import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
+import { Route as AuthRedditRouteImport } from './routes/auth/reddit'
 import { Route as AuthThreadsRouteImport } from './routes/auth/threads'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
@@ -47,6 +48,7 @@ import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.cal
 import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagram.callback'
 import { Route as AuthLinkedinCallbackRouteImport } from './routes/auth/linkedin.callback'
 import { Route as AuthMastodonCallbackRouteImport } from './routes/auth/mastodon.callback'
+import { Route as AuthRedditCallbackRouteImport } from './routes/auth/reddit.callback'
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
 import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
 
@@ -159,6 +161,11 @@ const AuthMastodonRoute = AuthMastodonRouteImport.update({
   path: '/auth/mastodon',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRedditRoute = AuthRedditRouteImport.update({
+  id: '/auth/reddit',
+  path: '/auth/reddit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthThreadsRoute = AuthThreadsRouteImport.update({
   id: '/auth/threads',
   path: '/auth/threads',
@@ -239,6 +246,11 @@ const AuthMastodonCallbackRoute = AuthMastodonCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => AuthMastodonRoute,
 } as any)
+const AuthRedditCallbackRoute = AuthRedditCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthRedditRoute,
+} as any)
 const AuthThreadsCallbackRoute = AuthThreadsCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -272,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/auth/linkedin': typeof AuthLinkedinRouteWithChildren
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
+  '/auth/reddit': typeof AuthRedditRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
@@ -286,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
+  '/auth/reddit/callback': typeof AuthRedditCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/channels/': typeof AppChannelsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
@@ -311,6 +325,7 @@ export interface FileRoutesByTo {
   '/auth/linkedin': typeof AuthLinkedinRouteWithChildren
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
+  '/auth/reddit': typeof AuthRedditRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
@@ -326,6 +341,7 @@ export interface FileRoutesByTo {
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
+  '/auth/reddit/callback': typeof AuthRedditCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/channels': typeof AppChannelsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
@@ -354,6 +370,7 @@ export interface FileRoutesById {
   '/auth/linkedin': typeof AuthLinkedinRouteWithChildren
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
+  '/auth/reddit': typeof AuthRedditRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
@@ -369,6 +386,7 @@ export interface FileRoutesById {
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
+  '/auth/reddit/callback': typeof AuthRedditCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/_app/channels/': typeof AppChannelsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
@@ -398,6 +416,7 @@ export interface FileRouteTypes {
     | '/auth/linkedin'
     | '/auth/logout'
     | '/auth/mastodon'
+    | '/auth/reddit'
     | '/auth/threads'
     | '/channels/$network'
     | '/design/components'
@@ -412,6 +431,7 @@ export interface FileRouteTypes {
     | '/auth/instagram/callback'
     | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
+    | '/auth/reddit/callback'
     | '/auth/threads/callback'
     | '/channels/'
     | '/settings/'
@@ -437,6 +457,7 @@ export interface FileRouteTypes {
     | '/auth/linkedin'
     | '/auth/logout'
     | '/auth/mastodon'
+    | '/auth/reddit'
     | '/auth/threads'
     | '/'
     | '/channels/$network'
@@ -452,6 +473,7 @@ export interface FileRouteTypes {
     | '/auth/instagram/callback'
     | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
+    | '/auth/reddit/callback'
     | '/auth/threads/callback'
     | '/channels'
     | '/settings'
@@ -479,6 +501,7 @@ export interface FileRouteTypes {
     | '/auth/linkedin'
     | '/auth/logout'
     | '/auth/mastodon'
+    | '/auth/reddit'
     | '/auth/threads'
     | '/_app/'
     | '/_app/channels/$network'
@@ -494,6 +517,7 @@ export interface FileRouteTypes {
     | '/auth/instagram/callback'
     | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
+    | '/auth/reddit/callback'
     | '/auth/threads/callback'
     | '/_app/channels/'
     | '/_app/settings/'
@@ -514,6 +538,7 @@ export interface RootRouteChildren {
   AuthLinkedinRoute: typeof AuthLinkedinRouteWithChildren
   AuthLogoutRoute: typeof AuthLogoutRoute
   AuthMastodonRoute: typeof AuthMastodonRouteWithChildren
+  AuthRedditRoute: typeof AuthRedditRouteWithChildren
   AuthThreadsRoute: typeof AuthThreadsRouteWithChildren
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
@@ -675,6 +700,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthMastodonRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/reddit': {
+      id: '/auth/reddit'
+      path: '/auth/reddit'
+      fullPath: '/auth/reddit'
+      preLoaderRoute: typeof AuthRedditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/threads': {
       id: '/auth/threads'
       path: '/auth/threads'
@@ -786,6 +818,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/mastodon/callback'
       preLoaderRoute: typeof AuthMastodonCallbackRouteImport
       parentRoute: typeof AuthMastodonRoute
+    }
+    '/auth/reddit/callback': {
+      id: '/auth/reddit/callback'
+      path: '/callback'
+      fullPath: '/auth/reddit/callback'
+      preLoaderRoute: typeof AuthRedditCallbackRouteImport
+      parentRoute: typeof AuthRedditRoute
     }
     '/auth/threads/callback': {
       id: '/auth/threads/callback'
@@ -908,6 +947,18 @@ const AuthMastodonRouteWithChildren = AuthMastodonRoute._addFileChildren(
   AuthMastodonRouteChildren,
 )
 
+interface AuthRedditRouteChildren {
+  AuthRedditCallbackRoute: typeof AuthRedditCallbackRoute
+}
+
+const AuthRedditRouteChildren: AuthRedditRouteChildren = {
+  AuthRedditCallbackRoute: AuthRedditCallbackRoute,
+}
+
+const AuthRedditRouteWithChildren = AuthRedditRoute._addFileChildren(
+  AuthRedditRouteChildren,
+)
+
 interface AuthThreadsRouteChildren {
   AuthThreadsCallbackRoute: typeof AuthThreadsCallbackRoute
 }
@@ -934,6 +985,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLinkedinRoute: AuthLinkedinRouteWithChildren,
   AuthLogoutRoute: AuthLogoutRoute,
   AuthMastodonRoute: AuthMastodonRouteWithChildren,
+  AuthRedditRoute: AuthRedditRouteWithChildren,
   AuthThreadsRoute: AuthThreadsRouteWithChildren,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
