@@ -5,6 +5,8 @@ import {
   ContentPack,
   contentPackJsonSchema,
   graphemeCount,
+  DEFAULT_MODES,
+  threadsLength,
   LIMITS,
   LaunchConfig,
   missingPieces,
@@ -30,6 +32,8 @@ const fullPack = {
   mastodon: { lang: 'en', text: 'claudio runs Claude Code as a service.' },
   instagram: { caption: 'Claude Code as a service. Link in bio. #claude #ai', summary: 'Claude Code as a service.', slides: [{ title: 'Chats', text: 'From anywhere.' }, { title: 'Agents', text: 'In parallel.' }] },
   reddit: [{ subreddit: 'ClaudeAI', title: 'I built claudio', body: 'What and why.' }],
+  // On by default: the GitHub App posts it, with no account to connect
+  githubDiscussions: { title: 'claudio 0.8.1', body: 'What shipped. https://example.dev/en/claudio-0-8/?ref=github' },
 } as const;
 
 // Reddit is off by default; turned on here so its drafts are still checked
@@ -171,4 +175,35 @@ test('Hacker News and Product Hunt are draft-only: auto and approval are refused
     assert.ok(!LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'approval' } }).success);
     assert.ok(LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'manual' } }).success);
   }
+});
+
+test('GitHub Discussions is on by default; Threads and LinkedIn stay off until turned on', () => {
+  assert.equal(DEFAULT_MODES.githubDiscussions, 'approval');
+  assert.equal(DEFAULT_MODES.threads, 'off');
+  assert.equal(DEFAULT_MODES.linkedin, 'off');
+  const plain = LaunchConfig.parse({ enabled: true, brand: 'personal' });
+  const { githubDiscussions: _g, ...rest } = fullPack;
+  assert.ok(missingPieces(ContentPack.parse(rest), plain, brand).includes('githubDiscussions: the pack has no githubDiscussions'));
+});
+
+test('the new networks’ pieces are valid within their limits and invalid beyond them', () => {
+  assert.ok(parse({ threads: { text: 'a'.repeat(LIMITS.threadsText) } }).success);
+  assert.ok(!parse({ threads: { text: 'a'.repeat(LIMITS.threadsText + 1) } }).success);
+  // Threads counts an emoji as its UTF-8 bytes: 125 rockets are 500, one more is too many
+  assert.equal(threadsLength('🚀 a'), 6);
+  assert.ok(parse({ threads: { text: '🚀'.repeat(125) } }).success);
+  assert.ok(!parse({ threads: { text: '🚀'.repeat(126) } }).success);
+  assert.ok(parse({ linkedin: { text: 'a'.repeat(LIMITS.linkedinText) } }).success);
+  assert.ok(!parse({ linkedin: { text: 'a'.repeat(LIMITS.linkedinText + 1) } }).success);
+  assert.ok(!parse({ githubDiscussions: { title: 'a'.repeat(LIMITS.githubDiscussionTitle + 1), body: 'b' } }).success);
+  assert.ok(!parse({ githubDiscussions: { title: 't' } }).success, 'a discussion needs its body');
+});
+
+test('missingPieces requires each new piece once its channel is on, and an article for LinkedIn to share', () => {
+  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'manual', threads: 'approval', linkedin: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
+  assert.deepEqual(missingPieces(ContentPack.parse(fullPack), on, brand), ['linkedin: the pack has no linkedin', 'threads: the pack has no threads']);
+  const { article: _a, ...noArticle } = fullPack;
+  const pack = ContentPack.parse({ ...noArticle, threads: { text: 't' }, linkedin: { text: 'l' } });
+  const blogOff = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { blog: 'off', devto: 'off', threads: 'approval', linkedin: 'approval' } });
+  assert.deepEqual(missingPieces(pack, blogOff, brand), ['linkedin: LinkedIn shares the article, which is missing']);
 });

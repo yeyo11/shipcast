@@ -572,3 +572,67 @@ test('the newsletter’s scheduled row goes once its issues are out', async () =
   assert.equal((await publishLaunch(launch, withNewsletter, { ...deps, now: () => hours(2) })).state, 'published');
   assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.status]), [['issue:en', 'live']]);
 });
+
+test('GitHub Discussions, Threads and LinkedIn are published once with the edited drafts', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({
+      ...pack,
+      githubDiscussions: { title: 'AI title', body: 'AI body' },
+      threads: { text: 'AI threads' },
+      linkedin: { text: 'AI linkedin' },
+    }),
+    [`yeyo11/launches/${D}/github-discussion.md@HEAD`]: '# GitHub Discussions\n\n> **Approval:** x\n\nTitle: Edited discussion\n\n---\n\nEdited **body**\n',
+    [`yeyo11/launches/${D}/threads.md@HEAD`]: '# Threads\n\n> **Approval:** x\n\nEdited threads\n',
+    [`yeyo11/launches/${D}/linkedin.md@HEAD`]: '# LinkedIn\n\n> **Approval:** x\n\nEdited linkedin\n',
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  threads: approval\n  linkedin: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  const ok = (channel: string) => async (input: unknown) => {
+    calls.push({ channel, input });
+    return { externalId: `${channel}-1`, url: `https://${channel}.example/1` };
+  };
+  publishers.githubDiscussions = { publish: ok('githubDiscussions') };
+  publishers.threads = { publish: ok('threads') };
+  publishers.linkedin = { publish: ok('linkedin') };
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const result = await publishLaunch(launch, brand, deps);
+
+  assert.equal(result.state, 'published');
+  const input = (channel: string) => calls.find((c) => c.channel === channel)!.input;
+  assert.deepEqual(input('githubDiscussions'), { repo: 'yeyo11/claudio', title: 'Edited discussion', body: 'Edited **body**' }, 'the discussion goes in the launched repo, on by default');
+  assert.deepEqual(input('threads'), { text: 'Edited threads', imageUrl: 'https://josegarrido.dev/launches/claudio/v0.8.2/og.jpg' });
+  assert.deepEqual(input('linkedin'), {
+    text: 'Edited linkedin',
+    article: {
+      url: 'https://josegarrido.dev/en/claudio/?ref=linkedin',
+      title: 'Edited title',
+      description: 'Edited description',
+      thumbnail: { bytes: new Uint8Array([0xff, 0xd8, 0xff]), mimeType: 'image/jpeg' },
+    },
+  });
+  const channels: string[] = (await registry.posts(launch.id)).map((p) => p.channel);
+  for (const c of ['githubDiscussions', 'threads', 'linkedin']) assert.ok(channels.includes(c), c);
+
+  const before = calls.length;
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.equal(calls.length, before, 'a second round publishes nothing again');
+});
+
+test('an article written in the app opens no discussion: it belongs to no project repo', async () => {
+  const registry = await memoryRegistry();
+  const { launch: claimed } = await registry.claim({ repo: 'yeyo11/launches', ref: 'article:notes', trigger: 'article', kind: 'launch', brand: 'personal' });
+  const launch = await registry.setStatus(claimed.id, 'drafted', 'direct:abc');
+  const files = {
+    'yeyo11/launches/articles/notes/pack.json@HEAD': JSON.stringify({ ...pack, githubDiscussions: { title: 't', body: 'b' } }),
+    'yeyo11/launches/articles/notes/launch.yml@HEAD': 'enabled: true\nbrand: personal\npublishing:\n  devto: off\n  bluesky: off\n  mastodon: off\n  instagram: off\n  githubDiscussions: approval\n',
+    'yeyo11/launches/src/content/posts/en/claudio.md@HEAD': merged['yeyo11/launches/src/content/posts/en/claudio.md@HEAD']!,
+  };
+  const { calls, publishers } = recorder();
+  publishers.githubDiscussions = { publish: async () => assert.fail('no discussion for an article') };
+  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  assert.equal(result.state, 'published');
+  assert.equal(calls.length, 0);
+});

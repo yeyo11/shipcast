@@ -1,4 +1,5 @@
 import { launchReplyContext, setupFor, type CommentRunResult, type PipelineDeps, type Registry, type ReplyDeps } from '@shipcast/engine';
+import type { GitHubTokenSource } from '@shipcast/connectors';
 import type { Brand } from '@shipcast/schema';
 import { commentConnectors } from './edits.ts';
 import type { WorkQueue } from './queue.ts';
@@ -23,6 +24,8 @@ export interface CommentWorkDeps {
   pipeline: PipelineDeps;
   brand: Brand;
   fetch?: typeof fetch;
+  /** The engine's GitHub access, which reads and answers GitHub Discussions */
+  github?: { auth: GitHubTokenSource };
 }
 
 /** What the engine's assistant runs with in this process: the accounts' connectors, the `replies` AI task, the launches repo */
@@ -30,7 +33,7 @@ export function replyDeps(d: CommentWorkDeps): ReplyDeps {
   return {
     registry: d.registry,
     brand: d.brand,
-    connectors: commentConnectors({ env: d.env, brand: d.brand, registry: d.registry, secrets: d.secrets, ...(d.fetch && { fetch: d.fetch }) }),
+    connectors: commentConnectors({ env: d.env, brand: d.brand, registry: d.registry, secrets: d.secrets, ...(d.fetch && { fetch: d.fetch }), ...(d.github && { github: d.github }) }),
     setup: () => setupFor(d.pipeline, 'replies'),
     context: launchReplyContext({
       github: d.pipeline.github,

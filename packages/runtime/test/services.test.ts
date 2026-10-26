@@ -38,7 +38,7 @@ test('the public parts of each account come from the brand profiles', () => {
 
 test('only the networks with credentials are configured', async () => {
   const services = await buildServices(await deps({ DEVTO_API_KEY: 'd', BLUESKY_APP_PASSWORD: 'b', INSTAGRAM_USER_ID: '1' }));
-  assert.deepEqual(services.configured, ['devto', 'bluesky', 'github']);
+  assert.deepEqual(services.configured, ['devto', 'bluesky', 'github discussions', 'github']);
   assert.deepEqual(Object.keys(services.publishers), ['devto', 'bluesky']);
   assert.equal(services.sources.blog, undefined);
   assert.equal(services.instagram, undefined, 'no token, no Instagram');
@@ -57,7 +57,7 @@ test('a connected account wins over .env, and .env never speaks for another bran
   assert.ok(personal.configured.includes('devto'));
 
   const other = await buildServices(await deps(env, { registry, secrets, brand: company }));
-  assert.deepEqual(other.configured, ['github'], 'the company brand gets nothing from the personal .env');
+  assert.deepEqual(other.configured, ['github discussions', 'github'], 'the company brand gets nothing from the personal .env');
 });
 
 test('a refreshed Instagram token in the registry wins over the one in .env', async () => {

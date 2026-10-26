@@ -25,6 +25,8 @@ import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLaunchesRouteImport } from './routes/api/launches'
 import { Route as AuthGithubRouteImport } from './routes/auth/github'
 import { Route as AuthInstagramRouteImport } from './routes/auth/instagram'
+import { Route as AuthThreadsRouteImport } from './routes/auth/threads'
+import { Route as AuthLinkedinRouteImport } from './routes/auth/linkedin'
 import { Route as AuthLinkRouteImport } from './routes/auth/link'
 import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
@@ -37,6 +39,8 @@ import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhoo
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.callback'
 import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagram.callback'
+import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
+import { Route as AuthLinkedinCallbackRouteImport } from './routes/auth/linkedin.callback'
 import { Route as AuthMastodonCallbackRouteImport } from './routes/auth/mastodon.callback'
 
 const AppRoute = AppRouteImport.update({
@@ -118,6 +122,16 @@ const AuthInstagramRoute = AuthInstagramRouteImport.update({
   path: '/auth/instagram',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthThreadsRoute = AuthThreadsRouteImport.update({
+  id: '/auth/threads',
+  path: '/auth/threads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthLinkedinRoute = AuthLinkedinRouteImport.update({
+  id: '/auth/linkedin',
+  path: '/auth/linkedin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthLinkRoute = AuthLinkRouteImport.update({
   id: '/auth/link',
   path: '/auth/link',
@@ -178,6 +192,16 @@ const AuthInstagramCallbackRoute = AuthInstagramCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => AuthInstagramRoute,
 } as any)
+const AuthThreadsCallbackRoute = AuthThreadsCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthThreadsRoute,
+} as any)
+const AuthLinkedinCallbackRoute = AuthLinkedinCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthLinkedinRoute,
+} as any)
 const AuthMastodonCallbackRoute = AuthMastodonCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -200,6 +224,8 @@ export interface FileRoutesByFullPath {
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
+  '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/auth/linkedin': typeof AuthLinkedinRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
@@ -211,6 +237,8 @@ export interface FileRoutesByFullPath {
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
+  '/auth/threads/callback': typeof AuthThreadsCallbackRoute
+  '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/channels/': typeof AppChannelsIndexRoute
 }
@@ -229,6 +257,8 @@ export interface FileRoutesByTo {
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
+  '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/auth/linkedin': typeof AuthLinkedinRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
@@ -241,6 +271,8 @@ export interface FileRoutesByTo {
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
+  '/auth/threads/callback': typeof AuthThreadsCallbackRoute
+  '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/channels': typeof AppChannelsIndexRoute
 }
@@ -261,6 +293,8 @@ export interface FileRoutesById {
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
+  '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/auth/linkedin': typeof AuthLinkedinRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
@@ -273,6 +307,8 @@ export interface FileRoutesById {
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
+  '/auth/threads/callback': typeof AuthThreadsCallbackRoute
+  '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/_app/channels/': typeof AppChannelsIndexRoute
 }
@@ -294,6 +330,8 @@ export interface FileRouteTypes {
     | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
+    | '/auth/threads'
+    | '/auth/linkedin'
     | '/auth/link'
     | '/auth/logout'
     | '/auth/mastodon'
@@ -305,6 +343,8 @@ export interface FileRouteTypes {
     | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
+    | '/auth/threads/callback'
+    | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
     | '/channels/'
   fileRoutesByTo: FileRoutesByTo
@@ -323,6 +363,8 @@ export interface FileRouteTypes {
     | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
+    | '/auth/threads'
+    | '/auth/linkedin'
     | '/auth/link'
     | '/auth/logout'
     | '/auth/mastodon'
@@ -335,6 +377,8 @@ export interface FileRouteTypes {
     | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
+    | '/auth/threads/callback'
+    | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
     | '/channels'
   id:
@@ -354,6 +398,8 @@ export interface FileRouteTypes {
     | '/api/launches'
     | '/auth/github'
     | '/auth/instagram'
+    | '/auth/threads'
+    | '/auth/linkedin'
     | '/auth/link'
     | '/auth/logout'
     | '/auth/mastodon'
@@ -366,6 +412,8 @@ export interface FileRouteTypes {
     | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
+    | '/auth/threads/callback'
+    | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
     | '/_app/channels/'
   fileRoutesById: FileRoutesById
@@ -378,6 +426,8 @@ export interface RootRouteChildren {
   ApiLaunchesRoute: typeof ApiLaunchesRoute
   AuthGithubRoute: typeof AuthGithubRouteWithChildren
   AuthInstagramRoute: typeof AuthInstagramRouteWithChildren
+  AuthThreadsRoute: typeof AuthThreadsRouteWithChildren
+  AuthLinkedinRoute: typeof AuthLinkedinRouteWithChildren
   AuthLinkRoute: typeof AuthLinkRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
   AuthMastodonRoute: typeof AuthMastodonRouteWithChildren
@@ -499,6 +549,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthInstagramRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/threads': {
+      id: '/auth/threads'
+      path: '/auth/threads'
+      fullPath: '/auth/threads'
+      preLoaderRoute: typeof AuthThreadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/linkedin': {
+      id: '/auth/linkedin'
+      path: '/auth/linkedin'
+      fullPath: '/auth/linkedin'
+      preLoaderRoute: typeof AuthLinkedinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/link': {
       id: '/auth/link'
       path: '/auth/link'
@@ -583,6 +647,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthInstagramCallbackRouteImport
       parentRoute: typeof AuthInstagramRoute
     }
+    '/auth/threads/callback': {
+      id: '/auth/threads/callback'
+      path: '/callback'
+      fullPath: '/auth/threads/callback'
+      preLoaderRoute: typeof AuthThreadsCallbackRouteImport
+      parentRoute: typeof AuthThreadsRoute
+    }
+    '/auth/linkedin/callback': {
+      id: '/auth/linkedin/callback'
+      path: '/callback'
+      fullPath: '/auth/linkedin/callback'
+      preLoaderRoute: typeof AuthLinkedinCallbackRouteImport
+      parentRoute: typeof AuthLinkedinRoute
+    }
     '/auth/mastodon/callback': {
       id: '/auth/mastodon/callback'
       path: '/callback'
@@ -645,12 +723,36 @@ interface AuthInstagramRouteChildren {
   AuthInstagramCallbackRoute: typeof AuthInstagramCallbackRoute
 }
 
+interface AuthThreadsRouteChildren {
+  AuthThreadsCallbackRoute: typeof AuthThreadsCallbackRoute
+}
+
+interface AuthLinkedinRouteChildren {
+  AuthLinkedinCallbackRoute: typeof AuthLinkedinCallbackRoute
+}
+
 const AuthInstagramRouteChildren: AuthInstagramRouteChildren = {
   AuthInstagramCallbackRoute: AuthInstagramCallbackRoute,
 }
 
+const AuthThreadsRouteChildren: AuthThreadsRouteChildren = {
+  AuthThreadsCallbackRoute: AuthThreadsCallbackRoute,
+}
+
+const AuthLinkedinRouteChildren: AuthLinkedinRouteChildren = {
+  AuthLinkedinCallbackRoute: AuthLinkedinCallbackRoute,
+}
+
 const AuthInstagramRouteWithChildren = AuthInstagramRoute._addFileChildren(
   AuthInstagramRouteChildren,
+)
+
+const AuthThreadsRouteWithChildren = AuthThreadsRoute._addFileChildren(
+  AuthThreadsRouteChildren,
+)
+
+const AuthLinkedinRouteWithChildren = AuthLinkedinRoute._addFileChildren(
+  AuthLinkedinRouteChildren,
 )
 
 interface AuthMastodonRouteChildren {
@@ -673,6 +775,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLaunchesRoute: ApiLaunchesRoute,
   AuthGithubRoute: AuthGithubRouteWithChildren,
   AuthInstagramRoute: AuthInstagramRouteWithChildren,
+  AuthThreadsRoute: AuthThreadsRouteWithChildren,
+  AuthLinkedinRoute: AuthLinkedinRouteWithChildren,
   AuthLinkRoute: AuthLinkRoute,
   AuthLogoutRoute: AuthLogoutRoute,
   AuthMastodonRoute: AuthMastodonRouteWithChildren,

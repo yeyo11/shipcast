@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { PostRefused } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
-import { accountSecretKey, MemoryStore, postEditors } from '../src/index.ts';
+import { accountSecretKey, commentConnectors, MemoryStore, postEditors } from '../src/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const company = Brand.parse({ id: 'company', displayName: 'Co', site: 'https://co.example', github: 'co' });
@@ -41,4 +41,17 @@ test('an account removed or without secrets is refused; .env never speaks for an
   assert.deepEqual(await postEditors({ env, brand: company, registry, secrets })('telegram', null), {});
   assert.deepEqual(await postEditors({ env, brand, registry, secrets })('reddit', null), {}, 'a channel with no connector has no editor');
   assert.ok((await postEditors({ env, brand, registry, secrets })('telegram', null)).telegram);
+});
+
+test('GitHub Discussions is edited and read with the engine’s GitHub access, with no account', async () => {
+  const registry = await memoryRegistry();
+  const secrets = new MemoryStore();
+  const seen: string[] = [];
+  const github = { auth: { token: async () => 'installation-token' } };
+  const editors = await postEditors({ env: {}, brand, registry, secrets, github, fetch: recording(seen) })('githubDiscussions', null);
+  await assert.rejects(editors.githubDiscussions!.delete('D_1'));
+  assert.deepEqual(seen, ['POST https://api.github.com/graphql Bearer installation-token']);
+  assert.deepEqual(await postEditors({ env: {}, brand, registry, secrets })('githubDiscussions', null), {}, 'without GitHub access there is no editor');
+  const connectors = await commentConnectors({ env: {}, brand, registry, secrets, github })('githubDiscussions', null);
+  assert.ok(connectors.reader && connectors.replier);
 });

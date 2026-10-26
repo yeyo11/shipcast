@@ -45,6 +45,9 @@ function fakeEditors(sent: Sent[], fail: Partial<Record<string, Error>> = {}): E
       devto: one('devto'),
       hashnode: one('hashnode'),
       bluesky: { delete: one('bluesky').delete },
+      githubDiscussions: one('githubDiscussions'),
+      threads: { delete: one('threads').delete },
+      linkedin: { delete: one('linkedin').delete },
     };
     return { [channel]: all[channel as keyof Editors] } as Editors;
   };
@@ -255,4 +258,27 @@ test('the capability map covers every channel, and says why where it refuses', (
   assert.deepEqual([CAPABILITIES.bluesky.edit, CAPABILITIES.bluesky.delete], ['no', 'yes']);
   assert.equal(CAPABILITIES.devto.delete, 'unpublish');
   assert.deepEqual([CAPABILITIES.instagram.edit, CAPABILITIES.instagram.delete, CAPABILITIES.newsletter.delete], ['no', 'no', 'no']);
+});
+
+test('a discussion takes a new title and body; Threads and LinkedIn delete but never edit', async () => {
+  const registry = await memoryRegistry();
+  const sent: Sent[] = [];
+  const deps: EditDeps = { registry, editors: fakeEditors(sent) };
+  const { posts } = await launchWith(registry, [
+    { channel: 'githubDiscussions', externalId: 'D_1' },
+    { channel: 'threads', externalId: 't1' },
+    { channel: 'linkedin', externalId: 'urn:li:share:1' },
+  ]);
+  const [discussion, thread, linkedin] = posts;
+  assert.equal((await editPost(discussion!.id, { title: 'New', text: 'New body' }, deps)).status, 'edited');
+  assert.deepEqual(sent[0], { channel: 'githubDiscussions', action: 'edit', id: 'D_1', input: { title: 'New', body: 'New body' }, accountId: null });
+  for (const post of [thread!, linkedin!]) {
+    await assert.rejects(editPost(post.id, { text: 'x' }, deps), (e) => e instanceof PostRefused && e.reason === 'unsupported');
+  }
+  for (const post of [discussion!, thread!, linkedin!]) assert.equal((await deletePost(post.id, deps)).status, 'deleted');
+  assert.deepEqual(
+    sent.filter((s) => s.action === 'delete').map((s) => [s.channel, s.id]),
+    [['githubDiscussions', 'D_1'], ['threads', 't1'], ['linkedin', 'urn:li:share:1']],
+  );
+  assert.match(CAPABILITIES.linkedin.note, /Community Management API/);
 });

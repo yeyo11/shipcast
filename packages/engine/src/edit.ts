@@ -68,7 +68,19 @@ export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
   reddit: NOT_PUBLISHED,
   hackerNews: NOT_PUBLISHED,
   productHunt: NOT_PUBLISHED,
-  linkedin: { ...NOT_PUBLISHED, note: 'Not connected yet' },
+  githubDiscussions: {
+    edit: 'yes',
+    delete: 'yes',
+    note: 'Through the GitHub App: an edit replaces the title or the Markdown body (GitHub shows it as edited); a delete removes the discussion with its comments',
+    fields: ['text', 'title'],
+  },
+  threads: { edit: 'no', delete: 'yes', note: 'The Threads API has no edit: a post can only be deleted (at most 100 deletes a day)', fields: [] },
+  linkedin: {
+    edit: 'no',
+    delete: 'yes',
+    note: 'Published on the personal profile with Share on LinkedIn, which can delete; LinkedIn’s comments and numbers need its Community Management API, granted only to approved companies, so none are read',
+    fields: [],
+  },
   x: { ...NOT_PUBLISHED, note: 'Not connected yet' },
 };
 
@@ -117,6 +129,9 @@ export interface Editors {
     delete(id: string): Promise<void>;
   };
   bluesky?: { delete(id: string): Promise<void> };
+  githubDiscussions?: { edit(id: string, e: { title?: string; body?: string }): Promise<void>; delete(id: string): Promise<void> };
+  threads?: { delete(id: string): Promise<void> };
+  linkedin?: { delete(id: string): Promise<void> };
 }
 
 /** The launches repo, for the blog's articles: read a file, commit onto a branch, list a folder */
@@ -145,7 +160,20 @@ export function contentHash(changes: PostChanges): string {
   return createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 }
 
-const NAMES: Partial<Record<Channel, string>> = { devto: 'dev.to', hashnode: 'Hashnode', mastodon: 'Mastodon', telegram: 'Telegram', discord: 'Discord', bluesky: 'Bluesky', instagram: 'Instagram', newsletter: 'The newsletter', blog: 'The blog' };
+const NAMES: Partial<Record<Channel, string>> = {
+  devto: 'dev.to',
+  hashnode: 'Hashnode',
+  mastodon: 'Mastodon',
+  telegram: 'Telegram',
+  discord: 'Discord',
+  bluesky: 'Bluesky',
+  instagram: 'Instagram',
+  newsletter: 'The newsletter',
+  blog: 'The blog',
+  githubDiscussions: 'GitHub Discussions',
+  threads: 'Threads',
+  linkedin: 'LinkedIn',
+};
 const nameOf = (channel: Channel) => NAMES[channel] ?? channel;
 
 /** The fields a change carries */
@@ -315,6 +343,11 @@ async function send(post: Post, changes: PostChanges, deps: EditDeps): Promise<v
         ...(changes.link !== undefined && { canonicalUrl: changes.link }),
         ...(changes.imageUrl !== undefined && { coverImageUrl: changes.imageUrl }),
       });
+    case 'githubDiscussions':
+      return editorOf(editors, 'githubDiscussions', post).edit(id, {
+        ...(changes.title !== undefined && { title: changes.title }),
+        ...(changes.text !== undefined && { body: changes.text }),
+      });
     default:
       throw new PostRefused('unsupported', `${nameOf(post.channel)} cannot edit a published post`);
   }
@@ -358,7 +391,10 @@ export async function deletePost(postId: number, deps: EditDeps): Promise<Post> 
       case 'discord':
       case 'devto':
       case 'hashnode':
-      case 'bluesky': {
+      case 'bluesky':
+      case 'githubDiscussions':
+      case 'threads':
+      case 'linkedin': {
         const editor = editorOf(editors, post.channel, post);
         await take(() => editor.delete(id));
         break;

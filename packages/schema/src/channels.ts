@@ -20,6 +20,8 @@ export const CHANNELS = [
   'newsletter',
   'telegram',
   'discord',
+  'githubDiscussions',
+  'threads',
 ] as const;
 
 export const Channel = z.enum(CHANNELS);
@@ -37,7 +39,11 @@ export type PublishMode = z.infer<typeof PublishMode>;
 /** Communities that judge self-promotion by hand: Shipcast only ever drafts for them. */
 export const DRAFT_ONLY_CHANNELS: readonly Channel[] = ['reddit', 'hackerNews', 'productHunt'];
 
-/** What a channel does when launch.yml does not mention it: the MVP's channels on, the rest off (Reddit, by the owner's choice, since 2026-10-25). */
+/**
+ * What a channel does when launch.yml does not mention it: the MVP's channels and GitHub Discussions
+ * on, the rest off (Reddit, by the owner's choice, since 2026-10-25), so a network that needs an
+ * account is never drafted for before one is connected.
+ */
 export const DEFAULT_MODES: Readonly<Record<Channel, PublishMode>> = {
   blog: 'approval',
   devto: 'approval',
@@ -53,6 +59,9 @@ export const DEFAULT_MODES: Readonly<Record<Channel, PublishMode>> = {
   newsletter: 'off',
   telegram: 'off',
   discord: 'off',
+  // Nothing to connect: the GitHub App posts it, so it is on like the MVP's channels
+  githubDiscussions: 'approval',
+  threads: 'off',
 };
 
 export const Language = z.enum(['en', 'es']);

@@ -24,10 +24,10 @@ publishing:
   assert.deepEqual(config.reddit.subreddits, []);
 });
 
-test('the smallest file turns on the MVP channels', () => {
+test('the smallest file turns on the MVP channels and GitHub Discussions', () => {
   const result = parseLaunchConfig('enabled: true\nbrand: personal\n');
   assert.ok(result.ok);
-  assert.deepEqual(activeChannels(result.value), ['blog', 'devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit only when a launch.yml asks for it');
+  assert.deepEqual(activeChannels(result.value), ['blog', 'devto', 'bluesky', 'mastodon', 'instagram', 'githubDiscussions'], 'Reddit only when a launch.yml asks for it');
 });
 
 test('enabled must be written out', () => {

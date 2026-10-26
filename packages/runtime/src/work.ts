@@ -342,7 +342,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
         return;
       }
       const brand = await d.brand();
-      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) });
+      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }) });
       if (commentId !== undefined) {
         const drafted = await draftReply(commentId, deps);
         if (drafted.status === 'failed') throw new Error(drafted.problem ?? 'could not draft');

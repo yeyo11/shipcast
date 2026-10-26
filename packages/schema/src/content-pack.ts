@@ -12,6 +12,15 @@ export function graphemeCount(text: string): number {
   return count;
 }
 
+const utf8 = new TextEncoder();
+
+/** Threads counts a character as one but an emoji as its UTF-8 bytes (four, or more for a joined one) */
+export function threadsLength(text: string): number {
+  let count = 0;
+  for (const { segment } of graphemes.segment(text)) count += /\p{Extended_Pictographic}/u.test(segment) ? utf8.encode(segment).length : 1;
+  return count;
+}
+
 const URL_PATTERN = /https?:\/\/\S+/i;
 
 /** Limits each network enforces, checked here so a pack that would be rejected never reaches review. */
@@ -39,6 +48,12 @@ export const LIMITS = {
   productHuntTagline: 60,
   productHuntDescription: 260,
   productHuntComment: 1000,
+  /** GitHub takes longer titles; a discussion list shows about this much */
+  githubDiscussionTitle: 120,
+  githubDiscussionBody: 4000,
+  threadsText: 500,
+  /** LinkedIn takes 3000; a post past the "see more" fold at about 200 is read by fewer people */
+  linkedinText: 1300,
 } as const;
 
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
@@ -153,6 +168,30 @@ export const ContentPack = z
       })
       .optional()
       .describe('A Product Hunt draft the owner posts by hand'),
+    githubDiscussions: z
+      .strictObject({
+        title: z.string().min(1).max(LIMITS.githubDiscussionTitle),
+        body: z
+          .string()
+          .min(1)
+          .max(LIMITS.githubDiscussionBody)
+          .describe("Markdown, in English, for the people who watch the repository: what shipped and how to try it, linking the article"),
+      })
+      .optional()
+      .describe("An announcement in the launched repo's Discussions (the Announcements category, else General)"),
+    threads: z
+      .strictObject({
+        text: z
+          .string()
+          .min(1)
+          .refine((t) => threadsLength(t) <= LIMITS.threadsText, `at most ${LIMITS.threadsText} characters, an emoji counting as its UTF-8 bytes`),
+      })
+      .optional()
+      .describe('One Threads post in English that goes with the launch image, linking the article'),
+    linkedin: z
+      .strictObject({ text: z.string().min(1).max(LIMITS.linkedinText) })
+      .optional()
+      .describe("One post in English on the owner's LinkedIn profile, sharing the article as its link card"),
     bluesky: z
       .strictObject({
         lang: Language,
@@ -241,6 +280,9 @@ const PIECE_OF: Partial<Record<Channel, keyof ContentPack>> = {
   hackerNews: 'hackerNews',
   productHunt: 'productHunt',
   newsletter: 'newsletter',
+  githubDiscussions: 'githubDiscussions',
+  threads: 'threads',
+  linkedin: 'linkedin',
 };
 
 /**
@@ -269,6 +311,10 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
   }
   if (config.publishing.hashnode !== 'off' && !pack.article?.en) {
     missing.push('hashnode: Hashnode republishes the English article, which is missing');
+  }
+  // The post is the article's link card: without an article there is nothing to share
+  if (config.publishing.linkedin !== 'off' && pack.linkedin && !pack.article) {
+    missing.push('linkedin: LinkedIn shares the article, which is missing');
   }
   if (config.publishing.reddit !== 'off' && pack.reddit) {
     const drafted = new Set(pack.reddit.map((d) => d.subreddit?.toLowerCase()));

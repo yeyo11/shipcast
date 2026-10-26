@@ -16,6 +16,12 @@ export interface SettingsValues {
   /** The Instagram app, for Instagram Login from the Channels page */
   instagramAppId: string | undefined;
   instagramAppSecret: string | undefined;
+  /** The Threads use case of the owner's Meta app, for Threads' sign-in from the Channels page */
+  threadsAppId: string | undefined;
+  threadsAppSecret: string | undefined;
+  /** The owner's LinkedIn app (Sign In with LinkedIn using OpenID Connect and Share on LinkedIn) */
+  linkedinClientId: string | undefined;
+  linkedinClientSecret: string | undefined;
 }
 
 export type SettingName = keyof SettingsValues;
@@ -55,6 +61,18 @@ export const SETTINGS: Record<SettingName, Definition> = {
     env: 'INSTAGRAM_APP_SECRET',
     store: { kind: 'secret', key: 'app:instagram-app-secret', label: 'Instagram app secret' },
     label: 'The Instagram app secret',
+  },
+  threadsAppId: { env: 'THREADS_APP_ID', store: { kind: 'setting', key: 'threads-app-id' }, label: 'The Threads app id' },
+  threadsAppSecret: {
+    env: 'THREADS_APP_SECRET',
+    store: { kind: 'secret', key: 'app:threads-app-secret', label: 'Threads app secret' },
+    label: 'The Threads app secret',
+  },
+  linkedinClientId: { env: 'LINKEDIN_CLIENT_ID', store: { kind: 'setting', key: 'linkedin-client-id' }, label: 'The LinkedIn client id' },
+  linkedinClientSecret: {
+    env: 'LINKEDIN_CLIENT_SECRET',
+    store: { kind: 'secret', key: 'app:linkedin-client-secret', label: 'LinkedIn client secret' },
+    label: 'The LinkedIn client secret',
   },
 };
 
@@ -100,6 +118,10 @@ function parse(values: Partial<Record<SettingName, string>>): SettingsValues {
     maxBudgetUsd: budget !== undefined && budget > 0 ? budget : undefined,
     instagramAppId: values.instagramAppId,
     instagramAppSecret: values.instagramAppSecret,
+    threadsAppId: values.threadsAppId,
+    threadsAppSecret: values.threadsAppSecret,
+    linkedinClientId: values.linkedinClientId,
+    linkedinClientSecret: values.linkedinClientSecret,
   };
 }
 
