@@ -63,7 +63,9 @@ function run(args: string[], options: { cwd: string; env: NodeJS.ProcessEnv; inp
 
 /** git output that means the branch moved under the push, as opposed to a network or permission failure */
 export function isRejectedPush(stderr: string): boolean {
-  return /\[rejected\]|non-fast-forward|fetch first|stale info|failed to update ref|cannot lock ref/i.test(stderr);
+  // Two first runs creating the branch at once: the loser is told the ref exists, not that its push
+  // is behind, and it lost the same race
+  return /\[rejected\]|non-fast-forward|fetch first|stale info|failed to update ref|cannot lock ref|reference already exists/i.test(stderr);
 }
 
 export interface GitStateOptions {

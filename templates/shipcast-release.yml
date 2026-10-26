@@ -7,7 +7,7 @@
 # Set once (Settings > Secrets and variables > Actions):
 #   variable  SHIPCAST_LAUNCHES_REPO         your launches repo, owner/name
 #   secrets   SHIPCAST_GITHUB_APP_ID         the Shipcast GitHub App, installed on this repo and the
-#             SHIPCAST_GITHUB_APP_PRIVATE_KEY launches repo (`shipcast github-app` creates it)
+#             SHIPCAST_GITHUB_APP_PRIVATE_KEY launches repo (`shipcast init` creates it)
 #             ANTHROPIC_API_KEY              the key the content is written with
 name: Shipcast launch
 

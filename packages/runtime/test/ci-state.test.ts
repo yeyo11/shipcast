@@ -127,6 +127,7 @@ test('the git store: a first commit, a read back, and a write on a stale parent 
 test('git output that means the branch moved is told apart from other failures', () => {
   assert.ok(isRejectedPush(' ! [rejected]        abc -> shipcast-state (fetch first)'));
   assert.ok(isRejectedPush('error: failed to push some refs\nhint: Updates were rejected because the tip of your current branch is behind (non-fast-forward)'));
+  assert.ok(isRejectedPush(' ! [remote rejected] f118472 -> shipcast-state (reference already exists)'), 'two first runs creating the branch at once');
   assert.ok(!isRejectedPush('fatal: Authentication failed for https://github.com/o/r.git'));
 });
 
