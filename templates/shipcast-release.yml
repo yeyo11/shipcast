@@ -1,0 +1,45 @@
+# Shipcast, in a project repo: copy this to .github/workflows/shipcast.yml.
+#
+# On a published release (or a repo made public, or a run by hand) Shipcast reads the code, writes the
+# launch content and opens a drafts pull request in your launches repo; nothing is published until
+# you merge it. .github/launch.yml in this repo decides what is launched, as always.
+#
+# Set once (Settings > Secrets and variables > Actions):
+#   variable  SHIPCAST_LAUNCHES_REPO         your launches repo, owner/name
+#   secrets   SHIPCAST_GITHUB_APP_ID         the Shipcast GitHub App, installed on this repo and the
+#             SHIPCAST_GITHUB_APP_PRIVATE_KEY launches repo (`shipcast github-app` creates it)
+#             ANTHROPIC_API_KEY              the key the content is written with
+name: Shipcast launch
+
+on:
+  release:
+    types: [published]
+  public:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag to launch (the latest release if empty); launch.yml must allow manual launches
+        required: false
+        type: string
+
+# One launch of a release at a time; a re-run waits instead of racing. Launching twice is refused
+# in the state either way, this only saves a run from waiting on it.
+concurrency:
+  group: shipcast-${{ github.repository }}-${{ github.event.release.tag_name || inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: yeyo11/shipcast@v1
+        with:
+          command: launch
+          launches-repo: ${{ vars.SHIPCAST_LAUNCHES_REPO }}
+          github-app-id: ${{ secrets.SHIPCAST_GITHUB_APP_ID }}
+          github-app-private-key: ${{ secrets.SHIPCAST_GITHUB_APP_PRIVATE_KEY }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

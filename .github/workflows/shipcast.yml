@@ -1,0 +1,111 @@
+name: Shipcast
+
+# The reusable workflow: a project repo's whole launch workflow is one call (see
+# templates/shipcast-release.yml), the launches repo's publish workflow another. It wraps the
+# composite action at the root of this repo.
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: launch, publish or round
+        type: string
+        default: launch
+      launches-repo:
+        description: The launches repo, owner/name
+        type: string
+        required: true
+      detect:
+        description: "round: also poll the brand's public events"
+        type: boolean
+        default: false
+      wait-minutes:
+        description: "publish: how long to wait for the blog to deploy"
+        type: string
+        default: "20"
+      dry-run:
+        type: boolean
+        default: false
+    secrets:
+      SHIPCAST_GITHUB_APP_ID:
+        required: false
+      SHIPCAST_GITHUB_APP_PRIVATE_KEY:
+        required: false
+      ANTHROPIC_API_KEY:
+        required: false
+      DEVTO_API_KEY:
+        required: false
+      BLUESKY_HANDLE:
+        required: false
+      BLUESKY_APP_PASSWORD:
+        required: false
+      MASTODON_INSTANCE:
+        required: false
+      MASTODON_ACCESS_TOKEN:
+        required: false
+      INSTAGRAM_USER_ID:
+        required: false
+      INSTAGRAM_ACCESS_TOKEN:
+        required: false
+      BREVO_API_KEY:
+        required: false
+      HASHNODE_TOKEN:
+        required: false
+      HASHNODE_PUBLICATION_HOST:
+        required: false
+      TELEGRAM_BOT_TOKEN:
+        required: false
+      TELEGRAM_CHAT_ID:
+        required: false
+      TELEGRAM_NOTIFY_CHAT_ID:
+        required: false
+      DISCORD_WEBHOOK_URL:
+        required: false
+      CLOUDFLARE_API_TOKEN:
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        required: false
+      CLOUDFLARE_WEB_ANALYTICS_SITE_TAG:
+        required: false
+      GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: false
+      BING_WEBMASTER_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  shipcast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: yeyo11/shipcast@v1
+        with:
+          command: ${{ inputs.command }}
+          launches-repo: ${{ inputs.launches-repo }}
+          github-app-id: ${{ secrets.SHIPCAST_GITHUB_APP_ID }}
+          github-app-private-key: ${{ secrets.SHIPCAST_GITHUB_APP_PRIVATE_KEY }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          detect: ${{ inputs.detect }}
+          wait-minutes: ${{ inputs.wait-minutes }}
+          dry-run: ${{ inputs.dry-run }}
+        env:
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          MASTODON_INSTANCE: ${{ secrets.MASTODON_INSTANCE }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          HASHNODE_TOKEN: ${{ secrets.HASHNODE_TOKEN }}
+          HASHNODE_PUBLICATION_HOST: ${{ secrets.HASHNODE_PUBLICATION_HOST }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_NOTIFY_CHAT_ID: ${{ secrets.TELEGRAM_NOTIFY_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WEB_ANALYTICS_SITE_TAG: ${{ secrets.CLOUDFLARE_WEB_ANALYTICS_SITE_TAG }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          BING_WEBMASTER_API_KEY: ${{ secrets.BING_WEBMASTER_API_KEY }}
