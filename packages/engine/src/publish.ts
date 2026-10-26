@@ -2,7 +2,7 @@ import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/co
 import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { isArticle, launchDir, parseInstagramDraft, projectSlug } from './drafts.ts';
+import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectSlug } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
@@ -40,10 +40,16 @@ export interface Publishers {
   hashnode?: { publish(a: { title: string; markdown: string; tags: string[]; canonicalUrl: string; coverImageUrl?: string }): Promise<Published> };
   telegram?: { publish(p: { text: string; imageUrl?: string }): Promise<Published> };
   discord?: { publish(p: { content: string; embed?: { title: string; url: string; description: string; imageUrl?: string } }): Promise<Published> };
+  /** Posts in the launched repo, whichever it is, so it takes the repo with each post */
+  githubDiscussions?: { publish(p: { repo: string; title: string; body: string }): Promise<Published> };
+  threads?: { publish(p: { text: string; imageUrl?: string }): Promise<Published> };
+  linkedin?: {
+    publish(p: { text: string; article: { url: string; title: string; description: string; thumbnail?: { bytes: Uint8Array; mimeType: string } } }): Promise<Published>;
+  };
 }
 
 /** Channels the engine publishes to itself; the blog is published by the merge, Reddit by hand. */
-export const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord'] as const;
+export const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord', 'githubDiscussions', 'threads', 'linkedin'] as const;
 type EngineChannel = (typeof PUBLISHED_BY_ENGINE)[number];
 
 /** A cancelled scheduled piece is not published at all: the publish step skips its channel, as it skips a permanent failure */
@@ -239,6 +245,32 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             deps.publishers.discord!.publish({
               content: draftBody((await read(`${dir}/discord.md`)) ?? pack.discord!.text),
               embed: { title, url: articleUrl, description, imageUrl: `${brand.site}${mediaPath(launch, 'og.png')}` },
+            })
+        : undefined,
+    // An article written in the app belongs to no project: there is no repo whose community it is news to
+    githubDiscussions:
+      deps.publishers.githubDiscussions && pack.githubDiscussions && !isArticle(launch)
+        ? async () =>
+            deps.publishers.githubDiscussions!.publish({
+              repo: launch.repo,
+              ...parseDiscussionDraft(draftBody((await read(`${dir}/github-discussion.md`)) ?? ''), pack.githubDiscussions!),
+            })
+        : undefined,
+    threads:
+      deps.publishers.threads && pack.threads
+        ? async () =>
+            deps.publishers.threads!.publish({
+              text: draftBody((await read(`${dir}/threads.md`)) ?? pack.threads!.text),
+              imageUrl: ogJpegUrl,
+            })
+        : undefined,
+    linkedin:
+      deps.publishers.linkedin && pack.linkedin
+        ? async () =>
+            deps.publishers.linkedin!.publish({
+              text: draftBody((await read(`${dir}/linkedin.md`)) ?? pack.linkedin!.text),
+              // The thumbnail is uploaded to LinkedIn: it does not read the article's page
+              article: { url: `${articleUrl}?ref=linkedin`, title, description, thumbnail: { bytes: await image(), mimeType: 'image/jpeg' } },
             })
         : undefined,
     bluesky:

@@ -13,7 +13,7 @@ export async function editingDeps(): Promise<EditDeps> {
   if (fakeNetworks()) return { registry: ctx.registry, editors: fakeEditors, blog: { github: fakeBlogRepo, launchesRepo: ctx.deps.launchesRepo } };
   return {
     registry: ctx.registry,
-    editors: postEditors({ env: process.env, brand: await ctx.brand(), registry: ctx.registry, secrets: ctx.secrets }),
+    editors: postEditors({ env: process.env, brand: await ctx.brand(), registry: ctx.registry, secrets: ctx.secrets, github: ctx.github }),
     blog: { github: ctx.github, launchesRepo: ctx.deps.launchesRepo },
   };
 }

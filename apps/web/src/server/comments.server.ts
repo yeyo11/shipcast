@@ -10,7 +10,7 @@ export async function commentDeps(): Promise<CommentDeps> {
   const ctx = await appContext();
   // A preview with fake networks sends no real reply (preview.server.ts)
   const fetch = fakeNetworks() ? { fetch: previewFetch } : {};
-  return { registry: ctx.registry, connectors: commentConnectors({ env: process.env, brand: await ctx.brand(), registry: ctx.registry, secrets: ctx.secrets, ...fetch }) };
+  return { registry: ctx.registry, connectors: commentConnectors({ env: process.env, brand: await ctx.brand(), registry: ctx.registry, secrets: ctx.secrets, github: ctx.github, ...fetch }) };
 }
 
 /** "Check comments now": a run by hand, whatever the automation mode */

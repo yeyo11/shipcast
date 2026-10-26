@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, ContentPack, LaunchConfig } from '@shipcast/schema';
-import { GitHubRest, launchDir, pullRequestBody, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
+import { buildPrompt, GitHubRest, launchDir, parseDiscussionDraft, pullRequestBody, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const text = (file: DraftFile | undefined): string => (file && 'content' in file ? file.content : '');
@@ -270,4 +270,38 @@ test('the desktop screenshots are found among the media, the home page first, an
   const once = withScreenshot('One.\n\nTwo.', '/s.png', 'x', 'en');
   assert.equal(withScreenshot(once, '/s.png', 'x', 'en'), once);
   assert.equal(withScreenshot('Only one paragraph.', '/s.png', 'x', 'en'), 'Only one paragraph.\n\n![x, screenshot](/s.png)');
+});
+
+test('the new networks get their drafts, and a discussion draft reads back as edited', () => {
+  const full = ContentPack.parse({
+    ...pack,
+    githubDiscussions: { title: 'claudio 0.9', body: 'What shipped.\n\n---\n\nA rule inside the body.' },
+    threads: { text: 'Threads post' },
+    linkedin: { text: 'LinkedIn post' },
+  });
+  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { threads: 'approval', linkedin: 'manual' } });
+  const files = renderDrafts(full, launch, on, brand, new Date('2026-10-25'));
+  const dir = launchDir(launch);
+  const file = (name: string) => text(files.find((f) => f.path === `${dir}/${name}`));
+  const discussion = file('github-discussion.md');
+  assert.match(discussion, /^# GitHub Discussions[\s\S]*\*\*Approval:\*\*[\s\S]*Title: claudio 0\.9\n\n---\n\nWhat shipped\./);
+  assert.match(file('threads.md'), /\*\*Approval:\*\*[\s\S]*Threads post/);
+  assert.match(file('linkedin.md'), /\*\*Manual:\*\*[\s\S]*LinkedIn post/);
+
+  const body = discussion.split('\n').slice(4).join('\n').replace('claudio 0.9', 'Edited title');
+  assert.deepEqual(parseDiscussionDraft(body, full.githubDiscussions!), { title: 'Edited title', body: 'What shipped.\n\n---\n\nA rule inside the body.' });
+  assert.deepEqual(parseDiscussionDraft('Only a body', full.githubDiscussions!), { title: 'claudio 0.9', body: 'Only a body' });
+
+  const off = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { githubDiscussions: 'off' } });
+  assert.ok(!renderDrafts(full, launch, off, brand, new Date('2026-10-25')).some((f) => f.path.endsWith('github-discussion.md')));
+});
+
+test('the prompt briefs the new pieces only when their channel is on', () => {
+  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { threads: 'approval', linkedin: 'approval' } });
+  const { prompt } = buildPrompt(launch, on, brand);
+  assert.match(prompt, /- githubDiscussions: an announcement in the repository's Discussions[\s\S]*\?ref=github/);
+  assert.match(prompt, /- threads: one post in English, at most 500 characters[\s\S]*\?ref=threads/);
+  assert.match(prompt, /- linkedin: one post in English on the author's own profile, at most 1300 characters/);
+  const plain = buildPrompt(launch, LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { githubDiscussions: 'off' } }), brand).prompt;
+  assert.doesNotMatch(plain, /- (threads|linkedin|githubDiscussions):/);
 });

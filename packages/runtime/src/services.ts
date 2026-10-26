@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { Telegram, type Instagram } from '@shipcast/connectors';
+import { GitHubDiscussions, Telegram, type Instagram } from '@shipcast/connectors';
 import { GitHubRest, type MetricSources, type Publishers, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, NETWORKS, type Built, type Credentials } from './catalog.ts';
@@ -139,6 +139,21 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     publishers.discord = discord;
     configured.push('discord');
   }
+  const threads = (await built('threads'))?.threads;
+  if (threads) {
+    publishers.threads = posts.threads = threads;
+    configured.push('threads');
+  }
+  const linkedin = (await built('linkedin'))?.linkedin;
+  if (linkedin) {
+    // No metrics: a member's numbers need LinkedIn's Community Management API
+    publishers.linkedin = linkedin;
+    configured.push('linkedin');
+  }
+  // No account to connect: the engine's own GitHub access (the App's installation) posts it
+  const discussions = new GitHubDiscussions({ auth: deps.github.auth, ...(deps.fetch && { fetch: deps.fetch }) });
+  publishers.githubDiscussions = posts.githubDiscussions = discussions;
+  configured.push('github discussions');
 
   const github = (await built('github'))?.github;
   if (github) sources.github = new GitHubRest({ token: github.token, fetch: deps.fetch });

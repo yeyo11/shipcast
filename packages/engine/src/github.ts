@@ -98,6 +98,11 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     this.#base = options.baseUrl ?? 'https://api.github.com';
   }
 
+  /** What hands out the token: the GitHub Discussions connector asks it for one per GraphQL query */
+  get auth(): GitHubAuth {
+    return this.#auth;
+  }
+
   /**
    * One request to the API with the current token. A 401 means the token was revoked or expired
    * early (an App's installation can be suspended); a minted token is then forgotten and the request

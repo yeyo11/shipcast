@@ -81,6 +81,8 @@ export const CHANNEL_NAMES: Record<string, string> = {
   hashnode: 'Hashnode',
   telegram: 'Telegram',
   discord: 'Discord',
+  githubDiscussions: 'GitHub Discussions',
+  threads: 'Threads',
   reddit: 'Reddit',
   hackerNews: 'Hacker News',
   productHunt: 'Product Hunt',
@@ -108,6 +110,7 @@ export function channelIcon(channel: string): string | undefined {
     telegram: 'telegram',
     discord: 'discord',
     github: 'github',
+    githubDiscussions: 'github',
     productHunt: 'product-hunt',
     newsletter: 'newsletter',
   };

@@ -9,10 +9,12 @@ import {
   Hashnode,
   Instagram,
   json,
+  LinkedIn,
   Mastodon,
   okCheck,
   SearchConsole,
   Telegram,
+  Threads,
   statsOf,
   type Check,
   type ProfileStats,
@@ -110,6 +112,34 @@ export const NETWORKS: readonly Network[] = [
       'Reads reach and interactions (instagram_business_manage_insights)',
     ],
     howTo: 'A professional (Creator or Business) account. Shipcast sends you to Instagram to authorise it; the token is renewed every 30 days.',
+  },
+  {
+    id: 'threads',
+    name: 'Threads',
+    channel: 'threads',
+    metrics: true,
+    auth: 'oauth',
+    fields: [],
+    permissions: [
+      'Publishes a post with the launch image (threads_content_publish) and deletes it when you ask (threads_delete)',
+      'Reads the replies and answers them when you approve (threads_read_replies, threads_manage_replies)',
+      'Reads views, likes, replies and reposts (threads_manage_insights)',
+    ],
+    howTo: 'Needs your Meta app’s Threads use case, its app id and secret set in Settings. Shipcast sends you to Threads to authorise it; the token is renewed every 30 days.',
+  },
+  {
+    id: 'linkedin',
+    name: 'LinkedIn',
+    channel: 'linkedin',
+    metrics: false,
+    auth: 'oauth',
+    fields: [],
+    permissions: [
+      'Publishes a post on your personal profile sharing the article, and deletes it when you ask (w_member_social)',
+      'Reads your name and picture to show the account (openid, profile)',
+      'No numbers and no comments: LinkedIn keeps them behind its Community Management API, for approved companies only',
+    ],
+    howTo: 'Needs your LinkedIn app with Sign In with LinkedIn using OpenID Connect and Share on LinkedIn, its client id and secret set in Settings. The token lasts 60 days; connect again when it runs out.',
   },
   {
     id: 'brevo',
@@ -331,6 +361,8 @@ export interface Built {
   bluesky?: Bluesky;
   mastodon?: Mastodon;
   instagram?: Instagram;
+  threads?: Threads;
+  linkedin?: LinkedIn;
   brevo?: Brevo;
   hashnode?: Hashnode;
   telegram?: Telegram;
@@ -364,6 +396,14 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     case 'instagram': {
       const instagram = new Instagram({ userId: v('userId'), accessToken: v('accessToken'), fetch: http });
       return { instagram, check: () => instagram.check(), profileStats: () => instagram.profileStats() };
+    }
+    case 'threads': {
+      const threads = new Threads({ userId: v('userId'), accessToken: v('accessToken'), fetch: http });
+      return { threads, check: () => threads.check(), profileStats: () => threads.profileStats() };
+    }
+    case 'linkedin': {
+      const linkedin = new LinkedIn({ personId: v('personId'), accessToken: v('accessToken'), expiresAt: all.expiresAt || undefined, fetch: http });
+      return { linkedin, check: () => linkedin.check() };
     }
     case 'brevo': {
       const brevo = new Brevo({ apiKey: v('apiKey'), fetch: http });
