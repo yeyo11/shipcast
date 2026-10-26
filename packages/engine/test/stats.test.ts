@@ -198,6 +198,10 @@ test('a series groups by account and launch with labels, and folds what passes t
   const byAccount = await statsSeries(registry, { metric: 'reactions', groupBy: 'account', from: '2026-10-20', to: '2026-10-20', bucket: 'day' });
   assert.deepEqual(byAccount.groups.map((g) => [g.key, g.label, g.total]), [['none', 'No account', 50], [String(account.id), 'mastodon @me@mastodon.social', 10]]);
 
+  const byLaunchChannel = await statsSeries(registry, { metric: 'reactions', groupBy: 'launchChannel', from: '2026-10-20', to: '2026-10-20', bucket: 'day', limit: 2 });
+  assert.match(byLaunchChannel.groups[0]?.key ?? '', /^\d+:mastodon$/, 'each launch and channel apart, keyed launch:channel');
+  assert.equal(byLaunchChannel.groups[0]?.total, 30);
+
   await assert.rejects(statsSeries(registry, { metric: 'reactions', groupBy: 'launch', from: '2020-01-01', to: '2026-10-20', bucket: 'day' }), RangeError);
 });
 

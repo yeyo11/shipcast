@@ -242,3 +242,22 @@ test('a job row keeps its first record, a bounded log, and is forgotten once old
   assert.equal(await registry.pruneJobs('2000-01-01T00:00:00.000Z'), 0);
   assert.equal(await registry.pruneJobs('2999-01-01T00:00:00.000Z'), 1);
 });
+
+test('a launch’s sent replies are counted per channel: only others’ comments answered, never another launch’s', async () => {
+  const registry = await memory();
+  const { launch } = await registry.claim(release);
+  const { launch: other } = await registry.claim({ ...release, ref: 'v1.0.0' });
+  const { post: mastodon } = await registry.recordPost({ launchId: launch.id, channel: 'mastodon', url: 'https://m/1', externalId: '1' });
+  const { post: bluesky } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://b/1', externalId: 'b1' });
+  const { post: elsewhere } = await registry.recordPost({ launchId: other.id, channel: 'mastodon', url: 'https://m/2', externalId: '2' });
+  const comment = (postId: number, channel: 'mastodon' | 'bluesky', externalId: string, status: 'sent' | 'new', own = false) =>
+    registry.recordComment({ postId, channel, externalId, author: { handle: '@ana' }, text: 'hi', createdAt: '2026-10-25T10:00:00.000Z', own, status });
+  await comment(mastodon.id, 'mastodon', 'c1', 'sent');
+  await comment(mastodon.id, 'mastodon', 'c2', 'sent');
+  await comment(mastodon.id, 'mastodon', 'c3', 'new');
+  await comment(mastodon.id, 'mastodon', 'c4', 'sent', true);
+  await comment(bluesky.id, 'bluesky', 'c5', 'sent');
+  await comment(elsewhere.id, 'mastodon', 'c6', 'sent');
+  assert.deepEqual(await registry.sentReplies(launch.id), { mastodon: 2, bluesky: 1 });
+  assert.deepEqual(await registry.sentReplies(9999), {});
+});

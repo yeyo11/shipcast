@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Automation as AutomationArt } from '../../components/illustrations';
+import { Jobs } from '../../components/Jobs';
 import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Pill, when } from '../../components/ui';
@@ -51,11 +52,12 @@ function Automation() {
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // While a round runs, the page follows it
+  const working = data.running || data.jobs.some((j) => j.state === 'running');
   useEffect(() => {
-    if (!data.running) return;
+    if (!working) return;
     const timer = window.setInterval(() => void router.invalidate(), 4000);
     return () => window.clearInterval(timer);
-  }, [data.running, router]);
+  }, [working, router]);
 
   const save = async () => {
     setBusy(true);
@@ -195,6 +197,13 @@ function Automation() {
               <p className="muted">GitHub sends a ping when the webhook is added; it shows below.</p>
             </aside>
           </div>
+        </>
+      )}
+
+      {data.jobs.length > 0 && (
+        <>
+          <h2 className="ph">Work in progress</h2>
+          <Jobs jobs={data.jobs} />
         </>
       )}
 

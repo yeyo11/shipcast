@@ -27,10 +27,11 @@ const HEADLINE: Array<[string, string, string]> = [
 ];
 
 export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
-  const [cursors, metrics, posts] = await Promise.all([
+  const [cursors, metrics, posts, replies] = await Promise.all([
     registry.cursorsWithPrefix(`publish-failed:${launch.id}:`),
     registry.latestMetrics(launch.id),
     registry.posts(launch.id),
+    registry.sentReplies(launch.id),
   ]);
   const failures = cursors.map((c) => ({ channel: c.key.split(':')[2] ?? '', message: c.value }));
   const pullRequest = launch.detail?.match(/https:\/\/github\.com\/\S+\/pull\/\d+/)?.[0];
@@ -47,6 +48,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
     createdAt: launch.createdAt,
     posts: posts.map((p) => ({ id: p.id, channel: p.channel, kind: p.kind, url: p.url, publishedAt: p.publishedAt, status: p.status, scheduledAt: p.scheduledAt })),
     failures,
+    replies,
     headline: HEADLINE.flatMap(([source, name, label]) => {
       const found = metrics.find((m) => m.source === source && m.name === name);
       return found ? [{ label, value: found.value }] : [];

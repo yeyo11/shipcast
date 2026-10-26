@@ -109,6 +109,18 @@
 .ui-tab[data-active] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .ui-tab:focus-visible { outline-offset: 2px; }
 .ui-tab-panel { outline: none; }
+/* A page's sections: the current one underlined in yellow, the rest quiet text, on one hairline */
+.ui-tabs-underline { gap: 18px; }
+.ui-tabs-underline .ui-tab-list { gap: 4px; padding: 0; border-bottom: 1px solid var(--sc-hairline); }
+.ui-tabs-underline .ui-tab { min-height: 46px; padding: 0 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; color: var(--sc-muted); font: 700 15px/1 var(--sc-font-text); }
+.ui-tabs-underline .ui-tab:hover { color: var(--sc-text); }
+.ui-tabs-underline .ui-tab[data-active] { background: none; color: var(--sc-text); border-bottom-color: var(--sc-yellow); }
+.ui-tabs-underline .ui-tab:focus-visible { outline-offset: -3px; }
+/* On a phone the sections still scroll sideways when they do not fit, without a scrollbar over the line */
+@media (max-width: 560px) {
+  .ui-tabs-underline .ui-tab-list { scrollbar-width: none; }
+  .ui-tabs-underline .ui-tab { padding: 0 10px; font-size: 14.5px; }
+}
 .ui-tab-panel:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 6px; border-radius: 8px; }
 
 /* ---------- Drawer: the phone's "More" ---------- */
@@ -191,3 +203,13 @@
 .spec-name p { margin: 0; font-size: 15px; }
 .spec-body { min-width: 0; }
 @media (max-width: 760px) { .spec { grid-template-columns: minmax(0, 1fr); } }
+
+/* The multiple combobox: chips inside the input, wrapping onto new lines rather than widening it */
+.ui-combo-multi { padding-left: 6px; flex-wrap: nowrap; }
+.ui-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; padding: 4px 0; }
+.ui-chips .ui-combo-input { flex: 1 1 80px; min-width: 80px; padding-left: 8px; }
+.ui-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; padding: 0 2px 0 12px; border-radius: var(--sc-radius-pill); background: var(--sc-text); color: var(--sc-ground); font: 600 13.5px/1 var(--sc-font-text); outline: none; }
+.ui-chip:focus-visible, .ui-chip[data-highlighted] { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.ui-chip-remove { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.ui-chip-remove:hover { background: color-mix(in srgb, var(--sc-ground) 22%, transparent); }
+@media (pointer: coarse) { .ui-chip { min-height: 40px; } .ui-chip-remove { width: 40px; height: 40px; } }

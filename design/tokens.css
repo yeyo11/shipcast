@@ -48,6 +48,7 @@
   --sc-on-yellow: #000000;
   --sc-cream: #FFF8DC;     /* cards that sit on a yellow band */
   --sc-failure: #FF6B5B;   /* failure only, always with a word */
+  --sc-success: #6FD58E;   /* published / done, always with a word or shape */
   --sc-stamp: var(--sc-text); /* colour of the offset shadow under yellow things */
 }
 
@@ -65,6 +66,7 @@
   --sc-on-yellow: #000000;
   --sc-cream: #FFF8DC;
   --sc-failure: #B42318;
+  --sc-success: #157A3E;
   --sc-stamp: #000000;
 }
 
