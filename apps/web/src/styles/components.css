@@ -70,6 +70,12 @@
 .ui-option-submenu { justify-content: space-between; }
 .ui-option-submenu[data-popup-open]:not([data-highlighted]) { background: var(--sc-raised); }
 .ui-option-chevron { font-size: 20px; line-height: 1; }
+/* Where you are: the item of the page on screen and the submenu holding it, as the nav's current
+   tab says it, with a yellow dot (ringed in the text colour: 3:1 on either theme's popup) and weight */
+.ui-option-label { display: inline-flex; align-items: center; gap: 10px; }
+.ui-option-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--sc-yellow); box-shadow: 0 0 0 1.5px var(--sc-text); }
+.ui-option[data-current] { font-weight: 700; }
+.ui-option[data-current][data-highlighted] .ui-option-dot { box-shadow: 0 0 0 1.5px var(--sc-ground); }
 .ui-option-check { flex: none; width: 18px; display: inline-grid; place-items: center; }
 /* The check holds its place when hidden, so labels line up whether or not they are chosen */
 .ui-option:not([data-selected]) .ui-option-check { visibility: hidden; }
@@ -149,6 +155,7 @@
 .drawer-links a[aria-current="page"] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .drawer-group { display: grid; gap: 6px; padding-top: 8px; }
 .drawer-group-title { font: var(--sc-label); color: var(--sc-muted); text-transform: uppercase; letter-spacing: .04em; padding-inline: 6px; }
+.drawer-group[data-current] .drawer-group-title { display: inline-flex; align-items: center; gap: 8px; color: var(--sc-text); font-weight: 700; }
 .drawer-sublinks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .drawer-who { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--sc-hairline); }
 .drawer-who form { margin: 0; }

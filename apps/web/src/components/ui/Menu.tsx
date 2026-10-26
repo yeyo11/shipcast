@@ -3,12 +3,19 @@ import type { ReactElement, ReactNode } from 'react';
 
 export type MenuEntry =
   /** `hint`: a second, smaller line; on a disabled item, why it is disabled, so a refusal is read rather than guessed */
-  | { kind?: 'item'; label: ReactNode; onSelect: () => void; disabled?: boolean; tone?: 'danger'; hint?: ReactNode }
+  /** `current`: the item goes to the page on screen; it says so (aria-current) and wears the current dot */
+  | { kind?: 'item'; label: ReactNode; onSelect: () => void; disabled?: boolean; tone?: 'danger'; hint?: ReactNode; current?: boolean }
   | { kind: 'link'; label: ReactNode; href: string }
   | { kind: 'separator' }
   | { kind: 'note'; label: ReactNode }
   /** An item that opens a nested list: Right arrow opens it, Left closes it (Base UI's own keys) */
-  | { kind: 'submenu'; label: ReactNode; entries: ReadonlyArray<MenuEntry> };
+  /** `current`: the page on screen is inside it, so the trigger marks the section as the one you are in */
+  | { kind: 'submenu'; label: ReactNode; entries: ReadonlyArray<MenuEntry>; current?: boolean };
+
+/** The yellow dot, ringed so it still reads on the day theme's white popup, where yellow alone is 1.4:1 */
+function CurrentDot() {
+  return <span className="ui-option-dot" aria-hidden="true" />;
+}
 
 export interface MenuProps {
   /** The button that opens it; its accessible name says what the menu is about */
@@ -37,8 +44,11 @@ function Entries({ entries }: { entries: ReadonlyArray<MenuEntry> }) {
         if (entry.kind === 'submenu')
           return (
             <Base.SubmenuRoot key={i}>
-              <Base.SubmenuTrigger className="ui-option ui-option-submenu">
-                <span>{entry.label}</span>
+              <Base.SubmenuTrigger className="ui-option ui-option-submenu" aria-current={entry.current ? 'true' : undefined} data-current={entry.current ? '' : undefined}>
+                <span className="ui-option-label">
+                  {entry.current && <CurrentDot />}
+                  {entry.label}
+                </span>
                 <span className="ui-option-chevron" aria-hidden="true">
                   ›
                 </span>
@@ -53,7 +63,15 @@ function Entries({ entries }: { entries: ReadonlyArray<MenuEntry> }) {
             </Base.SubmenuRoot>
           );
         return (
-          <Base.Item key={i} className={`ui-option${entry.tone === 'danger' ? ' ui-option-danger' : ''}${entry.hint ? ' ui-option-with-hint' : ''}`} onClick={entry.onSelect} disabled={entry.disabled}>
+          <Base.Item
+            key={i}
+            className={`ui-option${entry.tone === 'danger' ? ' ui-option-danger' : ''}${entry.hint ? ' ui-option-with-hint' : ''}`}
+            onClick={entry.onSelect}
+            disabled={entry.disabled}
+            aria-current={entry.current ? 'page' : undefined}
+            data-current={entry.current ? '' : undefined}
+          >
+            {entry.current && <CurrentDot />}
             {entry.hint ? (
               <span className="ui-option-text">
                 <span>{entry.label}</span>

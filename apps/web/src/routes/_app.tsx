@@ -13,6 +13,7 @@ import { ChannelsIcon, LaunchesIcon, MoreIcon, SearchIcon, StatsIcon, WriteIcon 
 import { Menu } from '../components/ui/Menu';
 import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
 import { getOnboardingState } from '../server/onboarding.functions';
+import { currentSettingsPage, inSettings } from '../server/settings-pages';
 import { whoAmI } from '../server/session.functions';
 
 export const Route = createFileRoute('/_app')({
@@ -42,10 +43,10 @@ const WRITE: Section = { to: '/write', label: 'Write', icon: WriteIcon, match: (
 const CHANNELS: Section = { to: '/channels', label: 'Channels', icon: ChannelsIcon, match: (p) => p.startsWith('/channels') };
 const COMMENTS: Section = { to: '/comments', label: 'Comments', match: (p) => p.startsWith('/comments') };
 const STATS: Section = { to: '/stats', label: 'Stats', icon: StatsIcon, match: (p) => p.startsWith('/stats') };
-const SETTINGS: Section = { to: '/settings', label: 'General', match: (p) => p === '/settings' };
-const AI: Section = { to: '/settings/ai', label: 'AI', match: (p) => p.startsWith('/settings/ai') };
-const AUTOMATION: Section = { to: '/settings/automation', label: 'Automation', match: (p) => p.startsWith('/settings/automation') };
-const API: Section = { to: '/settings/api', label: 'API', match: (p) => p.startsWith('/settings/api') };
+const SETTINGS: Section = { to: '/settings', label: 'General', match: (p) => currentSettingsPage(p) === '/settings' };
+const AI: Section = { to: '/settings/ai', label: 'AI', match: (p) => currentSettingsPage(p) === '/settings/ai' };
+const AUTOMATION: Section = { to: '/settings/automation', label: 'Automation', match: (p) => currentSettingsPage(p) === '/settings/automation' };
+const API: Section = { to: '/settings/api', label: 'API', match: (p) => currentSettingsPage(p) === '/settings/api' };
 
 /** Wide screens: the five working sections in the top bar; the configuration is in the user menu */
 const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS];
@@ -75,6 +76,7 @@ function Shell() {
   const navigate = useNavigate();
   const current = (s: Section) => (s.match(path) ? ('page' as const) : undefined);
   const inMore = MORE.some((s) => s.match(path));
+  const settingsHere = inSettings(path);
 
   return (
     <ToastProvider>
@@ -117,7 +119,8 @@ function Shell() {
                     {
                       kind: 'submenu',
                       label: 'Settings',
-                      entries: SETTINGS_GROUP.map((s) => ({ label: s.label, onSelect: () => void navigate({ to: s.to }) })),
+                      current: settingsHere,
+                      entries: SETTINGS_GROUP.map((s) => ({ label: s.label, current: s.match(path), onSelect: () => void navigate({ to: s.to }) })),
                     },
                     { kind: 'separator' },
                     { label: 'Take the tour', onSelect: requestTour },
@@ -161,9 +164,11 @@ function Shell() {
                 <li>
                   <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} />}>Launch a repo</DrawerClose>
                 </li>
-                <li role="group" aria-labelledby="more-settings" className="drawer-group">
+                <li role="group" aria-labelledby="more-settings" className="drawer-group" data-current={settingsHere ? '' : undefined}>
                   <span id="more-settings" className="drawer-group-title">
+                    {settingsHere && <span className="ui-option-dot" aria-hidden="true" />}
                     Settings
+                    {settingsHere && <span className="visually-hidden">, the current section</span>}
                   </span>
                   <ul className="drawer-sublinks">
                     {SETTINGS_GROUP.map((s) => (
