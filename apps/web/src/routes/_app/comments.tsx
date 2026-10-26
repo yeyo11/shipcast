@@ -156,45 +156,54 @@ function CommentRow({ comment, limit }: { comment: CommentView; limit: number })
   );
 }
 
+/** How each channel's replies go: a row per channel, its three modes as one segmented control, and what the network allows */
 function Modes({ data }: { data: Data }) {
   const router = useRouter();
   const toast = useToast();
   const channels = Object.keys(data.settings.replies) as Channel[];
+  const save = async (channel: Channel, mode: string) => {
+    try {
+      await saveCommentSettings({ data: { replies: { [channel]: mode } } });
+      toast.done(`${CHANNEL_NAMES[channel] ?? channel}: ${MODE_WORDS[mode] ?? mode}`);
+      await router.invalidate();
+    } catch (error) {
+      toast.fail(errorText(error));
+    }
+  };
   return (
-    <table className="table">
-      <tbody>
-        {channels.map((channel) => (
-          <tr key={channel}>
-            <th scope="row">
+    <ul className="reply-modes">
+      {channels.map((channel) => {
+        const canReply = Boolean(data.capabilities[channel]?.reply);
+        const current = data.settings.replies[channel];
+        return (
+          <li key={channel} className="reply-mode">
+            <div className="reply-mode-head">
               <ChannelName channel={channel} />
-            </th>
-            <td>
-              <select
-                className="input"
-                aria-label={`${channel}: replies`}
-                value={data.settings.replies[channel]}
-                onChange={async (e) => {
-                  try {
-                    await saveCommentSettings({ data: { replies: { [channel]: e.target.value } } });
-                    toast.done('Saved');
-                    await router.invalidate();
-                  } catch (error) {
-                    toast.fail(errorText(error));
-                  }
-                }}
-              >
-                <option value="off">Off: not read</option>
-                <option value="approval">Approval: drafts wait for you</option>
-                {data.capabilities[channel]?.reply && <option value="auto">Auto: drafts are sent at once</option>}
-              </select>
-            </td>
-            <td className="muted">{data.capabilities[channel]?.note}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+              <div className="seg reply-mode-seg" role="radiogroup" aria-label={`${CHANNEL_NAMES[channel] ?? channel}: replies`}>
+                {(['off', 'approval', 'auto'] as const).map((mode) => (
+                  <label key={mode} title={mode === 'auto' && !canReply ? 'This network cannot send a reply through its API' : undefined}>
+                    <input type="radio" name={`replies-${channel}`} checked={current === mode} disabled={mode === 'auto' && !canReply} onChange={() => void save(channel, mode)} />
+                    <span>{MODE_WORDS[mode]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <p className="reply-mode-text">
+              <strong>{MODE_TEXT[current] ?? ''}</strong> {data.capabilities[channel]?.note}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
+
+const MODE_WORDS: Record<string, string> = { off: 'Off', approval: 'Approval', auto: 'Auto' };
+const MODE_TEXT: Record<string, string> = {
+  off: 'Not read.',
+  approval: 'Replies are drafted and wait for you.',
+  auto: 'Replies are drafted and sent at once.',
+};
 
 const ALL = 'all';
 

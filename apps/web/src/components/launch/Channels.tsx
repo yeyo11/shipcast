@@ -14,7 +14,6 @@ import { ConfirmDialog } from '../ui/ConfirmButton';
 import { EditManyDialog, EditPieceDialog } from './EditDialogs';
 import { ChannelIcon, StateDot } from './Glance';
 import { ChannelSchedule } from './Schedule';
-import { Sparkline } from './Sparkline';
 
 /*
  * The launch page's Channels tab (docs/web-app.md): a strip of channel chips, each its network's mark
@@ -49,19 +48,31 @@ function Check({ row, selected, onSelect }: { row: PieceRow; selected: boolean; 
   );
 }
 
-/** Each number of a piece: its line, where it stands, and how much it grew since it was first read */
+/** A metric's name as words: `views_bluesky` → "Views bluesky" */
+export const metricWords = (name: string) => {
+  const words = name.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/**
+ * Each number of a piece as a figure: the value large, its name under it, and how much it grew
+ * since it was first read. A grid that wraps, so a newsletter's seven numbers never push the row
+ * wider than the card; the readings' span is in each figure's title.
+ */
 function PieceNumbers({ row }: { row: PieceRow }) {
-  if (row.numbers.length === 0) return <span className="post-metrics muted">No numbers yet</span>;
+  if (row.numbers.length === 0) return <p className="post-numbers-none muted">No numbers yet</p>;
   return (
-    <ul className="post-metrics" aria-label={`Numbers of ${pieceTitle(row)}`}>
+    <dl className="post-numbers" aria-label={`Numbers of ${pieceTitle(row)}`}>
       {row.numbers.map((n) => (
-        <li key={n.name} title={`${n.series.length} ${n.series.length === 1 ? 'reading' : 'readings'}, from ${n.from.slice(0, 16).replace('T', ' ')} to ${n.to.slice(0, 16).replace('T', ' ')}`}>
-          <Sparkline values={n.series} width={48} height={18} />
-          <strong>{number(n.value)}</strong> {n.name.replace(/_/g, ' ')}
-          {n.series.length > 1 && n.value !== n.first && <span className="muted"> {signed(n.value - n.first)}</span>}
-        </li>
+        <div key={n.name} title={`${n.series.length} ${n.series.length === 1 ? 'reading' : 'readings'}, from ${n.from.slice(0, 16).replace('T', ' ')} to ${n.to.slice(0, 16).replace('T', ' ')}`}>
+          <dt>{metricWords(n.name)}</dt>
+          <dd>
+            {number(n.value)}
+            {n.series.length > 1 && n.value !== n.first && <span className="post-delta">{signed(n.value - n.first)}</span>}
+          </dd>
+        </div>
       ))}
-    </ul>
+    </dl>
   );
 }
 
@@ -94,8 +105,8 @@ function PieceItem({
         <span className="post-what">
           {pieceName(row)}
           {status && <Pill tone={status.tone}>{status.label}</Pill>}
-          {row.account && <span className="muted post-account">{row.account.handle ?? row.account.label}</span>}
         </span>
+        {row.account && <span className="muted post-account">{row.account.handle ?? row.account.label}</span>}
         {row.url ? (
           <a className="post-link" href={row.url} target="_blank" rel="noreferrer">
             {address(row.url)}
@@ -105,7 +116,6 @@ function PieceItem({
           <span className="muted post-link">No address</span>
         )}
       </div>
-      <PieceNumbers row={row} />
       <div className="post-actions">
         {row.status === 'failed' ? (
           <button type="button" className="btn btn-small btn-primary" onClick={onRetry}>
@@ -127,6 +137,7 @@ function PieceItem({
           </>
         )}
       </div>
+      <PieceNumbers row={row} />
     </li>
   );
 }

@@ -1,42 +1,41 @@
 import { networkName, signed, type AccountRow } from '../../server/pieces';
 import { Avatar, number } from '../ui';
-import { Sparkline } from './Sparkline';
+import { ChannelIcon } from './Glance';
 
 /*
- * The accounts a launch went out with and how their followers moved, in the Details tab. Each piece's
- * own numbers over time are in its channel's panel (Channels.tsx).
+ * The accounts a launch went out with and how their followers moved, in the Details tab: a card like
+ * the others, an account per row with its followers as a figure. Each piece's own numbers over time
+ * are in its channel's panel (Channels.tsx).
  */
-
-/** The accounts the launch went out with, and how their followers moved: the properties column's last block */
 export function AccountNumbers({ accounts }: { accounts: AccountRow[] }) {
   if (accounts.length === 0) return null;
   return (
-    <section className="props-block" aria-labelledby="accounts-title">
-      <h2 className="props-title" id="accounts-title">
-        Accounts
+    <section className="lcard dcard" aria-labelledby="accounts-title">
+      <h2 className="dcard-title" id="accounts-title">
+        Accounts it went out with
       </h2>
-      <ul className="props-accounts">
+      <ul className="daccounts">
         {accounts.map((a) => (
           <li key={a.id}>
-            <div className="account-who">
-              <Avatar src={a.avatarUrl} alt="" size={28} />
-              <span>
-                <strong className="break">{a.handle ?? a.label}</strong>
-                <span className="muted"> {networkName(a.network)}</span>
+            <span className="daccount-pic">
+              <Avatar src={a.avatarUrl} alt="" size={36} />
+              <span className="daccount-glyph" aria-hidden="true">
+                <ChannelIcon channel={a.network} size={12} />
               </span>
-            </div>
+            </span>
+            <span className="daccount-name">
+              <strong>{a.handle ?? a.label}</strong>
+              <span className="muted">{networkName(a.network)}</span>
+            </span>
             {a.followers ? (
-              <div className="props-followers">
-                <Sparkline values={a.followers.series} width={88} height={22} />
-                <span>
-                  <span className="mono">{number(a.followers.now)}</span> followers{' '}
-                  <span className="muted" title={`From ${a.followers.from} to ${a.followers.to}`}>
-                    {signed(a.followers.change)} since {a.followers.from === a.followers.to ? 'today' : a.followers.from}
-                  </span>
+              <span className="daccount-figure" title={`From ${a.followers.from} to ${a.followers.to}`}>
+                <strong>{number(a.followers.now)}</strong>
+                <span className="muted">
+                  followers{a.followers.change ? `, ${signed(a.followers.change)} since ${a.followers.from === a.followers.to ? 'today' : a.followers.from}` : ''}
                 </span>
-              </div>
+              </span>
             ) : (
-              <p className="muted props-followers">No follower counts recorded yet</p>
+              <span className="daccount-figure muted">No counts</span>
             )}
           </li>
         ))}

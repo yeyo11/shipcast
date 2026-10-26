@@ -108,6 +108,8 @@ export function channelIcon(channel: string): string | undefined {
     github: 'github',
     githubDiscussions: 'github',
     newsletter: 'newsletter',
+    // An account's network, where it is not its channel's name
+    brevo: 'newsletter',
   };
   return file[channel] ? `/icons/${file[channel]}.svg` : undefined;
 }

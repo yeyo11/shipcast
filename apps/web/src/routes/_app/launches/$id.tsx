@@ -1,8 +1,8 @@
 import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Jobs } from '../../../components/Jobs';
-import { Channels } from '../../../components/launch/Channels';
-import { DailyBars, TotalsRow } from '../../../components/launch/Glance';
+import { Channels, metricWords } from '../../../components/launch/Channels';
+import { ChannelIcon, DailyBars, TotalsRow } from '../../../components/launch/Glance';
 import { AccountNumbers } from '../../../components/launch/Numbers';
 import { EmptyDrafts } from '../../../components/illustrations';
 import { Empty } from '../../../components/PageHead';
@@ -93,35 +93,50 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
   );
 }
 
-/** What the launch is, the accounts it went out with, its last reading of every number and its jobs */
+/**
+ * What the launch is, the accounts it went out with, its last reading of every number and its jobs:
+ * four cards in the app's card skin, the facts as label and value, every number as a figure under
+ * its source's glyph
+ */
 function Details({ data }: { data: Data }) {
   const { launch, pieces, metrics, jobs } = data;
   const replies = Object.values(pieces.replies).reduce((a, b) => a + b, 0);
   const bySource = new Map<string, typeof metrics>();
   for (const m of metrics) bySource.set(m.source, [...(bySource.get(m.source) ?? []), m]);
+  const out = pieces.rows.filter((r) => r.status === 'live' || r.status === 'edited').length;
   return (
     <div className="details">
-      <section className="props-block" aria-labelledby="props-title">
-        <h2 className="props-title" id="props-title">
-          Properties
+      <section className="lcard dcard" aria-labelledby="props-title">
+        <h2 className="dcard-title" id="props-title">
+          About this launch
         </h2>
-        <dl className="props-list">
-          <dt>State</dt>
-          <dd>
-            <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
-          </dd>
-          <dt>Repository</dt>
-          <dd className="break">{launch.repo}</dd>
-          <dt>{launch.ref.startsWith('article:') ? 'Article' : 'Release'}</dt>
-          <dd className="mono break">{launch.ref.replace(/^article:/, '')}</dd>
-          <dt>Kind</dt>
-          <dd>
-            {launch.kind}, by {launch.trigger}
-          </dd>
-          <dt>Started</dt>
-          <dd>{when(launch.createdAt)}</dd>
+        <dl className="dfacts">
+          <div>
+            <dt>State</dt>
+            <dd>
+              <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
+            </dd>
+          </div>
+          <div>
+            <dt>Repository</dt>
+            <dd className="break">{launch.repo}</dd>
+          </div>
+          <div>
+            <dt>{launch.ref.startsWith('article:') ? 'Article' : 'Release'}</dt>
+            <dd className="mono break">{launch.ref.replace(/^article:/, '')}</dd>
+          </div>
+          <div>
+            <dt>Pack</dt>
+            <dd>
+              {launch.kind}, started {launch.trigger === 'manual' ? 'by hand' : `by ${launch.trigger}`}
+            </dd>
+          </div>
+          <div>
+            <dt>Started</dt>
+            <dd>{when(launch.createdAt)}</dd>
+          </div>
           {launch.pullRequest && (
-            <>
+            <div>
               <dt>Drafts</dt>
               <dd>
                 <a className="break" href={launch.pullRequest} target="_blank" rel="noreferrer">
@@ -129,48 +144,52 @@ function Details({ data }: { data: Data }) {
                   <span className="visually-hidden"> (opens in a new tab)</span>
                 </a>
               </dd>
-            </>
+            </div>
           )}
-          <dt>Pieces out</dt>
-          <dd>{pieces.rows.filter((r) => r.status === 'live' || r.status === 'edited').length}</dd>
+          <div>
+            <dt>Pieces out</dt>
+            <dd>{out}</dd>
+          </div>
           {replies > 0 && (
-            <>
+            <div>
               <dt>Replies sent</dt>
               <dd>
                 <Link to="/comments">{replies}</Link>
               </dd>
-            </>
+            </div>
           )}
         </dl>
       </section>
       <AccountNumbers accounts={pieces.accounts} />
       {metrics.length > 0 && (
-        <section className="props-block details-wide" aria-labelledby="latest-title">
-          <h2 className="props-title" id="latest-title">
+        <section className="lcard dcard details-wide" aria-labelledby="latest-title">
+          <h2 className="dcard-title" id="latest-title">
             Every number, last reading
           </h2>
-          <div className="latest">
+          <div className="dsources">
             {[...bySource].map(([source, values]) => (
-              <table className="table latest-table" key={source}>
-                <caption>
-                  {CHANNEL_NAMES[source] ?? source} <span className="muted">read {when(values[0]!.takenAt)}</span>
-                </caption>
-                <tbody>
+              <section className="dsource" key={source} aria-label={CHANNEL_NAMES[source] ?? source}>
+                <header className="dsource-head">
+                  <ChannelIcon channel={source} size={18} />
+                  <strong>{CHANNEL_NAMES[source] ?? source}</strong>
+                  <span className="muted">read {when(values[0]!.takenAt)}</span>
+                </header>
+                <dl className="post-numbers dsource-numbers">
                   {values.map((v) => (
-                    <tr key={v.name}>
-                      <th scope="row">{v.name.replace(/_/g, ' ')}</th>
-                      <td className="num">{number(v.value)}</td>
-                    </tr>
+                    <div key={v.name}>
+                      <dt>{metricWords(v.name)}</dt>
+                      <dd>{number(v.value)}</dd>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </dl>
+              </section>
             ))}
           </div>
         </section>
       )}
       {jobs.length > 0 && (
-        <section className="props-block details-wide" aria-labelledby="jobs-title">
-          <h2 className="props-title" id="jobs-title">
+        <section className="lcard dcard details-wide" aria-labelledby="jobs-title">
+          <h2 className="dcard-title" id="jobs-title">
             Jobs of this launch
           </h2>
           <Jobs jobs={jobs} />

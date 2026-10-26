@@ -414,26 +414,34 @@ h2.ph.chan-title { display: inline-flex; align-items: center; gap: 12px; margin:
 .chan-selected { margin: 0; font-size: 13.5px; }
 .chan-panel .sched { background: var(--sc-ground); }
 .post-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.post-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 8px 16px; align-items: center; padding: 12px 14px; border-radius: 14px; background: var(--sc-ground); border: 1px solid var(--sc-hairline); }
+/*
+ * A piece: what it is, its account and its address on the left, its actions on the right, and its
+ * numbers as a row of figures across the bottom that wraps, so nothing pushes the row past the card
+ */
+.post-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 6px 16px; align-items: start; padding: 12px 14px 14px; border-radius: 14px; background: var(--sc-ground); border: 1px solid var(--sc-hairline); }
 .post-item[data-status="failed"] { border-color: var(--sc-failure); }
 .post-item[data-status="deleted"] .post-main { opacity: .7; }
-.post-check { display: inline-grid; place-items: center; width: 32px; height: 44px; }
+.post-check { display: inline-grid; place-items: center; width: 32px; height: 32px; }
 .post-check input { width: 18px; height: 18px; accent-color: var(--sc-yellow); }
-.post-main { display: grid; gap: 4px; min-width: 0; }
-.post-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: 700 14.5px/1.2 var(--sc-font-text); }
+.post-main { display: grid; gap: 3px; min-width: 0; padding-top: 5px; }
+.post-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: 700 15px/1.2 var(--sc-font-text); }
 .post-what .pill { height: 24px; font-size: 11.5px; padding: 0 9px; }
-.post-account { font-weight: 400; font-size: 13px; }
+.post-account { font-size: 13px; overflow-wrap: anywhere; }
 .post-link { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sc-muted); }
 a.post-link:hover { color: var(--sc-text); }
-.post-metrics { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--sc-muted); }
-.post-metrics li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.post-metrics strong { color: var(--sc-text); font-size: 15px; }
 .post-actions { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
 .post-none { font-size: 13px; }
-@media (max-width: 860px) {
+.post-numbers { grid-column: 2 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px 14px; margin: 8px 0 0; padding-top: 12px; border-top: 1px solid var(--sc-hairline); }
+.post-numbers > div { display: grid; gap: 2px; min-width: 0; }
+.post-numbers dt { order: 2; font-size: 12.5px; color: var(--sc-muted); overflow-wrap: anywhere; }
+.post-numbers dd { order: 1; margin: 0; display: flex; align-items: baseline; gap: 6px; font: 800 20px/1.1 var(--sc-font-text); font-variant-numeric: tabular-nums; }
+.post-delta { font: 700 12.5px/1 var(--sc-font-text); color: var(--sc-success); }
+.post-numbers-none { grid-column: 2 / -1; margin: 4px 0 0; font-size: 13px; }
+@media (max-width: 640px) {
   .post-item { grid-template-columns: 32px minmax(0, 1fr); }
-  .post-metrics, .post-actions { grid-column: 2; justify-content: flex-start; }
+  .post-actions { grid-column: 2; justify-content: flex-start; }
   .post-link { white-space: normal; overflow-wrap: anywhere; }
+  .post-numbers { grid-column: 1 / -1; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
 }
 @media (max-width: 640px) {
   .chan-strip { flex-wrap: nowrap; overflow-x: auto; padding: 6px 2px; margin: -6px -2px; scrollbar-width: thin; }
@@ -443,21 +451,37 @@ a.post-link:hover { color: var(--sc-text); }
 }
 
 /* The Details tab: properties, accounts, the last readings and the jobs */
-.details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 28px 40px; align-items: start; font-size: 14.5px; }
+/*
+ * A launch's Details: cards in the app's skin (.lcard), each titled in the display face. Facts are a
+ * label over a value in two columns; accounts are rows with their followers as a figure; every number
+ * is a figure grouped under its source's glyph, the same figures as a piece's in Channels.
+ */
+.details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 22px; align-items: start; }
 .details-wide { grid-column: 1 / -1; }
-.props-title { font: var(--sc-label); text-transform: uppercase; letter-spacing: .06em; color: var(--sc-muted); margin: 0 0 10px; }
-.props-list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 16px; margin: 0; align-items: center; }
-.props-list dt { color: var(--sc-muted); }
-.props-list dd { margin: 0; min-width: 0; }
-.props-accounts { list-style: none; margin: 0; padding: 0; }
-.props-accounts li { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--sc-hairline); }
-.props-accounts li:first-child { padding-top: 0; }
-.props-followers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
-.latest { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px 24px; align-items: start; }
-.latest-table caption { text-align: left; font-weight: 700; padding-bottom: 4px; }
-.latest-table caption .muted { font-weight: 400; font-size: 12.5px; }
-.latest-table th, .latest-table td { padding: 6px 4px; }
-.details .list { margin-bottom: 0 !important; }
+.dcard { gap: 16px; }
+.dcard .dcard-title { flex: none; margin: 0; font: 900 22px/1 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); }
+.dfacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 16px 20px; margin: 0; }
+.dfacts > div { display: grid; gap: 4px; min-width: 0; align-content: start; }
+.dfacts dt { font-size: 12.5px; color: var(--sc-muted); }
+.dfacts dd { margin: 0; min-width: 0; font-weight: 600; }
+.daccounts { list-style: none; margin: 0; padding: 0; display: grid; }
+.daccounts li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--sc-hairline); }
+.daccounts li:first-child { border-top: 0; padding-top: 0; }
+.daccount-pic { position: relative; display: inline-grid; }
+.daccount-glyph { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sc-ground); border: 1.5px solid var(--sc-rail); }
+.daccount-name { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.daccount-name .muted { font-size: 12.5px; }
+.daccount-figure { display: grid; justify-items: end; gap: 2px; text-align: right; font-size: 12.5px; }
+.daccount-figure strong { font: 800 20px/1.1 var(--sc-font-text); font-variant-numeric: tabular-nums; }
+.dsources { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 22px 28px; }
+.dsource { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.dsource-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; }
+.dsource-head .muted { font-size: 12.5px; }
+.dsource-numbers { margin: 0; padding-top: 10px; }
+@media (max-width: 420px) {
+  .daccounts li { grid-template-columns: auto minmax(0, 1fr); }
+  .daccount-figure { grid-column: 2; justify-items: start; text-align: left; }
+}
 .spark { flex: none; color: var(--sc-text); vertical-align: middle; overflow: visible; }
 
 /* Times for what is not out yet (components/launch/Schedule.tsx) */
@@ -549,3 +573,18 @@ html.lenis, html.lenis body { height: auto; }
 /* Comments: the filters behind the toolbar's Filters (layout.css has the bar's search), and the pager */
 .comment-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 14px; align-items: end; padding-top: 6px; }
 .comment-pager { justify-content: center; gap: 16px; margin: 24px 0; }
+
+/* Comments' replies per channel: a row per channel, its mode as a segmented control, what it means under it */
+.reply-modes { list-style: none; margin: 12px 0 0; padding: 0; display: grid; }
+.reply-mode { display: grid; gap: 8px; padding: 16px 0; border-top: 1px solid var(--sc-hairline); }
+.reply-mode-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.reply-mode-seg { flex: none; }
+.reply-mode-seg input:disabled + span { opacity: .45; cursor: not-allowed; }
+.reply-mode-text { margin: 0; max-width: 72ch; font-size: 13.5px; color: var(--sc-muted); overflow-wrap: anywhere; }
+.reply-mode-text strong { color: var(--sc-text); font-weight: 600; }
+/* A phone: the three modes side by side across the row, under the channel's name */
+@media (max-width: 560px) {
+  .reply-mode-seg { flex: 1 1 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border-radius: var(--sc-radius-pill); }
+  .reply-mode-seg span { justify-content: center; padding-inline: 6px; }
+  .reply-mode-seg label + label span { border-top: 0; border-left: 1px solid var(--sc-rail); }
+}
