@@ -1,6 +1,10 @@
 import { useEffect, useId, useState } from 'react';
 import { MultiCombobox } from '../ui/Combobox';
+import { DateRangePicker } from '../ui/DatePicker';
+import { dateToDay } from '../ui/dates';
+import { Drawer } from '../ui/Drawer';
 import { Popover } from '../ui/Popover';
+import { usePhone } from '../ui/ResponsiveMenu';
 import { Select, type Option } from '../ui/Select';
 import { DAYS_LIMIT, MAX_DAYS, daysBetween, isDay, type Bucket, type GroupBy, type Kind, type Metric, type Period, type StatsSearch } from '../../server/stats-search';
 
@@ -8,12 +12,13 @@ import { DAYS_LIMIT, MAX_DAYS, daysBetween, isDay, type Bucket, type GroupBy, ty
  * The Stats page's filters: the period at hand, as a segmented control, and everything else (the
  * filters, the grouping, the chart's kind and interval, the comparison, a custom range) one click
  * away behind "Filters". Every change goes to the address (the page's search params), which is what
- * loads the numbers, so a view is always shareable.
+ * loads the numbers, so a view is always shareable. On a phone the bar is one row (the period as a
+ * Select, Filters as a bottom sheet) with the range as a caption under it.
  */
 
 export const METRIC_NAMES: Record<Metric, string> = { views: 'Views', reactions: 'Reactions', comments: 'Comments', shares: 'Shares', clicks: 'Clicks', impressions: 'Impressions' };
 
-const PERIOD_OPTIONS: Array<{ value: Exclude<Period, 'custom'>; label: string }> = [
+const PERIOD_OPTIONS: Array<Option<Exclude<Period, 'custom'>>> = [
   { value: '7d', label: '7 days' },
   { value: '30d', label: '30 days' },
   { value: '90d', label: '90 days' },
@@ -46,40 +51,46 @@ export function FilterBar({ search, period, options, onChange, range }: FilterBa
     (search.chart !== 'line' ? 1 : 0) +
     (search.bucket !== 'day' ? 1 : 0) +
     (search.compare ? 1 : 0);
+  const phone = usePhone();
+  const pick = (period: Period) => {
+    if (period !== 'custom') onChange({ period, from: undefined, to: undefined });
+  };
+  const periodOptions: Array<Option<Period>> = [...PERIOD_OPTIONS, ...(search.period === 'custom' ? [{ value: 'custom' as const, label: 'Custom' }] : [])];
+  const trigger = (
+    <button type="button" className="btn btn-small stats-filters-button">
+      Filters
+      {set > 0 && (
+        <span className="stats-filters-count">
+          {set}
+          <span className="visually-hidden"> set</span>
+        </span>
+      )}
+    </button>
+  );
+  const filters = <Filters search={search} period={period} options={options} onChange={onChange} />;
   return (
     <section className="stats-filterbar" aria-label="What to show">
+      {/* Both shapes are rendered and CSS shows one, so the server's page is already right on a phone */}
       <div className="seg stats-period" role="radiogroup" aria-label="Period">
-        {PERIOD_OPTIONS.map((o) => (
+        {periodOptions.map((o) => (
           <label key={o.value}>
-            <input type="radio" name={`${id}-period`} checked={search.period === o.value} onChange={() => onChange({ period: o.value, from: undefined, to: undefined })} />
+            <input type="radio" name={`${id}-period`} checked={search.period === o.value} readOnly={o.value === 'custom'} onChange={() => pick(o.value)} />
             <span>{o.label}</span>
           </label>
         ))}
-        {search.period === 'custom' && (
-          <label>
-            <input type="radio" name={`${id}-period`} checked readOnly />
-            <span>Custom</span>
-          </label>
-        )}
       </div>
-      <Popover
-        title="Filters"
-        className="stats-filters-popup"
-        align="start"
-        trigger={
-          <button type="button" className="btn btn-small stats-filters-button">
-            Filters
-            {set > 0 && (
-              <span className="stats-filters-count">
-                {set}
-                <span className="visually-hidden"> set</span>
-              </span>
-            )}
-          </button>
-        }
-      >
-        <Filters search={search} period={period} options={options} onChange={onChange} />
-      </Popover>
+      <div className="stats-period-select">
+        <Select<Period> label={<span className="visually-hidden">Period</span>} options={periodOptions} value={search.period} onValueChange={pick} />
+      </div>
+      {phone ? (
+        <Drawer title="Filters" trigger={trigger}>
+          {filters}
+        </Drawer>
+      ) : (
+        <Popover title="Filters" className="stats-filters-popup" align="start" trigger={trigger}>
+          {filters}
+        </Popover>
+      )}
       <p className="stats-range muted" aria-live="polite">
         {range}
       </p>
@@ -167,21 +178,19 @@ function Filters({ search, period, options, onChange }: Omit<FilterBarProps, 'ra
           if (!rangeProblem) onChange({ period: 'custom', from, to });
         }}
       >
-        <span className="label">Custom range</span>
-        <div className="stats-filters-days">
-          <div className="field">
-            <label className="label" htmlFor={`${id}-from`}>
-              From
-            </label>
-            <input id={`${id}-from`} className="input" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor={`${id}-to`}>
-              To
-            </label>
-            <input id={`${id}-to`} className="input" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
-          </div>
-        </div>
+        <span className="label" aria-hidden="true">
+          Custom range
+        </span>
+        <DateRangePicker
+          label="Custom range"
+          from={from}
+          to={to}
+          max={dateToDay(new Date())}
+          onChange={(range) => {
+            setFrom(range.from);
+            setTo(range.to);
+          }}
+        />
         <button className="btn btn-small" type="submit" disabled={rangeProblem !== null}>
           Show this range
         </button>

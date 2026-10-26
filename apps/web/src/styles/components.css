@@ -271,3 +271,37 @@ html::-webkit-scrollbar-thumb:hover { background: var(--sc-muted); }
 .jobs-bar .seg small { margin-left: 6px; opacity: .7; font-size: 12px; }
 .jobs-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 @media (max-width: 560px) { .jobs-bar .seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .jobs-bar .seg span { justify-content: center; } }
+/* ---------- Date pickers: react-day-picker's parts (its default class names, no library theme) in role tokens ---------- */
+
+.ui-date-popover { width: auto; max-width: calc(100vw - 16px); }
+.ui-date-sheet { display: grid; justify-items: center; gap: 12px; padding-top: 8px; }
+.ui-date-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--sc-hairline); font-size: 13px; }
+.ui-date-sheet .ui-date-foot { margin-top: 0; }
+.rdp-root { --rdp-cell: 40px; position: relative; color: var(--sc-text); font: var(--sc-body); }
+.rdp-months { position: relative; display: flex; flex-wrap: wrap; gap: 20px; }
+.rdp-month { display: grid; gap: 6px; }
+.rdp-month_caption { display: flex; align-items: center; justify-content: center; min-height: 40px; }
+.rdp-caption_label { font: 700 15px/1 var(--sc-font-text); }
+.rdp-nav { position: absolute; top: 0; inset-inline: 0; display: flex; justify-content: space-between; pointer-events: none; }
+.rdp-button_previous, .rdp-button_next { pointer-events: auto; display: inline-grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent; color: var(--sc-text); cursor: pointer; }
+.rdp-button_previous:hover, .rdp-button_next:hover { background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
+.rdp-button_previous[disabled], .rdp-button_next[disabled] { opacity: .35; cursor: default; }
+.rdp-month_grid { border-collapse: collapse; }
+.rdp-weekday { width: var(--rdp-cell); padding: 4px 0; font: 600 12px/1 var(--sc-font-text); color: var(--sc-muted); text-align: center; }
+.rdp-day { width: var(--rdp-cell); height: var(--rdp-cell); padding: 0; text-align: center; }
+.rdp-day_button { width: 100%; height: 100%; border: 0; border-radius: 50%; background: transparent; color: inherit; font: 500 14px/1 var(--sc-font-text); cursor: pointer; }
+.rdp-day_button:hover { background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
+.rdp-day_button:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 1px; }
+.rdp-today:not(.rdp-selected) .rdp-day_button { border: var(--sc-border-control) solid var(--sc-rail); }
+.rdp-outside { color: var(--sc-muted); opacity: .6; }
+.rdp-disabled { opacity: .3; }
+.rdp-disabled .rdp-day_button { cursor: default; }
+.rdp-hidden { visibility: hidden; }
+.rdp-selected .rdp-day_button { background: var(--sc-black); color: var(--sc-on-black); font-weight: 700; }
+.rdp-range_middle { background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
+.rdp-range_middle .rdp-day_button { background: transparent; color: var(--sc-text); font-weight: 500; border-radius: 0; }
+.rdp-range_start { border-radius: 50% 0 0 50%; background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
+.rdp-range_end { border-radius: 0 50% 50% 0; background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
+.rdp-range_start.rdp-range_end { border-radius: 50%; }
+@media (pointer: coarse) { .rdp-root { --rdp-cell: 44px; } }
+@media (max-width: 400px) { .rdp-root { --rdp-cell: 40px; } }

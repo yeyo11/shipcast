@@ -214,5 +214,8 @@ export const comments = pgTable(
     unique('comments_channel_external_unique').on(t.channel, t.externalId),
     index('comments_by_post').on(t.postId),
     index('comments_by_status').on(t.status, t.createdAt),
+    // The page's filters: a channel's newest, and the newest of all, both in the order they are listed
+    index('comments_by_channel').on(t.channel, t.createdAt.desc(), t.id.desc()),
+    index('comments_by_newest').on(t.createdAt.desc(), t.id.desc()),
   ],
 );

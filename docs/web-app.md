@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T11:40:27.573350713Z
-updated_at: 2026-10-26T12:33:34.853587778Z
+created_at: 2026-10-25T20:33:47.239913855Z
+updated_at: 2026-10-26T12:39:39.440422516Z
 tags:
     - web-app
     - dashboard
@@ -21,6 +21,7 @@ tags:
     - mobile
     - launch-page
     - stats
+    - comments
 ---
 # The web app
 
@@ -125,7 +126,8 @@ runs on the owner's machine.
   scheduled time, a running job). Below, four tabs kept in the address (`?tab=`, and `?channel=`):
   **Channels**, a strip of channel chips (glyph and state dot) choosing one channel, shown with its
   totals, each piece with its link, its numbers over time, Edit and Delete (or Unpublish) where its
-  network allows them or Retry when it failed, its time while it is not out yet, and what the
+  network allows them or Retry when it failed, its time while it is not out yet (a day picked in the
+  calendar of the component layer and a time field), and what the
   network allows in a line; Edit selected and Delete everything sit above the panel. **Content**,
   what went out (or the drafts, editable while the pull request is open: a save is a commit on its
   branch) and the media, folded rows (an Accordion) opened on demand. **Search engines**, each
@@ -138,9 +140,21 @@ runs on the owner's machine.
 - **Write** (`/write`): an article in the owner's words, in Spanish or English; the channels it
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
   directly. See [articles](engine.md#articles-written-in-the-app).
-- **Channels** (`/channels`): see [accounts.md](accounts.md). A newly connected account lands on the
-  list, scrolled to and focused. The **Anthropic API** and an **OpenAI-compatible server** are
-  connected here too, as AI providers.
+- **Channels** (`/channels`): see [accounts.md](accounts.md#the-channels-page). Four tabs by kind of
+  network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
+  card in the launch card's skin. A newly connected account lands on the list, in its tab, scrolled
+  to and focused. The **Anthropic API** and an **OpenAI-compatible server** are connected here too,
+  under AI providers.
+- **Comments** (`/comments`): the comments on the owner's posts and the replies drafted for them
+  ([decisions/comment-assistant.md](decisions/comment-assistant.md)). The list can run to thousands,
+  so it is one page at a time (25) and every filter is in the address and applied by the database:
+  state (waiting for a reply, replied, ignored), channel, launch, post (offered once a launch is
+  chosen) and words to find in the comment or its author (`?state=&channel=&launch=&post=&q=&page=`;
+  a default is left out and a hand-edited link never breaks the page). The filters offer only what has
+  comments, with counts. The query is `Registry.commentsPage` (one join of comment and post, a count
+  of the same filter for the total, the indexes on status, channel and date; no query per row) and
+  `commentFacets` (three grouped queries); "waiting" covers new, drafted, being sent and failed
+  comments. Each channel's reply mode is below the list.
 - **Stats** (`/stats`): how the launches did, under one filter bar (the period, and the rest behind
   Filters) in four tabs: Overview (the totals, which pick the chart's metric, and the time chart),
   Ranking (the posts ranked; `?tab=posts` still opens it), Accounts (one table of the accounts'
@@ -185,7 +199,9 @@ on the [approved design direction](decisions/app-design-direction.md).
   `window.confirm`: disconnecting an account, rotating the webhook secret, revoking a token,
   clearing a setting), Combobox, Select (a release, a connection's brand, the AI page's providers and
   preview launch), Menu (an account's secondary actions), Tabs, Tooltip, Popover, Drawer, the toasts
-  and the palette. **ResponsiveMenu** is one menu in two shapes: the Popover on a desktop (in a
+  and the palette, and the date pickers (`DatePicker`, `DateRangePicker`, on react-day-picker: the
+  Popover on a desktop, the Drawer on a phone; they replaced every native date input).
+  **ResponsiveMenu** is one menu in two shapes: the Popover on a desktop (in a
   portal, flipped and shifted by Base UI to stay on screen, so opening it never scrolls the page) and
   the Drawer as a bottom sheet on a phone (640 px wide or a coarse pointer), with the same content and
   open state and nothing that needs hover; the launch cards' channel menus use it. **Collapsible**
@@ -346,4 +362,4 @@ group, never the same field twice. General's page is `src/routes/_app/settings/i
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]] · [[decisions/comment-assistant.md]]
