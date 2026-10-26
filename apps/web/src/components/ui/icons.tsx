@@ -103,3 +103,13 @@ export const HelpIcon = (p: IconProps) => (
     <path d="M9.75 9.5a2.25 2.25 0 114 1.4c-.9.7-1.75 1.2-1.75 2.6M12 16.75h.01" />
   </Glyph>
 );
+export const HistoryIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M4 12a8 8 0 108-8 8 8 0 00-6 2.7M4 4.5v3.2h3.2M12 8v4.25l2.75 1.75" />
+  </Glyph>
+);
+export const PlusIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Glyph>
+);

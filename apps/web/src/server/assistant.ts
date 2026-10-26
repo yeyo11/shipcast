@@ -10,9 +10,11 @@ import {
   type AssistantContext,
   type Checkout,
   type Launch,
+  type Registry,
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
+import { splitProposals } from '../components/assistant/diff.ts';
 import { id, InvalidInput, object, text } from './input.ts';
 
 /*
@@ -33,6 +35,15 @@ export interface AssistantDeps {
   /** Where claudio's REST fallback works when there is no repo: its workspace root */
   aiWorkdir?: string;
   maxBudgetUsd?: number;
+  /** Where chat turns are kept; without it the chat is not saved */
+  sessions?: Pick<Registry, 'createAssistantSession' | 'assistantSession' | 'addAssistantMessage'>;
+}
+
+/** A session's title: the first question in a line, or the draft's name when it has no words */
+export function sessionTitle(question: string, draftLabel: string | undefined): string {
+  const line = question.replace(/\s+/g, ' ').trim();
+  if (!line) return draftLabel || 'Untitled session';
+  return line.length > 80 ? `${line.slice(0, 79).trimEnd()}…` : line;
 }
 
 const MAX_DOCUMENT = 200_000;
@@ -62,6 +73,16 @@ export function parseAssistantRequest(input: unknown): AssistantRequest {
     request.lang = o.lang;
   }
   if (typeof o.channel === 'string' && o.channel) request.channel = text(o.channel, 'channel', 40);
+  if (o.sessionId !== undefined && o.sessionId !== null) request.sessionId = id(o.sessionId, 'sessionId');
+  if (typeof o.draftPath === 'string' && o.draftPath) request.draftPath = text(o.draftPath, 'draftPath', 300);
+  if (typeof o.draftLabel === 'string' && o.draftLabel) request.draftLabel = text(o.draftLabel, 'draftLabel', 200);
+  if (o.range !== undefined && o.range !== null) {
+    const r = object(o.range, 'range');
+    if (typeof r.start !== 'number' || typeof r.end !== 'number' || !Number.isInteger(r.start) || !Number.isInteger(r.end) || r.start < 0 || r.end < r.start) {
+      throw new InvalidInput('range must be two offsets into the text');
+    }
+    request.range = { start: r.start, end: r.end };
+  }
   if (o.target !== undefined) {
     if (!isAdaptTarget(o.target)) throw new InvalidInput('target is a network the assistant can adapt to');
     request.target = o.target;
@@ -107,6 +128,9 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
       return;
     }
 
+    // The chat is saved as it goes: the question first, so a session exists even if the answer fails
+    const saving = request.action === 'chat' && deps.sessions ? await startSaving(request, launch, deps.sessions) : undefined;
+
     let whole = false;
     const common = { model: setup.model, cwd: deps.aiWorkdir ?? '/workspace', ...(signal && { abortSignal: signal }), onWhole: () => (whole = true) };
     const stream =
@@ -126,17 +150,75 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
           })();
 
     let told = false;
-    for await (const chunk of stream) {
-      if (whole && !told) {
-        told = true;
-        yield { type: 'whole' };
+    let answer = '';
+    let settled = false;
+    try {
+      for await (const chunk of stream) {
+        if (whole && !told) {
+          told = true;
+          yield { type: 'whole' };
+        }
+        if (chunk) {
+          answer += chunk;
+          yield { type: 'text', text: chunk };
+        }
       }
-      if (chunk) yield { type: 'text', text: chunk };
+      settled = true;
+      const saved = saving ? await saving.finish(answer) : undefined;
+      if (saved) yield { type: 'saved', ...saved };
+      yield { type: 'done' };
+    } catch (error) {
+      // A stopped answer is kept as far as it got; a failed one with why it stopped
+      if (saving && !settled) {
+        settled = true;
+        await saving.finish(answer, signal?.aborted ? undefined : message(error));
+      }
+      throw error;
+    } finally {
+      // The reader went away mid-answer (the generator was returned): keep what was written
+      if (saving && !settled) await saving.finish(answer);
     }
-    yield { type: 'done' };
   } catch (error) {
     if (signal?.aborted) return;
     yield { type: 'error', message: message(error) };
+  }
+}
+
+type Sessions = NonNullable<AssistantDeps['sessions']>;
+
+/**
+ * Saves the owner's question and returns what saves the answer. Saving never breaks the chat: a
+ * database that fails costs the history, not the answer.
+ */
+async function startSaving(request: AssistantRequest, launch: Launch | undefined, sessions: Sessions) {
+  const question = request.messages?.at(-1)?.content ?? '';
+  try {
+    let sessionId = request.sessionId;
+    if (sessionId !== undefined && !(await sessions.assistantSession(sessionId))) sessionId = undefined;
+    sessionId ??= (
+      await sessions.createAssistantSession({
+        title: sessionTitle(question, request.draftLabel),
+        launchId: launch?.id ?? null,
+        draftPath: request.draftPath ?? null,
+        draftLabel: request.draftLabel ?? null,
+      })
+    ).id;
+    const id = sessionId;
+    const selection = request.range && request.selection ? { ...request.range, original: request.selection } : null;
+    await sessions.addAssistantMessage(id, { role: 'user', content: question, selection });
+    return {
+      async finish(answer: string, problem?: string): Promise<{ sessionId: number; messageId: number } | undefined> {
+        try {
+          const proposals = splitProposals(answer).flatMap((p) => (p.type === 'proposal' && p.complete ? [{ text: p.text, state: 'open' as const }] : []));
+          const row = await sessions.addAssistantMessage(id, { role: 'assistant', content: answer, proposals, selection, problem: problem ?? null });
+          return row ? { sessionId: id, messageId: row.id } : undefined;
+        } catch {
+          return undefined;
+        }
+      },
+    };
+  } catch {
+    return undefined;
   }
 }
 

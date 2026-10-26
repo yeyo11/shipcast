@@ -50,6 +50,13 @@
       "when": 1793017870658,
       "tag": "0007_comments_paging",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793019081235,
+      "tag": "0008_assistant_sessions",
+      "breakpoints": true
     }
   ]
 }

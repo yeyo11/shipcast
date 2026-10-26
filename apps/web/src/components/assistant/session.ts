@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { loadAssistantSession, settleAssistantProposal } from '../../server/assistant.functions';
 import { applyProposal } from './diff';
 import { readEvents, type Action, type AssistantEvent, type AssistantRequest, type ChatTurn, type CheckVerdict } from './protocol';
 
@@ -15,6 +16,9 @@ export interface AssistantTarget {
   lang?: 'en' | 'es';
   channel?: string;
   launchId?: number;
+  /** What the history shows the session under: the draft's file in the launches repo (none on Write) and its name */
+  draftPath?: string;
+  draftLabel?: string;
   /** Why "Check against the repo's code" cannot run here; undefined when it can */
   checkDisabled?: string;
 }
@@ -47,6 +51,10 @@ export interface ChatMessage extends ChatTurn {
   /** What the owner had selected when asking: proposals replace it */
   range?: Range;
   original?: string;
+  /** The saved answer's row, once the server has kept it: what settling a proposal is recorded against */
+  savedId?: number;
+  /** What was done with each proposal of the answer, by its number among the answer's proposals */
+  settled?: Record<number, 'accepted' | 'rejected'>;
 }
 
 const LABELS: Record<Action, string> = {
@@ -86,6 +94,8 @@ export function useAssistant(target: AssistantTarget) {
   const [selection, setSelection] = useState<Range>({ start: 0, end: 0 });
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  // The saved session the chat continues; undefined until the server keeps the first turn
+  const [sessionId, setSessionId] = useState<number | undefined>(undefined);
   const [announce, setAnnounce] = useState('');
   const actionAbort = useRef<AbortController | null>(null);
   const chatAbort = useRef<AbortController | null>(null);
@@ -109,6 +119,8 @@ export function useAssistant(target: AssistantTarget) {
       ...(t.lang && { lang: t.lang }),
       ...(t.channel && { channel: t.channel }),
       ...(t.launchId !== undefined && { launchId: t.launchId }),
+      ...(t.draftPath && { draftPath: t.draftPath }),
+      ...(t.draftLabel && { draftLabel: t.draftLabel }),
     };
   };
 
@@ -185,8 +197,12 @@ export function useAssistant(target: AssistantTarget) {
       const history = [...chat.filter((m) => !m.problem && m.content), mine].map(({ role, content: c }) => ({ role, content: c }));
       setChat((c) => [...c, mine, answer]);
       const update = (change: (m: ChatMessage) => ChatMessage) => setChat((c) => c.map((m) => (m.id === answer.id ? change(m) : m)));
-      void ask({ ...base(), action: 'chat', messages: history }, controller.signal, (event) => {
+      void ask({ ...base(), action: 'chat', messages: history, ...(sessionId !== undefined && { sessionId }), ...(range && { range }) }, controller.signal, (event) => {
         if (event.type === 'whole') update((m) => ({ ...m, whole: true }));
+        else if (event.type === 'saved') {
+          setSessionId(event.sessionId);
+          update((m) => ({ ...m, savedId: event.messageId }));
+        }
         else if (event.type === 'text') update((m) => ({ ...m, content: m.content + event.text }));
         else if (event.type === 'error') update((m) => ({ ...m, streaming: false, problem: event.message }));
         else if (event.type === 'done') {
@@ -198,12 +214,54 @@ export function useAssistant(target: AssistantTarget) {
         update((m) => ({ ...m, streaming: false, problem: error instanceof Error ? error.message : String(error) }));
       });
     },
-    [chat, selected, selection.start, selection.end],
+    [chat, sessionId, selected, selection.start, selection.end],
   );
 
   const stopChat = useCallback(() => {
     chatAbort.current?.abort();
     setChat((c) => c.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
+  }, []);
+
+  /** Starts a new session: what was said stays in the history */
+  const newSession = useCallback(() => {
+    chatAbort.current?.abort();
+    setChat([]);
+    setSessionId(undefined);
+  }, []);
+
+  /** Takes a saved session up again; false when it could not be loaded */
+  const openSession = useCallback(async (id: number): Promise<boolean> => {
+    try {
+      const { messages } = await loadAssistantSession({ data: id });
+      chatAbort.current?.abort();
+      setChat(
+        messages.map((m): ChatMessage => {
+          const settled: Record<number, 'accepted' | 'rejected'> = {};
+          m.proposals.forEach((p, i) => {
+            if (p.state !== 'open') settled[i] = p.state;
+          });
+          return {
+            id: nextId(),
+            role: m.role,
+            content: m.content,
+            savedId: m.id,
+            settled,
+            ...(m.problem && { problem: m.problem }),
+            ...(m.selection && { range: { start: m.selection.start, end: m.selection.end }, original: m.selection.original }),
+          };
+        }),
+      );
+      setSessionId(id);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** Records what the owner did with an answer's proposal, here and in the saved session */
+  const settle = useCallback((message: ChatMessage, proposal: number, state: 'accepted' | 'rejected') => {
+    setChat((c) => c.map((m) => (m.id === message.id ? { ...m, settled: { ...m.settled, [proposal]: state } } : m)));
+    if (message.savedId !== undefined) void settleAssistantProposal({ data: { messageId: message.savedId, index: proposal, state } }).catch(() => undefined);
   }, []);
 
   return {
@@ -220,7 +278,10 @@ export function useAssistant(target: AssistantTarget) {
     chat,
     send,
     stopChat,
-    clearChat: () => setChat([]),
+    sessionId,
+    newSession,
+    openSession,
+    settle,
     announce,
   };
 }

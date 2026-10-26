@@ -41,6 +41,13 @@ export interface AssistantRequest {
   launchId?: number;
   /** For `chat`: the conversation, the owner's last message last */
   messages?: ChatTurn[];
+  /** For `chat`: the saved session this turn continues; a new one is started when absent */
+  sessionId?: number;
+  /** For `chat`: where the selection sits in the text, saved with the question so its proposals can be applied again */
+  range?: { start: number; end: number };
+  /** What the session is about, for the history: the draft's file (none for an article on Write) and its name */
+  draftPath?: string;
+  draftLabel?: string;
 }
 
 export type CheckVerdict = 'backed' | 'planned' | 'not-found' | 'contradicted';
@@ -52,6 +59,8 @@ export type AssistantEvent =
   | { type: 'text'; text: string }
   | { type: 'check'; revised: string; findings: Array<{ claim: string; verdict: CheckVerdict; evidence: string }> }
   | { type: 'error'; message: string }
+  /** A chat turn was saved: the session it belongs to, and the answer's row for settling its proposals */
+  | { type: 'saved'; sessionId: number; messageId: number }
   | { type: 'done' };
 
 const DRAFT_CHANNELS: Record<string, string> = {
