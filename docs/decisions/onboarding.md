@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T09:21:40.555762039Z
-updated_at: 2026-10-26T09:21:40.555762039Z
+created_at: 2026-10-26T10:16:47.77132413Z
+updated_at: 2026-10-26T10:16:47.77132413Z
 tags:
     - decision
     - web-app
@@ -47,7 +47,38 @@ cramped and floated the form mid-page.
   AI task; a per-task choice that already works is left alone.
 - **Back** as a secondary button from step 2; **Skip this step** as a quiet text link only on the
   optional steps; **Finish later** as a text link in the top bar sets the onboarding aside.
+- **"Step n of 5" opens the list of the steps**, each with its state; every step up to the furthest
+  one reached (by its saved state, or opened in this visit) is a link. Back is never disabled, so a
+  slow save cannot trap anyone on a step.
 - Works at 320 px, keyboard focus visible, the bar's movement off under reduced motion.
+
+## Saying what is missing
+
+Added on 2026-10-26 after the owner tried it: Continue on a step with problems seemed to do nothing,
+and the brand.yml form answered with the schema's raw `brand.yml:3:14 displayName: Too small…`.
+
+- **Each step knows what it is missing** (no repo chosen, claudio's address or token, an interval
+  under 60 seconds, the brand.yml fields) and tells the wizard. While it does, **Continue is shown
+  unavailable** with `aria-disabled` (not `disabled`, so it stays focusable) and a hint beside it
+  ("To continue: add your name and add your blog's full address").
+- **Pressing it anyway** raises a failure toast ("Brand and blog isn't ready", seen wherever the page
+  is scrolled), scrolls the first field to fix into view (without smooth scrolling under reduced
+  motion) and focuses it, its message under it (`aria-invalid`, `aria-describedby`). A problem only
+  the server can find (the repo has no brand.yml) is pointed at the same way; other server failures
+  keep the failure toast.
+- **The brand.yml form is checked in the page** with the schema's rules in plain words: a name, the
+  blog's full `https://` address with a host, a GitHub login without the URL, at least one language.
+  "Show the file" points at the first problem instead of asking the server; whatever the server's
+  schema still finds is mapped to its field (`checkBrandForm` and `brandIssuesByField` in
+  `server/onboarding.ts`, tested), never shown as YAML lines.
+- **A press never misses**: the action buttons keep the focus where it is until the click runs, since
+  a field losing it would show its message and move the button mid-press. On narrow screens the
+  onboarding's toasts sit at the top, because a failure (which stays until closed) at the bottom
+  covered Back and Continue.
+- **Not done**: committing brand.yml from a preview copy is not a dry run. The app has no preview flag
+  beyond `SHIPCAST_APP_TLS=off`, which `shipcast init` also writes for a real local install, so it
+  cannot tell a preview from a real install; the commit is only ever made after the file is shown
+  and "Commit brand.yml" is pressed, and never over an existing brand.yml.
 
 ## A state that never gets in the way
 
