@@ -55,10 +55,10 @@ function Launches() {
           {(lanes.approval.length > 0 || lanes.pending.length > 0) && (
             <ul className="lrows" aria-label="Launches that wait">
               {lanes.approval.map((launch) => (
-                <ApprovalRow key={launch.id} launch={launch} timezone={timezone} />
+                <ApprovalRow key={launch.id} launch={launch} timezone={timezone} avatarUrl={launch.avatarUrl} />
               ))}
               {lanes.pending.map((launch) => (
-                <PendingRow key={launch.id} launch={launch} timezone={timezone} />
+                <PendingRow key={launch.id} launch={launch} timezone={timezone} avatarUrl={launch.avatarUrl} />
               ))}
             </ul>
           )}
@@ -67,7 +67,7 @@ function Launches() {
             <MotionConfig reducedMotion="user">
               <div className="lcards">
                 {lanes.out.map((launch) => (
-                  <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} />
+                  <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} avatarUrl={launch.avatarUrl} />
                 ))}
               </div>
             </MotionConfig>

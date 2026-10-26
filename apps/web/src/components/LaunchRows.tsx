@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { launchDateLabel } from '../server/launch-summary';
 import type { LaunchView } from '../server/view';
+import { ProjectAvatar } from './ProjectAvatar';
 import { Pill } from './ui';
 
 /*
@@ -11,10 +12,12 @@ import { Pill } from './ui';
 
 const titleOf = (launch: LaunchView) => (launch.ref.startsWith('article:') ? 'Article' : (launch.repo.split('/')[1] ?? launch.repo));
 
-function Who({ launch, timezone }: { launch: LaunchView; timezone: string }) {
+function Who({ launch, timezone, avatarUrl }: { launch: LaunchView; timezone: string; avatarUrl: string | null }) {
   const article = launch.ref.startsWith('article:');
   return (
     <div className="lrow-who">
+      <ProjectAvatar src={avatarUrl} article={article} />
+      <div className="lrow-name">
       <h2 className="lrow-title">
         <Link to="/launches/$id" params={{ id: String(launch.id) }}>
           {titleOf(launch)} {!article && <span className="lcard-ref">{launch.ref}</span>}
@@ -23,14 +26,15 @@ function Who({ launch, timezone }: { launch: LaunchView; timezone: string }) {
       <p className="lrow-meta">
         {launch.repo} · {launchDateLabel(launch.createdAt, timezone)}
       </p>
+      </div>
     </div>
   );
 }
 
-export function ApprovalRow({ launch, timezone }: { launch: LaunchView; timezone: string }) {
+export function ApprovalRow({ launch, timezone, avatarUrl }: { launch: LaunchView; timezone: string; avatarUrl: string | null }) {
   return (
     <li className="lrow lrow-approval">
-      <Who launch={launch} timezone={timezone} />
+      <Who launch={launch} timezone={timezone} avatarUrl={avatarUrl} />
       <p className="lrow-text">Drafts are waiting in the pull request.</p>
       <div className="lrow-actions">
         {launch.pullRequest && (
@@ -46,11 +50,11 @@ export function ApprovalRow({ launch, timezone }: { launch: LaunchView; timezone
   );
 }
 
-export function PendingRow({ launch, timezone }: { launch: LaunchView; timezone: string }) {
+export function PendingRow({ launch, timezone, avatarUrl }: { launch: LaunchView; timezone: string; avatarUrl: string | null }) {
   const drafting = launch.status === 'detected' || launch.status === 'generating';
   return (
     <li className="lrow lrow-pending">
-      <Who launch={launch} timezone={timezone} />
+      <Who launch={launch} timezone={timezone} avatarUrl={avatarUrl} />
       <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
       <p className="lrow-text">{drafting ? 'Shipcast is reading the code and writing each piece.' : 'Nothing was published for this release.'}</p>
       <div className="lrow-actions">

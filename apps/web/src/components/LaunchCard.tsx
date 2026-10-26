@@ -5,6 +5,7 @@ import { cardChannels, foldMarks, launchDateLabel, markCapacity, MARK_WORD, type
 import { zonedLabel } from '../server/pieces';
 import { CHANNEL_NAMES, type LaunchView } from '../server/view';
 import { ChannelIcon, StateDot } from './launch/Glance';
+import { ProjectAvatar } from './ProjectAvatar';
 import { number, Pill } from './ui';
 import { ResponsiveMenu } from './ui/ResponsiveMenu';
 
@@ -300,11 +301,14 @@ export function LaunchCard({
   numbers,
   postAccounts,
   timezone,
+  avatarUrl = null,
 }: {
   launch: LaunchView;
   numbers: LaunchNumbers | null;
   postAccounts: Record<number, string>;
   timezone: string;
+  /** The project's picture (the repo owner's GitHub avatar); null shows our own scene */
+  avatarUrl?: string | null;
 }) {
   const channels = cardChannels({ posts: launch.posts, failures: launch.failures, postAccounts });
   const [peek, setPeek] = useState<string | null>(null);
@@ -320,6 +324,7 @@ export function LaunchCard({
   return (
     <article className={`lcard${waiting ? ' waiting' : ''}`} data-peek={peek ? '' : undefined}>
       <header>
+        <ProjectAvatar src={avatarUrl} article={article} />
         <h2>
           <Link to="/launches/$id" params={{ id: String(launch.id) }}>
             {article ? 'Article' : launch.repo.split('/')[1]} {!article && <span className="lcard-ref">{launch.ref}</span>}
