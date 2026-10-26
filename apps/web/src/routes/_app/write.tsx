@@ -35,6 +35,7 @@ function Write() {
     value: markdown,
     onChange: setMarkdown,
     lang,
+    draftLabel: title.trim() || 'Article on Write',
     checkDisabled: 'An article of your own has no code behind it: it is the truth the pieces follow.',
   });
   return (

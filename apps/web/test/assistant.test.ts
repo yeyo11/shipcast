@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Claudio, LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES, type AiProvider, type Launch } from '@shipcast/engine';
-import { mockStreamingProvider, type StreamCall } from '@shipcast/engine/testing';
+import { memoryRegistry, mockStreamingProvider, type StreamCall } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import { readEvents, type AssistantEvent } from '../src/components/assistant/protocol.ts';
-import { handleAssistant, parseAssistantRequest, type AssistantDeps } from '../src/server/assistant.ts';
+import { handleAssistant, parseAssistantRequest, sessionTitle, type AssistantDeps } from '../src/server/assistant.ts';
 import { tourSteps } from '../src/components/tour/steps.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -22,9 +22,9 @@ function deps(provider: AiProvider): AssistantDeps {
   };
 }
 
-async function ask(body: unknown, provider: AiProvider): Promise<{ status: number; events: AssistantEvent[]; json?: unknown }> {
+async function ask(body: unknown, provider: AiProvider, sessions?: AssistantDeps['sessions']): Promise<{ status: number; events: AssistantEvent[]; json?: unknown }> {
   const request = new Request('http://app/api/assistant', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const response = await handleAssistant(request, async () => deps(provider));
+  const response = await handleAssistant(request, async () => ({ ...deps(provider), ...(sessions && { sessions }) }));
   if (!response.headers.get('content-type')?.includes('ndjson')) return { status: response.status, events: [], json: await response.json() };
   const events: AssistantEvent[] = [];
   for await (const event of readEvents(response.body!)) events.push(event);
@@ -124,4 +124,55 @@ test('the tour chains its pages, and leaves the launch page out when there is no
     if (step.selector) assert.ok(step.selector.startsWith(`main[data-path="${step.route}"]`), step.selector);
   });
   assert.ok(!tourSteps({ launchId: null }).some((s) => s.route.startsWith('/launches/')));
+});
+
+test('a chat turn is saved as it streams: the question, then the answer with its proposals, in one session', async () => {
+  const registry = await memoryRegistry();
+  const provider = await mockStreamingProvider(['Try this:\n```proposal\nNew.\n```']);
+  const body = { action: 'chat', selection: 'Old.', range: { start: 0, end: 4 }, document: 'Old. Rest.', launchId: 7, draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky', messages: [{ role: 'user', content: 'Punchier, please' }] };
+  const { events } = await ask(body, provider, registry);
+  const saved = events.find((e) => e.type === 'saved');
+  assert.ok(saved && saved.type === 'saved');
+  assert.equal(events.at(-1)?.type, 'done');
+
+  const session = await registry.assistantSession(saved.sessionId);
+  assert.deepEqual({ title: session?.title, launchId: session?.launchId, draftPath: session?.draftPath, draftLabel: session?.draftLabel }, { title: 'Punchier, please', launchId: 7, draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky' });
+  const turns = await registry.assistantMessages(saved.sessionId);
+  assert.deepEqual(turns.map((t) => [t.role, t.content]), [['user', 'Punchier, please'], ['assistant', 'Try this:\n```proposal\nNew.\n```']]);
+  assert.deepEqual(turns[0]?.selection, { start: 0, end: 4, original: 'Old.' });
+  assert.deepEqual(turns[1]?.proposals, [{ text: 'New.', state: 'open' }]);
+  assert.equal(turns[1]?.id, saved.messageId);
+
+  // A second turn with the session's id continues it instead of starting another
+  await ask({ ...body, sessionId: saved.sessionId, messages: [{ role: 'user', content: 'Again' }] }, await mockStreamingProvider(['Done.']), registry);
+  assert.equal((await registry.assistantSessions()).sessions.length, 1);
+  assert.equal((await registry.assistantMessages(saved.sessionId)).length, 4);
+});
+
+test('a failed answer is saved with why it stopped, and a quick action is not saved at all', async () => {
+  const registry = await memoryRegistry();
+  const failing: AiProvider = {
+    id: 'test',
+    generateObject: async () => assert.fail('not used'),
+    streamText: async function* () {
+      yield 'Half';
+      throw new Error('the model is down');
+    },
+  };
+  await ask({ action: 'chat', selection: '', document: 'x', messages: [{ role: 'user', content: 'Hi' }] }, failing, registry);
+  const [session] = (await registry.assistantSessions()).sessions;
+  const turns = await registry.assistantMessages(session!.id);
+  assert.equal(turns[1]?.content, 'Half');
+  assert.equal(turns[1]?.problem, 'the model is down');
+
+  await ask({ action: 'improve', selection: 'x', document: 'x' }, await mockStreamingProvider(['y']), registry);
+  assert.equal((await registry.assistantSessions()).sessions.length, 1);
+});
+
+test('a session is titled by the first question, or by the draft when there are no words', () => {
+  assert.equal(sessionTitle('  Make   it\npunchier ', 'Bluesky'), 'Make it punchier');
+  assert.equal(sessionTitle('', 'Bluesky'), 'Bluesky');
+  assert.equal(sessionTitle('x'.repeat(200), undefined).length, 80);
+  assert.throws(() => parseAssistantRequest({ action: 'chat', document: 'x', sessionId: 0, messages: [{ role: 'user', content: 'hi' }] }), /sessionId/);
+  assert.throws(() => parseAssistantRequest({ action: 'chat', document: 'x', range: { start: 5, end: 2 }, messages: [{ role: 'user', content: 'hi' }] }), /range/);
 });

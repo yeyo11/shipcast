@@ -42,6 +42,8 @@ function Editor({ launchId, draft, editable, article }: { launchId: number; draf
     value: content,
     onChange: setContent,
     launchId,
+    draftPath: draft.path,
+    draftLabel: draft.label,
     ...(lang && { lang }),
     ...(channel && { channel }),
     ...(article && { checkDisabled: 'This launch is an article you wrote: there is no code to check it against, the article is the truth.' }),
