@@ -74,7 +74,7 @@
 .chart-swatch { flex: none; display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .chart-swatch-line { flex: none; }
 .chart-box { position: relative; width: 100%; min-width: 0; }
-.chart-plot { position: relative; border-radius: 8px; }
+.chart-plot { position: relative; border-radius: 8px; user-select: none; -webkit-user-select: none; }
 .chart-plot:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 4px; }
 .chart-svg { display: block; overflow: visible; }
 /* Horizontal drags brush and vertical ones still scroll the page on a phone */
