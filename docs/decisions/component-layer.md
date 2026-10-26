@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:31:21.19467279Z
-updated_at: 2026-10-25T16:31:21.19467279Z
+created_at: 2026-10-26T12:34:15.984238479Z
+updated_at: 2026-10-26T12:38:19.672015668Z
 tags:
     - decision
     - web-app
@@ -45,6 +45,7 @@ palette) are built on [Base UI](https://base-ui.com) (`@base-ui/react` 1.x) and 
   - `Menu` (secondary actions behind one button: an account's Check, Publish with this one, Rename;
     the signed-in user's Sign out), `Tabs`, `Tooltip` (with one app-wide `TooltipProvider`),
     `Popover`, `Drawer` (a bottom sheet, swiped down to close).
+  - `DatePicker` and `DateRangePicker` (`DatePicker.tsx`, with `dates.ts`): see the next section.
   - `CommandPalette`: a Dialog around an inline Autocomplete, after Linear's. ⌘K or Ctrl+K anywhere,
     or Search in the top bar, or the phone's More; it filters the sections and the main actions
     (launch a repo, write, connect an account, run an automation round, create a token, sign out).
@@ -61,6 +62,27 @@ palette) are built on [Base UI](https://base-ui.com) (`@base-ui/react` 1.x) and 
 - **Native where native is enough.** The drafts on a launch's page stay native `<details>` (with a
   drawn marker), and the segmented controls (`.seg`) stay radio buttons that stack on narrow screens:
   neither needed a component.
+
+## Date pickers (2026-10-26)
+
+The native `<input type="date">` popup ignores Cartel and overflows a phone, and Base UI has no
+calendar, so the day pickers are built on [react-day-picker](https://daypicker.dev) 9 (the grid, the
+arrow keys, Page Up/Down for months, Home/End for the week), without its stylesheet or theme.
+
+- `DatePicker` picks one day, `DateRangePicker` a range (two months side by side on a desktop, one on
+  a phone; it stays open until Done so the range can be read before it is used).
+- The calendar's parts keep react-day-picker's default `rdp-*` class names and are styled in
+  `components.css` with the role tokens only: the selected day in the black role, the range as a tint
+  of the text colour, today outlined, the focus ring yellow. Cells are 44 px under a coarse pointer.
+- The same calendar opens in the `Popover` on a desktop and in the `Drawer` (a bottom sheet) on a
+  phone (at most 640 px wide, or a coarse pointer), the rule `ResponsiveMenu` already uses
+  (`usePhone`).
+- Weeks start on Monday and days read day first (`en-GB`). `dates.ts` converts between the app's
+  `YYYY-MM-DD` days and a local-midnight `Date` from the parts, never by parsing an instant, so a day
+  never slides for someone west of UTC and a day that does not exist (31 February) is refused.
+- Every date input in the app uses them: the Stats custom range, and the launch page's scheduling,
+  where the day is a `DatePicker` (today onwards) and the time stays a native time field; together
+  they form the `datetime-local` text the zone helpers (`zonedInputToIso`) already read.
 
 ## Why Base UI
 
