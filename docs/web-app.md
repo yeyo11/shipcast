@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:33:47.239913855Z
-updated_at: 2026-10-26T12:39:39.440422516Z
+created_at: 2026-10-26T12:40:23.704829086Z
+updated_at: 2026-10-26T13:09:44.07335014Z
 tags:
     - web-app
     - dashboard
@@ -115,8 +115,13 @@ runs on the owner's machine.
   mark opens the same menu (`ResponsiveMenu`), a line per post (labelled by account, language or
   kind; a link in a new tab, or its state) and a way to the channel on the launch page; while it is
   open the card's numbers and chart turn to that channel against the launch's own scale, counted
-  and morphed with Motion (instant under reduced motion), without the card changing height. A launch
-  waiting for the owner is the yellow card under the yellow band. The queue's jobs are not here any
+  and morphed with Motion (instant under reduced motion), without the card changing height.
+  **The cards' surface** is Cartel's neutral raised one, like every other card of the app: `--sc-raised`,
+  a hairline border and the card radius, with no yellow stamp. Text, the chart (the text colour, not
+  yellow, which is under 3:1 on the day theme's light card), the state dots, the marks' tiles and
+  menus, the "+n" chip, the accounts count and the scope pill are all on the role tokens, so they hold
+  AA contrast in the night and the day theme. The glyphs follow the theme. Only a launch waiting for
+  the owner is the yellow card, with dark-on-yellow text. The queue's jobs are not here any
   more: they are on Automation. `/api/launches` gives the launches as JSON behind the session; scripts
   and the MCP server use the [REST API](api.md) instead.
 - **A launch** (`/launches/<id>`): a compact header (title, repo, launch date, state pill, Publish
@@ -127,7 +132,7 @@ runs on the owner's machine.
   **Channels**, a strip of channel chips (glyph and state dot) choosing one channel, shown with its
   totals, each piece with its link, its numbers over time, Edit and Delete (or Unpublish) where its
   network allows them or Retry when it failed, its time while it is not out yet (a day picked in the
-  calendar of the component layer and a time field), and what the
+  calendar and a time in the time field, both of the component layer), and what the
   network allows in a line; Edit selected and Delete everything sit above the panel. **Content**,
   what went out (or the drafts, editable while the pull request is open: a save is a commit on its
   branch) and the media, folded rows (an Accordion) opened on demand. **Search engines**, each
@@ -139,12 +144,20 @@ runs on the owner's machine.
   of the queue.
 - **Write** (`/write`): an article in the owner's words, in Spanish or English; the channels it
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
-  directly. See [articles](engine.md#articles-written-in-the-app).
+  directly. See [articles](engine.md#articles-written-in-the-app). The text has the **writing
+  assistant** ([decisions/writing-assistant.md](decisions/writing-assistant.md)), here and in each
+  draft's editor: quick actions on the selected text (improve, shorten, translate, titles, adapt to a
+  network, check against the code), a side chat for open requests, and every proposal a word-by-word
+  diff to accept or reject. Its chats are saved as they stream (sessions and messages in the
+  registry), listed from a History button with the next page loaded as the list scrolls, and taken up
+  again with what was done to each proposal. On a phone (760 px and under) the chat is a floating
+  bubble that opens a full-screen sheet; messages carry avatars (the signed-in user's GitHub picture,
+  the Shipcast mark for the assistant).
 - **Channels** (`/channels`): see [accounts.md](accounts.md#the-channels-page). Four tabs by kind of
   network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
-  card in the launch card's skin. A newly connected account lands on the list, in its tab, scrolled
-  to and focused. The **Anthropic API** and an **OpenAI-compatible server** are connected here too,
-  under AI providers.
+  card in the launch card's skin (the same neutral raised surface, on role tokens). A newly connected
+  account lands on the list, in its tab, scrolled to and focused. The **Anthropic API** and an
+  **OpenAI-compatible server** are connected here too, under AI providers.
 - **Comments** (`/comments`): the comments on the owner's posts and the replies drafted for them
   ([decisions/comment-assistant.md](decisions/comment-assistant.md)). The list can run to thousands,
   so it is one page at a time (25) and every filter is in the address and applied by the database:
@@ -154,7 +167,8 @@ runs on the owner's machine.
   comments, with counts. The query is `Registry.commentsPage` (one join of comment and post, a count
   of the same filter for the total, the indexes on status, channel and date; no query per row) and
   `commentFacets` (three grouped queries); "waiting" covers new, drafted, being sent and failed
-  comments. Each channel's reply mode is below the list.
+  comments. **Approve and send** asks first in the app's alert dialog (the network, and that the reply
+  cannot be edited afterwards). Each channel's reply mode is below the list.
 - **Stats** (`/stats`): how the launches did, under one filter bar (the period, and the rest behind
   Filters) in four tabs: Overview (the totals, which pick the chart's metric, and the time chart),
   Ranking (the posts ranked; `?tab=posts` still opens it), Accounts (one table of the accounts'
@@ -194,13 +208,31 @@ on the [approved design direction](decisions/app-design-direction.md).
   filters the sections (AI, Automation, API and Settings among them) and the main actions (launch a
   repo, write, connect an account, run an automation round, create a token, sign out); Enter runs
   the highlighted one. On a phone the dialog is centred with margins that respect the safe areas.
+- **The first-run onboarding and the tour** ([decisions/onboarding.md](decisions/onboarding.md)): a
+  centred wizard on the first sign-in, then an optional tour (NextStep) of Launches, a launch's page,
+  Write and its assistant, Channels and Automation, offered when the onboarding ends and from the
+  user menu or the palette (Take the tour). Moving between steps goes through one controller,
+  `components/tour/TourRuntime.tsx`: it navigates without resetting the scroll, waits for the target
+  and for its box to stop moving, scrolls it into the part of the window no bar covers (with Lenis,
+  so nothing fights the page's scroller) and only then moves NextStep on; the card follows the
+  spotlight's glide, the buttons wait while a move is under way, and a target fixed to the screen
+  (the phone's bubble) keeps its spotlight through a scroll. The pointer is a notch on the card's
+  edge drawn by Shipcast (`notchFor` in `components/tour/steps.ts`).
 - **The components** are Base UI wearing Cartel only, typed wrappers in `src/components/ui/`, styled in
   `src/styles/components.css`: Dialog, an AlertDialog behind `ConfirmButton` (it replaced every
   `window.confirm`: disconnecting an account, rotating the webhook secret, revoking a token,
-  clearing a setting), Combobox, Select (a release, a connection's brand, the AI page's providers and
+  clearing a setting, sending a comment's reply; nothing in the app calls the browser's `confirm` or
+  `alert`), Combobox, Select (a release, a connection's brand, the AI page's providers and
   preview launch), Menu (an account's secondary actions), Tabs, Tooltip, Popover, Drawer, the toasts
-  and the palette, and the date pickers (`DatePicker`, `DateRangePicker`, on react-day-picker: the
-  Popover on a desktop, the Drawer on a phone; they replaced every native date input).
+  and the palette, the date pickers (`DatePicker`, `DateRangePicker`, on react-day-picker: the
+  Popover on a desktop, the Drawer on a phone; they replaced every native date input) and the
+  **time field** (`TimeField`, beside the day picker where a piece is scheduled). The time field
+  replaced the native `<input type="time">`: an hour and a minute segment in 24 hours inside one
+  control in the input's skin; type the digits (a shown `01` then a 7 is 17; a last digit past 2 moves
+  on to the minutes), Up and Down step a segment and wrap, Left, Right and `:` move between them,
+  Backspace clears, and `inputMode="numeric"` gives a phone its number pad. Its value is still the
+  `HH:MM` text of the `datetime-local` string the server helpers read; the pure parts (`parseTime`,
+  `formatTime`, `stepTime`, `typeTime` in `ui/dates.ts`) are tested.
   **ResponsiveMenu** is one menu in two shapes: the Popover on a desktop (in a
   portal, flipped and shifted by Base UI to stay on screen, so opening it never scrolls the page) and
   the Drawer as a bottom sheet on a phone (640 px wide or a coarse pointer), with the same content and
@@ -362,4 +394,4 @@ group, never the same field twice. General's page is `src/routes/_app/settings/i
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]] · [[decisions/comment-assistant.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]] · [[decisions/comment-assistant.md]] · [[decisions/writing-assistant.md]] · [[decisions/onboarding.md]]
