@@ -59,13 +59,13 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
 .section-intro { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 24px; height: 140px; margin-bottom: 20px; overflow: hidden; }
 .section-intro-text { min-width: 0; }
 .section-intro .ph.settings-title { line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.section-intro p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.section-intro p { margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .section-intro-art { pointer-events: none; }
 .section-intro-art svg { width: auto; max-height: 128px; }
 .section-intro[data-compact] p { visibility: hidden; transition: visibility 0s linear .25s; }
 @media (max-width: 759px) {
-  .section-intro { height: 56px !important; grid-template-columns: minmax(0, 1fr); }
-  .section-intro .ph.settings-title { font-size: 24px !important; }
+  .section-intro { height: 68px !important; grid-template-columns: minmax(0, 1fr); }
+  .section-intro .ph.settings-title { font-size: 36px; }
   .section-intro p, .section-intro-art { display: none; }
 }
 

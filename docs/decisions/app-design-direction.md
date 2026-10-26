@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T14:55:50.446436644Z
-updated_at: 2026-10-26T15:30:37.452951972Z
+created_at: 2026-10-26T15:33:20.756229049Z
+updated_at: 2026-10-26T15:50:08.037474351Z
 tags:
     - decision
     - design
@@ -85,10 +85,13 @@ Chosen by the owner after trying the live preview of the second interface round.
 - **One banner height.** Every band is the same height on a wide screen (200 px, the title on one
   line, the lead clamped to two), so moving between sections never shifts the work area; the
   per-page overrides are gone.
-- **A banner that folds.** A small button in the band's corner folds it to a 56 px title strip and
-  back, animated with Motion (instant under reduced motion). The choice is one for every page and
-  kept in a cookie the server reads, so a page never draws the other size first. Phones always get
-  the strip, without the button.
+- **A banner that folds, and keeps its title.** A small button in the band's corner folds it to 104 px
+  and back, animated with Motion (instant under reduced motion). Folding takes away only the lead
+  and the illustration: the title keeps its size, so the band reads the same, just shorter (the first
+  version shrank the title to a 56 px strip, which the owner rejected as badly laid out). The choice
+  is one for every page and kept in a cookie the server reads, so a page never draws the other size
+  first. Phones always get the folded design, with a slightly smaller title (44 px, 84 px tall) and
+  without the button.
 - **Launches: what waits above, what went out in a grid.** A launch waiting for approval is a
   yellow row above the grid, with Review the drafts; one drafting or not launched is a quiet dashed
   row. The grid holds only launches that went out, every card the same height.

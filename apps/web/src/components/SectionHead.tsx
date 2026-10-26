@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useBannerState } from './BannerState';
 
 /** A section head's two sizes, in px (layout.css draws the same) */
-const SECTION_HEIGHT = { full: 140, compact: 56 } as const;
+const SECTION_HEIGHT = { full: 140, compact: 80 } as const;
 
 /**
  * The title of one Settings section: the page's own h1 is Settings, so each section is an h2 with its
@@ -16,11 +16,14 @@ export function SectionHead({ title, children, art }: { title: ReactNode; childr
     <MotionConfig reducedMotion="user" transition={{ duration: 0.25, ease: 'easeOut' }}>
       <motion.header className="section-intro" data-compact={compact || undefined} initial={false} animate={{ height: compact ? SECTION_HEIGHT.compact : SECTION_HEIGHT.full }}>
         <div className="section-intro-text">
-          <motion.h2 className="ph settings-title" initial={false} animate={{ fontSize: compact ? '24px' : '48px' }}>
-            {title}
-          </motion.h2>
+          <h2 className="ph settings-title">{title}</h2>
           {children && (
-            <motion.p className="muted" initial={false} animate={{ opacity: compact ? 0 : 1 }} aria-hidden={compact || undefined}>
+            <motion.p
+              className="muted"
+              initial={false}
+              animate={{ opacity: compact ? 0 : 1, height: compact ? 0 : 'auto', marginTop: compact ? 0 : 8 }}
+              aria-hidden={compact || undefined}
+            >
               {children}
             </motion.p>
           )}

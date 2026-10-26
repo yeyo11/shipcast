@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:33:47.239913855Z
-updated_at: 2026-10-26T15:33:04.563204479Z
+created_at: 2026-10-26T15:33:28.83554596Z
+updated_at: 2026-10-26T15:51:23.671382558Z
 tags:
     - web-app
     - dashboard
@@ -265,14 +265,18 @@ on the [approved design direction](decisions/app-design-direction.md).
   under it and the section's illustration, at **one height on every page** (200 px on a wide screen:
   the title on one line, the lead clamped to two), so moving between sections never shifts the work
   area. A Settings section's head (`SectionHead`) is 140 px, likewise fixed. **The banner folds**: a
-  small button in its corner ("Collapse the banner", `aria-expanded`) turns it into a 56 px title
-  strip with a "+" to expand it again; Motion animates the height, the title's size and the fades in
-  250 ms, instant under reduced motion. The choice is one for every page (`useBannerState` in
-  `components/BannerState.tsx`), kept in the `sc_banner` cookie (`compact` or `full`, a year,
-  `Path=/`, `SameSite=Lax`, not HttpOnly since the page writes it); the shell's loader reads it on
-  the server (`getBanner`), so the page is drawn at the right size from the start. The helpers are
-  `src/server/banner.ts`, tested. Section heads fold with the banner and have no button of their own.
-  Phones (under 760 px) always get the strip, without the illustration, the lead or the button.
+  small button in its corner ("Collapse the banner", `aria-expanded`) folds it to 104 px (80 px for a
+  section head) with a "+" to expand it again. Folding takes away only the lead and the illustration;
+  **the title keeps its size**, so the band reads the same, just shorter (the first version shrank the
+  title to a 56 px strip, which looked wrong). The lead leaves the layout as well as the view (its
+  height goes to zero), so the title stays centred in the folded band. Motion animates the height and
+  the fades in 250 ms, instant under reduced motion. The choice is one for every page
+  (`useBannerState` in `components/BannerState.tsx`), kept in the `sc_banner` cookie (`compact` or
+  `full`, a year, `Path=/`, `SameSite=Lax`, not HttpOnly since the page writes it); the shell's loader
+  reads it on the server (`getBanner`), so the page is drawn at the right size from the start. The
+  helpers are `src/server/banner.ts`, tested. Section heads fold with the banner and have no button of
+  their own. Phones (under 760 px) always get the folded design, the title a little smaller (44 px, in
+  an 84 px band; 36 px and 68 px for a section head), without the illustration, the lead or the button.
 - **The toolbar** (`components/PageToolbar.tsx`) sits under every banner and holds what the band
   used to: the page's controls on the left, its actions on the right (`ToolbarAction`: one yellow
   primary, the rest quiet; `ToolbarMore` for the overflow). It is 56 px, on the ground colour with a

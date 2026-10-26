@@ -41,12 +41,13 @@ main:focus { outline: none; }
 main { padding-block: 32px 96px; }
 /* A section's header: the neutral Cartel band with its huge title, its lead and its illustration. One
    height for every section (the lead is clamped to two lines, the title to one), so moving between
-   pages never shifts the work area; folded (data-compact, components/PageHead.tsx) it is a 56 px
-   title strip. Motion sets the height and the title's size inline; the phone's rules below win */
+   pages never shifts the work area; folded (data-compact, components/PageHead.tsx) it is 104 px,
+   the title at the same size with the lead and the illustration gone. Motion sets the height inline; the
+   phone's rules below win */
 .page-band { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 28px; align-items: center; height: 200px; margin-bottom: 36px; padding: 0 clamp(24px, 4vw, 48px); border-radius: var(--sc-radius-band); background: var(--sc-raised); overflow: hidden; }
 .page-band-text { min-width: 0; }
 .page-band h1 { font-size: 64px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.page-band-lead { margin: 12px 0 0; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 680px; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.page-band-lead { margin: 0; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 680px; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .page-band-art { width: clamp(120px, 18vw, 200px); display: grid; place-items: center; pointer-events: none; }
 .page-band-art svg { width: 100%; height: auto; max-height: 168px; }
 /* Folded, the lead leaves the accessibility tree once its fade is over */
@@ -55,10 +56,10 @@ main { padding-block: 32px 96px; }
 .page-band .band-toggle:hover { border-color: var(--sc-rail); }
 .title-with-icon { display: inline-flex; align-items: center; gap: .25em; }
 .title-with-icon .icon { width: .9em; height: .9em; aspect-ratio: 1; }
-/* A phone: always the title strip, without the illustration, the lead or the button */
+/* A phone: always the folded design (title alone, a little smaller), without the illustration, the lead or the button */
 @media (max-width: 759px) {
-  .page-band { height: 56px !important; grid-template-columns: minmax(0, 1fr); padding: 0 18px; margin-bottom: 32px; border-radius: var(--sc-radius-card); }
-  .page-band h1 { font-size: 24px !important; }
+  .page-band { height: 84px !important; grid-template-columns: minmax(0, 1fr); padding: 0 18px; margin-bottom: 32px; border-radius: var(--sc-radius-card); }
+  .page-band h1 { font-size: 44px; }
   .page-band-lead, .page-band-art, .page-band .band-toggle { display: none; }
 }
 /* An empty list: its illustration beside what is missing and the one thing that fills it */
