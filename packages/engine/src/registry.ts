@@ -1,7 +1,7 @@
-import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, max, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import type { Channel, Language, PackKind } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
-import { accounts, accountSnapshots, apiTokens, assistantMessages, assistantSessions, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
+import { accounts, accountSnapshots, apiTokens, assistantMessages, assistantSessions, attentionDismissals, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
 /** A job's state, as pg-boss names them; `retry` waits for its next attempt */
 export type JobState = 'created' | 'active' | 'retry' | 'completed' | 'failed';
@@ -1305,6 +1305,43 @@ export class Registry {
       launches: launchRows.map((r) => ({ id: r.id, repo: r.repo, ref: r.ref, count: Number(r.n) })),
       buckets: { waiting: sum('waiting'), replied: sum('replied'), ignored: sum('ignored') },
     };
+  }
+
+  /** The newest comment still waiting for a reply, so the bell's line about them is new when one arrives */
+  async newestWaitingCommentId(own = false): Promise<number | null> {
+    const [row] = await this.#db
+      .select({ id: max(comments.id) })
+      .from(comments)
+      .where(and(eq(comments.own, own), inArray(comments.status, [...COMMENT_BUCKETS.waiting])));
+    return row?.id ?? null;
+  }
+
+  /** Hides the bell's lines with these keys; dismissing one twice keeps its first time */
+  async dismissAttention(keys: readonly string[]): Promise<void> {
+    if (keys.length === 0) return;
+    await this.#db
+      .insert(attentionDismissals)
+      .values([...new Set(keys)].map((key) => ({ key })))
+      .onConflictDoNothing();
+  }
+
+  /** Which of these keys were dismissed */
+  async dismissedAttention(keys: readonly string[]): Promise<Set<string>> {
+    if (keys.length === 0) return new Set();
+    const rows = await this.#db.select({ key: attentionDismissals.key }).from(attentionDismissals).where(inArray(attentionDismissals.key, [...keys]));
+    return new Set(rows.map((r) => r.key));
+  }
+
+  /**
+   * Forgets every dismissal but those of `keep`: the bell passes the lines it has now, so the
+   * dismissal of a line whose condition ended goes, and the same condition coming back is shown again
+   */
+  async clearAttentionDismissals(keep: readonly string[] = []): Promise<number> {
+    const rows = await this.#db
+      .delete(attentionDismissals)
+      .where(keep.length > 0 ? notInArray(attentionDismissals.key, [...keep]) : undefined)
+      .returning({ key: attentionDismissals.key });
+    return rows.length;
   }
 
   /** The posts of a launch that have comments, for the filter that narrows to one post */

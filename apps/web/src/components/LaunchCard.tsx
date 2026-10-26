@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { animate, AnimatePresence, motion, useMotionValue, useTransform } from 'motion/react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { cardChannels, foldMarks, launchDateLabel, markCapacity, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Totals } from '../server/launch-summary';
 import { zonedLabel } from '../server/pieces';
 import { CHANNEL_NAMES, type LaunchView } from '../server/view';
@@ -235,10 +235,19 @@ function DailyArea({ values, max }: { values: number[]; max: number }) {
   const step = w / Math.max(1, values.length - 1);
   const line = values.map((v, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - 4 - (v / Math.max(1, max)) * (h - 12)).toFixed(1)}`).join(' ');
   const area = `${line} L${w} ${h} L0 ${h} Z`;
+  // One gradient per card, as ids are document-wide; React's id marks (`:`, `«`) do not survive url(#…)
+  const fade = `darea-fade-${useId().replace(/[^\w-]/g, '')}`;
   return (
     <figure className="darea">
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
-        <motion.path initial={false} animate={{ d: area }} transition={EASE} className="darea-fill" />
+        <defs>
+          {/* In the box of the whole chart, not of the path, so the fade stays put while the path morphs */}
+          <linearGradient id={fade} x1="0" y1="0" x2="0" y2={h} gradientUnits="userSpaceOnUse">
+            <stop offset="0" className="darea-stop-top" />
+            <stop offset="1" className="darea-stop-bottom" />
+          </linearGradient>
+        </defs>
+        <motion.path initial={false} animate={{ d: area }} transition={EASE} className="darea-fill" fill={`url(#${fade})`} />
         <motion.path initial={false} animate={{ d: line }} transition={EASE} fill="none" className="darea-line" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       </svg>
       <figcaption>

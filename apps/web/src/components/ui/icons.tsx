@@ -51,9 +51,11 @@ export const SearchIcon = (p: IconProps) => (
     <path d="M15.5 15.5L20 20" />
   </Glyph>
 );
+/** A bell: stem, dome, rim and clapper, centred on the grid (2.5 to 21.5 high, 4.75 to 19.25 wide) */
 export const BellIcon = (p: IconProps) => (
   <Glyph {...p}>
-    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15L6 16.5zM10 21h4" />
+    <path d="M12 2.5V5M6.5 15.5v-5a5.5 5.5 0 0 1 11 0v5l1.75 1.75H4.75z" />
+    <path d="M10.25 19.75a1.75 1.75 0 0 0 3.5 0" />
   </Glyph>
 );
 export const DotsIcon = (p: IconProps) => (

@@ -70,6 +70,12 @@
 .ui-option-submenu { justify-content: space-between; }
 .ui-option-submenu[data-popup-open]:not([data-highlighted]) { background: var(--sc-raised); }
 .ui-option-chevron { font-size: 20px; line-height: 1; }
+/* Where you are: the item of the page on screen and the submenu holding it, as the nav's current
+   tab says it, with a yellow dot (ringed in the text colour: 3:1 on either theme's popup) and weight */
+.ui-option-label { display: inline-flex; align-items: center; gap: 10px; }
+.ui-option-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--sc-yellow); box-shadow: 0 0 0 1.5px var(--sc-text); }
+.ui-option[data-current] { font-weight: 700; }
+.ui-option[data-current][data-highlighted] .ui-option-dot { box-shadow: 0 0 0 1.5px var(--sc-ground); }
 .ui-option-check { flex: none; width: 18px; display: inline-grid; place-items: center; }
 /* The check holds its place when hidden, so labels line up whether or not they are chosen */
 .ui-option:not([data-selected]) .ui-option-check { visibility: hidden; }
@@ -149,6 +155,7 @@
 .drawer-links a[aria-current="page"] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .drawer-group { display: grid; gap: 6px; padding-top: 8px; }
 .drawer-group-title { font: var(--sc-label); color: var(--sc-muted); text-transform: uppercase; letter-spacing: .04em; padding-inline: 6px; }
+.drawer-group[data-current] .drawer-group-title { display: inline-flex; align-items: center; gap: 8px; color: var(--sc-text); font-weight: 700; }
 .drawer-sublinks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .drawer-who { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--sc-hairline); }
 .drawer-who form { margin: 0; }
@@ -158,19 +165,28 @@
 .search-button { color: var(--sc-muted); }
 .search-button:hover { color: var(--sc-text); }
 
-/* The attention bell: a yellow count on the icon, and one link per thing that needs the owner */
+/* The attention bell: the glyph centred in its 44px button, the count a yellow pill on its top-right
+   corner, ringed in the page's colour so it reads over the button's border. Out of the flow, so a
+   count appearing or going never moves the bar */
 .attention-button { position: relative; }
-.attention-badge { position: absolute; top: 2px; right: 0; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--sc-radius-pill); background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 12px/1 var(--sc-font-text); border: 2px solid var(--sc-ground); box-sizing: content-box; }
-.attention-popup { width: min(380px, calc(100vw - 24px)); }
+.attention-badge { position: absolute; top: -5px; right: -5px; display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: var(--sc-radius-pill); background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 11px/1 var(--sc-font-text); font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--sc-ground); pointer-events: none; }
+.attention-popup { width: min(400px, calc(100vw - 24px)); }
+.attention-panel { display: grid; gap: 8px; }
+.attention-head { display: flex; justify-content: flex-end; }
+.attention-clear { min-height: 32px; }
 .attention-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+/* The line is the link; its × sits beside it, a control of its own and never inside the link */
+.attention-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
 .attention-item { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; border: var(--sc-border-control) solid var(--sc-hairline); color: var(--sc-text); text-decoration: none; min-height: 44px; }
 .attention-item:hover, .attention-item:focus-visible { background: var(--sc-text); color: var(--sc-ground); }
 .attention-text { font: 500 15px/1.3 var(--sc-font-text); overflow-wrap: anywhere; }
 .attention-action { font: var(--sc-label); color: var(--sc-muted); }
 .attention-item:hover .attention-action, .attention-item:focus-visible .attention-action { color: inherit; }
-/* A line that only informs (a post going out soon) is quieter than one that needs a decision */
+.attention-dismiss { border-color: transparent; color: var(--sc-muted); }
+.attention-dismiss:hover, .attention-dismiss:focus-visible { color: var(--sc-text); border-color: var(--sc-rail); }
 .attention-scheduled { border-style: dashed; }
 .attention-empty { margin: 0; padding: 8px 4px; }
+.attention-empty:focus { outline: none; }
 
 .bottom-bar { display: none; }
 
