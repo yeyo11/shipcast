@@ -10,6 +10,7 @@ import { FilterBar, METRIC_NAMES } from '../../components/stats/FilterBar';
 import { Kpis } from '../../components/stats/Kpis';
 import { RankingTable } from '../../components/stats/RankingTable';
 import { Search } from '../../components/stats/Search';
+import { DownloadIcon } from '../../components/ui/icons';
 import { Tabs } from '../../components/ui/Tabs';
 import { getGrowth, getSearch, getStats } from '../../server/stats.functions';
 import { compactSearch, readStatsSearch, readStatsTab, withDefaults, type StatsSearch, type StatsTab } from '../../server/stats-search';
@@ -171,9 +172,15 @@ function Stats() {
       <PageHead
         title="Stats"
         action={
-          <button type="button" className="btn btn-primary" onClick={exportCsv} disabled={series.length === 0}>
-            Export CSV
-          </button>
+          <>
+            {/* One of the two shows (stats.css): the words on a desktop, the glyph beside the title on a phone */}
+            <button type="button" className="btn btn-primary stats-export-text" onClick={exportCsv} disabled={series.length === 0}>
+              Export CSV
+            </button>
+            <button type="button" className="ui-icon-button stats-export-icon" onClick={exportCsv} disabled={series.length === 0} aria-label="Export CSV">
+              <DownloadIcon />
+            </button>
+          </>
         }
       >
         How every launch did, channel by channel, over time.

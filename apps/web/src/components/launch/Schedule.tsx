@@ -4,6 +4,8 @@ import { cancelSchedule, moveSchedule, recommendedTimes, schedulePiece } from '.
 import { countdown, isoToZonedInput, scheduleChips, zonedInputToIso, zonedLabel, type Chip } from '../../server/pieces';
 import type { SchedulingChannel } from '../../server/pieces.server';
 import { useToast } from '../Toasts';
+import { DatePicker } from '../ui/DatePicker';
+import { dateToDay } from '../ui/dates';
 import { Tooltip } from '../ui/Tooltip';
 
 /*
@@ -11,6 +13,9 @@ import { Tooltip } from '../ui/Tooltip';
  * (their reason on hover and in the accessible name), a picker for any other, and for a scheduled
  * one its countdown and Cancel. Times read and write in the owner's zone (docs/scheduling.md).
  */
+
+/** The time a day starts with when only the day was picked: the morning, when a post is read */
+const DEFAULT_TIME = '09:00';
 
 function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
@@ -53,6 +58,7 @@ export function ChannelSchedule({ launchId, item, timezone }: { launchId: number
     }
   };
   const at = (iso: string) => (scheduled?.scheduledAt ? moveSchedule({ data: { postId: scheduled.id, at: iso } }) : schedulePiece({ data: { launchId, channel: item.channel, at: iso } }));
+  const [day = '', time = ''] = value.split('T');
   const picked = zonedInputToIso(value, timezone);
 
   return (
@@ -89,10 +95,14 @@ export function ChannelSchedule({ launchId, item, timezone }: { launchId: number
           </ul>
         )}
         <div className="sched-pick">
-          <label htmlFor={pickerId} className="visually-hidden">
-            Another time for {item.channel}, in {timezone}
+          {/* The day in the design system's calendar, the time as a time field: together they are the `datetime-local` text the server helpers read */}
+          <div className="sched-day">
+            <DatePicker id={pickerId} label={`Day for ${item.channel}, in ${timezone}`} value={day} onChange={(next) => setValue(`${next}T${time || DEFAULT_TIME}`)} min={dateToDay(new Date())} />
+          </div>
+          <label className="visually-hidden" htmlFor={`${pickerId}-time`}>
+            Time for {item.channel}, in {timezone}
           </label>
-          <input id={pickerId} className="input" type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} />
+          <input id={`${pickerId}-time`} className="input sched-time" type="time" value={time} disabled={!day} onChange={(e) => setValue(e.target.value ? `${day}T${e.target.value}` : day)} />
           <button type="button" className="btn btn-small" disabled={busy || !picked} onClick={() => picked && run(() => at(picked), 'Scheduled')}>
             {scheduled ? 'Move' : 'Schedule'}
           </button>

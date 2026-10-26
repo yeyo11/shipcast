@@ -29,6 +29,22 @@ export const CloseIcon = (p: IconProps) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Glyph>
 );
+export const CalendarIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <rect x="4" y="5.5" width="16" height="14" rx="2.5" />
+    <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+  </Glyph>
+);
+export const ChevronIcon = ({ dir = 'right', ...p }: IconProps & { dir?: 'left' | 'right' }) => (
+  <Glyph {...p}>
+    <path d={dir === 'left' ? 'M14.5 6l-6 6 6 6' : 'M9.5 6l6 6-6 6'} />
+  </Glyph>
+);
+export const DownloadIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14" />
+  </Glyph>
+);
 export const SearchIcon = (p: IconProps) => (
   <Glyph {...p}>
     <circle cx="10.5" cy="10.5" r="6.5" />

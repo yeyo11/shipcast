@@ -29,8 +29,9 @@
 .stats-filters-seg { grid-template-columns: max-content; }
 .stats-filters-range { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: end; }
 .stats-filters-range > .label, .stats-filters-range > small { grid-column: 1 / -1; }
-.stats-filters-days { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
-.stats-filters .input[type="date"] { min-width: 0; width: 100%; }
+/* The period as a Select is the phone's shape (below); the desktop keeps the segmented control */
+.stats-period-select { display: none; }
+.stats-export-icon { display: none; }
 /* The app's segmented controls stack on a phone; these have a few short words, which fit side by side */
 @media (max-width: 560px) {
   .stats-period, .stats-filters .seg, .section-head .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); justify-self: stretch; border-radius: var(--sc-radius-pill); }
@@ -40,6 +41,23 @@
   .stats-period label + label span { border-top: 0; }
   .section-head .seg { flex: 1 1 100%; }
   .stats-range { margin: 0; }
+}
+/*
+ * A phone: Export CSV is an icon beside the title, the period (a Select) and Filters share one row,
+ * and the range is a small caption under them, so the data starts right below
+ */
+@media (max-width: 640px) {
+  .stats-page .page-band { grid-template-columns: minmax(0, 1fr) auto; align-items: start; margin-bottom: 14px; }
+  .stats-page .page-band-action { grid-column: 2; }
+  .stats-export-text { display: none; }
+  .stats-export-icon { display: inline-grid; }
+  .stats-filterbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .stats-filterbar .stats-period { display: none; }
+  .stats-period-select { display: block; min-width: 0; }
+  .stats-period-select .field { gap: 0; }
+  .stats-period-select .ui-trigger { min-height: 44px; }
+  .stats-filterbar .stats-filters-button { min-height: 44px; }
+  .stats-range { grid-column: 1 / -1; margin: 0; font-size: 13px; }
 }
 
 /* ---------- KPIs: one strip that is also the chart's metric switch ---------- */

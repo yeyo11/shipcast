@@ -448,7 +448,8 @@ a.post-link:hover { color: var(--sc-text); }
 .chip[data-best]::after { content: " · best"; font-weight: 500; }
 @media (pointer: coarse) { .chip { min-height: 44px; } }
 .sched-pick { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.sched-pick .input { flex: 1 1 220px; width: auto; min-width: 0; }
+.sched-pick .sched-day { flex: 1 1 200px; min-width: 0; }
+.sched-pick .sched-time { flex: 0 1 130px; width: auto; min-width: 0; }
 
 /* The edit dialogs: the form and what it does, side by side when there is room */
 .edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
