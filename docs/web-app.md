@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T15:33:28.83554596Z
-updated_at: 2026-10-26T15:51:23.671382558Z
+created_at: 2026-10-26T15:51:51.332167626Z
+updated_at: 2026-10-26T16:22:19.718539155Z
 tags:
     - web-app
     - dashboard
@@ -268,9 +268,11 @@ on the [approved design direction](decisions/app-design-direction.md).
   small button in its corner ("Collapse the banner", `aria-expanded`) folds it to 104 px (80 px for a
   section head) with a "+" to expand it again. Folding takes away only the lead and the illustration;
   **the title keeps its size**, so the band reads the same, just shorter (the first version shrank the
-  title to a 56 px strip, which looked wrong). The lead leaves the layout as well as the view (its
-  height goes to zero), so the title stays centred in the folded band. Motion animates the height and
-  the fades in 250 ms, instant under reduced motion. The choice is one for every page
+  title to a 56 px strip, which looked wrong). The lead and the illustration leave the layout as well
+  as the view (their heights go to zero) and the band's grid row is pinned to the band's height, so
+  the title stays centred in the folded band: an illustration that kept its height once made the row
+  taller than the band and pushed the title down, cut at the bottom edge. Motion animates the height
+  and the fades in 250 ms, instant under reduced motion. The choice is one for every page
   (`useBannerState` in `components/BannerState.tsx`), kept in the `sc_banner` cookie (`compact` or
   `full`, a year, `Path=/`, `SameSite=Lax`, not HttpOnly since the page writes it); the shell's loader
   reads it on the server (`getBanner`), so the page is drawn at the right size from the start. The
@@ -288,8 +290,11 @@ on the [approved design direction](decisions/app-design-direction.md).
   Pages: Launches (Launch a repo), Write (Prepare the pieces or Publish the article), Channels
   (Import from .env, Connect a network), a channel's page (Back to channels), Comments (the search,
   Filters, Check comments now), Stats (period, Filters, Export CSV), a launch's page and its draft
-  editor, Settings General (Save settings), Automation (Run a round now, Save automation) and API
-  (Create a token). Launch a repo and Settings AI, which have nothing for it, have no bar. Below
+  editor, and every Settings section: General (Save settings), AI (Save AI settings, for the
+  providers and tone form), Automation (Run a round now, Save automation) and API (Create a token).
+  Only Launch a repo, which has nothing for it, has no bar. A Settings section without its bar made
+  the content sit 60 px higher than in the others, which showed as a jump when moving between
+  sections, so each one has it. Below
   it the work area is calm. What waits for the owner is in the bell; the one-line `.strip` is what a
   page may show for its own pending matter (a launch's Approve, Channels' networks still on `.env`).
 - **The command palette**: ⌘K or Ctrl+K anywhere, Search in the top bar, or More on a phone. It
@@ -330,7 +335,9 @@ on the [approved design direction](decisions/app-design-direction.md).
   and it is instant under `prefers-reduced-motion`. **ScrollArea** is Cartel's scrollbar for the
   regions inside a page (the locked rules and previews on AI, the work list, a launch's jobs); the
   page's own scrollbar is styled in CSS with `scrollbar-color` and `scrollbar-width`, plus
-  `::-webkit-scrollbar` for Safari, from the role tokens. See
+  `::-webkit-scrollbar` for Safari, from the role tokens, and `scrollbar-gutter: stable` keeps its
+  room whether the page scrolls or not, so a page that gets taller than the window does not narrow
+  the content when the owner moves to it. See
   [decisions/component-layer.md](decisions/component-layer.md). They are reviewed running at the
   hidden route `/design/components`.
 - **Illustrations wired in**: the 404 page ("Return to sender") and the error boundary ("Damaged on
@@ -408,7 +415,8 @@ a section of Settings (`/settings/ai`, `src/routes/_app/settings/ai.tsx`,
 - **Providers**: per task (the launch content pack, an article's distribution, the writing
   assistant) a provider (claudio, the Anthropic API, an OpenAI-compatible server; the ones without a
   connected account say so) and a model, empty for the provider's default. And the **tone**, which
-  replaces `brand.yml`'s in every prompt when set.
+  replaces `brand.yml`'s in every prompt when set. This form saves from the toolbar (Save AI
+  settings), like the other sections; claudio's group keeps its own Save under it.
 - **Prompts**: each channel's brief, each kind of pack's brief and the article's translation, as
   templates with `{{variables}}`, folded in an Accordion. A save is a new version; the versions are
   listed with their dates and any of them, or the default, can be restored.
@@ -425,7 +433,10 @@ phones. **General** (`/settings`), **AI** (above), **Automation** (above) and **
 (`/settings/api`, the REST API's tokens: created with a name and scopes (`read`, `write`) from the
 toolbar's Create a token, shown once, listed with when each was last used, and revoked; see
 [api.md](api.md)). The layout is
-`src/routes/_app/settings.tsx`; each section is a route under `src/routes/_app/settings/`. A
+`src/routes/_app/settings.tsx`; each section is a route under `src/routes/_app/settings/`. Every
+section has the same frame, so moving between them changes nothing but the content: the toolbar under
+the banner, one column of at most 880 px (`.settings-body`, in which a form fills the column instead
+of stopping at 720 px), and the page's scrollbar gutter kept. A
 setting is configured in exactly one place: the shared `SettingsForm` shows General's group and AI's
 group, never the same field twice. General's page is `src/routes/_app/settings/index.tsx` with
 `src/server/settings.functions.ts`:
