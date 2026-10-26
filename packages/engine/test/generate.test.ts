@@ -15,7 +15,7 @@ const config = LaunchConfig.parse({
   brand: 'personal',
   assets: { demo: 'docs/media/tour.gif' },
   // Reddit is off by default; turned on here so its brief is still checked
-  publishing: { reddit: 'manual' },
+  publishing: { reddit: 'approval' },
   reddit: { subreddits: ['ClaudeAI', 'selfhosted'] },
 });
 
@@ -119,12 +119,11 @@ test('the prompt briefs the phase 5 channels when they are on', () => {
   const on = LaunchConfig.parse({
     enabled: true,
     brand: 'personal',
-    publishing: { hashnode: 'approval', telegram: 'approval', discord: 'approval', hackerNews: 'manual', productHunt: 'manual' },
+    publishing: { hashnode: 'approval', telegram: 'approval', discord: 'approval' },
   });
   const { prompt } = buildPrompt(launch(), on, brand);
   assert.match(prompt, /hashnode: 1 to 5 lowercase tags/);
   assert.match(prompt, /telegram: one post in English, at most 900 characters.*\?ref=telegram/);
   assert.match(prompt, /discord: one message in English, at most 1800 characters.*\?ref=discord/);
-  assert.match(prompt, /hackerNews: .*"Show HN: ".*at most 80 characters.*first comment/);
-  assert.match(prompt, /productHunt: a tagline \(at most 60 characters\).*description \(at most 260\).*\(at most 1000\)/);
+  assert.doesNotMatch(prompt, /hackerNews|productHunt|Show HN/);
 });

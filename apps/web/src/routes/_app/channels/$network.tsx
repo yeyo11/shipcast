@@ -14,7 +14,7 @@ export const Route = createFileRoute('/_app/channels/$network')({
   loader: async ({ params }) => {
     const data = await getChannels();
     const network = data.networks.find((n) => n.id === params.network);
-    if (!network || network.auth === 'none') throw notFound();
+    if (!network) throw notFound();
     return { network, brands: data.brands, oauthReady: data.oauthReady, secretsKind: data.secretsKind };
   },
   head: ({ loaderData }) => ({ meta: [{ title: `Connect ${loaderData?.network.name ?? ''} · Shipcast` }] }),

@@ -52,7 +52,7 @@ function Components() {
   const toast = useToast();
   const [repo, setRepo] = useState<string | null>(null);
   const [release, setRelease] = useState<string | null>('v0.9.0');
-  const [channel, setChannel] = useState<'bluesky' | 'mastodon' | 'hn'>('bluesky');
+  const [channel, setChannel] = useState<'bluesky' | 'mastodon' | 'reddit'>('bluesky');
   return (
     <>
       <PageHead title="Components">
@@ -142,7 +142,7 @@ function Components() {
           tabs={[
             { value: 'bluesky', label: 'Bluesky', panel: <p>claudio 0.9 is out: start a session on your laptop, pick it up from your phone.</p> },
             { value: 'mastodon', label: 'Mastodon', panel: <p>claudio 0.9: remote sessions, on any device you own. #claude #cli</p> },
-            { value: 'hn', label: 'Hacker News', panel: <p><Pill tone="manual">Post it yourself</Pill></p> },
+            { value: 'reddit', label: 'Reddit', panel: <p>I built claudio to run Claude Code as a service. Here is what it does today.</p> },
           ]}
         />
       </Specimen>
@@ -163,8 +163,8 @@ function Components() {
       </Specimen>
 
       <Specimen name="Popover" text="A small card anchored to its trigger: an explanation or a few controls.">
-        <Popover title="Why manual?" trigger={<button className="btn btn-small" type="button">Why is Reddit manual?</button>}>
-          <p>Reddit and Hacker News are always drafts: Shipcast writes them, you post them yourself.</p>
+        <Popover title="Why approval?" trigger={<button className="btn btn-small" type="button">Why does Reddit wait?</button>}>
+          <p>A channel on approval is published when you merge the drafts: you read every post before it goes out.</p>
         </Popover>
       </Specimen>
 

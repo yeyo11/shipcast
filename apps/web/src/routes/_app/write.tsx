@@ -16,8 +16,8 @@ export const Route = createFileRoute('/_app/write')({
   head: () => ({ meta: [{ title: 'Write · Shipcast' }] }),
   loader: async () => {
     const data = await getChannels();
-    // The channels an article can go to: those with a connected account or credentials, and the draft-only ones
-    const ready = data.networks.filter((n) => n.channel && n.channel !== 'blog' && (n.auth === 'none' || n.accounts.some((a) => a.status === 'ok') || n.usesEnv)).map((n) => n.channel!);
+    // The channels an article can go to: those with a connected account or credentials
+    const ready = data.networks.filter((n) => n.channel && n.channel !== 'blog' && (n.accounts.some((a) => a.status === 'ok') || n.usesEnv)).map((n) => n.channel!);
     return { ready };
   },
   component: Write,
@@ -29,7 +29,7 @@ function Write() {
   const [title, setTitle] = useState('');
   const [markdown, setMarkdown] = useState('');
   const [lang, setLang] = useState<'en' | 'es'>('es');
-  const [channels, setChannels] = useState<string[]>(ready.filter((c) => c !== 'hackerNews' && c !== 'productHunt'));
+  const [channels, setChannels] = useState<string[]>(ready);
   const [direct, setDirect] = useState(false);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -101,7 +101,6 @@ function Write() {
                   onChange={(e) => setChannels(e.target.checked ? [...channels, c] : channels.filter((x) => x !== c))}
                 />
                 {CHANNEL_NAMES[c] ?? c}
-                {c === 'hackerNews' || c === 'productHunt' ? ' (draft)' : ''}
               </label>
             ))}
           </div>

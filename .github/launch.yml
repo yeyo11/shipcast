@@ -10,8 +10,6 @@ publishing:
   mastodon: approval
   instagram: approval
   newsletter: approval
-  hackerNews: manual
-  productHunt: manual
 
 assets:
   demo: docs/media/tour.gif

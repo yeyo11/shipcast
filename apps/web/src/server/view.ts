@@ -1,6 +1,6 @@
 /** How the app names states, shared by the server functions and the pages */
 
-export type Tone = 'published' | 'waiting' | 'draft' | 'manual' | 'failed';
+export type Tone = 'published' | 'waiting' | 'draft' | 'quiet' | 'failed';
 
 export interface LaunchView {
   id: number;
@@ -64,7 +64,7 @@ export function groupChannels(launch: Pick<LaunchView, 'posts' | 'failures' | 'r
     const deleted = pieces.filter((p) => p.status === 'deleted').length;
     let state: ChannelGroup['state'];
     if (failure !== undefined) state = live > 0 ? { label: `${live} of ${pieces.length}`, tone: 'failed' } : { label: 'Failed', tone: 'failed' };
-    else if (deleted === pieces.length) state = { label: 'Deleted', tone: 'manual' };
+    else if (deleted === pieces.length) state = { label: 'Deleted', tone: 'quiet' };
     else if (scheduled > 0) state = { label: scheduled === pieces.length ? 'Scheduled' : `${live} of ${pieces.length}`, tone: 'waiting' };
     else state = live === pieces.length ? { label: 'Published', tone: 'published' } : { label: `${live} of ${pieces.length}`, tone: 'waiting' };
     return { channel, pieces, state, hasFailure: failure !== undefined, expandable: pieces.length > 1, replies: launch.replies[channel] ?? 0 };
@@ -84,10 +84,7 @@ export const CHANNEL_NAMES: Record<string, string> = {
   githubDiscussions: 'GitHub Discussions',
   threads: 'Threads',
   reddit: 'Reddit',
-  hackerNews: 'Hacker News',
-  productHunt: 'Product Hunt',
   linkedin: 'LinkedIn',
-  x: 'X',
   // Metric sources that are not channels, as their cards on a launch's page are titled
   search: 'Google Search',
   bing: 'Bing',
@@ -104,14 +101,11 @@ export function channelIcon(channel: string): string | undefined {
     instagram: 'instagram',
     hashnode: 'hashnode',
     reddit: 'reddit',
-    hackerNews: 'hacker-news',
     linkedin: 'linkedin',
-    x: 'x',
     telegram: 'telegram',
     discord: 'discord',
     github: 'github',
     githubDiscussions: 'github',
-    productHunt: 'product-hunt',
     newsletter: 'newsletter',
   };
   return file[channel] ? `/icons/${file[channel]}.svg` : undefined;

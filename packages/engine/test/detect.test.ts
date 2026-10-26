@@ -103,7 +103,7 @@ test('an invalid launch.yml is recorded as failed with its line, and not retried
   const registry = await memoryRegistry();
   const github = new FakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
-    { 'yeyo11/claudio@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  reddit: auto\n' },
+    { 'yeyo11/claudio@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  reddit: manual\n' },
   );
   const [outcome] = await detect({ github, registry, brand });
   assert.equal(outcome?.result, 'invalid-config');

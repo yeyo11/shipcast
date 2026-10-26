@@ -34,7 +34,7 @@ export async function channelsView() {
   });
   const fromEnv: string[] = [];
   for (const network of NETWORKS) {
-    if (network.auth === 'none' || accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;
+    if (accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;
     const found = await credentialsFor(network.id, { env: process.env, brand: current, registry, secrets, readFile: (p) => readFileSync(p, 'utf8') }).catch(() => undefined);
     if (found?.origin.kind === 'env') fromEnv.push(network.id);
   }

@@ -36,7 +36,7 @@ export interface Field {
 
 /**
  * Every network Shipcast knows, as the Channels page shows it. A network is a connector plus one
- * entry here; `auth: 'none'` marks a channel with no API to post through (drafts only).
+ * entry here.
  */
 export interface Network {
   id: string;
@@ -45,7 +45,7 @@ export interface Network {
   channel?: Channel;
   /** Whether it reads numbers for the dashboard */
   metrics: boolean;
-  auth: 'oauth' | 'form' | 'none';
+  auth: 'oauth' | 'form';
   /** What the form asks; for OAuth, what is asked before leaving for the network (the instance) */
   fields: Field[];
   /** What Shipcast does with the account, in words */
@@ -251,26 +251,6 @@ export const NETWORKS: readonly Network[] = [
     ],
     permissions: ['Writes text for the tasks the AI settings give it, through the chat completions API with a JSON Schema answer'],
     howTo: 'Any server that speaks OpenAI’s chat completions (a local model through Ollama, llama.cpp or vLLM, or a hosted one). Then choose it per task in the AI settings.',
-  },
-  {
-    id: 'hackerNews',
-    name: 'Hacker News',
-    channel: 'hackerNews',
-    metrics: false,
-    auth: 'none',
-    fields: [],
-    permissions: ['None: Hacker News has no API to post. Shipcast writes the Show HN draft for you to post'],
-    howTo: 'Turn on hackerNews: manual in a project’s launch.yml.',
-  },
-  {
-    id: 'productHunt',
-    name: 'Product Hunt',
-    channel: 'productHunt',
-    metrics: false,
-    auth: 'none',
-    fields: [],
-    permissions: ['None: Product Hunt’s API cannot create launches. Shipcast writes the launch kit for you'],
-    howTo: 'Turn on productHunt: manual in a project’s launch.yml.',
   },
 ];
 

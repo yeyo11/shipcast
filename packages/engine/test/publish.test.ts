@@ -109,7 +109,7 @@ test('after the merge every approval channel is published with the edited texts,
 
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published');
-  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit is manual: never posted');
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit has no publisher here');
 
   const input = (channel: string) => calls.find((c) => c.channel === channel)!.input as Record<string, unknown>;
   assert.deepEqual(input('devto'), {
@@ -340,7 +340,7 @@ test('a newsletter issue that went out is kept when the other language fails, an
   );
 });
 
-test('Hashnode, Telegram and Discord are published with the edited drafts; Show HN and Product Hunt never are', async () => {
+test('Hashnode, Telegram and Discord are published with the edited drafts', async () => {
   const files = {
     ...merged,
     [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({
@@ -348,14 +348,12 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
       hashnode: { tags: ['ai'] },
       telegram: { text: 'AI telegram' },
       discord: { text: 'AI discord' },
-      hackerNews: { title: 'Show HN: claudio', firstComment: 'c' },
-      productHunt: { tagline: 't', description: 'd', firstComment: 'c' },
     }),
     [`yeyo11/launches/${D}/hashnode.md@HEAD`]: '# Hashnode\n\n> **Approval:** x\n\nRepublishes…\n\nTags: `claude`, `typescript`\n',
     [`yeyo11/launches/${D}/telegram.md@HEAD`]: '# Telegram\n\n> **Approval:** x\n\nEdited telegram\n',
     [`yeyo11/launches/${D}/discord.md@HEAD`]: '# Discord\n\n> **Approval:** x\n\nEdited discord\n',
     'yeyo11/claudio/.github/launch.yml@v0.8.2':
-      'enabled: true\nbrand: personal\npublishing:\n  hashnode: approval\n  telegram: approval\n  discord: approval\n  hackerNews: manual\n  productHunt: manual\nreddit:\n  subreddits: [ClaudeAI]\n',
+      'enabled: true\nbrand: personal\npublishing:\n  hashnode: approval\n  telegram: approval\n  discord: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
   };
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
@@ -389,7 +387,6 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
     },
   });
   assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
-  assert.ok(!calls.some((c) => c.channel === 'hackerNews' || c.channel === 'productHunt'));
 
   await publishLaunch((await registry.get(launch.id))!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(calls.length, 7, 'a second round publishes nothing again');
@@ -527,7 +524,7 @@ test('a scheduled piece is moved and cancelled; a cancelled channel is not publi
   assert.deepEqual(calls.map((c) => c.channel).sort(), ['bluesky', 'devto', 'instagram'], 'the cancelled channel is left out');
 });
 
-test('a schedule is refused for a channel out already, one Shipcast does not publish, one manual in launch.yml, or a launch done', async () => {
+test('a schedule is refused for a channel out already, one Shipcast does not publish, one off in launch.yml, or a launch done', async () => {
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const refused = (reason: string) => (e: unknown) => e instanceof ScheduleRefused && e.reason === reason;
@@ -535,7 +532,7 @@ test('a schedule is refused for a channel out already, one Shipcast does not pub
   await assert.rejects(scheduleLaunch(registry, launch.id, { devto: hours(1) }, { now: T }), refused('refused'));
   await assert.rejects(scheduleLaunch(registry, launch.id, { reddit: hours(1) }, { now: T }), refused('invalid'));
   await assert.rejects(scheduleLaunch(registry, launch.id, { bluesky: hours(24 * 61) }, { now: T }), refused('invalid'));
-  const parsed = parseLaunchConfig('enabled: true\nbrand: personal\npublishing:\n  mastodon: manual\n');
+  const parsed = parseLaunchConfig('enabled: true\nbrand: personal\npublishing:\n  mastodon: off\n');
   assert.ok(parsed.ok);
   await assert.rejects(scheduleLaunch(registry, launch.id, { mastodon: hours(1) }, { now: T, config: parsed.value }), refused('refused'));
   await assert.rejects(scheduleLaunch(registry, 999, { bluesky: hours(1) }, { now: T }), refused('not_found'));

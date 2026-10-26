@@ -11,14 +11,14 @@ test("the personal brand's brand.yml, as it is in yeyo11/launches, is valid", ()
   assert.equal(result.value.site, 'https://josegarrido.dev');
   assert.equal(result.value.handles.reddit, 'https://www.reddit.com/user/josegarridodev/');
   assert.deepEqual(result.value.languages.blog, ['en', 'es']);
-  assert.equal(result.value.languages.x, undefined, 'the personal brand does not publish on X');
+  assert.equal(result.value.languages.linkedin, undefined);
   assert.match(result.value.analytics.cloudflareWebAnalytics ?? '', /^[0-9a-f]{32}$/);
 });
 
 test('a handle is a full https URL', () => {
-  const result = parseBrand('id: personal\ndisplayName: Me\nsite: https://me.dev\ngithub: me\nhandles:\n  x: "@me"\n');
+  const result = parseBrand('id: personal\ndisplayName: Me\nsite: https://me.dev\ngithub: me\nhandles:\n  mastodon: "@me"\n');
   assert.ok(!result.ok);
-  assert.equal(result.issues[0]?.path, 'handles.x');
+  assert.equal(result.issues[0]?.path, 'handles.mastodon');
   assert.equal(result.issues[0]?.line, 6);
 });
 

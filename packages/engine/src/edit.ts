@@ -66,8 +66,6 @@ export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
   },
   newsletter: { edit: 'no', delete: 'no', note: 'A sent campaign is in the readers’ inboxes already', fields: [] },
   reddit: NOT_PUBLISHED,
-  hackerNews: NOT_PUBLISHED,
-  productHunt: NOT_PUBLISHED,
   githubDiscussions: {
     edit: 'yes',
     delete: 'yes',
@@ -81,7 +79,6 @@ export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
     note: 'Published on the personal profile with Share on LinkedIn, which can delete; LinkedIn’s comments and numbers need its Community Management API, granted only to approved companies, so none are read',
     fields: [],
   },
-  x: { ...NOT_PUBLISHED, note: 'Not connected yet' },
 };
 
 /** Why an edit or a delete was not made, so the API can answer 404 or 409 */

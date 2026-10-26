@@ -2,7 +2,6 @@ import {
   CHANNELS,
   ContentPack,
   contentPackJsonSchema,
-  DRAFT_ONLY_CHANNELS,
   LaunchConfig,
   missingPieces,
   type Brand,
@@ -39,12 +38,11 @@ export function articleSlug(title: string): string {
 
 /**
  * The publishing modes of an article, as a launch.yml would say them: the blog and the chosen
- * channels on, every other channel off. Communities that only take drafts stay manual. GitHub
- * Discussions is always off: an article belongs to no repository whose community it is news to.
+ * channels on, every other channel off. GitHub Discussions is always off: an article belongs to no repository whose community it is news to.
  */
 export function articleConfig(brand: Brand, channels: Channel[]): LaunchConfig {
   const on = (c: Channel) => c === 'blog' || (channels.includes(c) && c !== 'githubDiscussions');
-  const publishing = Object.fromEntries(CHANNELS.map((c) => [c, on(c) ? (DRAFT_ONLY_CHANNELS.includes(c) ? 'manual' : 'approval') : 'off']));
+  const publishing = Object.fromEntries(CHANNELS.map((c) => [c, on(c) ? 'approval' : 'off']));
   return LaunchConfig.parse({ enabled: true, brand: brand.id, publishing });
 }
 

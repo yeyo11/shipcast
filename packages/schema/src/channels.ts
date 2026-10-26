@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Every channel Shipcast knows. The MVP publishes on blog, devto, bluesky, mastodon, instagram and
- * the newsletter (docs/decisions/mvp-scope.md); reddit can draft but is off unless a launch.yml turns
- * it on; the rest are named now so a launch.yml written today stays valid when their connectors arrive.
+ * Every channel Shipcast publishes on, each through its own connector. Only networks Shipcast posts
+ * to itself are channels: there are no drafts for the owner to post by hand
+ * (docs/decisions/automatic-channels-only.md).
  */
 export const CHANNELS = [
   'blog',
@@ -12,11 +12,8 @@ export const CHANNELS = [
   'mastodon',
   'instagram',
   'reddit',
-  'hackerNews',
   'hashnode',
   'linkedin',
-  'x',
-  'productHunt',
   'newsletter',
   'telegram',
   'discord',
@@ -30,19 +27,14 @@ export type Channel = z.infer<typeof Channel>;
 /**
  * - `auto`: published as soon as the pack is generated, without review.
  * - `approval`: in the drafts pull request; published when it is merged.
- * - `manual`: in the drafts pull request as a draft the owner posts by hand; Shipcast never posts it.
  * - `off`: not generated at all.
  */
-export const PublishMode = z.enum(['auto', 'approval', 'manual', 'off']);
+export const PublishMode = z.enum(['auto', 'approval', 'off']);
 export type PublishMode = z.infer<typeof PublishMode>;
-
-/** Communities that judge self-promotion by hand: Shipcast only ever drafts for them. */
-export const DRAFT_ONLY_CHANNELS: readonly Channel[] = ['reddit', 'hackerNews', 'productHunt'];
 
 /**
  * What a channel does when launch.yml does not mention it: the MVP's channels and GitHub Discussions
- * on, the rest off (Reddit, by the owner's choice, since 2026-10-25), so a network that needs an
- * account is never drafted for before one is connected.
+ * on, the rest off, so a network that needs an account is never drafted for before one is connected.
  */
 export const DEFAULT_MODES: Readonly<Record<Channel, PublishMode>> = {
   blog: 'approval',
@@ -51,11 +43,8 @@ export const DEFAULT_MODES: Readonly<Record<Channel, PublishMode>> = {
   mastodon: 'approval',
   instagram: 'approval',
   reddit: 'off',
-  hackerNews: 'off',
   hashnode: 'off',
   linkedin: 'off',
-  x: 'off',
-  productHunt: 'off',
   newsletter: 'off',
   telegram: 'off',
   discord: 'off',

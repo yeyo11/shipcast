@@ -93,16 +93,16 @@ test('the rules that keep the text true to the code, and the schema, cannot be o
 });
 
 test('a preview renders a past launch’s final prompt from its launch.yml, without an AI', async () => {
-  const files: Record<string, string> = { 'yeyo11/claudio/.github/launch.yml@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  hackerNews: manual\n' };
+  const files: Record<string, string> = { 'yeyo11/claudio/.github/launch.yml@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  telegram: approval\n' };
   const github: GitHubSource = {
     userEvents: async () => assert.fail('not used'),
     fileAt: async (repo, path, ref) => files[`${repo}/${path}@${ref}`],
     latestRelease: async () => undefined,
     pullRequestState: async () => 'merged',
   };
-  const shown = await previewPrompt(launch, brand, { github, launchesRepo: 'yeyo11/launches' }, { prompts: { 'channel.hackerNews': 'hackerNews: a plain Show HN.' } });
+  const shown = await previewPrompt(launch, brand, { github, launchesRepo: 'yeyo11/launches' }, { prompts: { 'channel.telegram': 'telegram: a plain post.' } });
   assert.equal(shown.task, 'pack');
-  assert.match(shown.prompt, /- hackerNews: a plain Show HN\./);
+  assert.match(shown.prompt, /- telegram: a plain post\./);
   assert.match(shown.system, /The code is the source of truth/);
   await assert.rejects(previewPrompt({ ...launch, ref: 'v1.0.0' }, brand, { github, launchesRepo: 'yeyo11/launches' }, { prompts: {} }), /no \.github\/launch\.yml/);
 });

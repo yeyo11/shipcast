@@ -26,8 +26,6 @@ export const BRIEFED_CHANNELS = [
   'githubDiscussions',
   'threads',
   'linkedin',
-  'hackerNews',
-  'productHunt',
   'newsletter',
 ] as const satisfies readonly Channel[];
 
@@ -64,10 +62,6 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
     "threads: one post in English, at most {{limit.threadsText}} characters (an emoji counts as four), conversational, ending with the English article's link {{site}}/en/<English slug>/?ref=threads. It goes with the launch image. At most two hashtags, or none.",
   'channel.linkedin':
     "linkedin: one post in English on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
-  'channel.hackerNews':
-    'hackerNews: a Show HN draft. A title starting with "Show HN: ", at most {{limit.hackerNewsTitle}} characters in all, plain and without hype; and the author\'s first comment (at most {{limit.hackerNewsComment}} characters, plain text): what it is, why you built it, how it works in a few lines, and what comes next. Honest about what exists today. The URL submitted is the repository, so do not link the article. The owner posts it by hand.',
-  'channel.productHunt':
-    "productHunt: a tagline (at most {{limit.productHuntTagline}} characters), a description (at most {{limit.productHuntDescription}}) and the maker's first comment (at most {{limit.productHuntComment}}): who made it, why, what it does today. Concrete, no superlatives. The owner posts it by hand.",
   'channel.newsletter':
     "newsletter: one issue per language ({{newsletterLanguages}}), each with a subject (at most {{limit.newsletterSubject}} characters), a preview text (at most {{limit.newsletterPreview}}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language ({{site}}/<lang>/<that language's slug>/?ref=newsletter). Not the article itself; no images.",
   article:

@@ -58,7 +58,7 @@ export async function connectAccount(
   input: { network: string; brand: string; label?: string; credentials: Credentials },
 ): Promise<Connected> {
   const info = network(input.network);
-  if (!info || info.auth === 'none') return { ok: false, problem: `${input.network} cannot be connected` };
+  if (!info) return { ok: false, problem: `${input.network} cannot be connected` };
   const brand = brandOf(deps, input.brand);
   const result = await check(input.network, input.credentials, brand, deps.fetch);
   if (!result.ok) return result;
@@ -109,7 +109,7 @@ export async function importFromEnv(
   if (!brand) return [];
   const results: Array<{ network: string; result: Connected }> = [];
   for (const info of NETWORKS) {
-    if (info.auth === 'none' || (await deps.registry.accounts({ brand: brandId, network: info.id })).length > 0) continue;
+    if ((await deps.registry.accounts({ brand: brandId, network: info.id })).length > 0) continue;
     // Without a GitHub App the engine still runs on this token, so it stays in .env, where the engine reads it
     if (info.id === 'github') continue;
     let credentials: Credentials | undefined;

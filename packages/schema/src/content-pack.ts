@@ -42,12 +42,6 @@ export const LIMITS = {
   /** Fits a photo caption (1024) with room for the link */
   telegramText: 900,
   discordText: 1800,
-  /** Hacker News cuts titles at 80 */
-  hackerNewsTitle: 80,
-  hackerNewsComment: 2000,
-  productHuntTagline: 60,
-  productHuntDescription: 260,
-  productHuntComment: 1000,
   /** GitHub takes longer titles; a discussion list shows about this much */
   githubDiscussionTitle: 120,
   githubDiscussionBody: 4000,
@@ -149,25 +143,6 @@ export const ContentPack = z
       .strictObject({ text: z.string().min(1).max(LIMITS.discordText) })
       .optional()
       .describe('One message in English'),
-    hackerNews: z
-      .strictObject({
-        title: z
-          .string()
-          .min(1)
-          .max(LIMITS.hackerNewsTitle)
-          .refine((t) => t.startsWith('Show HN: '), 'a Show HN title starts with "Show HN: "'),
-        firstComment: z.string().min(1).max(LIMITS.hackerNewsComment).describe("The author's first comment, in plain text"),
-      })
-      .optional()
-      .describe('A Show HN draft the owner posts by hand; the URL submitted is the repository'),
-    productHunt: z
-      .strictObject({
-        tagline: z.string().min(1).max(LIMITS.productHuntTagline),
-        description: z.string().min(1).max(LIMITS.productHuntDescription),
-        firstComment: z.string().min(1).max(LIMITS.productHuntComment).describe("The maker's first comment"),
-      })
-      .optional()
-      .describe('A Product Hunt draft the owner posts by hand'),
     githubDiscussions: z
       .strictObject({
         title: z.string().min(1).max(LIMITS.githubDiscussionTitle),
@@ -244,11 +219,11 @@ export const ContentPack = z
           body: z
             .string()
             .min(1)
-            .describe("Markdown, written for that community's rules: what you built and why, not an ad"),
+            .describe("Markdown, written for that community's rules: what you built and why, not an ad; it links the article"),
         }),
       )
       .optional()
-      .describe('Drafts the owner posts by hand, one per subreddit'),
+      .describe('One text post per subreddit, linking the article'),
     newsletter: z
       .strictObject({ en: NewsletterIssue.optional(), es: NewsletterIssue.optional() })
       .refine((n) => n.en || n.es, 'the issue needs at least one language')
@@ -266,8 +241,8 @@ export function articleUrl(pack: ContentPack, site: string, lang: 'en' | 'es'): 
   return version ? `${site}/${lang}/${version.slug}/` : undefined;
 }
 
-/** The pieces the pack schema can carry today, by channel. */
-const PIECE_OF: Partial<Record<Channel, keyof ContentPack>> = {
+/** Each channel's piece of the pack: every channel Shipcast knows publishes one */
+const PIECE_OF: Record<Channel, keyof ContentPack> = {
   blog: 'article',
   devto: 'devto',
   bluesky: 'bluesky',
@@ -277,8 +252,6 @@ const PIECE_OF: Partial<Record<Channel, keyof ContentPack>> = {
   hashnode: 'hashnode',
   telegram: 'telegram',
   discord: 'discord',
-  hackerNews: 'hackerNews',
-  productHunt: 'productHunt',
   newsletter: 'newsletter',
   githubDiscussions: 'githubDiscussions',
   threads: 'threads',
@@ -294,10 +267,6 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
 
   for (const channel of activeChannels(config)) {
     const piece = PIECE_OF[channel];
-    if (!piece) {
-      missing.push(`${channel}: no connector yet; set it to off in launch.yml`);
-      continue;
-    }
     if (pack[piece] === undefined) missing.push(`${channel}: the pack has no ${piece}`);
   }
 

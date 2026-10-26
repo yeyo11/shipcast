@@ -385,7 +385,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
 
   for (const channel of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[channel];
-    if (mode === 'off' || mode === 'manual' || done(pieces, channel)) continue;
+    if (mode === 'off' || done(pieces, channel)) continue;
     if ((await registry.cursor(failureKey(launch, channel))) || (await registry.cursor(cancelledKey(launch.id, channel)))) continue;
     const at = later(pieces, channel);
     if (at) {
@@ -422,7 +422,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const pending: EngineChannel[] = [];
   for (const c of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[c];
-    if (mode === 'off' || mode === 'manual' || !publishers[c] || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
+    if (mode === 'off' || !publishers[c] || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
     if (!(await registry.cursor(failureKey(launch, c))) && !(await registry.cursor(cancelledKey(launch.id, c)))) pending.push(c);
   }
   if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems, scheduled };

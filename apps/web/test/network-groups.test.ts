@@ -6,7 +6,7 @@ import { groupOf, readGroup } from '../src/server/network-groups.ts';
 test('every network lands in the tab for what it does', () => {
   const group = (id: string) => groupOf(NETWORKS.find((n) => n.id === id)!);
   assert.equal(group('mastodon'), 'social');
-  assert.equal(group('hackerNews'), 'social');
+  assert.equal(group('threads'), 'social');
   assert.equal(group('devto'), 'blog');
   assert.equal(group('hashnode'), 'blog');
   assert.equal(group('brevo'), 'blog');

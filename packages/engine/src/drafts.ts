@@ -1,5 +1,4 @@
 import { articleUrl as urlOf, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
-import { carouselPieces } from './launch-assets.ts';
 import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
 
@@ -55,11 +54,9 @@ export function launchDir(launch: Launch): string {
 }
 
 function modeLine(mode: PublishMode): string {
-  return mode === 'manual'
-    ? '> **Manual:** Shipcast never posts this. Copy it and post it yourself.'
-    : mode === 'auto'
-      ? '> **Auto:** published without waiting for this pull request.'
-      : '> **Approval:** published when this pull request is merged. Edit it here if it needs changes.';
+  return mode === 'auto'
+    ? '> **Auto:** published without waiting for this pull request.'
+    : '> **Approval:** published when this pull request is merged. Edit it here if it needs changes.';
 }
 
 function draft(title: string, mode: PublishMode, body: string): string {
@@ -159,46 +156,6 @@ export function renderDrafts(
   if (pack.linkedin && mode('linkedin') !== 'off') {
     files.push({ path: `${dir}/linkedin.md`, content: draft('LinkedIn', mode('linkedin'), pack.linkedin.text) });
   }
-  if (pack.hackerNews && mode('hackerNews') !== 'off') {
-    files.push({
-      path: `${dir}/show-hn.md`,
-      content: draft(
-        'Show HN',
-        mode('hackerNews'),
-        `Title: ${pack.hackerNews.title}\n\nURL to submit: ${pack.project.repo}\n\nFirst comment, to post right after submitting:\n\n${pack.hackerNews.firstComment}`,
-      ),
-    });
-  }
-  if (pack.productHunt && mode('productHunt') !== 'off') {
-    const ph = pack.productHunt;
-    // The images the launch builds, which the owner uploads to the gallery by hand
-    const gallery = [
-      'og.png',
-      ...(pack.instagram && mode('instagram') !== 'off' ? carouselPieces(pack, config).filter((p) => p.kind === 'image').map((p) => p.file) : []),
-    ];
-    files.push({
-      path: `${dir}/product-hunt.md`,
-      content: draft(
-        'Product Hunt',
-        mode('productHunt'),
-        [
-          `Tagline: ${ph.tagline}`,
-          '',
-          `Description: ${ph.description}`,
-          '',
-          `Website: ${pack.project.repo}`,
-          '',
-          "Maker's first comment:",
-          '',
-          ph.firstComment,
-          '',
-          `Gallery, from \`public/${dir}/\`:`,
-          '',
-          ...gallery.map((f) => `- ${f}`),
-        ].join('\n'),
-      ),
-    });
-  }
   if (pack.bluesky && mode('bluesky') !== 'off') {
     files.push({ path: `${dir}/bluesky.md`, content: draft('Bluesky', mode('bluesky'), pack.bluesky.text) });
   }
@@ -269,7 +226,7 @@ export function pullRequestBody(pack: ContentPack, launch: Launch, config: Launc
   return [
     `Launch of [${launch.repo}](https://github.com/${launch.repo}) at \`${launch.ref}\` (${launch.kind} pack), drafted by Shipcast from the code.`,
     '',
-    '**Merging publishes** the article on the blog and every `approval` channel; `manual` drafts are for you to post.',
+    '**Merging publishes** the article on the blog and every `approval` channel.',
     'Edit any file in this pull request first: what is merged is what gets published.',
     '',
     '### What the code shows',

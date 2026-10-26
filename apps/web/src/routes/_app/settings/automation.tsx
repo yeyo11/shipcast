@@ -212,7 +212,7 @@ function Automation() {
         <article className="card">
           <header>
             <h3 className="ph">Last round</h3>
-            {data.running ? <Pill tone="draft">Running</Pill> : data.lastRound ? <Pill tone="published">Done</Pill> : <Pill tone="manual">None yet</Pill>}
+            {data.running ? <Pill tone="draft">Running</Pill> : data.lastRound ? <Pill tone="published">Done</Pill> : <Pill tone="quiet">None yet</Pill>}
           </header>
           {data.lastRound ? (
             <>
@@ -228,7 +228,7 @@ function Automation() {
         <article className="card">
           <header>
             <h3 className="ph">Last delivery</h3>
-            {data.lastDelivery ? <Pill tone="published">Received</Pill> : <Pill tone="manual">None yet</Pill>}
+            {data.lastDelivery ? <Pill tone="published">Received</Pill> : <Pill tone="quiet">None yet</Pill>}
           </header>
           <p className="muted">{data.lastDelivery ? `${when(data.lastDelivery.at)} · ${data.lastDelivery.summary}` : 'No webhook delivery has reached Shipcast.'}</p>
         </article>

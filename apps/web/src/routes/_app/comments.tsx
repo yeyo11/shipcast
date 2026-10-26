@@ -38,7 +38,7 @@ const STATUS: Record<CommentView['status'], { label: string; tone: Tone }> = {
   'draft-ready': { label: 'Draft ready', tone: 'draft' },
   approved: { label: 'Sending', tone: 'waiting' },
   sent: { label: 'Answered', tone: 'published' },
-  dismissed: { label: 'Dismissed', tone: 'manual' },
+  dismissed: { label: 'Dismissed', tone: 'quiet' },
   failed: { label: 'Failed', tone: 'failed' },
 };
 

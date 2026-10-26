@@ -36,8 +36,8 @@ const fullPack = {
   githubDiscussions: { title: 'claudio 0.8.1', body: 'What shipped. https://example.dev/en/claudio-0-8/?ref=github' },
 } as const;
 
-// Reddit is off by default; turned on here so its drafts are still checked
-const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'manual' }, reddit: { subreddits: ['ClaudeAI'] } });
+// Reddit is off by default; turned on here so its posts are still checked
+const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
 
 function parse(overrides: Record<string, unknown>) {
@@ -95,11 +95,6 @@ test('missingPieces names what the enabled channels still need', () => {
   ]);
 });
 
-test('a channel without a connector yet cannot be turned on silently', () => {
-  const withX = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { x: 'manual' } });
-  assert.ok(missingPieces(ContentPack.parse(fullPack), withX, brand).includes('x: no connector yet; set it to off in launch.yml'));
-});
-
 test('the JSON Schema for Claude is an object schema that keeps the field descriptions', () => {
   const schema = contentPackJsonSchema() as {
     type: string;
@@ -134,8 +129,6 @@ const phase5 = {
   hashnode: { tags: ['claude', 'ai'] },
   telegram: { text: 'claudio runs Claude Code as a service. https://example.dev/en/claudio-0-8/?ref=telegram' },
   discord: { text: 'claudio runs Claude Code as a service. https://example.dev/en/claudio-0-8/?ref=discord' },
-  hackerNews: { title: 'Show HN: claudio, Claude Code as a service', firstComment: 'I built it because...' },
-  productHunt: { tagline: 'Claude Code as a service', description: 'Run Claude Code from anywhere.', firstComment: 'Hi, I made it.' },
 };
 
 test('the phase 5 pieces are valid within their limits and invalid beyond them', () => {
@@ -146,34 +139,26 @@ test('the phase 5 pieces are valid within their limits and invalid beyond them',
   assert.ok(parse({ telegram: { text: 'a'.repeat(LIMITS.telegramText) } }).success);
   assert.ok(!parse({ telegram: { text: 'a'.repeat(LIMITS.telegramText + 1) } }).success);
   assert.ok(!parse({ discord: { text: 'a'.repeat(LIMITS.discordText + 1) } }).success);
-  assert.ok(!parse({ hackerNews: { ...phase5.hackerNews, title: `Show HN: ${'a'.repeat(80)}` } }).success);
-  assert.ok(!parse({ hackerNews: { ...phase5.hackerNews, title: 'claudio' } }).success, 'must start with Show HN');
-  assert.ok(!parse({ hackerNews: { ...phase5.hackerNews, firstComment: 'a'.repeat(2001) } }).success);
-  assert.ok(!parse({ productHunt: { ...phase5.productHunt, tagline: 'a'.repeat(61) } }).success);
-  assert.ok(!parse({ productHunt: { ...phase5.productHunt, description: 'a'.repeat(261) } }).success);
-  assert.ok(!parse({ productHunt: { ...phase5.productHunt, firstComment: 'a'.repeat(1001) } }).success);
+  assert.ok(!parse({ hackerNews: { title: 'Show HN: claudio', firstComment: 'I built it' } }).success, 'Hacker News is no piece of the pack');
 });
 
 test('missingPieces requires each phase 5 piece once its channel is on', () => {
   const on = LaunchConfig.parse({
     enabled: true,
     brand: 'personal',
-    publishing: { hashnode: 'approval', telegram: 'approval', discord: 'approval', hackerNews: 'manual', productHunt: 'manual' },
+    publishing: { hashnode: 'approval', telegram: 'approval', discord: 'approval' },
   });
   assert.deepEqual(missingPieces(ContentPack.parse({ ...fullPack, reddit: undefined, ...phase5 }), on, brand), []);
   assert.deepEqual(missingPieces(ContentPack.parse({ ...fullPack, reddit: undefined }), on, brand), [
-    'hackerNews: the pack has no hackerNews',
     'hashnode: the pack has no hashnode',
-    'productHunt: the pack has no productHunt',
     'telegram: the pack has no telegram',
     'discord: the pack has no discord',
   ]);
 });
 
-test('Hacker News and Product Hunt are draft-only: auto and approval are refused', () => {
-  for (const channel of ['hackerNews', 'productHunt']) {
-    assert.ok(!LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'approval' } }).success);
-    assert.ok(LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'manual' } }).success);
+test('only channels Shipcast publishes on itself exist: Hacker News, Product Hunt and X are refused', () => {
+  for (const channel of ['hackerNews', 'productHunt', 'x']) {
+    assert.ok(!LaunchConfig.safeParse({ enabled: true, brand: 'personal', publishing: { [channel]: 'off' } }).success, channel);
   }
 });
 
@@ -200,7 +185,7 @@ test('the new networks’ pieces are valid within their limits and invalid beyon
 });
 
 test('missingPieces requires each new piece once its channel is on, and an article for LinkedIn to share', () => {
-  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'manual', threads: 'approval', linkedin: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
+  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'approval', threads: 'approval', linkedin: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
   assert.deepEqual(missingPieces(ContentPack.parse(fullPack), on, brand), ['linkedin: the pack has no linkedin', 'threads: the pack has no threads']);
   const { article: _a, ...noArticle } = fullPack;
   const pack = ContentPack.parse({ ...noArticle, threads: { text: 't' }, linkedin: { text: 'l' } });

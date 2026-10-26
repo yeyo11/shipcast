@@ -59,7 +59,7 @@ async function detect(ctx: AppContext) {
   const ai = await readAiSettings(ctx.registry);
   const ready = Object.fromEntries(await Promise.all(AI_PROVIDERS.map(async (p) => [p, await providerReady(ctx, p)] as const))) as Record<AiProviderId, boolean>;
   const accounts = await ctx.registry.accounts();
-  const channelIds = new Set(NETWORKS.filter((n) => n.channel && n.auth !== 'none').map((n) => n.id));
+  const channelIds = new Set(NETWORKS.filter((n) => n.channel).map((n) => n.id));
   const hasLaunches = (await ctx.registry.recent(1)).length > 0;
   const automationChosen = (await ctx.registry.setting<string>('automation:mode')) !== undefined;
   const detected: Detected = {
@@ -120,7 +120,7 @@ export const getOnboarding = createServerFn({ method: 'GET' }).handler(async () 
       ready,
       claudio: { url: values.claudioUrl ?? null, tokenSet: Boolean(values.claudioToken) },
     },
-    channels: NETWORKS.filter((n) => n.channel && n.auth !== 'none').map((n) => ({ id: n.id, name: n.name, accounts: connected(n.id) })),
+    channels: NETWORKS.filter((n) => n.channel).map((n) => ({ id: n.id, name: n.name, accounts: connected(n.id) })),
     measure: NETWORKS.filter((n) => (MEASURE_NETWORKS as readonly string[]).includes(n.id)).map((n) => ({ id: n.id, name: n.name, accounts: connected(n.id) })),
     automation,
   };

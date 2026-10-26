@@ -8,7 +8,7 @@ const text = (file: DraftFile | undefined): string => (file && 'content' in file
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 // Reddit is off by default; turned on here so its drafts are still checked
-const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'manual' }, reddit: { subreddits: ['ClaudeAI'] } });
+const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
 const launch = (await (await memoryRegistry()).claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
 
 const pack = ContentPack.parse({
@@ -62,7 +62,7 @@ test('every channel gets a readable draft that says its mode, and the pack trave
     [`${dir}/devto.md`, `${dir}/bluesky.md`, `${dir}/mastodon.md`, `${dir}/instagram.md`, `${dir}/reddit-claudeai.md`, `${dir}/pack.json`],
   );
   const reddit = text(files.find((f) => f.path.endsWith('reddit-claudeai.md')));
-  assert.match(reddit, /\*\*Manual:\*\* Shipcast never posts this/);
+  assert.match(reddit, /\*\*Approval:\*\*/);
   assert.match(reddit, /# Reddit, r\/ClaudeAI/);
   assert.match(text(files.find((f) => f.path.endsWith('bluesky.md'))), /\*\*Approval:\*\* published when this pull request is merged/);
   assert.match(text(files.find((f) => f.path.endsWith('devto.md'))), /canonical URL set to https:\/\/josegarrido\.dev\/en\/claudio\//);
@@ -86,7 +86,7 @@ test('the pull request body shows what the code analysis found and what merging 
   assert.match(body, /- REST API\n- Web UI/);
   assert.match(body, /\*\*Planned, not presented as working\*\*\n- macOS app/);
   assert.match(body, /\*\*Claimed by the docs but not backed by the code\*\*\n- none/);
-  assert.match(body, /- \*\*reddit\*\*: manual/);
+  assert.match(body, /- \*\*reddit\*\*: approval/);
 });
 
 interface Call {
@@ -211,13 +211,11 @@ test('the phase 5 channels get their drafts with the right mode lines', () => {
     hashnode: { tags: ['claude', 'ai'] },
     telegram: { text: 'Telegram post' },
     discord: { text: 'Discord message' },
-    hackerNews: { title: 'Show HN: claudio', firstComment: 'First comment.' },
-    productHunt: { tagline: 'Claude Code as a service', description: 'Run it anywhere.', firstComment: 'Maker comment.' },
   });
   const on = LaunchConfig.parse({
     enabled: true,
     brand: 'personal',
-    publishing: { hashnode: 'approval', telegram: 'auto', discord: 'approval', hackerNews: 'manual', productHunt: 'manual' },
+    publishing: { hashnode: 'approval', telegram: 'auto', discord: 'approval' },
   });
   const files = renderDrafts(full, launch, on, brand, new Date('2026-10-25'));
   const dir = launchDir(launch);
@@ -227,19 +225,8 @@ test('the phase 5 channels get their drafts with the right mode lines', () => {
   assert.match(file('hashnode.md'), /\*\*Approval:\*\*/);
   assert.match(file('telegram.md'), /\*\*Auto:\*\*[\s\S]*Telegram post/);
   assert.match(file('discord.md'), /\*\*Approval:\*\*[\s\S]*Discord message/);
-  const hn = file('show-hn.md');
-  assert.match(hn, /\*\*Manual:\*\*/);
-  assert.match(hn, /Title: Show HN: claudio/);
-  assert.match(hn, /URL to submit: https:\/\/github\.com\/yeyo11\/claudio/);
-  assert.match(hn, /First comment[\s\S]*First comment\./);
-  const ph = file('product-hunt.md');
-  assert.match(ph, /\*\*Manual:\*\*/);
-  assert.match(ph, /Tagline: Claude Code as a service/);
-  assert.match(ph, /Maker comment\./);
-  assert.match(ph, /^- og\.png$/m);
-  assert.match(ph, /^- instagram-01\.jpg$/m);
-  assert.match(ph, /^- instagram-04\.jpg$/m);
-  assert.match(pullRequestBody(full, launch, on), /- \*\*hackerNews\*\*: manual[\s\S]*- \*\*productHunt\*\*: manual/);
+  assert.ok(!files.some((f) => /show-hn|product-hunt/.test(f.path)), 'no draft for the owner to post by hand');
+  assert.match(pullRequestBody(full, launch, on), /- \*\*telegram\*\*: auto/);
 });
 
 test('the article carries its launch image alt text and the project screenshot after its opening paragraph', () => {
@@ -279,14 +266,14 @@ test('the new networks get their drafts, and a discussion draft reads back as ed
     threads: { text: 'Threads post' },
     linkedin: { text: 'LinkedIn post' },
   });
-  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { threads: 'approval', linkedin: 'manual' } });
+  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { threads: 'approval', linkedin: 'auto' } });
   const files = renderDrafts(full, launch, on, brand, new Date('2026-10-25'));
   const dir = launchDir(launch);
   const file = (name: string) => text(files.find((f) => f.path === `${dir}/${name}`));
   const discussion = file('github-discussion.md');
   assert.match(discussion, /^# GitHub Discussions[\s\S]*\*\*Approval:\*\*[\s\S]*Title: claudio 0\.9\n\n---\n\nWhat shipped\./);
   assert.match(file('threads.md'), /\*\*Approval:\*\*[\s\S]*Threads post/);
-  assert.match(file('linkedin.md'), /\*\*Manual:\*\*[\s\S]*LinkedIn post/);
+  assert.match(file('linkedin.md'), /\*\*Auto:\*\*[\s\S]*LinkedIn post/);
 
   const body = discussion.split('\n').slice(4).join('\n').replace('claudio 0.9', 'Edited title');
   assert.deepEqual(parseDiscussionDraft(body, full.githubDiscussions!), { title: 'Edited title', body: 'What shipped.\n\n---\n\nA rule inside the body.' });

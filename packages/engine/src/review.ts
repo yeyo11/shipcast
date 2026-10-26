@@ -37,8 +37,6 @@ const CHANNEL_FILES: Record<string, string> = {
   'github-discussion.md': 'GitHub Discussions',
   'threads.md': 'Threads',
   'linkedin.md': 'LinkedIn',
-  'show-hn.md': 'Show HN',
-  'product-hunt.md': 'Product Hunt',
   'newsletter-en.md': 'Newsletter (en)',
   'newsletter-es.md': 'Newsletter (es)',
   'release-notes.md': 'Release notes',

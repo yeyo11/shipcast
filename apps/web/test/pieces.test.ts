@@ -164,7 +164,7 @@ test('the launch card groups a launch by channel: one row each, a failure kept o
     ],
   );
   assert.equal(groups.at(-1)?.pieces[0]?.failure, 'auth failed', 'a channel that failed before publishing has its failure as its only piece');
-  assert.deepEqual(groupChannels({ posts: [p(7, 'devto', 'post', 'deleted')], failures: [], replies: {} })[0]?.state, { label: 'Deleted', tone: 'manual' });
+  assert.deepEqual(groupChannels({ posts: [p(7, 'devto', 'post', 'deleted')], failures: [], replies: {} })[0]?.state, { label: 'Deleted', tone: 'quiet' });
   assert.deepEqual(groupChannels({ posts: [], failures: [], replies: {} }), []);
 });
 
