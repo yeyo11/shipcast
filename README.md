@@ -81,13 +81,21 @@ Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](d
 - An account on each network you want, connected from the app or listed in `.env`
   ([.env.example](.env.example)).
 
+Install in one command (it clones Shipcast, installs it and runs `shipcast init`, which writes the
+bootstrap `.env`, starts Postgres and creates your GitHub App from a manifest):
+
 ```bash
-pnpm install
-cp .env.example .env             # fill in what you use
-docker compose up -d postgres    # the registry; `docker compose up -d` starts claudio too
-pnpm shipcast preflight owner/repo
-pnpm shipcast launch owner/repo  # or: pnpm app
+curl -fsSL https://raw.githubusercontent.com/yeyo11/shipcast/main/scripts/install.sh | sh
+cd shipcast && pnpm app          # then finish in the app's onboarding
 ```
+
+Or by hand, in a clone: `pnpm install`, then `pnpm shipcast init`. Everything else (the launches
+repo, the AI provider, the channels) is set in the app's onboarding. See
+[docs/install.md](docs/install.md).
+
+**Without a machine of your own**, Shipcast runs in GitHub Actions: `shipcast ci` with the composite
+action at this repo's root and the workflows in `templates/`
+([docs/decisions/action-mode.md](docs/decisions/action-mode.md)).
 
 An install from before Postgres keeps its registry in `data/shipcast.db`: stop the app and the CLI,
 start Postgres, then `pnpm sqlite-to-postgres` copies every row into the database at

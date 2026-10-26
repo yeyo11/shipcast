@@ -1,3 +1,5 @@
+import { runCi } from './ci.ts';
+import { runInit } from './init.ts';
 import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
@@ -48,6 +50,12 @@ const USAGE = `Usage: shipcast <command>
                                       (read,write); printed once, only its hash is kept
   token list                          The API tokens, revoked ones too
   token revoke <id>                   Revoke an API token at once
+  init [--public-url <https://host>] [--login <login>]
+                                      Set up a local install in this checkout: the bootstrap .env,
+                                      Postgres, and your GitHub App from a manifest (docs/install.md)
+  ci <launch|publish|round> [flags]   Action mode: the same work in GitHub Actions, configured by the
+                                      environment, the registry kept on the launches repo's
+                                      shipcast-state branch (shipcast ci --help, docs/decisions/action-mode.md)
   mcp [--url <url>] [--token <token>] The MCP server over stdio, for Claude Code and other clients:
                                       calls the app's REST API at SHIPCAST_API_URL (this checkout's
                                       SHIPCAST_PUBLIC_URL by default) with SHIPCAST_API_TOKEN, a
@@ -114,6 +122,12 @@ async function mcp(url: string | undefined, token: string | undefined): Promise<
 }
 
 async function main(argv: string[]): Promise<number> {
+  // Action mode: its own flags and configuration (the environment only, no .env, no keychain), so it
+  // is routed before the local install's arguments and runtime (docs/decisions/action-mode.md)
+  if (argv[0] === 'ci') return runCi(argv.slice(1));
+  // Before there is an install to load: it writes the .env the runtime reads
+  if (argv[0] === 'init') return runInit(argv.slice(1), ROOT);
+
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
