@@ -1,4 +1,4 @@
-import { ConnectorError, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
+import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
 import { ContentPack, graphemeCount, threadsLength, type Brand, type Channel } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
@@ -141,6 +141,8 @@ export interface FetchResult {
   added: CommentRecord[];
   /** Comments the owner had answered on the network themselves, marked sent */
   answeredByHand: number;
+  /** Posts the network says no longer exist, marked deleted so no run reads them again */
+  gone: Post[];
   problems: string[];
 }
 
@@ -167,6 +169,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
   let found = 0;
   let read = 0;
   let answeredByHand = 0;
+  const gone: Post[] = [];
 
   for (const post of posts) {
     if (!post.externalId || !isCommentChannel(post.channel)) continue;
@@ -180,6 +183,10 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
       }
       list = await reader.comments(post.externalId);
     } catch (error) {
+      if (error instanceof PostGone) {
+        gone.push(await registry.updatePost(post.id, { status: 'deleted' }));
+        continue;
+      }
       problems.add(`${name} post ${post.id}: ${message(error)}`);
       continue;
     }
@@ -213,7 +220,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
       if (marked) answeredByHand++;
     }
   }
-  return { posts: read, found, added, answeredByHand, problems: [...problems] };
+  return { posts: read, found, added, answeredByHand, gone, problems: [...problems] };
 }
 
 /** What a reply is grounded in, per launch: its analysis, the post as published, and the code */
@@ -425,6 +432,7 @@ export async function runComments(deps: ReplyDeps, options: { days?: number; log
   const log = options.log ?? (() => {});
   const fetched = await fetchComments(deps, options);
   log(`Read ${fetched.posts} posts: ${fetched.found} comments, ${fetched.added.length} new${fetched.answeredByHand ? `, ${fetched.answeredByHand} already answered by you` : ''}`);
+  for (const post of fetched.gone) log(`${isCommentChannel(post.channel) ? NAMES[post.channel] : post.channel} post ${post.id} no longer exists on the network: marked deleted, and not read again`);
   for (const problem of fetched.problems) log(problem);
   const settings = await readCommentSettings(deps.registry);
   const waiting = (await deps.registry.comments({ status: 'new', own: false, limit: 500 })).filter((c) => isCommentChannel(c.channel) && settings.replies[c.channel] !== 'off');

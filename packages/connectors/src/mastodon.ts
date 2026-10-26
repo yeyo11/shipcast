@@ -1,10 +1,12 @@
 import {
   checkProblem,
+  ConnectorError,
   expectOk,
   htmlToText,
   imageUrl,
   json,
   okCheck,
+  PostGone,
   statsOf,
   type Check,
   type Comment,
@@ -176,7 +178,11 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
       'Mastodon',
       await this.#fetch(`${this.#instance}/api/v1/statuses/${id}/context`, { headers: { authorization: `Bearer ${this.#token}` } }),
       'read the replies',
-    );
+    ).catch((error: unknown) => {
+      // A deleted status is Mastodon's own 404, not any 404: a wrong instance address must not delete every post
+      if (error instanceof ConnectorError && error.status === 404 && error.message.includes('"error":"Record not found"')) throw new PostGone('Mastodon', `the status ${externalId} no longer exists`, 404);
+      throw error;
+    });
     const own = await this.#ownId();
     const host = new URL(this.#instance).host;
     return context.descendants

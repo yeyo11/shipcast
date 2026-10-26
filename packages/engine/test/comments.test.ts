@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConnectorError, type Comment, type ReplyTarget } from '@shipcast/connectors';
+import { ConnectorError, PostGone, type Comment, type ReplyTarget } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
 import { MockLanguageModelV4 } from 'ai/test';
 import {
@@ -143,6 +143,19 @@ test('a network that fails is reported and the others are read', async () => {
   const result = await fetchComments(broken);
   assert.equal(result.posts, 0);
   assert.match(result.problems[0]!, /Mastodon post \d+: Mastodon: read the replies: 503/);
+});
+
+test('a post the network says is gone is marked deleted, not reported, and never read again', async () => {
+  const w = await world();
+  let reads = 0;
+  const gone = { ...w, connectors: async () => ({ reader: { comments: async () => (reads++, Promise.reject(new PostGone('Mastodon', 'the status 100 no longer exists', 404))) } }) };
+  const first = await fetchComments(gone);
+  assert.deepEqual(first.gone.map((p) => [p.id, p.status]), [[w.postId, 'deleted']]);
+  assert.deepEqual(first.problems, []);
+  assert.equal((await w.registry.post(w.postId))?.status, 'deleted');
+  const second = await fetchComments(gone);
+  assert.equal(reads, 1, 'a deleted post is not read again');
+  assert.deepEqual(second.gone, []);
 });
 
 test('a reply is drafted through the AI provider with the locked rules last, grounded in the analysis and the thread', async () => {

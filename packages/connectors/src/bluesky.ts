@@ -5,6 +5,7 @@ import {
   imageUrl,
   json,
   okCheck,
+  PostGone,
   statsOf,
   type Check,
   type Comment,
@@ -167,11 +168,14 @@ export class Bluesky implements Deletable, CommentReader, Replier {
   /**
    * The replies under a post, threads included, from the public AppView's thread view (no session
    * needed). A reply whose author blocked the reader, or that was deleted, comes back as a stub with
-   * no post, and is left out.
+   * no post, and is left out. The post itself deleted is a 400 `NotFound`, which is PostGone.
    */
   async comments(externalId: string): Promise<Comment[]> {
     const query = new URLSearchParams({ uri: externalId, depth: '10', parentHeight: '0' });
-    const { thread } = await json<{ thread: ThreadView }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPostThread?${query}`), 'read the replies');
+    const { thread } = await json<{ thread: ThreadView }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPostThread?${query}`), 'read the replies').catch((error: unknown) => {
+      if (error instanceof ConnectorError && error.status === 400 && error.message.includes('"error":"NotFound"')) throw new PostGone('Bluesky', `the post ${externalId} no longer exists`, 400);
+      throw error;
+    });
     const owner = thread.post?.author.did;
     const out: Comment[] = [];
     const visit = (node: ThreadView) => {
