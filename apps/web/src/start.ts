@@ -1,4 +1,5 @@
 import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/react-start';
+import { loginPath, SESSION_HEADER } from './server/next-path';
 
 /** GitHub's deliveries: no session and no same-origin, since GitHub sends them; their signature is checked instead */
 const WEBHOOK = '/api/github/webhook';
@@ -18,8 +19,10 @@ const MCP = /^\/mcp$/;
 const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/, API, MCP];
 
 /**
- * Every other request needs a session. A page without one goes to the sign-in page; anything else
- * (a server function, an API call) gets a 401, so a script never mistakes the sign-in page for data.
+ * Every other request needs a session. A page without one goes to the sign-in page, which brings the
+ * owner back to it afterwards; anything else (a server function, an API call) gets a 401, so a script
+ * never mistakes the sign-in page for data. The 401 says why in a header, which the app's pages read
+ * to send the owner to sign in again instead of showing an error (components/SessionExpiry.tsx).
  */
 const requireSession = createMiddleware().server(async ({ request, pathname, next }) => {
   if (PUBLIC.some((p) => p.test(pathname))) return next();
@@ -28,7 +31,11 @@ const requireSession = createMiddleware().server(async ({ request, pathname, nex
   const session = await readSession((await appContext()).secrets, cookieOf(request, SESSION_COOKIE));
   if (session) return next({ context: { login: session.login } });
   const isPage = request.method === 'GET' && (request.headers.get('accept') ?? '').includes('text/html');
-  return isPage ? new Response(null, { status: 302, headers: { location: '/login' } }) : new Response('Sign in first', { status: 401 });
+  if (isPage) {
+    const url = new URL(request.url);
+    return new Response(null, { status: 302, headers: { location: loginPath(`${url.pathname}${url.search}`) } });
+  }
+  return new Response('Sign in first', { status: 401, headers: { [SESSION_HEADER]: 'required' } });
 });
 
 /** Anything that changes something must come from the app's own pages */
