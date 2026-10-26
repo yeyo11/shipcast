@@ -24,3 +24,15 @@ test('an API failure nobody foresaw still says who, what and how, with the detai
 test('a short plain sentence is kept as it is', () => {
   assert.deepEqual(explain('no such launch'), { title: 'Something went wrong', text: 'No such launch' });
 });
+
+test('a part of the app that no longer loads asks for a reload, in every browser’s wording', () => {
+  for (const raw of [
+    'Failed to fetch dynamically imported module: http://192.0.2.1:8763/assets/TourRuntime-abc123.js',
+    'error loading dynamically imported module: http://192.0.2.1:8763/assets/TourRuntime-abc123.js',
+    'Importing a module script failed.',
+  ]) {
+    const e = explain(raw);
+    assert.equal(e.title, 'This page lost Shipcast');
+    assert.match(e.text, /Reload the page/);
+  }
+});
