@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 import { JobsPanel } from '../../../components/Jobs';
 import { Automation as SortingMachine } from '../../../components/illustrations';
 import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
+import { SaveBar } from '../../../components/SaveBar';
 import { SectionHead } from '../../../components/SectionHead';
-import { CheckIcon, RefreshIcon } from '../../../components/ui/icons';
+import { RefreshIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
 import { ConfirmButton } from '../../../components/ui/ConfirmButton';
@@ -53,6 +54,11 @@ function Automation() {
   const [interval, setIntervalText] = useState(String(data.intervalSeconds));
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // What was saved comes back from the server: the form starts again from it, so the save bar closes
+  useEffect(() => {
+    setMode(data.mode);
+    setIntervalText(String(data.intervalSeconds));
+  }, [data.mode, data.intervalSeconds]);
   // While a round runs, the page follows it
   const working = data.running || data.jobs.counts.running > 0;
   useEffect(() => {
@@ -102,7 +108,6 @@ function Automation() {
                 await router.invalidate();
               }}
             />
-            <ToolbarAction primary type="submit" form="automation-form" label="Save automation" busyLabel={busy && 'Saving…'} icon={<CheckIcon />} disabled={busy} />
           </>
         }
       />
@@ -138,6 +143,16 @@ function Automation() {
             </small>
           </div>
         )}
+        <SaveBar
+          form="automation-form"
+          dirty={mode !== data.mode || interval !== String(data.intervalSeconds)}
+          busy={busy}
+          save="Save automation"
+          onDiscard={() => {
+            setMode(data.mode);
+            setIntervalText(String(data.intervalSeconds));
+          }}
+        />
       </form>
 
       {mode === 'webhook' && (

@@ -1,12 +1,12 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { useState } from 'react';
-import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
+import { useEffect, useState } from 'react';
+import { PageToolbar } from '../../../components/PageToolbar';
+import { SaveBar } from '../../../components/SaveBar';
 import { SectionHead } from '../../../components/SectionHead';
 import { AI_SETTING_NAMES, SettingsForm } from '../../../components/SettingsForm';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem } from '../../../components/ui/Collapsible';
-import { CheckIcon } from '../../../components/ui/icons';
 import { ScrollArea } from '../../../components/ui/ScrollArea';
 import { Select } from '../../../components/ui/Select';
 import { getSettings } from '../../../server/settings.functions';
@@ -77,6 +77,13 @@ function Tasks({ data }: { data: Data }) {
   const [tone, setTone] = useState(data.settings.tone ?? '');
   const [busy, setBusy] = useState(false);
   const set = (task: Task, change: { provider?: ProviderId; model?: string }) => setTasks((all) => ({ ...all, [task]: { ...all[task], ...change } }));
+  // What was saved comes back from the server: the form starts again from it, so the save bar closes.
+  // Keyed on the saved values, not the object: saving a prompt reloads the page's data too
+  const saved = JSON.stringify([data.settings.tasks, data.settings.tone ?? '']);
+  useEffect(() => {
+    setTasks(data.settings.tasks);
+    setTone(data.settings.tone ?? '');
+  }, [saved]);
 
   const save = async () => {
     setBusy(true);
@@ -106,9 +113,19 @@ function Tasks({ data }: { data: Data }) {
         void save();
       }}
     >
-      {/* Like General, Automation and API, the section's own form saves from the toolbar, so every Settings
-          section has the same bar and the content does not jump when the owner moves between them */}
-      <PageToolbar label="AI" actions={<ToolbarAction primary type="submit" form="ai-tasks-form" label="Save AI settings" busyLabel={busy && 'Saving…'} icon={<CheckIcon />} disabled={busy} />} />
+      {/* Every Settings section keeps the same bar, so the content does not jump between them; the
+          section's own form saves from the save bar, which shows only while it has changes */}
+      <PageToolbar label="AI" />
+      <SaveBar
+        form="ai-tasks-form"
+        dirty={JSON.stringify(tasks) !== JSON.stringify(data.settings.tasks) || tone !== (data.settings.tone ?? '')}
+        busy={busy}
+        save="Save AI settings"
+        onDiscard={() => {
+          setTasks(data.settings.tasks);
+          setTone(data.settings.tone ?? '');
+        }}
+      />
       {data.tasks.map((task) => {
         const chosen = data.providers.find((p) => p.id === tasks[task].provider);
         return (

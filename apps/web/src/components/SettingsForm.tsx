@@ -2,9 +2,9 @@ import { useRouter } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { saveSettings } from '../server/settings.functions';
 import { useToast } from './Toasts';
-import { PageToolbar, ToolbarAction } from './PageToolbar';
+import { PageToolbar } from './PageToolbar';
+import { SaveBar } from './SaveBar';
 import { ConfirmButton } from './ui/ConfirmButton';
-import { CheckIcon } from './ui/icons';
 
 export interface SettingView {
   name: string;
@@ -28,7 +28,8 @@ const SOURCE: Record<string, string> = {
 
 /**
  * A group of the runtime settings as one form. General and AI each show their own group, so a
- * setting is configured in exactly one place. With `toolbar`, its Save is the page toolbar's action.
+ * setting is configured in exactly one place. With `toolbar` it is the page's own form: it keeps the
+ * page's (empty) toolbar, so Settings' sections line up, and saves from the save bar.
  */
 export function SettingsForm({ settings, submit = 'Save settings', toolbar = false }: { settings: SettingView[]; submit?: string; toolbar?: boolean }) {
   const formId = useId();
@@ -95,12 +96,12 @@ export function SettingsForm({ settings, submit = 'Save settings', toolbar = fal
           </small>
         </div>
       ))}
-      {/* The page's own form saves from its toolbar; a form among others keeps its button under it */}
+      {/* The page's own form saves from the save bar; a form among others keeps its button under it */}
       {toolbar ? (
-        <PageToolbar
-          label="Settings"
-          actions={<ToolbarAction primary type="submit" form={formId} label={submit} busyLabel={busy && 'Saving…'} icon={<CheckIcon />} disabled={busy || Object.keys(changed).length === 0} />}
-        />
+        <>
+          <PageToolbar label="Settings" />
+          <SaveBar form={formId} dirty={Object.keys(changed).length > 0} busy={busy} save={submit} onDiscard={() => setEdits({})} />
+        </>
       ) : (
         <div className="row">
           <button className="btn btn-primary" type="submit" disabled={busy || Object.keys(changed).length === 0}>

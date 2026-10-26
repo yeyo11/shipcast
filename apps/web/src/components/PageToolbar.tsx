@@ -7,8 +7,8 @@ import { Menu, type MenuEntry } from './ui/Menu';
  * The bar under every page's banner (docs/decisions/app-design-direction.md): the page's controls on
  * the left (filters, a period, a way back), its actions on the right (one yellow primary, the rest
  * quiet, the overflow behind a menu). It sticks under the top of the window while the page scrolls
- * and lifts a little once stuck. On a phone it stays one row: the controls scroll sideways and an
- * action keeps only its glyph, its words staying as its accessible name.
+ * and lifts a little once stuck. On a phone it stays one row: the controls and the actions scroll
+ * sideways, each action with its glyph and its words.
  */
 
 /**
@@ -58,7 +58,7 @@ export function PageToolbar(props: { label: string; controls?: ReactNode; action
 }
 
 type ActionProps = {
-  /** The action in words: shown beside the glyph on a desktop, the accessible name on a phone */
+  /** The action in words, beside the glyph on every screen */
   label: string;
   icon: ReactNode;
   /** The page's one yellow action */
@@ -69,7 +69,7 @@ type ActionProps = {
   render?: ReactElement;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>;
 
-/** A toolbar action: a glyph and its words, the words hidden on a phone where only the glyph fits */
+/** A toolbar action: a glyph and its words */
 export function ToolbarAction({ label, icon, primary, busyLabel, render, className, ...button }: ActionProps) {
   const classes = `btn btn-small tb-action${primary ? ' btn-primary' : ' tb-quiet'}${className ? ` ${className}` : ''}`;
   const text = busyLabel || label;

@@ -34,14 +34,16 @@
 main:has(.page-toolbar) .settings-nav, main:has(.page-toolbar) .chat-panel { top: calc(56px + 16px); }
 main:has(.page-toolbar) { scroll-padding-top: 72px; }
 
-/* A phone: one row. The controls scroll sideways; each action keeps its glyph, its words its name */
+/* A phone: one row. The controls scroll sideways; each action keeps its glyph and its words, since a
+   glyph alone said nothing (2026-10-26) */
 @media (max-width: 640px) {
   .page-toolbar { --tb-height: 52px; gap: 8px; margin-top: -16px; }
   .page-toolbar-controls { overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
   .page-toolbar-controls::-webkit-scrollbar { display: none; }
   .page-toolbar-controls > * { flex: none; }
-  .tb-action { width: 44px; min-height: 44px; padding: 0; }
-  .tb-action .tb-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .page-toolbar-actions { overflow-x: auto; scrollbar-width: none; flex: 0 1 auto; min-width: 0; padding: 2px 4px 6px 2px; }
+  .page-toolbar-actions::-webkit-scrollbar { display: none; }
+  .tb-action { min-height: 44px; padding: 0 14px; flex: none; }
   .tb-action.btn-primary { box-shadow: 3px 3px 0 var(--sc-stamp); }
 }
 
@@ -108,3 +110,22 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
 .lrow-who { display: flex; align-items: center; gap: 12px; }
 .lrow-name { display: grid; gap: 2px; min-width: 0; }
 .lrow-approval .project-avatar { border-color: #000; }
+
+/*
+ * Settings' contextual save bar: only while a form has changes, at the bottom of the window, in the
+ * card's outline and stamp; the yellow dot is "this needs you". On a phone it rides over the bottom
+ * navigation, and the page keeps room under its last field so nothing hides behind it.
+ */
+.save-bar { position: fixed; z-index: 45; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(720px, calc(100vw - 32px)); display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; padding: 12px 14px 12px 20px; background: var(--sc-raised); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
+.save-bar-text { display: inline-flex; align-items: center; gap: 10px; margin: 0; font-weight: 700; }
+.save-bar-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--sc-yellow); box-shadow: 0 0 0 1.5px var(--sc-text); }
+.save-bar-actions { display: flex; gap: 8px; margin-left: auto; }
+main:has(.save-bar) { padding-bottom: 168px; }
+@media (prefers-reduced-motion: no-preference) {
+  .save-bar { animation: save-bar-in var(--ui-move) var(--ui-ease); }
+  @keyframes save-bar-in { from { transform: translate(-50%, 16px); opacity: 0; } }
+}
+@media (max-width: 759px) {
+  .save-bar { bottom: calc(84px + env(safe-area-inset-bottom)); padding: 10px 10px 10px 16px; }
+  main:has(.save-bar) { padding-bottom: calc(196px + env(safe-area-inset-bottom)); }
+}
