@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:33:49.83782785Z
-updated_at: 2026-10-26T13:16:49.326406431Z
+created_at: 2026-10-26T16:39:51.199517003Z
+updated_at: 2026-10-26T20:53:07.603648976Z
 tags:
     - plan
     - design-system
@@ -30,8 +30,9 @@ The first direction, the "signal path", was rejected and is recorded below.
   approval); black carries the structure; red (`#FF6B5B` night, `#B42318` day) only for failure.
   `node design/scripts/contrast.mjs` checks the CSS against the JSON and 24 pairs, all AA.
 - **States, word plus shape:** Published (filled pill), Waiting for you (yellow with a black edge),
-  Draft (dotted marker), Manual — post it yourself (dashed), Failed (red outline, diamond marker).
-  Reddit and Hacker News are always Manual.
+  Draft (dotted marker), Quiet — not launched, deleted, dismissed (dashed; it was "Manual, post it
+  yourself" until the drafts for the owner to post were removed on 2026-10-26), Failed (red outline,
+  diamond marker).
 - **Mark:** a yellow rounded square with a black outline, a black dot inside and an offset shadow.
 
 It was chosen over three other directions explored at the same time (Departures, Manifest, Console).
@@ -147,4 +148,4 @@ Claude Design briefs are withdrawn.
 
 ## Related
 
-[[plans/shipcast.md]] · [[status.md]] · [[personal-identity.md]] · [[brands.md]] · [[publishing.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]]
+[[plans/shipcast.md]] · [[status.md]] · [[personal-identity.md]] · [[brands.md]] · [[publishing.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]] · [[plans/goal-after-mvp.md]]

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:24:01.502838798Z
-updated_at: 2026-10-25T16:24:01.502838798Z
+created_at: 2026-10-25T16:31:21.16585086Z
+updated_at: 2026-10-26T20:52:06.719329823Z
 tags:
     - decision
     - publishing
@@ -36,7 +36,10 @@ note, fields }`; `GET /api/v1/capabilities` serves it.
 | Instagram | no | no | The API edits no caption of a published post and deletes no post (comments can be deleted; not done here) |
 | Newsletter | no | no | A sent campaign is in the inboxes already |
 | Blog | yes: body, title, tags | yes | A commit to the launches repo's `main`, which deploys the site |
-| Reddit, Hacker News, Product Hunt, LinkedIn, X | no | no | Posted by hand, or not connected |
+| GitHub Discussions | yes: title, body | yes | `updateDiscussion` and `deleteDiscussion` through the GitHub App; a delete removes its comments |
+| Threads | no | yes | The Threads API has no edit; `DELETE /{media-id}`, at most 100 a day |
+| LinkedIn | no | yes | `DELETE /rest/posts/{urn}`; Share on LinkedIn cannot edit |
+| Reddit | no | yes | `POST /api/del` with the post's name (`t3_…`); a title can never change, and editing the body (`/api/editusertext`) is not built |
 
 In the connectors the capability is a type too: a connector that can implements `Editable<Piece>`
 (`edit(externalId, piece)`) or `Deletable` (`delete(externalId)`), with `Piece` what that network lets
@@ -75,11 +78,11 @@ word: the piece is gone, which is what was asked.
 
 What the network cannot do is refused before any request leaves, with the capability's note: an edit
 on Bluesky or Instagram, a delete on Instagram or the newsletter, a story, a comment or a newsletter
-issue (only a channel's post and the blog's articles are edited), a field the network does not take
-(an image on Discord), a link with no text on a network whose post is text alone, an image with no
-text on Telegram (the Bot API cannot read the caption back to keep it). The API answers 409 for what
-cannot be done, 400 for a change that is not valid, 404 for a post or launch that does not exist, and
-502 with the network's own words when the network refuses.
+issue (only a channel's post, a subreddit's post and the blog's articles are edited or deleted), a
+field the network does not take (an image on Discord), a link with no text on a network whose post is
+text alone, an image with no text on Telegram (the Bot API cannot read the caption back to keep it).
+The API answers 409 for what cannot be done, 400 for a change that is not valid, 404 for a post or
+launch that does not exist, and 502 with the network's own words when the network refuses.
 
 ## Several channels at once
 
@@ -117,4 +120,4 @@ touched. Hashnode's mutations were checked against its schema but not run: its A
 
 ## Related
 
-[[publishing.md]] · [[api.md]] · [[decisions/post-model.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[accounts.md]] · [[launches-repo.md]]
+[[publishing.md]] · [[api.md]] · [[decisions/post-model.md]] · [[decisions/automatic-channels-only.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[accounts.md]] · [[launches-repo.md]]

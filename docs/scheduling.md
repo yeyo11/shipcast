@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:06:06.864204941Z
-updated_at: 2026-10-25T20:06:06.864204941Z
+created_at: 2026-10-25T20:20:08.075803489Z
+updated_at: 2026-10-26T20:53:44.849887907Z
 tags:
     - scheduling
     - publishing
@@ -27,10 +27,11 @@ account yet. No migration: the columns were there since `0001_post_model`.
 
 - **`scheduleLaunch(registry, launchId, { channel: Date })`** (`packages/engine/src/schedule.ts`)
   writes one scheduled row per channel; a channel scheduled again has its row moved. It refuses, before
-  writing anything, a channel the engine does not publish (the blog goes out with the merge, Reddit and
-  Hacker News are always drafts), a channel `manual` or `off` in the launch's `launch.yml` (when it can
-  be read), a channel with anything out already, a time more than 60 days ahead, and a launch that is
-  `published`, `skipped` or `failed`. A time already past means "as soon as it can".
+  writing anything, a channel the engine does not schedule (the blog goes out with the merge, and
+  Reddit, whose launch is one post per subreddit while a schedule is one row per channel, goes out
+  with it too), a channel `off` in the launch's `launch.yml` (when it can be read), a channel with
+  anything out already, a time more than 60 days ahead, and a launch that is `published`, `skipped` or
+  `failed`. A time already past means "as soon as it can".
 - **`registry.schedulePost`** runs under an advisory lock per launch and channel and refuses when any
   non-scheduled piece of that channel exists, so a launch still happens once.
 - **Going out**: `recordPost` first looks for a scheduled row of the same launch, channel and kind
@@ -176,7 +177,7 @@ On PGlite with a clock the tests move (`packages/engine/test/publish.test.ts`,
 `packages/engine/test/recommend.test.ts`, `packages/runtime/test/queue.test.ts`,
 `apps/web/test/api.test.ts`): a scheduled channel waits and never holds the others back, goes out once
 at its time in its own row, and never again; overdue pieces after three days off go out on the next
-run; moving, cancelling and scheduling again; the refusals (out already, Reddit, manual, too far, a
+run; moving, cancelling and scheduling again; the refusals (out already, Reddit, off, too far, a
 done launch) and the uniqueness of the row; the newsletter's row; the due job runs after a restart,
 does nothing for a cancelled piece, waits for approval while the pull request is open, and arming twice
 leaves one job; the API's routes and scopes; the recommendation's defaults, the blend (a few posts
@@ -196,4 +197,4 @@ hour, so the defaults still lead.
 
 ## Related
 
-[[publishing.md]] · [[api.md]] · [[engine.md]] · [[stats.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[accounts.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[publishing.md]] · [[api.md]] · [[engine.md]] · [[stats.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/automatic-channels-only.md]] · [[accounts.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]

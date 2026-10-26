@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T06:55:46.001035981Z
-updated_at: 2026-10-25T18:58:05.691237288Z
+created_at: 2026-10-25T19:02:51.559002284Z
+updated_at: 2026-10-26T20:51:03.908955017Z
 tags:
     - schema
     - content-pack
@@ -33,14 +33,17 @@ Claude Code's `--json-schema` refused draft 2020-12 on the first launch.
 | `instagram` | `caption` (≤ 5 hashtags, no links), `summary` (≤ 140) for the cover, `slides`: 2–3 features, each a `title` (≤ 40) and a `text` (≤ 140) ([publishing.md](publishing.md#the-launchs-media)) |
 | `telegram` | `text` (≤ 900, so it fits a photo caption), ending with the article's link |
 | `discord` | `text` (≤ 1,800), ending with the article's link |
-| `hackerNews` | Show HN draft: `title` (starts with `Show HN: `, ≤ 80) and the author's `firstComment` (≤ 2,000); the URL submitted is the repo |
-| `productHunt` | Launch kit: `tagline` (≤ 60), `description` (≤ 260), the maker's `firstComment` (≤ 1,000) |
-| `reddit` | Drafts: `subreddit` (optional, without `r/`), `title` (≤ 300), `body`; Reddit is off by default since 2026-10-25 |
+| `githubDiscussions` | `title` (≤ 120) and a Markdown `body` (≤ 4,000) for the launched repo's Discussions |
+| `threads` | `text` (≤ 500, an emoji counting as its UTF-8 bytes) |
+| `linkedin` | `text` (≤ 1,300); the post shares the article as its link card |
+| `reddit` | One post per subreddit: `subreddit` (required, without `r/`), `title` (≤ 300), a Markdown `body` that links the article |
 | `newsletter` | An `en` and/or `es` issue: `subject` (≤ 90), `previewText` (≤ 140), `markdown` ([publishing.md](publishing.md#the-newsletter)) |
 | `releaseNotes` | Improved release notes, for the minor pack |
 
-Hashnode, Telegram, Discord, Show HN and Product Hunt were added on 2026-10-25 (phase 5). Hacker News,
-Product Hunt and Reddit are drafts only: Shipcast never posts them.
+Hashnode, Telegram and Discord were added on 2026-10-25 (phase 5); GitHub Discussions, Threads and
+LinkedIn on 2026-10-26 ([decisions/new-networks.md](decisions/new-networks.md)). Every piece is
+published by Shipcast: the Show HN draft and the Product Hunt kit were removed on 2026-10-26, and
+Reddit's drafts became posts ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 
 ## One slug per language
 
@@ -93,10 +96,10 @@ Every piece is optional, so one schema serves every `launch.yml`. Whether a pack
 launch needs is `missingPieces(pack, config, brand)`, which lists, in plain sentences:
 
 - a channel turned on in `launch.yml` whose piece is missing;
-- a channel turned on that has no connector yet (`x: no connector yet; set it to off in launch.yml`);
 - an article missing one of the languages of the brand's blog;
-- dev.to or Hashnode turned on without the English article they republish;
-- a configured subreddit without its draft;
+- dev.to or Hashnode turned on without the English article they republish, and LinkedIn without the
+  article it shares;
+- a subreddit listed in `launch.yml` without its post;
 - the newsletter turned on without a `newsletter` block in `brand.yml`, or without an issue for each
   of its lists.
 
@@ -105,9 +108,8 @@ launch needs is `missingPieces(pack, config, brand)`, which lists, in plain sent
 The limits in `LIMITS` are the networks' own, checked here so a pack that would be rejected never
 reaches review. Bluesky counts graphemes (`Intl.Segmenter`), so `👩‍💻` is one, as a reader sees it.
 Instagram captions carry no URL because links there are not clickable. Telegram's text is kept under
-a photo caption's 1,024 characters; Discord's under a message's 2,000; Show HN's title under Hacker
-News's 80.
+a photo caption's 1,024 characters; Discord's under a message's 2,000; a Reddit title under its 300.
 
 ## Related
 
-[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]]
+[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]]
