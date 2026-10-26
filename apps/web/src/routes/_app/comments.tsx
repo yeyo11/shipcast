@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react';
 import { useToast } from '../../components/Toasts';
 import { ChannelName, Pill, when } from '../../components/ui';
+import { ConfirmButton } from '../../components/ui/ConfirmButton';
 import { Select, type Option } from '../../components/ui/Select';
 import { approveReply, checkCommentsNow, dismissReply, listComments, redraftReply, saveCommentSettings, saveReply } from '../../server/comments.functions';
 import { COMMENT_STATE_NAMES, COMMENT_STATES, readCommentsSearch, type CommentsSearch, type CommentState } from '../../server/comments-search';
@@ -106,20 +107,22 @@ function CommentRow({ comment, limit }: { comment: CommentView; limit: number })
             </div>
             <div className="row">
               {comment.canReply ? (
-                <button
+                <ConfirmButton
                   className="btn btn-primary btn-small"
-                  type="button"
                   disabled={busy || !draft.trim()}
-                  onClick={() => {
-                    if (!window.confirm(`Send this reply to ${comment.author.handle} in your name?`)) return;
-                    void run(async () => {
+                  tone="primary"
+                  title={`Send this reply to ${comment.author.handle}?`}
+                  description={`It goes out on ${CHANNEL_NAMES[comment.channel] ?? comment.channel} under your connected account, and it cannot be edited afterwards.`}
+                  confirm="Send the reply"
+                  onConfirm={() =>
+                    run(async () => {
                       if (draft !== (comment.draft ?? '')) await saveReply({ data: { id: comment.id, draft } });
                       await approveReply({ data: comment.id });
-                    }, 'Reply sent');
-                  }}
+                    }, 'Reply sent')
+                  }
                 >
                   Approve and send
-                </button>
+                </ConfirmButton>
               ) : (
                 comment.replyOn && (
                   <a className="btn btn-small" href={comment.replyOn} target="_blank" rel="noreferrer">

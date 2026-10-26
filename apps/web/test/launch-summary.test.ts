@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { METRIC_FAMILIES } from '@shipcast/engine';
-import { cardChannels, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
+import { cardChannels, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, markCapacity, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
 
 test('a launch totals its counters through the stats families, with GitHub stars apart from reactions', () => {
   const totals = launchTotals(
@@ -153,4 +153,19 @@ test('a launch:channel series splits into each launch summed and each of its cha
   assert.deepEqual(launches.get(4), pts(0, 7));
   assert.deepEqual([...(channels.get(3)?.keys() ?? [])], ['blog', 'devto']);
   assert.equal(launches.size, 2);
+});
+
+test('a row holds as many tiles as its real width allows, with the "+n" in the last slot', () => {
+  // 36px tiles and 8px gaps: n tiles take 44n - 8
+  assert.equal(markCapacity(236), 5, '320px phone');
+  assert.equal(markCapacity(280), 6);
+  assert.equal(markCapacity(344), 8, '390px phone');
+  assert.equal(markCapacity(0), 1, 'never zero');
+  for (const width of [236, 280, 344]) {
+    const fit = markCapacity(width);
+    const items = Array.from({ length: 12 }, (_, i) => ({ channel: `c${i}`, mark: 'published' as Mark }));
+    const { shown, folded } = foldMarks(items, fit);
+    const tiles = shown.length + (folded.length > 0 ? 1 : 0);
+    assert.ok(tiles * 44 - 8 <= width, `${tiles} tiles fit in ${width}px`);
+  }
 });

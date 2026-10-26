@@ -43,3 +43,49 @@ export function formatRange(from: string | undefined, to: string | undefined): s
   const head = new Intl.DateTimeFormat(DATE_LOCALE, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' }).format(start);
   return `${head} – ${formatDay(to, true)}`;
 }
+
+/*
+ * Times as the `datetime-local` text keeps them (`HH:MM`, 24 hours, no zone) and as the time field edits
+ * them: an hour and a minute, each a number that wraps around and takes typed digits.
+ */
+
+export interface TimeParts {
+  hour: number;
+  minute: number;
+}
+
+export type TimeUnit = 'hour' | 'minute';
+
+const TIME = /^(\d{2}):(\d{2})$/;
+
+/** `HH:MM` as its parts, or undefined for anything that is not a real time of day */
+export function parseTime(value: string | undefined): TimeParts | undefined {
+  const m = value ? TIME.exec(value) : null;
+  if (!m) return undefined;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  return hour < 24 && minute < 60 ? { hour, minute } : undefined;
+}
+
+export function formatTime({ hour, minute }: TimeParts): string {
+  return `${pad2(hour)}:${pad2(minute)}`;
+}
+
+const MAX: Record<TimeUnit, number> = { hour: 23, minute: 59 };
+
+/** One arrow press: the unit goes up or down and wraps (23 to 00, 00 to 59) without carrying into the other */
+export function stepTime(parts: TimeParts, unit: TimeUnit, delta: number): TimeParts {
+  const size = MAX[unit] + 1;
+  return { ...parts, [unit]: (((parts[unit] + delta) % size) + size) % size };
+}
+
+/**
+ * Digits typed into a unit that shows two: the new digit joins the last one shown, like a clock's
+ * segments (a shown `01` then a typed 7 is 17), and what is past the unit's limit stops at it.
+ * Anything that is not a digit is ignored; undefined when nothing usable was typed.
+ */
+export function typeTime(parts: TimeParts, unit: TimeUnit, typed: string): TimeParts | undefined {
+  const digits = typed.replace(/\D/g, '');
+  if (!digits) return undefined;
+  return { ...parts, [unit]: Math.min(Number(digits.slice(-2)), MAX[unit]) };
+}

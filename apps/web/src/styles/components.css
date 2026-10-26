@@ -305,3 +305,12 @@ html::-webkit-scrollbar-thumb:hover { background: var(--sc-muted); }
 .rdp-range_start.rdp-range_end { border-radius: 50%; }
 @media (pointer: coarse) { .rdp-root { --rdp-cell: 44px; } }
 @media (max-width: 400px) { .rdp-root { --rdp-cell: 40px; } }
+
+/* The time field (ui/TimeField.tsx): one control in the input's skin holding the hour and minute segments */
+.ui-time { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 0 10px; border-radius: 14px; border: var(--sc-border-control) solid var(--sc-rail); background: var(--sc-ground); color: var(--sc-text); font: var(--sc-body); font-variant-numeric: tabular-nums; }
+.ui-time:focus-within { border-color: var(--sc-text); }
+.ui-time[data-disabled] { opacity: .5; }
+.ui-time-segment { width: 2.4ch; min-height: 40px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: center; caret-color: transparent; }
+.ui-time-segment::placeholder { color: var(--sc-muted); }
+.ui-time-segment:focus { outline: none; background: var(--sc-text); color: var(--sc-ground); }
+.ui-time-colon { color: var(--sc-muted); }

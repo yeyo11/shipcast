@@ -6,6 +6,7 @@ import type { SchedulingChannel } from '../../server/pieces.server';
 import { useToast } from '../Toasts';
 import { DatePicker } from '../ui/DatePicker';
 import { dateToDay } from '../ui/dates';
+import { TimeField } from '../ui/TimeField';
 import { Tooltip } from '../ui/Tooltip';
 
 /*
@@ -95,14 +96,11 @@ export function ChannelSchedule({ launchId, item, timezone }: { launchId: number
           </ul>
         )}
         <div className="sched-pick">
-          {/* The day in the design system's calendar, the time as a time field: together they are the `datetime-local` text the server helpers read */}
+          {/* The day in the design system's calendar, the time as a two-segment 24-hour field: together they are the `datetime-local` text the server helpers read */}
           <div className="sched-day">
             <DatePicker id={pickerId} label={`Day for ${item.channel}, in ${timezone}`} value={day} onChange={(next) => setValue(`${next}T${time || DEFAULT_TIME}`)} min={dateToDay(new Date())} />
           </div>
-          <label className="visually-hidden" htmlFor={`${pickerId}-time`}>
-            Time for {item.channel}, in {timezone}
-          </label>
-          <input id={`${pickerId}-time`} className="input sched-time" type="time" value={time} disabled={!day} onChange={(e) => setValue(e.target.value ? `${day}T${e.target.value}` : day)} />
+          <TimeField id={`${pickerId}-time`} label={`Time for ${item.channel}, in ${timezone}`} value={time} disabled={!day} fallback={DEFAULT_TIME} onChange={(next) => setValue(next ? `${day}T${next}` : day)} />
           <button type="button" className="btn btn-small" disabled={busy || !picked} onClick={() => picked && run(() => at(picked), 'Scheduled')}>
             {scheduled ? 'Move' : 'Schedule'}
           </button>

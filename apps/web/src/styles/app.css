@@ -120,23 +120,29 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .card.manual { background: transparent; border-style: dashed; border-color: var(--sc-rail); }
 .card .foot { margin-top: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
-/* The launch cards (components/LaunchCard.tsx): black with a yellow stamp, a summary each, in a grid.
-   Waiting for the owner keeps the yellow card */
+/* The launch cards (components/LaunchCard.tsx): Cartel's neutral raised card like the rest of the app, a
+   summary each, in a grid, all on role tokens so contrast holds in night and day. Only a launch waiting
+   for the owner is the yellow card */
 .lcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 24px; align-items: start; }
 .lcards > * { min-width: 0; }
-.lcard { background: var(--sc-black); color: var(--sc-on-black); border: var(--sc-border-card) solid var(--sc-on-black); border-radius: var(--sc-radius-card); padding: 24px 26px; display: grid; gap: 14px; box-shadow: var(--sc-stamp-sm) var(--sc-yellow); min-width: 0; }
-.lcard header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
-.lcard h2 { margin: 0; font: 900 30px/0.92 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); overflow-wrap: anywhere; min-width: 0; }
+.band .ph { overflow-wrap: anywhere; }
+.lcard { background: var(--sc-raised); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 24px 26px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+/* A grid's one implicit column is `auto`: it grows to its widest child's minimum and the card overflows a phone. `minmax(0, 1fr)` above and this keep every child inside the card's width */
+.lcard > * { min-width: 0; }
+.lcard header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 12px; align-items: start; }
+.lcard h2 { flex: 1 1 0; margin: 0; font: 900 30px/0.92 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); overflow-wrap: anywhere; min-width: 0; }
 .lcard h2 a { text-decoration: none; }
 .lcard h2 a:hover { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; }
-.lcard-ref { font: 600 14px/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: #A9A69E; vertical-align: 4px; }
+.lcard-ref { font: 600 14px/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: var(--sc-muted); vertical-align: 4px; }
 .lcard p { margin: 0; }
-.lcard-meta { color: #A9A69E; font-size: 13.5px; overflow-wrap: anywhere; }
+.lcard-meta { color: var(--sc-muted); font-size: 13.5px; overflow-wrap: anywhere; }
 /* Which channel the numbers are for. Peeking never moves the card: one fixed line height here, and
    fixed columns below that do not wrap when a value's width changes */
-.lcard-scope { display: flex; align-items: center; gap: 6px; height: 20px; margin: 0 0 -6px; overflow: hidden; white-space: nowrap; font: var(--sc-label); line-height: 20px; color: #A9A69E; }
-.lcard-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 10px; background: #1F1F1D; overflow: hidden; }
-.lcard-pill.is-on { background: color-mix(in srgb, var(--sc-yellow) 16%, #000); color: var(--sc-yellow); }
+.lcard-scope { display: flex; align-items: center; gap: 6px; height: 20px; margin: 0 0 -6px; overflow: hidden; white-space: nowrap; font: var(--sc-label); line-height: 20px; color: var(--sc-muted); }
+.lcard-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 10px; background: var(--sc-ground); overflow: hidden; }
+.lcard-pill.is-on { background: var(--sc-yellow); color: var(--sc-on-yellow); }
+/* Yellow is light in both themes, so the glyph on it is dark in both */
+.lcard-pill.is-on .glyph.icon { filter: none; }
 .lcard-pill-name { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .lcard.waiting .lcard-scope { color: #2a2a2a; }
 .lcard.waiting .lcard-pill { background: rgb(0 0 0 / .1); }
@@ -146,20 +152,26 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 /* The labels share one line and the numbers the next, whatever each number's size */
 .lcard-stats > div { display: contents; }
 .lcard-stats dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.lcard-stats dt { font: var(--sc-label); color: #A9A69E; }
+.lcard-stats dt { font: var(--sc-label); color: var(--sc-muted); }
 .lcard-stats dd { margin: 4px 0 0; font: 900 30px/0.9 var(--sc-font-display); }
 .lcard-stats .is-lead dd { font-size: 52px; }
-@media (max-width: 420px) { .lcard-stats { column-gap: 14px; grid-template-columns: minmax(72px, auto) repeat(3, minmax(52px, auto)); } .lcard-stats .is-lead dd { font-size: 44px; } .lcard-stats dd:not(.is-lead dd) { font-size: 26px; } }
+/* On a phone the card's inner width is about 236px at 320: four equal columns that may shrink, smaller type, and a label or number that still does not fit is clipped rather than overlapping its neighbour */
+@media (max-width: 520px) {
+  .lcard { padding: 18px; }
+  .lcard h2 { font-size: 26px; }
+  .lcard-stats { grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); column-gap: 8px; justify-content: stretch; }
+  .lcard-stats dt { font-size: 11px; letter-spacing: 0; text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lcard-stats dd { font-size: 24px; overflow: hidden; text-overflow: clip; }
+  .lcard-stats .is-lead dd { font-size: 40px; }
+}
 /* Views per day, alone on its row: an area with its line, the days under it */
-.darea { margin: 0; }
+.darea { margin: 0; min-width: 0; }
 .darea svg { display: block; width: 100%; height: 96px; }
-.darea-fill { fill: color-mix(in srgb, var(--sc-yellow) 18%, transparent); }
-.darea-line { stroke: var(--sc-yellow); }
-.darea figcaption { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: #A9A69E; }
-.lcard-none { color: #A9A69E; font-size: 14px; }
-.lcard .s-published { background: var(--sc-on-black); color: #000; }
-.lcard .s-manual, .lcard .s-draft { color: #C8C5BC; border-color: #6B6963; }
-.lcard .s-failed { color: #FF6B5B; border-color: #FF6B5B; }
+/* The text colour, not yellow: yellow on the day theme's light card is under 3:1 */
+.darea-fill { fill: color-mix(in srgb, var(--sc-text) 12%, transparent); }
+.darea-line { stroke: var(--sc-text); }
+.darea figcaption { display: flex; justify-content: space-between; margin-top: 6px; gap: 8px; min-width: 0; font-size: 12px; color: var(--sc-muted); }
+.lcard-none { color: var(--sc-muted); font-size: 14px; }
 .lcard.waiting { background: var(--sc-yellow); color: var(--sc-on-yellow); border-color: #000; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
 .lcard.waiting .pill.s-waiting { background: #000; color: var(--sc-yellow); }
 .lcard.waiting .lcard-ref, .lcard.waiting .lcard-meta, .lcard.waiting .lcard-stats dt, .lcard.waiting .darea figcaption, .lcard.waiting .lcard-none { color: #2a2a2a; }
@@ -172,20 +184,20 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .marks > li { flex: none; }
 .marks[data-full] { justify-content: space-between; gap: 4px; }
 /* "+n": the channels that went fine, folded so the marks stay on one row */
-.marks-more > button { height: 36px; min-width: 44px; padding: 0 10px; border-radius: 10px; border: 2px dashed #5A5853; background: none; color: inherit; font: 700 14px/1 var(--sc-font-text); cursor: pointer; }
+.marks-more > button { height: 36px; min-width: 44px; padding: 0 10px; border-radius: 10px; border: 2px dashed var(--sc-rail); background: none; color: inherit; font: 700 14px/1 var(--sc-font-text); cursor: pointer; }
 .marks-more > button:hover, .marks-more > button:focus-visible { border-style: solid; border-color: currentColor; }
 .lcard.waiting .marks-more > button { border-color: #000; }
 /* How many of the brand's accounts a channel went out on, quiet in the tile's lower corner */
-.mark-accounts { position: absolute; right: -5px; bottom: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--sc-on-black); color: var(--sc-black); font: 800 10.5px/16px var(--sc-font-text); text-align: center; box-shadow: 0 0 0 2px var(--sc-black); }
+.mark-accounts { position: absolute; right: -5px; bottom: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--sc-text); color: var(--sc-ground); font: 800 10.5px/16px var(--sc-font-text); text-align: center; box-shadow: 0 0 0 2px var(--sc-raised); }
 .lcard.waiting .mark-accounts { background: #000; color: var(--sc-yellow); box-shadow: 0 0 0 2px var(--sc-yellow); }
 .marks-more > button[data-popup-open] { border-style: solid; border-color: currentColor; }
 /* Marks that open: the tile is the link or the menu's button */
 .mark.is-link > a, .mark.is-link > button, .pop-channels .mark > a, .pop-channels .mark > span { position: relative; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 8px; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-.mark.is-link:hover { border-color: #6B6963; }
+.mark.is-link:hover { border-color: var(--sc-text); }
 /* The mark whose menu is open keeps a solid border in the text colour until it closes */
-.mark.is-link[data-active] { border-color: currentColor; background: #1A1A18; }
+.mark.is-link[data-active] { border-color: currentColor; background: var(--sc-ground); }
 .lcard.waiting .mark.is-link[data-active] { background: rgb(0 0 0 / .1); }
-.mark.is-link:has(:focus-visible) { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.mark.is-link:has(:focus-visible) { outline: 3px solid var(--sc-text); outline-offset: 2px; }
 .mark.is-link :focus-visible { outline: none; }
 .lcard.waiting .mark.is-link:has(:focus-visible) { outline-color: #000; }
 /* A mark's menu (Base UI's Popover, in a portal on the page's ground) */
@@ -219,14 +231,13 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .pop-chips > * { padding: 7px 11px; border-radius: var(--sc-radius-pill); border: 1.5px solid var(--sc-rail); font: 700 12.5px/1 var(--sc-font-text); color: var(--sc-text); text-decoration: none; }
 .pop-chips > a:hover, .pop-chips > a:focus-visible { background: var(--sc-text); color: var(--sc-ground); }
 .pop-chips > .is-quiet { color: var(--sc-muted); border-style: dashed; }
-.mark { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 2px solid #3A3936; }
-.mark.m-failed { border-color: #FF6B5B; }
+.mark { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 2px solid var(--sc-rail); }
+.mark.m-failed { border-color: var(--sc-failure); }
 .mark .dot { position: absolute; right: -5px; top: -5px; }
-.mark .dot i { width: 12px; height: 12px; box-shadow: 0 0 0 2px var(--sc-black); }
+.mark .dot i { width: 12px; height: 12px; box-shadow: 0 0 0 2px var(--sc-raised); }
 .lcard.waiting .mark { border-color: #000; }
 .lcard.waiting .mark .dot i { box-shadow: 0 0 0 2px var(--sc-yellow); }
-/* Glyphs on the black card stay light in either theme */
-.lcard .glyph.icon, [data-theme="day"] .lcard .glyph.icon { filter: invert(1); }
+/* Glyphs follow the theme (.icon); on the yellow card they are dark in both */
 .lcard.waiting .glyph.icon, [data-theme="day"] .lcard.waiting .glyph.icon { filter: none; }
 
 /* Bands */
@@ -322,8 +333,8 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .dot.d-failed i { background: var(--sc-failure); }
 .dot.d-off { color: var(--sc-muted); }
 .dot.d-off i { border: 2px dotted var(--sc-muted); }
-.mark .dot.d-scheduled i { box-shadow: inset 0 0 0 3px var(--sc-yellow), 0 0 0 2px var(--sc-black); }
-.mark .dot.d-off i { background: var(--sc-black); }
+.mark .dot.d-scheduled i { box-shadow: inset 0 0 0 3px var(--sc-yellow), 0 0 0 2px var(--sc-raised); }
+.mark .dot.d-off i { background: var(--sc-raised); }
 
 /* A launch's page: a compact header, the numbers first, one quiet line, then the tabs */
 .lhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px 24px; margin: 8px 0 20px; }
@@ -449,7 +460,7 @@ a.post-link:hover { color: var(--sc-text); }
 @media (pointer: coarse) { .chip { min-height: 44px; } }
 .sched-pick { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .sched-pick .sched-day { flex: 1 1 200px; min-width: 0; }
-.sched-pick .sched-time { flex: 0 1 130px; width: auto; min-width: 0; }
+.sched-pick .ui-time { flex: 0 0 auto; }
 
 /* The edit dialogs: the form and what it does, side by side when there is room */
 .edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
@@ -496,23 +507,23 @@ html.lenis, html.lenis body { height: auto; }
 .lenis [data-lenis-prevent], .lenis [data-lenis-prevent-wheel], .lenis [data-lenis-prevent-touch] { overscroll-behavior: contain; }
 .lenis.lenis-smooth iframe { pointer-events: none; }
 
-/* ---------- Channels: a card per account, in the launch card's skin (.lcard) ---------- */
+/* ---------- Channels: a card per account, in the launch card's skin (.lcard), so on role tokens too ---------- */
 .ccards { list-style: none; margin: 0 0 8px; padding: 0 8px 8px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 22px; }
 .ccard { align-content: start; }
 .ccard h2 { font-size: 24px; }
 .ccard-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .ccard-who { display: flex; align-items: center; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
-.ccard-who .avatar { border-color: #3A3936; }
+.ccard-who .avatar { border-color: var(--sc-rail); }
 .ccard-name { min-width: 0; flex: 1; display: grid; gap: 2px; }
 .ccard-stats { grid-template-columns: auto; margin: 0; }
 .ccard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 4px; }
-.ccard .btn { color: inherit; border-color: #6B6963; }
+.ccard .btn { color: inherit; border-color: var(--sc-rail); }
 .ccard .btn:hover:not(:disabled), .ccard .btn:focus-visible { border-color: currentColor; }
-.ccard .input { background: #1A1A18; color: inherit; border-color: #6B6963; }
-.ccard.is-failed { border-color: #FF6B5B; }
-.ccard .stale { color: #FF6B5B; }
-/* A network not connected yet is quieter than one that is: no stamp shadow, a dashed edge */
-.ccard-add { box-shadow: none; border-style: dashed; border-color: #6B6963; }
+.ccard .input { background: var(--sc-ground); color: inherit; border-color: var(--sc-rail); }
+.ccard.is-failed { border-color: var(--sc-failure); }
+.ccard .stale { color: var(--sc-failure); }
+/* A network not connected yet is quieter than one that is: a dashed edge */
+.ccard-add { border-style: dashed; border-color: var(--sc-rail); }
 .ui-tab-count { font-variant-numeric: tabular-nums; color: var(--sc-muted); font-weight: 600; }
 
 /* Comments: the filters in a wrapping row (the search takes the first line on a phone), and the pager */
