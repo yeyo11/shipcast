@@ -13,14 +13,14 @@ export const Route = createFileRoute('/_app/channels/$network')({
     const data = await getChannels();
     const network = data.networks.find((n) => n.id === params.network);
     if (!network || network.auth === 'none') throw notFound();
-    return { network, brands: data.brands, instagramOAuth: data.instagramOAuth, secretsKind: data.secretsKind };
+    return { network, brands: data.brands, oauthReady: data.oauthReady, secretsKind: data.secretsKind };
   },
   head: ({ loaderData }) => ({ meta: [{ title: `Connect ${loaderData?.network.name ?? ''} · Shipcast` }] }),
   component: Connect,
 });
 
 function Connect() {
-  const { network, brands, instagramOAuth, secretsKind } = Route.useLoaderData();
+  const { network, brands, oauthReady, secretsKind } = Route.useLoaderData();
   const search = Route.useSearch();
   const [brand, setBrand] = useState(brands[0]?.id ?? 'personal');
   const [label, setLabel] = useState('');
@@ -121,8 +121,10 @@ function Connect() {
             </label>
             <input id="label" className="input" placeholder="The account’s own name, if left empty" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
-          {network.id === 'instagram' && !instagramOAuth ? (
-            <Notice tone="bad">Instagram Login needs the Instagram app id and secret: set them in <a href="/settings">Settings</a>.</Notice>
+          {network.id in oauthReady && !oauthReady[network.id] ? (
+            <Notice tone="bad">
+              Connecting {network.name} needs your {network.id === 'linkedin' ? 'LinkedIn app’s client id and secret' : `${network.name} app id and secret`}: set them in <a href="/settings">Settings</a>.
+            </Notice>
           ) : (
             <div className="row">
               <button className="btn btn-primary" type="submit" disabled={busy}>

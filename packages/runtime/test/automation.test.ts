@@ -11,6 +11,7 @@ import {
   readAutomation,
   record,
   refreshInstagramAccounts,
+  refreshMetaAccounts,
   verifyAnySignature,
   verifySignature,
   webhookAction,
@@ -98,4 +99,20 @@ test('every Instagram account refreshes its own token when it is 30 days old', a
   assert.equal(JSON.parse((await secrets.get(accountSecretKey(old.id)))!).accessToken, 'new-token');
   assert.equal((await registry.account(old.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z');
   assert.equal((await registry.account(fresh.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z', 'a first sight only records the date');
+});
+
+test('a Threads account refreshes its token at Threads, when it is 30 days old', async () => {
+  const registry = await memoryRegistry();
+  const secrets = new MemoryStore();
+  const old = await registry.addAccount({ network: 'threads', brand: 'personal', label: '@me', settings: { userId: '9', refreshedAt: '2026-09-01T00:00:00.000Z' } });
+  await secrets.set(accountSecretKey(old.id), JSON.stringify({ accessToken: 'old-token' }), 'x');
+  const urls: string[] = [];
+  const http = (async (input: string | URL | Request) => {
+    urls.push(String(input));
+    return Response.json({ access_token: 'new-token', expires_in: 5_184_000 });
+  }) as typeof fetch;
+  const lines = await refreshMetaAccounts('threads', { registry, secrets }, new Date('2026-10-25T00:00:00Z'), http);
+  assert.deepEqual(lines, ['Threads token of @me refreshed; valid for 60 more days']);
+  assert.match(urls[0] ?? '', /^https:\/\/graph\.threads\.com\/refresh_access_token\?grant_type=th_refresh_token&access_token=old-token$/);
+  assert.equal(JSON.parse((await secrets.get(accountSecretKey(old.id)))!).accessToken, 'new-token');
 });

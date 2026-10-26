@@ -1,5 +1,5 @@
 import { ConnectorError, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { ContentPack, graphemeCount, type Brand, type Channel } from '@shipcast/schema';
+import { ContentPack, graphemeCount, threadsLength, type Brand, type Channel } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
@@ -14,8 +14,8 @@ import type { Checkout } from './workspace.ts';
  * when the owner approves, or at once on a channel set to auto. See docs/decisions/comment-assistant.md
  */
 
-/** The channels whose comments can be read; Telegram and Discord cannot read replies here */
-export const COMMENT_CHANNELS = ['mastodon', 'bluesky', 'instagram', 'devto'] as const satisfies readonly Channel[];
+/** The channels whose comments can be read; Telegram, Discord and LinkedIn cannot read replies here */
+export const COMMENT_CHANNELS = ['mastodon', 'bluesky', 'instagram', 'devto', 'threads', 'githubDiscussions'] as const satisfies readonly Channel[];
 export type CommentChannel = (typeof COMMENT_CHANNELS)[number];
 
 export function isCommentChannel(channel: string): channel is CommentChannel {
@@ -40,6 +40,9 @@ export const REPLY_CAPABILITIES: Readonly<Record<string, ReplyCapability>> = {
   devto: { read: true, reply: false, note: 'Forem’s API reads comments but cannot write one: the draft is copied and posted on dev.to' },
   telegram: { read: false, reply: false, note: 'A bot cannot read the replies to a channel post' },
   discord: { read: false, reply: false, note: 'A webhook cannot read the replies to its message' },
+  threads: { read: true, reply: true, note: 'Every reply in the post’s conversation (threads_read_replies); a reply is a post under the comment (threads_manage_replies)' },
+  githubDiscussions: { read: true, reply: true, note: 'The comments and their replies, through the GitHub App; a reply is written by the App’s bot, not by your own GitHub account' },
+  linkedin: { read: false, reply: false, note: 'Reading comments on a member’s post needs LinkedIn’s Community Management API, granted only to approved companies' },
 };
 
 /** How long a reply may be on each network: short on purpose, under what the network itself allows */
@@ -49,9 +52,18 @@ export const REPLY_LIMITS: Readonly<Record<CommentChannel, number>> = {
   bluesky: 300,
   instagram: 300,
   devto: 600,
+  threads: 400,
+  githubDiscussions: 1000,
 };
 
-const NAMES: Record<CommentChannel, string> = { mastodon: 'Mastodon', bluesky: 'Bluesky', instagram: 'Instagram', devto: 'dev.to' };
+const NAMES: Record<CommentChannel, string> = {
+  mastodon: 'Mastodon',
+  bluesky: 'Bluesky',
+  instagram: 'Instagram',
+  devto: 'dev.to',
+  threads: 'Threads',
+  githubDiscussions: 'GitHub Discussions',
+};
 
 export const COMMENTS_SETTINGS_KEY = 'comments';
 
@@ -60,7 +72,9 @@ export interface CommentSettings {
 }
 
 /** Approval everywhere: nothing goes out in the owner's name without their click until they choose otherwise */
-export const DEFAULT_COMMENT_SETTINGS: CommentSettings = { replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval' } };
+export const DEFAULT_COMMENT_SETTINGS: CommentSettings = {
+  replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' },
+};
 
 export class InvalidCommentSettings extends Error {}
 
@@ -246,8 +260,9 @@ export function replyJsonSchema(): Record<string, unknown> {
   };
 }
 
-/** A reply's length as the network counts it: graphemes on Bluesky, characters elsewhere */
+/** A reply's length as the network counts it: graphemes on Bluesky, emoji bytes on Threads, characters elsewhere */
 export function replyLength(channel: CommentChannel, text: string): number {
+  if (channel === 'threads') return threadsLength(text);
   return channel === 'bluesky' ? graphemeCount(text) : [...text].length;
 }
 

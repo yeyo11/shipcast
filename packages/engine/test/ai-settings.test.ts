@@ -74,7 +74,7 @@ test('an edited prompt is a new version; earlier ones and the default can be res
 test('the rules that keep the text true to the code, and the schema, cannot be overridden', async () => {
   const registry = await memoryRegistry();
   for (const id of ['rules.launch', 'rules.article', 'schema', 'system']) await assert.rejects(savePrompt(registry, id, 'Anything goes.'), LockedPrompt);
-  await assert.rejects(savePrompt(registry, 'channel.linkedin', 'x'), InvalidPrompt, 'only prompts the code knows');
+  await assert.rejects(savePrompt(registry, 'channel.x', 'x'), InvalidPrompt, 'only prompts the code knows');
   await assert.rejects(savePrompt(registry, 'channel.bluesky', 'Post at {{sitee}}'), /\{\{sitee\}\} is not a variable/);
   await assert.rejects(savePrompt(registry, 'pack.launch', '   '), InvalidPrompt);
 

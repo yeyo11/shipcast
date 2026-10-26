@@ -123,3 +123,84 @@ export async function exchangeInstagramCode(
   if (!userId) throw new ConnectorError('Instagram', 'the account has no user_id: it is not a professional account');
   return { userId, accessToken: long.access_token, expiresIn: long.expires_in };
 }
+
+/** Publishing, deleting, replies and insights: every permission the Threads connector uses */
+export const THREADS_SCOPES = [
+  'threads_basic',
+  'threads_content_publish',
+  'threads_read_replies',
+  'threads_manage_replies',
+  'threads_manage_insights',
+  'threads_delete',
+];
+
+/** Threads' authorisation window; the redirect URI must be listed, exactly, in the Meta app's Threads use case */
+export function threadsAuthorizeUrl(appId: string, redirectUri: string, state: string): string {
+  const query = new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, scope: THREADS_SCOPES.join(','), response_type: 'code', state });
+  return `https://threads.com/oauth/authorize?${query}`;
+}
+
+/**
+ * As Instagram's: the code is worth a short-lived token (an hour), swapped at once for a long-lived
+ * one (60 days, refreshed every 30 by `Threads.refreshToken`). Both steps need the app secret.
+ */
+export async function exchangeThreadsCode(
+  app: { appId: string; appSecret: string },
+  redirectUri: string,
+  code: string,
+  http: typeof fetch = globalThis.fetch,
+): Promise<{ userId: string; accessToken: string; expiresIn: number }> {
+  const response = await http('https://graph.threads.com/oauth/access_token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    // Threads appends `#_` to the redirect, which is not part of the code
+    body: new URLSearchParams({ client_id: app.appId, client_secret: app.appSecret, grant_type: 'authorization_code', redirect_uri: redirectUri, code: code.replace(/#_$/, '') }),
+  });
+  // The user id can be a number past 2^53 in JSON: it is read as text, before JSON.parse rounds it
+  const text = await response.text();
+  if (!response.ok) throw new ConnectorError('Threads', `exchange the code: ${response.status} ${text.slice(0, 300)}`, response.status);
+  let short: { access_token?: string };
+  try {
+    short = JSON.parse(text) as typeof short;
+  } catch {
+    throw new ConnectorError('Threads', 'exchange the code: the answer is not JSON', response.status);
+  }
+  const userId = /"user_id"\s*:\s*"?(\d+)/.exec(text)?.[1];
+  if (!short.access_token || !userId) throw new ConnectorError('Threads', 'the code exchange returned no access token or user id');
+  const query = new URLSearchParams({ grant_type: 'th_exchange_token', client_secret: app.appSecret, access_token: short.access_token });
+  const long = await json<{ access_token: string; expires_in: number }>('Threads', await http(`https://graph.threads.com/access_token?${query}`), 'get a long-lived token');
+  return { userId, accessToken: long.access_token, expiresIn: long.expires_in };
+}
+
+/** Sign In with LinkedIn using OpenID Connect (openid, profile) and Share on LinkedIn (w_member_social) */
+export const LINKEDIN_SCOPES = ['openid', 'profile', 'w_member_social'];
+
+/** The redirect URI must be listed, exactly, under the LinkedIn app's Auth → Authorized redirect URLs */
+export function linkedinAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
+  const query = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, state, scope: LINKEDIN_SCOPES.join(' ') });
+  return `https://www.linkedin.com/oauth/v2/authorization?${query}`;
+}
+
+/**
+ * The code becomes an access token of 60 days; LinkedIn gives refresh tokens only to the partners it
+ * approves, so the owner connects again when it runs out. The member's id comes from userinfo.
+ */
+export async function exchangeLinkedInCode(
+  app: { clientId: string; clientSecret: string },
+  redirectUri: string,
+  code: string,
+  http: typeof fetch = globalThis.fetch,
+): Promise<{ personId: string; name: string | undefined; accessToken: string; expiresIn: number }> {
+  const response = await http('https://www.linkedin.com/oauth/v2/accessToken', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: app.clientId, client_secret: app.clientSecret, redirect_uri: redirectUri }),
+  });
+  const token = await json<{ access_token: string; expires_in: number }>('LinkedIn', response, 'exchange the code');
+  const me = await json<{ sub: string; name?: string }>(
+    'LinkedIn',
+    await http('https://api.linkedin.com/v2/userinfo', { headers: { authorization: `Bearer ${token.access_token}` } }),
+    'read the member',
+  );
+  return { personId: me.sub, name: me.name, accessToken: token.access_token, expiresIn: token.expires_in };
+}

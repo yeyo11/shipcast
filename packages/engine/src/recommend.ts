@@ -106,6 +106,31 @@ export const CHANNEL_DEFAULTS: Partial<Record<Channel, ChannelDefaults>> = {
       { days: WEEKEND, from: 11, to: 13, weight: 0.4 },
     ],
   },
+  threads: {
+    note: 'weekday lunchtime and early evening, the hours the studies find for Threads, which share Instagram’s audience',
+    windows: [
+      { days: WORKDAYS, from: 12, to: 14, weight: 1 },
+      { days: WORKDAYS, from: 18, to: 21, weight: 0.8 },
+      { days: WEEKEND, from: 10, to: 13, weight: 0.4 },
+    ],
+  },
+  linkedin: {
+    note: 'Tuesday to Thursday mornings, where the LinkedIn studies agree',
+    windows: [
+      { days: MIDWEEK, from: 8, to: 11, weight: 1 },
+      { days: WORKDAYS, from: 8, to: 11, weight: 0.7 },
+      { days: MIDWEEK, from: 12, to: 14, weight: 0.6 },
+      { days: WEEKEND, from: 10, to: 12, weight: 0.1 },
+    ],
+  },
+  githubDiscussions: {
+    note: 'weekday working hours in Europe and the US east coast, when maintainers and watchers read GitHub',
+    windows: [
+      { days: WORKDAYS, from: 15, to: 18, weight: 1 },
+      { days: WORKDAYS, from: 9, to: 13, weight: 0.8 },
+      { days: WEEKEND, from: 10, to: 13, weight: 0.3 },
+    ],
+  },
   discord: {
     note: 'weekday late afternoons, when the servers are busiest, and late mornings',
     windows: [
@@ -205,7 +230,7 @@ export interface Recommendation {
   audience: boolean;
 }
 
-const NAMES: Partial<Record<Channel, string>> = { devto: 'dev.to', bluesky: 'Bluesky', mastodon: 'Mastodon', instagram: 'Instagram', hashnode: 'Hashnode', newsletter: 'the newsletter', telegram: 'Telegram', discord: 'Discord' };
+const NAMES: Partial<Record<Channel, string>> = { devto: 'dev.to', bluesky: 'Bluesky', mastodon: 'Mastodon', instagram: 'Instagram', hashnode: 'Hashnode', newsletter: 'the newsletter', telegram: 'Telegram', discord: 'Discord', githubDiscussions: 'GitHub Discussions', threads: 'Threads', linkedin: 'LinkedIn' };
 const nameOf = (channel: Channel) => NAMES[channel] ?? channel;
 
 function median(values: number[]): number {

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { GitHubDiscussions, type GitHubTokenSource } from '@shipcast/connectors';
 import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, MissingField, NETWORKS, type Built, type Credentials } from './catalog.ts';
@@ -12,6 +13,13 @@ export interface EditorDeps {
   secrets: SecretStore;
   readFile?: (path: string) => string;
   fetch?: typeof fetch;
+  /** The engine's GitHub access, for GitHub Discussions, which has no account of its own */
+  github?: { auth: GitHubTokenSource };
+}
+
+/** GitHub Discussions with the engine's GitHub access; undefined without it */
+function discussions(deps: EditorDeps): GitHubDiscussions | undefined {
+  return deps.github ? new GitHubDiscussions({ auth: deps.github.auth, ...(deps.fetch && { fetch: deps.fetch }) }) : undefined;
 }
 
 /**
@@ -49,8 +57,12 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
  */
 export function commentConnectors(deps: EditorDeps): CommentDeps['connectors'] {
   return async (channel, accountId) => {
+    if (channel === 'githubDiscussions') {
+      const connector = discussions(deps);
+      return connector ? { reader: connector, replier: connector } : {};
+    }
     const built = await postConnector(deps, channel, accountId);
-    const connector = built?.mastodon ?? built?.bluesky ?? built?.instagram ?? built?.devto;
+    const connector = built?.mastodon ?? built?.bluesky ?? built?.instagram ?? built?.threads ?? built?.devto;
     if (!connector) return {};
     // dev.to reads only: Forem has no endpoint to write a comment
     return 'reply' in connector ? { reader: connector, replier: connector } : { reader: connector };
@@ -65,6 +77,10 @@ export function commentConnectors(deps: EditorDeps): CommentDeps['connectors'] {
  */
 export function postEditors(deps: EditorDeps): EditDeps['editors'] {
   return async (channel, accountId) => {
+    if (channel === 'githubDiscussions') {
+      const connector = discussions(deps);
+      return connector ? { githubDiscussions: connector } : {};
+    }
     const built = await postConnector(deps, channel, accountId);
     if (!built) return {};
     const editors: Editors = {
@@ -74,6 +90,8 @@ export function postEditors(deps: EditorDeps): EditDeps['editors'] {
       ...(built.devto && { devto: built.devto }),
       ...(built.hashnode && { hashnode: built.hashnode }),
       ...(built.bluesky && { bluesky: built.bluesky }),
+      ...(built.threads && { threads: built.threads }),
+      ...(built.linkedin && { linkedin: built.linkedin }),
     };
     return editors;
   };

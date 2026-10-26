@@ -2,10 +2,14 @@ import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import {
   exchangeInstagramCode,
+  exchangeLinkedInCode,
   exchangeMastodonCode,
+  exchangeThreadsCode,
   instagramAuthorizeUrl,
+  linkedinAuthorizeUrl,
   mastodonAuthorizeUrl,
   registerMastodonApp,
+  threadsAuthorizeUrl,
 } from '@shipcast/connectors';
 import { connectAccount, credentialsFor, getJson, isStale, lastSynced, NETWORKS, type AccountDeps } from '@shipcast/runtime';
 import { appContext, type AppContext } from './context.server';
@@ -38,6 +42,8 @@ export async function channelsView() {
     brands: [{ id: current.id, name: current.displayName }],
     secretsKind: secrets.kind,
     instagramOAuth: instagramApp(ctx) !== undefined,
+    /** Which OAuth networks have the owner's app set in Settings; Mastodon registers itself */
+    oauthReady: { instagram: instagramApp(ctx) !== undefined, threads: threadsApp(ctx) !== undefined, linkedin: linkedinApp(ctx) !== undefined } as Record<string, boolean>,
     networks: NETWORKS.map((n) => ({
       ...n,
       accounts: accounts.filter((a) => a.network === n.id),
@@ -47,9 +53,10 @@ export async function channelsView() {
 }
 
 /** OAuth sign-ins in flight, by state: which network, brand and instance they are for. Ten minutes each. */
-const pending = new Map<string, { network: 'mastodon' | 'instagram'; brand: string; instance?: string; label?: string; expires: number }>();
+type OAuthNetwork = 'mastodon' | 'instagram' | 'threads' | 'linkedin';
+const pending = new Map<string, { network: OAuthNetwork; brand: string; instance?: string; label?: string; expires: number }>();
 
-function remember(entry: { network: 'mastodon' | 'instagram'; brand: string; instance?: string; label?: string }): string {
+function remember(entry: { network: OAuthNetwork; brand: string; instance?: string; label?: string }): string {
   const state = randomBytes(18).toString('base64url');
   for (const [key, value] of pending) if (value.expires < Date.now()) pending.delete(key);
   pending.set(state, { ...entry, expires: Date.now() + 10 * 60_000 });
@@ -153,5 +160,90 @@ export async function finishInstagram(request: Request): Promise<Response> {
     return result.ok ? connected(result.account) : back('instagram', result.problem);
   } catch (error) {
     return back('instagram', error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** The Threads use case of the owner's Meta app, from the settings; undefined until both are set */
+function threadsApp(ctx: Pick<AppContext, 'settings'>) {
+  const { threadsAppId, threadsAppSecret } = ctx.settings.current();
+  return threadsAppId && threadsAppSecret ? { appId: threadsAppId, appSecret: threadsAppSecret } : undefined;
+}
+
+/** The owner's LinkedIn app, from the settings; undefined until both are set */
+function linkedinApp(ctx: Pick<AppContext, 'settings'>) {
+  const { linkedinClientId, linkedinClientSecret } = ctx.settings.current();
+  return linkedinClientId && linkedinClientSecret ? { clientId: linkedinClientId, clientSecret: linkedinClientSecret } : undefined;
+}
+
+/** The flow a callback belongs to, taken once: a state is never good twice */
+function takeFlow(url: URL, network: OAuthNetwork) {
+  const state = url.searchParams.get('state') ?? '';
+  const flow = pending.get(state);
+  pending.delete(state);
+  return flow && flow.network === network && flow.expires >= Date.now() ? flow : undefined;
+}
+
+/** Threads: needs the app id and secret of the owner's Meta app (its Threads use case), set in Settings */
+export async function startThreads(request: Request): Promise<Response> {
+  const ctx = await appContext();
+  const threads = threadsApp(ctx);
+  if (!threads) return back('threads', 'Set the Threads app id and secret in Settings (/settings) first.');
+  const url = new URL(request.url);
+  const state = remember({ network: 'threads', brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
+  return redirect(threadsAuthorizeUrl(threads.appId, `${ctx.app.publicUrl}/auth/threads/callback`, state));
+}
+
+export async function finishThreads(request: Request): Promise<Response> {
+  const ctx = await appContext();
+  const threads = threadsApp(ctx);
+  const url = new URL(request.url);
+  const flow = takeFlow(url, 'threads');
+  if (!flow) return back('threads', 'This authorisation is stale or was not started here: try again.');
+  const code = url.searchParams.get('code');
+  if (!code || !threads) return back('threads', `Threads did not authorise Shipcast: ${url.searchParams.get('error_description') ?? url.searchParams.get('error_reason') ?? 'cancelled'}.`);
+  try {
+    const token = await exchangeThreadsCode(threads, `${ctx.app.publicUrl}/auth/threads/callback`, code);
+    const result = await connectAccount(await accountDeps(), {
+      network: 'threads',
+      brand: flow.brand,
+      label: flow.label,
+      credentials: { settings: { userId: token.userId, refreshedAt: new Date().toISOString() }, secrets: { accessToken: token.accessToken } },
+    });
+    return result.ok ? connected(result.account) : back('threads', result.problem);
+  } catch (error) {
+    return back('threads', error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** LinkedIn: needs the client id and secret of the owner's LinkedIn app, set in Settings */
+export async function startLinkedIn(request: Request): Promise<Response> {
+  const ctx = await appContext();
+  const linkedin = linkedinApp(ctx);
+  if (!linkedin) return back('linkedin', 'Set the LinkedIn client id and secret in Settings (/settings) first.');
+  const url = new URL(request.url);
+  const state = remember({ network: 'linkedin', brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
+  return redirect(linkedinAuthorizeUrl(linkedin.clientId, `${ctx.app.publicUrl}/auth/linkedin/callback`, state));
+}
+
+export async function finishLinkedIn(request: Request): Promise<Response> {
+  const ctx = await appContext();
+  const linkedin = linkedinApp(ctx);
+  const url = new URL(request.url);
+  const flow = takeFlow(url, 'linkedin');
+  if (!flow) return back('linkedin', 'This authorisation is stale or was not started here: try again.');
+  const code = url.searchParams.get('code');
+  if (!code || !linkedin) return back('linkedin', `LinkedIn did not authorise Shipcast: ${url.searchParams.get('error_description') ?? url.searchParams.get('error') ?? 'cancelled'}.`);
+  try {
+    const token = await exchangeLinkedInCode(linkedin, `${ctx.app.publicUrl}/auth/linkedin/callback`, code);
+    const result = await connectAccount(await accountDeps(), {
+      network: 'linkedin',
+      brand: flow.brand,
+      label: flow.label ?? token.name,
+      // No refresh token for most apps: the expiry is kept so the account says when to connect again
+      credentials: { settings: { personId: token.personId, expiresAt: new Date(Date.now() + token.expiresIn * 1000).toISOString() }, secrets: { accessToken: token.accessToken } },
+    });
+    return result.ok ? connected(result.account) : back('linkedin', result.problem);
+  } catch (error) {
+    return back('linkedin', error instanceof Error ? error.message : String(error));
   }
 }
