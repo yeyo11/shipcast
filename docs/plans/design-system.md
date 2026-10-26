@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T19:52:50.075846055Z
-updated_at: 2026-10-25T16:34:18.568476834Z
+created_at: 2026-10-25T20:33:49.83782785Z
+updated_at: 2026-10-26T13:16:49.326406431Z
 tags:
     - plan
     - design-system
@@ -55,8 +55,10 @@ typed `Illustration` name union and an `ILLUSTRATIONS` map (component and what i
   copies on one page never clash.
 - **Humour:** each scene carries one wink — "Return to sender" with tracking No. 404, "this side up"
   arrows upside down on the 500 parcel, a dozing mailbox, a moth leaving the empty box, a megaphone
-  that only puffs dots, "Reward: stars" on the Wanted poster, a stamp with a face for the AI.
-- **Frame and sizes:** a 320 × 240 (4:3) `viewBox`, scaled by `width`; drawn to read from 160 to
+  that only puffs dots, "Reward: stars" on the Wanted poster, a stamp with a face for the AI, a
+  moustache on the top parcel of the Launches stack, a sweating parcel on the scale, a screw left
+  over beside the toolbox, a pigeon that took the post literally.
+- **Frame and sizes:** a 320 × 240 (4:3) `viewBox`, scaled by `width`; drawn to read from 120 to
   320 px. The outline is 4 units (2 px at 160 px). Lettering only in Phudu (uppercase) or the mono,
   and short.
 - **Accessibility:** decorative (`aria-hidden`) by default; a `title` prop makes it an image with a
@@ -65,13 +67,30 @@ typed `Illustration` name union and an `ILLUSTRATIONS` map (component and what i
 - **Never** generated images, **no rockets** (another brand's), no colour outside the palette.
 
 The set: NotFound, ServerError, Offline, EmptyLaunches, EmptyDrafts, NoAccounts, WaitingForYou,
-Shipped, PublishFailed, SignIn, Automation, and the onboarding steps OnboardBrand, OnboardAI,
-OnboardChannels, OnboardMeasure, OnboardAutomation. They are reviewed running at the hidden app route
+Shipped, PublishFailed, SignIn, Automation, the onboarding steps OnboardBrand, OnboardAI,
+OnboardChannels, OnboardMeasure, OnboardAutomation, and the **page-banner scenes**: Parcels, Sealing,
+Typewriter, Pigeonholes, Mailbox, Scale, Toolbox. They are reviewed running at the hidden app route
 `/design/illustrations` (both themes, 320 and 160 px) and copied into `design/specimen.html` as static
 SVG by `pnpm illustrations:specimen`, so the specimen still opens from disk. Since 2026-10-25 the app
 uses NotFound (404), ServerError (the error boundary), EmptyLaunches, EmptyDrafts and NoAccounts (empty
-states), SignIn, Automation (its header) and OnboardMeasure (the Stats placeholder); the rest wait for
-their screens.
+states), SignIn and OnboardMeasure (the Stats placeholder); the rest wait for their screens.
+
+### Page banners
+
+Every section's banner carries one scene beside its title, through `PageHead`'s `art` prop (and
+`SectionHead`'s, for a Settings sub-page): about 200 px wide, so at most 150 px tall, and hidden under
+760 px where it only pushes the title down. The scenes are decoration (`aria-hidden`).
+
+| Page | Scene | What it shows |
+| --- | --- | --- |
+| Launches | Parcels | Stamped parcels on a sack truck, the top one with a moustache, a rubber stamp waiting |
+| Launch a repo | Sealing | A parcel taped shut and labelled "To: The world", the tape dispenser beside it |
+| Write | Typewriter | A typewriter whose page starts "Dear world,", the bell about to ding |
+| Channels | Pigeonholes | The pigeonhole wall, a few holes tagged, a pigeon with a letter in its beak |
+| Comments | Mailbox | A smiling mailbox, letters arriving, a reply slip |
+| Stats | Scale | A platform scale weighing a parcel with a bar chart on its label |
+| Settings | Toolbox | A toolbox on a parcel, a wrench, a stamp and a spare screw |
+| Settings › Automation | Automation | The sorting machine, back in its header |
 
 ## The component layer
 
