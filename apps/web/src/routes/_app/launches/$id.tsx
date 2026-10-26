@@ -8,6 +8,7 @@ import { EmptyDrafts } from '../../../components/illustrations';
 import { Empty } from '../../../components/PageHead';
 import { useToast } from '../../../components/Toasts';
 import { Notice, number, Pill, when } from '../../../components/ui';
+import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
 import { Tabs } from '../../../components/ui/Tabs';
 import { launchDateLabel } from '../../../server/launch-summary';
 import { approveDrafts, getLaunch, publishAgain, saveDraft } from '../../../server/launches.functions';
@@ -49,11 +50,17 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
   const [busy, setBusy] = useState(false);
   const changed = content !== (draft.content ?? '');
   return (
-    <details className="draft">
-      <summary>
-        <h3 className="draft-title">{draft.label}</h3>
-        <span className="muted mono break draft-path">{draft.path}</span>
-      </summary>
+    <AccordionItem
+      value={draft.path}
+      className="draft"
+      triggerClassName="draft-trigger"
+      summary={
+        <>
+          <span className="draft-title">{draft.label}</span>
+          <span className="muted mono break draft-path">{draft.path}</span>
+        </>
+      }
+    >
       {editable ? (
         <>
           <label className="visually-hidden" htmlFor={draft.path}>
@@ -80,7 +87,7 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
       ) : (
         <div className="preview">{draft.content}</div>
       )}
-    </details>
+    </AccordionItem>
   );
 }
 
@@ -394,21 +401,26 @@ function LaunchPage() {
                     <h2 className="tab-title" id="texts-title">
                       {open ? 'The drafts' : 'What went out'}
                     </h2>
-                    <div className="drafts">
+                    <Accordion className="drafts">
                       {texts.map((d) => (
                         <DraftEditor key={d.path} launchId={launch.id} draft={d} editable={open} />
                       ))}
-                    </div>
+                    </Accordion>
                   </section>
                 )}
                 {media.length > 0 && (
-                  <details className="draft">
-                    <summary>
-                      <h3 className="draft-title">Media</h3>
-                      <span className="muted draft-path">
-                        {media.length} {media.length === 1 ? 'file' : 'files'}
-                      </span>
-                    </summary>
+                  <Collapsible
+                    className="draft"
+                    triggerClassName="draft-trigger"
+                    summary={
+                      <>
+                        <span className="draft-title">Media</span>
+                        <span className="muted draft-path">
+                          {media.length} {media.length === 1 ? 'file' : 'files'}
+                        </span>
+                      </>
+                    }
+                  >
                     <div className="thumbs">
                       {media.map((m) =>
                         m.kind === 'video' ? (
@@ -420,7 +432,7 @@ function LaunchPage() {
                         ),
                       )}
                     </div>
-                  </details>
+                  </Collapsible>
                 )}
                 {texts.length === 0 && media.length === 0 && launch.posts.length > 0 && <p className="muted">The drafts of this launch could not be read from its pull request.</p>}
               </div>

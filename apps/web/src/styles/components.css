@@ -194,9 +194,10 @@
 .toast-close { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: var(--sc-radius-pill); border: var(--sc-border-control) solid var(--sc-rail); background: transparent; color: inherit; cursor: pointer; }
 .toast.wait .toast-close { border-color: #000; }
 @media (pointer: coarse) { .toast-close { width: 44px; height: 44px; } }
-.toast-details summary { cursor: pointer; font: var(--sc-label); color: var(--sc-muted); min-height: 32px; display: flex; align-items: center; }
+.toast-details .ui-collapsible-trigger { width: auto; justify-content: flex-start; font: var(--sc-label); color: var(--sc-muted); min-height: 32px; }
+.toast-details .ui-collapsible-inner { padding-top: 0; }
 .toast-details pre { margin: 8px 0 0; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--sc-black); color: var(--sc-on-black); border-radius: var(--sc-radius-chip); font: 12.5px/1.5 var(--sc-font-mono); user-select: text; }
-.toast.wait .toast-details summary { color: #2a2a2a; }
+.toast.wait .toast-details .ui-collapsible-trigger { color: #2a2a2a; }
 @media (max-width: 860px) { .toasts { right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); } }
 
 /* ---------- The components' review page (/design/components) ---------- */
@@ -232,3 +233,41 @@
   .settings-nav { position: static; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 3px; }
   .settings-nav a { flex: none; }
 }
+
+/* ---------- Collapsible and Accordion: the folds, with a height transition ---------- */
+.ui-collapsible-trigger { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ui-accordion-header { margin: 0; font: inherit; }
+.ui-chevron { flex: none; width: 10px; height: 10px; margin-inline: 4px; border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor; transform: rotate(45deg); transition: transform var(--ui-move) var(--ui-ease); }
+.ui-collapsible-trigger[data-panel-open] .ui-chevron, .ui-collapsible-trigger[aria-expanded="true"] .ui-chevron { transform: rotate(-135deg); }
+/* The panel is as tall as its content when open and zero at either end of the transition */
+.ui-collapsible-panel { height: var(--collapsible-panel-height); overflow: hidden; transition: height var(--ui-move) var(--ui-ease); }
+.ui-accordion-panel { height: var(--accordion-panel-height); }
+.ui-collapsible-panel[data-starting-style], .ui-collapsible-panel[data-ending-style] { height: 0; }
+.ui-collapsible-inner { display: grid; gap: 12px; padding-top: 12px; }
+
+/* ---------- ScrollArea: Cartel's scrollbar for the regions inside a page ---------- */
+.ui-scroll { position: relative; min-width: 0; }
+.ui-scroll-viewport { max-height: var(--ui-scroll-max, none); overscroll-behavior: contain; }
+.ui-scroll-viewport:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.ui-scrollbar { display: flex; padding: 3px; opacity: 0; transition: opacity var(--ui-move) var(--ui-ease); pointer-events: none; }
+.ui-scrollbar[data-orientation="vertical"] { width: 14px; justify-content: center; }
+.ui-scrollbar[data-orientation="horizontal"] { height: 14px; flex-direction: column; justify-content: center; }
+.ui-scrollbar[data-hovering], .ui-scrollbar[data-scrolling] { opacity: 1; pointer-events: auto; }
+.ui-scroll-thumb { flex: 1; border-radius: var(--sc-radius-pill); background: var(--sc-rail); }
+.ui-scroll-thumb:hover, .ui-scrollbar[data-scrolling] .ui-scroll-thumb { background: var(--sc-muted); }
+/* No hover on a touch screen: the thumb stays visible so the region reads as scrollable */
+@media (hover: none) { .ui-scrollbar { opacity: 1; } }
+
+/* ---------- The page's own scrollbar, in the role colours (Firefox and Chromium, Safari through the pseudo-elements) ---------- */
+html { scrollbar-color: var(--sc-rail) var(--sc-ground); scrollbar-width: thin; }
+html::-webkit-scrollbar { width: 12px; height: 12px; }
+html::-webkit-scrollbar-track { background: var(--sc-ground); }
+html::-webkit-scrollbar-thumb { background: var(--sc-rail); border-radius: var(--sc-radius-pill); border: 3px solid var(--sc-ground); }
+html::-webkit-scrollbar-thumb:hover { background: var(--sc-muted); }
+
+/* ---------- The work list: filter on top, a bounded list, the pager below ---------- */
+.jobs-panel { display: grid; gap: 16px; margin-bottom: 36px; }
+.jobs-panel .list { margin: 0; }
+.jobs-bar .seg small { margin-left: 6px; opacity: .7; font-size: 12px; }
+.jobs-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+@media (max-width: 560px) { .jobs-bar .seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .jobs-bar .seg span { justify-content: center; } }

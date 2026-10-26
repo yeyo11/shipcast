@@ -4,6 +4,7 @@ import { DiffView } from '../components/assistant/DiffView';
 import { OnboardAI, OnboardAutomation, OnboardBrand, OnboardChannels, OnboardMeasure, Shipped, type IllustrationProps } from '../components/illustrations';
 import { ToastProvider, useToast } from '../components/Toasts';
 import { Notice, Pill } from '../components/ui';
+import { Collapsible } from '../components/ui/Collapsible';
 import { Combobox } from '../components/ui/Combobox';
 import { CheckIcon } from '../components/ui/icons';
 import { TooltipProvider } from '../components/ui/Tooltip';
@@ -655,12 +656,17 @@ function StepList({ data, current, seen }: { data: Data; current: Step; seen: nu
   const furthest = Math.max(index, seen, ...STEPS.map((s, i) => (data.state.steps[s] === 'pending' ? -1 : i)));
   const state = data.state.steps[current];
   return (
-    <details className="onb-steps">
-      <summary className="onb-count">
-        Step {index + 1} of {STEPS.length}
-        {state === 'done' ? ' · done' : state === 'skipped' ? ' · skipped for now' : OPTIONAL.has(current) ? ' · optional' : ''}
-        <span className="visually-hidden">; show every step</span>
-      </summary>
+    <Collapsible
+      className="onb-steps"
+      triggerClassName="onb-count"
+      summary={
+        <>
+          Step {index + 1} of {STEPS.length}
+          {state === 'done' ? ' · done' : state === 'skipped' ? ' · skipped for now' : OPTIONAL.has(current) ? ' · optional' : ''}
+          <span className="visually-hidden">; show every step</span>
+        </>
+      }
+    >
       <ol aria-label="Set-up steps">
         {STEPS.map((s, i) => {
           const label = (
@@ -688,7 +694,7 @@ function StepList({ data, current, seen }: { data: Data; current: Step; seen: nu
           );
         })}
       </ol>
-    </details>
+    </Collapsible>
   );
 }
 

@@ -4,6 +4,8 @@ import { SectionHead } from '../../../components/SectionHead';
 import { AI_SETTING_NAMES, SettingsForm } from '../../../components/SettingsForm';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
+import { Accordion, AccordionItem } from '../../../components/ui/Collapsible';
+import { ScrollArea } from '../../../components/ui/ScrollArea';
 import { Select } from '../../../components/ui/Select';
 import { getSettings } from '../../../server/settings.functions';
 import { getAiSettings, previewAiPrompt, restoreAiPrompt, saveAiPrompt, saveAiSettings } from '../../../server/ai.functions';
@@ -53,6 +55,15 @@ function promptLabel(id: string): string {
   const [group, name = ''] = id.split('.');
   if (group === 'pack') return `Pack brief: ${name === 'launch' ? 'first launch' : `${name} version`}`;
   return `Channel brief: ${CHANNEL_NAMES[name] ?? name}`;
+}
+
+/** A long read-only text on black, bounded in height and scrolled with Cartel's scrollbar */
+function Log({ text }: { text: string }) {
+  return (
+    <ScrollArea maxHeight="320px" className="log-area" label="Text, scrollable">
+      <div className="log">{text}</div>
+    </ScrollArea>
+  );
 }
 
 function errorText(error: unknown): string {
@@ -153,12 +164,17 @@ function PromptEditor({ prompt }: { prompt: PromptView }) {
   };
 
   return (
-    <details className="card">
-      <summary style={{ display: 'flex', justifyContent: 'space-between', gap: 12, cursor: 'pointer' }}>
-        <span>{promptLabel(prompt.id)}</span>
-        {edited ? <Pill tone="draft">Edited</Pill> : <Pill tone="manual">Default</Pill>}
-      </summary>
-      <div className="form" style={{ marginTop: 12 }}>
+    <AccordionItem
+      value={prompt.id}
+      className="card"
+      summary={
+        <>
+          <span>{promptLabel(prompt.id)}</span>
+          {edited ? <Pill tone="draft">Edited</Pill> : <Pill tone="manual">Default</Pill>}
+        </>
+      }
+    >
+      <div className="form">
         <textarea className="input mono" rows={6} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={promptLabel(prompt.id)} />
         <div className="row">
           <button className="btn btn-small btn-primary" type="button" disabled={draft === current} onClick={() => void run(() => saveAiPrompt({ data: { id: prompt.id, text: draft } }), 'Prompt saved')}>
@@ -184,7 +200,7 @@ function PromptEditor({ prompt }: { prompt: PromptView }) {
           </ol>
         )}
       </div>
-    </details>
+    </AccordionItem>
   );
 }
 
@@ -221,9 +237,9 @@ function Preview({ data }: { data: Data }) {
       {shown && (
         <>
           <span className="label">System</span>
-          <div className="log">{shown.system}</div>
+          <Log text={shown.system} />
           <span className="label">Prompt</span>
-          <div className="log">{shown.prompt}</div>
+          <Log text={shown.prompt} />
         </>
       )}
     </div>
@@ -250,40 +266,34 @@ function AiSettingsPage() {
       <p className="muted">
         Each edit is a new version; earlier ones stay and can be restored. Variables: {data.variables.map((v) => `{{${v}}}`).join(' ')}
       </p>
-      <div className="cards">
+      <Accordion className="cards">
         {data.prompts.map((p) => (
           <PromptEditor key={`${p.id}-${p.versions.length}`} prompt={p} />
         ))}
-      </div>
+      </Accordion>
 
       <h2 className="ph">Locked</h2>
       <p className="muted">What keeps generated text true to the code, and the pack’s schema. Always added after your prompts; never editable.</p>
-      <div className="cards">
-        <details className="card">
-          <summary>Rules for a launch</summary>
-          <div className="log">{data.locked.launchRules.join('\n')}</div>
-        </details>
-        <details className="card">
-          <summary>Rules for an article</summary>
-          <div className="log">{data.locked.articleRules.join('\n')}</div>
-        </details>
-        <details className="card">
-          <summary>Rules for a reply to a comment</summary>
-          <div className="log">{data.locked.replyRules.join('\n')}</div>
-        </details>
-        <details className="card">
-          <summary>Rules for the writing assistant, on a launch’s pieces</summary>
-          <div className="log">{data.locked.assistantLaunchRules.join('\n')}</div>
-        </details>
-        <details className="card">
-          <summary>Rules for the writing assistant, on an article</summary>
-          <div className="log">{data.locked.assistantArticleRules.join('\n')}</div>
-        </details>
-        <details className="card">
-          <summary>The content pack’s schema</summary>
-          <div className="log">{data.locked.packSchema}</div>
-        </details>
-      </div>
+      <Accordion className="cards">
+        <AccordionItem value="Rules for a launch" className="card" summary={<span>Rules for a launch</span>}>
+          <Log text={data.locked.launchRules.join('\n')} />
+        </AccordionItem>
+        <AccordionItem value="Rules for an article" className="card" summary={<span>Rules for an article</span>}>
+          <Log text={data.locked.articleRules.join('\n')} />
+        </AccordionItem>
+        <AccordionItem value="Rules for a reply to a comment" className="card" summary={<span>Rules for a reply to a comment</span>}>
+          <Log text={data.locked.replyRules.join('\n')} />
+        </AccordionItem>
+        <AccordionItem value="Rules for the writing assistant, on a launch’s pieces" className="card" summary={<span>Rules for the writing assistant, on a launch’s pieces</span>}>
+          <Log text={data.locked.assistantLaunchRules.join('\n')} />
+        </AccordionItem>
+        <AccordionItem value="Rules for the writing assistant, on an article" className="card" summary={<span>Rules for the writing assistant, on an article</span>}>
+          <Log text={data.locked.assistantArticleRules.join('\n')} />
+        </AccordionItem>
+        <AccordionItem value="The content pack’s schema" className="card" summary={<span>The content pack’s schema</span>}>
+          <Log text={data.locked.packSchema} />
+        </AccordionItem>
+      </Accordion>
 
       <h2 className="ph">Preview</h2>
       <Preview data={data} />

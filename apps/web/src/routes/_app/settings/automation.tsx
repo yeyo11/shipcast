@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { Jobs } from '../../../components/Jobs';
+import { JobsPanel } from '../../../components/Jobs';
 import { SectionHead } from '../../../components/SectionHead';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
@@ -51,7 +51,7 @@ function Automation() {
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // While a round runs, the page follows it
-  const working = data.running || data.jobs.some((j) => j.state === 'running');
+  const working = data.running || data.jobs.counts.running > 0;
   useEffect(() => {
     if (!working) return;
     const timer = window.setInterval(() => void router.invalidate(), 4000);
@@ -198,10 +198,10 @@ function Automation() {
         </>
       )}
 
-      {data.jobs.length > 0 && (
+      {data.jobs.counts.all > 0 && (
         <>
           <h2 className="ph">Work in progress</h2>
-          <Jobs jobs={data.jobs} />
+          <JobsPanel initial={data.jobs} />
         </>
       )}
 
