@@ -116,7 +116,7 @@ test('a malformed request is refused before the AI is asked', async () => {
 test('the tour chains its pages, and leaves the launch page out when there is no launch', () => {
   const steps = tourSteps({ launchId: 12 });
   assert.ok(steps.length >= 5 && steps.length <= 7, `${steps.length} steps`);
-  assert.deepEqual([...new Set(steps.map((s) => s.route))], ['/', '/launches/12', '/write', '/channels', '/automation']);
+  assert.deepEqual([...new Set(steps.map((s) => s.route))], ['/', '/launches/12', '/write', '/channels', '/settings/automation']);
   steps.forEach((step, i) => {
     const next = steps[i + 1];
     assert.equal(step.nextRoute, next && next.route !== step.route ? next.route : undefined);
