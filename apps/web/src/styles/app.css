@@ -51,7 +51,8 @@ main { padding-block: 32px 96px; }
 @media (max-width: 760px) {
   .page-band { grid-template-columns: minmax(0, 1fr); }
   .page-band-action, .page-band.has-art .page-band-action { justify-content: flex-start; grid-column: 1; }
-  .page-band.has-art .page-band-art { grid-row: auto; grid-column: 1; justify-self: center; width: min(100%, 240px); }
+  /* The illustration is decoration; on a phone it only pushes the title down */
+  .page-band.has-art .page-band-art { display: none; }
   .page-band-lead { font-size: 17px; }
 }
 /* An empty list: its illustration beside what is missing and the one thing that fills it */
