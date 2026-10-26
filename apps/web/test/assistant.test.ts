@@ -129,14 +129,14 @@ test('the tour chains its pages, and leaves the launch page out when there is no
 test('a chat turn is saved as it streams: the question, then the answer with its proposals, in one session', async () => {
   const registry = await memoryRegistry();
   const provider = await mockStreamingProvider(['Try this:\n```proposal\nNew.\n```']);
-  const body = { action: 'chat', selection: 'Old.', range: { start: 0, end: 4 }, document: 'Old. Rest.', launchId: 7, draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky', messages: [{ role: 'user', content: 'Punchier, please' }] };
+  const body = { action: 'chat', selection: 'Old.', range: { start: 0, end: 4 }, document: 'Old. Rest.', draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky', messages: [{ role: 'user', content: 'Punchier, please' }] };
   const { events } = await ask(body, provider, registry);
   const saved = events.find((e) => e.type === 'saved');
   assert.ok(saved && saved.type === 'saved');
   assert.equal(events.at(-1)?.type, 'done');
 
   const session = await registry.assistantSession(saved.sessionId);
-  assert.deepEqual({ title: session?.title, launchId: session?.launchId, draftPath: session?.draftPath, draftLabel: session?.draftLabel }, { title: 'Punchier, please', launchId: 7, draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky' });
+  assert.deepEqual({ title: session?.title, launchId: session?.launchId, draftPath: session?.draftPath, draftLabel: session?.draftLabel }, { title: 'Punchier, please', launchId: null, draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky' });
   const turns = await registry.assistantMessages(saved.sessionId);
   assert.deepEqual(turns.map((t) => [t.role, t.content]), [['user', 'Punchier, please'], ['assistant', 'Try this:\n```proposal\nNew.\n```']]);
   assert.deepEqual(turns[0]?.selection, { start: 0, end: 4, original: 'Old.' });
