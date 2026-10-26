@@ -1,5 +1,7 @@
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { Mailbox } from '../../components/illustrations';
+import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { ChannelName, Pill, when } from '../../components/ui';
 import { ConfirmButton } from '../../components/ui/ConfirmButton';
@@ -279,24 +281,26 @@ function Comments() {
   const filtered = Object.keys(search).some((k) => k !== 'page');
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="ph">Comments</h1>
-          <p>The comments on your posts, read every half hour, each with a reply drafted from the repo and the launch’s analysis. Nothing is sent without your click on a channel in approval mode.</p>
-        </div>
-        <button
-          className="btn"
-          type="button"
-          onClick={async () => {
-            const answer = await checkCommentsNow();
-            if (answer.ok) toast.done('Checking the comments', 'The drafts appear here when the job ends.');
-            else toast.fail(answer.problem);
-            await router.invalidate();
-          }}
-        >
-          Check comments now
-        </button>
-      </div>
+      <PageHead
+        title="Comments"
+        art={<Mailbox width={200} />}
+        action={
+          <button
+            className="btn"
+            type="button"
+            onClick={async () => {
+              const answer = await checkCommentsNow();
+              if (answer.ok) toast.done('Checking the comments', 'The drafts appear here when the job ends.');
+              else toast.fail(answer.problem);
+              await router.invalidate();
+            }}
+          >
+            Check comments now
+          </button>
+        }
+      >
+        The comments on your posts, read every half hour, each with a reply drafted from the repo and the launch’s analysis. Nothing is sent without your click on a channel in approval mode.
+      </PageHead>
 
       <Filters data={data} search={search} />
       <h2 className="ph">

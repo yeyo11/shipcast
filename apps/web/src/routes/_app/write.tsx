@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { AssistedEditor } from '../../components/assistant/AssistedEditor';
 import { ChatPanel } from '../../components/assistant/ChatPanel';
 import { useAssistant } from '../../components/assistant/session';
+import { Typewriter } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { getChannels } from '../../server/channels.functions';
@@ -40,7 +41,7 @@ function Write() {
   });
   return (
     <>
-      <PageHead title="Write">An article of your own, in your words. Shipcast translates it, writes a piece for each channel you choose and publishes it on the blog.</PageHead>
+      <PageHead title="Write" art={<Typewriter width={200} />}>An article of your own, in your words. Shipcast translates it, writes a piece for each channel you choose and publishes it on the blog.</PageHead>
       <div className={`writer${chatOpen ? ' with-chat' : ''}`}>
       <form
         className="form"

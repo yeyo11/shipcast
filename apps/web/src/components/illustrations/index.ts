@@ -9,12 +9,19 @@ import { EmptyLaunches } from './EmptyLaunches';
 import type { IllustrationProps } from './kit';
 import { NoAccounts } from './NoAccounts';
 import { NotFound } from './NotFound';
+import { Pigeonholes } from './Pigeonholes';
+import { Mailbox } from './Mailbox';
+import { Scale } from './Scale';
+import { Toolbox } from './Toolbox';
 import { Offline } from './Offline';
 import { OnboardAI } from './OnboardAI';
 import { OnboardAutomation } from './OnboardAutomation';
 import { OnboardBrand } from './OnboardBrand';
 import { OnboardChannels } from './OnboardChannels';
 import { OnboardMeasure } from './OnboardMeasure';
+import { Parcels } from './Parcels';
+import { Sealing } from './Sealing';
+import { Typewriter } from './Typewriter';
 import { PublishFailed } from './PublishFailed';
 import { ServerError } from './ServerError';
 import { Shipped } from './Shipped';
@@ -23,6 +30,13 @@ import { WaitingForYou } from './WaitingForYou';
 
 export type { IllustrationProps } from './kit';
 export {
+  Pigeonholes,
+  Mailbox,
+  Scale,
+  Toolbox,
+  Parcels,
+  Sealing,
+  Typewriter,
   Automation,
   EmptyDrafts,
   EmptyLaunches,
@@ -59,6 +73,13 @@ export const ILLUSTRATIONS = {
   OnboardChannels: { component: OnboardChannels, use: 'Onboarding, channels: the address book' },
   OnboardMeasure: { component: OnboardMeasure, use: 'Onboarding, measuring: the tracking slip' },
   OnboardAutomation: { component: OnboardAutomation, use: 'Onboarding, automation: the belt and the clock' },
+  Parcels: { component: Parcels, use: 'Launches, the list: parcels on a sack truck, one with a moustache' },
+  Sealing: { component: Sealing, use: 'Launch a repo: a parcel taped shut, labelled "To: The world"' },
+  Typewriter: { component: Typewriter, use: 'Write: a typewriter, the bell about to ding' },
+  Pigeonholes: { component: Pigeonholes, use: 'Channels: the pigeonhole wall, a few holes tagged, a pigeon with a letter' },
+  Mailbox: { component: Mailbox, use: 'Comments: letters arriving in a smiling mailbox, a reply slip beside it' },
+  Scale: { component: Scale, use: 'Stats: a scale weighing a parcel with a bar chart on its label' },
+  Toolbox: { component: Toolbox, use: 'Settings: a toolbox on a parcel, a wrench, a stamp and a spare screw' },
 } as const satisfies Record<string, { component: ComponentType<IllustrationProps>; use: string }>;
 
 export type Illustration = keyof typeof ILLUSTRATIONS;

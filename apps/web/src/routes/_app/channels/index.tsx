@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
 import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
-import { NoAccounts } from '../../../components/illustrations';
+import { NoAccounts, Pigeonholes } from '../../../components/illustrations';
 import { ChannelIcon } from '../../../components/launch/Glance';
 import { Empty, PageHead } from '../../../components/PageHead';
 import { useToast } from '../../../components/Toasts';
@@ -269,7 +269,7 @@ function Channels() {
   const envCount = data.networks.filter((n) => n.usesEnv).length;
   return (
     <>
-      <PageHead title="Channels">
+      <PageHead title="Channels" art={<Pigeonholes width={200} />}>
         Every network Shipcast can publish to or read from, the accounts connected to each, and what they may do. Credentials are kept in {data.secretsKind}.
       </PageHead>
       {envCount > 0 && (

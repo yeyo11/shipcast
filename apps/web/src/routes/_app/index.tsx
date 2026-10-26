@@ -3,7 +3,7 @@ import { MotionConfig } from 'motion/react';
 import { useEffect } from 'react';
 import { LaunchCard } from '../../components/LaunchCard';
 import { Empty, PageHead } from '../../components/PageHead';
-import { EmptyLaunches } from '../../components/illustrations';
+import { EmptyLaunches, Parcels } from '../../components/illustrations';
 import { listLaunches } from '../../server/launches.functions';
 
 export const Route = createFileRoute('/_app/')({
@@ -28,6 +28,7 @@ function Launches() {
     <>
       <PageHead
         title="Launches"
+        art={<Parcels width={200} />}
         action={
           <Link className="btn btn-primary" to="/launch">
             Launch a repo

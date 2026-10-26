@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { JobsPanel } from '../../../components/Jobs';
+import { Automation as SortingMachine } from '../../../components/illustrations';
 import { SectionHead } from '../../../components/SectionHead';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
@@ -83,6 +84,7 @@ function Automation() {
     <>
       <SectionHead
         title="Automation"
+        art={<SortingMachine width={180} />}
         action={
           <button
             className="btn"

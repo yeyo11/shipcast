@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
+import { Toolbox } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
 
 export const Route = createFileRoute('/_app/settings')({
@@ -13,7 +14,7 @@ export const Route = createFileRoute('/_app/settings')({
 function SettingsLayout() {
   return (
     <>
-      <PageHead title="Settings">Everything that is configured, in one place: the app, the AI, how releases are noticed and the API.</PageHead>
+      <PageHead title="Settings" art={<Toolbox width={200} />}>Everything that is configured, in one place: the app, the AI, how releases are noticed and the API.</PageHead>
       <div className="settings-shell">
         <nav className="settings-nav" aria-label="Settings sections">
           <Link to="/settings" activeOptions={{ exact: true }}>
