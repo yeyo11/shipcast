@@ -1,0 +1,99 @@
+# Shipcast, in the launches repo: copy this to .github/workflows/shipcast.yml.
+#
+# When a drafts pull request (launch/*) is merged, Shipcast publishes that launch to its channels; every
+# hour it also publishes whatever is ready (a scheduled piece now due, a channel to retry) and, with
+# detection, claims releases whose own workflow did not run.
+#
+# Set once (Settings > Secrets and variables > Actions): the same GitHub App and Anthropic secrets as
+# the project repos, and a secret for each network you publish to (names as in .env.example). A
+# network without its secrets is not published to.
+name: Shipcast publish
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      detect:
+        description: Also poll your public GitHub events for releases no workflow claimed
+        required: false
+        default: false
+        type: boolean
+
+# One run per merged pull request, and one round at a time; the state's lease serialises the rest
+concurrency:
+  group: shipcast-${{ github.event.pull_request.number || 'round' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'launch/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: yeyo11/shipcast@v1
+        with:
+          command: publish
+          launches-repo: ${{ github.repository }}
+          github-app-id: ${{ secrets.SHIPCAST_GITHUB_APP_ID }}
+          github-app-private-key: ${{ secrets.SHIPCAST_GITHUB_APP_PRIVATE_KEY }}
+        env:
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          MASTODON_INSTANCE: ${{ secrets.MASTODON_INSTANCE }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          HASHNODE_TOKEN: ${{ secrets.HASHNODE_TOKEN }}
+          HASHNODE_PUBLICATION_HOST: ${{ secrets.HASHNODE_PUBLICATION_HOST }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_NOTIFY_CHAT_ID: ${{ secrets.TELEGRAM_NOTIFY_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WEB_ANALYTICS_SITE_TAG: ${{ secrets.CLOUDFLARE_WEB_ANALYTICS_SITE_TAG }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          BING_WEBMASTER_API_KEY: ${{ secrets.BING_WEBMASTER_API_KEY }}
+
+  round:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: yeyo11/shipcast@v1
+        with:
+          command: round
+          launches-repo: ${{ github.repository }}
+          github-app-id: ${{ secrets.SHIPCAST_GITHUB_APP_ID }}
+          github-app-private-key: ${{ secrets.SHIPCAST_GITHUB_APP_PRIVATE_KEY }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          detect: ${{ github.event_name == 'schedule' || inputs.detect }}
+        env:
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          MASTODON_INSTANCE: ${{ secrets.MASTODON_INSTANCE }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          HASHNODE_TOKEN: ${{ secrets.HASHNODE_TOKEN }}
+          HASHNODE_PUBLICATION_HOST: ${{ secrets.HASHNODE_PUBLICATION_HOST }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_NOTIFY_CHAT_ID: ${{ secrets.TELEGRAM_NOTIFY_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WEB_ANALYTICS_SITE_TAG: ${{ secrets.CLOUDFLARE_WEB_ANALYTICS_SITE_TAG }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          BING_WEBMASTER_API_KEY: ${{ secrets.BING_WEBMASTER_API_KEY }}
