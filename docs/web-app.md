@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T12:40:23.704829086Z
-updated_at: 2026-10-26T13:09:44.07335014Z
+created_at: 2026-10-26T13:10:07.024455517Z
+updated_at: 2026-10-26T13:50:55.958591688Z
 tags:
     - web-app
     - dashboard
@@ -121,12 +121,13 @@ runs on the owner's machine.
   yellow, which is under 3:1 on the day theme's light card), the state dots, the marks' tiles and
   menus, the "+n" chip, the accounts count and the scope pill are all on the role tokens, so they hold
   AA contrast in the night and the day theme. The glyphs follow the theme. Only a launch waiting for
-  the owner is the yellow card, with dark-on-yellow text. The queue's jobs are not here any
+  the owner is the yellow card, with dark-on-yellow text; there is no yellow band above the list any
+  more, the top bar's bell says what waits (see The interface). The queue's jobs are not here any
   more: they are on Automation. `/api/launches` gives the launches as JSON behind the session; scripts
   and the MCP server use the [REST API](api.md) instead.
 - **A launch** (`/launches/<id>`): a compact header (title, repo, launch date, state pill, Publish
-  what is pending, Open the article), the yellow band with **Approve and publish** while its drafts
-  wait, then **its numbers first**: the totals (views, reactions, comments, clicks, stars) and views
+  what is pending, Open the article), a slim one-line yellow strip with **Approve and publish** (and
+  Open the pull request) while its drafts wait, then **its numbers first**: the totals (views, reactions, comments, clicks, stars) and views
   per day as bars. One quiet line links what waits on the owner (comments to answer, a channel's
   scheduled time, a running job). Below, four tabs kept in the address (`?tab=`, and `?channel=`):
   **Channels**, a strip of channel chips (glyph and state dot) choosing one channel, shown with its
@@ -157,7 +158,8 @@ runs on the owner's machine.
   network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
   card in the launch card's skin (the same neutral raised surface, on role tokens). A newly connected
   account lands on the list, in its tab, scrolled to and focused. The **Anthropic API** and an
-  **OpenAI-compatible server** are connected here too, under AI providers.
+  **OpenAI-compatible server** are connected here too, under AI providers. Networks that still work
+  from `.env` get a slim one-line strip with Import, not a band.
 - **Comments** (`/comments`): the comments on the owner's posts and the replies drafted for them
   ([decisions/comment-assistant.md](decisions/comment-assistant.md)). The list can run to thousands,
   so it is one page at a time (25) and every filter is in the address and applied by the database:
@@ -172,8 +174,10 @@ runs on the owner's machine.
 - **Stats** (`/stats`): how the launches did, under one filter bar (the period, and the rest behind
   Filters) in four tabs: Overview (the totals, which pick the chart's metric, and the time chart),
   Ranking (the posts ranked; `?tab=posts` still opens it), Accounts (one table of the accounts'
-  growth with Sync now) and Search (the articles in Google and Bing). See
-  [stats.md](stats.md#the-page).
+  growth with Sync now) and Search (the articles in Google and Bing). Its header is the same band as
+  every section's: `stats.css` once stripped the band's background and padding and shrank its
+  title, which made Stats look different; since 2026-10-26 it only moves the Export button beside
+  the title on a phone. See [stats.md](stats.md#the-page).
 - **Settings** (`/settings`): one area with a submenu, below. Its sections are General
   (`/settings`), AI (`/settings/ai`), Automation (`/settings/automation`) and API
   (`/settings/api`); the old `/ai`, `/automation` and `/tokens` redirect to them.
@@ -192,18 +196,36 @@ on the [approved design direction](decisions/app-design-direction.md).
 
 - **The shell** (`src/routes/_app.tsx`). On wide screens the top bar holds the lockup, the five
   working sections (Launches, Write, Channels, Comments, Stats), Search as an icon-only button
-  (accessible name "Search"; its shortcut is in the tooltip) and the signed-in user as a menu with
-  Settings, AI, Automation, API, Take the tour and Sign out: the configuration is not in the bar.
+  (accessible name "Search"; its shortcut is in the tooltip), the **attention bell** (below) and the
+  signed-in user as a menu: **Settings is a submenu** (General, AI, Automation, API; Right arrow
+  opens it, Left closes it), then Take the tour and Sign out as top-level items. The configuration is
+  not in the bar. The submenu is `kind: 'submenu'` in the typed `Menu` wrapper, on Base UI's
+  `SubmenuRoot` and `SubmenuTrigger`.
   Below 860 px the sections leave the top for a **bottom bar** in reach of the thumb: Launches,
-  Write, Channels, Stats and **More**, which opens a drawer with Comments, Settings, AI,
-  Automation, API, Launch a repo, the search and the signed-in account with Sign out. The current
+  Write, Channels, Stats and **More**, which opens a drawer with Comments, Launch a repo, Settings
+  as a group of its four entries (General, AI, Automation, API), the search, the tour and the
+  signed-in account with Sign out. The bell stays in the phone's top bar. The current
   section is `aria-current="page"` in both (a launch's page and Launch a repo count as Launches);
   there is a skip link to the content, `<main>` is a landmark, every target is at least 44 px,
   focus is the yellow ring, and Escape closes any popup with focus back where it was.
+- **The attention bell** (`components/AttentionBell.tsx`) replaced the big yellow bands on top of the
+  pages. An icon button with a small yellow count badge when something needs the owner, named for
+  assistive technology by the count ("3 things need you", "Nothing needs you"). It opens a
+  `ResponsiveMenu` (a Popover on a desktop, the Drawer on a phone) with a link per line: launches
+  waiting for approval (Review the drafts), launches with posts that failed (Retry), comments waiting
+  for a reply (Answer), accounts that need reconnecting (Reconnect) and, informational and not
+  counted, posts scheduled to go out within a day. Empty, it says "Nothing needs you." One server
+  function, `getAttention` (`src/server/attention.functions.ts`), reads launches, the failure
+  cursors by prefix for all launches at once, the accounts, the comment facets and the scheduled
+  posts in one round, with no query per launch; the pure `buildAttention` (`src/server/attention.ts`,
+  tested) turns them into the list. It is read again on every navigation, when the bell opens and
+  every three minutes.
 - **Section headers are Cartel bands** (`PageHead`): the neutral band, the huge uppercase title, a line
-  under it and the section's main action, yellow when there is one (Launch a repo on Launches). Below
-  it the work area is calm. Yellow bands stay for what waits for the owner. On phones (under 760 px)
-  the illustration in a band is hidden: it only pushed the title down.
+  under it and the section's main action, yellow when there is one (Launch a repo on Launches), and
+  the section's illustration. Every section uses the same band, padding and title size. Below
+  it the work area is calm. What waits for the owner is in the bell; the one-line `.strip` is what a
+  page may show for its own pending action (a launch's Approve, Channels' .env import). On phones
+  (under 760 px) the illustration in a band is hidden: it only pushed the title down.
 - **The command palette**: ⌘K or Ctrl+K anywhere, Search in the top bar, or More on a phone. It
   filters the sections (AI, Automation, API and Settings among them) and the main actions (launch a
   repo, write, connect an account, run an automation round, create a token, sign out); Enter runs
@@ -223,7 +245,7 @@ on the [approved design direction](decisions/app-design-direction.md).
   `window.confirm`: disconnecting an account, rotating the webhook secret, revoking a token,
   clearing a setting, sending a comment's reply; nothing in the app calls the browser's `confirm` or
   `alert`), Combobox, Select (a release, a connection's brand, the AI page's providers and
-  preview launch), Menu (an account's secondary actions), Tabs, Tooltip, Popover, Drawer, the toasts
+  preview launch), Menu (an account's secondary actions, and the user menu's Settings submenu), Tabs, Tooltip, Popover, Drawer, the toasts
   and the palette, the date pickers (`DatePicker`, `DateRangePicker`, on react-day-picker: the
   Popover on a desktop, the Drawer on a phone; they replaced every native date input) and the
   **time field** (`TimeField`, beside the day picker where a piece is scheduled). The time field
@@ -236,7 +258,7 @@ on the [approved design direction](decisions/app-design-direction.md).
   **ResponsiveMenu** is one menu in two shapes: the Popover on a desktop (in a
   portal, flipped and shifted by Base UI to stay on screen, so opening it never scrolls the page) and
   the Drawer as a bottom sheet on a phone (640 px wide or a coarse pointer), with the same content and
-  open state and nothing that needs hover; the launch cards' channel menus use it. **Collapsible**
+  open state and nothing that needs hover; the launch cards' channel menus and the attention bell use it. **Collapsible**
   and **Accordion** replaced every native `<details>` that was outside the stats, channels, comments,
   assistant and tour components: the panel's height animates through `--collapsible-panel-height`,
   and it is instant under `prefers-reduced-motion`. **ScrollArea** is Cartel's scrollbar for the

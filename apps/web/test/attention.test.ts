@@ -11,7 +11,7 @@ const launches = [
 const base = { launches, failureKeys: [], brokenAccounts: [], commentsWaiting: 0, scheduled: [], now };
 
 test('nothing to do is an empty list and a calm label', () => {
-  const a = buildAttention(base);
+  const a = buildAttention({ ...base, launches: [launches[2]!] });
   assert.deepEqual(a, { count: 0, items: [] });
   assert.equal(attentionLabel(0), 'Nothing needs you');
 });
