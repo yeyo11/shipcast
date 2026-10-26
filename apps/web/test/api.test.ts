@@ -511,8 +511,8 @@ test('checking and drafting again are jobs; the reply modes are read and set', a
   assert.deepEqual(s.calls, ['check comments', `redraft ${question.id}`, 'redraft 999']);
 
   const modes = await body(await call(s.deps, 'GET', '/comment-settings', { token: s.read }));
-  assert.deepEqual(modes, { replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval' } });
+  assert.deepEqual(modes, { replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' } });
   const set = await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { bluesky: 'auto', devto: 'auto' } } });
-  assert.deepEqual(((await body(set)).replies as Record<string, string>), { mastodon: 'approval', bluesky: 'auto', instagram: 'approval', devto: 'approval' });
+  assert.deepEqual(((await body(set)).replies as Record<string, string>), { mastodon: 'approval', bluesky: 'auto', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' });
   assert.equal((await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { mastodon: 'sometimes' } } })).status, 400);
 });

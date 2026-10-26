@@ -95,6 +95,7 @@ const launchPack = {
   devto: { tags: ['ai'] },
   bluesky: { lang: 'en', text: 'b' },
   mastodon: { lang: 'en', text: 'm' },
+  githubDiscussions: { title: 'claudio 0.9', body: 'What shipped. https://josegarrido.dev/en/claudio/?ref=github' },
 };
 
 async function deps(github: FakeGitHub, output: unknown = launchPack) {
@@ -131,6 +132,10 @@ test('an article lives under articles/, is claimed once, and turns on only the c
   assert.equal(config.publishing.bluesky, 'approval');
   assert.equal(config.publishing.hackerNews, 'manual', 'drafts-only stays manual');
   assert.equal(config.publishing.devto, 'off');
+  // An article belongs to no repository, so there is no Discussions to post it in, even when chosen
+  assert.equal(config.publishing.githubDiscussions, 'off');
+  assert.equal(articleConfig(brand, ['githubDiscussions', 'threads']).publishing.githubDiscussions, 'off');
+  assert.equal(articleConfig(brand, ['githubDiscussions', 'threads']).publishing.threads, 'approval');
 
   const registry = await memoryRegistry();
   const first = await claimArticle({ title: 'Hello there', markdown: 'x', lang: 'en', channels: [] }, brand as never, { registry, launchesRepo: 'yeyo11/launches' });

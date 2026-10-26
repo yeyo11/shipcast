@@ -25,6 +25,19 @@ export function parseInstagramDraft(body: string): { caption: string; comment: s
   return { caption, comment: /^Comment: (.+)$/m.exec(head ?? '')?.[1]?.trim() };
 }
 
+/** The draft of a discussion: its title on a line of its own, then the body after a `---` line */
+export function discussionDraft(piece: { title: string; body: string }): string {
+  return `Title: ${piece.title}\n\n---\n\n${piece.body.trim()}`;
+}
+
+/** Splits a discussion draft as edited; a draft whose title line is gone keeps the pack's title */
+export function parseDiscussionDraft(body: string, fallback: { title: string; body: string }): { title: string; body: string } {
+  const [head, ...rest] = body.split(/^---$/m);
+  const title = /^Title: (.+)$/m.exec(head ?? '')?.[1]?.trim() || fallback.title;
+  const text = rest.length > 0 ? rest.join('---').trim() : body.trim();
+  return { title, body: text || fallback.body };
+}
+
 /** `yeyo11/claudio` → `claudio` */
 export function projectSlug(repo: string): string {
   return repo.split('/').at(-1)!.toLowerCase();
@@ -136,6 +149,15 @@ export function renderDrafts(
   }
   if (pack.discord && mode('discord') !== 'off') {
     files.push({ path: `${dir}/discord.md`, content: draft('Discord', mode('discord'), pack.discord.text) });
+  }
+  if (pack.githubDiscussions && mode('githubDiscussions') !== 'off') {
+    files.push({ path: `${dir}/github-discussion.md`, content: draft('GitHub Discussions', mode('githubDiscussions'), discussionDraft(pack.githubDiscussions)) });
+  }
+  if (pack.threads && mode('threads') !== 'off') {
+    files.push({ path: `${dir}/threads.md`, content: draft('Threads', mode('threads'), pack.threads.text) });
+  }
+  if (pack.linkedin && mode('linkedin') !== 'off') {
+    files.push({ path: `${dir}/linkedin.md`, content: draft('LinkedIn', mode('linkedin'), pack.linkedin.text) });
   }
   if (pack.hackerNews && mode('hackerNews') !== 'off') {
     files.push({

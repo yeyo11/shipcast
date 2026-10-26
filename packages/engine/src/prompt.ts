@@ -12,7 +12,7 @@ export const ANALYSIS_TOOLS = ['Read', 'Grep', 'Glob', 'Bash(ls:*)', 'Bash(git l
  * the settings: whatever an edited prompt says, they are appended after it, unchanged.
  */
 
-/** The channels that get a piece of their own; LinkedIn and X have no brief yet */
+/** The channels that get a piece of their own; X has no brief */
 export const BRIEFED_CHANNELS = [
   'blog',
   'devto',
@@ -23,6 +23,9 @@ export const BRIEFED_CHANNELS = [
   'hashnode',
   'telegram',
   'discord',
+  'githubDiscussions',
+  'threads',
+  'linkedin',
   'hackerNews',
   'productHunt',
   'newsletter',
@@ -55,6 +58,12 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
     "telegram: one post in English, at most {{limit.telegramText}} characters (it is the caption of the launch image), ending with the English article's link {{site}}/en/<English slug>/?ref=telegram.",
   'channel.discord':
     "discord: one message in English, at most {{limit.discordText}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=discord. Short paragraphs; Discord renders Markdown.",
+  'channel.githubDiscussions':
+    "githubDiscussions: an announcement in the repository's Discussions, in English, for the people who watch the repository. A plain title (at most {{limit.githubDiscussionTitle}} characters, the project's name and what shipped) and a Markdown body (at most {{limit.githubDiscussionBody}} characters): what shipped in two or three short paragraphs, how to install or try it with the repository's real commands, and the English article's link {{site}}/en/<English slug>/?ref=github. It invites feedback in the thread; no hype, no hashtags.",
+  'channel.threads':
+    "threads: one post in English, at most {{limit.threadsText}} characters (an emoji counts as four), conversational, ending with the English article's link {{site}}/en/<English slug>/?ref=threads. It goes with the launch image. At most two hashtags, or none.",
+  'channel.linkedin':
+    "linkedin: one post in English on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
   'channel.hackerNews':
     'hackerNews: a Show HN draft. A title starting with "Show HN: ", at most {{limit.hackerNewsTitle}} characters in all, plain and without hype; and the author\'s first comment (at most {{limit.hackerNewsComment}} characters, plain text): what it is, why you built it, how it works in a few lines, and what comes next. Honest about what exists today. The URL submitted is the repository, so do not link the article. The owner posts it by hand.',
   'channel.productHunt':
