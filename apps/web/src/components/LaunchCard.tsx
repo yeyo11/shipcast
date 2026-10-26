@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { animate, AnimatePresence, motion, useMotionValue, useTransform } from 'motion/react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { cardChannels, foldMarks, launchDateLabel, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Totals } from '../server/launch-summary';
+import { cardChannels, foldMarks, launchDateLabel, markCapacity, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Totals } from '../server/launch-summary';
 import { zonedLabel } from '../server/pieces';
 import { CHANNEL_NAMES, type LaunchView } from '../server/view';
 import { ChannelIcon, StateDot } from './launch/Glance';
@@ -17,8 +17,6 @@ import { ResponsiveMenu } from './ui/ResponsiveMenu';
  */
 
 /** A mark's width and the gap after it, as in app.css (.mark: 36px, .marks: gap 8px) */
-const MARK_GAP = 8;
-const MARK_STEP = 36 + MARK_GAP;
 const EASE = { duration: 0.25, ease: 'easeOut' } as const;
 
 const networkOf = (channel: string) => CHANNEL_NAMES[channel] ?? channel;
@@ -206,7 +204,7 @@ function Marks({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setFit(Math.max(1, Math.floor((el.clientWidth + MARK_GAP) / MARK_STEP)));
+    const measure = () => setFit(markCapacity(el.clientWidth));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);

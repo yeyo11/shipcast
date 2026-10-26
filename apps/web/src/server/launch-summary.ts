@@ -221,6 +221,18 @@ export function markOf(statuses: readonly string[], failed: boolean): Mark {
   return 'off';
 }
 
+/** A channel's tile and the gap between tiles, in CSS px: `.mark` and `.marks` in app.css */
+export const MARK_SIZE = 36;
+export const MARK_GAP = 8;
+
+/**
+ * How many tiles a row of `width` px holds, at least one. Computed from the row's real width, so the
+ * "+n" chip (which `foldMarks` keeps in the last slot) never pushes the row past the card.
+ */
+export function markCapacity(width: number): number {
+  return Math.max(1, Math.floor((Math.max(0, width) + MARK_GAP) / (MARK_SIZE + MARK_GAP)));
+}
+
 const RANK: Record<Mark, number> = { failed: 0, scheduled: 1, off: 2, published: 3 };
 
 /**

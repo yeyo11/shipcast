@@ -125,9 +125,12 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
    for the owner is the yellow card */
 .lcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 24px; align-items: start; }
 .lcards > * { min-width: 0; }
-.lcard { background: var(--sc-raised); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 24px 26px; display: grid; gap: 14px; min-width: 0; }
-.lcard header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
-.lcard h2 { margin: 0; font: 900 30px/0.92 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); overflow-wrap: anywhere; min-width: 0; }
+.band .ph { overflow-wrap: anywhere; }
+.lcard { background: var(--sc-raised); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 24px 26px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+/* A grid's one implicit column is `auto`: it grows to its widest child's minimum and the card overflows a phone. `minmax(0, 1fr)` above and this keep every child inside the card's width */
+.lcard > * { min-width: 0; }
+.lcard header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 12px; align-items: start; }
+.lcard h2 { flex: 1 1 0; margin: 0; font: 900 30px/0.92 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); overflow-wrap: anywhere; min-width: 0; }
 .lcard h2 a { text-decoration: none; }
 .lcard h2 a:hover { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; }
 .lcard-ref { font: 600 14px/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: var(--sc-muted); vertical-align: 4px; }
@@ -152,14 +155,22 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .lcard-stats dt { font: var(--sc-label); color: var(--sc-muted); }
 .lcard-stats dd { margin: 4px 0 0; font: 900 30px/0.9 var(--sc-font-display); }
 .lcard-stats .is-lead dd { font-size: 52px; }
-@media (max-width: 420px) { .lcard-stats { column-gap: 14px; grid-template-columns: minmax(72px, auto) repeat(3, minmax(52px, auto)); } .lcard-stats .is-lead dd { font-size: 44px; } .lcard-stats dd:not(.is-lead dd) { font-size: 26px; } }
+/* On a phone the card's inner width is about 236px at 320: four equal columns that may shrink, smaller type, and a label or number that still does not fit is clipped rather than overlapping its neighbour */
+@media (max-width: 520px) {
+  .lcard { padding: 18px; }
+  .lcard h2 { font-size: 26px; }
+  .lcard-stats { grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); column-gap: 8px; justify-content: stretch; }
+  .lcard-stats dt { font-size: 11px; letter-spacing: 0; text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lcard-stats dd { font-size: 24px; overflow: hidden; text-overflow: clip; }
+  .lcard-stats .is-lead dd { font-size: 40px; }
+}
 /* Views per day, alone on its row: an area with its line, the days under it */
-.darea { margin: 0; }
+.darea { margin: 0; min-width: 0; }
 .darea svg { display: block; width: 100%; height: 96px; }
 /* The text colour, not yellow: yellow on the day theme's light card is under 3:1 */
 .darea-fill { fill: color-mix(in srgb, var(--sc-text) 12%, transparent); }
 .darea-line { stroke: var(--sc-text); }
-.darea figcaption { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--sc-muted); }
+.darea figcaption { display: flex; justify-content: space-between; margin-top: 6px; gap: 8px; min-width: 0; font-size: 12px; color: var(--sc-muted); }
 .lcard-none { color: var(--sc-muted); font-size: 14px; }
 .lcard.waiting { background: var(--sc-yellow); color: var(--sc-on-yellow); border-color: #000; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
 .lcard.waiting .pill.s-waiting { background: #000; color: var(--sc-yellow); }
