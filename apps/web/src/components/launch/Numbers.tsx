@@ -30,9 +30,8 @@ export function AccountNumbers({ accounts }: { accounts: AccountRow[] }) {
             {a.followers ? (
               <span className="daccount-figure" title={`From ${a.followers.from} to ${a.followers.to}`}>
                 <strong>{number(a.followers.now)}</strong>
-                <span className="muted">
-                  followers{a.followers.change ? `, ${signed(a.followers.change)} since ${a.followers.from === a.followers.to ? 'today' : a.followers.from}` : ''}
-                </span>
+                <span className="muted">followers</span>
+                {a.followers.change ? <span className="daccount-change">{signed(a.followers.change)} since {a.followers.from === a.followers.to ? 'today' : a.followers.from}</span> : null}
               </span>
             ) : (
               <span className="daccount-figure muted">No counts</span>

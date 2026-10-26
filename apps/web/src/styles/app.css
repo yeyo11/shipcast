@@ -469,15 +469,17 @@ a.post-link:hover { color: var(--sc-text); }
 .daccounts li:first-child { border-top: 0; padding-top: 0; }
 .daccount-pic { position: relative; display: inline-grid; }
 .daccount-glyph { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--sc-ground); border: 1.5px solid var(--sc-rail); }
-.daccount-name { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.daccount-name { display: grid; gap: 2px; min-width: 0; overflow-wrap: break-word; font-size: 14px; }
 .daccount-name .muted { font-size: 12.5px; }
-.daccount-figure { display: grid; justify-items: end; gap: 2px; text-align: right; font-size: 12.5px; }
+.daccount-figure { display: grid; justify-items: end; gap: 1px; text-align: right; font-size: 12.5px; white-space: nowrap; }
+.daccount-change { color: var(--sc-muted); font-size: 12px; }
 .daccount-figure strong { font: 800 20px/1.1 var(--sc-font-text); font-variant-numeric: tabular-nums; }
 .dsources { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 22px 28px; }
 .dsource { display: grid; gap: 10px; align-content: start; min-width: 0; }
-.dsource-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; }
+.dcard .dsource-head { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; }
 .dsource-head .muted { font-size: 12.5px; }
 .dsource-numbers { margin: 0; padding-top: 10px; }
+.dcard .list { margin-bottom: 0 !important; }
 @media (max-width: 420px) {
   .daccounts li { grid-template-columns: auto minmax(0, 1fr); }
   .daccount-figure { grid-column: 2; justify-items: start; text-align: left; }
@@ -579,6 +581,7 @@ html.lenis, html.lenis body { height: auto; }
 .reply-mode { display: grid; gap: 8px; padding: 16px 0; border-top: 1px solid var(--sc-hairline); }
 .reply-mode-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .reply-mode-seg { flex: none; }
+.reply-mode-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
 .reply-mode-seg input:disabled + span { opacity: .45; cursor: not-allowed; }
 .reply-mode-text { margin: 0; max-width: 72ch; font-size: 13.5px; color: var(--sc-muted); overflow-wrap: anywhere; }
 .reply-mode-text strong { color: var(--sc-text); font-weight: 600; }

@@ -48,9 +48,9 @@ function Check({ row, selected, onSelect }: { row: PieceRow; selected: boolean; 
   );
 }
 
-/** A metric's name as words: `views_bluesky` → "Views bluesky" */
+/** A metric's name as words: `views_bluesky` → "Views bluesky", `uniqueVisitors` → "Unique visitors" */
 export const metricWords = (name: string) => {
-  const words = name.replace(/_/g, ' ');
+  const words = name.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, (_, a: string, b: string) => `${a} ${b.toLowerCase()}`);
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 

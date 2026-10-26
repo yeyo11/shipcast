@@ -41,7 +41,12 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
   .page-toolbar-controls { overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
   .page-toolbar-controls::-webkit-scrollbar { display: none; }
   .page-toolbar-controls > * { flex: none; }
-  .page-toolbar-actions { overflow-x: auto; scrollbar-width: none; flex: 0 1 auto; min-width: 0; padding: 2px 4px 6px 2px; }
+  /* Two rows when the page has both: its controls across the top, its actions under them, each
+     action whole with its words; a row too long for the screen scrolls sideways rather than clip */
+  .page-toolbar { flex-wrap: wrap; padding-block: 8px; }
+  .page-toolbar-controls { flex: 1 1 100%; }
+  .page-toolbar-controls:empty { display: none; }
+  .page-toolbar-actions { overflow-x: auto; scrollbar-width: none; flex: 1 1 100%; justify-content: flex-start; margin-left: 0; min-width: 0; padding: 2px 4px 6px 2px; }
   .page-toolbar-actions::-webkit-scrollbar { display: none; }
   .tb-action { min-height: 44px; padding: 0 14px; flex: none; }
   .tb-action.btn-primary { box-shadow: 3px 3px 0 var(--sc-stamp); }

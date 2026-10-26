@@ -178,7 +178,9 @@ function Modes({ data }: { data: Data }) {
         return (
           <li key={channel} className="reply-mode">
             <div className="reply-mode-head">
-              <ChannelName channel={channel} />
+              <span className="reply-mode-name">
+                <ChannelName channel={channel} />
+              </span>
               <div className="seg reply-mode-seg" role="radiogroup" aria-label={`${CHANNEL_NAMES[channel] ?? channel}: replies`}>
                 {(['off', 'approval', 'auto'] as const).map((mode) => (
                   <label key={mode} title={mode === 'auto' && !canReply ? 'This network cannot send a reply through its API' : undefined}>

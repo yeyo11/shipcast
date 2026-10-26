@@ -93,6 +93,15 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
   );
 }
 
+/** How a launch started, in words */
+const TRIGGER_WORDS: Record<string, string> = {
+  release: 'started by a release',
+  manual: 'started by hand',
+  public: 'started when the repo went public',
+  enabled: 'started when launches were turned on',
+  article: 'written in the app',
+};
+
 /**
  * What the launch is, the accounts it went out with, its last reading of every number and its jobs:
  * four cards in the app's card skin, the facts as label and value, every number as a figure under
@@ -128,7 +137,7 @@ function Details({ data }: { data: Data }) {
           <div>
             <dt>Pack</dt>
             <dd>
-              {launch.kind}, started {launch.trigger === 'manual' ? 'by hand' : `by ${launch.trigger}`}
+              {launch.kind}, {TRIGGER_WORDS[launch.trigger] ?? `started by ${launch.trigger}`}
             </dd>
           </div>
           <div>
