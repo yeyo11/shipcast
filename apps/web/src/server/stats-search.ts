@@ -10,7 +10,7 @@ import { InvalidInput } from './input.ts';
  */
 
 export const METRICS = ['views', 'reactions', 'comments', 'shares', 'clicks', 'impressions'] as const;
-export const PERIODS = ['7d', '30d', '90d', 'custom'] as const;
+export const PERIODS = ['7d', '30d', '90d', 'all', 'custom'] as const;
 export const GROUPS = ['channel', 'account', 'launch'] as const;
 export const KINDS = ['line', 'area', 'bar'] as const;
 export const BUCKETS = ['day', 'week'] as const;
@@ -109,9 +109,18 @@ export function readStatsSearch(raw: Record<string, unknown>): Partial<StatsSear
 /** The address with its defaults filled in: what the page works with */
 export const withDefaults = (search: Partial<StatsSearch>): StatsSearch => ({ ...DEFAULTS, ...search });
 
-/** The period's days, both included; `today` is the server's UTC day */
-export function resolvePeriod(search: Pick<StatsSearch, 'period' | 'from' | 'to'>, today: string): { from: string; to: string; days: number } {
+/**
+ * The period's days, both included; `today` is the server's UTC day. "All" starts on `earliest`, the
+ * first published launch's day (nothing before it can have numbers), at most MAX_DAYS back, and is the
+ * last 30 days while nothing is published.
+ */
+export function resolvePeriod(search: Pick<StatsSearch, 'period' | 'from' | 'to'>, today: string, earliest?: string): { from: string; to: string; days: number } {
   if (search.period === 'custom' && search.from && search.to) return { from: search.from, to: search.to, days: daysBetween(search.from, search.to) };
+  if (search.period === 'all') {
+    const floor = addDays(today, -(MAX_DAYS - 1));
+    const from = earliest && isDay(earliest) && earliest <= today ? (earliest < floor ? floor : earliest) : addDays(today, -29);
+    return { from, to: today, days: daysBetween(from, today) };
+  }
   const days = search.period === '7d' ? 7 : search.period === '90d' ? 90 : 30;
   return { from: addDays(today, -(days - 1)), to: today, days };
 }
@@ -175,6 +184,15 @@ export function parseStatsInput(input: unknown): StatsSearch {
   };
 }
 
+/** The page's tabs; the tab is in the address too, so a link opens on it, but it never reloads the numbers */
+export const STATS_TABS = ['overview', 'posts', 'accounts', 'search'] as const;
+export type StatsTab = (typeof STATS_TABS)[number];
+export const readStatsTab = (raw: Record<string, unknown>): StatsTab | undefined => {
+  const tab = pick(raw.tab, STATS_TABS);
+  // The first tab is the default, left out of the address like every other default
+  return tab === 'overview' ? undefined : tab;
+};
+
 /** The account-growth section's period: two days, the page's own */
 export function parseGrowthInput(input: unknown): { from: string; to: string } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new InvalidInput('the period must be an object');
@@ -183,6 +201,17 @@ export function parseGrowthInput(input: unknown): { from: string; to: string } {
   if (to < from) throw new InvalidInput('to comes after from');
   if (daysBetween(from, to) > MAX_DAYS) throw new InvalidInput(`a period is at most ${MAX_DAYS} days`);
   return { from, to };
+}
+
+/** The search tab's input: the page's period and, when the page is filtered by launch, those launches */
+export function parseSearchInput(input: unknown): { from: string; to: string; launches?: number[] } {
+  const range = parseGrowthInput(input);
+  const { launches } = input as Record<string, unknown>;
+  if (launches === undefined) return range;
+  if (!Array.isArray(launches) || launches.length > 50 || !launches.every((v): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 2 ** 31)) {
+    throw new InvalidInput('launches is a list of at most 50 ids');
+  }
+  return launches.length > 0 ? { ...range, launches } : range;
 }
 
 /** The view as the address keeps it: only what differs from the defaults, so the default view is plain `/stats` */

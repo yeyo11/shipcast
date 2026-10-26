@@ -1,8 +1,8 @@
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { InvalidInput } from './input';
-import { parseGrowthInput, parseStatsInput } from './stats-search';
-import { loadGrowth, loadStats } from './stats.server';
+import { parseGrowthInput, parseSearchInput, parseStatsInput } from './stats-search';
+import { loadGrowth, loadSearch, loadStats } from './stats.server';
 
 /*
  * The Stats page's server functions: the engine's stats queries run in the app's own process, no
@@ -27,3 +27,7 @@ export const getStats = createServerFn({ method: 'GET' })
 export const getGrowth = createServerFn({ method: 'GET' })
   .validator((input: unknown) => parseGrowthInput(input))
   .handler(async ({ data }) => checked(async () => loadGrowth((await appContext()).registry, data)));
+
+export const getSearch = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => parseSearchInput(input))
+  .handler(async ({ data }) => checked(async () => loadSearch((await appContext()).registry, data)));

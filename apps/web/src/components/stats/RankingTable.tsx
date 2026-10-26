@@ -3,7 +3,7 @@ import { full } from '../charts/data';
 import { ChannelName } from '../ui';
 import { pieceName } from '../../server/view';
 import type { RankBy, Sort, StatsSearch } from '../../server/stats-search';
-import { METRIC_NAMES } from './ControlBar';
+import { METRIC_NAMES } from './FilterBar';
 
 export interface RankingEntryView {
   rank: number;
@@ -35,7 +35,7 @@ const COLUMNS = ['views', 'reactions', 'comments', 'shares', 'clicks'] as const;
 const BY_NAMES: Record<RankBy, string> = { post: 'Posts', launch: 'Launches', account: 'Accounts' };
 
 /**
- * The ranking under the chart: posts, launches or accounts by popularity normalised per network,
+ * The ranking: posts, launches or accounts by popularity normalised per network,
  * with the raw numbers beside the score, sortable by any column and paged. A row names its launch
  * and links to the launch's page; a post also links out to where it was published.
  */
@@ -52,9 +52,9 @@ export function RankingTable({ by, sort, order, entries, page, pages, total, onC
     </th>
   );
   return (
-    <section className="ranking" aria-labelledby="ranking-title">
+    <section className="ranking stats-panel" aria-labelledby="ranking-title">
       <div className="section-head">
-        <h2 id="ranking-title" className="ph">
+        <h2 id="ranking-title" className="stats-panel-title">
           Ranking
         </h2>
         <div className="seg" role="radiogroup" aria-label="Rank">

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Registry } from '@shipcast/engine';
+import { indexStatusKey, type Registry } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { DEFAULTS, parseStatsInput } from '../src/server/stats-search.ts';
-import { loadGrowth, loadStats, PAGE_SIZE, sortRanking } from '../src/server/stats.server.ts';
+import { loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../src/server/stats.server.ts';
 
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
 const TODAY = '2026-10-25';
@@ -98,4 +98,22 @@ test('a view the server function parsed always loads', async () => {
   assert.equal(view.period.bucket, 'week', 'a long period is charted in weeks');
   assert.equal(view.ranking.pages, 1);
   assert.deepEqual(view.chart.groups, []);
+});
+
+test('the search tab lists each article page with what each engine said, and the launch\'s numbers in the period', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await seed(registry);
+  const url = 'https://blog.example/en/claudio/';
+  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: 'a1', url });
+  await registry.setCursor(indexStatusKey(url), JSON.stringify({ indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
+  for (const [day, impressions] of [['12', 5], ['22', 40]] as const) await registry.recordMetrics(launch.id, 'search', { impressions, clicks: 1 }, at(day));
+
+  const view = await loadSearch(registry, { from: '2026-09-26', to: TODAY });
+  assert.equal(view.launches.length, 1);
+  const [entry] = view.launches;
+  assert.equal(entry?.label, 'yeyo11/claudio v1.0.0');
+  assert.deepEqual(entry?.pages, [{ lang: 'en', url, google: { indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }, bing: null }]);
+  assert.equal(entry?.google?.impressions, 40, 'what grew in the period');
+  assert.equal(entry?.bing, null, 'Bing never read');
+  assert.deepEqual((await loadSearch(registry, { from: '2026-09-26', to: TODAY, launches: [launch.id + 1] })).launches, []);
 });

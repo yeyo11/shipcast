@@ -1,5 +1,7 @@
 import {
   accountGrowth,
+  articleUrls,
+  indexStatus,
   METRIC_FAMILIES,
   previousWindow,
   statsOverview,
@@ -80,10 +82,15 @@ export interface StatsView {
   };
 }
 
+/** The day the first published launch was made: where "all" starts */
+const firstPublished = (launches: ReadonlyArray<{ status: string; createdAt: string }>): string | undefined =>
+  launches.reduce<string | undefined>((first, l) => (l.status === 'published' && (first === undefined || l.createdAt.slice(0, 10) < first) ? l.createdAt.slice(0, 10) : first), undefined);
+
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
 
 export async function loadStats(registry: Registry, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
-  const period = resolvePeriod(search, today);
+  const [accounts, launches] = await Promise.all([registry.accounts(), registry.recent(LAUNCH_OPTIONS)]);
+  const period = resolvePeriod(search, today, firstPublished(launches));
   const bucket = effectiveBucket(search.bucket, period.days);
   const filters = {
     ...(search.channels && { channels: search.channels }),
@@ -91,7 +98,6 @@ export async function loadStats(registry: Registry, search: StatsSearch, today =
     ...(search.launches && { launches: search.launches }),
   };
   const previous = search.compare ? previousWindow(statsWindow(period.from, period.to)) : null;
-  const [accounts, launches] = await Promise.all([registry.accounts(), registry.recent(LAUNCH_OPTIONS)]);
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const [overview, series, before, ranking] = await Promise.all([
@@ -217,4 +223,59 @@ export async function loadGrowth(registry: Registry, range: { from: string; to: 
       };
     }),
   };
+}
+
+/** What one search engine says of one page: null until the engine has been read for it */
+export interface IndexView {
+  indexed: boolean;
+  /** The engine's own words ("Submitted and indexed", "Crawled on 2026-10-20") */
+  coverage: string;
+  checkedAt: string;
+}
+
+export interface SearchView {
+  from: string;
+  to: string;
+  launches: Array<{
+    id: number;
+    label: string;
+    /** What grew in the period, per engine; null when the engine has no reading for the launch */
+    google: { impressions: number; clicks: number } | null;
+    bing: { impressions: number; clicks: number } | null;
+    pages: Array<{ lang: string; url: string; google: IndexView | null; bing: IndexView | null }>;
+  }>;
+}
+
+/** The launches whose articles are looked up: one query per launch, so a long history is cut here */
+const SEARCH_LAUNCHES = 100;
+
+/**
+ * The blog's articles in search engines: each published launch's article pages, what Google and
+ * Bing last said of each (docs/search-indexing.md; the same reading as a launch's page), and the
+ * impressions and clicks each engine counted for the launch in the period. The engines count a
+ * launch's pages together, so the numbers are per launch, not per page.
+ */
+export async function loadSearch(registry: Registry, range: { from: string; to: string; launches?: readonly number[] }): Promise<SearchView> {
+  const wanted = range.launches ? new Set(range.launches) : null;
+  const published = (await registry.recent(LAUNCH_OPTIONS)).filter((l) => l.status === 'published' && (!wanted || wanted.has(l.id))).slice(0, SEARCH_LAUNCHES);
+  const read = async (url: string, engine: 'google' | 'bing'): Promise<IndexView | null> => {
+    const status = await indexStatus(registry, url, engine);
+    return status ? { indexed: status.indexed, coverage: status.coverage, checkedAt: status.checkedAt } : null;
+  };
+  const launches = await Promise.all(
+    published.map(async (l) => {
+      const urls = articleUrls(await registry.posts(l.id, { channel: 'blog' }));
+      if (urls.length === 0) return null;
+      const [pages, overview] = await Promise.all([
+        Promise.all(urls.map(async ({ lang, url }) => ({ lang, url, google: await read(url, 'google'), bing: await read(url, 'bing') }))),
+        statsOverview(registry, { from: range.from, to: range.to, channels: ['search', 'bing'], launches: [l.id] }),
+      ]);
+      const engine = (source: string) => {
+        const found = overview.channels.find((c) => c.channel === source);
+        return found ? { impressions: found.metrics.impressions ?? 0, clicks: found.metrics.clicks ?? 0 } : null;
+      };
+      return { id: l.id, label: `${l.repo} ${l.ref}`, google: engine('search'), bing: engine('bing'), pages };
+    }),
+  );
+  return { from: range.from, to: range.to, launches: launches.filter((l) => l !== null) };
 }

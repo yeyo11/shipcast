@@ -109,6 +109,18 @@
 .ui-tab[data-active] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .ui-tab:focus-visible { outline-offset: 2px; }
 .ui-tab-panel { outline: none; }
+/* A page's sections: the current one underlined in yellow, the rest quiet text, on one hairline */
+.ui-tabs-underline { gap: 18px; }
+.ui-tabs-underline .ui-tab-list { gap: 4px; padding: 0; border-bottom: 1px solid var(--sc-hairline); }
+.ui-tabs-underline .ui-tab { min-height: 46px; padding: 0 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; color: var(--sc-muted); font: 700 15px/1 var(--sc-font-text); }
+.ui-tabs-underline .ui-tab:hover { color: var(--sc-text); }
+.ui-tabs-underline .ui-tab[data-active] { background: none; color: var(--sc-text); border-bottom-color: var(--sc-yellow); }
+.ui-tabs-underline .ui-tab:focus-visible { outline-offset: -3px; }
+/* On a phone the sections still scroll sideways when they do not fit, without a scrollbar over the line */
+@media (max-width: 560px) {
+  .ui-tabs-underline .ui-tab-list { scrollbar-width: none; }
+  .ui-tabs-underline .ui-tab { padding: 0 10px; font-size: 14.5px; }
+}
 .ui-tab-panel:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 6px; border-radius: 8px; }
 
 /* ---------- Drawer: the phone's "More" ---------- */

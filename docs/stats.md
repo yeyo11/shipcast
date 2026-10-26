@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:30:22.670895974Z
-updated_at: 2026-10-25T19:30:22.670895974Z
+created_at: 2026-10-25T19:57:08.545542324Z
+updated_at: 2026-10-26T09:16:37.250593464Z
 tags:
     - stats
     - metrics
@@ -8,8 +8,9 @@ tags:
     - engine
     - reference
     - phase-9
+    - web-app
 ---
-# Stats: the model, popularity and the routes
+# Stats: the model, popularity, the routes and the page
 
 Built on 2026-10-25 for the stats section of milestone 5 of the [goal](plans/goal-after-mvp.md): the
 backend the charts read ([decisions/app-design-direction.md](decisions/app-design-direction.md): several
@@ -17,6 +18,7 @@ series, period comparisons, a ranking under the chart, filters by channel, accou
 sorted by popularity normalised per network). The queries are `packages/engine/src/stats.ts`
 ([source](../packages/engine/src/stats.ts)); the routes are `apps/web/src/server/stats-api.ts`, spread
 into the [REST API](api.md). No migration: every query runs on the existing `metrics_by_launch` index.
+The web app's Stats page reads the same queries in its own process ([below](#the-page)).
 
 ## What a reading is
 
@@ -122,6 +124,46 @@ per page, never one per row.
 
 A parameter that is not valid is a 400 that says which and why.
 
+## The page
+
+`/stats` in the web app (`apps/web/src/routes/_app/stats.tsx`, its parts in
+`apps/web/src/components/stats/`), laid out on 2026-10-26 from the mock-up the owner approved (the
+"tabs" variant) so that no part needs a long scroll: each tab fits about one screen on a desktop.
+
+- **The header**: the poster title at a smaller size (`clamp(40px, 6vw, 72px)`) and Export CSV, the
+  chart's series as a file.
+- **The filter bar**: the period as a segmented control (7 days, 30 days, 90 days, All; Custom appears
+  while a custom range is shown) and one **Filters** button, which opens a popover with what the view
+  is narrowed to (channels, accounts, launches, and Clear the filters), how the chart is drawn
+  (grouped by channel, account or launch; lines, areas or bars; days or weeks, weeks only past 120
+  days; compared with the previous period or not) and a custom range. The button counts what is set.
+  "All" starts on the day of the first published launch, at most 731 days back, and is the last 30
+  days while nothing is published.
+- **The tabs**: Overview, Posts, Accounts, Search, as Base UI Tabs in the component layer's
+  `underline` variant (arrows move between them and show each). The tab is in the address with the
+  rest of the view (`/stats?tab=accounts`), so a link opens on it; it is left out of the loader's
+  dependencies, so moving between tabs never reads the numbers again, and it replaces the history
+  entry rather than adding one.
+- **Overview**: the totals as one strip that is also the chart's metric switch (a radio group; the
+  charted family has Cartel's yellow line under it), and the time chart with its zoom and its "Show
+  the data" table.
+- **Posts**: the ranking of posts, launches or accounts by score, with the raw numbers beside it,
+  sortable by any column, ten to a page.
+- **Accounts**: one table of the accounts with snapshots: the network and handle; followers,
+  following and posts with their change in the period; a sparkline of the chosen measure over the
+  period (scaled to its own range, a missed day left as a gap, the period as a hairline under it); when
+  it was last synced; and Sync now. The sparklines are for the eye only: "Show the data" lays every
+  day's number out as a table.
+- **Search**: each published launch's article pages with what Google (URL Inspection) and Bing
+  (crawled or not) last said of each, as on a launch's page ([search-indexing.md](search-indexing.md)),
+  and each engine's impressions and clicks for the launch in the period. The engines count a
+  launch's pages together, so those numbers span its rows. It is read by `loadSearch` in
+  `apps/web/src/server/stats.server.ts` from what the engine already keeps (`articleUrls`,
+  `indexStatus`, `statsOverview` on the `search` and `bing` sources); the launches filter narrows it.
+
+On a phone (320 px) the tabs scroll sideways, the period's options sit side by side, the ranking's
+rows become blocks, and the Accounts and Search tables scroll inside their own box, never the page.
+
 ## Checked
 
 `packages/engine/test/stats.test.ts` on PGlite: cumulative readings to increases per bucket, a missed
@@ -131,8 +173,11 @@ left unranked, comparison deltas, the channel, account and launch filters, ascen
 GitHub counted once per repo, old launch-wide newsletter readings not counted twice, series labels and
 `other`, and account growth across a missed day. `apps/web/test/stats-api.test.ts` covers the scopes,
 the parameters, the 400s and 404, and the OpenAPI document. On 2026-10-25 the functions ran against a
-copy of the live registry restored into a throwaway Postgres 17.
+copy of the live registry restored into a throwaway Postgres 17. For the page,
+`apps/web/test/stats-search.test.ts` and `apps/web/test/stats-server.test.ts` cover the address
+(the period "all", the tab), the search tab's input and what it lists; the page was checked running
+at 1440, 390 and 320 px wide.
 
 ## Related
 
-[[api.md]] · [[engine.md]] · [[publishing.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[plans/goal-after-mvp.md]]
+[[api.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]]

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { InvalidInput } from '../src/server/input.ts';
-import { compactSearch, DEFAULTS, effectiveBucket, parseGrowthInput, parseStatsInput, readStatsSearch, resolvePeriod, withDefaults } from '../src/server/stats-search.ts';
+import { compactSearch, DEFAULTS, effectiveBucket, parseGrowthInput, parseSearchInput, parseStatsInput, readStatsSearch, readStatsTab, resolvePeriod, withDefaults } from '../src/server/stats-search.ts';
 
 test('the address is read leniently: what is not valid falls back to the default', () => {
   assert.deepEqual(readStatsSearch({ period: 'forever', metric: 'views', groupBy: 'nope', channels: 'bluesky,Bad Channel', accounts: '3,x,-1,4', page: '0', compare: '1' }), {
@@ -59,4 +59,23 @@ test('the growth period is two real days in order', () => {
   assert.throws(() => parseGrowthInput({ from: '2026-10-02', to: '2026-10-01' }), InvalidInput);
   assert.throws(() => parseGrowthInput({ from: 'x', to: '2026-10-01' }), InvalidInput);
   assert.throws(() => parseGrowthInput(undefined), InvalidInput);
+});
+
+test('"all" starts at the first published launch, at most two years back, and is 30 days with nothing published', () => {
+  assert.deepEqual(resolvePeriod({ period: 'all' }, '2026-10-25', '2026-10-20'), { from: '2026-10-20', to: '2026-10-25', days: 6 });
+  assert.equal(resolvePeriod({ period: 'all' }, '2026-10-25', '2020-01-01').days, 731);
+  assert.equal(resolvePeriod({ period: 'all' }, '2026-10-25').days, 30);
+  assert.deepEqual(readStatsSearch({ period: 'all' }), { period: 'all' });
+});
+
+test('the tab is read from the address, the first one left out', () => {
+  assert.equal(readStatsTab({ tab: 'accounts' }), 'accounts');
+  assert.equal(readStatsTab({ tab: 'overview' }), undefined);
+  assert.equal(readStatsTab({ tab: 'nope' }), undefined);
+});
+
+test('the search tab takes the period and, when filtered, the launches', () => {
+  assert.deepEqual(parseSearchInput({ from: '2026-10-01', to: '2026-10-05' }), { from: '2026-10-01', to: '2026-10-05' });
+  assert.deepEqual(parseSearchInput({ from: '2026-10-01', to: '2026-10-05', launches: [3] }), { from: '2026-10-01', to: '2026-10-05', launches: [3] });
+  assert.throws(() => parseSearchInput({ from: '2026-10-01', to: '2026-10-05', launches: ['3'] }), InvalidInput);
 });
