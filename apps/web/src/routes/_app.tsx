@@ -42,7 +42,7 @@ const WRITE: Section = { to: '/write', label: 'Write', icon: WriteIcon, match: (
 const CHANNELS: Section = { to: '/channels', label: 'Channels', icon: ChannelsIcon, match: (p) => p.startsWith('/channels') };
 const COMMENTS: Section = { to: '/comments', label: 'Comments', match: (p) => p.startsWith('/comments') };
 const STATS: Section = { to: '/stats', label: 'Stats', icon: StatsIcon, match: (p) => p.startsWith('/stats') };
-const SETTINGS: Section = { to: '/settings', label: 'Settings', match: (p) => p === '/settings' };
+const SETTINGS: Section = { to: '/settings', label: 'General', match: (p) => p === '/settings' };
 const AI: Section = { to: '/settings/ai', label: 'AI', match: (p) => p.startsWith('/settings/ai') };
 const AUTOMATION: Section = { to: '/settings/automation', label: 'Automation', match: (p) => p.startsWith('/settings/automation') };
 const API: Section = { to: '/settings/api', label: 'API', match: (p) => p.startsWith('/settings/api') };
@@ -51,7 +51,9 @@ const API: Section = { to: '/settings/api', label: 'API', match: (p) => p.starts
 const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS];
 /** Phones: the four in reach of the thumb; the rest behind More */
 const BOTTOM = [LAUNCHES, WRITE, CHANNELS, STATS];
-const MORE = [COMMENTS, SETTINGS, AI, AUTOMATION, API];
+/** Settings is one group of four, in the user menu (a submenu) and in More (a group), never four flat entries */
+const SETTINGS_GROUP = [SETTINGS, AI, AUTOMATION, API];
+const MORE = [COMMENTS, ...SETTINGS_GROUP];
 
 function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
   return (
@@ -112,10 +114,11 @@ function Shell() {
                   entries={[
                     { kind: 'note', label: name ? `${name} (@${login})` : `@${login}` },
                     { kind: 'separator' },
-                    { label: 'Settings', onSelect: () => void navigate({ to: '/settings' }) },
-                    { label: 'AI', onSelect: () => void navigate({ to: '/settings/ai' }) },
-                    { label: 'Automation', onSelect: () => void navigate({ to: '/settings/automation' }) },
-                    { label: 'API', onSelect: () => void navigate({ to: '/settings/api' }) },
+                    {
+                      kind: 'submenu',
+                      label: 'Settings',
+                      entries: SETTINGS_GROUP.map((s) => ({ label: s.label, onSelect: () => void navigate({ to: s.to }) })),
+                    },
                     { kind: 'separator' },
                     { label: 'Take the tour', onSelect: requestTour },
                     { label: 'Sign out', onSelect: () => signOut.current?.requestSubmit() },
@@ -152,11 +155,24 @@ function Shell() {
           >
             <nav aria-label="More sections">
               <ul className="drawer-links">
-                {[...MORE, { ...LAUNCHES, to: '/launch' as const, label: 'Launch a repo', match: (p: string) => p === '/launch' }].map((s) => (
-                  <li key={s.to}>
-                    <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
-                  </li>
-                ))}
+                <li>
+                  <DrawerClose render={<Link to={COMMENTS.to} aria-current={current(COMMENTS)} />}>{COMMENTS.label}</DrawerClose>
+                </li>
+                <li>
+                  <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} />}>Launch a repo</DrawerClose>
+                </li>
+                <li role="group" aria-labelledby="more-settings" className="drawer-group">
+                  <span id="more-settings" className="drawer-group-title">
+                    Settings
+                  </span>
+                  <ul className="drawer-sublinks">
+                    {SETTINGS_GROUP.map((s) => (
+                      <li key={s.to}>
+                        <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
                 <li>
                   <button
                     type="button"

@@ -67,6 +67,9 @@
 .ui-option[data-disabled] { opacity: .5; }
 .ui-option-danger { color: var(--sc-failure); }
 .ui-option-danger[data-highlighted] { background: var(--sc-failure); color: var(--sc-ground); }
+.ui-option-submenu { justify-content: space-between; }
+.ui-option-submenu[data-popup-open]:not([data-highlighted]) { background: var(--sc-raised); }
+.ui-option-chevron { font-size: 20px; line-height: 1; }
 .ui-option-check { flex: none; width: 18px; display: inline-grid; place-items: center; }
 /* The check holds its place when hidden, so labels line up whether or not they are chosen */
 .ui-option:not([data-selected]) .ui-option-check { visibility: hidden; }
@@ -144,6 +147,9 @@
 .drawer-links { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .drawer-links a, .drawer-links button { display: flex; align-items: center; width: 100%; min-height: 52px; padding: 0 18px; border-radius: 16px; border: var(--sc-border-control) solid var(--sc-rail); background: transparent; color: var(--sc-text); font: 600 17px/1.2 var(--sc-font-text); text-decoration: none; text-align: left; cursor: pointer; }
 .drawer-links a[aria-current="page"] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
+.drawer-group { display: grid; gap: 6px; padding-top: 8px; }
+.drawer-group-title { font: var(--sc-label); color: var(--sc-muted); text-transform: uppercase; letter-spacing: .04em; padding-inline: 6px; }
+.drawer-sublinks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .drawer-who { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--sc-hairline); }
 .drawer-who form { margin: 0; }
 
