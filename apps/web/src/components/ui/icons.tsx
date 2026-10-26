@@ -138,3 +138,8 @@ export const ImportIcon = (p: IconProps) => (
     <path d="M12 3.5v10M8 9.5l4 4 4-4M4.5 14v4.5a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V14" />
   </Glyph>
 );
+export const MinusIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M5 12h14" />
+  </Glyph>
+);
