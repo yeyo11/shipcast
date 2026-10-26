@@ -35,7 +35,7 @@ test('the page reads its chart, totals, ranking and options from the registry', 
   assert.equal(view.totals.previous, null);
   assert.equal(view.ranking.total, 1);
   assert.equal(view.ranking.entries[0]?.launchId, launch.id);
-  assert.deepEqual(view.options.accounts, [{ value: String(account.id), label: '@me', hint: 'Bluesky' }]);
+  assert.deepEqual(view.options.accounts, [{ value: String(account.id), label: '@me', hint: 'Bluesky', group: 'Bluesky' }]);
   assert.ok(view.options.channels.some((c) => c.value === 'bluesky'));
 });
 
@@ -65,7 +65,7 @@ test('filters narrow the view and a channel with nothing is an empty one', async
   assert.equal(other.ranking.total, 0, 'a launch filter leaves the other launches out');
   const one = await loadStats(registry, { ...DEFAULTS, metric: 'reactions', groupBy: 'launch', launches: [launch.id] }, TODAY);
   assert.equal(one.chart.groups[0]?.id, launch.id);
-  assert.deepEqual(one.options.launches, [{ value: String(launch.id), label: 'yeyo11/claudio v1.0.0', hint: launch.createdAt.slice(0, 10) }]);
+  assert.deepEqual(one.options.launches, [{ value: String(launch.id), label: 'yeyo11/claudio v1.0.0', hint: launch.createdAt.slice(0, 10), group: 'yeyo11/claudio' }]);
 });
 
 test('the ranking is sorted over every row, then paged', () => {

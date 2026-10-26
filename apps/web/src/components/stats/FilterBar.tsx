@@ -1,19 +1,22 @@
-import { useEffect, useId, useState } from 'react';
-import { MultiCombobox } from '../ui/Combobox';
+import { useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { DateRangePicker } from '../ui/DatePicker';
 import { dateToDay } from '../ui/dates';
 import { Drawer } from '../ui/Drawer';
+import { CloseIcon } from '../ui/icons';
 import { Popover } from '../ui/Popover';
 import { usePhone } from '../ui/ResponsiveMenu';
+import { ScrollArea } from '../ui/ScrollArea';
 import { Select, type Option } from '../ui/Select';
+import { grouped, summarize, type FilterOption } from './filter-options';
 import { DAYS_LIMIT, MAX_DAYS, daysBetween, isDay, type Bucket, type GroupBy, type Kind, type Metric, type Period, type StatsSearch } from '../../server/stats-search';
 
 /*
- * The Stats page's filters: the period at hand, as a segmented control, and everything else (the
- * filters, the grouping, the chart's kind and interval, the comparison, a custom range) one click
- * away behind "Filters". Every change goes to the address (the page's search params), which is what
- * loads the numbers, so a view is always shareable. On a phone the bar is one row (the period as a
- * Select, Filters as a bottom sheet). It sits in the page's toolbar; the range is the caption under it.
+ * The Stats page's filters, as one bar (Linear's and Plausible's pattern, 2026-10-26): the period,
+ * then a pill per thing to narrow to (Channel, Account, Launch) and Chart for how the numbers are
+ * drawn. A pill says what it holds ("3 accounts") rather than listing it, so the bar keeps its size
+ * with a hundred accounts; it opens a list with a search, grouped (accounts by network, launches by
+ * project), to tick. Every change goes to the address, which is what loads the numbers, so a view is
+ * always shareable. On a phone the lists open as bottom sheets and the row scrolls sideways.
  */
 
 export const METRIC_NAMES: Record<Metric, string> = { views: 'Views', reactions: 'Reactions', comments: 'Comments', shares: 'Shares', clicks: 'Clicks', impressions: 'Impressions' };
@@ -34,38 +37,19 @@ export interface FilterBarProps {
   search: StatsSearch;
   /** The period's real days, from the server: what a custom range starts from */
   period: { from: string; to: string; days: number };
-  options: { channels: Array<Option<string>>; accounts: Array<Option<string>>; launches: Array<Option<string>> };
+  options: { channels: FilterOption[]; accounts: FilterOption[]; launches: FilterOption[] };
   onChange: (patch: Partial<StatsSearch>) => void;
 }
 
 export function FilterBar({ search, period, options, onChange }: FilterBarProps) {
   const id = useId();
-  // How many choices narrow or reshape the view, so a closed "Filters" still says something is set
-  const set =
-    (search.channels ? 1 : 0) +
-    (search.accounts ? 1 : 0) +
-    (search.launches ? 1 : 0) +
-    (search.groupBy !== 'channel' ? 1 : 0) +
-    (search.chart !== 'line' ? 1 : 0) +
-    (search.bucket !== 'day' ? 1 : 0) +
-    (search.compare ? 1 : 0);
-  const phone = usePhone();
-  const pick = (period: Period) => {
-    if (period !== 'custom') onChange({ period, from: undefined, to: undefined });
+  const pick = (next: Period) => {
+    if (next !== 'custom') onChange({ period: next, from: undefined, to: undefined });
   };
   const periodOptions: Array<Option<Period>> = [...PERIOD_OPTIONS, ...(search.period === 'custom' ? [{ value: 'custom' as const, label: 'Custom' }] : [])];
-  const trigger = (
-    <button type="button" className="btn btn-small stats-filters-button">
-      Filters
-      {set > 0 && (
-        <span className="stats-filters-count">
-          {set}
-          <span className="visually-hidden"> set</span>
-        </span>
-      )}
-    </button>
-  );
-  const filters = <Filters search={search} period={period} options={options} onChange={onChange} />;
+  const filtered = Boolean(search.channels || search.accounts || search.launches);
+  // How the chart differs from its defaults, so a closed Chart still says something is set
+  const reshaped = (search.groupBy !== 'channel' ? 1 : 0) + (search.chart !== 'line' ? 1 : 0) + (search.bucket !== 'day' ? 1 : 0) + (search.compare ? 1 : 0);
   return (
     <section className="stats-filterbar" aria-label="What to show">
       {/* Both shapes are rendered and CSS shows one, so the server's page is already right on a phone */}
@@ -80,20 +64,158 @@ export function FilterBar({ search, period, options, onChange }: FilterBarProps)
       <div className="stats-period-select">
         <Select<Period> label={<span className="visually-hidden">Period</span>} options={periodOptions} value={search.period} onValueChange={pick} />
       </div>
-      {phone ? (
-        <Drawer title="Filters" trigger={trigger}>
-          {filters}
-        </Drawer>
-      ) : (
-        <Popover title="Filters" className="stats-filters-popup" align="start" trigger={trigger}>
-          {filters}
-        </Popover>
+      <Dimension
+        name="Channel"
+        plural="channels"
+        options={options.channels}
+        value={search.channels ?? []}
+        onValueChange={(channels) => onChange({ channels: channels.length > 0 ? channels : undefined })}
+      />
+      <Dimension
+        name="Account"
+        plural="accounts"
+        options={options.accounts}
+        value={(search.accounts ?? []).map(String)}
+        onValueChange={(accounts) => onChange({ accounts: accounts.length > 0 ? accounts.map(Number) : undefined })}
+      />
+      <Dimension
+        name="Launch"
+        plural="launches"
+        options={options.launches}
+        value={(search.launches ?? []).map(String)}
+        onValueChange={(launches) => onChange({ launches: launches.length > 0 ? launches.map(Number) : undefined })}
+        empty="No published launch yet."
+      />
+      <Sheet
+        title="The chart"
+        trigger={
+          <button type="button" className="btn btn-small stats-pill" data-set={reshaped > 0 || undefined}>
+            Chart
+            {reshaped > 0 && (
+              <span className="stats-filters-count">
+                {reshaped}
+                <span className="visually-hidden"> changed</span>
+              </span>
+            )}
+          </button>
+        }
+      >
+        <ChartOptions search={search} period={period} onChange={onChange} />
+      </Sheet>
+      {filtered && (
+        <button type="button" className="btn-link stats-clear" onClick={() => onChange({ channels: undefined, accounts: undefined, launches: undefined })}>
+          Clear the filters
+        </button>
       )}
     </section>
   );
 }
 
-function Filters({ search, period, options, onChange }: FilterBarProps) {
+/** A popover by its trigger on a desktop, a bottom sheet on a phone: the same content */
+function Sheet({ title, trigger, children, className }: { title: string; trigger: ReactElement; children: ReactNode; className?: string }) {
+  const phone = usePhone();
+  return phone ? (
+    <Drawer title={title} trigger={trigger}>
+      {children}
+    </Drawer>
+  ) : (
+    <Popover title={title} className={`stats-sheet${className ? ` ${className}` : ''}`} align="start" trigger={trigger}>
+      {children}
+    </Popover>
+  );
+}
+
+/** One thing to narrow to: a pill that says what it holds, its list behind it, and a way to clear it */
+function Dimension({ name, plural, options, value, onValueChange, empty }: { name: string; plural: string; options: FilterOption[]; value: string[]; onValueChange: (v: string[]) => void; empty?: string }) {
+  const summary = summarize(value, options, plural);
+  return (
+    <span className="stats-pill-wrap" data-set={summary ? true : undefined}>
+      <Sheet
+        title={name}
+        className="stats-sheet-list"
+        trigger={
+          <button type="button" className="btn btn-small stats-pill" data-set={summary ? true : undefined} aria-label={summary ? `${name}: ${summary}` : `${name}: all ${plural}`}>
+            <span className="stats-pill-name">{name}</span>
+            {summary && <span className="stats-pill-value">{summary}</span>}
+          </button>
+        }
+      >
+        <Checklist name={name} plural={plural} options={options} value={value} onValueChange={onValueChange} empty={empty} />
+      </Sheet>
+      {summary && (
+        <button type="button" className="stats-pill-clear" aria-label={`Show every ${name.toLowerCase()} again`} onClick={() => onValueChange([])}>
+          <CloseIcon size={14} />
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** The list behind a pill: a search, then the choices under their groups, each a checkbox */
+function Checklist({ name, plural, options, value, onValueChange, empty = `No ${plural} yet.` }: { name: string; plural: string; options: FilterOption[]; value: string[]; onValueChange: (v: string[]) => void; empty?: string }) {
+  const id = useId();
+  const [query, setQuery] = useState('');
+  const groups = useMemo(() => grouped(options, query), [options, query]);
+  const shown = groups.flatMap((g) => g.options.map((o) => o.value));
+  const chosen = new Set(value);
+  const toggle = (v: string, on: boolean) => onValueChange(on ? [...value, v] : value.filter((x) => x !== v));
+  return (
+    <div className="stats-checklist">
+      {options.length > 6 && (
+        <input
+          className="input stats-checklist-search"
+          type="search"
+          placeholder={`Find ${plural}`}
+          aria-label={`Find ${plural}`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          // A list this long is searched first
+          autoFocus
+        />
+      )}
+      <div className="stats-checklist-bar">
+        <span className="muted" role="status">
+          {value.length === 0 ? `All ${plural}` : `${value.length} of ${options.length}`}
+        </span>
+        <span className="stats-checklist-actions">
+          <button type="button" className="btn-link" disabled={shown.every((v) => chosen.has(v))} onClick={() => onValueChange([...new Set([...value, ...shown])])}>
+            {query ? 'Tick these' : 'Tick all'}
+          </button>
+          <button type="button" className="btn-link" disabled={value.length === 0} onClick={() => onValueChange([])}>
+            Untick all
+          </button>
+        </span>
+      </div>
+      <ScrollArea maxHeight="min(360px, 50dvh)" label={`${name} list`}>
+        {options.length === 0 ? (
+          <p className="muted stats-checklist-empty">{empty}</p>
+        ) : shown.length === 0 ? (
+          <p className="muted stats-checklist-empty">Nothing matches “{query}”.</p>
+        ) : (
+          groups.map((g) => (
+            <div key={g.group ?? ''} className="stats-checklist-group" role="group" aria-labelledby={g.group ? `${id}-${g.group}` : undefined}>
+              {g.group && (
+                <p className="stats-checklist-heading" id={`${id}-${g.group}`}>
+                  {g.group}
+                </p>
+              )}
+              {g.options.map((o) => (
+                <label key={o.value} className="stats-checklist-item">
+                  <input type="checkbox" checked={chosen.has(o.value)} onChange={(e) => toggle(o.value, e.target.checked)} />
+                  <span className="stats-checklist-label">{o.label}</span>
+                  {o.hint && o.hint !== o.group && <span className="muted stats-checklist-hint">{o.hint}</span>}
+                </label>
+              ))}
+            </div>
+          ))
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
+/** How the numbers are drawn: grouping, kind, interval, the comparison and a custom range */
+function ChartOptions({ search, period, onChange }: Omit<FilterBarProps, 'options'>) {
   const id = useId();
   const [from, setFrom] = useState(period.from);
   const [to, setTo] = useState(period.to);
@@ -103,41 +225,9 @@ function Filters({ search, period, options, onChange }: FilterBarProps) {
   }, [period.from, period.to]);
   const rangeProblem = !isDay(from) || !isDay(to) ? 'Pick both days.' : to < from ? 'The end comes after the start.' : daysBetween(from, to) > MAX_DAYS ? `At most ${MAX_DAYS} days.` : null;
   const weeksOnly = period.days > DAYS_LIMIT;
-  const filtered = Boolean(search.channels || search.accounts || search.launches);
   return (
     <div className="stats-filters">
-      <div className="stats-filters-group" role="group" aria-labelledby={`${id}-narrow`}>
-        <h3 className="stats-filters-heading" id={`${id}-narrow`}>
-          Narrow to
-        </h3>
-        <MultiCombobox label="Channels" noun="channels" options={options.channels} value={search.channels ?? []} onValueChange={(channels) => onChange({ channels: channels.length > 0 ? channels : undefined })} placeholder="All channels" />
-        <MultiCombobox
-          label="Accounts"
-          noun="accounts"
-          options={options.accounts}
-          value={(search.accounts ?? []).map(String)}
-          onValueChange={(accounts) => onChange({ accounts: accounts.length > 0 ? accounts.map(Number) : undefined })}
-          placeholder="All accounts"
-        />
-        <MultiCombobox
-          label="Launches"
-          noun="launches"
-          options={options.launches}
-          value={(search.launches ?? []).map(String)}
-          onValueChange={(launches) => onChange({ launches: launches.length > 0 ? launches.map(Number) : undefined })}
-          placeholder="All launches"
-          empty="No published launch matches."
-        />
-        {filtered && (
-          <button type="button" className="btn-link stats-filters-clear" onClick={() => onChange({ channels: undefined, accounts: undefined, launches: undefined })}>
-            Clear the filters
-          </button>
-        )}
-      </div>
-      <div className="stats-filters-group" role="group" aria-labelledby={`${id}-chart`}>
-        <h3 className="stats-filters-heading" id={`${id}-chart`}>
-          The chart
-        </h3>
+      <div className="stats-filters-group">
         <Select<GroupBy> label="Group the chart by" options={GROUP_OPTIONS} value={search.groupBy} onValueChange={(groupBy) => onChange({ groupBy })} />
         <Segmented<Kind>
           label="Chart"

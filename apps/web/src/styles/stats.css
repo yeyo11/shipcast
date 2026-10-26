@@ -6,24 +6,53 @@
 
 /* The page's banner is the app's own .page-band (app.css), the same as every section's: no override here */
 
-/* ---------- The filter bar: the period at hand, the rest behind "Filters" ---------- */
+/* ---------- The filter bar: the period, a pill per thing to narrow to, and Chart ---------- */
 
-.stats-filterbar { display: flex; flex-wrap: nowrap; gap: 10px 12px; align-items: center; min-width: 0; }
+.stats-filterbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; min-width: 0; }
 .stats-period { border-width: var(--sc-border-control); border-color: var(--sc-rail); padding: 3px; gap: 2px; border-radius: var(--sc-radius-pill); }
 .stats-period span { min-height: 36px; padding: 0 14px; border-radius: var(--sc-radius-pill); font-size: 13.5px; font-weight: 700; color: var(--sc-muted); }
 .stats-period input:checked + span { color: var(--sc-ground); }
+/* Comments' Filters button wears the same count */
 .stats-filters-button { gap: 8px; }
 .stats-filters-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--sc-radius-pill); background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 12px/1 var(--sc-font-text); }
 .stats-range { margin: -14px 0 12px; font-size: 13.5px; }
-.stats-filters-popup { width: min(640px, calc(100vw - 16px), var(--available-width, 640px)); max-width: none; max-height: min(var(--available-height, 680px), 680px); }
-/* Two columns where there is room (what to count, how to draw it), one on a phone */
-.stats-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 18px 24px; padding-top: 6px; }
+
+/* A pill says what it holds: quiet while it holds everything, outlined in the text colour once set */
+.stats-pill-wrap { display: inline-flex; align-items: stretch; flex: none; }
+.stats-pill { gap: 6px; border-color: var(--sc-hairline); white-space: nowrap; }
+.stats-pill[data-set] { border-color: var(--sc-text); }
+.stats-pill-name { color: var(--sc-muted); }
+.stats-pill[data-set] .stats-pill-name::after { content: ':'; }
+.stats-pill-value { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: var(--sc-text); }
+/* Set, the pill and its clear are one shape: the clear is the pill's right end */
+.stats-pill-wrap[data-set] .stats-pill { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 6px; }
+.stats-pill-clear { display: inline-grid; place-items: center; width: 34px; padding: 0; border: var(--sc-border-control) solid var(--sc-text); border-left: 0; border-radius: 0 var(--sc-radius-pill) var(--sc-radius-pill) 0; background: transparent; color: var(--sc-muted); cursor: pointer; }
+.stats-pill-clear:hover { color: var(--sc-text); background: var(--sc-raised); }
+.stats-pill-clear:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.stats-clear { white-space: nowrap; }
+
+/* The list behind a pill: a search, the count and the bulk actions, then the choices by group */
+.stats-sheet { width: min(var(--available-width, 560px), calc(100vw - 16px), 560px); max-width: none; max-height: min(var(--available-height, 680px), 680px); }
+.stats-sheet-list { width: min(var(--available-width, 380px), calc(100vw - 16px), 380px); }
+.stats-checklist { display: grid; gap: 10px; min-width: 0; }
+.stats-checklist-search { width: 100%; }
+.stats-checklist-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.stats-checklist-actions { display: flex; gap: 14px; }
+.stats-checklist-group { display: grid; gap: 2px; padding-bottom: 8px; }
+.stats-checklist-heading { margin: 6px 0 2px; padding-inline: 8px; font: var(--sc-label); color: var(--sc-muted); }
+.stats-checklist-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 40px; padding: 4px 8px; border-radius: 12px; cursor: pointer; }
+.stats-checklist-item:hover { background: var(--sc-raised); }
+.stats-checklist-item:has(input:checked) .stats-checklist-label { font-weight: 700; }
+.stats-checklist-label { overflow-wrap: anywhere; }
+.stats-checklist-hint { font-size: 12.5px; white-space: nowrap; }
+.stats-checklist-empty { margin: 8px; }
+@media (pointer: coarse) { .stats-checklist-item { min-height: 48px; } }
+
+/* Chart: how the numbers are drawn, then a custom range across the bottom */
+.stats-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 18px 24px; padding-top: 6px; }
 .stats-filters-group { display: grid; gap: 12px; align-content: start; min-width: 0; }
-.stats-filters-heading { margin: 0; font: var(--sc-label); color: var(--sc-muted); text-transform: uppercase; letter-spacing: .04em; }
-.stats-filters-range { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--sc-hairline); }
-.stats-filters-clear { justify-self: start; }
 .stats-filters-seg { grid-template-columns: max-content; }
-.stats-filters-range { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: end; }
+.stats-filters-range { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: end; padding-top: 14px; border-top: 1px solid var(--sc-hairline); }
 .stats-filters-range > .label, .stats-filters-range > small { grid-column: 1 / -1; }
 /* The period as a Select is the phone's shape (below); the desktop keeps the segmented control */
 .stats-period-select { display: none; }
@@ -37,16 +66,16 @@
   .section-head .seg { flex: 1 1 100%; }
 }
 /*
- * A phone: the toolbar's one row holds the period (a Select) and Filters, Export CSV is the toolbar's
- * glyph, and the range is the small caption under the bar, so the data starts right below
+ * A phone: the toolbar's one row holds the period (a Select) and the pills, which scroll sideways with
+ * the toolbar's controls, and the range is the small caption under the bar
  */
 @media (max-width: 640px) {
-  .stats-filterbar { gap: 6px 8px; }
+  .stats-filterbar { flex-wrap: nowrap; gap: 6px 8px; }
   .stats-filterbar .stats-period { display: none; }
   .stats-period-select { display: block; min-width: 140px; }
   .stats-period-select .field { gap: 0; }
   .stats-period-select .ui-trigger { min-height: 44px; }
-  .stats-filterbar .stats-filters-button { min-height: 44px; }
+  .stats-filterbar .stats-pill, .stats-filterbar .stats-pill-clear { min-height: 44px; }
   .stats-range { margin-top: -18px; font-size: 13px; }
 }
 

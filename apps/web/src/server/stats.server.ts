@@ -159,8 +159,12 @@ export async function loadStats(registry: Registry, search: StatsSearch, today =
       channels: Object.keys(METRIC_FAMILIES).map((c) => ({ value: c, label: CHANNEL_NAMES[c] ?? c })),
       accounts: accounts
         .filter((a) => MEASURED_NETWORKS.has(a.network))
-        .map((a) => ({ value: String(a.id), label: a.label, hint: CHANNEL_NAMES[channelOfNetwork(a.network)] ?? a.network })),
-      launches: launches.filter((l) => l.status === 'published').map((l) => ({ value: String(l.id), label: `${l.repo} ${l.ref}`, hint: l.createdAt.slice(0, 10) })),
+        .map((a) => {
+          const network = CHANNEL_NAMES[channelOfNetwork(a.network)] ?? a.network;
+          return { value: String(a.id), label: a.label, hint: network, group: network };
+        }),
+      // Grouped by project in the filter's list, so a project's many releases sit together
+      launches: launches.filter((l) => l.status === 'published').map((l) => ({ value: String(l.id), label: `${l.repo} ${l.ref}`, hint: l.createdAt.slice(0, 10), group: l.repo })),
     },
   };
 }
