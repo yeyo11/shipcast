@@ -10,6 +10,8 @@ test('the address is read leniently: what is not valid falls back to the default
     channels: ['bluesky'],
     accounts: [3, 4],
   });
+  assert.deepEqual(readStatsSearch({ launches: '7,7,0,abc' }), { launches: [7] });
+  assert.deepEqual(compactSearch(withDefaults({ launches: [7, 9] })), { launches: [7, 9] });
   assert.deepEqual(readStatsSearch({ period: 'custom', from: '2026-10-05', to: '2026-10-01' }), {}, 'a backwards range is dropped');
   assert.deepEqual(readStatsSearch({ period: 'custom', from: '2026-02-30', to: '2026-03-01' }), {}, 'a day that does not exist is dropped');
   assert.deepEqual(readStatsSearch({ period: 'custom', from: '2026-10-01', to: '2026-10-05' }), { period: 'custom', from: '2026-10-01', to: '2026-10-05' });
@@ -43,6 +45,8 @@ test('the server function refuses what the page would never send', () => {
     { channels: 'bluesky' },
     { channels: ['Not Valid'] },
     { accounts: [1.5] },
+    { launches: ['3'] },
+    { launches: Array.from({ length: 51 }, (_, i) => i + 1) },
     { page: 0 },
     { order: 'sideways' },
   ];

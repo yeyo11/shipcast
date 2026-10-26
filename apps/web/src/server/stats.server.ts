@@ -26,6 +26,8 @@ const SERIES_LIMIT = 8;
 export const PAGE_SIZE = 10;
 /** The ranking is sorted by any column here, so it is read whole up to this many entries */
 const RANKING_CAP = 1000;
+/** The launches offered as a filter, newest first: only a published launch has numbers */
+const LAUNCH_OPTIONS = 500;
 
 /** Networks whose accounts publish pieces that have numbers; the rest (search consoles, the CDN) have no stats to filter by */
 const MEASURED_NETWORKS = new Set([...Object.keys(METRIC_FAMILIES), 'brevo']);
@@ -71,7 +73,11 @@ export interface StatsView {
       kind: string | null;
     }>;
   };
-  options: { channels: Array<{ value: string; label: string }>; accounts: Array<{ value: string; label: string; hint: string }> };
+  options: {
+    channels: Array<{ value: string; label: string }>;
+    accounts: Array<{ value: string; label: string; hint: string }>;
+    launches: Array<{ value: string; label: string; hint: string }>;
+  };
 }
 
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
@@ -79,9 +85,13 @@ const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().sli
 export async function loadStats(registry: Registry, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
   const period = resolvePeriod(search, today);
   const bucket = effectiveBucket(search.bucket, period.days);
-  const filters = { ...(search.channels && { channels: search.channels }), ...(search.accounts && { accounts: search.accounts }) };
+  const filters = {
+    ...(search.channels && { channels: search.channels }),
+    ...(search.accounts && { accounts: search.accounts }),
+    ...(search.launches && { launches: search.launches }),
+  };
   const previous = search.compare ? previousWindow(statsWindow(period.from, period.to)) : null;
-  const accounts = await registry.accounts();
+  const [accounts, launches] = await Promise.all([registry.accounts(), registry.recent(LAUNCH_OPTIONS)]);
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   const [overview, series, before, ranking] = await Promise.all([
@@ -144,6 +154,7 @@ export async function loadStats(registry: Registry, search: StatsSearch, today =
       accounts: accounts
         .filter((a) => MEASURED_NETWORKS.has(a.network))
         .map((a) => ({ value: String(a.id), label: a.label, hint: CHANNEL_NAMES[channelOfNetwork(a.network)] ?? a.network })),
+      launches: launches.filter((l) => l.status === 'published').map((l) => ({ value: String(l.id), label: `${l.repo} ${l.ref}`, hint: l.createdAt.slice(0, 10) })),
     },
   };
 }

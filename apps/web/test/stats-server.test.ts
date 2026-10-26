@@ -54,13 +54,18 @@ test('comparing lays the previous period over the same buckets and reports its t
 
 test('filters narrow the view and a channel with nothing is an empty one', async () => {
   const registry = await memoryRegistry();
-  const { account } = await seed(registry);
+  const { account, launch } = await seed(registry);
   const mastodon = await loadStats(registry, { ...DEFAULTS, metric: 'reactions', channels: ['mastodon'] }, TODAY);
   assert.equal(mastodon.ranking.total, 0);
   assert.ok(mastodon.chart.groups.every((g) => g.total === 0));
   const mine = await loadStats(registry, { ...DEFAULTS, metric: 'reactions', groupBy: 'account', accounts: [account.id] }, TODAY);
   assert.equal(mine.chart.groups[0]?.id, account.id);
   assert.equal(mine.chart.groups[0]?.channel, 'bluesky');
+  const other = await loadStats(registry, { ...DEFAULTS, metric: 'reactions', launches: [launch.id + 1] }, TODAY);
+  assert.equal(other.ranking.total, 0, 'a launch filter leaves the other launches out');
+  const one = await loadStats(registry, { ...DEFAULTS, metric: 'reactions', groupBy: 'launch', launches: [launch.id] }, TODAY);
+  assert.equal(one.chart.groups[0]?.id, launch.id);
+  assert.deepEqual(one.options.launches, [{ value: String(launch.id), label: 'yeyo11/claudio v1.0.0', hint: launch.createdAt.slice(0, 10) }]);
 });
 
 test('the ranking is sorted over every row, then paged', () => {

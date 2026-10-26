@@ -19,16 +19,6 @@
   .controls-seg { grid-template-columns: minmax(0, 1fr); flex: 1 1 100%; }
 }
 
-/* The multiple combobox: chips inside the input, wrapping onto new lines rather than widening it */
-.ui-combo-multi { padding-left: 6px; flex-wrap: nowrap; }
-.ui-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; padding: 4px 0; }
-.ui-chips .ui-combo-input { flex: 1 1 80px; min-width: 80px; padding-left: 8px; }
-.ui-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; padding: 0 2px 0 12px; border-radius: var(--sc-radius-pill); background: var(--sc-text); color: var(--sc-ground); font: 600 13.5px/1 var(--sc-font-text); outline: none; }
-.ui-chip:focus-visible, .ui-chip[data-highlighted] { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
-.ui-chip-remove { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
-.ui-chip-remove:hover { background: color-mix(in srgb, var(--sc-ground) 22%, transparent); }
-@media (pointer: coarse) { .ui-chip { min-height: 40px; } .ui-chip-remove { width: 40px; height: 40px; } }
-
 /* ---------- KPIs ---------- */
 
 .kpis { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 12px; }
@@ -76,6 +66,14 @@
 .chart-tooltip-value { font-family: var(--sc-font-mono); font-size: 12.5px; text-align: right; }
 .chart-tooltip-prev { grid-column: 2 / 4; color: var(--sc-muted); font-size: 12px; text-align: right; }
 .chart-tooltip-total { padding-top: 4px; border-top: 1px solid var(--sc-hairline); font-weight: 700; }
+
+/* The values as a table, on demand: it scrolls in its own box so a long period never widens the page */
+.chart-table { margin-top: 14px; max-height: 360px; overflow: auto; border: 1px solid var(--sc-hairline); border-radius: 12px; overscroll-behavior: contain; }
+.chart-table:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.chart-table .table { font-size: 13.5px; }
+.chart-table th, .chart-table td { white-space: nowrap; }
+.chart-table td { font-family: var(--sc-font-mono); font-size: 12.5px; text-align: right; }
+.chart-table thead th { position: sticky; top: 0; background: var(--sc-raised); }
 
 /* ---------- Ranking ---------- */
 

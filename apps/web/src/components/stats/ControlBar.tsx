@@ -28,7 +28,7 @@ export interface ControlBarProps {
   search: StatsSearch;
   /** The period's real days, from the server: what a custom range starts from */
   period: { from: string; to: string; days: number };
-  options: { channels: Array<Option<string>>; accounts: Array<Option<string>> };
+  options: { channels: Array<Option<string>>; accounts: Array<Option<string>>; launches: Array<Option<string>> };
   onChange: (patch: Partial<StatsSearch>) => void;
 }
 
@@ -102,6 +102,15 @@ export function ControlBar({ search, period, options, onChange }: ControlBarProp
           value={(search.accounts ?? []).map(String)}
           onValueChange={(accounts) => onChange({ accounts: accounts.length > 0 ? accounts.map(Number) : undefined })}
           placeholder="All accounts"
+        />
+        <MultiCombobox
+          label="Launches"
+          noun="launches"
+          options={options.launches}
+          value={(search.launches ?? []).map(String)}
+          onValueChange={(launches) => onChange({ launches: launches.length > 0 ? launches.map(Number) : undefined })}
+          placeholder="All launches"
+          empty="No published launch matches."
         />
       </div>
       <div className="controls-row controls-toggles">

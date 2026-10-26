@@ -11,6 +11,7 @@ import { Kpis } from '../../components/stats/Kpis';
 import { RankingTable } from '../../components/stats/RankingTable';
 import { getGrowth, getStats } from '../../server/stats.functions';
 import { compactSearch, readStatsSearch, withDefaults, type StatsSearch } from '../../server/stats-search';
+import statsCss from '../../styles/stats.css?url';
 
 /*
  * Stats: how the launches did across channels and accounts over time (milestone 5 of
@@ -27,7 +28,8 @@ export const Route = createFileRoute('/_app/stats')({
     const growth = await getGrowth({ data: { from: stats.period.from, to: stats.period.to } });
     return { stats, growth };
   },
-  head: () => ({ meta: [{ title: 'Stats · Shipcast' }] }),
+  // The charts' styles load with the section that draws them, not on every page of the app
+  head: () => ({ meta: [{ title: 'Stats · Shipcast' }], links: [{ rel: 'stylesheet', href: statsCss }] }),
   pendingComponent: Loading,
   component: Stats,
 });
@@ -71,7 +73,7 @@ function Stats() {
   const by = search.groupBy;
   const title = `${metricName} per ${per}, by ${by}`;
   const nothing = Object.values(stats.totals.metrics).every((v) => !v) && stats.ranking.total === 0;
-  const filtered = Boolean(search.channels || search.accounts);
+  const filtered = Boolean(search.channels || search.accounts || search.launches);
   const range = `${dayLabel(stats.period.from, true)} – ${dayLabel(stats.period.to, true)}`;
 
   const exportCsv = () => {
@@ -112,7 +114,7 @@ function Stats() {
           title="No numbers here yet"
           action={
             filtered ? (
-              <button type="button" className="btn" onClick={() => change({ channels: undefined, accounts: undefined })}>
+              <button type="button" className="btn" onClick={() => change({ channels: undefined, accounts: undefined, launches: undefined })}>
                 Clear the filters
               </button>
             ) : search.period !== '90d' ? (
@@ -127,7 +129,7 @@ function Stats() {
           }
         >
           {filtered
-            ? 'Nothing these channels or accounts published grew in this period.'
+            ? 'Nothing these channels, accounts or launches published grew in this period.'
             : 'Numbers are read every few hours once a launch is out. Try a longer period, or launch something.'}
         </Empty>
       ) : (

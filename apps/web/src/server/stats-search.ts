@@ -37,6 +37,7 @@ export interface StatsSearch {
   compare: boolean;
   channels?: string[];
   accounts?: number[];
+  launches?: number[];
   rank: RankBy;
   sort: Sort;
   order: 'desc' | 'asc';
@@ -70,6 +71,9 @@ function items(value: unknown): unknown[] {
   return [];
 }
 
+/** Row ids from the address (accounts, launches), at most 50: a filter longer than that is not a filter */
+const ids = (value: unknown) => [...new Set(items(value).map(Number).filter((n) => Number.isInteger(n) && n > 0 && n < 2 ** 31))].slice(0, 50);
+
 /** The address read leniently: what is valid is kept, the rest is the default; defaults are left out so links stay short */
 export function readStatsSearch(raw: Record<string, unknown>): Partial<StatsSearch> {
   const out: Partial<StatsSearch> = {};
@@ -88,8 +92,10 @@ export function readStatsSearch(raw: Record<string, unknown>): Partial<StatsSear
   if (raw.compare === true || raw.compare === 'true' || raw.compare === '1') out.compare = true;
   const channels = [...new Set(items(raw.channels).filter((c): c is string => typeof c === 'string' && CHANNEL.test(c)))].slice(0, 30);
   if (channels.length > 0) out.channels = channels;
-  const accounts = [...new Set(items(raw.accounts).map(Number).filter((n) => Number.isInteger(n) && n > 0 && n < 2 ** 31))].slice(0, 50);
+  const accounts = ids(raw.accounts);
   if (accounts.length > 0) out.accounts = accounts;
+  const launches = ids(raw.launches);
+  if (launches.length > 0) out.launches = launches;
   const rank = pick(raw.rank, RANK_BY);
   if (rank) out.rank = rank;
   const sort = pick(raw.sort, SORTS);
@@ -146,7 +152,9 @@ export function parseStatsInput(input: unknown): StatsSearch {
     return value.length > 0 ? [...new Set(value as T[])] : undefined;
   };
   const channels = list('channels', 30, (v): v is string => typeof v === 'string' && CHANNEL.test(v));
-  const accounts = list('accounts', 50, (v): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 2 ** 31);
+  const isId = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 2 ** 31;
+  const accounts = list('accounts', 50, isId);
+  const launches = list('launches', 50, isId);
   const page = o.page === undefined ? 1 : o.page;
   if (typeof page !== 'number' || !Number.isInteger(page) || page < 1 || page > 10_000) throw new InvalidInput('page is an integer from 1');
   return {
@@ -159,6 +167,7 @@ export function parseStatsInput(input: unknown): StatsSearch {
     compare: o.compare === true,
     ...(channels && { channels }),
     ...(accounts && { accounts }),
+    ...(launches && { launches }),
     rank: one('rank', RANK_BY, DEFAULTS.rank),
     sort: one('sort', SORTS, DEFAULTS.sort),
     order: one('order', ['desc', 'asc'] as const, DEFAULTS.order),
@@ -184,7 +193,7 @@ export function compactSearch(search: StatsSearch): Partial<StatsSearch> {
     if (value === undefined || (Array.isArray(value) && value.length === 0)) continue;
     if (key === 'from' || key === 'to') {
       if (search.period !== 'custom') continue;
-    } else if (key !== 'channels' && key !== 'accounts' && value === DEFAULTS[key]) continue;
+    } else if (key !== 'channels' && key !== 'accounts' && key !== 'launches' && value === DEFAULTS[key]) continue;
     Object.assign(out, { [key]: value });
   }
   return out;

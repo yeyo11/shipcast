@@ -64,6 +64,8 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
   const [active, setActive] = useState<number | null>(null);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  // The values as a visible table: for whoever reads numbers better than lines, or cannot tell the colours apart
+  const [asTable, setAsTable] = useState(false);
   const plotRef = useRef<HTMLDivElement>(null);
 
   // New data (another period, metric or filter) is another chart: the zoom and the point reset
@@ -172,6 +174,9 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
         <Legend series={shown} kind={kind} comparison={hasComparison ? (stacked ? 'total' : 'series') : null} comparisonName={comparisonName} />
         <div className="chart-tools">
           {tools}
+          <button type="button" className="btn btn-small" aria-expanded={asTable} aria-controls={tableId} onClick={() => setAsTable((v) => !v)}>
+            {asTable ? 'Hide the data' : 'Show the data'}
+          </button>
           {zoom && (
             <button type="button" className="btn btn-small" onClick={() => setZoom(null)}>
               Reset zoom
@@ -327,7 +332,7 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
       <p className="visually-hidden" aria-live="polite">
         {summary}
       </p>
-      <DataTable id={tableId} title={title} buckets={shownBuckets} unit={unit} series={shown} comparisonName={comparisonName} />
+      <DataTable id={tableId} visible={asTable} title={title} buckets={shownBuckets} unit={unit} series={shown} comparisonName={comparisonName} />
     </figure>
   );
 }
@@ -374,11 +379,15 @@ function Legend({ series, kind, comparison, comparisonName }: { series: readonly
   );
 }
 
-/** Every value of the chart as a table, for screen readers; sighted readers have the tooltip and the CSV */
-function DataTable({ id, title, buckets, unit, series, comparisonName }: { id: string; title: string; buckets: readonly string[]; unit: 'day' | 'week'; series: readonly ChartSeries[]; comparisonName: string }) {
+/**
+ * Every value of the chart as a table. Always there for screen readers; shown on demand for everyone
+ * else, in its own scrolling box so a long period never widens the page.
+ */
+function DataTable({ id, visible, title, buckets, unit, series, comparisonName }: { id: string; visible: boolean; title: string; buckets: readonly string[]; unit: 'day' | 'week'; series: readonly ChartSeries[]; comparisonName: string }) {
   const compared = series.filter((s) => s.comparison);
   return (
-    <table id={id} className="visually-hidden">
+    <div id={id} className={visible ? 'chart-table' : 'visually-hidden'} {...(visible && { tabIndex: 0, role: 'region', 'aria-label': `${title}: the values` })}>
+    <table className="table">
       <caption>{title}: the values</caption>
       <thead>
         <tr>
@@ -409,6 +418,7 @@ function DataTable({ id, title, buckets, unit, series, comparisonName }: { id: s
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
