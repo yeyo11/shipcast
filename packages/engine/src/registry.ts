@@ -1122,6 +1122,20 @@ export class Registry {
   }
 
   /**
+   * How many replies Shipcast sent under a launch's posts, per channel: the number a launch's card
+   * shows instead of a row for every comment, since an answered thread can run to dozens.
+   */
+  async sentReplies(launchId: number): Promise<Record<string, number>> {
+    const rows = await this.#db
+      .select({ channel: comments.channel, n: count() })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .where(and(eq(posts.launchId, launchId), eq(comments.status, 'sent'), eq(comments.own, false)))
+      .groupBy(comments.channel);
+    return Object.fromEntries(rows.map((r) => [r.channel, Number(r.n)]));
+  }
+
+  /**
    * Changes a comment, only while it is in one of the states given when `onlyIf` is set: the
    * compare-and-set that lets one sender claim a reply, so two clicks never send it twice.
    * Undefined when the comment does not exist or was in another state.
