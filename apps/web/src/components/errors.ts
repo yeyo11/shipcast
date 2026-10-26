@@ -47,6 +47,14 @@ const RULES: Rule[] = [
     explain: (m) => ({ title: 'Too many requests', text: `${m[1]} asked Shipcast to slow down. Try again in a few minutes.` }),
   },
   {
+    // Chrome, Firefox and Safari word it differently: a page lazily loads part of the app from the address it was opened at
+    match: /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/,
+    explain: () => ({
+      title: 'This page lost Shipcast',
+      text: 'Part of the app could not be loaded from the address this page was opened at: Shipcast restarted, was updated or moved. Reload the page, or open Shipcast at its current address.',
+    }),
+  },
+  {
     match: /could not reach|fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/,
     explain: () => ({ title: 'The network did not answer', text: 'Shipcast could not reach it. Check this machine’s connection and try again.' }),
   },

@@ -357,6 +357,14 @@ export function LaunchCard({
       ) : (
         <p className="lcard-none">
           {launch.problem ? launch.problem.split('\n')[0] : launch.pullRequest ? 'Drafts are waiting in the pull request.' : 'Nothing published yet.'}
+          {launch.status === 'drafted' && launch.pullRequest && (
+            <>
+              {' '}
+              <Link to="/launches/$id/edit" params={{ id: String(launch.id) }}>
+                Edit the drafts
+              </Link>
+            </>
+          )}
         </p>
       )}
     </article>

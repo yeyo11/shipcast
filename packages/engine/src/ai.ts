@@ -49,6 +49,16 @@ export interface TextRequest {
   messages?: ModelMessage[];
   model?: string;
   abortSignal?: AbortSignal;
+  /**
+   * Where a provider that runs an agent (claudio's REST fallback) works when there is no repo to read:
+   * a folder with nothing in it worth reading, its workspace root
+   */
+  cwd?: string;
+  /**
+   * Called before the first text when the provider cannot stream and the whole answer will arrive at
+   * once (claudio until its OpenAI-compatible API exists), so the page can say so
+   */
+  onWhole?: () => void;
 }
 
 /**

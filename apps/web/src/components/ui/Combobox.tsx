@@ -13,6 +13,10 @@ export interface ComboboxProps<V extends string> {
   empty?: string;
   disabled?: boolean;
   help?: ReactNode;
+  /** The input's id, for a page that moves the focus to it */
+  id?: string;
+  /** What is wrong with the choice, shown under it and tied to the input */
+  error?: string;
 }
 
 /**
@@ -20,8 +24,10 @@ export interface ComboboxProps<V extends string> {
  * repos). The input filters by the label and the hint; the value given back is the option's id,
  * so the page keeps plain strings in its state.
  */
-export function Combobox<V extends string>({ label, options, value, onValueChange, placeholder = 'Type to search', empty = 'Nothing matches.', disabled, help }: ComboboxProps<V>) {
-  const id = useId();
+export function Combobox<V extends string>({ label, options, value, onValueChange, placeholder = 'Type to search', empty = 'Nothing matches.', disabled, help, id: given, error }: ComboboxProps<V>) {
+  const generated = useId();
+  const id = given ?? generated;
+  const errorId = `${id}-error`;
   const byValue = useMemo(() => new Map(options.map((o) => [o.value, o])), [options]);
   const selected = value === null ? null : (byValue.get(value) ?? null);
   return (
@@ -40,7 +46,7 @@ export function Combobox<V extends string>({ label, options, value, onValueChang
           {label}
         </label>
         <Base.InputGroup className="ui-combo">
-          <Base.Input id={id} className="ui-combo-input" placeholder={placeholder} />
+          <Base.Input id={id} className="ui-combo-input" placeholder={placeholder} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} />
           <Base.Clear className="ui-icon-button ui-combo-clear" aria-label="Clear">
             <CloseIcon size={18} />
           </Base.Clear>
@@ -69,6 +75,11 @@ export function Combobox<V extends string>({ label, options, value, onValueChang
           </Base.Positioner>
         </Base.Portal>
       </Base.Root>
+      {error && (
+        <p className="field-error" id={errorId}>
+          {error}
+        </p>
+      )}
       {help && <small>{help}</small>}
     </div>
   );

@@ -260,6 +260,14 @@ function AiSettingsPage() {
           <div className="log">{data.locked.replyRules.join('\n')}</div>
         </details>
         <details className="card">
+          <summary>Rules for the writing assistant, on a launch’s pieces</summary>
+          <div className="log">{data.locked.assistantLaunchRules.join('\n')}</div>
+        </details>
+        <details className="card">
+          <summary>Rules for the writing assistant, on an article</summary>
+          <div className="log">{data.locked.assistantArticleRules.join('\n')}</div>
+        </details>
+        <details className="card">
           <summary>The content pack’s schema</summary>
           <div className="log">{data.locked.packSchema}</div>
         </details>

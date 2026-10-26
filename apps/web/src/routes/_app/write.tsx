@@ -1,5 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { AssistedEditor } from '../../components/assistant/AssistedEditor';
+import { ChatPanel } from '../../components/assistant/ChatPanel';
+import { useAssistant } from '../../components/assistant/session';
 import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { getChannels } from '../../server/channels.functions';
@@ -27,12 +30,19 @@ function Write() {
   const [direct, setDirect] = useState(false);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
+  const assistant = useAssistant({
+    value: markdown,
+    onChange: setMarkdown,
+    lang,
+    checkDisabled: 'An article of your own has no code behind it: it is the truth the pieces follow.',
+  });
   return (
     <>
       <PageHead title="Write">An article of your own, in your words. Shipcast translates it, writes a piece for each channel you choose and publishes it on the blog.</PageHead>
+      <div className={`writer${chatOpen ? ' with-chat' : ''}`}>
       <form
         className="form"
-        style={{ maxWidth: 900 }}
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
@@ -61,11 +71,15 @@ function Write() {
           <label htmlFor="title">Title</label>
           <input id="title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
         </div>
-        <div className="field">
-          <label htmlFor="body">Article</label>
-          <textarea id="body" className="textarea mono tall" value={markdown} onChange={(e) => setMarkdown(e.target.value)} required placeholder="Markdown, without the title as a heading" />
-          <small>Published as you wrote it. The other language is a faithful translation you review before it goes out.</small>
-        </div>
+        <AssistedEditor
+          id="body"
+          label="Article"
+          assistant={assistant}
+          tall
+          required
+          placeholder="Markdown, without the title as a heading"
+          help="Published as you wrote it. The other language is a faithful translation you review before it goes out."
+        />
         <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="label">Also on</legend>
           <div className="checks">
@@ -102,6 +116,8 @@ function Write() {
           </button>
         </div>
       </form>
+      <ChatPanel assistant={assistant} open={chatOpen} onOpenChange={setChatOpen} />
+      </div>
     </>
   );
 }

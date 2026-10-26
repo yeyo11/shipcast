@@ -73,6 +73,10 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 /* Buttons: one yellow primary action per view */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 24px; border-radius: var(--sc-radius-pill); font: 700 15px/1 var(--sc-font-text); text-decoration: none; cursor: pointer; transition: transform var(--sc-press), box-shadow var(--sc-press); background: transparent; color: var(--sc-text); border: var(--sc-border-control) solid var(--sc-rail); }
 .btn:disabled { opacity: .55; cursor: progress; }
+/* Unavailable but focusable: pressing it says what is missing, which a disabled button cannot */
+.btn[aria-disabled='true'] { opacity: .55; cursor: not-allowed; }
+.btn-primary[aria-disabled='true'] { box-shadow: none; }
+.btn-primary[aria-disabled='true']:active:not(:disabled) { transform: none; }
 .btn-primary { background: var(--sc-yellow); color: var(--sc-on-yellow); border: 2px solid #000; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
 .btn-primary:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--sc-stamp); }
 .btn-danger { color: var(--sc-failure); border: 2px solid var(--sc-failure); }
@@ -80,8 +84,10 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .btn svg { flex: none; }
 /* On touch screens every control is at least 44 px tall, the size a thumb hits without aiming */
 @media (pointer: coarse) { .btn-small { min-height: 44px; } }
+/* A text button reads as text: without background: none the browser paints its grey button box */
 .btn-link { background: none; border: 0; padding: 0; min-height: 0; font: var(--sc-label); text-decoration: underline; text-underline-offset: 3px; color: var(--sc-muted); cursor: pointer; }
 .btn-link:hover { color: var(--sc-text); }
+.btn-link:disabled { opacity: .55; cursor: progress; }
 @media (pointer: coarse) { .btn-link { min-height: 44px; } }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .row > * { min-width: 0; }
@@ -234,6 +240,9 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 .field label, .label { font: var(--sc-label); }
 .field small { color: var(--sc-muted); font-size: 13.5px; }
+/* A field's problem, under it: the word and the red border say it together, colour is never alone */
+.field-error { margin: 0; color: var(--sc-failure); font: 600 14px/1.4 var(--sc-font-text); }
+.input[aria-invalid='true'], .textarea[aria-invalid='true'], .ui-combo:has([aria-invalid='true']) { border-color: var(--sc-failure); }
 .input, .textarea, .select { width: 100%; min-height: 48px; padding: 12px 16px; border-radius: 14px; border: var(--sc-border-control) solid var(--sc-rail); background: var(--sc-ground); color: var(--sc-text); font: var(--sc-body); }
 .textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
 .textarea.mono, .input.mono { font-family: var(--sc-font-mono); font-size: 14px; }

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import appCss from '../styles/app.css?url';
 import componentsCss from '../styles/components.css?url';
+import featuresCss from '../styles/features.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -12,6 +13,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: '/tokens.css' },
       { rel: 'stylesheet', href: appCss },
       { rel: 'stylesheet', href: componentsCss },
+      { rel: 'stylesheet', href: featuresCss },
     ],
   }),
   shellComponent: Document,

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
@@ -44,6 +45,8 @@ export default defineConfig({
   server: { port: 3000, host: '127.0.0.1' },
   // The design system's folder is the app's public folder: tokens, fonts, logo and icons, one copy
   publicDir: '../../design',
+  // nextstepjs's entry imports its Next.js adapter; the tour never uses it (src/components/tour/next-navigation.ts)
+  resolve: { alias: { 'next/navigation': fileURLToPath(new URL('./src/components/tour/next-navigation.ts', import.meta.url)) } },
   environments: {
     ssr: {
       resolve: { external: WORKSPACE },

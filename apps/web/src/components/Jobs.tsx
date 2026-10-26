@@ -19,7 +19,7 @@ export function Jobs({ jobs }: { jobs: JobView[] }) {
           <li key={job.id}>
             <div style={{ minWidth: 0, flex: 1 }}>
               <strong>{job.title}</strong> <span className="muted">since {when(job.startedAt)}</span>
-              {job.log.length > 0 && <div className="muted" style={{ fontSize: 14 }}>{job.log.at(-1)}</div>}
+              {job.log.length > 0 && <div className="muted" style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{job.log.at(-1)}</div>}
             </div>
             <div className="row">
               {job.link && (

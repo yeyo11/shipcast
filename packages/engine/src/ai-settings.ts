@@ -2,6 +2,7 @@ import { contentPackJsonSchema, formatIssues, parseLaunchConfig, type Brand, typ
 import { z } from 'zod';
 import { AI_PROVIDERS, AI_TASKS, type AiTask } from './ai.ts';
 import { articleConfig } from './article.ts';
+import { LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES } from './assistant.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -102,8 +103,22 @@ export interface PromptVersion {
 export type PromptHistory = Partial<Record<PromptId, PromptVersion[]>>;
 
 /** The parts of the prompt that are never editable, shown read-only beside the editable ones */
-export function lockedPrompts(): { launchRules: readonly string[]; articleRules: readonly string[]; replyRules: readonly string[]; packSchema: Record<string, unknown> } {
-  return { launchRules: LOCKED_LAUNCH_RULES, articleRules: LOCKED_ARTICLE_RULES, replyRules: LOCKED_REPLY_RULES, packSchema: contentPackJsonSchema() };
+export function lockedPrompts(): {
+  launchRules: readonly string[];
+  articleRules: readonly string[];
+  replyRules: readonly string[];
+  assistantLaunchRules: readonly string[];
+  assistantArticleRules: readonly string[];
+  packSchema: Record<string, unknown>;
+} {
+  return {
+    launchRules: LOCKED_LAUNCH_RULES,
+    articleRules: LOCKED_ARTICLE_RULES,
+    replyRules: LOCKED_REPLY_RULES,
+    assistantLaunchRules: LOCKED_ASSISTANT_LAUNCH_RULES,
+    assistantArticleRules: LOCKED_ASSISTANT_ARTICLE_RULES,
+    packSchema: contentPackJsonSchema(),
+  };
 }
 
 export class LockedPrompt extends Error {}

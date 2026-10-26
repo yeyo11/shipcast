@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
@@ -21,6 +22,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppStatsRouteImport } from './routes/_app/stats'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
+import { Route as ApiAssistantRouteImport } from './routes/api/assistant'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLaunchesRouteImport } from './routes/api/launches'
 import { Route as AuthGithubRouteImport } from './routes/auth/github'
@@ -42,6 +44,7 @@ import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagr
 import { Route as AuthLinkedinCallbackRouteImport } from './routes/auth/linkedin.callback'
 import { Route as AuthMastodonCallbackRouteImport } from './routes/auth/mastodon.callback'
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
+import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -55,6 +58,11 @@ const LoginRoute = LoginRouteImport.update({
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -101,6 +109,11 @@ const AppWriteRoute = AppWriteRouteImport.update({
   id: '/write',
   path: '/write',
   getParentRoute: () => AppRoute,
+} as any)
+const ApiAssistantRoute = ApiAssistantRouteImport.update({
+  id: '/api/assistant',
+  path: '/api/assistant',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
@@ -207,11 +220,17 @@ const AuthThreadsCallbackRoute = AuthThreadsCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => AuthThreadsRoute,
 } as any)
+const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
+  id: '/launches/$id_/edit',
+  path: '/launches/$id/edit',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/onboarding': typeof OnboardingRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -220,6 +239,7 @@ export interface FileRoutesByFullPath {
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
+  '/api/assistant': typeof ApiAssistantRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
@@ -241,10 +261,12 @@ export interface FileRoutesByFullPath {
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/channels/': typeof AppChannelsIndexRoute
+  '/launches/$id/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/onboarding': typeof OnboardingRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -253,6 +275,7 @@ export interface FileRoutesByTo {
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
+  '/api/assistant': typeof ApiAssistantRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
@@ -275,12 +298,14 @@ export interface FileRoutesByTo {
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/channels': typeof AppChannelsIndexRoute
+  '/launches/$id/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/onboarding': typeof OnboardingRoute
   '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
@@ -289,6 +314,7 @@ export interface FileRoutesById {
   '/_app/stats': typeof AppStatsRoute
   '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
+  '/api/assistant': typeof ApiAssistantRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
@@ -311,6 +337,7 @@ export interface FileRoutesById {
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/_app/channels/': typeof AppChannelsIndexRoute
+  '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -318,6 +345,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/mcp'
+    | '/onboarding'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -326,6 +354,7 @@ export interface FileRouteTypes {
     | '/stats'
     | '/tokens'
     | '/write'
+    | '/api/assistant'
     | '/api/health'
     | '/api/launches'
     | '/auth/github'
@@ -347,10 +376,12 @@ export interface FileRouteTypes {
     | '/auth/mastodon/callback'
     | '/auth/threads/callback'
     | '/channels/'
+    | '/launches/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/mcp'
+    | '/onboarding'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -359,6 +390,7 @@ export interface FileRouteTypes {
     | '/stats'
     | '/tokens'
     | '/write'
+    | '/api/assistant'
     | '/api/health'
     | '/api/launches'
     | '/auth/github'
@@ -381,11 +413,13 @@ export interface FileRouteTypes {
     | '/auth/mastodon/callback'
     | '/auth/threads/callback'
     | '/channels'
+    | '/launches/$id/edit'
   id:
     | '__root__'
     | '/_app'
     | '/login'
     | '/mcp'
+    | '/onboarding'
     | '/_app/ai'
     | '/_app/automation'
     | '/_app/comments'
@@ -394,6 +428,7 @@ export interface FileRouteTypes {
     | '/_app/stats'
     | '/_app/tokens'
     | '/_app/write'
+    | '/api/assistant'
     | '/api/health'
     | '/api/launches'
     | '/auth/github'
@@ -416,12 +451,15 @@ export interface FileRouteTypes {
     | '/auth/mastodon/callback'
     | '/auth/threads/callback'
     | '/_app/channels/'
+    | '/_app/launches/$id_/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
+  OnboardingRoute: typeof OnboardingRoute
+  ApiAssistantRoute: typeof ApiAssistantRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLaunchesRoute: typeof ApiLaunchesRoute
   AuthGithubRoute: typeof AuthGithubRouteWithChildren
@@ -456,6 +494,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp'
       preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -520,6 +565,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/write'
       preLoaderRoute: typeof AppWriteRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/assistant': {
+      id: '/api/assistant'
+      path: '/api/assistant'
+      fullPath: '/api/assistant'
+      preLoaderRoute: typeof ApiAssistantRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/health': {
       id: '/api/health'
@@ -668,6 +720,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthThreadsCallbackRouteImport
       parentRoute: typeof AuthThreadsRoute
     }
+    '/_app/launches/$id_/edit': {
+      id: '/_app/launches/$id_/edit'
+      path: '/launches/$id/edit'
+      fullPath: '/launches/$id/edit'
+      preLoaderRoute: typeof AppLaunchesIdEditRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -686,6 +745,7 @@ interface AppRouteChildren {
   AppDesignIllustrationsRoute: typeof AppDesignIllustrationsRoute
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
+  AppLaunchesIdEditRoute: typeof AppLaunchesIdEditRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -703,6 +763,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDesignIllustrationsRoute: AppDesignIllustrationsRoute,
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
+  AppLaunchesIdEditRoute: AppLaunchesIdEditRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -771,6 +832,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
+  OnboardingRoute: OnboardingRoute,
+  ApiAssistantRoute: ApiAssistantRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLaunchesRoute: ApiLaunchesRoute,
   AuthGithubRoute: AuthGithubRouteWithChildren,
