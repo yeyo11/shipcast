@@ -87,7 +87,7 @@ export function ChannelSchedule({ launchId, item, timezone }: { launchId: number
             {chips.map((chip) => (
               <li key={chip.at}>
                 <Tooltip content={chip.title}>
-                  <button type="button" className="chip" data-best={chip.best || undefined} disabled={busy} aria-label={chip.title} onClick={() => run(() => at(chip.at), `Scheduled for ${chip.label}`)}>
+                  <button type="button" className="chip" data-best={chip.best || undefined} disabled={busy} aria-label={`${chip.label}: ${chip.title}`} onClick={() => run(() => at(chip.at), `Scheduled for ${chip.label}`)}>
                     {chip.label}
                   </button>
                 </Tooltip>
