@@ -322,20 +322,17 @@ function LaunchPage() {
       )}
 
       {open && (
-        <div className="band band-yellow band-slim">
-          <div>
-            <h2 className="ph">Waiting for you</h2>
-            <p className="muted">Read and edit every draft in Content. Approving merges the pull request: the blog publishes, then every approved channel.</p>
-          </div>
+        <div className="strip strip-yellow" role="region" aria-label="Waiting for you">
+          <strong className="strip-title">Waiting for you</strong>
           <div className="row">
-            <button className="btn btn-primary" disabled={busy} onClick={approve}>
-              {busy ? 'Approving…' : `Approve and publish ${texts.filter((t) => t.kind === 'channel').length + 1} pieces`}
-            </button>
             {reviewOk && (
-              <a className="btn" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer" style={{ color: '#000', borderColor: '#000' }}>
+              <a className="btn btn-small" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer" style={{ color: '#000', borderColor: '#000' }}>
                 Open the pull request
               </a>
             )}
+            <button className="btn btn-primary btn-small" disabled={busy} onClick={approve} title="Approving merges the pull request: the blog publishes, then every approved channel">
+              {busy ? 'Approving…' : `Approve and publish ${texts.filter((t) => t.kind === 'channel').length + 1} pieces`}
+            </button>
           </div>
         </div>
       )}

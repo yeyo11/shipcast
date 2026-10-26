@@ -152,6 +152,19 @@
 .search-button { color: var(--sc-muted); }
 .search-button:hover { color: var(--sc-text); }
 
+/* The attention bell: a yellow count on the icon, and one link per thing that needs the owner */
+.attention-button { position: relative; }
+.attention-badge { position: absolute; top: 2px; right: 0; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--sc-radius-pill); background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 12px/1 var(--sc-font-text); border: 2px solid var(--sc-ground); box-sizing: content-box; }
+.attention-popup { width: min(380px, calc(100vw - 24px)); }
+.attention-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.attention-item { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; border: var(--sc-border-control) solid var(--sc-hairline); color: var(--sc-text); text-decoration: none; min-height: 44px; }
+.attention-item:hover, .attention-item:focus-visible { background: var(--sc-text); color: var(--sc-ground); }
+.attention-text { font: 500 15px/1.3 var(--sc-font-text); overflow-wrap: anywhere; }
+.attention-action { font: var(--sc-label); color: var(--sc-muted); }
+.attention-item:hover .attention-action, .attention-item:focus-visible .attention-action { color: inherit; }
+/* A line that only informs (a post going out soon) is quieter than one that needs a decision */
+.attention-scheduled { border-style: dashed; }
+.attention-empty { margin: 0; padding: 8px 4px; }
 
 .bottom-bar { display: none; }
 

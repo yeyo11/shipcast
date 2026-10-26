@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
+import { AttentionBell } from '../components/AttentionBell';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { requestTour } from '../components/tour/request';
@@ -99,6 +100,7 @@ function Shell() {
                   <SearchIcon />
                 </button>
               </Tooltip>
+              <AttentionBell />
               <div className="who-menu">
                 <Menu
                   trigger={
