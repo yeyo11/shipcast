@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T13:51:20.211750165Z
-updated_at: 2026-10-26T15:20:34.167944441Z
+created_at: 2026-10-25T20:33:47.239913855Z
+updated_at: 2026-10-26T15:33:04.563204479Z
 tags:
     - web-app
     - dashboard
@@ -123,14 +123,26 @@ runs on the owner's machine.
   a hairline border and the card radius, with no yellow stamp. Text, the chart (its line on
   `--sc-chart`, 3:1 or more on the card in both themes), the state dots, the marks' tiles and
   menus, the "+n" chip, the accounts count and the scope pill are all on the role tokens, so they hold
-  AA contrast in the night and the day theme. The glyphs follow the theme. Only a launch waiting for
-  the owner is the yellow card, with dark-on-yellow text; there is no yellow band above the list any
-  more, the top bar's bell says what waits (see The interface). The queue's jobs are not here any
-  more: they are on Automation. `/api/launches` gives the launches as JSON behind the session; scripts
-  and the MCP server use the [REST API](api.md) instead.
-- **A launch** (`/launches/<id>`): a compact header (title, repo, launch date, state pill, Publish
-  what is pending, Open the article), a slim one-line yellow strip with **Approve and publish** (and
-  Open the pull request) while its drafts wait, then **its numbers first**: the totals (views, reactions, comments, clicks, stars) and views
+  AA contrast in the night and the day theme. The glyphs follow the theme. **What waits leaves the
+  grid** (since 2026-10-26): a launch waiting for the owner's approval is a slim yellow row above it
+  (its picture, title, repo and date, "Drafts are waiting in the pull request", **Review the drafts**
+  and Edit the drafts), and one that is drafting or was not launched a quiet dashed row with a way to
+  it. The grid holds only launches that went out (published, in part or failing), every card the
+  height of the tallest (`grid-auto-rows: 1fr`, the marks on the card's bottom edge). The split is
+  `splitLaunches` in `src/server/launch-list.ts`, tested. **Each title has the project's picture**, a
+  40 px tile (`components/ProjectAvatar.tsx`): the repo owner's public GitHub avatar
+  (`https://github.com/<owner>.png?size=80`, built by `ownerAvatarUrl` only for a valid login and
+  passed through `imageUrl` on the server), lazy and decorative; when there is none or it fails to
+  load, our own parcels (a release) or typewriter (an article). A `logo:` in `launch.yml` is the hook
+  for a project's own picture, not built yet. The app sends no Content-Security-Policy, so the
+  avatar needs no `img-src` change; one added later must allow `https://github.com` and
+  `https://avatars.githubusercontent.com`. The top bar's bell says what waits (see The interface).
+  The queue's jobs are not here any more: they are on Automation. `/api/launches` gives the launches
+  as JSON behind the session; scripts and the MCP server use the [REST API](api.md) instead.
+- **A launch** (`/launches/<id>`): a compact header (title, repo, launch date), its toolbar (All
+  launches and the state pill; Open the article, and Publish what is pending in yellow), a slim
+  one-line yellow strip with **Approve and publish** (and Open the pull request) while its drafts
+  wait, then **its numbers first**: the totals (views, reactions, comments, clicks, stars) and views
   per day as bars. One quiet line links what waits on the owner (comments to answer, a channel's
   scheduled time, a running job). Below, four tabs kept in the address (`?tab=`, and `?channel=`):
   **Channels**, a strip of channel chips (glyph and state dot) choosing one channel, shown with its
@@ -148,7 +160,8 @@ runs on the owner's machine.
   of the queue.
 - **Write** (`/write`): an article in the owner's words, in Spanish or English; the channels it
   also goes to (those with a working account, plus the drafts-only ones); review first or publish
-  directly. See [articles](engine.md#articles-written-in-the-app). The text has the **writing
+  directly, with the toolbar's Prepare the pieces (or Publish the article). See
+  [articles](engine.md#articles-written-in-the-app). The text has the **writing
   assistant** ([decisions/writing-assistant.md](decisions/writing-assistant.md)), here and in each
   draft's editor: quick actions on the selected text (improve, shorten, translate, titles, adapt to a
   network, check against the code), a side chat for open requests, and every proposal a word-by-word
@@ -161,11 +174,14 @@ runs on the owner's machine.
   network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
   card in the launch card's skin (the same neutral raised surface, on role tokens). A newly connected
   account lands on the list, in its tab, scrolled to and focused. The **Anthropic API** and an
-  **OpenAI-compatible server** are connected here too, under AI providers. Networks that still work
-  from `.env` get a slim one-line strip with Import, not a band.
+  **OpenAI-compatible server** are connected here too, under AI providers. The toolbar's **Connect a
+  network** is a menu of every network that takes an account; networks that still work from `.env`
+  add **Import from .env** beside it, with a slim one-line strip saying why.
 - **Comments** (`/comments`): the comments on the owner's posts and the replies drafted for them
   ([decisions/comment-assistant.md](decisions/comment-assistant.md)). The list can run to thousands,
-  so it is one page at a time (25) and every filter is in the address and applied by the database:
+  so it is one page at a time (25) and every filter is in the address and applied by the database
+  (the words in the toolbar, the rest behind its Filters, a popover or a sheet on a phone; **Check
+  comments now** is the toolbar's action):
   state (waiting for a reply, replied, ignored), channel, launch, post (offered once a launch is
   chosen) and words to find in the comment or its author (`?state=&channel=&launch=&post=&q=&page=`;
   a default is left out and a hand-edited link never breaks the page). The filters offer only what has
@@ -174,13 +190,12 @@ runs on the owner's machine.
   `commentFacets` (three grouped queries); "waiting" covers new, drafted, being sent and failed
   comments. **Approve and send** asks first in the app's alert dialog (the network, and that the reply
   cannot be edited afterwards). Each channel's reply mode is below the list.
-- **Stats** (`/stats`): how the launches did, under one filter bar (the period, and the rest behind
-  Filters) in four tabs: Overview (the totals, which pick the chart's metric, and the time chart),
-  Ranking (the posts ranked; `?tab=posts` still opens it), Accounts (one table of the accounts'
-  growth with Sync now) and Search (the articles in Google and Bing). Its header is the same band as
-  every section's: `stats.css` once stripped the band's background and padding and shrank its
-  title, which made Stats look different; since 2026-10-26 it only moves the Export button beside
-  the title on a phone. See [stats.md](stats.md#the-page).
+- **Stats** (`/stats`): how the launches did, under the toolbar (the period, the rest behind Filters,
+  and Export CSV, its glyph alone on a phone; the range is the caption under it) in four tabs:
+  Overview (the totals, which pick the chart's metric, and the time chart), Ranking (the posts
+  ranked; `?tab=posts` still opens it), Accounts (one table of the accounts' growth with Sync now)
+  and Search (the articles in Google and Bing). Its header is the same band as every section's, with
+  no override in `stats.css`. See [stats.md](stats.md#the-page).
 - **Settings** (`/settings`): one area with a submenu, below. Its sections are General
   (`/settings`), AI (`/settings/ai`), Automation (`/settings/automation`) and API
   (`/settings/api`); the old `/ai`, `/automation` and `/tokens` redirect to them.
@@ -247,11 +262,32 @@ on the [approved design direction](decisions/app-design-direction.md).
   `attentionItems` and `buildAttention` (`src/server/attention.ts`, tested) turn the reads into the
   list. It is read again on every navigation, when the bell opens and every three minutes.
 - **Section headers are Cartel bands** (`PageHead`): the neutral band, the huge uppercase title, a line
-  under it and the section's main action, yellow when there is one (Launch a repo on Launches), and
-  the section's illustration. Every section uses the same band, padding and title size. Below
+  under it and the section's illustration, at **one height on every page** (200 px on a wide screen:
+  the title on one line, the lead clamped to two), so moving between sections never shifts the work
+  area. A Settings section's head (`SectionHead`) is 140 px, likewise fixed. **The banner folds**: a
+  small button in its corner ("Collapse the banner", `aria-expanded`) turns it into a 56 px title
+  strip with a "+" to expand it again; Motion animates the height, the title's size and the fades in
+  250 ms, instant under reduced motion. The choice is one for every page (`useBannerState` in
+  `components/BannerState.tsx`), kept in the `sc_banner` cookie (`compact` or `full`, a year,
+  `Path=/`, `SameSite=Lax`, not HttpOnly since the page writes it); the shell's loader reads it on
+  the server (`getBanner`), so the page is drawn at the right size from the start. The helpers are
+  `src/server/banner.ts`, tested. Section heads fold with the banner and have no button of their own.
+  Phones (under 760 px) always get the strip, without the illustration, the lead or the button.
+- **The toolbar** (`components/PageToolbar.tsx`) sits under every banner and holds what the band
+  used to: the page's controls on the left, its actions on the right (`ToolbarAction`: one yellow
+  primary, the rest quiet; `ToolbarMore` for the overflow). It is 56 px, on the ground colour with a
+  bottom hairline, sticky at the top of the window and lifted by a soft shadow once stuck (an
+  IntersectionObserver on a line above it; the shadow's fade is off under reduced motion). On a phone
+  it stays one row: the controls scroll sideways and each action keeps its glyph, its words its
+  accessible name. A form's submit in the bar names its form (`form=`). Settings' layout renders a
+  `PageToolbarHost` under its banner, and each section's toolbar is drawn there through a portal.
+  Pages: Launches (Launch a repo), Write (Prepare the pieces or Publish the article), Channels
+  (Import from .env, Connect a network), a channel's page (Back to channels), Comments (the search,
+  Filters, Check comments now), Stats (period, Filters, Export CSV), a launch's page and its draft
+  editor, Settings General (Save settings), Automation (Run a round now, Save automation) and API
+  (Create a token). Launch a repo and Settings AI, which have nothing for it, have no bar. Below
   it the work area is calm. What waits for the owner is in the bell; the one-line `.strip` is what a
-  page may show for its own pending action (a launch's Approve, Channels' .env import). On phones
-  (under 760 px) the illustration in a band is hidden: it only pushed the title down.
+  page may show for its own pending matter (a launch's Approve, Channels' networks still on `.env`).
 - **The command palette**: ⌘K or Ctrl+K anywhere, Search in the top bar, or More on a phone. It
   filters the sections (AI, Automation, API and Settings among them) and the main actions (launch a
   repo, write, connect an account, run an automation round, create a token, sign out); Enter runs
@@ -296,14 +332,14 @@ on the [approved design direction](decisions/app-design-direction.md).
 - **Illustrations wired in**: the 404 page ("Return to sender") and the error boundary ("Damaged on
   the way", with Try again), both inside the shell when a section fails and on their own otherwise;
   the empty states for no launches, no drafts on a launch's page and no connected accounts; the
-  sign-in page; the Stats page's loading and empty states.
+  sign-in page; the Stats page's loading and empty states; a launch's picture when it has no avatar.
 - **Reflow to WCAG 2.2 at 320 CSS px.** The page no longer hides horizontal overflow
   (`overflow-x: clip` is gone); what overflowed was fixed instead: the card and two-column grids use
   `minmax(min(100%, N), 1fr)`, forms and fields are `minmax(0, 1fr)` grids, flex and grid children get
   `min-width: 0`, segmented controls stack under 560 px, record tables become blocks under 640 px,
   long URLs, refs, paths, handles and secrets break with `overflow-wrap: anywhere` (`.break`,
   `.copyable`, table cells), and the strips that hold one row of marks (a launch's channel chips, its
-  tabs) scroll sideways on a phone instead of widening the page.
+  tabs, the toolbar's controls) scroll sideways on a phone instead of widening the page.
 - **The reflow check** (`apps/web/scripts/reflow-check.ts`): a Lighthouse gate cannot run in CI
   without a database and a session, so this script runs against a live instance instead. It signs in
   with a console link (or a session saved with `--state`), opens every page at the widths given (320
@@ -327,7 +363,8 @@ never run the same round twice.
   merges as they happen; the rounds still publish what is ready), or **Off** (only the owner's
   actions: no rounds, and the scheduled metric reads and token refreshes skip). Rounds is the
   default. The metrics are read every six hours and the Instagram tokens checked daily, as jobs of
-  their own on cron schedules. Saving the settings moves the next round to 15 seconds later.
+  their own on cron schedules. Saving the settings (the toolbar's Save automation) moves the next
+  round to 15 seconds later.
 - **The webhook** (`POST /api/github/webhook`): trusted only with a valid `X-Hub-Signature-256`
   (HMAC-SHA256 of the exact body, compared in constant time) made with the GitHub App's webhook
   secret or the per-repo secret below; acted on only while webhooks are the chosen mode, answered at
@@ -348,8 +385,9 @@ never run the same round twice.
   offset and the list drops some rows after it), with a filter by state (All, Running, Failed, Done,
   each with its count) and a box of bounded height that scrolls with ScrollArea. A launch's own jobs
   (on its Details tab) are a bounded list too.
-- **What happened**: the last round and the last delivery, with their lines; and **Run a round now**,
-  which moves the round already queued to now (refused while one is running, in any process).
+- **What happened**: the last round and the last delivery, with their lines; and **Run a round now**
+  (in the toolbar), which moves the round already queued to now (refused while one is running, in
+  any process).
 - GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
   deliveries (a ping, an ignored event, a bad signature, a merge with no launch, an installation
   change) answered as expected on 2026-10-25.
@@ -380,8 +418,9 @@ a section of Settings (`/settings/ai`, `src/routes/_app/settings/ai.tsx`,
 Added on 2026-10-25 ([decisions/github-app.md](decisions/github-app.md)). Since 2026-10-26 Settings is
 **one area with a submenu**: a column beside the page on wide screens, tabs that scroll sideways on
 phones. **General** (`/settings`), **AI** (above), **Automation** (above) and **API**
-(`/settings/api`, the REST API's tokens: created with a name and scopes (`read`, `write`), shown
-once, listed with when each was last used, and revoked; see [api.md](api.md)). The layout is
+(`/settings/api`, the REST API's tokens: created with a name and scopes (`read`, `write`) from the
+toolbar's Create a token, shown once, listed with when each was last used, and revoked; see
+[api.md](api.md)). The layout is
 `src/routes/_app/settings.tsx`; each section is a route under `src/routes/_app/settings/`. A
 setting is configured in exactly one place: the shared `SettingsForm` shows General's group and AI's
 group, never the same field twice. General's page is `src/routes/_app/settings/index.tsx` with
@@ -390,10 +429,10 @@ group, never the same field twice. General's page is `src/routes/_app/settings/i
 - **Each setting** that is not the bootstrap and not the AI's: the launches repo and the Instagram,
   Threads and LinkedIn app ids and secrets. Each says where its value comes from (saved
   here, the keychain, or `.env` until it is saved here); secrets are shown as set or not, never sent
-  to the page. A save checks every value first (the launches repo is `owner/name`), applies to what
-  runs next without a restart, and a **Clear** (which asks first) removes a saved one. What is still
-  missing is listed at the top; a page that needs a missing setting says which one and to set it
-  here.
+  to the page. A save (the toolbar's Save settings) checks every value first (the launches repo is
+  `owner/name`), applies to what runs next without a restart, and a **Clear** beside a field (which
+  asks first) removes a saved one. What is still missing is listed at the top; a page that needs a
+  missing setting says which one and to set it here.
 - **GitHub**: how the engine reaches it (the App, whose commits are by `<slug>[bot]`, or the old
   token), the App's installation (account, all or selected repos, permissions), how the owner signs
   in, and the owner's user token with its expiry (refreshed on the page's own read when due).
@@ -430,6 +469,8 @@ group, never the same field twice. General's page is `src/routes/_app/settings/i
   ([stats.md](stats.md)), GitHub's stars apart from reactions; each channel's totals with only what
   its network counts (a metric it does not count shows a dash, not 0); and views per day for every
   launch and channel of the list in one query, the engine's daily series grouped by `launchChannel`.
+- **The page frame's styles** are `src/styles/layout.css` (the toolbar, the Settings section heads,
+  the Launches rows and the project pictures); the bands stay in `app.css`.
 - **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
   `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
   OpenAPI document is built from it. Requests that start work are checked by the same functions as

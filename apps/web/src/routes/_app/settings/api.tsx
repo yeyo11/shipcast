@@ -1,6 +1,8 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { SectionHead } from '../../../components/SectionHead';
+import { PlusIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
 import { ConfirmButton } from '../../../components/ui/ConfirmButton';
@@ -49,6 +51,10 @@ function Api() {
         Tokens for scripts, the MCP server and other clients of the REST API at <code className="break">{data.apiUrl}</code>. Its routes are described in{' '}
         <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
       </SectionHead>
+      <PageToolbar
+        label="API"
+        actions={<ToolbarAction primary type="submit" form="token-form" label="Create a token" busyLabel={busy && 'Creating…'} icon={<PlusIcon />} disabled={busy || !name.trim() || scopes.length === 0} />}
+      />
 
       {created && (
         <div className="form" style={{ marginBottom: 36 }}>
@@ -70,6 +76,7 @@ function Api() {
       )}
 
       <form
+        id="token-form"
         className="form"
         onSubmit={(e) => {
           e.preventDefault();
@@ -97,11 +104,6 @@ function Api() {
           </div>
           <small>{SCOPES.map((s) => `${s.id}: ${s.text}.`).join(' ')} One does not include the other.</small>
         </fieldset>
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={busy || !name.trim() || scopes.length === 0}>
-            {busy ? 'Creating…' : 'Create a token'}
-          </button>
-        </div>
       </form>
 
       <h2 className="ph">Tokens</h2>

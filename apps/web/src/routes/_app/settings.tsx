@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { Toolbox } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
+import { PageToolbarHost } from '../../components/PageToolbar';
 
 export const Route = createFileRoute('/_app/settings')({
   component: SettingsLayout,
@@ -15,6 +16,8 @@ function SettingsLayout() {
   return (
     <>
       <PageHead title="Settings" art={<Toolbox width={200} />}>Everything that is configured, in one place: the app, the AI, how releases are noticed and the API.</PageHead>
+      {/* Each section brings its own toolbar, drawn here under the banner */}
+      <PageToolbarHost>
       <div className="settings-shell">
         <nav className="settings-nav" aria-label="Settings sections">
           <Link to="/settings" activeOptions={{ exact: true }}>
@@ -28,6 +31,7 @@ function SettingsLayout() {
           <Outlet />
         </div>
       </div>
+      </PageToolbarHost>
     </>
   );
 }

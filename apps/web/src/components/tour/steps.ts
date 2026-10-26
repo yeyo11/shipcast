@@ -32,7 +32,7 @@ export function tourSteps({ launchId }: { launchId: number | null }): TourStep[]
       selector: on('/'),
       side: 'bottom-left',
       title: 'Launches',
-      content: 'Every release Shipcast noticed, or one you launched by hand: where it went and how it did. A launch waiting for you shows on a yellow card, and the bell in the top bar counts what needs you.',
+      content: 'Every release Shipcast noticed, or one you launched by hand: where it went and how it did. A launch waiting for you is a yellow row above the cards, and the bell in the top bar counts what needs you.',
     },
     ...(launch
       ? [

@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { AttentionBell } from '../components/AttentionBell';
+import { BannerProvider } from '../components/BannerState';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { requestTour } from '../components/tour/request';
@@ -12,16 +13,17 @@ import { Drawer, DrawerClose } from '../components/ui/Drawer';
 import { ChannelsIcon, LaunchesIcon, MoreIcon, SearchIcon, StatsIcon, WriteIcon } from '../components/ui/icons';
 import { Menu } from '../components/ui/Menu';
 import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
+import { getBanner } from '../server/banner.functions';
 import { getOnboardingState } from '../server/onboarding.functions';
 import { currentSettingsPage, inSettings } from '../server/settings-pages';
 import { whoAmI } from '../server/session.functions';
 
 export const Route = createFileRoute('/_app')({
   loader: async () => {
-    const [who, onboarding] = await Promise.all([whoAmI(), getOnboardingState()]);
+    const [who, onboarding, banner] = await Promise.all([whoAmI(), getOnboardingState(), getBanner()]);
     // A new install opens on the onboarding until it is finished or set aside; an install already working never does
     if (onboarding.autoOpen) throw redirect({ to: '/onboarding' });
-    return who;
+    return { ...who, banner };
   },
   component: Shell,
   notFoundComponent: NotFoundPage,
@@ -67,7 +69,7 @@ function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
 }
 
 function Shell() {
-  const { login, name, avatarUrl } = Route.useLoaderData();
+  const { login, name, avatarUrl, banner } = Route.useLoaderData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [palette, setPalette] = useState(false);
   const [more, setMore] = useState(false);
@@ -133,7 +135,9 @@ function Shell() {
           </div>
         </header>
         <main id="main" className="wrap" tabIndex={-1} data-path={path}>
-          <Outlet />
+          <BannerProvider initial={banner}>
+            <Outlet />
+          </BannerProvider>
         </main>
         <nav className="bottom-bar" aria-label="Sections">
           {BOTTOM.map((s) => {
