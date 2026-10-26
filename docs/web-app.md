@@ -1,5 +1,5 @@
 ---
-created_at: 2026-10-26T09:18:23.568787779Z
+created_at: 2026-10-25T20:33:47.239913855Z
 updated_at: 2026-10-26T09:58:59.66270882Z
 tags:
     - web-app
@@ -20,6 +20,7 @@ tags:
     - accessibility
     - mobile
     - launch-page
+    - stats
 ---
 # The web app
 
@@ -139,8 +140,10 @@ runs on the owner's machine.
 - **AI** (`/ai`): below.
 - **API** (`/tokens`): the REST API's tokens, created with a name and scopes (`read`, `write`), shown
   once, listed with when each was last used, and revoked. See [api.md](api.md).
-- **Stats** (`/stats`): a placeholder with its illustration until the stats section of milestone 5
-  arrives, so the phone's bottom bar keeps its four sections from now on.
+- **Stats** (`/stats`): how the launches did, under one filter bar (the period, and the rest behind
+  Filters) in four tabs: Overview (the totals, which pick the chart's metric, and the time chart),
+  Posts (the ranking), Accounts (one table of the accounts' growth with Sync now) and Search (the
+  articles in Google and Bing). See [stats.md](stats.md#the-page).
 - **Settings** (`/settings`): below.
 
 Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Waiting for you on
@@ -184,7 +187,7 @@ on the [approved design direction](decisions/app-design-direction.md).
 - **Illustrations wired in**: the 404 page ("Return to sender") and the error boundary ("Damaged on
   the way", with Try again), both inside the shell when a section fails and on their own otherwise;
   the empty states for no launches, no drafts on a launch's page and no connected accounts; the
-  sign-in page; the Automation header; the Stats placeholder.
+  sign-in page; the Automation header; the Stats page's loading and empty states.
 - **Reflow to WCAG 2.2 at 320 CSS px.** The page no longer hides horizontal overflow
   (`overflow-x: clip` is gone); what overflowed was fixed instead: the card and two-column grids use
   `minmax(min(100%, N), 1fr)`, forms and fields are `minmax(0, 1fr)` grids, flex and grid children get
