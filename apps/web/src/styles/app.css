@@ -495,3 +495,22 @@ html.lenis, html.lenis body { height: auto; }
 .lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
 .lenis [data-lenis-prevent], .lenis [data-lenis-prevent-wheel], .lenis [data-lenis-prevent-touch] { overscroll-behavior: contain; }
 .lenis.lenis-smooth iframe { pointer-events: none; }
+
+/* ---------- Channels: a card per account, in the launch card's skin (.lcard) ---------- */
+.ccards { list-style: none; margin: 0 0 8px; padding: 0 8px 8px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 22px; }
+.ccard { align-content: start; }
+.ccard h2 { font-size: 24px; }
+.ccard-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ccard-who { display: flex; align-items: center; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.ccard-who .avatar { border-color: #3A3936; }
+.ccard-name { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.ccard-stats { grid-template-columns: auto; margin: 0; }
+.ccard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 4px; }
+.ccard .btn { color: inherit; border-color: #6B6963; }
+.ccard .btn:hover:not(:disabled), .ccard .btn:focus-visible { border-color: currentColor; }
+.ccard .input { background: #1A1A18; color: inherit; border-color: #6B6963; }
+.ccard.is-failed { border-color: #FF6B5B; }
+.ccard .stale { color: #FF6B5B; }
+/* A network not connected yet is quieter than one that is: no stamp shadow, a dashed edge */
+.ccard-add { box-shadow: none; border-style: dashed; border-color: #6B6963; }
+.ui-tab-count { font-variant-numeric: tabular-nums; color: var(--sc-muted); font-weight: 600; }
