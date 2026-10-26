@@ -19,7 +19,6 @@ export function sourceOfReferrer(host: string | null | undefined): string {
   if (h === 'dev.to') return 'devto';
   if (h === 'instagram.com' || h.endsWith('.instagram.com')) return 'instagram';
   if (h === 'reddit.com' || h.endsWith('.reddit.com')) return 'reddit';
-  if (h === 'news.ycombinator.com') return 'hackerNews';
   if (h === 'github.com') return 'github';
   if (/(^|\.)(google|bing|duckduckgo|ecosia)\./.test(h)) return 'search';
   if (h === 'mastodon.social' || h.endsWith('.mastodon.social')) return 'mastodon';

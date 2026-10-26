@@ -164,6 +164,6 @@ test('the recommended times come in the owner’s zone, at most five, for a chan
   assert.equal(value?.timezone, 'Europe/Madrid');
   assert.ok((value?.slots.length ?? 0) > 0 && (value?.slots.length ?? 0) <= 5);
   assert.match(value?.slots[0]?.local ?? '', /^\w{3} \d{4}-\d{2}-\d{2} \d{2}:00$/);
-  const hn = await recommend(s.deps, { channel: 'hackerNews' });
-  assert.equal(!hn.ok && hn.reason, 'invalid');
+  const blog = await recommend(s.deps, { channel: 'blog' });
+  assert.equal(!blog.ok && blog.reason, 'invalid');
 });

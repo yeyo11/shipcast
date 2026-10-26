@@ -9,7 +9,7 @@ export function Preflight({ result }: { result: Result }) {
     <ul className="checklist" aria-label="Pre-flight checks">
       {result.checks.map((c) => (
         <li key={c.id}>
-          <Pill tone={c.ok ? 'published' : c.required ? 'failed' : 'manual'}>{c.ok ? 'Ready' : c.required ? 'Blocks' : 'Advice'}</Pill>
+          <Pill tone={c.ok ? 'published' : c.required ? 'failed' : 'quiet'}>{c.ok ? 'Ready' : c.required ? 'Blocks' : 'Advice'}</Pill>
           <span>
             <strong>{NAMES[c.id] ?? c.id}.</strong> {c.detail}
           </span>

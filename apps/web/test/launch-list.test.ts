@@ -10,13 +10,13 @@ test('a launch waiting for approval or not out yet leaves the grid; what went ou
   assert.equal(laneOf(launch(2, 'drafted', 'failed')), 'out');
   assert.equal(laneOf(launch(3, 'generating', 'draft')), 'pending');
   assert.equal(laneOf(launch(4, 'detected', 'draft')), 'pending');
-  assert.equal(laneOf(launch(5, 'skipped', 'manual')), 'pending');
+  assert.equal(laneOf(launch(5, 'skipped', 'quiet')), 'pending');
   assert.equal(laneOf(launch(6, 'published', 'published')), 'out');
   assert.equal(laneOf(launch(7, 'failed', 'failed')), 'out');
 });
 
 test('the split keeps the list order within each lane', () => {
-  const lanes = splitLaunches([launch(9, 'published', 'published'), launch(8, 'drafted', 'waiting'), launch(7, 'skipped', 'manual'), launch(6, 'published', 'published'), launch(5, 'drafted', 'waiting')]);
+  const lanes = splitLaunches([launch(9, 'published', 'published'), launch(8, 'drafted', 'waiting'), launch(7, 'skipped', 'quiet'), launch(6, 'published', 'published'), launch(5, 'drafted', 'waiting')]);
   assert.deepEqual(
     lanes.approval.map((l) => l.id),
     [8, 5],

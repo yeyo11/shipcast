@@ -92,6 +92,7 @@ export function postEditors(deps: EditorDeps): EditDeps['editors'] {
       ...(built.bluesky && { bluesky: built.bluesky }),
       ...(built.threads && { threads: built.threads }),
       ...(built.linkedin && { linkedin: built.linkedin }),
+      ...(built.reddit && { reddit: built.reddit }),
     };
     return editors;
   };

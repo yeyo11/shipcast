@@ -159,6 +159,7 @@ export interface CardChannel {
 
 const KIND_WORD = (kind: string): string => {
   if (kind === 'post') return '';
+  if (kind.startsWith('post:')) return `r/${kind.slice('post:'.length)}`;
   const lang = /^(?:article|issue):(\w+)$/.exec(kind)?.[1];
   return lang ? lang.toUpperCase() : kind.charAt(0).toUpperCase() + kind.slice(1);
 };

@@ -26,8 +26,6 @@ export const BRIEFED_CHANNELS = [
   'githubDiscussions',
   'threads',
   'linkedin',
-  'hackerNews',
-  'productHunt',
   'newsletter',
 ] as const satisfies readonly Channel[];
 
@@ -51,7 +49,7 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
   'channel.instagram':
     'instagram: a carousel in English{{demoNote}}. A summary of one line for the cover (at most {{limit.instagramSummary}} characters); 2 or 3 slides, each one implemented feature with a short title (at most {{limit.instagramSlideTitle}} characters) and one concrete sentence (at most {{limit.instagramSlideText}}); and a short caption: a one-line hook, two or three lines on what it is, "link in bio" (links are not clickable there, so no URL), and at most {{limit.instagramHashtags}} specific hashtags, never generic ones.',
   'channel.reddit':
-    'reddit: {{redditTarget}}. Write each for that community: what was built and why, plain and honest, never an ad. Link the article with ?ref=reddit. The owner posts these by hand.',
+    'reddit: {{redditTarget}}. Each is a text post with a title and a Markdown body, written for that community: what was built and why, plain and honest, never an ad, following what that subreddit allows. The body links the article with ?ref=reddit. Shipcast posts them from the owner\'s account.',
   'channel.hashnode':
     'hashnode: 1 to {{limit.hashnodeTags}} lowercase tags (letters and digits only). Hashnode republishes the English article with the blog as the original URL, so write nothing else for it.',
   'channel.telegram':
@@ -64,10 +62,6 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
     "threads: one post in English, at most {{limit.threadsText}} characters (an emoji counts as four), conversational, ending with the English article's link {{site}}/en/<English slug>/?ref=threads. It goes with the launch image. At most two hashtags, or none.",
   'channel.linkedin':
     "linkedin: one post in English on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
-  'channel.hackerNews':
-    'hackerNews: a Show HN draft. A title starting with "Show HN: ", at most {{limit.hackerNewsTitle}} characters in all, plain and without hype; and the author\'s first comment (at most {{limit.hackerNewsComment}} characters, plain text): what it is, why you built it, how it works in a few lines, and what comes next. Honest about what exists today. The URL submitted is the repository, so do not link the article. The owner posts it by hand.',
-  'channel.productHunt':
-    "productHunt: a tagline (at most {{limit.productHuntTagline}} characters), a description (at most {{limit.productHuntDescription}}) and the maker's first comment (at most {{limit.productHuntComment}}): who made it, why, what it does today. Concrete, no superlatives. The owner posts it by hand.",
   'channel.newsletter':
     "newsletter: one issue per language ({{newsletterLanguages}}), each with a subject (at most {{limit.newsletterSubject}} characters), a preview text (at most {{limit.newsletterPreview}}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language ({{site}}/<lang>/<that language's slug>/?ref=newsletter). Not the article itself; no images.",
   article:
@@ -125,7 +119,7 @@ export function promptVariables(brand: Brand, config: LaunchConfig, extra: Recor
     site: brand.site,
     blogLanguages: brand.languages.blog.join(' and '),
     newsletterLanguages: Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and '),
-    redditTarget: subs.length > 0 ? `one draft for each of r/${subs.join(', r/')}` : 'one or two drafts, suggesting fitting subreddits',
+    redditTarget: subs.length > 0 ? `one post for each of r/${subs.join(', r/')}` : 'one or two posts, each naming a fitting subreddit',
     demoNote: hasDemo(config) ? ' (the demo plays as its second slide)' : '',
     otherLanguages: 'the other blog languages',
     ...Object.fromEntries(Object.entries(LIMITS).map(([key, value]) => [`limit.${key}`, String(value)])),

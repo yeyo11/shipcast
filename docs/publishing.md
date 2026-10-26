@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:37:32.920301347Z
-updated_at: 2026-10-26T19:44:22.195920403Z
+created_at: 2026-10-26T19:54:54.663156746Z
+updated_at: 2026-10-26T20:55:07.267021957Z
 tags:
     - publishing
     - connectors
@@ -15,6 +15,7 @@ tags:
     - edit-delete
     - scheduling
     - comments
+    - reddit
 ---
 # Publishing, media and metrics
 
@@ -95,9 +96,10 @@ Binary files go into the pull request as base64 blobs through the Git data API.
    with (none for credentials from `.env`), and the registry refuses a second piece of the same kind
    ([decisions/post-model.md](decisions/post-model.md)). A channel is done once it has its `post`,
    whichever account published it and whatever its status since (edited or deleted); the newsletter
-   once every language with a list has its issue. A channel whose piece is **scheduled** for a time
-   still to come waits for it without holding the others back, and goes out on the first run at or
-   after its time; a cancelled one is skipped ([scheduling.md](scheduling.md)):
+   once every language with a list has its issue, and Reddit once every subreddit has its post. A
+   channel whose piece is **scheduled** for a time still to come waits for it without holding the
+   others back, and goes out on the first run at or after its time; a cancelled one is skipped
+   ([scheduling.md](scheduling.md)):
    - **dev.to** (`devto.ts`): the English article with `canonical_url` to the blog, `og.png` as the
      cover.
    - **Bluesky** (`bluesky.ts`): app password session, link facets counted in UTF-8 bytes, an external
@@ -121,11 +123,11 @@ Binary files go into the pull request as base64 blobs through the Git data API.
      its link is `t.me/<channel>/<id>`, or `t.me/c/<id>/<id>` for a private one.
    - **Discord** (`discord.ts`): the edited `discord.md` through a webhook, with an embed of the article
      (title, link, description, `og.png`).
-   - **Show HN** and **Product Hunt** are drafts for the owner to post (`show-hn.md` with the title, the
-     repo URL to submit and the first comment; `product-hunt.md` with the tagline, description, first
-     comment and the gallery images): neither network has an API to post through.
-   - **Reddit** is off by default since 2026-10-25, so no drafts are generated; a project that turns
-     it on (`manual`) gets drafts for the owner to post by hand, never a post.
+   - **Reddit** (`reddit.ts`, 2026-10-26): one text post per subreddit, described below. Off by
+     default; a project turns it on with `publishing.reddit: approval` and its subreddits.
+
+   Every channel is published by Shipcast: the Show HN draft, the Product Hunt kit and the `manual`
+   mode were removed on 2026-10-26 ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 5. A temporary failure (`ConnectorError.retryable`: 429, 5xx, no answer) is retried on the next
    round; a permanent one is recorded in the cursor `publish-failed:<launch>:<channel>` and not
    retried until `shipcast publish --retry <channel>` (every launch) or **Try again** in the app (that
@@ -139,6 +141,34 @@ is a `publish` job of the queue ([decisions/job-queue.md](decisions/job-queue.md
 attempt, and while the site has not deployed (or some channels will retry) the job is tried again 30
 seconds later, up to 40 times, so the 20-minute wait survives a restart. A launch has one publish job
 waiting at most, and the round leaves a launch with one alone.
+
+### Reddit
+
+Added on 2026-10-26, when Reddit stopped being a draft for the owner to post by hand
+([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)). Postiz's provider was
+read to learn how Reddit's API behaves; the connector is written from Reddit's own API.
+
+- **The account**: the owner's Reddit app, a "web app" at reddit.com/prefs/apps whose API access
+  Reddit has approved (it grants access by request since November 2025), its client id and secret in
+  Settings (`REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` before that), and its redirect uri set to the
+  app's `/auth/reddit/callback`. Connecting asks for `identity submit read` with
+  `duration=permanent`, so the refresh token never expires; it is kept in the keychain with the app's
+  client, since a refresh token is only good with the app that issued it. Each run trades it for an
+  access token of an hour; every request carries the `User-Agent` Reddit asks for.
+- **The drafts**: one `reddit-<subreddit>.md` per subreddit in `launch.yml`, a `Title:` line, `---`
+  and the Markdown body, edited in the pull request like the others. The body links the article with
+  `?ref=reddit`; when an edit took the link out, it is added back at the end.
+- **Publishing**: `POST /api/submit` (`kind=self`) per subreddit, each recorded at once as its own
+  piece, `post:<subreddit>`, so the channel is done when every subreddit has its post. Reddit refuses
+  a submission with a 200 and a list of errors: a rule of the subreddit (a flair it requires, a title
+  it forbids) is final and waits for **Try again**; a rate limit is tried on the next round. A refused
+  subreddit never holds back the others.
+- **Never twice**: before a submit the attempt is recorded (`reddit-attempt:<launch>:<subreddit>`);
+  a retry first looks for a post with that title in that subreddit among the account's newest
+  submissions since the attempt, and records it instead of submitting again.
+- **After**: a post can be deleted (`POST /api/del`); a Reddit title can never change and editing the
+  body is not built. The account's followers and karma are read with its snapshots; no per-post
+  numbers and no comments yet. Reddit is not schedulable: a schedule is one row per channel.
 
 ### Scheduled pieces
 
@@ -170,16 +200,19 @@ note, fields }`.
 | Instagram | no | no | — |
 | Newsletter (sent) | no | no | — |
 | Blog | yes, by a commit | yes, by a commit | text (the body), title, tags |
-| Reddit, Hacker News, Product Hunt, LinkedIn, X | no | no | posted by hand, or not connected |
+| GitHub Discussions | yes | yes | text (the body), title |
+| Threads | no | yes | — |
+| LinkedIn | no | yes | — |
+| Reddit | no | yes | — |
 
 - **One piece:** `editPost(postId, changes, deps)` and `deletePost(postId, deps)` read the row, refuse
   what the network cannot do (with the capability's note) before any request, build the connector
   with the row's account (`postEditors` in `packages/runtime/src/edits.ts`; `.env` for a row with
   none), send it, and update the row: `edited` with the `content_hash` of what was sent, or
-  `deleted`, and `updated_at`. Only a channel's `post` and the blog's articles are edited or deleted;
-  a story, a comment or a newsletter issue is refused, and so is a piece still `scheduled`, which is
-  on no network yet (its schedule is moved or cancelled instead). A network that answers 404 to a
-  delete counts as deleted.
+  `deleted`, and `updated_at`. Only a channel's `post`, a subreddit's post and the blog's articles are
+  edited or deleted; a story, a comment or a newsletter issue is refused, and so is a piece still
+  `scheduled`, which is on no network yet (its schedule is moved or cancelled instead). A network that
+  answers 404 to a delete counts as deleted.
 - **A whole launch:** `editPosts(launchId, changes, channels?)` sends the shared fields (text, link,
   image) to every live piece of the channels named, each network taking what it has (the text is the
   post on Mastodon and Telegram with the link after it, the message on Discord, the body on dev.to,
@@ -274,13 +307,13 @@ found) and keeps the numbers it last had.
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue (all languages added up); opens are inflated by Apple's privacy protection, clicks are the number to trust | Brevo's campaign statistics |
 | `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram` | views, reactions, comments, likes, reposts, reach… per post | each connector's `metrics(externalId)`; Bluesky through the public AppView, Mastodon needs `read:statuses`, Instagram through insights |
-| `blog` | each language's article visits (by its own slug) and their sum, and by referrer (`views_bluesky`, `views_devto`, …) | Cloudflare Web Analytics' GraphQL API (`cloudflare.ts`) |
+| `blog` | each language's article visits (by its own slug) and their sum, and by referrer (`views_bluesky`, `views_devto`, `views_reddit`, …) | Cloudflare Web Analytics' GraphQL API (`cloudflare.ts`) |
 | `search` | clicks and impressions of both articles; Google takes two or three days to report a new page | Search Console, with a service account's JWT signed by `node:crypto` (`search-console.ts`) |
 | `github` | stars, forks, watchers; views and unique visitors of the repo's last 14 days (not only since the launch); not read for articles | GitHub REST (`repoStats`) |
 
-Telegram and Discord give no numbers back: bots and webhooks cannot read views or reactions. The
-per-post numbers, scored by the stats ranking's popularity per network ([stats.md](stats.md)), are
-also what the recommended publishing times learn from
+Telegram and Discord give no numbers back: bots and webhooks cannot read views or reactions. Reddit's
+per-post numbers are not read yet. The per-post numbers, scored by the stats ranking's popularity per
+network ([stats.md](stats.md)), are also what the recommended publishing times learn from
 ([scheduling.md](scheduling.md#recommended-times)).
 
 Two limits found while building it:
@@ -324,4 +357,4 @@ which replaced the CLI's plain dashboard on 2026-10-25.
 
 ## Related
 
-[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[api.md]]
+[[engine.md]] · [[plans/mvp-close.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[status.md]] · [[plans/design-system.md]] · [[personal-identity.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[api.md]]

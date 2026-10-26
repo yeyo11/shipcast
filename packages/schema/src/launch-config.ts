@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CHANNELS, DEFAULT_MODES, DRAFT_ONLY_CHANNELS, Language, PublishMode, type Channel } from './channels.ts';
+import { CHANNELS, DEFAULT_MODES, Language, PublishMode, type Channel } from './channels.ts';
 import { parseYaml, type ParseResult } from './yaml.ts';
 
 /** The content packs of the plan: a new project, a major version, everything else. */
@@ -10,18 +10,7 @@ const publishingShape = Object.fromEntries(
   CHANNELS.map((channel) => [channel, PublishMode.default(DEFAULT_MODES[channel])]),
 ) as { [K in Channel]: z.ZodDefault<typeof PublishMode> };
 
-const Publishing = z.strictObject(publishingShape).superRefine((modes, ctx) => {
-  for (const channel of DRAFT_ONLY_CHANNELS) {
-    const mode = modes[channel];
-    if (mode !== 'manual' && mode !== 'off') {
-      ctx.addIssue({
-        code: 'custom',
-        path: [channel],
-        message: `${channel} is always a draft for you to post: use manual or off, not ${mode}`,
-      });
-    }
-  }
-});
+const Publishing = z.strictObject(publishingShape);
 
 export const MAX_TOUR_STEPS = 12;
 export const MAX_SCREENSHOTS = 6;

@@ -14,8 +14,9 @@ the roadmap are in [docs/plans/shipcast.md](docs/plans/shipcast.md), what follow
 - **The code is the source of truth, not the README.** Generated content must tell what is
   implemented from what is planned or only documented. An article that promises a feature that does
   not exist is a bug.
-- **Nothing is published without its channel's mode.** Each channel is `auto`, `approval` or
-  `manual` in the repo's `.github/launch.yml`; Reddit and Hacker News are always drafts.
+- **Nothing is published without its channel's mode.** Each channel is `auto`, `approval` or `off`
+  in the repo's `.github/launch.yml`. Shipcast only knows channels it publishes on itself: no drafts
+  for the owner to post by hand ([docs/decisions/automatic-channels-only.md](docs/decisions/automatic-channels-only.md)).
 - **Brands never mix.** Each brand has its own accounts, tone and language, and a launch only uses
   its own brand's. Today there is one, the owner's (josegarridodev); the company brand was dropped on
   2026-10-25.

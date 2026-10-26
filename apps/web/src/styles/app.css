@@ -109,8 +109,8 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .s-waiting { background: var(--sc-yellow); color: var(--sc-on-yellow); border-color: #000; }
 .s-failed { color: var(--sc-failure); border-color: var(--sc-failure); }
 .s-failed::before { border-radius: 0; transform: rotate(45deg); }
-.s-manual { color: var(--sc-muted); border: 2px dashed var(--sc-rail); }
-.s-manual::before { background: none; border: 2px solid currentColor; }
+.s-quiet { color: var(--sc-muted); border: 2px dashed var(--sc-rail); }
+.s-quiet::before { background: none; border: 2px solid currentColor; }
 .s-draft { color: var(--sc-muted); border-color: var(--sc-rail); }
 .s-draft::before { background: none; border: 2px dotted currentColor; }
 
@@ -124,7 +124,7 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .card.waiting .pill.s-waiting { background: #000; color: var(--sc-yellow); }
 .card.waiting .muted { color: #2a2a2a; }
 .card.failed { border-color: var(--sc-failure); }
-.card.manual { background: transparent; border-style: dashed; border-color: var(--sc-rail); }
+.card.quiet { background: transparent; border-style: dashed; border-color: var(--sc-rail); }
 .card .foot { margin-top: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
 /* The launch cards (components/LaunchCard.tsx): Cartel's neutral raised card like the rest of the app, a

@@ -46,8 +46,6 @@ const CHANNEL_NAMES: Record<string, string> = {
   githubDiscussions: 'GitHub Discussions',
   threads: 'Threads',
   linkedin: 'LinkedIn',
-  hackerNews: 'Hacker News',
-  productHunt: 'Product Hunt',
   newsletter: 'Newsletter',
 };
 
@@ -171,7 +169,7 @@ function PromptEditor({ prompt }: { prompt: PromptView }) {
       summary={
         <>
           <span>{promptLabel(prompt.id)}</span>
-          {edited ? <Pill tone="draft">Edited</Pill> : <Pill tone="manual">Default</Pill>}
+          {edited ? <Pill tone="draft">Edited</Pill> : <Pill tone="quiet">Default</Pill>}
         </>
       }
     >

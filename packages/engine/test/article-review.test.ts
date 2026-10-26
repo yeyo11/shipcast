@@ -127,10 +127,10 @@ test('published directly, the drafts go onto main in one commit and the launch s
 test('an article lives under articles/, is claimed once, and turns on only the chosen channels', async () => {
   assert.equal(articleSlug('Árboles, ramas & Claude: ¿qué?'), 'arboles-ramas-claude-que');
   const brand = { id: 'personal' } as Parameters<typeof articleConfig>[0];
-  const config = articleConfig(brand, ['bluesky', 'hackerNews']);
+  const config = articleConfig(brand, ['bluesky', 'reddit']);
   assert.equal(config.publishing.blog, 'approval');
   assert.equal(config.publishing.bluesky, 'approval');
-  assert.equal(config.publishing.hackerNews, 'manual', 'drafts-only stays manual');
+  assert.equal(config.publishing.reddit, 'approval');
   assert.equal(config.publishing.devto, 'off');
   // An article belongs to no repository, so there is no Discussions to post it in, even when chosen
   assert.equal(config.publishing.githubDiscussions, 'off');

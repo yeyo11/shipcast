@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T06:55:49.65731204Z
-updated_at: 2026-10-25T09:52:57.304970814Z
+created_at: 2026-10-25T10:29:05.41216436Z
+updated_at: 2026-10-26T20:50:41.735093397Z
 tags:
     - schema
     - launch-yml
@@ -32,7 +32,7 @@ content:
   socialPosts: true
   technicalTutorial: false
 
-publishing:              # auto | approval | manual | off, per channel
+publishing:              # auto | approval | off, per channel
   blog: approval
   devto: approval
   bluesky: approval
@@ -42,9 +42,7 @@ publishing:              # auto | approval | manual | off, per channel
   hashnode: approval     # phase 5 channels: off by default
   telegram: approval
   discord: approval
-  hackerNews: manual     # the Show HN draft
-  productHunt: manual    # the launch kit
-  reddit: manual         # off by default since 2026-10-25
+  reddit: approval       # off by default: one post per subreddit below
 
 assets:
   demo: docs/demo.gif    # path in the repo or URL of a GIF; or record one from `site`
@@ -81,27 +79,27 @@ The pre-flight check accepts a site that answers in place of a committed demo.
 | --- | --- |
 | `auto` | Published as soon as the pack is generated, without review |
 | `approval` | In the drafts pull request of the launches repo; published when it is merged |
-| `manual` | In the drafts pull request as a draft the owner posts by hand; Shipcast never posts it |
 | `off` | Not generated |
 
 The plan named three modes; `off` was added so a channel can be left out without deleting a key.
+A fourth, `manual` (a draft the owner posted by hand), was removed on 2026-10-26 with every channel
+Shipcast cannot publish itself ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 Defaults (`DEFAULT_MODES` in `channels.ts`) turn on the MVP's channels — blog, dev.to, Bluesky,
-Mastodon, Instagram on `approval` (the newsletter, off by default, is turned on per project) — and
-leave every other channel `off`, Reddit included since 2026-10-25, when the owner left it out for now
-([decisions/mvp-scope.md](decisions/mvp-scope.md)). A project that wants Reddit drafts sets
-`publishing.reddit: manual`. An article written in the app has no `launch.yml` of its own: the
-channels chosen there are written beside its drafts ([engine.md](engine.md#articles-written-in-the-app)).
+Mastodon, Instagram on `approval`, and GitHub Discussions, which needs no account (the newsletter,
+off by default, is turned on per project) — and leave every other channel `off`, Reddit included,
+so a network that needs an account is never drafted for before one is connected. A project that
+wants Reddit sets `publishing.reddit: approval` and lists its subreddits. An article written in the
+app has no `launch.yml` of its own: the channels chosen there are written beside its drafts
+([engine.md](engine.md#articles-written-in-the-app)).
 
 ## Rules the schema holds
 
 - **Strict objects everywhere.** A misspelt key (`blgo: auto`) is an error pointing at its line, not a
-  setting silently ignored.
-- **Reddit, Hacker News and Product Hunt are drafts.** Any mode other than `manual` or `off` is
-  refused: the plan keeps those communities for the owner to post by hand (Product Hunt joined them on
-  2026-10-25; neither it nor Hacker News has an API to post through).
-- **Channels are named ahead of their connectors.** `CHANNELS` lists every channel of the plan, so a
-  file written today stays valid; turning on one without a connector yet is caught when the pack is
-  checked (`missingPieces`, see [content-pack.md](content-pack.md)).
+  setting silently ignored. So is a channel that no longer exists (`hackerNews`, `productHunt`, `x`)
+  and the removed `manual` mode.
+- **Every channel publishes.** `CHANNELS` lists only networks with a connector, and each has its
+  piece of the pack; turning one on whose piece is missing is caught when the pack is checked
+  (`missingPieces`, see [content-pack.md](content-pack.md)).
 - **A site is https, and a tour stays on it**: a `goto` to another origin is refused.
 
 ## Which pack a release gets
@@ -113,4 +111,4 @@ that is not semver gets `minor`, the quiet choice.
 
 ## Related
 
-[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]]
+[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]]

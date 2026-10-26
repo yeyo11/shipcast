@@ -1,4 +1,5 @@
 import { ConnectorError, json } from './http.ts';
+import { REDDIT_SCOPES } from './reddit.ts';
 
 /**
  * The OAuth flows of the networks that offer one, as plain functions: the web app sends the owner's
@@ -203,4 +204,43 @@ export async function exchangeLinkedInCode(
     'read the member',
   );
   return { personId: me.sub, name: me.name, accessToken: token.access_token, expiresIn: token.expires_in };
+}
+
+/**
+ * `duration=permanent` asks for a refresh token that does not expire, so the account stays
+ * connected; the redirect URI must be the app's own "redirect uri", exactly.
+ */
+export function redditAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
+  const query = new URLSearchParams({ client_id: clientId, response_type: 'code', state, redirect_uri: redirectUri, duration: 'permanent', scope: REDDIT_SCOPES.join(' ') });
+  return `https://www.reddit.com/api/v1/authorize?${query}`;
+}
+
+/**
+ * The code becomes an access token of an hour and the permanent refresh token, which is all that is
+ * kept; the account's name comes from /api/v1/me. Reddit answers a bad code with a 200 and an error.
+ */
+export async function exchangeRedditCode(
+  app: { clientId: string; clientSecret: string },
+  redirectUri: string,
+  code: string,
+  http: typeof fetch = globalThis.fetch,
+): Promise<{ username: string; refreshToken: string }> {
+  const response = await http('https://www.reddit.com/api/v1/access_token', {
+    method: 'POST',
+    headers: {
+      authorization: `Basic ${Buffer.from(`${app.clientId}:${app.clientSecret}`).toString('base64')}`,
+      'content-type': 'application/x-www-form-urlencoded',
+      // The account is not known yet; Reddit only asks that the agent say what it is
+      'user-agent': 'web:dev.shipcast:1',
+    },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri }),
+  });
+  const token = await json<{ access_token?: string; refresh_token?: string; error?: string }>('Reddit', response, 'exchange the code');
+  if (!token.access_token || !token.refresh_token) throw new ConnectorError('Reddit', `the code was refused (${token.error ?? 'no permanent token'})`, 400, false);
+  const me = await json<{ name: string }>(
+    'Reddit',
+    await http('https://oauth.reddit.com/api/v1/me', { headers: { authorization: `bearer ${token.access_token}`, 'user-agent': 'web:dev.shipcast:1' } }),
+    'read the account',
+  );
+  return { username: me.name, refreshToken: token.refresh_token };
 }

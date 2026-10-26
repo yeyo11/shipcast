@@ -157,7 +157,7 @@ function AccountCard({ network, account, brands }: { network: NetworkView; accou
             { label: 'Check the credential', onSelect: () => void check() },
             ...(account.primary ? [] : [{ label: 'Publish with this one', onSelect: () => void act(() => makePrimary({ data: account.id }), `${account.label} now publishes for ${brand}`) }]),
             { label: renaming ? 'Stop renaming' : 'Rename', onSelect: () => setRenaming((r) => !r) },
-            ...(network.auth === 'none' ? [] : [{ kind: 'link' as const, label: 'Connect another account', href: `/channels/${network.id}` }]),
+            { kind: 'link' as const, label: 'Connect another account', href: `/channels/${network.id}` },
             { kind: 'separator' as const },
             { label: 'Disconnect', tone: 'danger' as const, onSelect: () => setLeaving(true) },
           ]}
@@ -177,13 +177,10 @@ function AccountCard({ network, account, brands }: { network: NetworkView; accou
 
 /** A network with no account yet: what it does and how to connect it */
 function NetworkCard({ network }: { network: NetworkView }) {
-  const uses =
-    network.auth === 'none'
-      ? 'Drafts for you to post'
-      : network.ai
-        ? 'AI provider, chosen per task in the AI settings'
-        : [network.channel ? 'publishes' : null, network.metrics ? 'reads numbers' : null].filter(Boolean).join(' · ');
-  const state = network.auth === 'none' ? 'Drafts only' : network.usesEnv ? 'From .env' : 'Not connected';
+  const uses = network.ai
+    ? 'AI provider, chosen per task in the AI settings'
+    : [network.channel ? 'publishes' : null, network.metrics ? 'reads numbers' : null].filter(Boolean).join(' · ');
+  const state = network.usesEnv ? 'From .env' : 'Not connected';
   return (
     <li className="lcard ccard ccard-add">
       <header>
@@ -191,18 +188,14 @@ function NetworkCard({ network }: { network: NetworkView }) {
           <Tile network={network} mark="off" word={state} />
           <h2>{network.name}</h2>
         </div>
-        <Pill tone={network.usesEnv ? 'draft' : 'manual'}>{state}</Pill>
+        <Pill tone={network.usesEnv ? 'draft' : 'quiet'}>{state}</Pill>
       </header>
       <p className="lcard-meta">{uses}</p>
       {network.usesEnv && <p className="lcard-meta">Working from the credentials in .env. Import them to keep them in the keychain instead.</p>}
       <div className="ccard-actions">
-        {network.auth === 'none' ? (
-          <span className="lcard-meta">{network.howTo}</span>
-        ) : (
-          <Link className="btn btn-small" to="/channels/$network" params={{ network: network.id }}>
-            Connect an account
-          </Link>
-        )}
+        <Link className="btn btn-small" to="/channels/$network" params={{ network: network.id }}>
+          Connect an account
+        </Link>
       </div>
     </li>
   );
@@ -295,9 +288,7 @@ function Channels() {
             {envCount > 0 && <ToolbarAction label={busy ? 'Importing…' : `Import ${envCount} from .env`} icon={<ImportIcon />} disabled={busy} onClick={importFromEnv} />}
             <Menu
               align="end"
-              entries={data.networks
-                .filter((n) => n.auth !== 'none')
-                .map((n) => ({ kind: 'link' as const, label: n.accounts.length > 0 ? `${n.name} (another account)` : n.name, href: `/channels/${n.id}` }))}
+              entries={data.networks.map((n) => ({ kind: 'link' as const, label: n.accounts.length > 0 ? `${n.name} (another account)` : n.name, href: `/channels/${n.id}` }))}
               trigger={
                 <button type="button" className="btn btn-small btn-primary tb-action">
                   <PlusIcon />

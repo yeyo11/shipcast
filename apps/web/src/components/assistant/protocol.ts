@@ -17,7 +17,6 @@ export const ADAPT_NETWORKS: ReadonlyArray<{ id: string; name: string }> = [
   { id: 'telegram', name: 'Telegram' },
   { id: 'discord', name: 'Discord' },
   { id: 'reddit', name: 'Reddit' },
-  { id: 'hackerNews', name: 'Hacker News' },
   { id: 'newsletter', name: 'Newsletter' },
 ];
 
@@ -71,8 +70,6 @@ const DRAFT_CHANNELS: Record<string, string> = {
   'instagram.md': 'instagram',
   'telegram.md': 'telegram',
   'discord.md': 'discord',
-  'show-hn.md': 'hackerNews',
-  'product-hunt.md': 'productHunt',
   'newsletter-en.md': 'newsletter',
   'newsletter-es.md': 'newsletter',
 };

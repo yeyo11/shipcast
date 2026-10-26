@@ -3,7 +3,7 @@ import { Language } from './channels.ts';
 import { parseYaml, type ParseResult } from './yaml.ts';
 
 /** The networks a brand can have a profile on. */
-export const NETWORKS = ['x', 'linkedin', 'bluesky', 'mastodon', 'devto', 'reddit', 'instagram', 'hashnode'] as const;
+export const NETWORKS = ['linkedin', 'bluesky', 'mastodon', 'devto', 'reddit', 'instagram', 'hashnode'] as const;
 export type Network = (typeof NETWORKS)[number];
 
 const profileUrl = z.url({ protocol: /^https$/, error: 'a profile is its full https:// URL' });
@@ -30,8 +30,7 @@ export const Brand = z.strictObject({
   languages: z
     .strictObject({
       blog: z.array(Language).min(1).default(['en', 'es']),
-      // Only for brands that publish there; the personal brand does not use X or LinkedIn
-      x: Language.optional(),
+      // Not read yet: the pack's LinkedIn post is in English whatever this says
       linkedin: Language.optional(),
     })
     .prefault({}),

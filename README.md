@@ -9,9 +9,10 @@
 
 You publish a release. Shipcast reads the project's **code**, not just its README, writes a launch
 piece for every channel, and publishes each one once you approve it: the article on your blog in
-English and Spanish, canonical copies on dev.to and Hashnode, posts on Bluesky, Mastodon, Telegram
-and Discord, an Instagram carousel with its story, a newsletter issue, and ready-to-paste Show HN and
-Product Hunt drafts. Then it reads back how each channel did.
+English and Spanish, canonical copies on dev.to and Hashnode, posts on Bluesky, Mastodon, Threads,
+LinkedIn, Telegram and Discord, one post per subreddit on Reddit, an announcement in the repo's GitHub
+Discussions, an Instagram carousel with its story and a newsletter issue. Then it reads back how each
+channel did.
 
 ![Shipcast's app: launches, launching a repo, channels and writing an article](docs/media/tour.gif)
 
@@ -24,7 +25,7 @@ Product Hunt drafts. Then it reads back how each channel did.
 ## How it works
 
 1. **Opt in per repo.** A `.github/launch.yml` turns launches on and sets a mode for each channel:
-   `approval` (published when you approve), `manual` (a draft for you to post), `auto` or `off`.
+   `approval` (published when you approve), `auto` or `off`.
 
    ```yaml
    # .github/launch.yml
@@ -35,7 +36,9 @@ Product Hunt drafts. Then it reads back how each channel did.
      devto: approval
      bluesky: approval
      instagram: approval
-     hackerNews: manual   # the Show HN draft
+     reddit: approval     # one post per subreddit below
+   reddit:
+     subreddits: [selfhosted]
    assets:
      demo: docs/demo.gif
    ```
@@ -110,10 +113,14 @@ start Postgres, then `pnpm sqlite-to-postgres` copies every row into the databas
 | Bluesky, Mastodon | A post with a link card or image |
 | Instagram | A carousel (cover, demo video, features, closing), a story and a comment |
 | Newsletter (Brevo) | One issue per language, sent to your lists |
+| Threads | A post with the launch image, linking the article |
+| LinkedIn | A post on your personal profile with the article as its link card |
+| Reddit | One text post per subreddit, linking the article, from your account (your Reddit app needs Reddit's API approval) |
+| GitHub Discussions | A discussion in the launched repo, linking the article |
 | Telegram, Discord | A post to your channel, an embed through a webhook |
-| Show HN, Product Hunt | Drafts for you to post: neither has an API to post through |
 
-X, LinkedIn and Reddit are not supported.
+Shipcast only lists networks it publishes on itself: Hacker News and Product Hunt have no API to post
+through, and X is not supported.
 
 ## Built with
 

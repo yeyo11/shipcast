@@ -14,7 +14,7 @@ export const Route = createFileRoute('/_app/channels/$network')({
   loader: async ({ params }) => {
     const data = await getChannels();
     const network = data.networks.find((n) => n.id === params.network);
-    if (!network || network.auth === 'none') throw notFound();
+    if (!network) throw notFound();
     return { network, brands: data.brands, oauthReady: data.oauthReady, secretsKind: data.secretsKind };
   },
   head: ({ loaderData }) => ({ meta: [{ title: `Connect ${loaderData?.network.name ?? ''} · Shipcast` }] }),
@@ -128,7 +128,7 @@ function Connect() {
           </div>
           {network.id in oauthReady && !oauthReady[network.id] ? (
             <Notice tone="bad">
-              Connecting {network.name} needs your {network.id === 'linkedin' ? 'LinkedIn app’s client id and secret' : `${network.name} app id and secret`}: set them in <a href="/settings">Settings</a>.
+              Connecting {network.name} needs your {network.id === 'linkedin' || network.id === 'reddit' ? `${network.name} app’s client id and secret` : `${network.name} app id and secret`}: set them in <a href="/settings">Settings</a>.
             </Notice>
           ) : (
             <div className="row">

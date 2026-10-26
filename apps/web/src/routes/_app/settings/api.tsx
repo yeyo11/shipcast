@@ -121,7 +121,7 @@ function Api() {
                 </td>
                 <td>
                   {t.revokedAt ? (
-                    <Pill tone="manual">Revoked {when(t.revokedAt)}</Pill>
+                    <Pill tone="quiet">Revoked {when(t.revokedAt)}</Pill>
                   ) : (
                     <ConfirmButton
                       className="btn btn-small btn-danger"

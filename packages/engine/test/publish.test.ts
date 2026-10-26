@@ -109,7 +109,7 @@ test('after the merge every approval channel is published with the edited texts,
 
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published');
-  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit is manual: never posted');
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'bluesky', 'mastodon', 'instagram'], 'Reddit is off unless launch.yml turns it on');
 
   const input = (channel: string) => calls.find((c) => c.channel === channel)!.input as Record<string, unknown>;
   assert.deepEqual(input('devto'), {
@@ -340,7 +340,7 @@ test('a newsletter issue that went out is kept when the other language fails, an
   );
 });
 
-test('Hashnode, Telegram and Discord are published with the edited drafts; Show HN and Product Hunt never are', async () => {
+test('Hashnode, Telegram and Discord are published with the edited drafts', async () => {
   const files = {
     ...merged,
     [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({
@@ -348,14 +348,12 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
       hashnode: { tags: ['ai'] },
       telegram: { text: 'AI telegram' },
       discord: { text: 'AI discord' },
-      hackerNews: { title: 'Show HN: claudio', firstComment: 'c' },
-      productHunt: { tagline: 't', description: 'd', firstComment: 'c' },
     }),
     [`yeyo11/launches/${D}/hashnode.md@HEAD`]: '# Hashnode\n\n> **Approval:** x\n\nRepublishes…\n\nTags: `claude`, `typescript`\n',
     [`yeyo11/launches/${D}/telegram.md@HEAD`]: '# Telegram\n\n> **Approval:** x\n\nEdited telegram\n',
     [`yeyo11/launches/${D}/discord.md@HEAD`]: '# Discord\n\n> **Approval:** x\n\nEdited discord\n',
     'yeyo11/claudio/.github/launch.yml@v0.8.2':
-      'enabled: true\nbrand: personal\npublishing:\n  hashnode: approval\n  telegram: approval\n  discord: approval\n  hackerNews: manual\n  productHunt: manual\nreddit:\n  subreddits: [ClaudeAI]\n',
+      'enabled: true\nbrand: personal\npublishing:\n  hashnode: approval\n  telegram: approval\n  discord: approval\nreddit:\n  subreddits: [ClaudeAI]\n',
   };
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
@@ -389,7 +387,6 @@ test('Hashnode, Telegram and Discord are published with the edited drafts; Show 
     },
   });
   assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
-  assert.ok(!calls.some((c) => c.channel === 'hackerNews' || c.channel === 'productHunt'));
 
   await publishLaunch((await registry.get(launch.id))!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(calls.length, 7, 'a second round publishes nothing again');
@@ -527,7 +524,7 @@ test('a scheduled piece is moved and cancelled; a cancelled channel is not publi
   assert.deepEqual(calls.map((c) => c.channel).sort(), ['bluesky', 'devto', 'instagram'], 'the cancelled channel is left out');
 });
 
-test('a schedule is refused for a channel out already, one Shipcast does not publish, one manual in launch.yml, or a launch done', async () => {
+test('a schedule is refused for a channel out already, one Shipcast does not publish, one off in launch.yml, or a launch done', async () => {
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const refused = (reason: string) => (e: unknown) => e instanceof ScheduleRefused && e.reason === reason;
@@ -535,7 +532,7 @@ test('a schedule is refused for a channel out already, one Shipcast does not pub
   await assert.rejects(scheduleLaunch(registry, launch.id, { devto: hours(1) }, { now: T }), refused('refused'));
   await assert.rejects(scheduleLaunch(registry, launch.id, { reddit: hours(1) }, { now: T }), refused('invalid'));
   await assert.rejects(scheduleLaunch(registry, launch.id, { bluesky: hours(24 * 61) }, { now: T }), refused('invalid'));
-  const parsed = parseLaunchConfig('enabled: true\nbrand: personal\npublishing:\n  mastodon: manual\n');
+  const parsed = parseLaunchConfig('enabled: true\nbrand: personal\npublishing:\n  mastodon: off\n');
   assert.ok(parsed.ok);
   await assert.rejects(scheduleLaunch(registry, launch.id, { mastodon: hours(1) }, { now: T, config: parsed.value }), refused('refused'));
   await assert.rejects(scheduleLaunch(registry, 999, { bluesky: hours(1) }, { now: T }), refused('not_found'));
@@ -635,4 +632,68 @@ test('an article written in the app opens no discussion: it belongs to no projec
   const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(result.state, 'published');
   assert.equal(calls.length, 0);
+});
+
+test('Reddit gets one post per subreddit from its edited draft, linking the article, each recorded once', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, reddit: [{ subreddit: 'ClaudeAI', title: 'AI title', body: 'AI body' }, { subreddit: 'selfhosted', title: 'Self', body: 'Body https://josegarrido.dev/en/claudio/?ref=reddit' }] }),
+    [`yeyo11/launches/${D}/reddit-claudeai.md@HEAD`]: '# Reddit, r/ClaudeAI\n\n> **Approval:** x\n\nTitle: Edited title for r/ClaudeAI\n\n---\n\nEdited body.\n',
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  reddit: approval\nreddit:\n  subreddits: [ClaudeAI, selfhosted]\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  const sent: Array<{ subreddit: string; title: string; text: string }> = [];
+  publishers.reddit = {
+    publish: async (p) => {
+      sent.push(p);
+      return { externalId: `t3_${p.subreddit}`, url: `https://www.reddit.com/r/${p.subreddit}/comments/1/` };
+    },
+    find: async () => assert.fail('nothing was attempted before'),
+  };
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const result = await publishLaunch(launch, brand, deps);
+  assert.equal(result.state, 'published', JSON.stringify(result));
+  assert.deepEqual(sent, [
+    { subreddit: 'ClaudeAI', title: 'Edited title for r/ClaudeAI', text: 'Edited body.\n\nhttps://josegarrido.dev/en/claudio/?ref=reddit' },
+    { subreddit: 'selfhosted', title: 'Self', text: 'Body https://josegarrido.dev/en/claudio/?ref=reddit' },
+  ]);
+  const rows = (await registry.posts(launch.id, { channel: 'reddit' })).map((p) => [p.kind, p.externalId]);
+  assert.deepEqual(rows, [['post:claudeai', 't3_ClaudeAI'], ['post:selfhosted', 't3_selfhosted']]);
+
+  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  assert.equal(sent.length, 2, 'a second round posts nothing again');
+  assert.ok(calls.length > 0);
+});
+
+test('a Reddit post whose answer was lost is found instead of posted twice, and a refused subreddit never holds back the others', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({ ...pack, reddit: [{ subreddit: 'ClaudeAI', title: 'One', body: 'b' }, { subreddit: 'strict', title: 'Two', body: 'b' }, { subreddit: 'selfhosted', title: 'Three', body: 'b' }] }),
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  reddit: approval\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { publishers } = recorder();
+  // The first round's submit to r/ClaudeAI reached Reddit, but its answer never came back
+  await registry.setCursor(`reddit-attempt:${launch.id}:claudeai`, '2026-10-27T10:00:00.000Z');
+  const submitted: string[] = [];
+  publishers.reddit = {
+    publish: async (p) => {
+      if (p.subreddit === 'strict') throw new ConnectorError('Reddit', 'r/strict refused the post: Your post must contain post flair.', 400, false);
+      submitted.push(p.subreddit);
+      return { externalId: `t3_${p.subreddit}`, url: `https://www.reddit.com/r/${p.subreddit}/comments/1/` };
+    },
+    find: async (p, since) => {
+      assert.equal(since.toISOString(), '2026-10-27T10:00:00.000Z');
+      return p.subreddit === 'ClaudeAI' ? { externalId: 't3_lost', url: 'https://www.reddit.com/r/ClaudeAI/comments/lost/' } : undefined;
+    },
+  };
+  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  assert.deepEqual(submitted, ['selfhosted'], 'r/ClaudeAI was found, not submitted again');
+  assert.deepEqual((await registry.posts(launch.id, { channel: 'reddit' })).map((p) => p.externalId).sort(), ['t3_lost', 't3_selfhosted']);
+  assert.ok(result.state === 'published' || result.state === 'partial');
+  const problems = result.state === 'published' || result.state === 'partial' ? result.problems : [];
+  assert.ok(problems.some((p) => /reddit: .*r\/strict refused the post/.test(p) && !p.includes('will retry')), JSON.stringify(problems));
 });

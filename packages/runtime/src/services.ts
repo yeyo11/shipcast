@@ -150,6 +150,11 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     publishers.linkedin = linkedin;
     configured.push('linkedin');
   }
+  const reddit = (await built('reddit'))?.reddit;
+  if (reddit) {
+    publishers.reddit = reddit;
+    configured.push('reddit');
+  }
   // No account to connect: the engine's own GitHub access (the App's installation) posts it
   const discussions = new GitHubDiscussions({ auth: deps.github.auth, ...(deps.fetch && { fetch: deps.fetch }) });
   publishers.githubDiscussions = posts.githubDiscussions = discussions;

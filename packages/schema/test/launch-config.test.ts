@@ -13,13 +13,13 @@ content:
   technicalTutorial: true
 publishing:
   blog: auto
-  reddit: manual
+  reddit: approval
 `);
   assert.ok(result.ok, JSON.stringify(!result.ok && result.issues));
   const config = result.value;
   assert.equal(config.publishing.blog, 'auto');
   assert.equal(config.publishing.devto, DEFAULT_MODES.devto);
-  assert.equal(config.publishing.x, 'off');
+  assert.equal(config.publishing.reddit, 'approval');
   assert.deepEqual(config.triggers, { release: true, manual: true, public: false, enabled: false });
   assert.deepEqual(config.reddit.subreddits, []);
 });
@@ -36,17 +36,16 @@ test('enabled must be written out', () => {
   assert.equal(result.issues[0]?.path, 'enabled');
 });
 
-test('reddit and hackerNews refuse to be published automatically, pointing at the line', () => {
+test('a draft for the owner to post by hand is gone: manual is refused, pointing at the line', () => {
   const result = parseLaunchConfig(`enabled: true
 brand: personal
 publishing:
   blog: approval
-  reddit: auto
+  reddit: manual
 `);
   assert.ok(!result.ok);
   const issue = result.issues.find((i) => i.path === 'publishing.reddit');
   assert.ok(issue, JSON.stringify(result.issues));
-  assert.match(issue.message, /always a draft/);
   assert.equal(issue.line, 5);
 });
 

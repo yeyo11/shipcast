@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:54:53.656730423Z
-updated_at: 2026-10-26T12:40:06.367869202Z
+created_at: 2026-10-26T16:39:21.049141503Z
+updated_at: 2026-10-26T20:52:38.02928536Z
 tags:
     - accounts
     - channels
@@ -11,6 +11,7 @@ tags:
     - snapshots
     - avatars
     - github-app
+    - reddit
 ---
 # Accounts and channels
 
@@ -21,11 +22,13 @@ brand, checked, and kept in the operating system's keychain.
 ## The catalog
 
 `NETWORKS` in `packages/runtime/src/catalog.ts` lists every network Shipcast knows: its name, the
-channel it publishes (if any), whether it reads numbers, how an account is connected (`oauth`, a
-`form`, or `none` for drafts only), the fields a form asks (public ones go to the registry, secret
-ones to the keychain), what Shipcast does with the account in words, and where the credential comes
-from. A new network is a connector in `packages/connectors` plus one entry here and its builder in
-`buildConnector`.
+channel it publishes (if any), whether it reads numbers, how an account is connected (`oauth` or a
+`form`), the fields a form asks (public ones go to the registry, secret ones to the keychain), what
+Shipcast does with the account in words, and where the credential comes from. A new network is a
+connector in `packages/connectors` plus one entry here and its builder in `buildConnector`. Since
+2026-10-26 every network that is a channel publishes through its connector: Hacker News and Product
+Hunt, which were drafts only (`none`), are gone
+([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 
 | Network | Connected with | Publishes | Reads |
 | --- | --- | --- | --- |
@@ -33,6 +36,9 @@ from. A new network is a connector in `packages/connectors` plus one entry here 
 | Bluesky | handle and app password | a post with a link card | likes, reposts, replies |
 | Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, replies |
 | Instagram | Instagram Login (OAuth) | carousel, story, comment | reach, interactions |
+| Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts |
+| LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
+| Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | followers, karma |
 | Newsletter (Brevo) | API key | one campaign per language | sends, opens, clicks |
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
 | Telegram | bot token, channel, owner's chat | a post with the launch image | — (the Bot API gives bots no counts) |
@@ -40,7 +46,6 @@ from. A new network is a connector in `packages/connectors` plus one entry here 
 | GitHub | fine-grained token | — | stars, forks, traffic |
 | Blog analytics (Cloudflare) | API token, account id, site tag | — | visits by source |
 | Google Search Console | service account JSON key | — | clicks, impressions |
-| Hacker News, Product Hunt | nothing: drafts only | — | — |
 
 **GitHub as an account is only the metrics' source.** The engine reaches GitHub through the GitHub
 App ([decisions/github-app.md](decisions/github-app.md)), which reads stars, forks and watchers too;
@@ -81,9 +86,9 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
   what the catalog says, so a new connector lands in the right tab by itself: an AI provider (the
   Anthropic API, an OpenAI-compatible server) is under AI providers; a network with no channel to
   publish to (GitHub, Cloudflare, Search Console, Bing) is Measurement; dev.to, Hashnode and the
-  newsletter are Blog & newsletter; every other channel, drafts-only ones included, is Social. Each tab
-  shows how many accounts it holds. Without a tab in the address the page opens on the first tab with
-  an account, and an account that was just connected opens its own tab.
+  newsletter are Blog & newsletter; every other channel is Social. Each tab shows how many accounts it
+  holds. Without a tab in the address the page opens on the first tab with an account, and an account
+  that was just connected opens its own tab.
 - **A card per account, in the launch card's skin** (`.lcard`, as on the Launches page): the same
   raised black surface and stamp shadow, a glyph tile with a state dot (green for a passed check, red
   for a failed one, a dotted ring while unchecked), the network's name and a state pill, the account's
@@ -101,8 +106,8 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
 
 - **Avatars.** A working `check()` also returns the profile's picture (`avatarUrl`) and name
   (`displayName`) where the same answer has them: Bluesky (the public profile, read after the
-  sign-in), Mastodon, Instagram, dev.to, Hashnode, a Discord webhook's own picture, GitHub. Every
-  check stores the picture; a check that finds none, or fails, leaves the last one. Only plain
+  sign-in), Mastodon, Instagram, dev.to, Hashnode, Reddit, a Discord webhook's own picture, GitHub.
+  Every check stores the picture; a check that finds none, or fails, leaves the last one. Only plain
   `https` addresses are kept, never one that carries a credential, so a Telegram channel has none
   (its photo is only downloadable at an address with the bot token in it). The signed-in user's
   GitHub name and picture ride in the signed session cookie, read once at sign-in; a session from a
@@ -129,9 +134,9 @@ command-line tools, so there is no native module: `secret-tool` (libsecret: GNOM
 on Linux, with the value on stdin, and `security` on macOS. On Linux it needs `libsecret-tools` and
 an unlocked session keyring, which is why the app runs in the owner's desktop session. Besides the
 accounts it keeps the app's session key, the TLS and ACME keys, each Mastodon instance's client, the
-owner's GitHub user token (`app:github-user`), claudio's token and the Instagram app secret. Entries
-are under the service `shipcast`, or `SHIPCAST_KEYCHAIN_SERVICE`, so a second install or a test copy
-keeps its own.
+owner's GitHub user token (`app:github-user`), claudio's token and the Instagram, Threads, LinkedIn
+and Reddit app secrets. Entries are under the service `shipcast`, or `SHIPCAST_KEYCHAIN_SERVICE`, so
+a second install or a test copy keeps its own.
 
 ## OAuth flows
 
@@ -146,8 +151,13 @@ state (ten minutes, in memory) and the client credentials.
   Settings page (imported from `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` in `.env` on an older
   install), and the callback listed exactly in its business login settings. The code becomes a
   short-lived token, swapped at once for a 60-day one, refreshed every 30 days into the keychain.
+- **Reddit** needs the owner's Reddit app (a "web app" whose API access Reddit approved), its client
+  id and secret in Settings and its redirect uri set to `/auth/reddit/callback`. It asks for
+  `identity submit read` with `duration=permanent`; the refresh token and the app's client are kept
+  with the account, and each run trades the token for an access token of an hour
+  ([publishing.md](publishing.md#reddit)).
 - Callbacks are behind the session: the `SameSite=Lax` cookie comes along on the redirect back.
 
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]]

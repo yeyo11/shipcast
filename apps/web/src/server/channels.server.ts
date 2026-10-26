@@ -4,10 +4,12 @@ import {
   exchangeInstagramCode,
   exchangeLinkedInCode,
   exchangeMastodonCode,
+  exchangeRedditCode,
   exchangeThreadsCode,
   instagramAuthorizeUrl,
   linkedinAuthorizeUrl,
   mastodonAuthorizeUrl,
+  redditAuthorizeUrl,
   registerMastodonApp,
   threadsAuthorizeUrl,
 } from '@shipcast/connectors';
@@ -34,7 +36,7 @@ export async function channelsView() {
   });
   const fromEnv: string[] = [];
   for (const network of NETWORKS) {
-    if (network.auth === 'none' || accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;
+    if (accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;
     const found = await credentialsFor(network.id, { env: process.env, brand: current, registry, secrets, readFile: (p) => readFileSync(p, 'utf8') }).catch(() => undefined);
     if (found?.origin.kind === 'env') fromEnv.push(network.id);
   }
@@ -43,7 +45,7 @@ export async function channelsView() {
     secretsKind: secrets.kind,
     instagramOAuth: instagramApp(ctx) !== undefined,
     /** Which OAuth networks have the owner's app set in Settings; Mastodon registers itself */
-    oauthReady: { instagram: instagramApp(ctx) !== undefined, threads: threadsApp(ctx) !== undefined, linkedin: linkedinApp(ctx) !== undefined } as Record<string, boolean>,
+    oauthReady: { instagram: instagramApp(ctx) !== undefined, threads: threadsApp(ctx) !== undefined, linkedin: linkedinApp(ctx) !== undefined, reddit: redditApp(ctx) !== undefined } as Record<string, boolean>,
     networks: NETWORKS.map((n) => ({
       ...n,
       accounts: accounts.filter((a) => a.network === n.id),
@@ -53,7 +55,7 @@ export async function channelsView() {
 }
 
 /** OAuth sign-ins in flight, by state: which network, brand and instance they are for. Ten minutes each. */
-type OAuthNetwork = 'mastodon' | 'instagram' | 'threads' | 'linkedin';
+type OAuthNetwork = 'mastodon' | 'instagram' | 'threads' | 'linkedin' | 'reddit';
 const pending = new Map<string, { network: OAuthNetwork; brand: string; instance?: string; label?: string; expires: number }>();
 
 function remember(entry: { network: OAuthNetwork; brand: string; instance?: string; label?: string }): string {
@@ -175,6 +177,12 @@ function linkedinApp(ctx: Pick<AppContext, 'settings'>) {
   return linkedinClientId && linkedinClientSecret ? { clientId: linkedinClientId, clientSecret: linkedinClientSecret } : undefined;
 }
 
+/** The owner's Reddit app, from the settings; undefined until both are set */
+function redditApp(ctx: Pick<AppContext, 'settings'>) {
+  const { redditClientId, redditClientSecret } = ctx.settings.current();
+  return redditClientId && redditClientSecret ? { clientId: redditClientId, clientSecret: redditClientSecret } : undefined;
+}
+
 /** The flow a callback belongs to, taken once: a state is never good twice */
 function takeFlow(url: URL, network: OAuthNetwork) {
   const state = url.searchParams.get('state') ?? '';
@@ -245,5 +253,38 @@ export async function finishLinkedIn(request: Request): Promise<Response> {
     return result.ok ? connected(result.account) : back('linkedin', result.problem);
   } catch (error) {
     return back('linkedin', error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Reddit: needs the client id and secret of the owner's Reddit app, set in Settings */
+export async function startReddit(request: Request): Promise<Response> {
+  const ctx = await appContext();
+  const reddit = redditApp(ctx);
+  if (!reddit) return back('reddit', 'Set the Reddit client id and secret in Settings (/settings) first.');
+  const url = new URL(request.url);
+  const state = remember({ network: 'reddit', brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
+  return redirect(redditAuthorizeUrl(reddit.clientId, `${ctx.app.publicUrl}/auth/reddit/callback`, state));
+}
+
+export async function finishReddit(request: Request): Promise<Response> {
+  const ctx = await appContext();
+  const reddit = redditApp(ctx);
+  const url = new URL(request.url);
+  const flow = takeFlow(url, 'reddit');
+  if (!flow) return back('reddit', 'This authorisation is stale or was not started here: try again.');
+  const code = url.searchParams.get('code');
+  if (!code || !reddit) return back('reddit', `Reddit did not authorise Shipcast: ${url.searchParams.get('error') ?? 'cancelled'}.`);
+  try {
+    const token = await exchangeRedditCode(reddit, `${ctx.app.publicUrl}/auth/reddit/callback`, code);
+    const result = await connectAccount(await accountDeps(), {
+      network: 'reddit',
+      brand: flow.brand,
+      label: flow.label ?? `u/${token.username}`,
+      // The app's client goes with the account: its refresh token is only good with that app
+      credentials: { settings: { username: token.username, clientId: reddit.clientId }, secrets: { refreshToken: token.refreshToken, clientSecret: reddit.clientSecret } },
+    });
+    return result.ok ? connected(result.account) : back('reddit', result.problem);
+  } catch (error) {
+    return back('reddit', error instanceof Error ? error.message : String(error));
   }
 }

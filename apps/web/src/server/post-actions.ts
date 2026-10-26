@@ -38,7 +38,7 @@ export interface PostActionDeps {
   editing(): Promise<EditDeps>;
   /** Queues (or moves) the wake-up of each scheduled piece */
   armSchedule(posts: Post[]): Promise<void>;
-  /** For the launch's launch.yml: a channel it sets to manual or off cannot be scheduled */
+  /** For the launch's launch.yml: a channel it sets to off cannot be scheduled */
   github: Pick<ReviewGitHub, 'fileAt'>;
   launchesRepo: string;
 }

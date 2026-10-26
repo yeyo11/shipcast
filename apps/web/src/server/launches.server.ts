@@ -12,7 +12,7 @@ function stateOf(launch: Launch, failures: number): { label: string; tone: Tone 
     case 'published':
       return { label: 'Published', tone: 'published' };
     case 'skipped':
-      return { label: 'Not launched', tone: 'manual' };
+      return { label: 'Not launched', tone: 'quiet' };
     default:
       return { label: 'Failed', tone: 'failed' };
   }

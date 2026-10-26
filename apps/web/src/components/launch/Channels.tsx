@@ -65,9 +65,9 @@ function PieceNumbers({ row }: { row: PieceRow }) {
   );
 }
 
-const STATUS_WORD: Partial<Record<PieceRow['status'], { label: string; tone: 'published' | 'manual' | 'failed' }>> = {
+const STATUS_WORD: Partial<Record<PieceRow['status'], { label: string; tone: 'published' | 'quiet' | 'failed' }>> = {
   edited: { label: 'Edited', tone: 'published' },
-  deleted: { label: 'Deleted', tone: 'manual' },
+  deleted: { label: 'Deleted', tone: 'quiet' },
   failed: { label: 'Failed', tone: 'failed' },
 };
 

@@ -35,7 +35,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
 
 /**
  * The channels a time can be set for: only while the launch is drafted, the channels the engine
- * publishes that launch.yml does not set to manual or off (or, when it cannot be read, those with a
+ * publishes that launch.yml does not set to off (or, when it cannot be read, those with a
  * draft in the pull request), and nothing of which is out yet.
  */
 async function schedulingChannels(
@@ -53,7 +53,7 @@ async function schedulingChannels(
       return name === `${channel}.md` || (channel === 'newsletter' && name.startsWith('newsletter-'));
     });
   const candidates = SCHEDULABLE_CHANNELS.filter((channel) => {
-    if (config) return config.publishing[channel] !== 'manual' && config.publishing[channel] !== 'off';
+    if (config) return config.publishing[channel] !== 'off';
     return drafted(channel);
   });
   const channels: SchedulingChannel[] = [];

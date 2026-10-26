@@ -10,6 +10,7 @@ import {
   Instagram,
   json,
   LinkedIn,
+  Reddit,
   Mastodon,
   okCheck,
   SearchConsole,
@@ -36,7 +37,7 @@ export interface Field {
 
 /**
  * Every network Shipcast knows, as the Channels page shows it. A network is a connector plus one
- * entry here; `auth: 'none'` marks a channel with no API to post through (drafts only).
+ * entry here.
  */
 export interface Network {
   id: string;
@@ -45,7 +46,7 @@ export interface Network {
   channel?: Channel;
   /** Whether it reads numbers for the dashboard */
   metrics: boolean;
-  auth: 'oauth' | 'form' | 'none';
+  auth: 'oauth' | 'form';
   /** What the form asks; for OAuth, what is asked before leaving for the network (the instance) */
   fields: Field[];
   /** What Shipcast does with the account, in words */
@@ -140,6 +141,20 @@ export const NETWORKS: readonly Network[] = [
       'No numbers and no comments: LinkedIn keeps them behind its Community Management API, for approved companies only',
     ],
     howTo: 'Needs your LinkedIn app with Sign In with LinkedIn using OpenID Connect and Share on LinkedIn, its client id and secret set in Settings. The token lasts 60 days; connect again when it runs out.',
+  },
+  {
+    id: 'reddit',
+    name: 'Reddit',
+    channel: 'reddit',
+    metrics: false,
+    auth: 'oauth',
+    fields: [],
+    permissions: [
+      'Publishes one text post per subreddit in launch.yml, linking the article, and deletes it when you ask (submit)',
+      'Reads your own submissions, to find a post whose answer was lost instead of posting it twice (read)',
+      'Reads your name, picture and karma (identity)',
+    ],
+    howTo: 'Needs your Reddit app (a "web app" at reddit.com/prefs/apps, whose API access Reddit has approved), its client id and secret set in Settings, and its redirect uri set to this app’s /auth/reddit/callback. Shipcast sends you to Reddit to authorise it once; the account stays connected.',
   },
   {
     id: 'brevo',
@@ -252,26 +267,6 @@ export const NETWORKS: readonly Network[] = [
     permissions: ['Writes text for the tasks the AI settings give it, through the chat completions API with a JSON Schema answer'],
     howTo: 'Any server that speaks OpenAI’s chat completions (a local model through Ollama, llama.cpp or vLLM, or a hosted one). Then choose it per task in the AI settings.',
   },
-  {
-    id: 'hackerNews',
-    name: 'Hacker News',
-    channel: 'hackerNews',
-    metrics: false,
-    auth: 'none',
-    fields: [],
-    permissions: ['None: Hacker News has no API to post. Shipcast writes the Show HN draft for you to post'],
-    howTo: 'Turn on hackerNews: manual in a project’s launch.yml.',
-  },
-  {
-    id: 'productHunt',
-    name: 'Product Hunt',
-    channel: 'productHunt',
-    metrics: false,
-    auth: 'none',
-    fields: [],
-    permissions: ['None: Product Hunt’s API cannot create launches. Shipcast writes the launch kit for you'],
-    howTo: 'Turn on productHunt: manual in a project’s launch.yml.',
-  },
 ];
 
 export function network(id: string): Network | undefined {
@@ -363,6 +358,7 @@ export interface Built {
   instagram?: Instagram;
   threads?: Threads;
   linkedin?: LinkedIn;
+  reddit?: Reddit;
   brevo?: Brevo;
   hashnode?: Hashnode;
   telegram?: Telegram;
@@ -404,6 +400,11 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     case 'linkedin': {
       const linkedin = new LinkedIn({ personId: v('personId'), accessToken: v('accessToken'), expiresAt: all.expiresAt || undefined, fetch: http });
       return { linkedin, check: () => linkedin.check() };
+    }
+    case 'reddit': {
+      // The app's client is kept with the account: the refresh token is only good with the app that issued it
+      const reddit = new Reddit({ clientId: v('clientId'), clientSecret: v('clientSecret'), refreshToken: v('refreshToken'), username: v('username'), fetch: http });
+      return { reddit, check: () => reddit.check(), profileStats: () => reddit.profileStats() };
     }
     case 'brevo': {
       const brevo = new Brevo({ apiKey: v('apiKey'), fetch: http });

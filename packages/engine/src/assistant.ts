@@ -33,7 +33,6 @@ export const ADAPT_TARGETS = {
   telegram: { name: 'Telegram', limit: `at most ${LIMITS.telegramText} characters, a link at the end` },
   discord: { name: 'Discord', limit: `at most ${LIMITS.discordText} characters, short paragraphs, Markdown` },
   reddit: { name: 'Reddit', limit: 'a post for a developer community: what was built and why, plain and honest, never an ad' },
-  hackerNews: { name: 'Hacker News', limit: `plain text without hype, at most ${LIMITS.hackerNewsComment} characters` },
   linkedin: { name: 'LinkedIn', limit: 'a short professional post, a few short paragraphs, no hashtag walls' },
   newsletter: { name: 'the newsletter', limit: 'a personal note to subscribers in Markdown, short' },
 } as const;

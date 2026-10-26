@@ -100,14 +100,18 @@ export const PRIMARY_METRIC: Readonly<Record<string, readonly string[]>> = {
   newsletter: ['opens', 'clicks'],
 };
 
-const NAMES: Record<string, string> = { devto: 'dev.to', hashnode: 'Hashnode', mastodon: 'Mastodon', telegram: 'Telegram', discord: 'Discord', bluesky: 'Bluesky', instagram: 'Instagram', newsletter: 'The newsletter', blog: 'The blog' };
+const NAMES: Record<string, string> = { devto: 'dev.to', hashnode: 'Hashnode', mastodon: 'Mastodon', telegram: 'Telegram', discord: 'Discord', bluesky: 'Bluesky', instagram: 'Instagram', newsletter: 'The newsletter', blog: 'The blog', reddit: 'Reddit' };
 export const networkName = (channel: string) => NAMES[channel] ?? channel;
 
-/** A post's own piece, or a blog article: what the engine edits and deletes (a story, a comment or an issue is not) */
-export const isMainPiece = (channel: string, kind: string) => (channel === 'blog' ? kind.startsWith('article:') : kind === 'post');
+/** A post's own piece, a blog article or a subreddit's post: what the engine edits and deletes (a story, a comment or an issue is not) */
+export const isMainPiece = (channel: string, kind: string) => {
+  if (channel === 'blog') return kind.startsWith('article:');
+  return channel === 'reddit' ? kind.startsWith('post:') : kind === 'post';
+};
 
 function pieceLabel(kind: string): string {
   if (kind === 'post') return '';
+  if (kind.startsWith('post:')) return `r/${kind.slice('post:'.length)}`;
   const lang = /^(?:article|issue):(\w+)$/.exec(kind)?.[1];
   return lang ? lang.toUpperCase() : kind;
 }

@@ -54,8 +54,11 @@ export async function saveTimezone(registry: Registry, name: unknown): Promise<s
   return name;
 }
 
-/** The channels a time can be set for: those the engine publishes itself (not the blog, Reddit or Hacker News) */
-export const SCHEDULABLE_CHANNELS: readonly Channel[] = PUBLISHED_BY_ENGINE;
+/**
+ * The channels a time can be set for: those the engine publishes itself, but not the blog, published
+ * by the merge, nor Reddit, whose launch is one post per subreddit and a schedule is one row per channel
+ */
+export const SCHEDULABLE_CHANNELS: readonly Channel[] = PUBLISHED_BY_ENGINE.filter((c) => c !== 'reddit');
 
 /** How far ahead a time may be: a launch's pieces belong to its week, and pg-boss keeps a queued job a fortnight past its start */
 export const MAX_SCHEDULE_DAYS = 60;
@@ -69,14 +72,14 @@ function when(value: Date, now: Date): Date {
 
 export interface ScheduleOptions {
   now?: Date;
-  /** The launch's launch.yml when it can be read: a channel it sets to manual or off is refused */
+  /** The launch's launch.yml when it can be read: a channel it sets to off is refused */
   config?: LaunchConfig;
 }
 
 /**
  * Sets the time of each named channel's piece of a launch. Each is a scheduled row; one already
  * scheduled is moved. Refused as a whole, before anything is written, when a channel cannot be
- * scheduled: not one the engine publishes, manual or off in launch.yml, or already out.
+ * scheduled: not one the engine publishes, off in launch.yml, or already out.
  */
 export async function scheduleLaunch(registry: Registry, launchId: number, times: Partial<Record<Channel, Date>>, options: ScheduleOptions = {}): Promise<Post[]> {
   const now = options.now ?? new Date();
@@ -91,7 +94,7 @@ export async function scheduleLaunch(registry: Registry, launchId: number, times
   for (const [channel, at] of entries) {
     if (!SCHEDULABLE_CHANNELS.includes(channel)) throw new ScheduleRefused('invalid', `${channel} is not published by Shipcast, so it has no time; the channels are ${SCHEDULABLE_CHANNELS.join(', ')}`);
     const mode = options.config?.publishing[channel];
-    if (mode === 'manual' || mode === 'off') throw new ScheduleRefused('refused', `${channel} is ${mode} in launch.yml: Shipcast does not publish it`);
+    if (mode === 'off') throw new ScheduleRefused('refused', `${channel} is off in launch.yml: Shipcast does not publish it`);
     if (pieces.some((p) => p.channel === channel && p.status !== 'scheduled')) throw new ScheduleRefused('refused', `${channel} is out already: a launch happens once`);
     when(at, now);
   }

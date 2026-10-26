@@ -73,10 +73,8 @@ A state is always a word and a shape; colour repeats what the shape says.
 | Published | Filled in the text colour | Neutral |
 | Waiting for you | Yellow with a black edge | Yellow with a stamp shadow |
 | Draft | Outlined, dotted marker | Neutral |
-| Manual (post it yourself) | Dashed outline | Dashed, transparent |
+| Quiet (not launched, deleted, dismissed, a default) | Dashed outline | Dashed, transparent |
 | Failed | Red outline, diamond marker | Red outline, with what happened and the fix |
-
-Reddit and Hacker News are always Manual.
 
 **State dots** mark a channel where a pill would not fit (a launch card's channel marks, the launch
 page's channel chips): a filled `--sc-success` circle for published, a yellow ring for scheduled, a
