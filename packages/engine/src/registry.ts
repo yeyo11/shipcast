@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, like, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Channel, Language, PackKind } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
 import { accounts, accountSnapshots, apiTokens, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
@@ -337,6 +337,50 @@ export interface CommentFilter {
   own?: boolean;
   limit?: number;
 }
+
+/**
+ * Where a comment stands for the owner, in three words: waiting for a reply (new, drafted, being
+ * sent or failed to send), replied, or ignored (dismissed)
+ */
+export type CommentBucket = 'waiting' | 'replied' | 'ignored';
+
+export const COMMENT_BUCKETS: Record<CommentBucket, readonly CommentStatus[]> = {
+  waiting: ['new', 'draft-ready', 'approved', 'failed'],
+  replied: ['sent'],
+  ignored: ['dismissed'],
+};
+
+/** One page of the comments list, filtered; `page` counts from 1 */
+export interface CommentPageFilter {
+  bucket?: CommentBucket;
+  channel?: Channel;
+  launchId?: number;
+  postId?: number;
+  /** Words to find in the comment's text or its author's handle or name, case-insensitive */
+  search?: string;
+  own?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CommentPage {
+  comments: CommentRecord[];
+  /** Every comment the filters match, not only this page's */
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}
+
+/** What the filters can offer: only the channels and launches that have comments, with how many */
+export interface CommentFacets {
+  channels: Array<{ channel: Channel; count: number }>;
+  launches: Array<{ id: number; repo: string; ref: string; count: number }>;
+  buckets: Record<CommentBucket, number>;
+}
+
+/** `%`, `_` and `\` in what the owner typed are letters, not LIKE's wildcards */
+const likePattern = (words: string) => `%${words.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 function toComment(row: typeof comments.$inferSelect, launchId: number): CommentRecord {
   return {
@@ -1119,6 +1163,78 @@ export class Registry {
       .orderBy(desc(comments.createdAt), desc(comments.id))
       .limit(filter.limit ?? 200);
     return rows.map((r) => toComment(r.comment, r.launchId));
+  }
+
+  /**
+   * One page of comments, newest first, for the Comments page: the filters become one WHERE over
+   * the comment and its post (one join, the indexes on status, channel and date serve it) and the
+   * total comes from a count of the same filter, so the list is never read whole to be paged.
+   */
+  async commentsPage(filter: CommentPageFilter = {}): Promise<CommentPage> {
+    const where: SQL[] = [];
+    if (filter.bucket !== undefined) where.push(inArray(comments.status, [...COMMENT_BUCKETS[filter.bucket]]));
+    if (filter.channel !== undefined) where.push(eq(comments.channel, filter.channel));
+    if (filter.launchId !== undefined) where.push(eq(posts.launchId, filter.launchId));
+    if (filter.postId !== undefined) where.push(eq(comments.postId, filter.postId));
+    if (filter.own !== undefined) where.push(eq(comments.own, filter.own));
+    const words = filter.search?.trim();
+    if (words) {
+      const pattern = likePattern(words);
+      const match = or(ilike(comments.text, pattern), ilike(comments.authorHandle, pattern), ilike(comments.authorName, pattern));
+      if (match) where.push(match);
+    }
+    const condition = where.length > 0 ? and(...where) : undefined;
+    const pageSize = Math.min(Math.max(Math.trunc(filter.pageSize ?? 25), 1), 100);
+    const [totalRow] = await this.#db.select({ n: count() }).from(comments).innerJoin(posts, eq(comments.postId, posts.id)).where(condition);
+    const total = Number(totalRow?.n ?? 0);
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    // A page past the end (a link kept after the list shrank) shows the last one
+    const page = Math.min(Math.max(Math.trunc(filter.page ?? 1), 1), pages);
+    const rows = await this.#db
+      .select({ comment: comments, launchId: posts.launchId })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .where(condition)
+      .orderBy(desc(comments.createdAt), desc(comments.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return { comments: rows.map((r) => toComment(r.comment, r.launchId)), total, page, pageSize, pages };
+  }
+
+  /** The options of the page's filters, from three grouped queries whatever the number of comments */
+  async commentFacets(own = false): Promise<CommentFacets> {
+    const mine = eq(comments.own, own);
+    const [channels, launchRows, statuses] = await Promise.all([
+      this.#db.select({ channel: comments.channel, n: count() }).from(comments).where(mine).groupBy(comments.channel).orderBy(asc(comments.channel)),
+      this.#db
+        .select({ id: launches.id, repo: launches.repo, ref: launches.ref, n: count() })
+        .from(comments)
+        .innerJoin(posts, eq(comments.postId, posts.id))
+        .innerJoin(launches, eq(posts.launchId, launches.id))
+        .where(mine)
+        .groupBy(launches.id, launches.repo, launches.ref)
+        .orderBy(desc(launches.id)),
+      this.#db.select({ status: comments.status, n: count() }).from(comments).where(mine).groupBy(comments.status),
+    ]);
+    const byStatus = new Map(statuses.map((r) => [r.status, Number(r.n)]));
+    const sum = (bucket: CommentBucket) => COMMENT_BUCKETS[bucket].reduce((total, status) => total + (byStatus.get(status) ?? 0), 0);
+    return {
+      channels: channels.map((r) => ({ channel: r.channel as Channel, count: Number(r.n) })),
+      launches: launchRows.map((r) => ({ id: r.id, repo: r.repo, ref: r.ref, count: Number(r.n) })),
+      buckets: { waiting: sum('waiting'), replied: sum('replied'), ignored: sum('ignored') },
+    };
+  }
+
+  /** The posts of a launch that have comments, for the filter that narrows to one post */
+  async commentPosts(launchId: number, own = false): Promise<Array<{ id: number; channel: Channel; kind: string; url: string | null; count: number }>> {
+    const rows = await this.#db
+      .select({ id: posts.id, channel: posts.channel, kind: posts.kind, url: posts.url, n: count() })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .where(and(eq(posts.launchId, launchId), eq(comments.own, own)))
+      .groupBy(posts.id, posts.channel, posts.kind, posts.url)
+      .orderBy(asc(posts.id));
+    return rows.map((r) => ({ id: r.id, channel: r.channel as Channel, kind: r.kind, url: r.url, count: Number(r.n) }));
   }
 
   /**
