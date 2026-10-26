@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:53:55.538251263Z
-updated_at: 2026-10-25T16:27:02.453645394Z
+created_at: 2026-10-25T16:54:53.656730423Z
+updated_at: 2026-10-26T12:40:06.367869202Z
 tags:
     - accounts
     - channels
@@ -71,6 +71,30 @@ the identity the network reported, the problem if it failed, and its profile pic
   were in `.env` (the launches repo, claudio, the Instagram app) are imported on their own at start,
   into the Settings page ([decisions/github-app.md](decisions/github-app.md)).
 
+## The Channels page
+
+Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
+
+- **Tabs by kind of network**, kept in the address (`/channels?tab=social|blog|measurement|ai`):
+  Social networks, Blog & newsletter, Measurement, AI providers. A network does not declare its tab:
+  `groupOf` (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives it from
+  what the catalog says, so a new connector lands in the right tab by itself: an AI provider (the
+  Anthropic API, an OpenAI-compatible server) is under AI providers; a network with no channel to
+  publish to (GitHub, Cloudflare, Search Console, Bing) is Measurement; dev.to, Hashnode and the
+  newsletter are Blog & newsletter; every other channel, drafts-only ones included, is Social. Each tab
+  shows how many accounts it holds. Without a tab in the address the page opens on the first tab with
+  an account, and an account that was just connected opens its own tab.
+- **A card per account, in the launch card's skin** (`.lcard`, as on the Launches page): the same
+  raised black surface and stamp shadow, a glyph tile with a state dot (green for a passed check, red
+  for a failed one, a dotted ring while unchecked), the network's name and a state pill, the account's
+  avatar, name and handle with its brand, the key number (followers, big, a dash where the network
+  counts none) with following and posts and the last sync under it, and the last problem explained.
+  A network with no account yet is a quieter dashed card with what it does and **Connect an account**.
+- **Every action is kept**: Sync now is a button on the card; the rest are in its Menu: Check the
+  credential, Publish with this one, Rename (in place), Connect another account (to the network's
+  page) and Disconnect, which asks first (a `ConfirmDialog`, since a menu item cannot hold a dialog's
+  trigger). The `#add` link of the command palette still lands on the heading of the networks to add.
+
 ## Pictures, numbers and freshness
 
 Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshots.md)).
@@ -126,4 +150,4 @@ state (ten minutes, in memory) and the client credentials.
 
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]]

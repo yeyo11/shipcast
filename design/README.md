@@ -39,6 +39,7 @@ Components use the role names, never raw hex values, so the theme is one attribu
 | `--sc-text` | `#F4F2EC` | `#0D0D0D` | Text |
 | `--sc-muted` | `#A9A69E` | `#5A5852` | Secondary text |
 | `--sc-yellow` | `#FFD43B` | `#FFD43B` | The brand: primary action, waiting for you, bands |
+| `--sc-chart` | `#FFD43B` | `#A87F00` | A chart's line (3:1 as a graphic): the brand yellow at night, 11.6:1 on raised; a dark amber by day, 3.17:1 on raised and 3.68:1 on the ground, because the yellow is 1.4:1 on a light card. Under the line, a fill of `--sc-yellow` fading from 35% to 0% |
 | `--sc-on-yellow` | `#000000` | `#000000` | Text on yellow |
 | `--sc-cream` | `#FFF8DC` | `#FFF8DC` | Cards sitting on a yellow band |
 | `--sc-failure` | `#FF6B5B` | `#B42318` | Failure only, always with its word |
@@ -111,7 +112,8 @@ specimen. After changing a scene, run `pnpm illustrations:specimen` to refresh t
 Do: one yellow primary action per view; display type uppercase and heavy, everything else in
 sentence case; buttons named by what happens ("Approve 2 posts") and the result echoing the verb.
 
-Don't: soft shadows, gradients or glow; yellow text on a light ground (yellow is a fill there);
+Don't: soft shadows, gradients or glow (the one exception is a chart's area, a yellow fading to
+transparent under its `--sc-chart` line); yellow text on a light ground (yellow is a fill there);
 Phudu for running text; any colour outside the palette; rockets, navy or cyan, which belong to
 other brands.
 

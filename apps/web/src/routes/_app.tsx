@@ -1,5 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
+import { AttentionBell } from '../components/AttentionBell';
+import { BannerProvider } from '../components/BannerState';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { requestTour } from '../components/tour/request';
@@ -11,22 +13,24 @@ import { Drawer, DrawerClose } from '../components/ui/Drawer';
 import { ChannelsIcon, LaunchesIcon, MoreIcon, SearchIcon, StatsIcon, WriteIcon } from '../components/ui/icons';
 import { Menu } from '../components/ui/Menu';
 import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
+import { getBanner } from '../server/banner.functions';
 import { getOnboardingState } from '../server/onboarding.functions';
+import { currentSettingsPage, inSettings } from '../server/settings-pages';
 import { whoAmI } from '../server/session.functions';
 
 export const Route = createFileRoute('/_app')({
   loader: async () => {
-    const [who, onboarding] = await Promise.all([whoAmI(), getOnboardingState()]);
+    const [who, onboarding, banner] = await Promise.all([whoAmI(), getOnboardingState(), getBanner()]);
     // A new install opens on the onboarding until it is finished or set aside; an install already working never does
     if (onboarding.autoOpen) throw redirect({ to: '/onboarding' });
-    return who;
+    return { ...who, banner };
   },
   component: Shell,
   notFoundComponent: NotFoundPage,
   errorComponent: ErrorPage,
 });
 
-type To = '/' | '/write' | '/channels' | '/comments' | '/stats' | '/automation' | '/ai' | '/tokens' | '/settings' | '/launch';
+type To = '/' | '/write' | '/channels' | '/comments' | '/stats' | '/settings' | '/settings/ai' | '/settings/automation' | '/settings/api' | '/launch';
 
 interface Section {
   to: To;
@@ -41,16 +45,18 @@ const WRITE: Section = { to: '/write', label: 'Write', icon: WriteIcon, match: (
 const CHANNELS: Section = { to: '/channels', label: 'Channels', icon: ChannelsIcon, match: (p) => p.startsWith('/channels') };
 const COMMENTS: Section = { to: '/comments', label: 'Comments', match: (p) => p.startsWith('/comments') };
 const STATS: Section = { to: '/stats', label: 'Stats', icon: StatsIcon, match: (p) => p.startsWith('/stats') };
-const AUTOMATION: Section = { to: '/automation', label: 'Automation', match: (p) => p.startsWith('/automation') };
-const AI: Section = { to: '/ai', label: 'AI', match: (p) => p.startsWith('/ai') };
-const API: Section = { to: '/tokens', label: 'API', match: (p) => p.startsWith('/tokens') };
-const SETTINGS: Section = { to: '/settings', label: 'Settings', match: (p) => p.startsWith('/settings') };
+const SETTINGS: Section = { to: '/settings', label: 'General', match: (p) => currentSettingsPage(p) === '/settings' };
+const AI: Section = { to: '/settings/ai', label: 'AI', match: (p) => currentSettingsPage(p) === '/settings/ai' };
+const AUTOMATION: Section = { to: '/settings/automation', label: 'Automation', match: (p) => currentSettingsPage(p) === '/settings/automation' };
+const API: Section = { to: '/settings/api', label: 'API', match: (p) => currentSettingsPage(p) === '/settings/api' };
 
-/** Wide screens: every section in the top bar */
-const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS, AUTOMATION, AI, API];
+/** Wide screens: the five working sections in the top bar; the configuration is in the user menu */
+const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS];
 /** Phones: the four in reach of the thumb; the rest behind More */
 const BOTTOM = [LAUNCHES, WRITE, CHANNELS, STATS];
-const MORE = [COMMENTS, AUTOMATION, AI, API, SETTINGS];
+/** Settings is one group of four, in the user menu (a submenu) and in More (a group), never four flat entries */
+const SETTINGS_GROUP = [SETTINGS, AI, AUTOMATION, API];
+const MORE = [COMMENTS, ...SETTINGS_GROUP];
 
 function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
   return (
@@ -63,7 +69,7 @@ function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
 }
 
 function Shell() {
-  const { login, name, avatarUrl } = Route.useLoaderData();
+  const { login, name, avatarUrl, banner } = Route.useLoaderData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [palette, setPalette] = useState(false);
   const [more, setMore] = useState(false);
@@ -72,6 +78,7 @@ function Shell() {
   const navigate = useNavigate();
   const current = (s: Section) => (s.match(path) ? ('page' as const) : undefined);
   const inMore = MORE.some((s) => s.match(path));
+  const settingsHere = inSettings(path);
 
   return (
     <ToastProvider>
@@ -94,13 +101,12 @@ function Shell() {
               ))}
             </nav>
             <div className="top-tools">
-              <Tooltip content={`Go to or do anything (${shortcut})`} side="bottom">
-                <button type="button" className="search-button" onClick={() => setPalette(true)} aria-keyshortcuts="Meta+K Control+K">
+              <Tooltip content={`Search (${shortcut})`} side="bottom">
+                <button type="button" className="ui-icon-button search-button" aria-label="Search" onClick={() => setPalette(true)} aria-keyshortcuts="Meta+K Control+K">
                   <SearchIcon />
-                  <span className="search-label">Search</span>
-                  <kbd className="ui-kbd search-kbd" aria-hidden="true">{shortcut}</kbd>
                 </button>
               </Tooltip>
+              <AttentionBell />
               <div className="who-menu">
                 <Menu
                   trigger={
@@ -112,7 +118,13 @@ function Shell() {
                   entries={[
                     { kind: 'note', label: name ? `${name} (@${login})` : `@${login}` },
                     { kind: 'separator' },
-                    { label: 'Settings', onSelect: () => void navigate({ to: '/settings' }) },
+                    {
+                      kind: 'submenu',
+                      label: 'Settings',
+                      current: settingsHere,
+                      entries: SETTINGS_GROUP.map((s) => ({ label: s.label, current: s.match(path), onSelect: () => void navigate({ to: s.to }) })),
+                    },
+                    { kind: 'separator' },
                     { label: 'Take the tour', onSelect: requestTour },
                     { label: 'Sign out', onSelect: () => signOut.current?.requestSubmit() },
                   ]}
@@ -123,7 +135,9 @@ function Shell() {
           </div>
         </header>
         <main id="main" className="wrap" tabIndex={-1} data-path={path}>
-          <Outlet />
+          <BannerProvider initial={banner}>
+            <Outlet />
+          </BannerProvider>
         </main>
         <nav className="bottom-bar" aria-label="Sections">
           {BOTTOM.map((s) => {
@@ -148,11 +162,26 @@ function Shell() {
           >
             <nav aria-label="More sections">
               <ul className="drawer-links">
-                {[...MORE, { ...LAUNCHES, to: '/launch' as const, label: 'Launch a repo', match: (p: string) => p === '/launch' }].map((s) => (
-                  <li key={s.to}>
-                    <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
-                  </li>
-                ))}
+                <li>
+                  <DrawerClose render={<Link to={COMMENTS.to} aria-current={current(COMMENTS)} />}>{COMMENTS.label}</DrawerClose>
+                </li>
+                <li>
+                  <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} />}>Launch a repo</DrawerClose>
+                </li>
+                <li role="group" aria-labelledby="more-settings" className="drawer-group" data-current={settingsHere ? '' : undefined}>
+                  <span id="more-settings" className="drawer-group-title">
+                    {settingsHere && <span className="ui-option-dot" aria-hidden="true" />}
+                    Settings
+                    {settingsHere && <span className="visually-hidden">, the current section</span>}
+                  </span>
+                  <ul className="drawer-sublinks">
+                    {SETTINGS_GROUP.map((s) => (
+                      <li key={s.to}>
+                        <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
                 <li>
                   <button
                     type="button"

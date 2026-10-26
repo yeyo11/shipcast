@@ -1,0 +1,2 @@
+CREATE INDEX "comments_by_channel" ON "comments" USING btree ("channel","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "comments_by_newest" ON "comments" USING btree ("created_at" DESC NULLS LAST,"id" DESC NULLS LAST);

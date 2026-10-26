@@ -3,13 +3,15 @@ import { useMemo, type ReactNode } from 'react';
 import { dayLabel, overlayComparison, seriesCsv, type ChartSeries } from '../../components/charts/data';
 import { assignColours } from '../../components/charts/palette';
 import { TimeChart } from '../../components/charts/TimeChart';
-import { OnboardMeasure } from '../../components/illustrations';
+import { OnboardMeasure, Scale } from '../../components/illustrations';
 import { Empty, PageHead } from '../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { Accounts } from '../../components/stats/Accounts';
 import { FilterBar, METRIC_NAMES } from '../../components/stats/FilterBar';
 import { Kpis } from '../../components/stats/Kpis';
 import { RankingTable } from '../../components/stats/RankingTable';
 import { Search } from '../../components/stats/Search';
+import { DownloadIcon } from '../../components/ui/icons';
 import { Tabs } from '../../components/ui/Tabs';
 import { getGrowth, getSearch, getStats } from '../../server/stats.functions';
 import { compactSearch, readStatsSearch, readStatsTab, withDefaults, type StatsSearch, type StatsTab } from '../../server/stats-search';
@@ -18,7 +20,7 @@ import statsCss from '../../styles/stats.css?url';
 /*
  * Stats: how the launches did across channels and accounts over time (milestone 5 of
  * docs/plans/goal-after-mvp.md, built on docs/decisions/app-design-direction.md and
- * docs/decisions/charts.md). One screen per tab (Overview, Posts, Accounts, Search) under one
+ * docs/decisions/charts.md). One screen per tab (Overview, Ranking, Accounts, Search) under one
  * filter bar, so nothing needs a long scroll. The view lives in the address, the tab included, so a
  * period, a metric, a set of filters and a tab can be shared as a link. The numbers come from the
  * engine's stats queries (docs/stats.md).
@@ -45,12 +47,12 @@ export const Route = createFileRoute('/_app/stats')({
   component: Stats,
 });
 
-const TAB_NAMES: Record<StatsTab, string> = { overview: 'Overview', posts: 'Posts', accounts: 'Accounts', search: 'Search' };
+const TAB_NAMES: Record<StatsTab, string> = { overview: 'Overview', ranking: 'Ranking', accounts: 'Accounts', search: 'Search' };
 
 function Loading() {
   return (
     <div className="stats-page">
-      <PageHead title="Stats">How every launch did, channel by channel, over time.</PageHead>
+      <PageHead title="Stats" art={<Scale width={200} />}>How every launch did, channel by channel, over time.</PageHead>
       <div className="stats-loading" role="status">
         <OnboardMeasure width={200} />
         <p className="muted">Counting the numbers…</p>
@@ -149,7 +151,7 @@ function Stats() {
     </>
   );
 
-  const posts = nothing ? (
+  const ranking = nothing ? (
     empty
   ) : (
     <RankingTable
@@ -164,21 +166,21 @@ function Stats() {
     />
   );
 
-  const panels: Record<StatsTab, ReactNode> = { overview, posts, accounts: <Accounts data={growth} />, search: <Search data={searchData} /> };
+  const panels: Record<StatsTab, ReactNode> = { overview, ranking, accounts: <Accounts data={growth} />, search: <Search data={searchData} /> };
 
   return (
     <div className="stats-page">
-      <PageHead
-        title="Stats"
-        action={
-          <button type="button" className="btn btn-primary" onClick={exportCsv} disabled={series.length === 0}>
-            Export CSV
-          </button>
-        }
-      >
+      <PageHead title="Stats" art={<Scale width={200} />}>
         How every launch did, channel by channel, over time.
       </PageHead>
-      <FilterBar search={search} period={stats.period} options={stats.options} onChange={change} range={range} />
+      <PageToolbar
+        label="What to show"
+        controls={<FilterBar search={search} period={stats.period} options={stats.options} onChange={change} />}
+        actions={<ToolbarAction primary label="Export CSV" icon={<DownloadIcon />} onClick={exportCsv} disabled={series.length === 0} />}
+      />
+      <p className="stats-range muted" aria-live="polite">
+        {range}
+      </p>
       <Tabs<StatsTab>
         label="Stats sections"
         variant="underline"

@@ -1,13 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { PageHead } from '../../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { useToast } from '../../../components/Toasts';
 import { Pill } from '../../../components/ui';
 import { Combobox } from '../../../components/ui/Combobox';
 import { ConfirmButton } from '../../../components/ui/ConfirmButton';
 import { Dialog, DialogClose } from '../../../components/ui/Dialog';
 import { Drawer } from '../../../components/ui/Drawer';
-import { DotsIcon } from '../../../components/ui/icons';
+import { DotsIcon, PlusIcon } from '../../../components/ui/icons';
 import { Menu } from '../../../components/ui/Menu';
 import { Popover } from '../../../components/ui/Popover';
 import { Select } from '../../../components/ui/Select';
@@ -54,9 +55,10 @@ function Components() {
   const [channel, setChannel] = useState<'bluesky' | 'mastodon' | 'hn'>('bluesky');
   return (
     <>
-      <PageHead title="Components" action={<button className="btn btn-primary" type="button" onClick={() => toast.done('The primary action', 'One yellow per view.')}>Primary action</button>}>
+      <PageHead title="Components">
         Base UI wearing Cartel only: every part styled in <code>styles/components.css</code> with the role tokens, states from Base UI’s data attributes.
       </PageHead>
+      <PageToolbar label="Components" actions={<ToolbarAction primary label="Primary action" icon={<PlusIcon />} onClick={() => toast.done('The primary action', 'One yellow per view.')} />} />
 
       <Specimen name="Toast" text="useToast().done / fail / show. Successes leave after six seconds; failures stay. Hover or focus pauses; swipe right or down to dismiss; F6 reaches them.">
         <div className="row">

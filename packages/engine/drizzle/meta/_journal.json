@@ -43,6 +43,27 @@
       "when": 1792956188090,
       "tag": "0006_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793017870658,
+      "tag": "0007_comments_paging",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793019081235,
+      "tag": "0008_assistant_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793025995489,
+      "tag": "0009_attention_dismissals",
+      "breakpoints": true
     }
   ]
 }

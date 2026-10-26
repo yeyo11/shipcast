@@ -11,6 +11,7 @@ export async function assistantDeps(): Promise<AssistantDeps> {
     launch: async (launchId) => (await ctx.registry.get(launchId)) ?? undefined,
     grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }),
     checkout: (repo, ref) => ctx.deps.checkout(repo, ref),
+    sessions: ctx.registry,
     aiWorkdir: ctx.deps.aiWorkdir ?? ctx.config.workspaceProviderDir,
     ...(ctx.deps.maxBudgetUsd !== undefined && { maxBudgetUsd: ctx.deps.maxBudgetUsd }),
   };

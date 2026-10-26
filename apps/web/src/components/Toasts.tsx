@@ -1,6 +1,7 @@
 import { Toast } from '@base-ui/react/toast';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { explain } from './errors';
+import { Collapsible } from './ui/Collapsible';
 import { CloseIcon } from './ui/icons';
 
 /**
@@ -60,10 +61,9 @@ function ToastList() {
           <Toast.Title className="toast-title" />
           {toast.description && <Toast.Description className="toast-text" />}
           {details && (
-            <details className="toast-details">
-              <summary>Details</summary>
+            <Collapsible className="toast-details" summary="Details">
               <pre>{details}</pre>
-            </details>
+            </Collapsible>
           )}
         </Toast.Content>
       </Toast.Root>

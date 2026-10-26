@@ -1,6 +1,8 @@
 import { CommentRefused, dismissComment, editReplyDraft, InvalidCommentSettings, readCommentSettings, REPLY_CAPABILITIES, REPLY_LIMITS, sendReply, writeCommentSettings } from '@shipcast/engine';
+import { CHANNELS } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
-import { commentView, commentViews } from './comment-view';
+import { commentView } from './comment-view';
+import { readCommentsSearch } from './comments-search';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { appContext } from './context.server';
 import { id, InvalidInput, object, text } from './input';
@@ -13,15 +15,34 @@ function asInput<T>(run: () => Promise<T>): Promise<T> {
   });
 }
 
-export const listComments = createServerFn({ method: 'GET' }).handler(async () => {
-  const { registry } = await appContext();
-  return {
-    comments: await commentViews(registry, { own: false, limit: 200 }),
-    settings: await readCommentSettings(registry),
-    capabilities: REPLY_CAPABILITIES,
-    limits: REPLY_LIMITS,
-  };
-});
+/** One page of comments for the filters in the address, with what the filters can offer: a handful of queries whatever the list's size */
+export const listComments = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => readCommentsSearch(object(input ?? {}, 'input')))
+  .handler(async ({ data }) => {
+    const { registry } = await appContext();
+    const channel = CHANNELS.find((c) => c === data.channel);
+    const [page, facets, posts] = await Promise.all([
+      registry.commentsPage({
+        own: false,
+        ...(data.state && { bucket: data.state }),
+        ...(channel && { channel }),
+        ...(data.launch && { launchId: data.launch }),
+        ...(data.post && { postId: data.post }),
+        ...(data.q && { search: data.q }),
+        ...(data.page && { page: data.page }),
+      }),
+      registry.commentFacets(false),
+      data.launch ? registry.commentPosts(data.launch, false) : Promise.resolve([]),
+    ]);
+    return {
+      comments: page.comments.map(commentView),
+      page: { number: page.page, pages: page.pages, total: page.total, size: page.pageSize },
+      facets: { ...facets, posts },
+      settings: await readCommentSettings(registry),
+      capabilities: REPLY_CAPABILITIES,
+      limits: REPLY_LIMITS,
+    };
+  });
 
 export const checkCommentsNow = createServerFn({ method: 'POST' }).handler(async () => checkComments());
 

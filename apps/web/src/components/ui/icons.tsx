@@ -29,10 +29,33 @@ export const CloseIcon = (p: IconProps) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Glyph>
 );
+export const CalendarIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <rect x="4" y="5.5" width="16" height="14" rx="2.5" />
+    <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+  </Glyph>
+);
+export const ChevronIcon = ({ dir = 'right', ...p }: IconProps & { dir?: 'left' | 'right' }) => (
+  <Glyph {...p}>
+    <path d={dir === 'left' ? 'M14.5 6l-6 6 6 6' : 'M9.5 6l6 6-6 6'} />
+  </Glyph>
+);
+export const DownloadIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14" />
+  </Glyph>
+);
 export const SearchIcon = (p: IconProps) => (
   <Glyph {...p}>
     <circle cx="10.5" cy="10.5" r="6.5" />
     <path d="M15.5 15.5L20 20" />
+  </Glyph>
+);
+/** A bell: stem, dome, rim and clapper, centred on the grid (2.5 to 21.5 high, 4.75 to 19.25 wide) */
+export const BellIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 2.5V5M6.5 15.5v-5a5.5 5.5 0 0 1 11 0v5l1.75 1.75H4.75z" />
+    <path d="M10.25 19.75a1.75 1.75 0 0 0 3.5 0" />
   </Glyph>
 );
 export const DotsIcon = (p: IconProps) => (
@@ -85,5 +108,40 @@ export const HelpIcon = (p: IconProps) => (
   <Glyph {...p}>
     <circle cx="12" cy="12" r="8.5" />
     <path d="M9.75 9.5a2.25 2.25 0 114 1.4c-.9.7-1.75 1.2-1.75 2.6M12 16.75h.01" />
+  </Glyph>
+);
+export const HistoryIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M4 12a8 8 0 108-8 8 8 0 00-6 2.7M4 4.5v3.2h3.2M12 8v4.25l2.75 1.75" />
+  </Glyph>
+);
+export const PlusIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Glyph>
+);
+export const RefreshIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4" />
+  </Glyph>
+);
+export const ExternalIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M13.5 4.5h6v6M19.5 4.5L11 13M17 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H10" />
+  </Glyph>
+);
+export const SendIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M4.5 12L20 4.5 15.5 20l-3.5-6.5L4.5 12zM12 13.5l8-9" />
+  </Glyph>
+);
+export const ImportIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 3.5v10M8 9.5l4 4 4-4M4.5 14v4.5a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V14" />
+  </Glyph>
+);
+export const MinusIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M5 12h14" />
   </Glyph>
 );

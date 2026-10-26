@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { explain } from '../errors';
+import { Collapsible } from './Collapsible';
 import { CHANNEL_NAMES, channelIcon, type Tone } from '../../server/view';
 
 export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
@@ -36,10 +37,9 @@ export function Problem({ text }: { text: string }) {
     <div className="problem" role="note">
       <strong>{e.title}.</strong> {e.text}
       {e.details && (
-        <details className="toast-details">
-          <summary>Details</summary>
+        <Collapsible className="toast-details" summary="Details">
           <pre>{e.details}</pre>
-        </details>
+        </Collapsible>
       )}
     </div>
   );

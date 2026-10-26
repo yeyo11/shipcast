@@ -6,6 +6,8 @@ import { channelOfDraft, langOfDraft } from '../../../components/assistant/proto
 import { useAssistant } from '../../../components/assistant/session';
 import { EmptyDrafts } from '../../../components/illustrations';
 import { Empty, PageHead } from '../../../components/PageHead';
+import { PageToolbar } from '../../../components/PageToolbar';
+import { ChevronIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Notice, Pill } from '../../../components/ui';
 import { Select } from '../../../components/ui/Select';
@@ -42,6 +44,8 @@ function Editor({ launchId, draft, editable, article }: { launchId: number; draf
     value: content,
     onChange: setContent,
     launchId,
+    draftPath: draft.path,
+    draftLabel: draft.label,
     ...(lang && { lang }),
     ...(channel && { channel }),
     ...(article && { checkDisabled: 'This launch is an article you wrote: there is no code to check it against, the article is the truth.' }),
@@ -89,19 +93,20 @@ function DraftsEditor() {
 
   return (
     <>
-      <PageHead
-        title="Edit the drafts"
-        action={
-          <div className="row">
-            <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
-            <Link className="btn" to="/launches/$id" params={{ id: String(launch.id) }}>
-              Back to the launch
-            </Link>
-          </div>
-        }
-      >
+      <PageHead title="Edit the drafts">
         {launch.repo} · <span className="mono break">{launch.ref}</span>. Select a passage for the quick actions, or ask the assistant beside the text; every change it proposes is a diff you accept or reject.
       </PageHead>
+      <PageToolbar
+        label="Drafts"
+        controls={
+          <>
+            <Link className="tb-back" to="/launches/$id" params={{ id: String(launch.id) }}>
+              <ChevronIcon dir="left" size={16} /> Back to the launch
+            </Link>
+            <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
+          </>
+        }
+      />
       {review && 'error' in review && <Notice tone="bad">The drafts could not be read: {review.error}</Notice>}
       {texts.length === 0 ? (
         <Empty art={<EmptyDrafts />} title="No drafts to edit">

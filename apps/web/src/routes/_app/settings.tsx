@@ -1,178 +1,37 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useState } from 'react';
+import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
+import { Toolbox } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
-import { useToast } from '../../components/Toasts';
-import { Notice, Pill, when } from '../../components/ui';
-import { ConfirmButton } from '../../components/ui/ConfirmButton';
-import { getOnboardingState } from '../../server/onboarding.functions';
-import { remaining, STEP_TITLES } from '../../server/onboarding';
-import { getSettings, saveSettings } from '../../server/settings.functions';
+import { PageToolbarHost } from '../../components/PageToolbar';
 
 export const Route = createFileRoute('/_app/settings')({
-  head: () => ({ meta: [{ title: 'Settings · Shipcast' }] }),
-  loader: async () => {
-    const [settings, onboarding] = await Promise.all([getSettings(), getOnboardingState()]);
-    return { ...settings, onboarding };
-  },
-  component: Settings,
+  component: SettingsLayout,
 });
 
-const SOURCE: Record<string, string> = {
-  settings: 'saved here',
-  keychain: 'saved in the keychain',
-  '.env': 'from .env, until it is saved here',
-  unset: 'not set',
-};
-
-function Settings() {
-  const data = Route.useLoaderData();
-  const router = useRouter();
-  const toast = useToast();
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-
-  const save = async (change: Record<string, string | null>) => {
-    setBusy(true);
-    try {
-      const answer = await saveSettings({ data: change });
-      setEdits({});
-      toast.done('Settings saved', answer.missing.length ? `Still to set: ${answer.missing.join(', ')}.` : 'They apply to what runs next.');
-      await router.invalidate();
-    } catch (error) {
-      toast.fail(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const changed = Object.fromEntries(Object.entries(edits).filter(([, v]) => v.trim() !== ''));
-  const { github } = data;
-
+/**
+ * Settings is one area with a submenu: a column beside the page on wide screens, tabs that scroll
+ * sideways on phones. Links rather than Tabs, since each section is a route of its own with its own
+ * data and its own address.
+ */
+function SettingsLayout() {
   return (
     <>
-      <PageHead title="Settings">
-        What Shipcast needs besides <code>.env</code>, which holds only what it needs before anyone signs in. Public values are kept in the database, secrets in{' '}
-        {data.secretsKind}. A change applies to what runs next, without a restart.
-      </PageHead>
-
-      <FinishSettingUp left={remaining(data.onboarding).map((s) => STEP_TITLES[s])} />
-
-      {data.missing.length > 0 && <Notice tone="wait">Still to set: {data.missing.join(', ')}. Launching and drafting wait for them.</Notice>}
-
-      <form
-        className="form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save(changed);
-        }}
-      >
-        {data.settings.map((s) => (
-          <div className="field" key={s.name}>
-            <label htmlFor={`setting-${s.name}`}>{s.label}</label>
-            <div className="row">
-              <input
-                id={`setting-${s.name}`}
-                className="input"
-                style={{ flex: '1 1 220px', minWidth: 0 }}
-                type={s.secret ? 'password' : 'text'}
-                autoComplete="off"
-                placeholder={s.secret ? (s.set ? 'Set; type a new one to replace it' : 'Not set') : (s.value ?? 'Not set')}
-                value={edits[s.name] ?? ''}
-                onChange={(e) => setEdits({ ...edits, [s.name]: e.target.value })}
-              />
-              {s.source === 'settings' || s.source === 'keychain' ? (
-                <ConfirmButton
-                  className="btn btn-small"
-                  disabled={busy}
-                  title={`Clear ${s.label.toLowerCase()}?`}
-                  description={s.secret ? 'The secret is deleted from the keychain; what needs it waits until a new one is set.' : `It is now ${s.value ?? 'empty'}; clearing it falls back to .env, if .env has it.`}
-                  confirm="Clear"
-                  onConfirm={() => save({ [s.name]: null })}
-                >
-                  Clear
-                </ConfirmButton>
-              ) : null}
-            </div>
-            <small>
-              {SOURCE[s.source]}
-              {s.value && !s.secret ? <> · now <code>{s.value}</code></> : null} · was <code>{s.env}</code> in .env
-            </small>
-          </div>
-        ))}
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={busy || Object.keys(changed).length === 0}>
-            {busy ? 'Saving…' : 'Save settings'}
-          </button>
+      <PageHead title="Settings" art={<Toolbox width={200} />}>Everything that is configured, in one place: the app, the AI, how releases are noticed and the API.</PageHead>
+      {/* Each section brings its own toolbar, drawn here under the banner */}
+      <PageToolbarHost>
+      <div className="settings-shell">
+        <nav className="settings-nav" aria-label="Settings sections">
+          <Link to="/settings" activeOptions={{ exact: true }}>
+            General
+          </Link>
+          <Link to="/settings/ai">AI</Link>
+          <Link to="/settings/automation">Automation</Link>
+          <Link to="/settings/api">API</Link>
+        </nav>
+        <div className="settings-body">
+          <Outlet />
         </div>
-      </form>
-
-      <h2 className="ph">GitHub</h2>
-      <table className="table">
-        <tbody>
-          <tr>
-            <th scope="row">The engine</th>
-            <td>
-              {github.access.kind === 'app' ? (
-                <>
-                  Through the GitHub App{github.access.slug ? <> <code>{github.access.slug}</code></> : null}; its commits and pull requests are by{' '}
-                  <code>{github.access.bot ?? 'the App’s bot'}</code>
-                </>
-              ) : (
-                <>Through GITHUB_TOKEN_PERSONAL in .env: set the GitHub App in .env to replace it</>
-              )}
-            </td>
-          </tr>
-          {github.access.kind === 'app' && (
-            <tr>
-              <th scope="row">Installation</th>
-              <td>
-                {github.installation ? (
-                  <>
-                    On <strong>{github.installation.account}</strong>, {github.installation.repositories} <span className="muted">({github.installation.permissions})</span>
-                  </>
-                ) : (
-                  <Pill tone="failed">{github.installationProblem ?? 'not found'}</Pill>
-                )}
-              </td>
-            </tr>
-          )}
-          <tr>
-            <th scope="row">Sign-in</th>
-            <td>{github.signIn === 'app' ? 'Through the GitHub App' : 'Through the GitHub OAuth App (SHIPCAST_GITHUB_CLIENT_ID); the GitHub App replaces it'}</td>
-          </tr>
-          {github.access.kind === 'app' && (
-            <tr>
-              <th scope="row">Your user token</th>
-              <td>
-                {github.user ? (
-                  <>
-                    @{github.user.login}
-                    {github.user.expiresAt ? `, valid until ${when(github.user.expiresAt)} UTC and refreshed on its own` : ', without expiry'}
-                    {github.user.refreshExpiresAt ? ` (until ${when(github.user.refreshExpiresAt)} UTC, then sign in again)` : ''}
-                  </>
-                ) : (
-                  <span className="muted">None yet: it is kept when you sign in with GitHub</span>
-                )}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </>
-  );
-}
-
-/** Where a skipped or unfinished onboarding is resumed; with every step done, a quiet way back into it */
-function FinishSettingUp({ left }: { left: string[] }) {
-  return (
-    <section className="card setup-card" aria-label="Setting up">
-      <div>
-        <h2 className="setup-title">{left.length > 0 ? 'Finish setting up' : 'Set up'}</h2>
-        <p className="muted">{left.length > 0 ? `Still to do: ${left.join(', ')}.` : 'Every step of the setup is done. Open it again to review a step.'}</p>
       </div>
-      <Link className={`btn${left.length > 0 ? ' btn-primary' : ''}`} to="/onboarding">
-        {left.length > 0 ? 'Finish setting up' : 'Open the setup'}
-      </Link>
-    </section>
+      </PageToolbarHost>
+    </>
   );
 }

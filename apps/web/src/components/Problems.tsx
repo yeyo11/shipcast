@@ -1,5 +1,6 @@
 import { Link, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { explain } from './errors';
+import { Collapsible } from './ui/Collapsible';
 import { NotFound, ServerError } from './illustrations';
 
 /**
@@ -40,10 +41,9 @@ export function ErrorPage({ error, reset }: ErrorComponentProps) {
           <strong>{e.title}.</strong> <span className="muted">{e.text}</span>
         </p>
         {e.details && (
-          <details className="toast-details">
-            <summary>Details</summary>
+          <Collapsible className="toast-details" summary="Details">
             <pre>{e.details}</pre>
-          </details>
+          </Collapsible>
         )}
         <div className="row">
           <button

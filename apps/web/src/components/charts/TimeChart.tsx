@@ -117,14 +117,20 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
   };
   const onPointerDown = (event: PointerEvent<SVGRectElement>) => {
     if (!zoomable || event.button !== 0) return;
+    // Without this the drag is also the browser's text selection, painted across the whole page
+    // width, and a selection in progress can swallow the pointer up that ends the brush
+    event.preventDefault();
+    plotRef.current?.focus({ preventScroll: true });
     const i = indexAt(event);
     event.currentTarget.setPointerCapture(event.pointerId);
     setDrag({ from: i, to: i });
   };
-  const onPointerUp = () => {
+  const onPointerUp = (event: PointerEvent<SVGRectElement>) => {
     if (!drag) return;
-    const range = brushRange(drag.from, drag.to, n);
+    // The release point counts even when no move was reported on the way there
+    const range = brushRange(drag.from, indexAt(event), n);
     setDrag(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (range) zoomTo(range);
   };
 
@@ -158,6 +164,11 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
   };
 
   const selection = drag ? brushRange(drag.from, drag.to, n) : anchor !== null && active !== null ? brushRange(anchor, active, n) : null;
+  // The band covers whole buckets but never leaves the plot: half a step past the first or last
+  // bucket would otherwise spill over the axis and out of the chart
+  const band = selection ? brushBand(xAt(selection[0]), xAt(selection[1]), step, innerW) : null;
+  // useId's characters are not all valid in url(#…); the server has no CSS.escape
+  const clipId = `chart-clip-${hintId.replace(/[^\w-]/g, '')}`;
   const activeBucket = active !== null ? shownBuckets[active] : undefined;
   const summary = activeBucket !== undefined && active !== null ? pointSummary(bucketLabel(activeBucket, unit), shown, active, hasComparison, comparisonName) : '';
   const tooltipLeft = active !== null ? margin.left + xAt(active) : 0;
@@ -201,11 +212,14 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
             }}
           >
             <svg width={width} height={height} aria-hidden="true" className="chart-svg">
+              <defs>
+                <clipPath id={clipId}>
+                  <rect x={0} y={0} width={innerW} height={innerH} />
+                </clipPath>
+              </defs>
               <Group left={margin.left} top={margin.top}>
                 <GridRows scale={y} width={innerW} numTicks={yTicks} stroke="var(--sc-hairline)" strokeWidth={1} />
-                {selection && (
-                  <rect className="chart-brush" x={Math.min(xAt(selection[0]), xAt(selection[1])) - step / 2} width={Math.abs(xAt(selection[1]) - xAt(selection[0])) + step} y={0} height={innerH} />
-                )}
+                {band && <rect className="chart-brush" x={band.x} width={band.width} y={0} height={innerH} clipPath={`url(#${clipId})`} />}
                 {kind === 'line' &&
                   shown.map((s) => (
                     <g key={s.key}>
@@ -335,6 +349,13 @@ export function TimeChart({ title, buckets, unit, series, kind, levels = false, 
       <DataTable id={tableId} visible={asTable} title={title} buckets={shownBuckets} unit={unit} series={shown} comparisonName={comparisonName} />
     </figure>
   );
+}
+
+/** A brushed range's band in plot coordinates, held inside [0, plotWidth] */
+function brushBand(a: number, b: number, step: number, plotWidth: number): { x: number; width: number } {
+  const x0 = Math.max(0, Math.min(a, b) - step / 2);
+  const x1 = Math.min(plotWidth, Math.max(a, b) + step / 2);
+  return { x: x0, width: Math.max(0, x1 - x0) };
 }
 
 /** The point in one sentence, for the live region: what a sighted reader gets from the tooltip */

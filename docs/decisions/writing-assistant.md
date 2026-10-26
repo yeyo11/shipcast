@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T07:46:24.02456459Z
-updated_at: 2026-10-26T07:46:24.02456459Z
+created_at: 2026-10-26T11:02:17.837649584Z
+updated_at: 2026-10-26T12:40:09.108264824Z
 tags:
     - decision
     - web-app
@@ -44,6 +44,38 @@ streams (the Anthropic API, an OpenAI-compatible server) shows text as it comes.
 its OpenAI-compatible API exists; until then the assistant reaches claudio through its existing REST
 chat API, where the whole answer arrives at once, and the page says so quietly. It works with the
 owner's claudio today.
+
+## Sessions and the history
+
+Added on 2026-10-26. A chat is kept so it can be found and taken up again.
+
+- **Saved as it streams, by the server.** The endpoint saves the owner's question before asking the
+  model (so a session exists even if the answer fails), then the assistant's final text with its
+  proposals (each `open`, `accepted` or `rejected`) when the stream ends, is stopped or fails (a failed
+  one with why it stopped). A `saved` event hands the page the session and the answer's row. Saving
+  never breaks the chat: a database that fails costs the history, not the answer. Quick actions are
+  not saved; only chat turns.
+- **Tables** `assistant_sessions` and `assistant_messages` (migration 0007, additive), with registry
+  methods tested on PGlite. A session records the launch and draft file (none for an article on Write)
+  and the draft's name as it was called; its title is the first question in a line, or the draft's name
+  when the first turn had no words. A message keeps the selected passage the question was about, so
+  its proposals can be applied again.
+- **The history** is a button in the chat's header, beside **New session**. It lists sessions, the most
+  recently talked in first, with title, draft and date, a page at a time by a keyset cursor (so new
+  messages never shift a page): the next page loads when the end of the list scrolls into view, with a
+  **Load more** button for anyone who cannot scroll. Choosing one restores the conversation with what
+  was done with each proposal. Server functions check their inputs (`server/assistant.functions.ts`).
+- **The Send button** is as wide as the form.
+
+## On phones
+
+At 760 px and under the chat is a **floating bubble** (bottom right, above the bottom bar, safe-area
+aware) that opens the chat as a **full-screen sheet** (a Base UI dialog: focus kept inside, Escape and
+the close button return to the bubble). The selection made in the text stays, so the chat still works
+on it. New messages scroll into view **smoothly, only when the reader is already at the bottom** (the
+owner's own question always does); Lenis drives only the page's scroller, so the chat's own scroller
+scrolls natively, never animated under reduced motion. Messages carry avatars: the signed-in user's
+GitHub picture on theirs, the Shipcast mark on the assistant's.
 
 ## Related
 

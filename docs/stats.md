@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:57:08.545542324Z
-updated_at: 2026-10-26T09:16:37.250593464Z
+created_at: 2026-10-26T11:02:17.209413514Z
+updated_at: 2026-10-26T12:38:47.349156133Z
 tags:
     - stats
     - metrics
@@ -131,12 +131,15 @@ A parameter that is not valid is a 400 that says which and why.
 "tabs" variant) so that no part needs a long scroll: each tab fits about one screen on a desktop.
 
 - **The header**: the poster title at a smaller size (`clamp(40px, 6vw, 72px)`) and Export CSV, the
-  chart's series as a file.
+  chart's series as a file. On a phone Export CSV is an icon button (a download glyph, named "Export
+  CSV") beside the title, so it takes no row of its own.
 - **The filter bar**: the period as a segmented control (7 days, 30 days, 90 days, All; Custom appears
   while a custom range is shown) and one **Filters** button, which opens a popover with what the view
   is narrowed to (channels, accounts, launches, and Clear the filters), how the chart is drawn
   (grouped by channel, account or launch; lines, areas or bars; days or weeks, weeks only past 120
-  days; compared with the previous period or not) and a custom range. The button counts what is set.
+  days; compared with the previous period or not) and a custom range, chosen in one calendar (the
+  `DateRangePicker` of the [component layer](decisions/component-layer.md): two months side by side,
+  a bottom sheet on a phone, no later than today). The button counts what is set.
   "All" starts on the day of the first published launch, at most 731 days back, and is the last 30
   days while nothing is published.
 - **The tabs**: Overview, Posts, Accounts, Search, as Base UI Tabs in the component layer's
@@ -161,8 +164,11 @@ A parameter that is not valid is a 400 that says which and why.
   `apps/web/src/server/stats.server.ts` from what the engine already keeps (`articleUrls`,
   `indexStatus`, `statsOverview` on the `search` and `bing` sources); the launches filter narrows it.
 
-On a phone (320 px) the tabs scroll sideways, the period's options sit side by side, the ranking's
-rows become blocks, and the Accounts and Search tables scroll inside their own box, never the page.
+On a phone (up to 640 px, or a coarse pointer) the controls take two rows instead of three: the
+period becomes a Select and sits with **Filters** (a bottom sheet there) on one row, and the date range
+is a small caption under them. Both shapes of the period are rendered and CSS shows one, so the
+server's page is already right on a phone. The tabs scroll sideways, the ranking's rows become blocks,
+and the Accounts and Search tables scroll inside their own box, never the page.
 
 ## Checked
 
@@ -176,7 +182,9 @@ the parameters, the 400s and 404, and the OpenAPI document. On 2026-10-25 the fu
 copy of the live registry restored into a throwaway Postgres 17. For the page,
 `apps/web/test/stats-search.test.ts` and `apps/web/test/stats-server.test.ts` cover the address
 (the period "all", the tab), the search tab's input and what it lists; the page was checked running
-at 1440, 390 and 320 px wide.
+at 1440, 390 and 320 px wide. The date helpers behind the range picker are in
+`apps/web/test/dates.test.ts`; the phone layout of 2026-10-26 and the calendar's look were written
+without a running preview and are still to be checked by eye.
 
 ## Related
 

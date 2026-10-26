@@ -5,6 +5,7 @@ import { SessionExpiry } from '../components/SessionExpiry';
 import appCss from '../styles/app.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
+import layoutCss from '../styles/layout.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,6 +16,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: appCss },
       { rel: 'stylesheet', href: componentsCss },
       { rel: 'stylesheet', href: featuresCss },
+      { rel: 'stylesheet', href: layoutCss },
     ],
   }),
   shellComponent: Document,

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T10:16:47.77132413Z
-updated_at: 2026-10-26T10:16:47.77132413Z
+created_at: 2026-10-26T11:02:13.509448866Z
+updated_at: 2026-10-26T12:40:22.895807834Z
 tags:
     - decision
     - web-app
@@ -93,10 +93,10 @@ and the brand.yml form answered with the schema's raw `brand.yml:3:14 displayNam
 ## The tour
 
 [NextStep](https://nextstepjs.com) drives a tour of a few steps across Launches, a launch's page,
-Write and its assistant, Channels and Automation, on a Cartel card, crossing pages through a
-navigation adapter for TanStack Router. It is offered when the onboarding ends (taken or declined,
-remembered), and can be started again any time from the user menu or the command palette (**Take the
-tour**). Keyboard accessible, and without motion for anyone who asks the system for reduced motion.
+Write and its assistant, Channels and Automation (under Settings), on a Cartel card. It is offered
+when the onboarding ends (taken or declined, remembered), and can be started again any time from the
+user menu or the command palette (**Take the tour**). Keyboard accessible, and without motion for
+anyone who asks the system for reduced motion.
 
 ### The card
 
@@ -106,10 +106,36 @@ tour**). Keyboard accessible, and without motion for anyone who asks the system 
   the target, which for a full-width page title put it at the card's far corner, over the text. For a
   card aligned to the target's left the notch sits near the card's left end, over the target's start.
 - Targets stay small enough for the card to fit on screen: the Write step points at the page title,
-  not the form, and the assistant step at the chat's header, not the whole panel. A target hidden
-  under the phone's bottom bar is scrolled into view, since NextStep counts it as visible.
+  not the form, and the assistant step at the chat's header (the bubble on a phone), not the whole
+  panel.
 - **Skip the tour** is a plain underlined text link: text buttons (`.btn-link`) have no background
   anywhere in the app, without which the browser paints a grey box.
+
+### Moving between steps
+
+Fixed on 2026-10-26 after the owner found the tour jumpy. Read against NextStep 2.3.0's README and
+source, what went wrong:
+
+- `nextRoute` navigates, then moves to the next step at the **first DOM mutation in which the
+  selector exists**: the page has mounted but not settled, so the spotlight was measured early, and
+  nothing waited for a scroll.
+- **Several scrolls raced**: the step's effects, `scrollToElement`, and an effect that skips its
+  in-view check (its `useInView` ref is never attached) all call `scrollIntoView({ behavior:
+  'smooth' })`, the last one always putting the target at the top of the window; our own reveal for
+  the phone's bottom bar added another. `noInViewScroll` switches the always-on one off.
+- **The card and the spotlight glided differently**: the spotlight's 0.4 s ease-in-out is fixed in
+  the library, the card's `cardTransition` was 0.25 s ease-out.
+- A native smooth scroll fights **Lenis**, which owns the page's scrolling.
+- Focusing the card on each step jumped the page to it (`focus()` scrolls): now `preventScroll`.
+
+Now the steps keep `nextRoute`/`prevRoute` as data, but the card's buttons and the arrow keys (NextStep's
+own are blocked) go through one conductor (`TourRuntime.tsx`): it navigates **without resetting the
+scroll**, so the card and spotlight stay where they were while the next page loads; waits for the
+target and for its box to stop moving; scrolls it, with Lenis, into the part of the window no bar
+covers (room for the card below, above or beside it, as its side says); and only then moves NextStep on,
+with the target already in view so the library has nothing to scroll. The card is matched to the
+spotlight's glide, the buttons wait while a move is under way, and a target fixed to the screen (the
+phone's bubble) keeps its spotlight through a scroll.
 
 ## Related
 
