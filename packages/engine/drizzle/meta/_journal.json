@@ -57,6 +57,13 @@
       "when": 1793019081235,
       "tag": "0008_assistant_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793025995489,
+      "tag": "0009_attention_dismissals",
+      "breakpoints": true
     }
   ]
 }

@@ -262,3 +262,11 @@ export const assistantMessages = pgTable(
   },
   (t) => [index('assistant_messages_by_session').on(t.sessionId, t.id)],
 );
+
+// The bell's lines the owner dismissed, by the item's key. A key carries the state it was made for
+// (`launch:12:waiting:<updated at>`), so a dismissal hides the line while its condition lasts and a
+// new condition is a new line; dismissals of lines that are gone are forgotten. See docs/web-app.md
+export const attentionDismissals = pgTable('attention_dismissals', {
+  key: text('key').primaryKey(),
+  dismissedAt: text('dismissed_at').notNull().default(nowIso),
+});
