@@ -57,9 +57,16 @@ export function LaunchCard({ launch }: { launch: LaunchView }) {
             <span className="post" style={{ gridColumn: 'span 2' }}>
               {launch.problem ? launch.problem.split('\n')[0] : launch.pullRequest ? 'Drafts are waiting in the pull request.' : 'Nothing published yet.'}
             </span>
-            <Link className="btn btn-small" style={{ color: 'inherit' }} to="/launches/$id" params={{ id: String(launch.id) }}>
-              Open
-            </Link>
+            <span className="row">
+              {launch.status === 'drafted' && launch.pullRequest && (
+                <Link className="btn btn-small" style={{ color: 'inherit' }} to="/launches/$id/edit" params={{ id: String(launch.id) }}>
+                  Edit
+                </Link>
+              )}
+              <Link className="btn btn-small" style={{ color: 'inherit' }} to="/launches/$id" params={{ id: String(launch.id) }}>
+                Open
+              </Link>
+            </span>
           </li>
         </ol>
       )}

@@ -310,6 +310,27 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     return { sha: merged.sha };
   }
 
+  /**
+   * The repos the GitHub App's installation can reach, newest push first, with their default branch:
+   * where the launches repo is chosen from. Only works with the App's installation token.
+   */
+  async installationRepos(): Promise<Array<{ repo: string; description: string | null; pushedAt: string; defaultBranch: string; private: boolean }>> {
+    const out: Array<{ repo: string; description: string | null; pushedAt: string; defaultBranch: string; private: boolean }> = [];
+    for (let page = 1; page <= 5; page++) {
+      const data = (await this.#ok('GET', `/installation/repositories?per_page=100&page=${page}`)) as {
+        repositories: Array<{ full_name: string; description: string | null; pushed_at: string; default_branch: string; private: boolean; archived: boolean }>;
+      };
+      out.push(...data.repositories.filter((r) => !r.archived).map((r) => ({ repo: r.full_name, description: r.description, pushedAt: r.pushed_at, defaultBranch: r.default_branch, private: r.private })));
+      if (data.repositories.length < 100) break;
+    }
+    return out.sort((a, b) => b.pushedAt.localeCompare(a.pushedAt));
+  }
+
+  /** A repo's default branch, where a file added outside a pull request is committed */
+  async defaultBranch(repo: string): Promise<string> {
+    return ((await this.#ok('GET', `/repos/${repo}`)) as { default_branch: string }).default_branch;
+  }
+
   /** An owner's public repos, newest push first, for choosing what to launch */
   async userRepos(owner: string): Promise<Array<{ repo: string; description: string | null; pushedAt: string }>> {
     const repos = (await this.#ok('GET', `/users/${encodeURIComponent(owner)}/repos?per_page=100&sort=pushed&type=owner`)) as Array<{

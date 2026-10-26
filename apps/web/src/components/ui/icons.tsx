@@ -70,3 +70,20 @@ export const MoreIcon = (p: IconProps) => (
     <path d="M4 7h16M4 12h16M4 17h16" />
   </Glyph>
 );
+/** The writing assistant: a spark, as in the OnboardAI scene */
+export const SparkIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18" />
+  </Glyph>
+);
+export const ChatIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M5 5h14v10H10l-5 4z" />
+  </Glyph>
+);
+export const HelpIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M9.75 9.5a2.25 2.25 0 114 1.4c-.9.7-1.75 1.2-1.75 2.6M12 16.75h.01" />
+  </Glyph>
+);

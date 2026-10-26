@@ -1,4 +1,5 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { APICallError, type ModelMessage } from 'ai';
 import { SdkProvider, type AiProvider, type ObjectRequest, type ObjectResult, type TextRequest } from './ai.ts';
 
 export class ClaudioError extends Error {
@@ -44,7 +45,9 @@ export interface ClaudioOptions {
  * the model answers through Claude Code's `StructuredOutput` tool, then stopped (claudio keeps a
  * finished chat's process alive for a follow-up, so stopping it is what frees the slot). That path
  * is what lets Claude Code explore the repo itself. Streamed text, for the writing assistant, goes
- * through claudio's OpenAI-compatible surface at `/api/v1` (docs/decisions/ai-providers.md).
+ * through claudio's OpenAI-compatible surface at `/api/v1` (docs/decisions/ai-providers.md); while
+ * that surface does not exist, the same text comes through the REST API instead, whole
+ * (docs/decisions/writing-assistant.md).
  */
 export class Claudio implements AiProvider {
   readonly id = 'claudio' as const;
@@ -68,8 +71,44 @@ export class Claudio implements AiProvider {
     this.#text = new SdkProvider({ id: 'claudio', model: (id) => openai(id ?? 'default') });
   }
 
-  streamText(request: TextRequest): AsyncIterable<string> {
-    return this.#text.streamText(request);
+  /**
+   * Streams through `/api/v1` when claudio has it. A claudio without it answers 404 before any text,
+   * and then the answer comes through the REST API as one piece: a chat with no tools, whose answer
+   * is a one-field structured output. A failure after text has arrived is never retried that way.
+   */
+  async *streamText(request: TextRequest): AsyncIterable<string> {
+    let spoke = false;
+    try {
+      for await (const chunk of this.#text.streamText(request)) {
+        spoke = true;
+        yield chunk;
+      }
+      return;
+    } catch (error) {
+      if (spoke || !surfaceMissing(error)) throw error;
+    }
+    request.onWhole?.();
+    yield await this.wholeText(request);
+  }
+
+  /** The assistant's answer through the REST API: not streamed, so it arrives at once */
+  async wholeText(request: TextRequest): Promise<string> {
+    const result = await this.#run(
+      {
+        prompt: transcript(request),
+        ...(request.system && { appendSystemPrompt: request.system }),
+        jsonSchema: WHOLE_TEXT_SCHEMA,
+        cwd: request.cwd ?? '/workspace',
+        // Nothing to read: the text to work on is in the prompt
+        allowedTools: [],
+        model: request.model,
+        maxTurns: 3,
+      },
+      { pollMs: Math.min(this.#pollMs, 1000), signal: request.abortSignal },
+    );
+    const output = result.output as { text?: unknown } | null;
+    if (typeof output?.text !== 'string') throw new ClaudioError('claudio answered without the text', result.chatId);
+    return output.text;
   }
 
   async #call(method: 'GET' | 'POST', path: string, body?: unknown): Promise<unknown> {
@@ -88,7 +127,11 @@ export class Claudio implements AiProvider {
     return response.json();
   }
 
-  async generateObject(request: ObjectRequest): Promise<ObjectResult> {
+  generateObject(request: ObjectRequest): Promise<ObjectResult> {
+    return this.#run(request, { pollMs: this.#pollMs });
+  }
+
+  async #run(request: ObjectRequest, options: { pollMs: number; signal?: AbortSignal }): Promise<ObjectResult> {
     const started = (await this.#call('POST', '/chats', {
       prompt: request.prompt,
       cwd: request.cwd,
@@ -124,7 +167,9 @@ export class Claudio implements AiProvider {
           throw new ClaudioError('claudio chat ended without a structured answer', chatId);
         }
         if (Date.now() > deadline) throw new ClaudioError(`claudio chat took longer than ${this.#timeoutMs} ms`, chatId);
-        await this.#sleep(this.#pollMs);
+        // Whoever asked has gone (the page was closed): the chat is stopped below instead of finishing for nobody
+        if (options.signal?.aborted) throw new ClaudioError('the request was cancelled', chatId);
+        await this.#sleep(options.pollMs);
       }
     } finally {
       await this.#call('POST', `/chats/${chatId}/stop`).catch(() => undefined);
@@ -141,4 +186,33 @@ function structuredOutput(view: ChatView): unknown {
     if (call) return call.input;
   }
   return undefined;
+}
+
+/** The one field the REST fallback answers with */
+const WHOLE_TEXT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['text'],
+  properties: { text: { type: 'string', description: 'Your whole answer, exactly as it should be shown' } },
+};
+
+/** claudio without its OpenAI-compatible API: the route is not there, so nothing was sent to a model */
+function surfaceMissing(error: unknown): boolean {
+  return APICallError.isInstance(error) && [404, 405, 501].includes(error.statusCode ?? 0);
+}
+
+function textOf(content: ModelMessage['content']): string {
+  if (typeof content === 'string') return content;
+  return content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+}
+
+/**
+ * A chat turned into one prompt for the REST fallback, which takes one prompt per chat: the turns
+ * so far, labelled, and the last request to answer.
+ */
+export function transcript(request: Pick<TextRequest, 'prompt' | 'messages'>): string {
+  const messages = (request.messages ?? []).filter((m) => m.role === 'user' || m.role === 'assistant');
+  if (messages.length === 0) return `${request.prompt ?? ''}\n\nPut your whole answer in \`text\`.`;
+  const turns = messages.map((m) => `${m.role === 'user' ? 'The owner' : 'You'} wrote:\n${textOf(m.content).trim()}`);
+  return ['The conversation so far, oldest first:', '', turns.join('\n\n'), '', 'Answer the owner’s last message. Put your whole answer in `text`.'].join('\n');
 }
