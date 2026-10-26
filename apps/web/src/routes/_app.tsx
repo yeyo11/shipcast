@@ -168,19 +168,22 @@ function Shell() {
                 <li>
                   <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} />}>Launch a repo</DrawerClose>
                 </li>
-                <li role="group" aria-labelledby="more-settings" className="drawer-group" data-current={settingsHere ? '' : undefined}>
-                  <span id="more-settings" className="drawer-group-title">
-                    {settingsHere && <span className="ui-option-dot" aria-hidden="true" />}
-                    Settings
-                    {settingsHere && <span className="visually-hidden">, the current section</span>}
-                  </span>
-                  <ul className="drawer-sublinks">
-                    {SETTINGS_GROUP.map((s) => (
-                      <li key={s.to}>
-                        <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
-                      </li>
-                    ))}
-                  </ul>
+                {/* The group is the li's child: a li with a role of its own is no longer a list item */}
+                <li>
+                  <div role="group" aria-labelledby="more-settings" className="drawer-group" data-current={settingsHere ? '' : undefined}>
+                    <span id="more-settings" className="drawer-group-title">
+                      {settingsHere && <span className="ui-option-dot" aria-hidden="true" />}
+                      Settings
+                      {settingsHere && <span className="visually-hidden">, the current section</span>}
+                    </span>
+                    <ul className="drawer-sublinks">
+                      {SETTINGS_GROUP.map((s) => (
+                        <li key={s.to}>
+                          <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </li>
                 <li>
                   <button

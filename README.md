@@ -18,9 +18,14 @@ channel did.
 
 > [!NOTE]
 > Shipcast is **alpha**, built for and used by its author: it launched
-> [claudio](https://github.com/yeyo11/claudio) v0.9.0 on six channels. It runs on your own machine
-> with your own accounts. Installing it for yourself takes some setup today (below); a GitHub Action
-> mode and a one-command install are on [the roadmap](docs/plans/shipcast.md#roadmap).
+> [claudio](https://github.com/yeyo11/claudio) v0.9.0 and its own v0.1.0. It runs on your own machine
+> with your own accounts, or in GitHub Actions; [installing it](#what-you-need) takes one command and
+> the app's onboarding.
+
+Read the launch article, written and published by Shipcast itself:
+[Shipcast: launch your GitHub projects without writing the announcement ten times](https://josegarrido.dev/en/shipcast-launch-your-github-projects/)
+([en español](https://josegarrido.dev/es/shipcast-lanza-tus-proyectos-de-github/)), and every launch
+on [the project's page](https://josegarrido.dev/en/projects/shipcast/) of the author's blog.
 
 ## How it works
 
@@ -66,11 +71,19 @@ channel's piece and publishes it the same way.
 `pnpm app` serves Shipcast's web app on a domain of yours reachable only over your
 [Tailscale](https://tailscale.com) network, with its own Let's Encrypt certificate:
 
-- **Launches**: every launch, where it went, what is waiting for you, and its numbers.
+- **Launches**: every launch, where it went, what is waiting for you, and its numbers; a launch's
+  page edits or deletes what went out, where the network allows it, and schedules what has not.
+- **Stats**: charts by channel, account, launch and dates, a ranking normalised per network, and
+  each account's followers over time.
+- **Comments**: the replies under your posts, each with a reply drafted from the project's code,
+  sent when you approve it.
 - **Channels**: every network, the accounts connected to each (per brand, several per network), what
-  Shipcast may do with them, a check of each credential, and OAuth for Mastodon and Instagram. Secrets
+  Shipcast may do with them, a check of each credential, and OAuth where the network has it. Secrets
   live in your operating system's keychain.
-- **Launch a repo** and **Write**, with the choice to review first or publish directly.
+- **Launch a repo** and **Write**, with a writing assistant beside every draft and the choice to
+  review first or publish directly.
+- **Settings**: the AI providers and prompts, automation (polling or GitHub webhooks), and API tokens
+  for the REST API and the MCP server ([docs/mcp.md](docs/mcp.md)).
 
 Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](docs/web-app.md).
 

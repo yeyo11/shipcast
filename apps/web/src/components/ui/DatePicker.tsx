@@ -56,7 +56,7 @@ function Shell({ phone, label, trigger, open, onOpenChange, children }: { phone:
 function Trigger({ id, label, text, placeholder, disabled, ...rest }: { id?: string; label: string; text: string; placeholder: string; disabled?: boolean }) {
   // Base UI's trigger passes its own props (aria-expanded, onClick, the ref) through `rest`
   return (
-    <button {...rest} type="button" id={id} className="ui-trigger ui-date-trigger" disabled={disabled} aria-label={`${label}: ${text || 'not set'}`}>
+    <button {...rest} type="button" id={id} className="ui-trigger ui-date-trigger" disabled={disabled} aria-label={`${label}: ${text || placeholder}`}>
       <span className="ui-trigger-value" data-placeholder={text ? undefined : ''}>
         {text || placeholder}
       </span>
