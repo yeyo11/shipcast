@@ -110,8 +110,6 @@ export async function importFromEnv(
   const results: Array<{ network: string; result: Connected }> = [];
   for (const info of NETWORKS) {
     if ((await deps.registry.accounts({ brand: brandId, network: info.id })).length > 0) continue;
-    // Without a GitHub App the engine still runs on this token, so it stays in .env, where the engine reads it
-    if (info.id === 'github') continue;
     let credentials: Credentials | undefined;
     try {
       credentials = credentialsFromEnv(info.id, env, brand, readFile);

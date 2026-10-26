@@ -12,7 +12,6 @@ test('every network lands in the tab for what it does', () => {
   assert.equal(group('brevo'), 'blog');
   assert.equal(group('cloudflare'), 'measurement');
   assert.equal(group('searchConsole'), 'measurement');
-  assert.equal(group('github'), 'measurement');
   assert.equal(group('anthropic'), 'ai');
   assert.equal(group('openaiCompatible'), 'ai');
 });

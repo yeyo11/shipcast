@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T16:39:21.049141503Z
-updated_at: 2026-10-26T20:52:38.02928536Z
+created_at: 2026-10-26T21:05:32.672714711Z
+updated_at: 2026-10-26T21:25:22.797550311Z
 tags:
     - accounts
     - channels
@@ -43,14 +43,13 @@ Hunt, which were drafts only (`none`), are gone
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
 | Telegram | bot token, channel, owner's chat | a post with the launch image | — (the Bot API gives bots no counts) |
 | Discord | webhook URL | a message with an embed | — (webhooks cannot read) |
-| GitHub | fine-grained token | — | stars, forks, traffic |
 | Blog analytics (Cloudflare) | API token, account id, site tag | — | visits by source |
 | Google Search Console | service account JSON key | — | clicks, impressions |
 
-**GitHub as an account is only the metrics' source.** The engine reaches GitHub through the GitHub
-App ([decisions/github-app.md](decisions/github-app.md)), which reads stars, forks and watchers too;
-a repo's traffic needs Administration: read, which the App is not granted, so it comes from a
-connected GitHub account with that permission, or from `GITHUB_TOKEN_PERSONAL` while it is in `.env`.
+**GitHub is not an account.** The engine reaches GitHub through the GitHub App
+([decisions/github-app.md](decisions/github-app.md)), which also reads each repo's stars, forks,
+watchers and, since 2026-10-26, its traffic (Administration: read). The GitHub "network" that held a
+fine-grained token for the traffic, or `GITHUB_TOKEN_PERSONAL` from `.env`, was removed that day.
 
 ## Accounts
 
@@ -70,8 +69,7 @@ the identity the network reported, the problem if it failed, and its profile pic
   ("the token belongs to another account", "rejected: wrong, revoked or expired", "lacks a
   permission"), not as a status code. Connecting the same account again replaces its credential.
 - **Import from .env.** One button checks every credential `.env` holds and moves it into the
-  keychain as a connected account; `GITHUB_TOKEN_PERSONAL` stays in `.env`, since without a GitHub App
-  the engine still runs on it. Run on 2026-10-25: six networks moved; Mastodon's token in `.env`
+  keychain as a connected account. Run on 2026-10-25: six networks moved; Mastodon's token in `.env`
   turned out to be invalid and needs connecting again through OAuth. The app-level settings that
   were in `.env` (the launches repo, claudio, the Instagram app) are imported on their own at start,
   into the Settings page ([decisions/github-app.md](decisions/github-app.md)).
@@ -85,7 +83,7 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
   `groupOf` (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives it from
   what the catalog says, so a new connector lands in the right tab by itself: an AI provider (the
   Anthropic API, an OpenAI-compatible server) is under AI providers; a network with no channel to
-  publish to (GitHub, Cloudflare, Search Console, Bing) is Measurement; dev.to, Hashnode and the
+  publish to (Cloudflare, Search Console, Bing) is Measurement; dev.to, Hashnode and the
   newsletter are Blog & newsletter; every other channel is Social. Each tab shows how many accounts it
   holds. Without a tab in the address the page opens on the first tab with an account, and an account
   that was just connected opens its own tab.
@@ -106,7 +104,7 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
 
 - **Avatars.** A working `check()` also returns the profile's picture (`avatarUrl`) and name
   (`displayName`) where the same answer has them: Bluesky (the public profile, read after the
-  sign-in), Mastodon, Instagram, dev.to, Hashnode, Reddit, a Discord webhook's own picture, GitHub.
+  sign-in), Mastodon, Instagram, dev.to, Hashnode, Reddit and a Discord webhook's own picture.
   Every check stores the picture; a check that finds none, or fails, leaves the last one. Only plain
   `https` addresses are kept, never one that carries a credential, so a Telegram channel has none
   (its photo is only downloadable at an address with the bot token in it). The signed-in user's

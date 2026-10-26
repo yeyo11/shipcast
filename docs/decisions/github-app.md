@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:25:42.456948845Z
-updated_at: 2026-10-25T16:28:34.911338763Z
+created_at: 2026-10-25T16:54:56.185308972Z
+updated_at: 2026-10-26T21:24:41.319685138Z
 tags:
     - decision
     - github-app
@@ -9,6 +9,7 @@ tags:
     - configuration
     - settings
     - phase-6
+    - metrics
 ---
 # The GitHub App, and the configuration in two parts
 
@@ -21,8 +22,9 @@ App** instead of an OAuth App plus a personal token, and its configuration is sp
 ## Why an App
 
 - **One identity, scoped.** The App has exactly the permissions Shipcast uses (Contents, Pull requests
-  and Discussions read and write, Metadata read) on the repos the owner installs it on, instead of a
-  fine-grained token the owner has to make, scope and renew by hand.
+  and Discussions read and write, Metadata read, and since 2026-10-26 Administration read for a repo's
+  traffic) on the repos the owner installs it on, instead of a fine-grained token the owner has to
+  make, scope and renew by hand.
 - **Webhooks for every repo at once.** An App's webhook covers every repo it is installed on, new ones
   included; per-repo webhooks on a user account had to be added repo by repo.
 - **Tokens that expire on their own.** Installation tokens last an hour and user tokens eight hours;
@@ -41,8 +43,8 @@ App** instead of an OAuth App plus a personal token, and its configuration is sp
   `401` it forgets a minted token and tries once more. Everything the engine does in the background
   goes through it: the user's events and repos, releases, `launch.yml`, the pre-flight reads,
   committing drafts and opening their pull requests in the launches repo, editing a draft, merging,
-  and later Discussions. One installation is used: the repos launched and the launches repo are
-  expected on the same account.
+  Discussions, and the repo's numbers. One installation is used: the repos launched and the launches
+  repo are expected on the same account.
 - **The owner: a user token** (`packages/runtime/src/github-user.ts`, `GitHubUserTokens`). Signing in
   through the App's client id and secret is GitHub's usual web flow on the same callback
   (`/auth/github/callback`); the answer carries an access token (8 hours) and a refresh token
@@ -61,16 +63,22 @@ App's bot, not by the owner's account. The launches repo's history shows the bot
 pull requests are opened by it, and the owner still reviews and merges them (or approves them in the
 app, which merges as the bot).
 
-## A repo's traffic is not the App's
+## A repo's traffic, through the App
 
 The metrics' `github` source reads stars, forks and watchers with any token, but a repo's traffic
-(`/repos/{owner}/{repo}/traffic/views`) needs **Administration: read**, which the App is not granted:
-an installation token gets `403 Resource not accessible by integration` (checked on 2026-10-25), and a
-user token of the App is limited to the App's permissions too. So traffic comes from a connected
-**GitHub account** (a fine-grained token with Administration: read), or from `GITHUB_TOKEN_PERSONAL`
-while it is still in `.env`, as the fallback of that account for the brand `.env` speaks for. Without
-either, the public numbers are read and traffic is left out, as before. Giving the App Administration
-was not done: it would let it change repo settings.
+(`/repos/{owner}/{repo}/traffic/views`) needs **Administration: read**. On 2026-10-25 the App was not
+granted it (an installation token got `403 Resource not accessible by integration`), so traffic came
+from a connected **GitHub account** or from `GITHUB_TOKEN_PERSONAL` in `.env`; giving the App
+Administration was not done then, thinking it would let it change repo settings.
+
+Changed on 2026-10-26 by the owner: the App is granted **Administration: read** (read only: it can see
+a repo's settings, collaborators and branch protection, and change none of them), and the traffic is
+read with the installation token like the rest. The GitHub "network" in Channels, which was only that
+metrics source, is gone, and so is `GITHUB_TOKEN_PERSONAL` for an install with the App; the import
+from `.env` used to skip it on purpose, which left the Channels page saying one network still worked
+from `.env` forever. `shipcast init`'s manifest asks for it, so a new App has it from the start; an
+App created before needs the permission added in its settings and accepted on the installation. Until
+then the public numbers are read and traffic is left out.
 
 ## Webhooks
 
@@ -113,8 +121,8 @@ Polling stays while GitHub cannot reach the app.
 
 With no App in `.env`, the engine runs on `GITHUB_TOKEN_PERSONAL` and the owner signs in through the
 old OAuth App (`SHIPCAST_GITHUB_CLIENT_ID`, `SHIPCAST_GITHUB_CLIENT_SECRET`), as before, so an install
-keeps working mid-way. With the App, both are unused (but for the traffic above) and can be removed
-once the owner has signed in through the App.
+keeps working mid-way. With the App, all three are unused and can be removed once the owner has
+signed in through the App.
 
 ## Related
 

@@ -160,8 +160,8 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
   publishers.githubDiscussions = posts.githubDiscussions = discussions;
   configured.push('github discussions');
 
-  const github = (await built('github'))?.github;
-  if (github) sources.github = new GitHubRest({ token: github.token, fetch: deps.fetch });
+  // Stars, forks, watchers and the repo's traffic through the App's installation: traffic needs its
+  // Administration: read, granted on 2026-10-26; without it the public numbers are read
   configured.push('github');
   const cloudflare = (await built('cloudflare'))?.cloudflare;
   if (cloudflare) {

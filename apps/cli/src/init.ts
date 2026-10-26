@@ -89,7 +89,7 @@ export function appManifest(options: { login: string; baseUrl: string; redirectU
   return {
     name: `Shipcast ${options.login}`.slice(0, 34),
     url: 'https://github.com/yeyo11/shipcast',
-    description: `Shipcast for ${options.login}: reads the repos' releases and the launches repo, opens drafts pull requests and posts launch discussions.`,
+    description: `Shipcast for ${options.login}: reads the repos' releases, traffic and the launches repo, opens drafts pull requests and posts launch discussions.`,
     public: false,
     redirect_url: options.redirectUrl,
     callback_urls: [`${options.baseUrl}/auth/github/callback`],
@@ -98,7 +98,8 @@ export function appManifest(options: { login: string; baseUrl: string; redirectU
     // A machine nobody can reach takes no webhooks: Shipcast polls until it has a public address
     hook_attributes: { url: `${options.baseUrl}/api/github/webhook`, active: options.baseUrl.startsWith('https://') && !options.baseUrl.endsWith('.localhost') },
     default_events: ['release', 'pull_request', 'repository', 'push'],
-    default_permissions: { metadata: 'read', contents: 'write', pull_requests: 'write', discussions: 'write' },
+    // Administration: read is only for a repo's traffic (views and unique visitors), which GitHub keeps behind it
+    default_permissions: { metadata: 'read', contents: 'write', pull_requests: 'write', discussions: 'write', administration: 'read' },
   };
 }
 

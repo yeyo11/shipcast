@@ -204,15 +204,6 @@ export const NETWORKS: readonly Network[] = [
     howTo: 'Discord → the channel’s settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
   },
   {
-    id: 'github',
-    name: 'GitHub',
-    metrics: true,
-    auth: 'form',
-    fields: [{ key: 'token', label: 'Fine-grained token', secret: true }],
-    permissions: ['Reads stars, forks and watchers', 'Reads the repo’s traffic (needs Administration: read)'],
-    howTo: 'GitHub → Settings → Developer settings → Fine-grained tokens, with read access to the repos you launch.',
-  },
-  {
     id: 'cloudflare',
     name: 'Blog analytics (Cloudflare)',
     metrics: true,
@@ -287,32 +278,6 @@ function need(values: Record<string, string>, key: string, network: string): str
   return value;
 }
 
-interface GitHubUser {
-  login: string;
-  name?: string | null;
-  avatar_url?: string;
-  followers?: number;
-  following?: number;
-  public_repos?: number;
-}
-
-async function gitHubUser(token: string, http: typeof fetch, what: string): Promise<GitHubUser> {
-  const response = await http('https://api.github.com/user', {
-    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'user-agent': 'shipcast' },
-  });
-  return json<GitHubUser>('GitHub', response, what);
-}
-
-/** A GitHub token's owner, checked without the engine's client */
-async function checkGitHub(token: string, http: typeof fetch): Promise<Check> {
-  try {
-    const user = await gitHubUser(token, http, 'check');
-    return okCheck(`@${user.login}`, { avatarUrl: user.avatar_url, displayName: user.name });
-  } catch (error) {
-    return checkProblem(error);
-  }
-}
-
 /** An Anthropic key, checked by listing the models it may use */
 async function checkAnthropic(apiKey: string, http: typeof fetch): Promise<Check> {
   try {
@@ -341,12 +306,6 @@ async function checkOpenAiCompatible(baseUrl: string, model: string, apiKey: str
   }
 }
 
-/** A GitHub user's posts are their public repos: what they ship */
-async function gitHubStats(token: string, http: typeof fetch): Promise<ProfileStats> {
-  const user = await gitHubUser(token, http, 'read the profile');
-  return statsOf({ followers: user.followers, following: user.following, posts: user.public_repos });
-}
-
 /** The connectors one network's account builds, whichever of them the network has. */
 export interface Built {
   check(): Promise<Check>;
@@ -363,7 +322,6 @@ export interface Built {
   hashnode?: Hashnode;
   telegram?: Telegram;
   discord?: Discord;
-  github?: { token: string };
   cloudflare?: CloudflareAnalytics;
   searchConsole?: SearchConsole;
   bing?: BingWebmaster;
@@ -421,10 +379,6 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     case 'discord': {
       const discord = new Discord({ webhookUrl: v('webhookUrl'), fetch: http });
       return { discord, check: () => discord.check() };
-    }
-    case 'github': {
-      const token = v('token');
-      return { github: { token }, check: () => checkGitHub(token, http), profileStats: () => gitHubStats(token, http) };
     }
     case 'cloudflare': {
       const cloudflare = new CloudflareAnalytics({ apiToken: v('apiToken'), accountId: v('accountId'), siteTag: v('siteTag'), fetch: http });
@@ -510,10 +464,6 @@ export function credentialsFromEnv(id: string, env: NodeJS.ProcessEnv, brand: Br
         : undefined;
     case 'searchConsole':
       return has('GOOGLE_SERVICE_ACCOUNT_FILE') ? { settings: {}, secrets: { serviceAccount: readFile(env.GOOGLE_SERVICE_ACCOUNT_FILE!) } } : undefined;
-    case 'github':
-      // The token the engine ran on before the GitHub App: with the App it is only the metrics'
-      // source, since a repo's traffic needs Administration: read, which the App is not granted
-      return has('GITHUB_TOKEN_PERSONAL') ? { settings: {}, secrets: { token: env.GITHUB_TOKEN_PERSONAL! } } : undefined;
     case 'bingWebmaster':
       return has('BING_WEBMASTER_API_KEY') ? { settings: {}, secrets: { apiKey: env.BING_WEBMASTER_API_KEY! } } : undefined;
     default:

@@ -23,7 +23,7 @@ test('the bootstrap .env holds only what the app needs before anyone signs in', 
 
 test("the App's manifest asks for what the engine uses, and takes webhooks only where GitHub can reach them", () => {
   const served = appManifest({ login: 'yeyo11', baseUrl: 'https://shipcast.example.dev', redirectUrl: 'http://127.0.0.1:5000/created' });
-  assert.deepEqual(served.default_permissions, { metadata: 'read', contents: 'write', pull_requests: 'write', discussions: 'write' });
+  assert.deepEqual(served.default_permissions, { metadata: 'read', contents: 'write', pull_requests: 'write', discussions: 'write', administration: 'read' });
   assert.deepEqual(served.default_events, ['release', 'pull_request', 'repository', 'push']);
   assert.deepEqual(served.callback_urls, ['https://shipcast.example.dev/auth/github/callback']);
   assert.equal(served.public, false);

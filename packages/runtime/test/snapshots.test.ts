@@ -29,12 +29,11 @@ const networks = (async (input: string | URL | Request) => {
   if (url === 'https://mastodon.social/api/v1/accounts/verify_credentials') {
     return Response.json({ acct: 'me', avatar: 'https://files.mastodon.social/me.png', followers_count: 30, following_count: 12, statuses_count: 200 });
   }
-  if (url === 'https://api.github.com/user') return Response.json({ login: 'me', avatar_url: 'https://avatars.githubusercontent.com/u/1', followers: 50, following: 4, public_repos: 20 });
   if (url === 'https://api.brevo.com/v3/account') return Response.json({ email: 'me@x.dev' });
   return new Response('unexpected', { status: 500 });
 }) as typeof fetch;
 
-/** Four connected accounts, each with its secrets in the keychain; Brevo counts nothing */
+/** Three connected accounts, each with its secrets in the keychain; Brevo counts nothing */
 async function connected(registry: Registry, secrets: MemoryStore): Promise<Record<string, number>> {
   const ids: Record<string, number> = {};
   const add = async (network: string, label: string, settings: Record<string, string>, secret: Record<string, string>) => {
@@ -44,7 +43,6 @@ async function connected(registry: Registry, secrets: MemoryStore): Promise<Reco
   };
   await add('devto', '@me', {}, { apiKey: 'k' });
   await add('mastodon', '@me@mastodon.social', { instance: 'https://mastodon.social' }, { accessToken: 't' });
-  await add('github', '@me', {}, { token: 'g' });
   await add('brevo', 'me@x.dev', {}, { apiKey: 'b' });
   return ids;
 }
@@ -74,12 +72,11 @@ test('the daily job checks every account, records a snapshot where the network c
   const last = await registry.lastSnapshots();
   assert.deepEqual([last.get(ids.devto!)?.followers, last.get(ids.devto!)?.posts, last.get(ids.devto!)?.following], [2, 1, null]);
   assert.deepEqual([last.get(ids.mastodon!)?.followers, last.get(ids.mastodon!)?.following, last.get(ids.mastodon!)?.posts], [30, 12, 200]);
-  assert.deepEqual([last.get(ids.github!)?.followers, last.get(ids.github!)?.posts], [50, 20]);
   assert.equal(last.has(ids.brevo!), false, 'Brevo gives no counts');
 
   // Every account was checked again, and the picture the check found is kept
   assert.equal((await registry.account(ids.mastodon!))?.avatarUrl, 'https://files.mastodon.social/me.png');
-  assert.equal((await registry.account(ids.github!))?.avatarUrl, 'https://avatars.githubusercontent.com/u/1');
+  assert.equal((await registry.account(ids.devto!))?.avatarUrl, 'https://media.dev.to/me.png');
   assert.equal((await registry.account(ids.brevo!))?.status, 'ok');
   assert.ok(lines.some((l) => /Newsletter \(Brevo\) me@x\.dev: checked; its network gives no follower counts/.test(l)), lines.join('\n'));
   assert.ok(lines.some((l) => /Mastodon @me@mastodon\.social: 30 followers, 12 following, 200 posts/.test(l)), lines.join('\n'));
@@ -94,7 +91,7 @@ test('an account whose check fails records no numbers, and the others still sync
   await workHandlers({} as unknown as WorkQueue, workDeps(registry, secrets)).snapshots!({ reason: 'daily' }, job(lines));
   const last = await registry.lastSnapshots();
   assert.equal(last.has(ids.mastodon!), false);
-  assert.equal(last.get(ids.github!)?.followers, 50);
+  assert.equal(last.get(ids.devto!)?.followers, 2);
   assert.equal((await registry.account(ids.mastodon!))?.status, 'failed');
 });
 
@@ -106,8 +103,8 @@ test('with automation off the daily job waits, and the same job by hand runs', a
   const { snapshots } = workHandlers({} as unknown as WorkQueue, workDeps(registry, secrets));
   await snapshots!({ reason: 'daily' }, job([]));
   assert.equal((await registry.lastSnapshots()).size, 0);
-  await snapshots!({ reason: BY_HAND, accountId: ids.github! }, job([]));
-  assert.deepEqual([...(await registry.lastSnapshots()).keys()], [ids.github]);
+  await snapshots!({ reason: BY_HAND, accountId: ids.devto! }, job([]));
+  assert.deepEqual([...(await registry.lastSnapshots()).keys()], [ids.devto]);
 });
 
 test('an account is stale after 36 hours without a snapshot or a check', () => {
@@ -150,7 +147,7 @@ test('Sync now queues one job for that account, a second click is the same job, 
   assert.ok(first);
   assert.equal(await syncNow(queue, account), first, 'a second click while it waits is the same job');
   assert.equal((await registry.job(first))?.title, `Syncing ${account.label}`);
-  assert.deepEqual(await queue.queued('snapshots', `account:${ids.github}`), [], 'another account has nothing queued');
+  assert.deepEqual(await queue.queued('snapshots', `account:${ids.devto}`), [], 'another account has nothing queued');
 
   await queue.work({ snapshots: workHandlers(queue, workDeps(registry, secrets)).snapshots! });
   const done = await queue.wait(first, 20_000, 100);
