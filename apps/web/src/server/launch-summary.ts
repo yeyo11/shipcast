@@ -77,10 +77,59 @@ export function dailyViews(points: ReadonlyArray<{ bucket: string; increase: num
     .slice(-max);
 }
 
-/** What a launch's card and its page lead with */
+/** One channel's share of a launch: only the totals its network counts (a metric it does not count is absent, not 0) */
+export interface ChannelNumbers {
+  totals: Partial<Totals>;
+  daily: Day[];
+}
+
+/** What a launch's card and its page lead with, and each channel's part of it */
 export interface LaunchNumbers {
   totals: Totals;
   daily: Day[];
+  channels: Record<string, ChannelNumbers>;
+}
+
+const CHANNEL_FAMILIES = ['views', 'reactions', 'comments', 'clicks'] as const;
+
+/**
+ * Each channel's totals from the latest reading of each counter: the families its network counts,
+ * summed over its pieces. Search engines and GitHub are sources of the launch, not channels.
+ */
+export function channelTotals(readings: readonly CounterReading[], families: Families): Record<string, Partial<Totals>> {
+  const out: Record<string, Partial<Totals>> = {};
+  for (const r of readings) {
+    if (r.source === 'search' || r.source === 'bing' || r.source === 'github') continue;
+    const counted = families[r.source];
+    if (!counted) continue;
+    const totals = (out[r.source] ??= Object.fromEntries(CHANNEL_FAMILIES.filter((f) => counted[f]).map((f) => [f, 0])));
+    for (const family of CHANNEL_FAMILIES) if (counted[family]?.includes(r.name)) totals[family] = (totals[family] ?? 0) + r.value;
+  }
+  return out;
+}
+
+type Points = ReadonlyArray<{ bucket: string; increase: number }>;
+
+/**
+ * A daily series keyed `<launch>:<channel>` split two ways: per launch and channel as it comes, and
+ * per launch summed over its channels, bucket by bucket.
+ */
+export function splitSeries(groups: ReadonlyArray<{ key: string; points: Points }>): { launches: Map<number, Points>; channels: Map<number, Map<string, Points>> } {
+  const launches = new Map<number, Map<string, number>>();
+  const channels = new Map<number, Map<string, Points>>();
+  for (const g of groups) {
+    const at = g.key.indexOf(':');
+    const id = Number(g.key.slice(0, at));
+    const channel = g.key.slice(at + 1);
+    if (at < 0 || !Number.isInteger(id)) continue;
+    (channels.get(id) ?? channels.set(id, new Map()).get(id)!).set(channel, g.points);
+    const sum = launches.get(id) ?? launches.set(id, new Map()).get(id)!;
+    for (const p of g.points) sum.set(p.bucket, (sum.get(p.bucket) ?? 0) + p.increase);
+  }
+  return {
+    launches: new Map([...launches].map(([id, sum]) => [id, [...sum].sort(([a], [b]) => a.localeCompare(b)).map(([bucket, increase]) => ({ bucket, increase }))])),
+    channels,
+  };
 }
 
 /** Each post's account by the name the owner knows it by; a post with no account is left out */

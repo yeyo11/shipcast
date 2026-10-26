@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
+import { MotionConfig } from 'motion/react';
 import { useEffect } from 'react';
 import { LaunchCard } from '../../components/LaunchCard';
 import { Empty, PageHead } from '../../components/PageHead';
@@ -58,11 +59,14 @@ function Launches() {
           Launch a repo with a release and a .github/launch.yml, or write an article of your own.
         </Empty>
       ) : (
-        <div className="lcards">
-          {launches.map((launch) => (
-            <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} />
-          ))}
-        </div>
+        // Counting numbers and morphing charts, instant for whoever asks the system for reduced motion
+        <MotionConfig reducedMotion="user">
+          <div className="lcards">
+            {launches.map((launch) => (
+              <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} />
+            ))}
+          </div>
+        </MotionConfig>
       )}
     </>
   );

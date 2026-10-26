@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { METRIC_FAMILIES } from '@shipcast/engine';
-import { cardChannels, dailyViews, postAccountNames, dayOffset, foldMarks, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
+import { cardChannels, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
 
 test('a launch totals its counters through the stats families, with GitHub stars apart from reactions', () => {
   const totals = launchTotals(
@@ -121,4 +121,36 @@ test('a card lists each channel once with its posts, told apart by account, lang
       ['threads', 'failed', 0, []],
     ],
   );
+});
+
+test('a channel totals only what its network counts, so the card shows a dash for the rest', () => {
+  const per = channelTotals(
+    [
+      { source: 'blog', name: 'views', value: 40 },
+      { source: 'bluesky', name: 'likes', value: 5 },
+      { source: 'bluesky', name: 'likes', value: 2 },
+      { source: 'newsletter', name: 'clicks', value: 3 },
+      { source: 'search', name: 'clicks', value: 9 },
+      { source: 'github', name: 'stars', value: 7 },
+    ],
+    METRIC_FAMILIES,
+  );
+  assert.deepEqual(per, { blog: { views: 40 }, bluesky: { reactions: 7, comments: 0 }, newsletter: { views: 0, clicks: 3 } });
+});
+
+test('a launch:channel series splits into each launch summed and each of its channels', () => {
+  const pts = (a: number, b: number) => [
+    { bucket: '2026-10-25', increase: a },
+    { bucket: '2026-10-26', increase: b },
+  ];
+  const { launches, channels } = splitSeries([
+    { key: '3:blog', points: pts(10, 4) },
+    { key: '3:devto', points: pts(2, 1) },
+    { key: '4:blog', points: pts(0, 7) },
+    { key: 'other', points: pts(99, 99) },
+  ]);
+  assert.deepEqual(launches.get(3), pts(12, 5));
+  assert.deepEqual(launches.get(4), pts(0, 7));
+  assert.deepEqual([...(channels.get(3)?.keys() ?? [])], ['blog', 'devto']);
+  assert.equal(launches.size, 2);
 });

@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { publishAgain } from '../../server/launches.functions';
 import { deleteAllPieces, deletePiece, editPiece, editPieces } from '../../server/posts.functions';
 import { allowance, channelEntries, draftPrefill, networkName, pieceName, signed, type ChannelEntry, type PieceRow } from '../../server/pieces';
+import type { ChannelNumbers, Totals } from '../../server/launch-summary';
 import type { SchedulingChannel } from '../../server/pieces.server';
 import type { PieceOutcome } from '../../server/post-actions';
 import { CHANNEL_NAMES } from '../../server/view';
@@ -136,6 +137,7 @@ function ChannelPanel({
   launchId,
   timezone,
   schedule,
+  totals,
   selected,
   onSelect,
   onEdit,
@@ -147,6 +149,8 @@ function ChannelPanel({
   launchId: number;
   timezone: string;
   schedule: SchedulingChannel | undefined;
+  /** The channel's own totals, from the launch's numbers: what its network counts */
+  totals: Partial<Totals> | undefined;
   selected: ReadonlySet<number>;
   onSelect: (id: number, on: boolean) => void;
   onEdit: (row: PieceRow) => void;
@@ -170,6 +174,17 @@ function ChannelPanel({
           <StateDot mark={entry.mark} label={entry.label} word />
         </div>
       </header>
+      {totals && Object.keys(totals).length > 0 && (
+        <p className="chan-numbers" aria-label={`${channelTitle(entry.channel)}'s totals`}>
+          {(['views', 'reactions', 'comments', 'clicks'] as const).flatMap((k) =>
+            totals[k] === undefined ? [] : [
+              <span key={k}>
+                <strong>{number(totals[k])}</strong> {k}
+              </span>,
+            ],
+          )}
+        </p>
+      )}
       {entry.failure !== undefined && (
         <div className="chan-failure">
           <Problem text={entry.failure} />
@@ -214,6 +229,7 @@ export function Channels({
   scheduling,
   channel,
   onChannel,
+  numbers,
 }: {
   launchId: number;
   repo: string;
@@ -226,6 +242,8 @@ export function Channels({
   /** The channel shown, from the address; the first one when unset or unknown */
   channel: string | undefined;
   onChannel: (channel: string) => void;
+  /** Each channel's totals, from the launch's numbers */
+  numbers: Record<string, ChannelNumbers>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -296,6 +314,7 @@ export function Channels({
         launchId={launchId}
         timezone={scheduling.timezone}
         schedule={scheduling.channels.find((c) => c.channel === current.channel)}
+        totals={numbers[current.channel]?.totals}
         selected={selected}
         onSelect={(id, on) =>
           setSelected((now) => {

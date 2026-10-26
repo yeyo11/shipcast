@@ -1,57 +1,68 @@
 import { METRIC_FAMILIES, readTimezone, statsSeries, type Launch, type Registry } from '@shipcast/engine';
-import { dailyViews, postAccountNames, latestByPiece, launchTotals, type Day, type LaunchNumbers, type Totals } from './launch-summary.ts';
+import { channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /** Sources read for the launch as a whole rather than for one of its pieces (as in the engine's stats) */
 const SITE_SOURCES = ['blog', 'search', 'bing', 'github'];
 
 /**
- * A launch's totals: each piece's latest number, read per piece so pieces read at different times
- * all count, plus the latest reading of each launch-wide source.
+ * A launch's counters at their latest reading: each piece's latest number, read per piece so pieces
+ * read at different times all count, plus the latest reading of each launch-wide source.
  */
-async function totalsOf(registry: Registry, launch: Launch): Promise<Totals> {
+async function readingsOf(registry: Registry, launch: Launch): Promise<CounterReading[]> {
   const [site, history, posts] = await Promise.all([registry.latestMetrics(launch.id), registry.postMetricHistory(launch.id), registry.posts(launch.id)]);
   const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
   const pieces = latestByPiece(history).flatMap((r) => {
     const source = channel.get(r.postId);
     return source ? [{ source, name: r.name, value: r.value }] : [];
   });
-  return launchTotals([...site.filter((m) => SITE_SOURCES.includes(m.source)), ...pieces], METRIC_FAMILIES);
+  return [...site.filter((m) => SITE_SOURCES.includes(m.source)), ...pieces];
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Views per day for several launches in one query: the stats section's daily series grouped by
- * launch, from the oldest launch's day (at most 399 days back, the series' limit) to today. A
- * failure to read it leaves the charts empty rather than the page broken.
+ * Views per day for several launches and each of their channels in one query: the stats section's
+ * daily series keyed by launch and channel, from the oldest launch's day (at most 399 days back, the
+ * series' limit) to today. A failure to read it leaves the charts empty rather than the page broken.
  */
-async function dailyOf(registry: Registry, launches: readonly Launch[]): Promise<Map<number, Day[]>> {
-  const out = new Map<number, Day[]>();
-  if (launches.length === 0) return out;
+async function seriesOf(registry: Registry, launches: readonly Launch[]): Promise<ReturnType<typeof splitSeries>> {
+  const empty: ReturnType<typeof splitSeries> = { launches: new Map(), channels: new Map() };
+  if (launches.length === 0) return empty;
   const floor = new Date(Date.now() - 399 * 86_400_000).toISOString().slice(0, 10);
   const oldest = launches.map((l) => l.createdAt.slice(0, 10)).sort()[0] ?? today();
   try {
     const series = await statsSeries(registry, {
       metric: 'views',
-      groupBy: 'launch',
+      groupBy: 'launchChannel',
       bucket: 'day',
       from: oldest < floor ? floor : oldest,
       to: today(),
       launches: launches.map((l) => l.id),
-      limit: launches.length,
+      // Every launch's every channel one by one: nothing folds into "other"
+      limit: Number.MAX_SAFE_INTEGER,
     });
-    const byId = new Map(series.groups.map((g) => [Number(g.key), g.points]));
-    for (const launch of launches) out.set(launch.id, dailyViews(byId.get(launch.id) ?? [], launch.createdAt));
+    return splitSeries(series.groups);
   } catch {
     // An empty chart says "no views read yet", which is the truth the page can still tell
+    return empty;
   }
-  return out;
 }
 
-/** The totals and the views per day of each launch, for the list's cards and a launch's page */
+/** The totals and the views per day of each launch and of each of its channels, for the list's cards and a launch's page */
 export async function launchNumbers(registry: Registry, launches: readonly Launch[]): Promise<Map<number, LaunchNumbers>> {
-  const [totals, daily] = await Promise.all([Promise.all(launches.map((l) => totalsOf(registry, l))), dailyOf(registry, launches)]);
-  return new Map(launches.map((l, i) => [l.id, { totals: totals[i]!, daily: daily.get(l.id) ?? [] }]));
+  const [readings, series] = await Promise.all([Promise.all(launches.map((l) => readingsOf(registry, l))), seriesOf(registry, launches)]);
+  return new Map(
+    launches.map((l, i) => {
+      const mine = readings[i] ?? [];
+      const perChannel = channelTotals(mine, METRIC_FAMILIES);
+      const days = series.channels.get(l.id) ?? new Map<string, ReadonlyArray<{ bucket: string; increase: number }>>();
+      const names = new Set([...Object.keys(perChannel), ...days.keys()]);
+      const channels = Object.fromEntries(
+        [...names].map((name) => [name, { totals: perChannel[name] ?? {}, daily: dailyViews(days.get(name) ?? [], l.createdAt) }]),
+      );
+      return [l.id, { totals: launchTotals(mine, METRIC_FAMILIES), daily: dailyViews(series.launches.get(l.id) ?? [], l.createdAt), channels }];
+    }),
+  );
 }
 
 /**

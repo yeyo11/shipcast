@@ -125,10 +125,24 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .lcard-ref { font: 600 14px/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: #A9A69E; vertical-align: 4px; }
 .lcard p { margin: 0; }
 .lcard-meta { color: #A9A69E; font-size: 13.5px; overflow-wrap: anywhere; }
-.lcard-stats { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 4px 0 0; align-items: flex-start; }
+/* Which channel the numbers are for. Peeking never moves the card: one fixed line height here, and
+   fixed columns below that do not wrap when a value's width changes */
+.lcard-scope { display: flex; align-items: center; gap: 6px; height: 20px; margin: 0 0 -6px; overflow: hidden; white-space: nowrap; font: var(--sc-label); line-height: 20px; color: #A9A69E; }
+.lcard-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 10px; background: #1F1F1D; overflow: hidden; }
+.lcard-pill.is-on { background: color-mix(in srgb, var(--sc-yellow) 16%, #000); color: var(--sc-yellow); }
+.lcard-pill-name { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.lcard.waiting .lcard-scope { color: #2a2a2a; }
+.lcard.waiting .lcard-pill { background: rgb(0 0 0 / .1); }
+.lcard.waiting .lcard-pill.is-on { background: #000; color: var(--sc-yellow); }
+.lcard.waiting .lcard-pill.is-on .glyph.icon, [data-theme="day"] .lcard.waiting .lcard-pill.is-on .glyph.icon { filter: invert(1); }
+.lcard-stats { display: grid; grid-template-columns: minmax(84px, auto) repeat(3, minmax(64px, auto)); grid-template-rows: auto auto; grid-auto-flow: column; justify-content: start; column-gap: 26px; margin: 4px 0 0; align-items: end; }
+/* The labels share one line and the numbers the next, whatever each number's size */
+.lcard-stats > div { display: contents; }
+.lcard-stats dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lcard-stats dt { font: var(--sc-label); color: #A9A69E; }
 .lcard-stats dd { margin: 4px 0 0; font: 900 30px/0.9 var(--sc-font-display); }
 .lcard-stats .is-lead dd { font-size: 52px; }
+@media (max-width: 420px) { .lcard-stats { column-gap: 14px; grid-template-columns: minmax(72px, auto) repeat(3, minmax(52px, auto)); } .lcard-stats .is-lead dd { font-size: 44px; } .lcard-stats dd:not(.is-lead dd) { font-size: 26px; } }
 /* Views per day, alone on its row: an area with its line, the days under it */
 .darea { margin: 0; }
 .darea svg { display: block; width: 100%; height: 96px; }
@@ -160,7 +174,10 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .marks-more > button[data-popup-open] { border-style: solid; border-color: currentColor; }
 /* Marks that open: the tile is the link or the menu's button */
 .mark.is-link > a, .mark.is-link > button, .pop-channels .mark > a, .pop-channels .mark > span { position: relative; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 8px; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-.mark.is-link:hover, .mark.is-link:has([data-popup-open]) { border-color: currentColor; }
+.mark.is-link:hover { border-color: #6B6963; }
+/* The mark whose menu is open keeps a solid border in the text colour until it closes */
+.mark.is-link[data-active] { border-color: currentColor; background: #1A1A18; }
+.lcard.waiting .mark.is-link[data-active] { background: rgb(0 0 0 / .1); }
 .mark.is-link:has(:focus-visible) { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
 .mark.is-link :focus-visible { outline: none; }
 .lcard.waiting .mark.is-link:has(:focus-visible) { outline-color: #000; }
@@ -184,6 +201,14 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .pop .mark .dot.d-scheduled i { box-shadow: inset 0 0 0 3px var(--sc-yellow), 0 0 0 2px var(--sc-ground); }
 .pop .mark-accounts { background: var(--sc-text); color: var(--sc-ground); box-shadow: 0 0 0 2px var(--sc-ground); }
 .pop-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* On a phone the menu is a bottom sheet (ResponsiveMenu), with the channel's numbers on top */
+.ui-sheet-menu { display: grid; gap: 2px; }
+/* The sheet is titled with the network already: its head keeps only the state */
+.ui-sheet-menu .pop-net { display: none; }
+.pop-numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+.pop-numbers div { background: var(--sc-raised); border-radius: 12px; padding: 10px; }
+.pop-numbers dt { font: var(--sc-label); color: var(--sc-muted); font-size: 12px; }
+.pop-numbers dd { margin: 4px 0 0; font: 900 24px/1 var(--sc-font-display); font-variant-numeric: tabular-nums; }
 .pop-chips > * { padding: 7px 11px; border-radius: var(--sc-radius-pill); border: 1.5px solid var(--sc-rail); font: 700 12.5px/1 var(--sc-font-text); color: var(--sc-text); text-decoration: none; }
 .pop-chips > a:hover, .pop-chips > a:focus-visible { background: var(--sc-text); color: var(--sc-ground); }
 .pop-chips > .is-quiet { color: var(--sc-muted); border-style: dashed; }
@@ -327,21 +352,26 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .quiet a:hover { color: var(--sc-text); }
 .tab-title { font: var(--sc-label); text-transform: uppercase; letter-spacing: .06em; color: var(--sc-muted); margin: 0 0 10px; }
 .content-tab { display: grid; gap: 18px; }
-.drafts { display: grid; gap: 10px; }
+.drafts { display: grid; gap: 8px; }
+/* A folded row is one line; it grows only when opened */
+.content-tab .draft { padding: 6px 18px; border-radius: 16px; }
+.content-tab .draft[open] { padding-bottom: 18px; }
 .draft-title { margin: 0; font: 700 17px/1.2 var(--sc-font-text); flex: 1 1 auto; overflow-wrap: anywhere; }
 
 /* The Channels tab (components/launch/Channels.tsx): the chips, then one channel's panel */
-.chan { display: grid; gap: 14px; }
+.chan { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .chan-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
-.chan-strip { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
-.chan-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: var(--sc-radius-pill); background: none; color: var(--sc-text); border: var(--sc-border-control) solid var(--sc-hairline); cursor: pointer; }
+.chan-strip { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+.chan-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: var(--sc-radius-pill); background: none; color: var(--sc-text); border: var(--sc-border-control) solid var(--sc-hairline); cursor: pointer; }
 .chan-chip:hover { border-color: var(--sc-rail); }
 .chan-chip[aria-pressed="true"] { border-color: var(--sc-text); background: var(--sc-raised); }
 .chan-chip.m-failed { border-color: var(--sc-failure); }
 .chan-bulk { display: flex; flex-wrap: wrap; gap: 8px; }
 .chan-panel { background: var(--sc-raised); border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 18px 20px; display: grid; gap: 14px; min-width: 0; }
 .chan-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
-.chan-title { display: inline-flex; align-items: center; gap: 12px; margin: 0; font-size: 36px; }
+h2.ph.chan-title { display: inline-flex; align-items: center; gap: 12px; margin: 0; font-size: 36px; }
+.chan-numbers { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; color: var(--sc-muted); }
+.chan-numbers strong { color: var(--sc-text); font-size: 18px; font-variant-numeric: tabular-nums; }
 .chan-replies { font-size: 13.5px; color: var(--sc-muted); }
 .chan-failure { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
 .chan-failure .problem { margin: 0; flex: 1 1 300px; }
@@ -375,7 +405,7 @@ a.post-link:hover { color: var(--sc-text); }
   .chan-strip { flex-wrap: nowrap; overflow-x: auto; padding: 6px 2px; margin: -6px -2px; scrollbar-width: thin; }
   .chan-chip { flex: none; }
   .chan-panel { padding: 16px 14px; }
-  .chan-title { font-size: 30px; }
+  h2.ph.chan-title { font-size: 30px; }
 }
 
 /* The Details tab: properties, accounts, the last readings and the jobs */
@@ -389,7 +419,7 @@ a.post-link:hover { color: var(--sc-text); }
 .props-accounts li { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--sc-hairline); }
 .props-accounts li:first-child { padding-top: 0; }
 .props-followers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
-.latest { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px 24px; }
+.latest { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px 24px; align-items: start; }
 .latest-table caption { text-align: left; font-weight: 700; padding-bottom: 4px; }
 .latest-table caption .muted { font-weight: 400; font-size: 12.5px; }
 .latest-table th, .latest-table td { padding: 6px 4px; }

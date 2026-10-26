@@ -370,6 +370,7 @@ function LaunchPage() {
                 scheduling={pieces.scheduling}
                 channel={search.channel}
                 onChannel={(channel) => go({ tab: 'channels', channel })}
+                numbers={numbers.channels}
               />
             ),
           },

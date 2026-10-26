@@ -320,7 +320,8 @@ export async function statsOverview(registry: Registry, options: OverviewOptions
   };
 }
 
-export type SeriesGroupBy = 'channel' | 'account' | 'launch';
+/** `launchChannel` keys a series `<launch id>:<channel>`: each launch's channels apart, in one query for a list of launches */
+export type SeriesGroupBy = 'channel' | 'account' | 'launch' | 'launchChannel';
 export type SeriesBucket = 'day' | 'week';
 
 export interface SeriesPoint {
@@ -402,7 +403,14 @@ export async function statsSeries(registry: Registry, options: SeriesOptions): P
   const limit = options.limit ?? 10;
   const day = sql`left(taken_at, 10)`;
   const bucketOf = options.bucket === 'day' ? day : sql`to_char(${day}::date - (extract(isodow FROM ${day}::date)::int - 1), 'YYYY-MM-DD')`;
-  const key = options.groupBy === 'channel' ? sql`u.source` : options.groupBy === 'account' ? sql`coalesce(u.account_id::text, 'none')` : sql`u.launch_id::text`;
+  const key =
+    options.groupBy === 'channel'
+      ? sql`u.source`
+      : options.groupBy === 'account'
+        ? sql`coalesce(u.account_id::text, 'none')`
+        : options.groupBy === 'launchChannel'
+          ? sql`u.launch_id::text || ':' || u.source`
+          : sql`u.launch_id::text`;
   const rows = await registry.selectRows<{ key: string; bucket: string | null; increase: number }>(sql`
     WITH ${counterSet(options, options.metric)},
     w AS (
@@ -469,7 +477,7 @@ export async function statsSeries(registry: Registry, options: SeriesOptions): P
 /** What a group is called on a chart, read in one query per kind rather than one per group */
 async function groupLabels(registry: Registry, groupBy: SeriesGroupBy, keys: string[]): Promise<Map<string, string>> {
   const labels = new Map<string, string>();
-  if (groupBy === 'channel') for (const key of keys) labels.set(key, key);
+  if (groupBy === 'channel' || groupBy === 'launchChannel') for (const key of keys) labels.set(key, key);
   if (groupBy === 'account') {
     const accounts = new Map((await registry.accounts()).map((a) => [String(a.id), a]));
     for (const key of keys) {
