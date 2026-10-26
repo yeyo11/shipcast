@@ -2,10 +2,12 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { MotionConfig } from 'motion/react';
 import { useEffect } from 'react';
 import { LaunchCard } from '../../components/LaunchCard';
+import { ApprovalRow, PendingRow } from '../../components/LaunchRows';
 import { Empty, PageHead } from '../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { PlusIcon } from '../../components/ui/icons';
 import { EmptyLaunches, Parcels } from '../../components/illustrations';
+import { splitLaunches } from '../../server/launch-list';
 import { listLaunches } from '../../server/launches.functions';
 
 export const Route = createFileRoute('/_app/')({
@@ -18,6 +20,7 @@ function Launches() {
   const { launches, timezone } = Route.useLoaderData();
   const router = useRouter();
   const busy = launches.some((l) => l.status === 'generating');
+  const lanes = splitLaunches(launches);
   // While something runs, the page follows it without a reload
   useEffect(() => {
     if (!busy) return;
@@ -48,14 +51,28 @@ function Launches() {
           Launch a repo with a release and a .github/launch.yml, or write an article of your own.
         </Empty>
       ) : (
-        // Counting numbers and morphing charts, instant for whoever asks the system for reduced motion
-        <MotionConfig reducedMotion="user">
-          <div className="lcards">
-            {launches.map((launch) => (
-              <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} />
-            ))}
-          </div>
-        </MotionConfig>
+        <>
+          {(lanes.approval.length > 0 || lanes.pending.length > 0) && (
+            <ul className="lrows" aria-label="Launches that wait">
+              {lanes.approval.map((launch) => (
+                <ApprovalRow key={launch.id} launch={launch} timezone={timezone} />
+              ))}
+              {lanes.pending.map((launch) => (
+                <PendingRow key={launch.id} launch={launch} timezone={timezone} />
+              ))}
+            </ul>
+          )}
+          {/* Counting numbers and morphing charts, instant for whoever asks the system for reduced motion */}
+          {lanes.out.length > 0 && (
+            <MotionConfig reducedMotion="user">
+              <div className="lcards">
+                {lanes.out.map((launch) => (
+                  <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} />
+                ))}
+              </div>
+            </MotionConfig>
+          )}
+        </>
       )}
     </>
   );

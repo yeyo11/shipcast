@@ -68,3 +68,32 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
   .section-intro .ph.settings-title { font-size: 24px !important; }
   .section-intro p, .section-intro-art { display: none; }
 }
+
+/* ---------- Launches: the rows of what waits, then a grid of equal cards ---------- */
+/* A card in the grid is a column: the marks sit on its bottom edge whatever the card above them holds */
+.lcards > .lcard { display: flex; flex-direction: column; }
+.lcards > .lcard > .marks { margin-top: auto; }
+.lrows { list-style: none; margin: 0 0 28px; padding: 0; display: grid; gap: 10px; }
+.lrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; min-height: 72px; padding: 12px 18px; border-radius: var(--sc-radius-card); }
+.lrow > * { min-width: 0; }
+.lrow-who { flex: 1 1 240px; display: grid; gap: 2px; }
+.lrow-title { margin: 0; font: 900 22px/1 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); overflow-wrap: anywhere; }
+.lrow-title a { text-decoration: none; }
+.lrow-title a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.lrow-meta { margin: 0; font-size: 13px; color: var(--sc-muted); overflow-wrap: anywhere; }
+.lrow-text { margin: 0; flex: 1 1 220px; font-size: 14.5px; }
+.lrow-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-left: auto; }
+.lrow-link { font: var(--sc-label); text-underline-offset: 3px; }
+/* Waiting for approval: the yellow of "this needs you", its action in black so it reads on the yellow */
+.lrow-approval { background: var(--sc-yellow); color: var(--sc-on-yellow); border: 2px solid #000; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
+.lrow-approval .lrow-meta, .lrow-approval .lcard-ref { color: #2a2a2a; }
+.lrow-approval .lrow-review { background: #000; color: var(--sc-yellow); border-color: #000; }
+.lrow-approval .lrow-review:active { transform: translate(2px, 2px); }
+.lrow-approval :focus-visible { outline-color: #000; }
+/* Not out and not the owner's to act on: quiet, dashed */
+.lrow-pending { border: var(--sc-border-control) dashed var(--sc-rail); color: var(--sc-text); }
+.lrow-pending .lrow-text { color: var(--sc-muted); }
+@media (max-width: 640px) {
+  .lrow { padding: 12px 14px; }
+  .lrow-actions { margin-left: 0; width: 100%; }
+}

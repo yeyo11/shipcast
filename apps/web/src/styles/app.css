@@ -129,7 +129,8 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 /* The launch cards (components/LaunchCard.tsx): Cartel's neutral raised card like the rest of the app, a
    summary each, in a grid, all on role tokens so contrast holds in night and day. Only a launch waiting
    for the owner is the yellow card */
-.lcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 24px; align-items: start; }
+/* Only launches that went out (what waits is in rows above, layout.css), every card the height of the tallest */
+.lcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); grid-auto-rows: 1fr; gap: 24px; align-items: stretch; }
 .lcards > * { min-width: 0; }
 .band .ph { overflow-wrap: anywhere; }
 .lcard { background: var(--sc-raised); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 24px 26px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
