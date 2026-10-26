@@ -57,7 +57,8 @@ test('a chat turn sends the conversation, and the text with the selection in the
   const { events } = await ask({ action: 'chat', selection: 'Old.', document: 'Old. Rest.', messages: [{ role: 'user', content: 'Punchier, please' }] }, provider);
   assert.equal(text(events), '```proposal\nNew.\n```');
   assert.match(calls[0]?.system ?? '', /The passage the owner selected:\n<<<\nOld\.\n>>>/);
-  assert.deepEqual(calls[0]?.messages, [{ role: 'user', content: [{ type: 'text', text: 'Punchier, please' }] }]);
+  // The SDK may add empty fields (providerOptions: undefined) to what it sends; the conversation is what counts
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0]?.messages)), [{ role: 'user', content: [{ type: 'text', text: 'Punchier, please' }] }]);
 });
 
 test('checking an article against the code is refused with the reason, as an event', async () => {
