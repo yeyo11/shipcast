@@ -214,5 +214,59 @@ export const comments = pgTable(
     unique('comments_channel_external_unique').on(t.channel, t.externalId),
     index('comments_by_post').on(t.postId),
     index('comments_by_status').on(t.status, t.createdAt),
+    // The page's filters: a channel's newest, and the newest of all, both in the order they are listed
+    index('comments_by_channel').on(t.channel, t.createdAt.desc(), t.id.desc()),
+    index('comments_by_newest').on(t.createdAt.desc(), t.id.desc()),
   ],
 );
+
+// The writing assistant's conversations, kept so a session can be found and taken up again. A
+// session belongs to what was being edited when it started: a launch's draft (the launch and the
+// draft's file) or an article on Write (no launch). See docs/decisions/writing-assistant.md
+export const assistantSessions = pgTable(
+  'assistant_sessions',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    // The first question, or the draft's title when the first turn had no words worth a title
+    title: text('title').notNull(),
+    launchId: integer('launch_id').references(() => launches.id, { onDelete: 'set null' }),
+    // The draft's file in the launches repo; null for an article on Write
+    draftPath: text('draft_path'),
+    // What the draft or article was called when the session started, as the list shows it
+    draftLabel: text('draft_label'),
+    createdAt: text('created_at').notNull().default(nowIso),
+    // Moves with every message, so the list shows the sessions last talked in first
+    updatedAt: text('updated_at').notNull().default(nowIso),
+  },
+  (t) => [index('assistant_sessions_by_updated').on(t.updatedAt, t.id)],
+);
+
+export const assistantMessages = pgTable(
+  'assistant_messages',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    sessionId: integer('session_id')
+      .notNull()
+      .references(() => assistantSessions.id, { onDelete: 'cascade' }),
+    // user or assistant
+    role: text('role').notNull(),
+    // The assistant's final text, proposals included as the model wrote them
+    content: text('content').notNull(),
+    // Each proposal in the answer, in order, and whether the owner accepted or rejected it
+    proposals: jsonb('proposals').$type<Array<{ text: string; state: 'open' | 'accepted' | 'rejected' }>>().notNull().default(sql`'[]'::jsonb`),
+    // The passage selected when the question was asked, which its proposals replace; null for the whole text
+    selection: jsonb('selection').$type<{ start: number; end: number; original: string } | null>(),
+    // Why the answer stopped short, in words
+    problem: text('problem'),
+    createdAt: text('created_at').notNull().default(nowIso),
+  },
+  (t) => [index('assistant_messages_by_session').on(t.sessionId, t.id)],
+);
+
+// The bell's lines the owner dismissed, by the item's key. A key carries the state it was made for
+// (`launch:12:waiting:<updated at>`), so a dismissal hides the line while its condition lasts and a
+// new condition is a new line; dismissals of lines that are gone are forgotten. See docs/web-app.md
+export const attentionDismissals = pgTable('attention_dismissals', {
+  key: text('key').primaryKey(),
+  dismissedAt: text('dismissed_at').notNull().default(nowIso),
+});

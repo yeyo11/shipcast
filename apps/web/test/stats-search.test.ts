@@ -72,6 +72,9 @@ test('the tab is read from the address, the first one left out', () => {
   assert.equal(readStatsTab({ tab: 'accounts' }), 'accounts');
   assert.equal(readStatsTab({ tab: 'overview' }), undefined);
   assert.equal(readStatsTab({ tab: 'nope' }), undefined);
+  assert.equal(readStatsTab({ tab: 'ranking' }), 'ranking');
+  // The old name of the ranking tab, kept for saved links
+  assert.equal(readStatsTab({ tab: 'posts' }), 'ranking');
 });
 
 test('the search tab takes the period and, when filtered, the launches', () => {

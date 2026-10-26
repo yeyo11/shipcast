@@ -1,10 +1,11 @@
 import { Link } from '@tanstack/react-router';
 import { animate, AnimatePresence, motion, useMotionValue, useTransform } from 'motion/react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { cardChannels, foldMarks, launchDateLabel, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Totals } from '../server/launch-summary';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { cardChannels, foldMarks, launchDateLabel, markCapacity, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Totals } from '../server/launch-summary';
 import { zonedLabel } from '../server/pieces';
 import { CHANNEL_NAMES, type LaunchView } from '../server/view';
 import { ChannelIcon, StateDot } from './launch/Glance';
+import { ProjectAvatar } from './ProjectAvatar';
 import { number, Pill } from './ui';
 import { ResponsiveMenu } from './ui/ResponsiveMenu';
 
@@ -17,8 +18,6 @@ import { ResponsiveMenu } from './ui/ResponsiveMenu';
  */
 
 /** A mark's width and the gap after it, as in app.css (.mark: 36px, .marks: gap 8px) */
-const MARK_GAP = 8;
-const MARK_STEP = 36 + MARK_GAP;
 const EASE = { duration: 0.25, ease: 'easeOut' } as const;
 
 const networkOf = (channel: string) => CHANNEL_NAMES[channel] ?? channel;
@@ -206,7 +205,7 @@ function Marks({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setFit(Math.max(1, Math.floor((el.clientWidth + MARK_GAP) / MARK_STEP)));
+    const measure = () => setFit(markCapacity(el.clientWidth));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -237,10 +236,19 @@ function DailyArea({ values, max }: { values: number[]; max: number }) {
   const step = w / Math.max(1, values.length - 1);
   const line = values.map((v, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - 4 - (v / Math.max(1, max)) * (h - 12)).toFixed(1)}`).join(' ');
   const area = `${line} L${w} ${h} L0 ${h} Z`;
+  // One gradient per card, as ids are document-wide; React's id marks (`:`, `«`) do not survive url(#…)
+  const fade = `darea-fade-${useId().replace(/[^\w-]/g, '')}`;
   return (
     <figure className="darea">
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
-        <motion.path initial={false} animate={{ d: area }} transition={EASE} className="darea-fill" />
+        <defs>
+          {/* In the box of the whole chart, not of the path, so the fade stays put while the path morphs */}
+          <linearGradient id={fade} x1="0" y1="0" x2="0" y2={h} gradientUnits="userSpaceOnUse">
+            <stop offset="0" className="darea-stop-top" />
+            <stop offset="1" className="darea-stop-bottom" />
+          </linearGradient>
+        </defs>
+        <motion.path initial={false} animate={{ d: area }} transition={EASE} className="darea-fill" fill={`url(#${fade})`} />
         <motion.path initial={false} animate={{ d: line }} transition={EASE} fill="none" className="darea-line" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       </svg>
       <figcaption>
@@ -302,11 +310,14 @@ export function LaunchCard({
   numbers,
   postAccounts,
   timezone,
+  avatarUrl = null,
 }: {
   launch: LaunchView;
   numbers: LaunchNumbers | null;
   postAccounts: Record<number, string>;
   timezone: string;
+  /** The project's picture (the repo owner's GitHub avatar); null shows our own scene */
+  avatarUrl?: string | null;
 }) {
   const channels = cardChannels({ posts: launch.posts, failures: launch.failures, postAccounts });
   const [peek, setPeek] = useState<string | null>(null);
@@ -322,6 +333,7 @@ export function LaunchCard({
   return (
     <article className={`lcard${waiting ? ' waiting' : ''}`} data-peek={peek ? '' : undefined}>
       <header>
+        <ProjectAvatar src={avatarUrl} article={article} />
         <h2>
           <Link to="/launches/$id" params={{ id: String(launch.id) }}>
             {article ? 'Article' : launch.repo.split('/')[1]} {!article && <span className="lcard-ref">{launch.ref}</span>}

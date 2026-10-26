@@ -1,8 +1,10 @@
+import { imageUrl } from '@shipcast/connectors';
 import { editDraft, preflight } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
 import { jobsView } from './jobs.server';
+import { ownerAvatarUrl } from './launch-list';
 import { launchNumbers, postAccounts, readTimezone, waitingComments } from './launch-summary.server';
 import { launchPieces } from './pieces.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
@@ -20,7 +22,10 @@ export const listLaunches = createServerFn({ method: 'GET' }).handler(async () =
     readTimezone(registry),
   ]);
   // The queue's jobs are Automation's now: the list is launches only
-  return { launches: views.map((v) => ({ ...v, numbers: numbers.get(v.id) ?? null, postAccounts: accounts.get(v.id) ?? {} })), timezone };
+  return {
+    launches: views.map((v) => ({ ...v, numbers: numbers.get(v.id) ?? null, postAccounts: accounts.get(v.id) ?? {}, avatarUrl: imageUrl(ownerAvatarUrl(v.repo)) ?? null })),
+    timezone,
+  };
 });
 
 export const getLaunch = createServerFn({ method: 'GET' })

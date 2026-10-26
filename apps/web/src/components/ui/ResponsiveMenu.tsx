@@ -5,7 +5,7 @@ import { Popover } from './Popover';
 /** Phones, by size or by a finger for a pointer: where a small anchored card is hard to hit and to read */
 const PHONE = '(max-width: 640px), (pointer: coarse)';
 
-function usePhone(): boolean {
+export function usePhone(): boolean {
   // The server renders the desktop's popover; the first effect on a phone swaps it before anyone taps
   const [phone, setPhone] = useState(false);
   useEffect(() => {

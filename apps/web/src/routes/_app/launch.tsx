@@ -1,6 +1,7 @@
 import type { Preflight as Result } from '@shipcast/engine';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
+import { Sealing } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
 import { Preflight } from '../../components/Preflight';
 import { useToast } from '../../components/Toasts';
@@ -48,7 +49,7 @@ function LaunchARepo() {
 
   return (
     <>
-      <PageHead title="Launch a repo">Pick one of {owner}’s repos and a release. Shipcast reads its code, writes every piece and hands you the drafts.</PageHead>
+      <PageHead title="Launch a repo" art={<Sealing width={200} />}>Pick one of {owner}’s repos and a release. Shipcast reads its code, writes every piece and hands you the drafts.</PageHead>
       <form
         className="form"
         onSubmit={async (e) => {

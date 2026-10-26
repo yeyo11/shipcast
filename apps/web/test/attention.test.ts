@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { ATTENTION_KEY, attentionItems, attentionLabel, buildAttention, parseFailureKey } from '../src/server/attention.ts';
+
+const now = new Date('2026-10-26T12:00:00Z');
+const launches = [
+  { id: 1, repo: 'me/alpha', ref: 'v1.0.0', status: 'drafted', updatedAt: '2026-10-26T10:00:00.000Z' },
+  { id: 2, repo: 'me/beta', ref: 'v2.0.0', status: 'drafted', updatedAt: '2026-10-26T11:00:00.000Z' },
+  { id: 3, repo: 'me/gamma', ref: 'v3.0.0', status: 'published', updatedAt: '2026-10-26T09:00:00.000Z' },
+];
+const base = { launches, failures: [], brokenAccounts: [], commentsWaiting: 0, scheduled: [], now };
+const fail = (key: string, value = 'refused') => ({ key, value });
+
+test('nothing to do is an empty list and a calm label', () => {
+  const a = buildAttention({ ...base, launches: [launches[2]!] });
+  assert.deepEqual(a, { count: 0, items: [] });
+  assert.equal(attentionLabel(0), 'Nothing needs you');
+});
+
+test('a drafted launch waits for approval, unless it already failed somewhere', () => {
+  const a = buildAttention({ ...base, failures: [fail('publish-failed:2:devto'), fail('publish-failed:2:mastodon')] });
+  assert.deepEqual(a.items.map((i) => i.kind), ['approve', 'retry']);
+  assert.equal(a.items[0]?.key, 'launch:1:waiting:2026-10-26T10:00:00.000Z');
+  assert.match(a.items[1]?.key ?? '', /^launch:2:failed:[0-9a-z]+$/);
+  assert.match(a.items[1]?.text ?? '', /beta v2\.0\.0 failed on devto, mastodon/);
+});
+
+test('failure keys of unknown launches or of another shape are ignored', () => {
+  assert.equal(parseFailureKey('publish-failed:x:devto'), null);
+  assert.deepEqual(parseFailureKey('publish-failed:7:devto'), { launchId: 7, channel: 'devto' });
+  assert.equal(buildAttention({ ...base, failures: [fail('publish-failed:99:devto')] }).items.length, 2);
+});
+
+test('comments and broken accounts count; scheduled posts inform without counting', () => {
+  const a = buildAttention({
+    ...base,
+    launches: [],
+    commentsWaiting: 3,
+    brokenAccounts: [{ id: 5, label: 'main', network: 'mastodon', problem: 'token revoked' }],
+    scheduled: [],
+  });
+  assert.equal(a.count, 2);
+  assert.deepEqual(a.items.map((i) => i.kind), ['reply', 'reconnect']);
+  assert.deepEqual(a.items[1]?.target, { to: '/channels', search: { focus: '5' } });
+});
+
+test('only posts going out within a day are listed, grouped by launch, and they are not counted', () => {
+  const a = buildAttention({
+    ...base,
+    launches: [launches[2]!],
+    scheduled: [
+      { launchId: 3, scheduledAt: '2026-10-26T14:00:00Z' },
+      { launchId: 3, scheduledAt: '2026-10-26T13:00:00Z' },
+      { launchId: 3, scheduledAt: '2026-10-29T13:00:00Z' },
+    ],
+  });
+  assert.equal(a.count, 0);
+  assert.equal(a.items.length, 1);
+  assert.match(a.items[0]?.text ?? '', /2 posts of gamma v3\.0\.0 go out in 1 h/);
+});
+
+test('the label says how many', () => {
+  assert.equal(attentionLabel(1), '1 thing needs you');
+  assert.equal(attentionLabel(3), '3 things need you');
+});
+
+test('a dismissed line leaves the list and the count; the others stay', () => {
+  const all = attentionItems({ ...base, commentsWaiting: 2, newestWaitingComment: 41 });
+  assert.deepEqual(all.map((i) => i.key), ['launch:1:waiting:2026-10-26T10:00:00.000Z', 'launch:2:waiting:2026-10-26T11:00:00.000Z', 'comments:waiting:41']);
+  const a = buildAttention({ ...base, commentsWaiting: 2, newestWaitingComment: 41, dismissed: new Set(['launch:1:waiting:2026-10-26T10:00:00.000Z', 'comments:waiting:41']) });
+  assert.equal(a.count, 1);
+  assert.deepEqual(a.items.map((i) => i.text), ['beta v2.0.0 waits for your approval']);
+});
+
+test('a dismissal holds while the condition lasts and a changed condition is a new line', () => {
+  const key = (input: Parameters<typeof attentionItems>[0], kind: string) => attentionItems(input).find((i) => i.kind === kind)?.key;
+  // A new comment arriving
+  assert.notEqual(key({ ...base, commentsWaiting: 2, newestWaitingComment: 41 }, 'reply'), key({ ...base, commentsWaiting: 2, newestWaitingComment: 42 }, 'reply'));
+  // The same failure read twice is the same line; another message, or the launch moved by a retry, is not
+  const failed = { ...base, failures: [fail('publish-failed:2:devto', 'rate limited')] };
+  assert.equal(key(failed, 'retry'), key(failed, 'retry'));
+  assert.notEqual(key(failed, 'retry'), key({ ...failed, failures: [fail('publish-failed:2:devto', 'token expired')] }, 'retry'));
+  const retried = { ...failed, launches: launches.map((l) => (l.id === 2 ? { ...l, updatedAt: '2026-10-26T11:30:00.000Z' } : l)) };
+  assert.notEqual(key(failed, 'retry'), key(retried, 'retry'));
+  // A drafted launch drafted again
+  assert.notEqual(key(base, 'approve'), key({ ...base, launches: launches.map((l) => ({ ...l, updatedAt: '2026-10-27T00:00:00.000Z' })) }, 'approve'));
+  // An account broken for another reason
+  const broken = (problem: string) => ({ ...base, brokenAccounts: [{ id: 5, label: 'main', network: 'mastodon', problem }] });
+  assert.notEqual(key(broken('token revoked'), 'reconnect'), key(broken('instance down'), 'reconnect'));
+});
+
+test('every key a line can have is one a dismissal accepts, and nothing else is', () => {
+  const items = attentionItems({
+    ...base,
+    failures: [fail('publish-failed:1:devto', 'a message: with "quotes" and spaces')],
+    commentsWaiting: 1,
+    newestWaitingComment: 9,
+    brokenAccounts: [{ id: 3, label: 'x', network: 'bluesky', problem: null }],
+    scheduled: [{ launchId: 2, scheduledAt: '2026-10-26T13:00:00Z' }],
+  });
+  assert.equal(items.length, 5);
+  for (const item of items) assert.match(item.key, ATTENTION_KEY);
+  for (const bad of ['', 'launch:', 'other:1', 'launch:1 waiting', `launch:${'x'.repeat(200)}`]) assert.doesNotMatch(bad, ATTENTION_KEY);
+});

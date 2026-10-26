@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T14:49:04.049764608Z
-updated_at: 2026-10-25T14:49:04.049764608Z
+created_at: 2026-10-26T15:33:20.756229049Z
+updated_at: 2026-10-26T15:50:08.037474351Z
 tags:
     - decision
     - design
@@ -47,8 +47,9 @@ you", black outlines and the offset stamp shadow stay, Phudu for headlines.
 
 ## How a screen is built
 
-- **A section header is a Cartel band**: the huge uppercase title and the section's main action in
-  yellow.
+- **A section header is a Cartel band**: the huge uppercase title, its lead and its illustration,
+  at one height on every page (below).
+- **Under the band, a toolbar** holds the page's controls and its actions (below), never the band.
 - **Below it, the work area is calm**: tables, charts and forms on `--sc-raised` with `--sc-rail`
   borders, Inter Tight at working sizes, the stamp shadow only on what is pressed or what needs the
   owner.
@@ -68,6 +69,35 @@ you", black outlines and the offset stamp shadow stay, Phudu for headlines.
   ([personal-identity.md](../personal-identity.md)), not in Cartel: a project card, the launches as a
   timeline, the demo, and `/<lang>/projects/` with an article index filterable by project and topic.
 
+## The page frame (2026-10-26)
+
+Chosen by the owner after trying the live preview of the second interface round.
+
+- **A toolbar under every banner, not actions inside it.** Each page's main action used to sit in
+  its band (Launch a repo, Export CSV, Check comments now, Run a round now), each placed a little
+  differently. Now every page uses one component, `PageToolbar`: a slim bar (56 px) on the ground
+  colour with a bottom hairline, sticky at the top of the window while the page scrolls and lifted by
+  a soft shadow once stuck (the shadow's fade is off under reduced motion). The page's controls on
+  the left (filters, a period, the way back), its actions on the right: one yellow primary, the
+  others quiet outlined buttons, the rest behind a "More actions" menu. On a phone it stays one row:
+  the controls scroll sideways or open a sheet, and each action keeps only its glyph, its words
+  staying as its accessible name. A page with nothing to put there (Launch a repo) has no bar.
+- **One banner height.** Every band is the same height on a wide screen (200 px, the title on one
+  line, the lead clamped to two), so moving between sections never shifts the work area; the
+  per-page overrides are gone.
+- **A banner that folds, and keeps its title.** A small button in the band's corner folds it to 104 px
+  and back, animated with Motion (instant under reduced motion). Folding takes away only the lead
+  and the illustration: the title keeps its size, so the band reads the same, just shorter (the first
+  version shrank the title to a 56 px strip, which the owner rejected as badly laid out). The choice
+  is one for every page and kept in a cookie the server reads, so a page never draws the other size
+  first. Phones always get the folded design, with a slightly smaller title (44 px, 84 px tall) and
+  without the button.
+- **Launches: what waits above, what went out in a grid.** A launch waiting for approval is a
+  yellow row above the grid, with Review the drafts; one drafting or not launched is a quiet dashed
+  row. The grid holds only launches that went out, every card the same height.
+- **A project picture.** Each launch's title has a 40 px tile with the repo owner's GitHub avatar,
+  or our own parcels (a release) or typewriter (an article) when there is none.
+
 ## Related
 
-[[plans/goal-after-mvp.md]] · [[plans/after-mvp.md]] · [[plans/design-system.md]] · [[web-app.md]] · [[personal-identity.md]] · [[plans/search-presence.md]]
+[[plans/goal-after-mvp.md]] · [[plans/after-mvp.md]] · [[plans/design-system.md]] · [[web-app.md]] · [[personal-identity.md]] · [[plans/search-presence.md]] · [[decisions/component-layer.md]]

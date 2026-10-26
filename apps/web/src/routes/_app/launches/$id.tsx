@@ -6,8 +6,11 @@ import { DailyBars, TotalsRow } from '../../../components/launch/Glance';
 import { AccountNumbers } from '../../../components/launch/Numbers';
 import { EmptyDrafts } from '../../../components/illustrations';
 import { Empty } from '../../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
+import { ChevronIcon, ExternalIcon, SendIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Notice, number, Pill, when } from '../../../components/ui';
+import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
 import { Tabs } from '../../../components/ui/Tabs';
 import { launchDateLabel } from '../../../server/launch-summary';
 import { approveDrafts, getLaunch, publishAgain, saveDraft } from '../../../server/launches.functions';
@@ -49,11 +52,17 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
   const [busy, setBusy] = useState(false);
   const changed = content !== (draft.content ?? '');
   return (
-    <details className="draft">
-      <summary>
-        <h3 className="draft-title">{draft.label}</h3>
-        <span className="muted mono break draft-path">{draft.path}</span>
-      </summary>
+    <AccordionItem
+      value={draft.path}
+      className="draft"
+      triggerClassName="draft-trigger"
+      summary={
+        <>
+          <span className="draft-title">{draft.label}</span>
+          <span className="muted mono break draft-path">{draft.path}</span>
+        </>
+      }
+    >
       {editable ? (
         <>
           <label className="visually-hidden" htmlFor={draft.path}>
@@ -80,7 +89,7 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
       ) : (
         <div className="preview">{draft.content}</div>
       )}
-    </details>
+    </AccordionItem>
   );
 }
 
@@ -267,9 +276,6 @@ function LaunchPage() {
     <>
       <header className="lhead">
         <div className="lhead-text">
-          <Link className="lhead-back" to="/">
-            All launches
-          </Link>
           <h1 className="ph">
             {launch.ref.startsWith('article:') ? 'Article' : launch.repo.split('/')[1]}
             {!launch.ref.startsWith('article:') && <span className="lhead-ref"> {launch.ref}</span>}
@@ -278,29 +284,42 @@ function LaunchPage() {
             {launch.repo} · {launch.kind} · launched {launchDateLabel(launch.createdAt, timezone)}
           </p>
         </div>
-        <div className="row lhead-actions">
-          <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
-          {launch.status === 'drafted' && !open && !running && (
-            <button
-              type="button"
-              className="btn btn-small"
-              onClick={async () => {
-                const answer = await publishAgain({ data: { id: launch.id } });
-                if (answer.ok) toast.done('Publishing what is still pending');
-                else toast.fail(answer.problem);
-                await router.invalidate();
-              }}
-            >
-              Publish what is pending
-            </button>
-          )}
-          {article?.url && (
-            <a className="btn btn-small" href={article.url} target="_blank" rel="noreferrer">
-              Open the article<span className="visually-hidden"> (opens in a new tab)</span>
-            </a>
-          )}
-        </div>
       </header>
+      <PageToolbar
+        label="This launch"
+        controls={
+          <>
+            <Link className="tb-back" to="/">
+              <ChevronIcon dir="left" size={16} /> All launches
+            </Link>
+            <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
+          </>
+        }
+        actions={
+          <>
+            {article?.url && (
+              <ToolbarAction
+                label="Open the article"
+                icon={<ExternalIcon />}
+                render={<a href={article.url} target="_blank" rel="noreferrer" aria-label="Open the article (opens in a new tab)" />}
+              />
+            )}
+            {launch.status === 'drafted' && !open && !running && (
+              <ToolbarAction
+                primary
+                label="Publish what is pending"
+                icon={<SendIcon />}
+                onClick={async () => {
+                  const answer = await publishAgain({ data: { id: launch.id } });
+                  if (answer.ok) toast.done('Publishing what is pending');
+                  else toast.fail(answer.problem);
+                  await router.invalidate();
+                }}
+              />
+            )}
+          </>
+        }
+      />
 
       {data.fakeNetworks && (
         <Notice tone="wait">
@@ -315,20 +334,17 @@ function LaunchPage() {
       )}
 
       {open && (
-        <div className="band band-yellow band-slim">
-          <div>
-            <h2 className="ph">Waiting for you</h2>
-            <p className="muted">Read and edit every draft in Content. Approving merges the pull request: the blog publishes, then every approved channel.</p>
-          </div>
+        <div className="strip strip-yellow" role="region" aria-label="Waiting for you">
+          <strong className="strip-title">Waiting for you</strong>
           <div className="row">
-            <button className="btn btn-primary" disabled={busy} onClick={approve}>
-              {busy ? 'Approving…' : `Approve and publish ${texts.filter((t) => t.kind === 'channel').length + 1} pieces`}
-            </button>
             {reviewOk && (
-              <a className="btn" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer" style={{ color: '#000', borderColor: '#000' }}>
+              <a className="btn btn-small" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer" style={{ color: '#000', borderColor: '#000' }}>
                 Open the pull request
               </a>
             )}
+            <button className="btn btn-primary btn-small" disabled={busy} onClick={approve} title="Approving merges the pull request: the blog publishes, then every approved channel">
+              {busy ? 'Approving…' : `Approve and publish ${texts.filter((t) => t.kind === 'channel').length + 1} pieces`}
+            </button>
           </div>
         </div>
       )}
@@ -394,21 +410,26 @@ function LaunchPage() {
                     <h2 className="tab-title" id="texts-title">
                       {open ? 'The drafts' : 'What went out'}
                     </h2>
-                    <div className="drafts">
+                    <Accordion className="drafts">
                       {texts.map((d) => (
                         <DraftEditor key={d.path} launchId={launch.id} draft={d} editable={open} />
                       ))}
-                    </div>
+                    </Accordion>
                   </section>
                 )}
                 {media.length > 0 && (
-                  <details className="draft">
-                    <summary>
-                      <h3 className="draft-title">Media</h3>
-                      <span className="muted draft-path">
-                        {media.length} {media.length === 1 ? 'file' : 'files'}
-                      </span>
-                    </summary>
+                  <Collapsible
+                    className="draft"
+                    triggerClassName="draft-trigger"
+                    summary={
+                      <>
+                        <span className="draft-title">Media</span>
+                        <span className="muted draft-path">
+                          {media.length} {media.length === 1 ? 'file' : 'files'}
+                        </span>
+                      </>
+                    }
+                  >
                     <div className="thumbs">
                       {media.map((m) =>
                         m.kind === 'video' ? (
@@ -420,7 +441,7 @@ function LaunchPage() {
                         ),
                       )}
                     </div>
-                  </details>
+                  </Collapsible>
                 )}
                 {texts.length === 0 && media.length === 0 && launch.posts.length > 0 && <p className="muted">The drafts of this launch could not be read from its pull request.</p>}
               </div>

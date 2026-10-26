@@ -37,6 +37,10 @@ import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$
 import { Route as AppDesignComponentsRouteImport } from './routes/_app/design/components'
 import { Route as AppDesignIllustrationsRouteImport } from './routes/_app/design/illustrations'
 import { Route as AppLaunchesIdRouteImport } from './routes/_app/launches/$id'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
+import { Route as AppSettingsAiRouteImport } from './routes/_app/settings/ai'
+import { Route as AppSettingsApiRouteImport } from './routes/_app/settings/api'
+import { Route as AppSettingsAutomationRouteImport } from './routes/_app/settings/automation'
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.callback'
@@ -185,6 +189,26 @@ const AppLaunchesIdRoute = AppLaunchesIdRouteImport.update({
   path: '/launches/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAiRoute = AppSettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsApiRoute = AppSettingsApiRouteImport.update({
+  id: '/api',
+  path: '/api',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAutomationRoute = AppSettingsAutomationRouteImport.update({
+  id: '/automation',
+  path: '/automation',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const ApiGithubWebhookRoute = ApiGithubWebhookRouteImport.update({
   id: '/api/github/webhook',
   path: '/api/github/webhook',
@@ -235,7 +259,7 @@ export interface FileRoutesByFullPath {
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
   '/launch': typeof AppLaunchRoute
-  '/settings': typeof AppSettingsRoute
+  '/settings': typeof AppSettingsRouteWithChildren
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
@@ -253,6 +277,9 @@ export interface FileRoutesByFullPath {
   '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
   '/launches/$id': typeof AppLaunchesIdRoute
+  '/settings/ai': typeof AppSettingsAiRoute
+  '/settings/api': typeof AppSettingsApiRoute
+  '/settings/automation': typeof AppSettingsAutomationRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -261,6 +288,7 @@ export interface FileRoutesByFullPath {
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/channels/': typeof AppChannelsIndexRoute
+  '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRoutesByTo {
@@ -271,7 +299,6 @@ export interface FileRoutesByTo {
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
   '/launch': typeof AppLaunchRoute
-  '/settings': typeof AppSettingsRoute
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
@@ -290,6 +317,9 @@ export interface FileRoutesByTo {
   '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
   '/launches/$id': typeof AppLaunchesIdRoute
+  '/settings/ai': typeof AppSettingsAiRoute
+  '/settings/api': typeof AppSettingsApiRoute
+  '/settings/automation': typeof AppSettingsAutomationRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -298,6 +328,7 @@ export interface FileRoutesByTo {
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/channels': typeof AppChannelsIndexRoute
+  '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRoutesById {
@@ -310,7 +341,7 @@ export interface FileRoutesById {
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
   '/_app/launch': typeof AppLaunchRoute
-  '/_app/settings': typeof AppSettingsRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/stats': typeof AppStatsRoute
   '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
@@ -329,6 +360,9 @@ export interface FileRoutesById {
   '/_app/design/components': typeof AppDesignComponentsRoute
   '/_app/design/illustrations': typeof AppDesignIllustrationsRoute
   '/_app/launches/$id': typeof AppLaunchesIdRoute
+  '/_app/settings/ai': typeof AppSettingsAiRoute
+  '/_app/settings/api': typeof AppSettingsApiRoute
+  '/_app/settings/automation': typeof AppSettingsAutomationRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
@@ -337,6 +371,7 @@ export interface FileRoutesById {
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/_app/channels/': typeof AppChannelsIndexRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRouteTypes {
@@ -368,6 +403,9 @@ export interface FileRouteTypes {
     | '/design/components'
     | '/design/illustrations'
     | '/launches/$id'
+    | '/settings/ai'
+    | '/settings/api'
+    | '/settings/automation'
     | '/api/github/webhook'
     | '/api/v1/$'
     | '/auth/github/callback'
@@ -376,6 +414,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon/callback'
     | '/auth/threads/callback'
     | '/channels/'
+    | '/settings/'
     | '/launches/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -386,7 +425,6 @@ export interface FileRouteTypes {
     | '/automation'
     | '/comments'
     | '/launch'
-    | '/settings'
     | '/stats'
     | '/tokens'
     | '/write'
@@ -405,6 +443,9 @@ export interface FileRouteTypes {
     | '/design/components'
     | '/design/illustrations'
     | '/launches/$id'
+    | '/settings/ai'
+    | '/settings/api'
+    | '/settings/automation'
     | '/api/github/webhook'
     | '/api/v1/$'
     | '/auth/github/callback'
@@ -413,6 +454,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon/callback'
     | '/auth/threads/callback'
     | '/channels'
+    | '/settings'
     | '/launches/$id/edit'
   id:
     | '__root__'
@@ -443,6 +485,9 @@ export interface FileRouteTypes {
     | '/_app/design/components'
     | '/_app/design/illustrations'
     | '/_app/launches/$id'
+    | '/_app/settings/ai'
+    | '/_app/settings/api'
+    | '/_app/settings/automation'
     | '/api/github/webhook'
     | '/api/v1/$'
     | '/auth/github/callback'
@@ -451,6 +496,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon/callback'
     | '/auth/threads/callback'
     | '/_app/channels/'
+    | '/_app/settings/'
     | '/_app/launches/$id_/edit'
   fileRoutesById: FileRoutesById
 }
@@ -671,6 +717,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchesIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/ai': {
+      id: '/_app/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AppSettingsAiRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/api': {
+      id: '/_app/settings/api'
+      path: '/api'
+      fullPath: '/settings/api'
+      preLoaderRoute: typeof AppSettingsApiRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/automation': {
+      id: '/_app/settings/automation'
+      path: '/automation'
+      fullPath: '/settings/automation'
+      preLoaderRoute: typeof AppSettingsAutomationRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/api/github/webhook': {
       id: '/api/github/webhook'
       path: '/api/github/webhook'
@@ -730,12 +804,30 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppSettingsRouteChildren {
+  AppSettingsAiRoute: typeof AppSettingsAiRoute
+  AppSettingsApiRoute: typeof AppSettingsApiRoute
+  AppSettingsAutomationRoute: typeof AppSettingsAutomationRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAiRoute: AppSettingsAiRoute,
+  AppSettingsApiRoute: AppSettingsApiRoute,
+  AppSettingsAutomationRoute: AppSettingsAutomationRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAiRoute: typeof AppAiRoute
   AppAutomationRoute: typeof AppAutomationRoute
   AppCommentsRoute: typeof AppCommentsRoute
   AppLaunchRoute: typeof AppLaunchRoute
-  AppSettingsRoute: typeof AppSettingsRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppStatsRoute: typeof AppStatsRoute
   AppTokensRoute: typeof AppTokensRoute
   AppWriteRoute: typeof AppWriteRoute
@@ -753,7 +845,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAutomationRoute: AppAutomationRoute,
   AppCommentsRoute: AppCommentsRoute,
   AppLaunchRoute: AppLaunchRoute,
-  AppSettingsRoute: AppSettingsRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppStatsRoute: AppStatsRoute,
   AppTokensRoute: AppTokensRoute,
   AppWriteRoute: AppWriteRoute,

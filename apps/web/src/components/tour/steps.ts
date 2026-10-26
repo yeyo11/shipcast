@@ -32,7 +32,7 @@ export function tourSteps({ launchId }: { launchId: number | null }): TourStep[]
       selector: on('/'),
       side: 'bottom-left',
       title: 'Launches',
-      content: 'Every release Shipcast noticed, or one you launched by hand: where it went and how it did. A launch waiting for you shows on a yellow band.',
+      content: 'Every release Shipcast noticed, or one you launched by hand: where it went and how it did. A launch waiting for you is a yellow row above the cards, and the bell in the top bar counts what needs you.',
     },
     ...(launch
       ? [
@@ -68,16 +68,17 @@ export function tourSteps({ launchId }: { launchId: number | null }): TourStep[]
       content: 'The accounts you post from, one per network, and whether each publishes on its own, waits for your approval or stays a draft.',
     },
     {
-      route: '/automation',
-      selector: on('/automation'),
+      route: '/settings/automation',
+      // Under Settings the page's h1 is Settings; the section's own title is an h2
+      selector: on('/settings/automation', 'h2'),
       side: 'bottom-left',
       title: 'Automation',
       content: 'How Shipcast notices a release on its own: rounds every few minutes, or GitHub’s webhooks. Off means only what you start by hand.',
     },
     {
-      route: '/automation',
+      route: '/settings/automation',
       title: 'That is all',
-      content: 'Take the tour again from the menu under your name, or from the search (⌘K or Ctrl K).',
+      content: 'Settings, in the menu under your name, holds the AI, the API and this. Take the tour again from that menu, or from the search (⌘K or Ctrl K).',
     },
   ];
   return steps.map((step, i) => {

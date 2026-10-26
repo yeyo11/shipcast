@@ -17,11 +17,11 @@
 .onb-art svg { display: block; width: min(220px, 56vw); height: auto; }
 /* "Step n of 5" opens the list of the steps: going back to any step reached, in one press */
 .onb-steps { margin: 16px 0 8px; position: relative; }
-.onb-steps summary.onb-count { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border-radius: var(--sc-radius-pill); font: var(--sc-label); color: var(--sc-muted); cursor: pointer; list-style: none; }
-.onb-steps summary.onb-count::-webkit-details-marker { display: none; }
-.onb-steps summary.onb-count::after { content: ''; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); }
-.onb-steps[open] summary.onb-count::after { transform: translateY(2px) rotate(-135deg); }
-.onb-steps summary.onb-count:hover { color: var(--sc-text); background: var(--sc-raised); }
+.onb-steps .onb-count { display: inline-flex; width: auto; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 12px; border-radius: var(--sc-radius-pill); font: var(--sc-label); color: var(--sc-muted); cursor: pointer; }
+.onb-steps .onb-count .ui-chevron { width: 7px; height: 7px; border-width: 2px; margin: 0; transform: translateY(-2px) rotate(45deg); }
+.onb-steps .onb-count[data-panel-open] .ui-chevron { transform: translateY(2px) rotate(-135deg); }
+.onb-steps .ui-collapsible-inner { padding-top: 0; }
+.onb-steps .onb-count:hover { color: var(--sc-text); background: var(--sc-raised); }
 .onb-steps ol { list-style: none; margin: 8px auto 0; padding: 8px; width: min(320px, calc(100vw - 32px)); display: grid; gap: 2px; text-align: left; background: var(--sc-raised); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); }
 .onb-steps li > a, .onb-steps-later { display: flex; gap: 12px; align-items: center; min-height: 44px; padding: 6px 10px; border-radius: 12px; color: var(--sc-text); text-decoration: none; font-weight: 600; }
 .onb-steps li > a:hover { background: var(--sc-ground); }
@@ -128,16 +128,36 @@
 .chat-head .ui-icon-button { border: 0; }
 .chat-list { overflow-y: auto; overscroll-behavior: contain; padding: 16px; display: grid; align-content: start; gap: 14px; }
 .chat-empty { margin: 0; font-size: 14.5px; line-height: 1.5; }
-.chat-mine { justify-self: end; max-width: 88%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--sc-text); color: var(--sc-ground); white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+.chat-row-mine { grid-template-columns: minmax(0, 1fr) 28px; justify-items: end; }
+.chat-avatar { display: grid; place-items: center; width: 28px; height: 28px; overflow: hidden; border-radius: var(--sc-radius-pill); }
+.chat-avatar .avatar { width: 28px; height: 28px; border-radius: var(--sc-radius-pill); object-fit: cover; }
+.chat-avatar-mark { border-radius: 0; overflow: visible; }
+.chat-initial { display: grid; place-items: center; width: 28px; height: 28px; background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 13px/1 var(--sc-font-text); }
+.chat-mine { justify-self: end; max-width: 100%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--sc-text); color: var(--sc-ground); white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-answer { display: grid; gap: 10px; min-width: 0; }
 .chat-prose { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .chat-proposal { display: grid; gap: 8px; }
 .chat-wait { margin: 0; font-size: 13.5px; }
 .chat-form { display: grid; gap: 8px; padding: 12px; border-top: 1px solid var(--sc-hairline); }
 .chat-input { min-height: 64px; }
+.chat-send { width: 100%; justify-content: center; }
+.chat-history { display: grid; gap: 10px; align-content: start; }
+.chat-sessions { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.chat-session { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--sc-hairline); border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.chat-session:hover, .chat-session[aria-current='true'] { border-color: var(--sc-text); }
+.chat-session .muted { font-size: 13px; }
+.chat-session-title { overflow-wrap: anywhere; }
 .chat-fab { position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 20; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--sc-radius-pill); border: 2px solid #000; background: var(--sc-yellow); color: var(--sc-on-yellow); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); cursor: pointer; }
 @media (max-width: 1099px) { .chat-panel { position: static; height: 560px; } }
-@media (max-width: 860px) { .chat-fab { bottom: calc(92px + env(safe-area-inset-bottom)); } }
+/* The bottom bar is about 70px tall plus the safe area: the bubble floats above it */
+@media (max-width: 860px) { .chat-fab { bottom: calc(86px + env(safe-area-inset-bottom)); right: max(16px, env(safe-area-inset-right)); } }
+/* On a phone the chat is a sheet over the whole screen, closed back to the bubble */
+.chat-sheet { position: fixed; inset: 0; z-index: 61; display: grid; background: var(--sc-ground); color: var(--sc-text); outline: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); transition: transform var(--ui-move) var(--ui-ease), opacity var(--ui-move) var(--ui-ease); }
+.chat-sheet[data-starting-style], .chat-sheet[data-ending-style] { opacity: 0; transform: translateY(24px); }
+.chat-panel-sheet { position: static; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+.chat-panel-sheet .chat-form { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) { .chat-sheet { transition: none; } }
 
 /* ---------- The drafts editor: the drafts on the left, the text and its chat beside ---------- */
 .drafts-editor { display: grid; grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 28px; align-items: start; }

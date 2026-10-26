@@ -2,7 +2,7 @@ import { newWebhookSecret, WEBHOOK_SECRET_KEY, writeAutomation, type AutomationM
 import { createServerFn } from '@tanstack/react-start';
 import { automationChanged, automationView, roundNow } from './automation.server';
 import { appContext } from './context.server';
-import { jobsView } from './jobs.server';
+import { jobsPage, type JobStateFilter } from './jobs.server';
 import { InvalidInput, object } from './input';
 
 export const getAutomation = createServerFn({ method: 'GET' }).handler(async () => {
@@ -16,9 +16,19 @@ export const getAutomation = createServerFn({ method: 'GET' }).handler(async () 
     launchesRepo: ctx.settings.launchesRepo(),
     owner: (await ctx.brand()).github,
     /** The queue's work of the last day: drafting, publishing, GitHub's deliveries (moved here from the launches list) */
-    jobs: await jobsView(ctx.registry),
+    jobs: await jobsPage(ctx.registry, { page: 1, state: 'all' }),
   };
 });
+
+/** One page of the work list, for the filter and the pager on the Automation page */
+export const getJobsPage = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => {
+    const o = object(input, 'input');
+    if (typeof o.page !== 'number' || !Number.isInteger(o.page) || o.page < 1) throw new InvalidInput('page must be a positive integer');
+    if (o.state !== 'all' && o.state !== 'running' && o.state !== 'failed' && o.state !== 'done') throw new InvalidInput('state is all, running, failed or done');
+    return { page: o.page, state: o.state as JobStateFilter };
+  })
+  .handler(async ({ data }) => jobsPage((await appContext()).registry, data));
 
 export const saveAutomation = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
