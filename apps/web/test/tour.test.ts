@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { notchFor, tourSteps } from '../src/components/tour/steps.ts';
+import { notchFor, phoneSide, tourSteps } from '../src/components/tour/steps.ts';
 
 test('the notch sits on the card edge facing the target, along it as the card is aligned', () => {
   assert.deepEqual(notchFor('bottom-left'), { edge: 'top', align: 'start' });
@@ -23,4 +23,14 @@ test('every step with a target has a side the notch can point from, and the rout
       if (next && next.route !== step.route) assert.equal(step.nextRoute, next.route);
     });
   }
+});
+
+test('on a phone no card sits beside its target: it goes above it, lined up with its far edge', () => {
+  assert.equal(phoneSide('left'), 'top-right');
+  assert.equal(phoneSide('left-bottom'), 'top-right');
+  assert.equal(phoneSide('right'), 'top-left');
+  assert.equal(phoneSide('bottom-left'), 'bottom-left');
+  const assistant = (phone: boolean) => tourSteps({ launchId: 1, phone }).find((s) => s.selector?.includes('assistant'))?.side;
+  assert.equal(assistant(false), 'left');
+  assert.equal(assistant(true), 'top-right');
 });

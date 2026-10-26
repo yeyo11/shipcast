@@ -56,6 +56,11 @@ const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS];
 const BOTTOM = [LAUNCHES, WRITE, CHANNELS, STATS];
 /** Settings is one group of four, in the user menu (a submenu) and in More (a group), never four flat entries */
 const SETTINGS_GROUP = [SETTINGS, AI, AUTOMATION, API];
+/**
+ * The router's Link marks itself current when the address merely starts with its path, so `/settings`
+ * was "current" on every Settings page; exact matching leaves `match` above the only judge
+ */
+const EXACT = { exact: true } as const;
 const MORE = [COMMENTS, ...SETTINGS_GROUP];
 
 function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
@@ -89,13 +94,13 @@ function Shell() {
         </a>
         <header className="top">
           <div className="top-inner wrap">
-            <Link to="/" className="lockup" aria-label="Shipcast, the launches">
+            <Link to="/" className="lockup" aria-label="Shipcast, the launches" activeOptions={EXACT}>
               <img src="/logo/mark.svg" alt="" />
               <span>Shipcast</span>
             </Link>
             <nav className="nav" aria-label="Sections">
               {TOP.map((s) => (
-                <Link key={s.to} to={s.to} aria-current={current(s)}>
+                <Link key={s.to} to={s.to} aria-current={current(s)} activeOptions={EXACT}>
                   {s.label}
                 </Link>
               ))}
@@ -143,7 +148,7 @@ function Shell() {
           {BOTTOM.map((s) => {
             const Icon = s.icon!;
             return (
-              <Link key={s.to} to={s.to} aria-current={current(s)}>
+              <Link key={s.to} to={s.to} aria-current={current(s)} activeOptions={EXACT}>
                 <Icon size={22} />
                 <span>{s.label}</span>
               </Link>
@@ -163,10 +168,10 @@ function Shell() {
             <nav aria-label="More sections">
               <ul className="drawer-links">
                 <li>
-                  <DrawerClose render={<Link to={COMMENTS.to} aria-current={current(COMMENTS)} />}>{COMMENTS.label}</DrawerClose>
+                  <DrawerClose render={<Link to={COMMENTS.to} aria-current={current(COMMENTS)} activeOptions={EXACT} />}>{COMMENTS.label}</DrawerClose>
                 </li>
                 <li>
-                  <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} />}>Launch a repo</DrawerClose>
+                  <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} activeOptions={EXACT} />}>Launch a repo</DrawerClose>
                 </li>
                 {/* The group is the li's child: a li with a role of its own is no longer a list item */}
                 <li>
@@ -179,7 +184,7 @@ function Shell() {
                     <ul className="drawer-sublinks">
                       {SETTINGS_GROUP.map((s) => (
                         <li key={s.to}>
-                          <DrawerClose render={<Link to={s.to} aria-current={current(s)} />}>{s.label}</DrawerClose>
+                          <DrawerClose render={<Link to={s.to} aria-current={current(s)} activeOptions={EXACT} />}>{s.label}</DrawerClose>
                         </li>
                       ))}
                     </ul>

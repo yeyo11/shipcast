@@ -344,7 +344,8 @@ export default function TourRuntime({ onEnd }: { onEnd: () => void }) {
       .then((data) => setLaunchId(data.launches[0]?.id ?? null))
       .catch(() => setLaunchId(null));
   }, []);
-  const steps = useMemo(() => (launchId === undefined ? [] : tourSteps({ launchId })), [launchId]);
+  // The phone's width, as the assistant's panel reads it (ChatPanel's PHONE): there it is a button at the edge
+  const steps = useMemo(() => (launchId === undefined ? [] : tourSteps({ launchId, phone: window.matchMedia('(max-width: 760px)').matches })), [launchId]);
   // Keys are the conductor's; see Stage
   const forNextStep = useMemo(() => steps.map((step) => ({ ...step, blockKeyboardControl: true })), [steps]);
   const reduced = prefersReducedMotion();

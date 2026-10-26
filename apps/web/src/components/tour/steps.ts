@@ -23,8 +23,21 @@ export interface TourStep {
 
 const on = (path: string, inside = 'h1') => `main[data-path="${path}"] ${inside}`;
 
+type Side = NonNullable<TourStep['side']>;
+
+/**
+ * On a phone a card beside its target has no room: the writing assistant is a button at the right
+ * edge, and its card, set to the left of it, started off-screen. It goes above the target instead,
+ * lined up with the target's far edge, so it grows into the screen.
+ */
+export function phoneSide(side: Side): Side {
+  if (side.startsWith('left')) return 'top-right';
+  if (side.startsWith('right')) return 'top-left';
+  return side;
+}
+
 /** The tour: Launches, the newest launch's page (when there is one), Write and its assistant, Channels, Automation */
-export function tourSteps({ launchId }: { launchId: number | null }): TourStep[] {
+export function tourSteps({ launchId, phone = false }: { launchId: number | null; phone?: boolean }): TourStep[] {
   const launch = launchId === null ? null : `/launches/${launchId}`;
   const steps: Array<Omit<TourStep, 'nextRoute' | 'prevRoute'>> = [
     {
@@ -89,6 +102,7 @@ export function tourSteps({ launchId }: { launchId: number | null }): TourStep[]
       pointerRadius: 18,
       selectorRetryAttempts: 10,
       ...step,
+      ...(phone && step.side && { side: phoneSide(step.side) }),
       ...(next && next.route !== step.route && { nextRoute: next.route }),
       ...(prev && prev.route !== step.route && { prevRoute: prev.route }),
     };
