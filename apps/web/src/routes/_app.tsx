@@ -26,7 +26,7 @@ export const Route = createFileRoute('/_app')({
   errorComponent: ErrorPage,
 });
 
-type To = '/' | '/write' | '/channels' | '/comments' | '/stats' | '/automation' | '/ai' | '/tokens' | '/settings' | '/launch';
+type To = '/' | '/write' | '/channels' | '/comments' | '/stats' | '/settings' | '/settings/ai' | '/settings/automation' | '/settings/api' | '/launch';
 
 interface Section {
   to: To;
@@ -41,16 +41,16 @@ const WRITE: Section = { to: '/write', label: 'Write', icon: WriteIcon, match: (
 const CHANNELS: Section = { to: '/channels', label: 'Channels', icon: ChannelsIcon, match: (p) => p.startsWith('/channels') };
 const COMMENTS: Section = { to: '/comments', label: 'Comments', match: (p) => p.startsWith('/comments') };
 const STATS: Section = { to: '/stats', label: 'Stats', icon: StatsIcon, match: (p) => p.startsWith('/stats') };
-const AUTOMATION: Section = { to: '/automation', label: 'Automation', match: (p) => p.startsWith('/automation') };
-const AI: Section = { to: '/ai', label: 'AI', match: (p) => p.startsWith('/ai') };
-const API: Section = { to: '/tokens', label: 'API', match: (p) => p.startsWith('/tokens') };
-const SETTINGS: Section = { to: '/settings', label: 'Settings', match: (p) => p.startsWith('/settings') };
+const SETTINGS: Section = { to: '/settings', label: 'Settings', match: (p) => p === '/settings' };
+const AI: Section = { to: '/settings/ai', label: 'AI', match: (p) => p.startsWith('/settings/ai') };
+const AUTOMATION: Section = { to: '/settings/automation', label: 'Automation', match: (p) => p.startsWith('/settings/automation') };
+const API: Section = { to: '/settings/api', label: 'API', match: (p) => p.startsWith('/settings/api') };
 
-/** Wide screens: every section in the top bar */
-const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS, AUTOMATION, AI, API];
+/** Wide screens: the five working sections in the top bar; the configuration is in the user menu */
+const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS];
 /** Phones: the four in reach of the thumb; the rest behind More */
 const BOTTOM = [LAUNCHES, WRITE, CHANNELS, STATS];
-const MORE = [COMMENTS, AUTOMATION, AI, API, SETTINGS];
+const MORE = [COMMENTS, SETTINGS, AI, AUTOMATION, API];
 
 function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
   return (
@@ -94,11 +94,9 @@ function Shell() {
               ))}
             </nav>
             <div className="top-tools">
-              <Tooltip content={`Go to or do anything (${shortcut})`} side="bottom">
-                <button type="button" className="search-button" onClick={() => setPalette(true)} aria-keyshortcuts="Meta+K Control+K">
+              <Tooltip content={`Search (${shortcut})`} side="bottom">
+                <button type="button" className="ui-icon-button search-button" aria-label="Search" onClick={() => setPalette(true)} aria-keyshortcuts="Meta+K Control+K">
                   <SearchIcon />
-                  <span className="search-label">Search</span>
-                  <kbd className="ui-kbd search-kbd" aria-hidden="true">{shortcut}</kbd>
                 </button>
               </Tooltip>
               <div className="who-menu">
@@ -113,6 +111,10 @@ function Shell() {
                     { kind: 'note', label: name ? `${name} (@${login})` : `@${login}` },
                     { kind: 'separator' },
                     { label: 'Settings', onSelect: () => void navigate({ to: '/settings' }) },
+                    { label: 'AI', onSelect: () => void navigate({ to: '/settings/ai' }) },
+                    { label: 'Automation', onSelect: () => void navigate({ to: '/settings/automation' }) },
+                    { label: 'API', onSelect: () => void navigate({ to: '/settings/api' }) },
+                    { kind: 'separator' },
                     { label: 'Take the tour', onSelect: requestTour },
                     { label: 'Sign out', onSelect: () => signOut.current?.requestSubmit() },
                   ]}

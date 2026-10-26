@@ -14,7 +14,7 @@ const NATIVE = ['@resvg/resvg-js', 'satori'];
  * (use-sync-external-store) cannot load in the browser that way: its entry points are pre-bundled.
  * Add one here when a page starts using another Base UI component.
  */
-const BASE_UI = ['alert-dialog', 'autocomplete', 'combobox', 'dialog', 'drawer', 'menu', 'popover', 'select', 'tabs', 'toast', 'tooltip'].map((c) => `@base-ui/react/${c}`);
+const BASE_UI = ['accordion', 'alert-dialog', 'autocomplete', 'collapsible', 'combobox', 'dialog', 'drawer', 'menu', 'popover', 'scroll-area', 'select', 'tabs', 'toast', 'tooltip'].map((c) => `@base-ui/react/${c}`);
 
 /**
  * Discovery would crawl from the routes into the engine's source (a linked package) and try to

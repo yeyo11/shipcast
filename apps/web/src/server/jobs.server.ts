@@ -29,3 +29,32 @@ export async function jobsView(registry: Registry, filter: { launchId?: number }
       : await registry.jobs({ launchId: filter.launchId, limit: 20 });
   return jobs.filter(shown).slice(0, 30).map(jobView);
 }
+
+export const JOB_PAGE_SIZE = 10;
+export type JobStateFilter = 'all' | JobView['state'];
+
+export interface JobsPageView {
+  jobs: JobView[];
+  /** Jobs in the chosen state */
+  total: number;
+  page: number;
+  pageCount: number;
+  /** How many there are in each state, so the filter can say what it would show */
+  counts: Record<JobStateFilter, number>;
+}
+
+/**
+ * One page of the last day's jobs, in one state or all. The registry has no offset, and `shown`
+ * drops rows after the query, so the day's jobs (at most 200) are read once and cut here: the page
+ * receives ten of them, not the lot.
+ */
+export async function jobsPage(registry: Registry, { page, state }: { page: number; state: JobStateFilter }): Promise<JobsPageView> {
+  const all = (await registry.jobs({ since: new Date(Date.now() - 86_400_000).toISOString(), limit: 200 })).filter(shown).map(jobView);
+  const counts: Record<JobStateFilter, number> = { all: all.length, running: 0, failed: 0, done: 0 };
+  for (const job of all) counts[job.state] += 1;
+  const matching = state === 'all' ? all : all.filter((j) => j.state === state);
+  const pageCount = Math.max(1, Math.ceil(matching.length / JOB_PAGE_SIZE));
+  // A page past the end (the list shrank since it was shown) falls back to the last one
+  const at = Math.min(Math.max(1, page), pageCount);
+  return { jobs: matching.slice((at - 1) * JOB_PAGE_SIZE, at * JOB_PAGE_SIZE), total: matching.length, page: at, pageCount, counts };
+}

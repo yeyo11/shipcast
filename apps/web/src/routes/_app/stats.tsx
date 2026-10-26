@@ -18,7 +18,7 @@ import statsCss from '../../styles/stats.css?url';
 /*
  * Stats: how the launches did across channels and accounts over time (milestone 5 of
  * docs/plans/goal-after-mvp.md, built on docs/decisions/app-design-direction.md and
- * docs/decisions/charts.md). One screen per tab (Overview, Posts, Accounts, Search) under one
+ * docs/decisions/charts.md). One screen per tab (Overview, Ranking, Accounts, Search) under one
  * filter bar, so nothing needs a long scroll. The view lives in the address, the tab included, so a
  * period, a metric, a set of filters and a tab can be shared as a link. The numbers come from the
  * engine's stats queries (docs/stats.md).
@@ -45,7 +45,7 @@ export const Route = createFileRoute('/_app/stats')({
   component: Stats,
 });
 
-const TAB_NAMES: Record<StatsTab, string> = { overview: 'Overview', posts: 'Posts', accounts: 'Accounts', search: 'Search' };
+const TAB_NAMES: Record<StatsTab, string> = { overview: 'Overview', ranking: 'Ranking', accounts: 'Accounts', search: 'Search' };
 
 function Loading() {
   return (
@@ -149,7 +149,7 @@ function Stats() {
     </>
   );
 
-  const posts = nothing ? (
+  const ranking = nothing ? (
     empty
   ) : (
     <RankingTable
@@ -164,7 +164,7 @@ function Stats() {
     />
   );
 
-  const panels: Record<StatsTab, ReactNode> = { overview, posts, accounts: <Accounts data={growth} />, search: <Search data={searchData} /> };
+  const panels: Record<StatsTab, ReactNode> = { overview, ranking, accounts: <Accounts data={growth} />, search: <Search data={searchData} /> };
 
   return (
     <div className="stats-page">

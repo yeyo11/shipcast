@@ -185,10 +185,11 @@ export function parseStatsInput(input: unknown): StatsSearch {
 }
 
 /** The page's tabs; the tab is in the address too, so a link opens on it, but it never reloads the numbers */
-export const STATS_TABS = ['overview', 'posts', 'accounts', 'search'] as const;
+export const STATS_TABS = ['overview', 'ranking', 'accounts', 'search'] as const;
 export type StatsTab = (typeof STATS_TABS)[number];
 export const readStatsTab = (raw: Record<string, unknown>): StatsTab | undefined => {
-  const tab = pick(raw.tab, STATS_TABS);
+  // The ranking was the Posts tab until 2026-10-26: links saved with ?tab=posts still open it
+  const tab = raw.tab === 'posts' ? 'ranking' : pick(raw.tab, STATS_TABS);
   // The first tab is the default, left out of the address like every other default
   return tab === 'overview' ? undefined : tab;
 };

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T11:02:25.586416449Z
-updated_at: 2026-10-26T11:13:00.348898706Z
+created_at: 2026-10-26T11:40:27.573350713Z
+updated_at: 2026-10-26T12:33:34.853587778Z
 tags:
     - web-app
     - dashboard
@@ -128,9 +128,9 @@ runs on the owner's machine.
   network allows them or Retry when it failed, its time while it is not out yet, and what the
   network allows in a line; Edit selected and Delete everything sit above the panel. **Content**,
   what went out (or the drafts, editable while the pull request is open: a save is a commit on its
-  branch) and the media, folded rows opened on demand. **Search engines**, each engine's view of
-  each language's article. **Details**, the properties, the accounts it went out with and how their
-  followers moved, the last reading of every number, and the launch's jobs.
+  branch) and the media, folded rows (an Accordion) opened on demand. **Search engines**, each
+  engine's view of each language's article. **Details**, the properties, the accounts it went out
+  with and how their followers moved, the last reading of every number, and the launch's jobs.
 - **Launch a repo** (`/launch`): the owner's repos (a combobox with a search) and their releases (a
   select), the [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice,
   and the choice between reviewing the drafts first or publishing without review. Drafting is a job
@@ -141,15 +141,14 @@ runs on the owner's machine.
 - **Channels** (`/channels`): see [accounts.md](accounts.md). A newly connected account lands on the
   list, scrolled to and focused. The **Anthropic API** and an **OpenAI-compatible server** are
   connected here too, as AI providers.
-- **Automation** (`/automation`): below.
-- **AI** (`/ai`): below.
-- **API** (`/tokens`): the REST API's tokens, created with a name and scopes (`read`, `write`), shown
-  once, listed with when each was last used, and revoked. See [api.md](api.md).
 - **Stats** (`/stats`): how the launches did, under one filter bar (the period, and the rest behind
   Filters) in four tabs: Overview (the totals, which pick the chart's metric, and the time chart),
-  Posts (the ranking), Accounts (one table of the accounts' growth with Sync now) and Search (the
-  articles in Google and Bing). See [stats.md](stats.md#the-page).
-- **Settings** (`/settings`): below.
+  Ranking (the posts ranked; `?tab=posts` still opens it), Accounts (one table of the accounts'
+  growth with Sync now) and Search (the articles in Google and Bing). See
+  [stats.md](stats.md#the-page).
+- **Settings** (`/settings`): one area with a submenu, below. Its sections are General
+  (`/settings`), AI (`/settings/ai`), Automation (`/settings/automation`) and API
+  (`/settings/api`); the old `/ai`, `/automation` and `/tokens` redirect to them.
 
 Every action's outcome is a toast in Cartel (Done, Failed with its diamond, Waiting for you on
 yellow), and every error is explained for a person, with the original text folded under Details
@@ -163,21 +162,24 @@ reduced motion.
 Built on 2026-10-25, the first part of milestone 3 of the [goal after the MVP](plans/goal-after-mvp.md),
 on the [approved design direction](decisions/app-design-direction.md).
 
-- **The shell** (`src/routes/_app.tsx`). On wide screens the top bar holds the lockup, the sections
-  (Launches, Write, Channels, Stats, Automation, AI, API), Search with its shortcut, and the signed-in
-  user as a menu with Settings and Sign out. Below 860 px the sections leave the top for a **bottom
-  bar** in reach of the thumb: Launches, Write, Channels, Stats and **More**, which opens a drawer
-  with Automation, AI, API, Settings, Launch a repo, the search and the signed-in account with Sign
-  out. The current section is `aria-current="page"` in both (a launch's page and Launch a repo count
-  as Launches); there is a skip link to the content, `<main>` is a landmark, every target is at least
-  44 px, focus is the yellow ring, and Escape closes any popup with focus back where it was.
+- **The shell** (`src/routes/_app.tsx`). On wide screens the top bar holds the lockup, the five
+  working sections (Launches, Write, Channels, Comments, Stats), Search as an icon-only button
+  (accessible name "Search"; its shortcut is in the tooltip) and the signed-in user as a menu with
+  Settings, AI, Automation, API, Take the tour and Sign out: the configuration is not in the bar.
+  Below 860 px the sections leave the top for a **bottom bar** in reach of the thumb: Launches,
+  Write, Channels, Stats and **More**, which opens a drawer with Comments, Settings, AI,
+  Automation, API, Launch a repo, the search and the signed-in account with Sign out. The current
+  section is `aria-current="page"` in both (a launch's page and Launch a repo count as Launches);
+  there is a skip link to the content, `<main>` is a landmark, every target is at least 44 px,
+  focus is the yellow ring, and Escape closes any popup with focus back where it was.
 - **Section headers are Cartel bands** (`PageHead`): the neutral band, the huge uppercase title, a line
   under it and the section's main action, yellow when there is one (Launch a repo on Launches). Below
-  it the work area is calm. Yellow bands stay for what waits for the owner.
+  it the work area is calm. Yellow bands stay for what waits for the owner. On phones (under 760 px)
+  the illustration in a band is hidden: it only pushed the title down.
 - **The command palette**: ⌘K or Ctrl+K anywhere, Search in the top bar, or More on a phone. It
-  filters the sections (AI and Settings among them) and the main actions (launch a repo, write,
-  connect an account, run an automation round, create a token, sign out); Enter runs the
-  highlighted one.
+  filters the sections (AI, Automation, API and Settings among them) and the main actions (launch a
+  repo, write, connect an account, run an automation round, create a token, sign out); Enter runs
+  the highlighted one. On a phone the dialog is centred with margins that respect the safe areas.
 - **The components** are Base UI wearing Cartel only, typed wrappers in `src/components/ui/`, styled in
   `src/styles/components.css`: Dialog, an AlertDialog behind `ConfirmButton` (it replaced every
   `window.confirm`: disconnecting an account, rotating the webhook secret, revoking a token,
@@ -186,13 +188,19 @@ on the [approved design direction](decisions/app-design-direction.md).
   and the palette. **ResponsiveMenu** is one menu in two shapes: the Popover on a desktop (in a
   portal, flipped and shifted by Base UI to stay on screen, so opening it never scrolls the page) and
   the Drawer as a bottom sheet on a phone (640 px wide or a coarse pointer), with the same content and
-  open state and nothing that needs hover; the launch cards' channel menus use it. See
+  open state and nothing that needs hover; the launch cards' channel menus use it. **Collapsible**
+  and **Accordion** replaced every native `<details>` that was outside the stats, channels, comments,
+  assistant and tour components: the panel's height animates through `--collapsible-panel-height`,
+  and it is instant under `prefers-reduced-motion`. **ScrollArea** is Cartel's scrollbar for the
+  regions inside a page (the locked rules and previews on AI, the work list, a launch's jobs); the
+  page's own scrollbar is styled in CSS with `scrollbar-color` and `scrollbar-width`, plus
+  `::-webkit-scrollbar` for Safari, from the role tokens. See
   [decisions/component-layer.md](decisions/component-layer.md). They are reviewed running at the
   hidden route `/design/components`.
 - **Illustrations wired in**: the 404 page ("Return to sender") and the error boundary ("Damaged on
   the way", with Try again), both inside the shell when a section fails and on their own otherwise;
   the empty states for no launches, no drafts on a launch's page and no connected accounts; the
-  sign-in page; the Automation header; the Stats page's loading and empty states.
+  sign-in page; the Stats page's loading and empty states.
 - **Reflow to WCAG 2.2 at 320 CSS px.** The page no longer hides horizontal overflow
   (`overflow-x: clip` is gone); what overflowed was fixed instead: the card and two-column grids use
   `minmax(min(100%, N), 1fr)`, forms and fields are `minmax(0, 1fr)` grids, flex and grid children get
@@ -211,7 +219,8 @@ on the [approved design direction](decisions/app-design-direction.md).
 ## Automation
 
 Added on 2026-10-25 ([plans/mvp-close.md](plans/mvp-close.md)); on the job queue since phase 6
-([decisions/job-queue.md](decisions/job-queue.md)). The app is a worker of the queue from its start,
+([decisions/job-queue.md](decisions/job-queue.md)); since 2026-10-26 it is a section of Settings
+(`/settings/automation`). The app is a worker of the queue from its start,
 so nothing depends on a terminal running `watch`; `server.ts` warms the app's context through
 `/api/health` as soon as it listens, and the first round runs 15 seconds later. Each round sends the
 next one an interval later; a round is a singleton across processes, so the app and `shipcast watch`
@@ -238,7 +247,11 @@ never run the same round twice.
   what to tick on GitHub for a webhook set by hand.
 - **Work in progress**: the queue's jobs of the last day (drafting, publishing, GitHub's deliveries),
   each with its last log line and its state, followed while one runs; it moved here from the
-  launches list, where it took the room of the launches.
+  launches list, where it took the room of the launches. Ten to a page, cut on the server
+  (`jobsPage` in `src/server/jobs.server.ts`, which the registry's query cannot do itself: it has no
+  offset and the list drops some rows after it), with a filter by state (All, Running, Failed, Done,
+  each with its count) and a box of bounded height that scrolls with ScrollArea. A launch's own jobs
+  (on its Details tab) are a bounded list too.
 - **What happened**: the last round and the last delivery, with their lines; and **Run a round now**,
   which moves the round already queued to now (refused while one is running, in any process).
 - GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
@@ -247,38 +260,44 @@ never run the same round twice.
 
 ## AI
 
-Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md)); since the component
-layer it has the section band and Base UI selects, the rest of its redesign comes later
-(`src/routes/_app/ai.tsx`, `src/server/ai.functions.ts`):
+Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md)); since 2026-10-26 it is
+a section of Settings (`/settings/ai`, `src/routes/_app/settings/ai.tsx`,
+`src/server/ai.functions.ts`), and **all** AI configuration lives there and nowhere else:
 
+- **claudio**: its URL and token and the AI budget per generation. claudio stays a provider of its
+  own: its REST API is what lets Claude Code explore the repo for the content pack, and its
+  OpenAI-compatible surface streams the writing assistant. These three settings are not on General.
 - **Providers**: per task (the launch content pack, an article's distribution, the writing
   assistant) a provider (claudio, the Anthropic API, an OpenAI-compatible server; the ones without a
   connected account say so) and a model, empty for the provider's default. And the **tone**, which
   replaces `brand.yml`'s in every prompt when set.
 - **Prompts**: each channel's brief, each kind of pack's brief and the article's translation, as
-  templates with `{{variables}}`. A save is a new version; the versions are listed with their dates
-  and any of them, or the default, can be restored.
+  templates with `{{variables}}`, folded in an Accordion. A save is a new version; the versions are
+  listed with their dates and any of them, or the default, can be restored.
 - **Locked**: the rules that keep generated text true to the code (and to the article), and the
   content pack's JSON Schema, shown read-only.
 - **Preview**: the final system prompt and prompt a past launch would get with the saved prompts and
   tone, rendered without calling an AI.
 
-The selection actions and side chat of the writing assistant come later, with the redesign
-([decisions/app-design-direction.md](decisions/app-design-direction.md)).
-
 ## Settings
 
-Added on 2026-10-25 ([decisions/github-app.md](decisions/github-app.md)); since the component layer
-it has the section band, and its Clear asks first (`src/routes/_app/settings.tsx`,
-`src/server/settings.functions.ts`):
+Added on 2026-10-25 ([decisions/github-app.md](decisions/github-app.md)). Since 2026-10-26 Settings is
+**one area with a submenu**: a column beside the page on wide screens, tabs that scroll sideways on
+phones. **General** (`/settings`), **AI** (above), **Automation** (above) and **API**
+(`/settings/api`, the REST API's tokens: created with a name and scopes (`read`, `write`), shown
+once, listed with when each was last used, and revoked; see [api.md](api.md)). The layout is
+`src/routes/_app/settings.tsx`; each section is a route under `src/routes/_app/settings/`. A
+setting is configured in exactly one place: the shared `SettingsForm` shows General's group and AI's
+group, never the same field twice. General's page is `src/routes/_app/settings/index.tsx` with
+`src/server/settings.functions.ts`:
 
-- **Each setting** that is not the bootstrap: the launches repo, claudio's URL and token, the AI
-  budget per generation, the Instagram app id and secret. Each says where its value comes from (saved
+- **Each setting** that is not the bootstrap and not the AI's: the launches repo and the Instagram,
+  Threads and LinkedIn app ids and secrets. Each says where its value comes from (saved
   here, the keychain, or `.env` until it is saved here); secrets are shown as set or not, never sent
-  to the page. A save checks every value first (the launches repo is `owner/name`, claudio's URL is
-  `http(s)://`, the budget a positive number), applies to what runs next without a restart, and a
-  **Clear** removes a saved one. What is still missing is listed at the top; a page that needs a
-  missing setting says which one and to set it here.
+  to the page. A save checks every value first (the launches repo is `owner/name`), applies to what
+  runs next without a restart, and a **Clear** (which asks first) removes a saved one. What is still
+  missing is listed at the top; a page that needs a missing setting says which one and to set it
+  here.
 - **GitHub**: how the engine reaches it (the App, whose commits are by `<slug>[bot]`, or the old
   token), the App's installation (account, all or selected repos, permissions), how the owner signs
   in, and the owner's user token with its expiry (refreshed on the page's own read when due).

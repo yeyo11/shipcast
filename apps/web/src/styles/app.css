@@ -51,7 +51,8 @@ main { padding-block: 32px 96px; }
 @media (max-width: 760px) {
   .page-band { grid-template-columns: minmax(0, 1fr); }
   .page-band-action, .page-band.has-art .page-band-action { justify-content: flex-start; grid-column: 1; }
-  .page-band.has-art .page-band-art { grid-row: auto; grid-column: 1; justify-self: center; width: min(100%, 240px); }
+  /* The illustration is decoration; on a phone it only pushes the title down */
+  .page-band.has-art .page-band-art { display: none; }
   .page-band-lead { font-size: 17px; }
 }
 /* An empty list: its illustration beside what is missing and the one thing that fills it */
@@ -289,6 +290,9 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 }
 .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .checklist li { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; }
+.log-area { border-radius: 16px; overflow: hidden; background: var(--sc-black); }
+.log-area .log { max-height: none; overflow: visible; }
+.card.ui-collapsible { gap: 0; }
 .log { background: var(--sc-black); color: var(--sc-on-black); border-radius: 16px; padding: 14px 18px; font: 13px/1.6 var(--sc-font-mono); white-space: pre-wrap; max-height: 320px; overflow: auto; }
 .icon { width: 22px; height: 22px; vertical-align: middle; filter: invert(1); }
 [data-theme="day"] .icon { filter: none; }
@@ -296,13 +300,9 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .grid-2 > * { min-width: 0; }
 /* A value to copy (a URL, a secret, a token): wraps instead of scrolling or overflowing */
 .copyable { flex: 1 1 240px; display: flex; align-items: center; min-width: 0; overflow-wrap: anywhere; }
-.draft { border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 18px 20px; display: grid; gap: 12px; }
-.draft summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; cursor: pointer; list-style: none; min-height: 44px; }
-.draft summary::-webkit-details-marker { display: none; }
-/* The disclosure's own marker, drawn so it turns with the state rather than the browser's triangle */
-.draft summary::after { content: ""; width: 10px; height: 10px; border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor; transform: rotate(45deg); margin-inline: 4px; transition: transform var(--sc-fade); }
-.draft[open] summary::after { transform: rotate(-135deg); }
-.draft summary h3 { margin: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+.draft { border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 18px 20px; }
+.draft-trigger { min-height: 44px; }
+.draft .ui-collapsible-inner { padding-top: 12px; }
 .draft-path { font-size: 12px; }
 .preview { white-space: pre-wrap; font-size: 14.5px; line-height: 1.55; }
 .thumbs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
@@ -364,7 +364,7 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .drafts { display: grid; gap: 8px; }
 /* A folded row is one line; it grows only when opened */
 .content-tab .draft { padding: 6px 18px; border-radius: 16px; }
-.content-tab .draft[open] { padding-bottom: 18px; }
+.content-tab .draft:has([data-panel-open]) { padding-bottom: 18px; }
 .draft-title { margin: 0; font: 700 17px/1.2 var(--sc-font-text); flex: 1 1 auto; overflow-wrap: anywhere; }
 
 /* The Channels tab (components/launch/Channels.tsx): the chips, then one channel's panel */
@@ -472,7 +472,7 @@ a.post-link:hover { color: var(--sc-text); }
 
 /* A failure kept on the page: red, worded, its original text folded away */
 .problem { margin-top: 6px; font-size: 14px; line-height: 1.45; color: var(--sc-failure); }
-.problem .toast-details summary { color: var(--sc-failure); }
+.problem .toast-details .ui-collapsible-trigger { color: var(--sc-failure); }
 /* The account just connected gets the focus ring, the same yellow as every focus */
 .account-row:focus { outline: 3px solid var(--sc-yellow); outline-offset: 6px; border-radius: 12px; }
 /* Profile pictures: round, cropped to fill, never squeezed by the row beside them */
