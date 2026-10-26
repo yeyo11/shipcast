@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-24T14:26:58.648123954Z
-updated_at: 2026-10-25T10:01:24.713699659Z
+created_at: 2026-10-25T13:35:08.832505072Z
+updated_at: 2026-10-26T21:16:31.934973069Z
 tags:
     - decision
     - workflow
@@ -9,8 +9,9 @@ tags:
 # Work straight on main until the MVP
 
 Decided on 2026-10-24 by the owner. **Ended on 2026-10-25**, when the owner closed the MVP
-([plans/mvp-close.md](../plans/mvp-close.md)): every change now goes through a pull request,
-squash-merged (see [After the MVP](#after-the-mvp)).
+([plans/mvp-close.md](../plans/mvp-close.md)): every change went through a pull request, squash-merged
+(see [After the MVP](#after-the-mvp)). **Back on 2026-10-26, until a stable version**: the owner
+returned to working straight on `main` (see [Until a stable version](#until-a-stable-version)).
 
 ## Decision
 
@@ -57,6 +58,21 @@ running its own rounds. Other people can now use Shipcast and contribute to it, 
 - **Agents** branch from `main`, commit through the Sluice gates, push their branch and open the pull
   request without asking; **the owner merges it**, unless they ask the agent to.
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) still asks outside contributors to open an issue first.
+
+## Until a stable version
+
+Decided on 2026-10-26 by the owner, "until further notice": the pull request flow was slowing the work
+down before a stable version, so changes go straight to `main` again. The owner relaxes the branch
+protection on GitHub (no required pull request or check; force pushes and deleting `main` stay
+refused).
+
+- **The rules of the first period hold**: small Conventional Commits, Sluice's gates on every commit
+  and push, CI on every push to `main`, agents push without asking once the gates pass.
+- **The main checkout still runs production**: an agent works in its own worktree on a local branch
+  based on `origin/main`, pushes its commits to `origin main` as a fast-forward, and deploys from the
+  main checkout as before (a `pg_dump` first, `git merge --ff-only`, restart, health, table counts).
+- **Parallel agents still never push to `main`**: the lead integrates their branches.
+- The pull request flow of [After the MVP](#after-the-mvp) comes back when the owner says so.
 
 ## Related
 
