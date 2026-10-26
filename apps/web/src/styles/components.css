@@ -259,7 +259,10 @@
 .settings-nav a { display: flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: var(--sc-radius-pill); font: var(--sc-label); text-decoration: none; color: var(--sc-muted); }
 .settings-nav a:hover { color: var(--sc-text); }
 .settings-nav a[aria-current="page"] { background: var(--sc-text); color: var(--sc-ground); }
-.settings-body { min-width: 0; }
+/* One measure for every section: a form no longer stops at 720 px while the cards beside it run to the
+   column's edge, which made the content change width from one section to the next */
+.settings-body { min-width: 0; max-width: 880px; }
+.settings-body .form { max-width: none; }
 .section-intro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px 24px; margin-bottom: 28px; }
 .section-intro p { margin: 8px 0 0; max-width: 680px; }
 /* Beside the title, as in a page band: decoration, so off on a phone where it only pushes the text down */
@@ -297,7 +300,9 @@
 @media (hover: none) { .ui-scrollbar { opacity: 1; } }
 
 /* ---------- The page's own scrollbar, in the role colours (Firefox and Chromium, Safari through the pseudo-elements) ---------- */
-html { scrollbar-color: var(--sc-rail) var(--sc-ground); scrollbar-width: thin; }
+/* The gutter is always kept, so a page that gets taller than the window (the AI section, say) does not
+   narrow the content by the scrollbar's width when the owner moves between sections */
+html { scrollbar-color: var(--sc-rail) var(--sc-ground); scrollbar-width: thin; scrollbar-gutter: stable; }
 html::-webkit-scrollbar { width: 12px; height: 12px; }
 html::-webkit-scrollbar-track { background: var(--sc-ground); }
 html::-webkit-scrollbar-thumb { background: var(--sc-rail); border-radius: var(--sc-radius-pill); border: 3px solid var(--sc-ground); }

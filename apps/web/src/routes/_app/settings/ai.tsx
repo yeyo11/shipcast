@@ -1,10 +1,12 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { SectionHead } from '../../../components/SectionHead';
 import { AI_SETTING_NAMES, SettingsForm } from '../../../components/SettingsForm';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem } from '../../../components/ui/Collapsible';
+import { CheckIcon } from '../../../components/ui/icons';
 import { ScrollArea } from '../../../components/ui/ScrollArea';
 import { Select } from '../../../components/ui/Select';
 import { getSettings } from '../../../server/settings.functions';
@@ -99,12 +101,16 @@ function Tasks({ data }: { data: Data }) {
 
   return (
     <form
+      id="ai-tasks-form"
       className="form"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
+      {/* Like General, Automation and API, the section's own form saves from the toolbar, so every Settings
+          section has the same bar and the content does not jump when the owner moves between them */}
+      <PageToolbar label="AI" actions={<ToolbarAction primary type="submit" form="ai-tasks-form" label="Save AI settings" busyLabel={busy && 'Saving…'} icon={<CheckIcon />} disabled={busy} />} />
       {data.tasks.map((task) => {
         const chosen = data.providers.find((p) => p.id === tasks[task].provider);
         return (
@@ -136,11 +142,6 @@ function Tasks({ data }: { data: Data }) {
         <label htmlFor="tone">Tone</label>
         <textarea id="tone" className="input" rows={3} value={tone} placeholder={data.brandTone ?? 'first person, direct and technical, no hype.'} onChange={(e) => setTone(e.target.value)} />
         <small>Replaces brand.yml’s tone in every prompt. Empty keeps brand.yml’s{data.brandTone ? '' : ' (it has none: the default above applies)'}.</small>
-      </div>
-      <div className="row">
-        <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save AI settings'}
-        </button>
       </div>
     </form>
   );
