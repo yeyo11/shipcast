@@ -18,6 +18,13 @@
   .controls { padding: 16px 14px; }
   .controls-seg { grid-template-columns: minmax(0, 1fr); flex: 1 1 100%; }
 }
+/* The app's segmented controls stack on a phone; these have two or three short words, which fit side by side and save a screen of scrolling */
+@media (max-width: 560px) {
+  .controls .seg, .section-head .seg { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border-radius: var(--sc-radius-pill); }
+  .controls .seg span, .section-head .seg span { justify-content: center; padding-inline: 8px; }
+  .controls .seg label + label span, .section-head .seg label + label span { border-top: 0; border-left: 1px solid var(--sc-rail); }
+  .section-head .seg { flex: 1 1 100%; }
+}
 
 /* ---------- KPIs ---------- */
 
