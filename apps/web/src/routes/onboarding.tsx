@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
 import { DiffView } from '../components/assistant/DiffView';
 import { OnboardAI, OnboardAutomation, OnboardBrand, OnboardChannels, OnboardMeasure, Shipped, type IllustrationProps } from '../components/illustrations';
 import { ToastProvider, useToast } from '../components/Toasts';
@@ -26,8 +26,9 @@ import {
 import { STEP_TITLES, STEPS, type Step } from '../server/onboarding';
 
 /*
- * The onboarding: full-screen steps with one illustration each and a progress line, after the
- * approved design direction. Every step can be skipped for now and resumed from Settings; what is
+ * The onboarding, a centred wizard: one step per screen, a thin progress bar, and one primary button
+ * that saves the step's choice and moves on. Only the optional steps (Channels, Measurement) offer
+ * "Skip this step"; "Finish later" sets the whole thing aside, resumable from Settings. What is
  * already configured shows as done. See docs/decisions/onboarding.md
  */
 
@@ -67,27 +68,34 @@ const LEADS: Record<Step, string> = {
   automation: 'How Shipcast notices a release on its own, and how often it looks.',
 };
 
+/** The steps that can be left empty without the install missing anything it needs to launch */
+const OPTIONAL: ReadonlySet<Step> = new Set<Step>(['channels', 'measure']);
+
+/** Said when Continue cannot move on a required step: what is still missing */
+const MISSING: Record<Step, string> = {
+  brand: 'Choose the launches repo, with a brand.yml that validates, to go on; or finish later.',
+  ai: 'The provider is not set up yet: give claudio its URL and token, or connect the account in Channels.',
+  channels: '',
+  measure: '',
+  automation: 'The automation could not be saved.',
+};
+
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-function Progress({ data, current }: { data: Data; current: Step | 'end' }) {
-  return (
-    <ol className="onb-progress" aria-label="Setup steps">
-      {STEPS.map((s, i) => {
-        const state = data.state.steps[s];
-        return (
-          <li key={s} data-state={state} aria-current={s === current ? 'step' : undefined}>
-            <Link to="/onboarding" search={{ step: s }}>
-              <span className="onb-progress-bar" aria-hidden="true" />
-              <span className="onb-progress-label">
-                {i + 1}. {STEP_TITLES[s]}
-                <span className="visually-hidden">, {state === 'done' ? 'done' : state === 'skipped' ? 'skipped for now' : 'to do'}</span>
-              </span>
-            </Link>
-          </li>
-        );
-      })}
-    </ol>
-  );
+/**
+ * A step's own save, run by Continue before it moves on: false when the step could not save and
+ * already said why. Kept in a ref so the one Continue button can drive every step's form.
+ */
+type Saver = () => Promise<boolean>;
+type SaverRef = { current: Saver | null };
+
+function useSaver(ref: SaverRef, save: Saver) {
+  useEffect(() => {
+    ref.current = save;
+    return () => {
+      if (ref.current === save) ref.current = null;
+    };
+  });
 }
 
 function Done({ children }: { children: ReactNode }) {
@@ -98,7 +106,7 @@ function Done({ children }: { children: ReactNode }) {
   );
 }
 
-function BrandStep({ data }: { data: Data }) {
+function BrandStep({ data, saver }: { data: Data; saver: SaverRef }) {
   const router = useRouter();
   const toast = useToast();
   const [repos, setRepos] = useState<Array<{ value: string; label: string; hint?: string }>>([]);
@@ -116,16 +124,20 @@ function BrandStep({ data }: { data: Data }) {
     });
   }, []);
 
-  const choose = async () => {
-    if (!repo) return;
-    setBusy(true);
-    const answer = await chooseLaunchesRepo({ data: repo }).catch((error: unknown) => ({ ok: false as const, problem: message(error) }));
-    setBusy(false);
-    if (!answer.ok) return toast.fail(answer.problem);
+  const choose = async (chosen: string) => {
+    const answer = await chooseLaunchesRepo({ data: chosen }).catch((error: unknown) => ({ ok: false as const, problem: message(error) }));
+    if (!answer.ok) {
+      toast.fail(answer.problem);
+      return false;
+    }
     setBrandFile(answer.brand);
     if (answer.brand.state === 'valid') toast.done('The launches repo is set', `brand.yml speaks for ${answer.brand.name}.`);
     await router.invalidate();
+    return answer.brand.state === 'valid';
   };
+
+  // No repo chosen saves nothing: Continue then says what is missing
+  useSaver(saver, async () => (!repo || (repo === data.brand.launchesRepo && data.brand.ok) ? true : choose(repo)));
 
   const body = { repo: repo ?? '', ...form };
   return (
@@ -137,15 +149,15 @@ function BrandStep({ data }: { data: Data }) {
         label="The launches repo"
         options={repos}
         value={repo}
-        onValueChange={setRepo}
+        onValueChange={(value) => {
+          // The brand.yml check answered for the repo chosen before
+          setRepo(value);
+          setBrandFile(null);
+          setYaml(null);
+        }}
         placeholder={repos.length ? 'Search your repos' : 'Loading the repos…'}
         help={data.viaApp ? 'The repos the GitHub App is installed on. Missing one? Add it to the App’s installation on GitHub.' : 'Your public repos.'}
       />
-      <div className="row">
-        <button type="button" className="btn" disabled={!repo || busy || (repo === data.brand.launchesRepo && data.brand.ok)} onClick={choose}>
-          {busy ? 'Checking…' : 'Use this repo'}
-        </button>
-      </div>
       {brandFile?.state === 'invalid' && (
         <Notice tone="bad">
           brand.yml is there but does not validate; fix it on GitHub:
@@ -235,8 +247,7 @@ const PROVIDERS = [
   { id: 'openaiCompatible', name: 'OpenAI-compatible' },
 ] as const;
 
-function AiStep({ data }: { data: Data }) {
-  const router = useRouter();
+function AiStep({ data, saver }: { data: Data; saver: SaverRef }) {
   const toast = useToast();
   const chosen = data.ai.tasks.pack.provider;
   const [provider, setProvider] = useState<(typeof PROVIDERS)[number]['id']>(chosen);
@@ -246,6 +257,21 @@ function AiStep({ data }: { data: Data }) {
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const ready = data.ai.ready[provider];
   const everyTask = Object.values(data.ai.tasks).every((t) => t.provider === provider);
+
+  useSaver(saver, async () => {
+    if (provider === 'claudio' && (token || url !== (data.ai.claudio.url ?? ''))) {
+      const answer = await saveClaudio({ data: { url, token } }).catch((error: unknown) => ({ ok: false as const, problem: message(error) }));
+      if (!answer.ok) {
+        toast.fail(answer.problem);
+        return false;
+      }
+      setToken('');
+      toast.done('claudio saved', 'Its token is in the keychain.');
+    }
+    // A provider picked here does every task; a per-task choice that already works is left alone
+    if (provider !== chosen || (!everyTask && !data.detected.ai)) await useProviderForAll({ data: provider });
+    return true;
+  });
 
   const test = async () => {
     setBusy(true);
@@ -273,19 +299,7 @@ function AiStep({ data }: { data: Data }) {
         </div>
       </fieldset>
       {provider === 'claudio' ? (
-        <form
-          className="form"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            const answer = await saveClaudio({ data: { url, token } }).catch((error: unknown) => ({ ok: false as const, problem: message(error) }));
-            setBusy(false);
-            if (!answer.ok) return toast.fail(answer.problem);
-            setToken('');
-            toast.done('claudio saved', 'Its token is in the keychain.');
-            await router.invalidate();
-          }}
-        >
+        <div className="form">
           <div className="field">
             <label htmlFor="c-url">claudio’s URL</label>
             <input id="c-url" className="input mono" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://localhost:8798" />
@@ -294,12 +308,7 @@ function AiStep({ data }: { data: Data }) {
             <label htmlFor="c-token">claudio’s token</label>
             <input id="c-token" className="input mono" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder={data.ai.claudio.tokenSet ? 'Set; type a new one to replace it' : 'Not set'} />
           </div>
-          <div className="row">
-            <button type="submit" className="btn" disabled={busy || !url}>
-              Save
-            </button>
-          </div>
-        </form>
+        </div>
       ) : (
         <p>
           {ready ? 'An account is connected.' : 'Its key is a connected account, kept in the keychain like any network’s.'}{' '}
@@ -313,22 +322,9 @@ function AiStep({ data }: { data: Data }) {
         <button type="button" className="btn" disabled={busy || !ready} onClick={test}>
           {busy ? 'Testing…' : 'Test the connection'}
         </button>
-        {!everyTask && (
-          <button
-            type="button"
-            className="btn"
-            disabled={!ready}
-            onClick={async () => {
-              await useProviderForAll({ data: provider });
-              toast.done(`${PROVIDERS.find((p) => p.id === provider)?.name} does every task`, 'Choose per task in AI settings.');
-              await router.invalidate();
-            }}
-          >
-            Use it for every task
-          </button>
-        )}
       </div>
       {result && <Notice tone={result.ok ? 'ok' : 'bad'}>{result.text}</Notice>}
+      {!everyTask && <p className="muted">Each task has its own provider in AI settings; choosing another one here gives it every task.</p>}
     </>
   );
 }
@@ -353,26 +349,22 @@ function AccountsStep({ networks, kind }: { networks: Data['channels']; kind: 'c
   );
 }
 
-function AutomationStep({ data }: { data: Data }) {
+function AutomationStep({ data, saver }: { data: Data; saver: SaverRef }) {
   const toast = useToast();
-  const router = useRouter();
   const [mode, setMode] = useState(data.automation.mode);
   const [interval, setIntervalText] = useState(String(data.automation.intervalSeconds));
+  useSaver(saver, async () => {
+    try {
+      const saved = await saveAutomation({ data: { mode, intervalSeconds: Number(interval) } });
+      toast.done('Automation saved', saved.mode === 'off' ? 'Nothing runs on its own.' : `A round every ${saved.intervalSeconds} seconds.`);
+      return true;
+    } catch (error) {
+      toast.fail(message(error));
+      return false;
+    }
+  });
   return (
-    <form
-      className="form"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        try {
-          const saved = await saveAutomation({ data: { mode, intervalSeconds: Number(interval) } });
-          await markStep({ data: { step: 'automation', as: 'done' } });
-          toast.done('Automation saved', saved.mode === 'off' ? 'Nothing runs on its own.' : `A round every ${saved.intervalSeconds} seconds.`);
-          await router.invalidate();
-        } catch (error) {
-          toast.fail(message(error));
-        }
-      }}
-    >
+    <>
       <fieldset className="field onb-fieldset">
         <legend className="label">Mode</legend>
         <div className="seg">
@@ -397,12 +389,28 @@ function AutomationStep({ data }: { data: Data }) {
           <input id="o-interval" className="input mono" type="number" min={60} step={30} value={interval} onChange={(e) => setIntervalText(e.target.value)} style={{ maxWidth: 200 }} />
         </div>
       )}
-      <div className="row">
-        <button type="submit" className="btn">
-          Save
-        </button>
+    </>
+  );
+}
+
+
+/** The top bar: the lockup, how far the set-up has come, and the way out */
+function Top({ at, current, onLeave }: { at: number; current: string; onLeave?: () => void }) {
+  return (
+    <header className="onb-top">
+      <span className="lockup">
+        <img src="/logo/mark.svg" alt="" />
+        <span>Shipcast</span>
+      </span>
+      <div className="onb-bar" role="progressbar" aria-label="Set-up progress" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={at} aria-valuetext={current}>
+        <span style={{ width: `${(at / STEPS.length) * 100}%` }} />
       </div>
-    </form>
+      {onLeave && (
+        <button type="button" className="btn-link onb-leave" onClick={onLeave}>
+          Finish later
+        </button>
+      )}
+    </header>
   );
 }
 
@@ -411,8 +419,15 @@ function Onboarding() {
   const { step } = Route.useSearch();
   const navigate = useNavigate();
   const router = useRouter();
+  const toast = useToast();
+  const saver = useRef<Saver | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const first = STEPS.find((s) => data.state.steps[s] === 'pending') ?? STEPS.find((s) => data.state.steps[s] === 'skipped') ?? 'end';
   const current: Step | 'end' = step ?? first;
+
+  // A step's "what is missing" belongs to that step only
+  useEffect(() => setProblem(null), [current]);
 
   const go = async (to: Step | 'end') => {
     if (to === 'end') await finishOnboarding();
@@ -431,51 +446,43 @@ function Onboarding() {
     const left = STEPS.filter((s) => data.state.steps[s] !== 'done');
     return (
       <div className="onb">
-        <header className="onb-top">
-          <span className="lockup">
-            <img src="/logo/mark.svg" alt="" />
-            <span>Shipcast</span>
-          </span>
-          <Progress data={data} current="end" />
-        </header>
+        <Top at={STEPS.length} current="Set-up finished" />
         <main className="onb-main" id="main">
           <div className="onb-art">
-            <Shipped />
+            <Shipped width={220} />
           </div>
-          <div className="onb-body">
-            <h1 className="ph onb-title" id="onb-title" tabIndex={-1}>
-              {left.length === 0 ? 'All set' : 'Set up for now'}
-            </h1>
-            <p className="onb-lead">
-              {left.length === 0
-                ? 'Shipcast has what it needs. A short tour shows where things are; it takes a minute.'
-                : `Still to do when you like: ${left.map((s) => STEP_TITLES[s]).join(', ')}. Settings has “Finish setting up”.`}
-            </p>
-            <div className="row">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={async () => {
-                  await answerTourOffer({ data: 'taken' });
-                  requestTour();
-                  await navigate({ to: '/' });
-                }}
-              >
-                Take the tour
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={async () => {
-                  await answerTourOffer({ data: 'declined' });
-                  await navigate({ to: '/' });
-                }}
-              >
-                Not now, go to Launches
-              </button>
-            </div>
-            <p className="muted">The tour is always in the menu under your name, and in the search (⌘K or Ctrl K).</p>
+          <h1 className="ph onb-title" id="onb-title" tabIndex={-1}>
+            {left.length === 0 ? 'All set' : 'Set up for now'}
+          </h1>
+          <p className="onb-lead">
+            {left.length === 0
+              ? 'Shipcast has what it needs. A short tour shows where things are; it takes a minute.'
+              : `Still to do when you like: ${left.map((s) => STEP_TITLES[s]).join(', ')}. Settings has “Finish setting up”.`}
+          </p>
+          <div className="onb-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={async () => {
+                await answerTourOffer({ data: 'declined' });
+                await navigate({ to: '/' });
+              }}
+            >
+              Not now, go to Launches
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={async () => {
+                await answerTourOffer({ data: 'taken' });
+                requestTour();
+                await navigate({ to: '/' });
+              }}
+            >
+              Take the tour
+            </button>
           </div>
+          <p className="muted onb-note">The tour is always in the menu under your name, and in the search (⌘K or Ctrl K).</p>
         </main>
       </div>
     );
@@ -484,72 +491,83 @@ function Onboarding() {
   const Art = ART[current];
   const index = STEPS.indexOf(current);
   const state = data.state.steps[current];
-  const detected = data.detected[current];
+  const optional = OPTIONAL.has(current);
+  const last = index === STEPS.length - 1;
+
+  /** Continue: the step saves its choice, then the step is done (or, when optional and empty, left for later) */
+  const proceed = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      if (!(await (saver.current?.() ?? Promise.resolve(true)))) return;
+      // Detected fresh: what the step just saved is what decides whether it is done
+      const fresh = await getOnboarding();
+      if (fresh.detected[current] || fresh.state.steps[current] === 'done') await markStep({ data: { step: current, as: 'done' } });
+      else if (optional) await markStep({ data: { step: current, as: 'skipped' } });
+      else {
+        await router.invalidate();
+        setProblem(MISSING[current]);
+        return;
+      }
+      await go(nextOf(current));
+    } catch (error) {
+      toast.fail(message(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="onb">
-      <header className="onb-top">
-        <span className="lockup">
-          <img src="/logo/mark.svg" alt="" />
-          <span>Shipcast</span>
-        </span>
-        <Progress data={data} current={current} />
-        <button type="button" className="btn-link onb-leave" onClick={leave}>
-          Set it up later
-        </button>
-      </header>
+      <Top at={index + 1} current={`Step ${index + 1} of ${STEPS.length}: ${STEP_TITLES[current]}`} onLeave={leave} />
       <main className="onb-main" id="main">
         <div className="onb-art">
-          <Art />
+          <Art width={220} />
         </div>
-        <div className="onb-body">
-          <p className="onb-count">
-            Step {index + 1} of {STEPS.length}
-            {state === 'done' ? ' · done' : state === 'skipped' ? ' · skipped for now' : ''}
-          </p>
-          <h1 className="ph onb-title" id="onb-title" tabIndex={-1}>
-            {STEP_TITLES[current]}
-          </h1>
-          <p className="onb-lead">{LEADS[current]}</p>
+        <p className="onb-count">
+          Step {index + 1} of {STEPS.length}
+          {state === 'done' ? ' · done' : state === 'skipped' ? ' · skipped for now' : optional ? ' · optional' : ''}
+        </p>
+        <h1 className="ph onb-title" id="onb-title" tabIndex={-1}>
+          {STEP_TITLES[current]}
+        </h1>
+        <p className="onb-lead">{LEADS[current]}</p>
+        {/* One form per step, so Enter in any of its fields is Continue */}
+        <form className="onb-form" onSubmit={proceed} noValidate>
           <div className="onb-step">
-            {current === 'brand' && <BrandStep data={data} />}
-            {current === 'ai' && <AiStep data={data} />}
+            {current === 'brand' && <BrandStep key="brand" data={data} saver={saver} />}
+            {current === 'ai' && <AiStep key="ai" data={data} saver={saver} />}
             {current === 'channels' && <AccountsStep networks={data.channels} kind="channels" />}
             {current === 'measure' && <AccountsStep networks={data.measure} kind="measure" />}
-            {current === 'automation' && <AutomationStep data={data} />}
+            {current === 'automation' && <AutomationStep key="automation" data={data} saver={saver} />}
           </div>
-          <nav className="onb-nav" aria-label="Setup navigation">
+          {problem && <Notice tone="bad">{problem}</Notice>}
+          <div className="onb-actions">
             {index > 0 && (
-              <button type="button" className="btn" onClick={() => go(STEPS[index - 1]!)}>
+              <button type="button" className="btn" disabled={busy} onClick={() => go(STEPS[index - 1]!)}>
                 Back
               </button>
             )}
-            <span className="onb-nav-gap" />
-            {!detected && state !== 'done' && (
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : last ? 'Finish' : 'Continue'}
+            </button>
+            {optional && !data.detected[current] && state !== 'done' && (
               <button
                 type="button"
-                className="btn"
+                className="btn-link onb-skip"
+                disabled={busy}
                 onClick={async () => {
                   await markStep({ data: { step: current, as: 'skipped' } });
                   await go(nextOf(current));
                 }}
               >
-                Skip for now
+                Skip this step
               </button>
             )}
-            {(detected || state === 'done') && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={async () => {
-                  await markStep({ data: { step: current, as: 'done' } });
-                  await go(nextOf(current));
-                }}
-              >
-                {index === STEPS.length - 1 ? 'Finish' : 'Continue'}
-              </button>
-            )}
-          </nav>
-        </div>
+          </div>
+        </form>
       </main>
     </div>
   );

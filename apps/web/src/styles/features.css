@@ -4,29 +4,26 @@
  * theme is one attribute.
  */
 
-/* ---------- The onboarding: full-screen steps, one illustration each ---------- */
+/* ---------- The onboarding: a centred wizard, one step per screen ---------- */
 .onb { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
-.onb-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px 32px; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--sc-hairline); }
-.onb-progress { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.onb-progress a { display: grid; gap: 8px; min-height: 44px; align-content: center; text-decoration: none; color: var(--sc-muted); }
-.onb-progress-bar { display: block; height: 6px; border-radius: var(--sc-radius-pill); background: var(--sc-hairline); }
-.onb-progress-label { font: 600 13px/1.2 var(--sc-font-text); overflow-wrap: anywhere; }
-.onb-progress li[data-state='done'] .onb-progress-bar { background: var(--sc-text); }
-.onb-progress li[data-state='skipped'] .onb-progress-bar { background: repeating-linear-gradient(90deg, var(--sc-rail) 0 6px, transparent 6px 10px); }
-.onb-progress li[aria-current='step'] a { color: var(--sc-text); }
-.onb-progress li[aria-current='step'] .onb-progress-bar { background: var(--sc-yellow); box-shadow: 0 0 0 2px var(--sc-text); }
-.onb-leave { min-height: 44px; }
-.onb-main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 5vw, 72px); align-items: center; width: min(100% - 32px, 1200px); margin-inline: auto; padding-block: clamp(24px, 5vw, 64px); }
-.onb-art { justify-self: center; width: min(100%, 420px); }
-.onb-art svg { width: 100%; height: auto; }
-.onb-body { display: grid; gap: 18px; min-width: 0; }
-.onb-count { margin: 0; font: var(--sc-label); color: var(--sc-muted); }
-.onb-title { font-size: clamp(40px, 7vw, 80px); overflow-wrap: anywhere; outline: none; }
-.onb-lead { margin: 0; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 60ch; }
+.onb-top { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 12px clamp(16px, 4vw, 40px); border-bottom: 1px solid var(--sc-hairline); }
+.onb-top .lockup { flex: none; }
+.onb-bar { flex: 1 1 auto; max-width: 520px; height: 6px; border-radius: var(--sc-radius-pill); background: var(--sc-hairline); overflow: hidden; }
+.onb-bar span { display: block; height: 100%; background: var(--sc-yellow); transition: width .25s ease-out; }
+@media (prefers-reduced-motion: reduce) { .onb-bar span { transition: none; } }
+.onb-leave { flex: none; min-height: 44px; }
+/* Started near the top, never centred in the empty height: the form is what the step is for */
+.onb-main { width: min(100% - 32px, 560px); margin-inline: auto; padding-block: clamp(20px, 4vw, 40px) 56px; display: grid; justify-items: center; align-content: start; text-align: center; }
+.onb-art svg { display: block; width: min(220px, 56vw); height: auto; }
+.onb-count { margin: 16px 0 8px; font: var(--sc-label); color: var(--sc-muted); }
+.onb-title { font-size: clamp(36px, 9vw, 64px); overflow-wrap: anywhere; outline: none; }
+.onb-lead { margin: 14px 0 24px; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 52ch; }
+.onb-form { width: 100%; display: grid; gap: 16px; text-align: left; }
 .onb-step { display: grid; gap: 16px; min-width: 0; }
 .onb-step .form { max-width: none; }
-.onb-nav { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 18px; border-top: 1px solid var(--sc-hairline); }
-.onb-nav-gap { flex: 1 1 auto; }
+.onb-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: center; margin-top: 12px; padding-top: 20px; border-top: 1px solid var(--sc-hairline); }
+.onb-skip { min-height: 44px; }
+.onb-note { margin: 20px 0 0; font-size: 14px; }
 .onb-done { display: flex; gap: 10px; align-items: center; margin: 0; font-weight: 600; }
 .onb-sub { display: grid; gap: 14px; padding: 20px; border: var(--sc-border-card) dashed var(--sc-rail); border-radius: var(--sc-radius-card); }
 .onb-sub h3 { margin: 0; font: var(--sc-heading); }
@@ -36,14 +33,10 @@
 .onb-networks li { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; min-height: 52px; padding: 6px 14px; border-radius: 14px; background: var(--sc-raised); }
 .onb-networks li.muted { background: transparent; padding-inline: 0; }
 .onb-network-name { font-weight: 600; }
-@media (max-width: 860px) {
-  .onb-top { grid-template-columns: minmax(0, 1fr) auto; }
-  .onb-progress { grid-column: 1 / -1; grid-row: 2; }
-  .onb-progress-label { font-size: 0; }
-  .onb-progress li[aria-current='step'] .onb-progress-label { font-size: 12px; }
-  .onb-main { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .onb-art { width: min(60%, 220px); }
-  .onb-nav > .btn { flex: 1 1 auto; }
+/* On a phone the bar takes a row of its own under the lockup and "Finish later" */
+@media (max-width: 520px) {
+  .onb-top { flex-wrap: wrap; }
+  .onb-bar { order: 3; flex-basis: 100%; max-width: none; }
 }
 
 /* ---------- Settings: where the setup is resumed ---------- */
@@ -51,7 +44,8 @@
 .setup-title { margin: 0 0 4px; font: var(--sc-heading); }
 
 /* ---------- The tour's card ---------- */
-.tour-card { position: relative; width: min(360px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 18px 20px; background: var(--sc-ground); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); outline: none; }
+/* Narrower than the screen by more than its margin: NextStep lines the card up with the target's edge, already inset */
+.tour-card { position: relative; width: min(360px, calc(100vw - 56px)); display: grid; gap: 12px; padding: 18px 20px; background: var(--sc-ground); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); outline: none; }
 .tour-card:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 3px; }
 .tour-card-head { display: flex; align-items: center; justify-content: space-between; }
 .tour-count { font: var(--sc-label); color: var(--sc-muted); }
@@ -62,6 +56,18 @@
 .tour-progress { height: 6px; border-radius: var(--sc-radius-pill); background: var(--sc-hairline); overflow: hidden; }
 .tour-progress span { display: block; height: 100%; background: var(--sc-yellow); }
 .tour-skip { margin-left: auto; min-height: 36px; }
+/* The notch: a square turned 45°, outlined on the two sides that stick out, so it reads as the card's own corner */
+.tour-notch { position: absolute; width: 18px; height: 18px; background: var(--sc-ground); border: 0 solid var(--sc-text); transform: rotate(45deg); }
+.tour-notch[data-edge='top'] { top: -10px; border-top-width: var(--sc-border-card); border-left-width: var(--sc-border-card); border-top-left-radius: 3px; }
+.tour-notch[data-edge='bottom'] { bottom: -10px; border-bottom-width: var(--sc-border-card); border-right-width: var(--sc-border-card); border-bottom-right-radius: 3px; }
+.tour-notch[data-edge='left'] { left: -10px; border-bottom-width: var(--sc-border-card); border-left-width: var(--sc-border-card); border-bottom-left-radius: 3px; }
+.tour-notch[data-edge='right'] { right: -10px; border-top-width: var(--sc-border-card); border-right-width: var(--sc-border-card); border-top-right-radius: 3px; }
+.tour-notch:is([data-edge='top'], [data-edge='bottom'])[data-align='start'] { left: 40px; }
+.tour-notch:is([data-edge='top'], [data-edge='bottom'])[data-align='center'] { left: calc(50% - 9px); }
+.tour-notch:is([data-edge='top'], [data-edge='bottom'])[data-align='end'] { right: 40px; }
+.tour-notch:is([data-edge='left'], [data-edge='right'])[data-align='start'] { top: 28px; }
+.tour-notch:is([data-edge='left'], [data-edge='right'])[data-align='center'] { top: calc(50% - 9px); }
+.tour-notch:is([data-edge='left'], [data-edge='right'])[data-align='end'] { bottom: 28px; }
 
 /* ---------- The writing assistant: the editor beside its chat ---------- */
 .writer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
