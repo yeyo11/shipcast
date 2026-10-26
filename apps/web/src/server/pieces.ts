@@ -5,7 +5,7 @@ import type { Capability, EditField, PostChanges } from '@shipcast/engine';
  * with what it can do and, when it cannot, why; what an edit of several pieces at once changes on
  * each; the recommended times as chips. Only types come from the engine, so this module is safe in
  * the browser bundle. The rules mirror the engine's (packages/engine/src/edit.ts), which refuses
- * again on the server: the page only says it first. See docs/decisions/launch-page.md
+ * again on the server: the page only says it first. See docs/web-app.md
  */
 
 export type PieceStatus = 'live' | 'edited' | 'deleted' | 'scheduled' | 'failed';
@@ -46,6 +46,18 @@ export interface PieceState {
   scheduledAt: string | null;
 }
 
+/** One number of a piece over the readings Shipcast took (every six hours) */
+export interface PieceNumber {
+  name: string;
+  value: number;
+  /** The first reading, so the page can say how much it grew since it was first read */
+  first: number;
+  series: number[];
+  /** When the first and the latest readings were taken */
+  from: string;
+  to: string;
+}
+
 /** An action a row offers: allowed, or refused with the reason the page shows beside it */
 export interface Action {
   allowed: boolean;
@@ -67,8 +79,8 @@ export interface PieceRow {
   updatedAt: string;
   /** The number a row shows, with its history for the sparkline */
   metric: { name: string; value: number; series: number[] } | null;
-  /** The latest reading of each of its numbers */
-  numbers: Array<{ name: string; value: number }>;
+  /** Each of its numbers over time: the first and latest readings, and every reading for the line */
+  numbers: PieceNumber[];
   edit: Action & { fields: EditField[] };
   remove: Action & { verb: 'Delete' | 'Unpublish' };
 }
@@ -132,7 +144,13 @@ export function pieceRows(input: {
     const capability = input.capabilities[post.channel] ?? { edit: 'no', delete: 'no', note: 'Shipcast does not know this channel', fields: [] };
     const readings = [...(byPost.get(post.id) ?? [])].sort((a, b) => a.takenAt.localeCompare(b.takenAt));
     const latest = new Map<string, number>();
-    for (const r of readings) latest.set(r.name, r.value);
+    const numbers = new Map<string, PieceNumber>();
+    for (const r of readings) {
+      latest.set(r.name, r.value);
+      const n = numbers.get(r.name);
+      if (n) numbers.set(r.name, { ...n, value: r.value, series: [...n.series, r.value], to: r.takenAt });
+      else numbers.set(r.name, { name: r.name, value: r.value, first: r.value, series: [r.value], from: r.takenAt, to: r.takenAt });
+    }
     const lead = (PRIMARY_METRIC[post.channel] ?? []).find((name) => latest.has(name)) ?? [...latest.keys()][0];
     const account = post.accountId === null ? undefined : accounts.get(post.accountId);
     const editWhy = refusal({ ...post, status }, capability, 'edit');
@@ -150,7 +168,7 @@ export function pieceRows(input: {
       scheduledAt: post.scheduledAt,
       updatedAt: post.updatedAt,
       metric: lead === undefined ? null : { name: lead, value: latest.get(lead) ?? 0, series: readings.filter((r) => r.name === lead).map((r) => r.value) },
-      numbers: [...latest].map(([name, value]) => ({ name, value })),
+      numbers: [...numbers.values()],
       edit: { allowed: editWhy === undefined, reason: editWhy ?? capability.note, fields: editWhy === undefined ? capability.fields : [] },
       remove: {
         allowed: deleteWhy === undefined,
@@ -166,6 +184,76 @@ export function withStatus(row: PieceRow, status: PieceStatus, updatedAt: string
   if (status !== 'deleted') return { ...row, status, updatedAt };
   return { ...row, status, updatedAt, edit: { allowed: false, reason: DELETED, fields: [] }, remove: { ...row.remove, allowed: false, reason: DELETED } };
 }
+
+/* ---------- The accounts a launch went out with ---------- */
+
+export interface SnapshotInput {
+  accountId: number;
+  /** YYYY-MM-DD, UTC */
+  day: string;
+  followers: number | null;
+}
+
+export interface AccountRow {
+  id: number;
+  network: string;
+  label: string;
+  handle: string | null;
+  avatarUrl: string | null;
+  /** The channels of this launch it published on */
+  channels: string[];
+  /**
+   * Its followers around the launch, from the daily snapshots: the last count before the launch's
+   * day (or the first one there is, for an account connected later), the latest, and the days
+   * between for the line. Null when the network counts no followers or nothing was recorded yet.
+   */
+  followers: { before: number; now: number; change: number; series: number[]; from: string; to: string } | null;
+}
+
+/**
+ * One row per account that published a piece of the launch, with how its followers moved since. A
+ * piece with no account went out with the .env credentials, which have no snapshots, so it has no row.
+ */
+export function accountRows(input: {
+  posts: readonly Pick<PieceInput, 'channel' | 'accountId'>[];
+  accounts: readonly (AccountInput & { network: string })[];
+  snapshots: readonly SnapshotInput[];
+  launchedAt: string;
+}): AccountRow[] {
+  const launchDay = input.launchedAt.slice(0, 10);
+  const used = new Map<number, string[]>();
+  for (const p of input.posts) {
+    if (p.accountId === null) continue;
+    const channels = used.get(p.accountId) ?? [];
+    if (!channels.includes(p.channel)) channels.push(p.channel);
+    used.set(p.accountId, channels);
+  }
+  return input.accounts.flatMap((a) => {
+    const channels = used.get(a.id);
+    if (!channels) return [];
+    const days = input.snapshots
+      .filter((s): s is SnapshotInput & { followers: number } => s.accountId === a.id && s.followers !== null)
+      .sort((x, y) => x.day.localeCompare(y.day));
+    const last = days.at(-1);
+    const before = days.filter((s) => s.day < launchDay).at(-1) ?? days[0];
+    const shown = days.filter((s) => s.day >= (before?.day ?? ''));
+    return [
+      {
+        id: a.id,
+        network: a.network,
+        label: a.label,
+        handle: a.identity,
+        avatarUrl: a.avatarUrl,
+        channels,
+        followers:
+          last && before ? { before: before.followers, now: last.followers, change: last.followers - before.followers, series: shown.map((s) => s.followers), from: before.day, to: last.day } : null,
+      },
+    ];
+  });
+}
+
+/** A signed change for reading: +12, −3, or 0 */
+export const signed = (n: number) => (n > 0 ? `+${n.toLocaleString('en')}` : n < 0 ? `−${Math.abs(n).toLocaleString('en')}` : '0');
 
 /* ---------- One row per channel ---------- */
 
@@ -431,4 +519,17 @@ export function isoToZonedInput(iso: string, timeZone: string): string {
 /** An instant for reading, in the owner's zone: `Tue 27 Oct, 17:00` */
 export function zonedLabel(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+}
+
+/* ---------- What a network allows ---------- */
+
+/** A network's capability in a few words, for the list that says up front what each channel can do */
+export function allowance(capability: Pick<Capability, 'edit' | 'delete'>): string {
+  const edit = capability.edit !== 'no';
+  if (capability.delete === 'unpublish') return edit ? 'Edit, and unpublish instead of delete' : 'Unpublish only';
+  const remove = capability.delete === 'yes';
+  if (edit && remove) return 'Edit and delete';
+  if (edit) return 'Edit only';
+  if (remove) return 'Delete only, no edit';
+  return 'Neither edit nor delete';
 }

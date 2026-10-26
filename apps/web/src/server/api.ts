@@ -869,7 +869,8 @@ const launchProperties = {
     },
   },
   failures: { type: 'array', items: { type: 'object', properties: { channel: { type: 'string' }, message: { type: 'string' } } } },
-  headline: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } } } },
+  replies: { type: 'object', description: 'Replies Shipcast sent under the launch’s posts, counted per channel', additionalProperties: { type: 'integer' } },
+  headline:{ type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } } } },
 };
 
 /** The OpenAPI 3.1 description, built from ROUTES so it cannot drift from what is served */

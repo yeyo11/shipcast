@@ -8,7 +8,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { Sparkline } from './Sparkline';
 
 /*
- * The published pieces, one row per channel (docs/decisions/launch-page.md): a channel with one
+ * The published pieces, one row per channel (docs/web-app.md): a channel with one
  * piece is a plain row; a channel with several folds them under a disclosure button whose summary
  * lists them, and opens on its own when one failed. Only this file knows the markup, so the style
  * of the list can be swapped for tiles or stamps without touching the page's logic.

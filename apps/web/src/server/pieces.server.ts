@@ -1,6 +1,6 @@
 import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
-import { pieceRows, type PieceState } from './pieces.ts';
+import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
 
 /** A channel a drafted launch can still put on a time, and its scheduled piece when it has one */
 export interface SchedulingChannel {
@@ -15,22 +15,22 @@ export interface SchedulingChannel {
  * its shape.
  */
 export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] }) {
-  const [posts, accounts, readings, comments] = await Promise.all([
+  const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts(launch.id),
     registry.accounts(),
     registry.postMetricHistory(launch.id),
-    // What the assistant answered: the comments of others it sent a reply to (the page counts them, never lists them)
-    registry.comments({ launchId: launch.id, own: false, status: 'sent', limit: 5000 }),
+    // What the assistant answered, counted per channel: the page never lists them
+    registry.sentReplies(launch.id),
   ]);
-  const replies: Record<string, number> = {};
-  for (const c of comments) replies[c.channel] = (replies[c.channel] ?? 0) + 1;
-  const rows = pieceRows({
-    posts: posts.filter((p) => p.status !== 'scheduled'),
-    accounts: accounts.map((a) => ({ id: a.id, label: a.label, identity: a.identity, avatarUrl: a.avatarUrl })),
-    readings,
-    capabilities: CAPABILITIES,
-  });
-  return { rows, replies, capabilities: CAPABILITIES, scheduling: await schedulingChannels(registry, launch, posts, deps) };
+  const out = posts.filter((p) => p.status !== 'scheduled');
+  const shaped = accounts.map((a) => ({ id: a.id, network: a.network, label: a.label, identity: a.identity, avatarUrl: a.avatarUrl }));
+  const rows = pieceRows({ posts: out, accounts: shaped, readings, capabilities: CAPABILITIES });
+  // A week before the launch's day, so the line shows where the followers stood before it
+  const since = new Date(Date.parse(launch.createdAt) - 7 * 86_400_000).toISOString().slice(0, 10);
+  const usedIds = [...new Set(out.flatMap((p) => (p.accountId === null ? [] : [p.accountId])))];
+  const snapshots: SnapshotInput[] = (await Promise.all(usedIds.map((id) => registry.accountSnapshots(id, { since })))).flat();
+  const accountNumbers = accountRows({ posts: out, accounts: shaped, snapshots, launchedAt: launch.createdAt });
+  return { rows, replies, accounts: accountNumbers, capabilities: CAPABILITIES, scheduling: await schedulingChannels(registry, launch, posts, deps) };
 }
 
 /**
