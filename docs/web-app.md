@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T13:10:07.024455517Z
-updated_at: 2026-10-26T13:50:55.958591688Z
+created_at: 2026-10-26T13:51:20.211750165Z
+updated_at: 2026-10-26T15:20:34.167944441Z
 tags:
     - web-app
     - dashboard
@@ -108,7 +108,10 @@ runs on the owner's machine.
 
 - **Launches** (`/`): one summary card per launch in a grid (two columns on a desktop): its title
   and state pill, the repo and the date in the owner's zone, its views, reactions, comments and
-  clicks, the views per day since the launch as an area chart, and one **mark** per channel (its
+  clicks, the views per day since the launch as an area chart (a line in `--sc-chart`, the brand
+  yellow at night and a dark amber by day, where yellow is under 3:1 on the light card, over a
+  yellow fill fading from 35% to transparent through an SVG gradient with one id per card; the
+  waiting yellow card draws it in black), and one **mark** per channel (its
   glyph, a state dot: green published, yellow ring scheduled, red failed, dotted not launched; a
   small count when it went out on more than one of the brand's accounts). The marks stay on one row:
   problems first, as many as the card's width holds (measured), the rest behind a "+n" menu. Every
@@ -117,8 +120,8 @@ runs on the owner's machine.
   open the card's numbers and chart turn to that channel against the launch's own scale, counted
   and morphed with Motion (instant under reduced motion), without the card changing height.
   **The cards' surface** is Cartel's neutral raised one, like every other card of the app: `--sc-raised`,
-  a hairline border and the card radius, with no yellow stamp. Text, the chart (the text colour, not
-  yellow, which is under 3:1 on the day theme's light card), the state dots, the marks' tiles and
+  a hairline border and the card radius, with no yellow stamp. Text, the chart (its line on
+  `--sc-chart`, 3:1 or more on the card in both themes), the state dots, the marks' tiles and
   menus, the "+n" chip, the accounts count and the scope pill are all on the role tokens, so they hold
   AA contrast in the night and the day theme. The glyphs follow the theme. Only a launch waiting for
   the owner is the yellow card, with dark-on-yellow text; there is no yellow band above the list any
@@ -200,26 +203,49 @@ on the [approved design direction](decisions/app-design-direction.md).
   signed-in user as a menu: **Settings is a submenu** (General, AI, Automation, API; Right arrow
   opens it, Left closes it), then Take the tour and Sign out as top-level items. The configuration is
   not in the bar. The submenu is `kind: 'submenu'` in the typed `Menu` wrapper, on Base UI's
-  `SubmenuRoot` and `SubmenuTrigger`.
+  `SubmenuRoot` and `SubmenuTrigger`. The submenu's item for the page on screen is
+  `aria-current="page"` with a ringed yellow dot and bold, and on any `/settings` path the Settings
+  trigger is `aria-current="true"` with the same dot (`current` on a `Menu` entry). Which page is
+  current is the pure, tested `currentSettingsPage` (`src/server/settings-pages.ts`): `/settings` is
+  General only when exact, each sub-page owns its path and what is under it, never a sibling sharing
+  a prefix (`/settings/aix` is none).
   Below 860 px the sections leave the top for a **bottom bar** in reach of the thumb: Launches,
   Write, Channels, Stats and **More**, which opens a drawer with Comments, Launch a repo, Settings
   as a group of its four entries (General, AI, Automation, API), the search, the tour and the
-  signed-in account with Sign out. The bell stays in the phone's top bar. The current
-  section is `aria-current="page"` in both (a launch's page and Launch a repo count as Launches);
-  there is a skip link to the content, `<main>` is a landmark, every target is at least 44 px,
-  focus is the yellow ring, and Escape closes any popup with focus back where it was.
+  signed-in account with Sign out; on a Settings page the group's title wears the dot and says it is
+  the current section, and its entry for the page is filled. The bell stays in the phone's top bar.
+  The current section is `aria-current="page"` in both (a launch's page and Launch a repo count as
+  Launches); there is a skip link to the content, `<main>` is a landmark, every target is at least
+  44 px, focus is the yellow ring, and Escape closes any popup with focus back where it was.
 - **The attention bell** (`components/AttentionBell.tsx`) replaced the big yellow bands on top of the
-  pages. An icon button with a small yellow count badge when something needs the owner, named for
-  assistive technology by the count ("3 things need you", "Nothing needs you"). It opens a
+  pages: a notifications inbox. A 44 px icon button with the bell glyph centred and, when something
+  needs the owner, the count as an 18 px yellow pill on its top-right corner (tabular numbers, "9+"
+  above nine, a 2 px ring in the page's colour, out of the flow so it never moves the bar), named
+  for assistive technology by the count ("3 things need you", "Nothing needs you"). It opens a
   `ResponsiveMenu` (a Popover on a desktop, the Drawer on a phone) with a link per line: launches
   waiting for approval (Review the drafts), launches with posts that failed (Retry), comments waiting
   for a reply (Answer), accounts that need reconnecting (Reconnect) and, informational and not
-  counted, posts scheduled to go out within a day. Empty, it says "Nothing needs you." One server
-  function, `getAttention` (`src/server/attention.functions.ts`), reads launches, the failure
-  cursors by prefix for all launches at once, the accounts, the comment facets and the scheduled
-  posts in one round, with no query per launch; the pure `buildAttention` (`src/server/attention.ts`,
-  tested) turns them into the list. It is read again on every navigation, when the bell opens and
-  every three minutes.
+  counted, posts scheduled to go out within a day. Empty, it says "Nothing needs you."
+  Every line has a **Dismiss** button beside it (Delete or Backspace on the focused line does the
+  same) and the panel a **Clear all**, informational lines included. A dismissal leaves the list at
+  once (optimistic, the count recomputed), then the list is read again, without closing the panel;
+  focus moves to the next line, and a polite live region says "Dismissed" or "All cleared". Clear
+  all sends the keys the owner saw, so a line that arrived in between is not cleared unread.
+  Dismissals live in the registry (table `attention_dismissals`, migration
+  `0009_attention_dismissals`: a `key` and `dismissed_at`), so they hold across devices and reloads.
+  **The rule**: a line's key names its condition with its state — `launch:<id>:waiting:<updated at>`,
+  `launch:<id>:failed:<digest of the launch's last change and each channel's message>`,
+  `comments:waiting:<newest waiting comment id>`, `account:<id>:reconnect:<digest of the problem>`,
+  `launch:<id>:scheduled:<first time>:<posts>`. A dismissed line stays hidden while that condition
+  lasts; when it changes (a new comment, another failure, a retry that fails again, a launch drafted
+  again) the key changes and the line is new. Each read also forgets the dismissals of lines no
+  longer there, so a condition that ends and comes back is shown again, and the table stays as small
+  as the bell. Server functions: `getAttention` reads launches, the failure cursors by prefix for
+  all launches at once, the accounts, the comment facets, the newest waiting comment and the
+  scheduled posts in one round, with no query per launch, then the dismissals; `dismissAttention`
+  and `clearAttention` take `{ keys }`, checked (1 to 100 keys, each of the shape above). The pure
+  `attentionItems` and `buildAttention` (`src/server/attention.ts`, tested) turn the reads into the
+  list. It is read again on every navigation, when the bell opens and every three minutes.
 - **Section headers are Cartel bands** (`PageHead`): the neutral band, the huge uppercase title, a line
   under it and the section's main action, yellow when there is one (Launch a repo on Launches), and
   the section's illustration. Every section uses the same band, padding and title size. Below
