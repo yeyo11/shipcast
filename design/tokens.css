@@ -45,6 +45,7 @@
   --sc-text: #F4F2EC;
   --sc-muted: #A9A69E;
   --sc-yellow: #FFD43B;    /* the brand: the primary action, what waits for you, the bands */
+  --sc-chart: #FFD43B;     /* a chart's line: the brand yellow where it reaches 3:1 */
   --sc-on-yellow: #000000;
   --sc-cream: #FFF8DC;     /* cards that sit on a yellow band */
   --sc-failure: #FF6B5B;   /* failure only, always with a word */
@@ -63,6 +64,7 @@
   --sc-text: #0D0D0D;
   --sc-muted: #5A5852;
   --sc-yellow: #FFD43B;
+  --sc-chart: #A87F00;     /* yellow is 1.4:1 on a light card; this amber is 3.2:1 on raised */
   --sc-on-yellow: #000000;
   --sc-cream: #FFF8DC;
   --sc-failure: #B42318;

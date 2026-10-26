@@ -26,7 +26,7 @@ const rows = [];
 for (const theme of ['night', 'day']) {
   const t = json[theme];
   for (const bg of ['ground', 'raised']) {
-    rows.push([theme, 'text', 'text', bg, 4.5], [theme, 'muted', 'muted', bg, 4.5], [theme, 'failure', 'failure', bg, 4.5], [theme, 'success', 'success', bg, 4.5], [theme, 'rail (control border)', 'rail', bg, 3]);
+    rows.push([theme, 'text', 'text', bg, 4.5], [theme, 'muted', 'muted', bg, 4.5], [theme, 'failure', 'failure', bg, 4.5], [theme, 'success', 'success', bg, 4.5], [theme, 'rail (control border)', 'rail', bg, 3], [theme, 'chart line', 'chart', bg, 3]);
   }
   rows.push([theme, 'on-black', 'on-black', 'black', 4.5], [theme, 'yellow text', 'yellow', 'black', 4.5]);
   rows.push([theme, 'on-yellow', 'on-yellow', 'yellow', 4.5], [theme, 'on-yellow', 'on-yellow', 'cream', 4.5]);
@@ -39,5 +39,5 @@ for (const [theme, label, , bg, need, fg, bgHex] of rows) {
   if (r < need) failed += 1;
   console.log(`| ${theme} | ${label} \`${fg}\` | ${bg} \`${bgHex}\` | ${r.toFixed(2)} | ${need} | ${r >= need ? 'pass' : 'FAIL'} |`);
 }
-console.log('\nDecorative only, never text or a control border: hairline.');
+console.log('\nDecorative only, never text or a control border: hairline, and the yellow area fill under a chart line.');
 process.exit(failed ? 1 : 0);

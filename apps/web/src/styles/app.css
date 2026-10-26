@@ -167,15 +167,19 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 /* Views per day, alone on its row: an area with its line, the days under it */
 .darea { margin: 0; min-width: 0; }
 .darea svg { display: block; width: 100%; height: 96px; }
-/* The text colour, not yellow: yellow on the day theme's light card is under 3:1 */
-.darea-fill { fill: color-mix(in srgb, var(--sc-text) 12%, transparent); }
-.darea-line { stroke: var(--sc-text); }
+/* A yellow fading to nothing under a line in --sc-chart: the brand yellow at night, a dark amber by
+   day, where the yellow is under 3:1 on the light card. The fill is decorative; the line carries it */
+.darea-stop-top { stop-color: var(--sc-yellow); stop-opacity: .35; }
+.darea-stop-bottom { stop-color: var(--sc-yellow); stop-opacity: 0; }
+.darea-line { stroke: var(--sc-chart); }
 .darea figcaption { display: flex; justify-content: space-between; margin-top: 6px; gap: 8px; min-width: 0; font-size: 12px; color: var(--sc-muted); }
 .lcard-none { color: var(--sc-muted); font-size: 14px; }
 .lcard.waiting { background: var(--sc-yellow); color: var(--sc-on-yellow); border-color: #000; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
 .lcard.waiting .pill.s-waiting { background: #000; color: var(--sc-yellow); }
 .lcard.waiting .lcard-ref, .lcard.waiting .lcard-meta, .lcard.waiting .lcard-stats dt, .lcard.waiting .darea figcaption, .lcard.waiting .lcard-none { color: #2a2a2a; }
-.lcard.waiting .darea-fill { fill: rgb(0 0 0 / .12); }
+/* On the yellow card the yellow fade would vanish: black, as the card's text */
+.lcard.waiting .darea-stop-top { stop-color: #000; stop-opacity: .14; }
+.lcard.waiting .darea-stop-bottom { stop-color: #000; stop-opacity: 0; }
 .lcard.waiting .darea-line { stroke: #000; }
 
 /* A channel's mark: its glyph in a rounded square, the state dot on its corner */
