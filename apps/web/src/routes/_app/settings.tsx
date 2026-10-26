@@ -1,14 +1,19 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Notice, Pill, when } from '../../components/ui';
 import { ConfirmButton } from '../../components/ui/ConfirmButton';
+import { getOnboardingState } from '../../server/onboarding.functions';
+import { remaining, STEP_TITLES } from '../../server/onboarding';
 import { getSettings, saveSettings } from '../../server/settings.functions';
 
 export const Route = createFileRoute('/_app/settings')({
   head: () => ({ meta: [{ title: 'Settings · Shipcast' }] }),
-  loader: () => getSettings(),
+  loader: async () => {
+    const [settings, onboarding] = await Promise.all([getSettings(), getOnboardingState()]);
+    return { ...settings, onboarding };
+  },
   component: Settings,
 });
 
@@ -49,6 +54,8 @@ function Settings() {
         What Shipcast needs besides <code>.env</code>, which holds only what it needs before anyone signs in. Public values are kept in the database, secrets in{' '}
         {data.secretsKind}. A change applies to what runs next, without a restart.
       </PageHead>
+
+      <FinishSettingUp left={remaining(data.onboarding).map((s) => STEP_TITLES[s])} />
 
       {data.missing.length > 0 && <Notice tone="wait">Still to set: {data.missing.join(', ')}. Launching and drafting wait for them.</Notice>}
 
@@ -152,5 +159,20 @@ function Settings() {
         </tbody>
       </table>
     </>
+  );
+}
+
+/** Where a skipped or unfinished onboarding is resumed; with every step done, a quiet way back into it */
+function FinishSettingUp({ left }: { left: string[] }) {
+  return (
+    <section className="card setup-card" aria-label="Setting up">
+      <div>
+        <h2 className="setup-title">{left.length > 0 ? 'Finish setting up' : 'Set up'}</h2>
+        <p className="muted">{left.length > 0 ? `Still to do: ${left.join(', ')}.` : 'Every step of the setup is done. Open it again to review a step.'}</p>
+      </div>
+      <Link className={`btn${left.length > 0 ? ' btn-primary' : ''}`} to="/onboarding">
+        {left.length > 0 ? 'Finish setting up' : 'Open the setup'}
+      </Link>
+    </section>
   );
 }

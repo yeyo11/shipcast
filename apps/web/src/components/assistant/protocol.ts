@@ -82,11 +82,13 @@ export function langOfDraft(path: string): 'en' | 'es' | undefined {
 
 /** Reads the answer's NDJSON stream as events, as they arrive */
 export async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<AssistantEvent> {
-  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
   let buffer = '';
   for (;;) {
     const { value, done } = await reader.read();
-    if (value) buffer += value;
+    // `stream: true` keeps a character split across two chunks whole
+    if (value) buffer += decoder.decode(value, { stream: true });
     let newline = buffer.indexOf('\n');
     while (newline >= 0) {
       const line = buffer.slice(0, newline).trim();

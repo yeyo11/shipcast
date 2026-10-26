@@ -85,9 +85,15 @@ async function save(change: (state: OnboardingState) => OnboardingState): Promis
   return next;
 }
 
-/** Just the state, for the shell: whether to open the onboarding, offer the tour, or show nothing */
+/**
+ * Just the state, for the shell, which asks on every navigation: the stored row when there is one,
+ * read without detecting anything (detection reads GitHub and the keychain). Only the first sign-in,
+ * with no row yet, detects what is configured and writes the first state.
+ */
 export const getOnboardingState = createServerFn({ method: 'GET' }).handler(async () => {
   const ctx = await appContext();
+  const stored = readState(await ctx.registry.setting<unknown>(ONBOARDING_KEY));
+  if (stored) return stored;
   const { detected, hasLaunches } = await detect(ctx);
   return load(ctx, detected, hasLaunches);
 });

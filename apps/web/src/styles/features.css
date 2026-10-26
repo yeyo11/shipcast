@@ -1,0 +1,124 @@
+/*
+ * The onboarding, the tour and the writing assistant, on Cartel's role tokens like the rest
+ * (docs/decisions/onboarding.md, docs/decisions/writing-assistant.md). Role names only, so the day
+ * theme is one attribute.
+ */
+
+/* ---------- The onboarding: full-screen steps, one illustration each ---------- */
+.onb { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
+.onb-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px 32px; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--sc-hairline); }
+.onb-progress { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.onb-progress a { display: grid; gap: 8px; min-height: 44px; align-content: center; text-decoration: none; color: var(--sc-muted); }
+.onb-progress-bar { display: block; height: 6px; border-radius: var(--sc-radius-pill); background: var(--sc-hairline); }
+.onb-progress-label { font: 600 13px/1.2 var(--sc-font-text); overflow-wrap: anywhere; }
+.onb-progress li[data-state='done'] .onb-progress-bar { background: var(--sc-text); }
+.onb-progress li[data-state='skipped'] .onb-progress-bar { background: repeating-linear-gradient(90deg, var(--sc-rail) 0 6px, transparent 6px 10px); }
+.onb-progress li[aria-current='step'] a { color: var(--sc-text); }
+.onb-progress li[aria-current='step'] .onb-progress-bar { background: var(--sc-yellow); box-shadow: 0 0 0 2px var(--sc-text); }
+.onb-leave { min-height: 44px; }
+.onb-main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 5vw, 72px); align-items: center; width: min(100% - 32px, 1200px); margin-inline: auto; padding-block: clamp(24px, 5vw, 64px); }
+.onb-art { justify-self: center; width: min(100%, 420px); }
+.onb-art svg { width: 100%; height: auto; }
+.onb-body { display: grid; gap: 18px; min-width: 0; }
+.onb-count { margin: 0; font: var(--sc-label); color: var(--sc-muted); }
+.onb-title { font-size: clamp(40px, 7vw, 80px); overflow-wrap: anywhere; outline: none; }
+.onb-lead { margin: 0; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 60ch; }
+.onb-step { display: grid; gap: 16px; min-width: 0; }
+.onb-step .form { max-width: none; }
+.onb-nav { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 18px; border-top: 1px solid var(--sc-hairline); }
+.onb-nav-gap { flex: 1 1 auto; }
+.onb-done { display: flex; gap: 10px; align-items: center; margin: 0; font-weight: 600; }
+.onb-sub { display: grid; gap: 14px; padding: 20px; border: var(--sc-border-card) dashed var(--sc-rail); border-radius: var(--sc-radius-card); }
+.onb-sub h3 { margin: 0; font: var(--sc-heading); }
+.onb-sub p { margin: 0; }
+.onb-fieldset { border: 0; padding: 0; margin: 0; }
+.onb-networks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.onb-networks li { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; min-height: 52px; padding: 6px 14px; border-radius: 14px; background: var(--sc-raised); }
+.onb-networks li.muted { background: transparent; padding-inline: 0; }
+.onb-network-name { font-weight: 600; }
+@media (max-width: 860px) {
+  .onb-top { grid-template-columns: minmax(0, 1fr) auto; }
+  .onb-progress { grid-column: 1 / -1; grid-row: 2; }
+  .onb-progress-label { font-size: 0; }
+  .onb-progress li[aria-current='step'] .onb-progress-label { font-size: 12px; }
+  .onb-main { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .onb-art { width: min(60%, 220px); }
+  .onb-nav > .btn { flex: 1 1 auto; }
+}
+
+/* ---------- Settings: where the setup is resumed ---------- */
+.setup-card { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.setup-title { margin: 0 0 4px; font: var(--sc-heading); }
+
+/* ---------- The tour's card ---------- */
+.tour-card { position: relative; width: min(360px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 18px 20px; background: var(--sc-ground); color: var(--sc-text); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); outline: none; }
+.tour-card:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 3px; }
+.tour-card-head { display: flex; align-items: center; justify-content: space-between; }
+.tour-count { font: var(--sc-label); color: var(--sc-muted); }
+.tour-close { width: 36px; height: 36px; border: 0; }
+@media (pointer: coarse) { .tour-close { width: 44px; height: 44px; } }
+.tour-title { margin: 0; font: 900 26px/1 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); }
+.tour-text { font-size: 15px; line-height: 1.5; }
+.tour-progress { height: 6px; border-radius: var(--sc-radius-pill); background: var(--sc-hairline); overflow: hidden; }
+.tour-progress span { display: block; height: 100%; background: var(--sc-yellow); }
+.tour-skip { margin-left: auto; min-height: 36px; }
+
+/* ---------- The writing assistant: the editor beside its chat ---------- */
+.writer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.writer > .form { max-width: 900px; }
+@media (min-width: 1100px) { .writer.with-chat { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); } }
+
+.assisted-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.assist-trigger { gap: 6px; }
+.assisted-box { position: relative; }
+.assisted-box .textarea { width: 100%; }
+.assist-float { position: absolute; z-index: 2; }
+.assist-float-button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: var(--sc-radius-pill); border: 2px solid #000; background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 13px/1 var(--sc-font-text); box-shadow: 3px 3px 0 var(--sc-stamp); cursor: pointer; }
+@media (pointer: coarse) { .assist-float-button { min-height: 44px; } }
+.ui-submenu-trigger { justify-content: space-between; }
+.ui-submenu-caret { transform: rotate(-90deg); }
+
+.proposal { display: grid; gap: 12px; padding: 16px 18px; border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); background: var(--sc-raised); }
+.proposal-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.proposal-wait { margin-left: auto; font: var(--sc-label); color: var(--sc-muted); }
+.proposal-titles ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.proposal-titles .btn { height: auto; min-height: 36px; padding-block: 8px; text-align: left; white-space: normal; }
+.findings { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.findings li[data-verdict='not-found'], .findings li[data-verdict='contradicted'] { color: var(--sc-failure); }
+
+/* The diff: nothing depends on colour alone, deletions are struck and insertions underlined */
+.diff { margin: 0; display: grid; gap: 8px; }
+.diff-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; font: var(--sc-label); color: var(--sc-muted); }
+.diff-key { display: inline-flex; gap: 8px; }
+.diff-text { max-height: 360px; overflow: auto; padding: 12px 14px; border-radius: 12px; background: var(--sc-ground); border: 1px solid var(--sc-hairline); font: 14px/1.6 var(--sc-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff del { color: var(--sc-failure); text-decoration: line-through; text-decoration-thickness: 2px; }
+.diff ins { background: var(--sc-yellow); color: var(--sc-on-yellow); text-decoration: underline; text-underline-offset: 3px; border-radius: 3px; }
+
+.chat-panel { position: sticky; top: 16px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: min(760px, calc(100dvh - 32px)); border: var(--sc-border-card) solid var(--sc-text); border-radius: var(--sc-radius-card); background: var(--sc-ground); overflow: hidden; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 18px; border-bottom: 1px solid var(--sc-hairline); }
+.chat-head .ui-icon-button { border: 0; }
+.chat-list { overflow-y: auto; overscroll-behavior: contain; padding: 16px; display: grid; align-content: start; gap: 14px; }
+.chat-empty { margin: 0; font-size: 14.5px; line-height: 1.5; }
+.chat-mine { justify-self: end; max-width: 88%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--sc-text); color: var(--sc-ground); white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-answer { display: grid; gap: 10px; min-width: 0; }
+.chat-prose { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.chat-proposal { display: grid; gap: 8px; }
+.chat-wait { margin: 0; font-size: 13.5px; }
+.chat-form { display: grid; gap: 8px; padding: 12px; border-top: 1px solid var(--sc-hairline); }
+.chat-input { min-height: 64px; }
+.chat-fab { position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 20; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--sc-radius-pill); border: 2px solid #000; background: var(--sc-yellow); color: var(--sc-on-yellow); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); cursor: pointer; }
+@media (max-width: 1099px) { .chat-panel { position: static; height: 560px; } }
+@media (max-width: 860px) { .chat-fab { bottom: calc(92px + env(safe-area-inset-bottom)); } }
+
+/* ---------- The drafts editor: the drafts on the left, the text and its chat beside ---------- */
+.drafts-editor { display: grid; grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.drafts-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; position: sticky; top: 16px; }
+.drafts-list button { width: 100%; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--sc-muted); font: 600 14.5px/1.3 var(--sc-font-text); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.drafts-list button:hover { background: var(--sc-raised); color: var(--sc-text); }
+.drafts-list button[aria-current='true'] { background: var(--sc-text); color: var(--sc-ground); }
+.drafts-pick { display: none; }
+@media (max-width: 860px) {
+  .drafts-editor { grid-template-columns: minmax(0, 1fr); }
+  .drafts-list { display: none; }
+  .drafts-pick { display: block; }
+}

@@ -93,8 +93,9 @@ export function setAside(state: OnboardingState): OnboardingState {
   return { ...state, autoOpen: false };
 }
 
+/** The tour offer answered, either way: the onboarding is over, so it no longer opens by itself */
 export function answerTour(state: OnboardingState, answer: 'taken' | 'declined'): OnboardingState {
-  return { ...state, tour: answer };
+  return { ...state, autoOpen: false, tour: answer };
 }
 
 /** Steps still to do, skipped ones included, in order */

@@ -3,6 +3,7 @@ import { Dialog } from '@base-ui/react/dialog';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { runRoundNow } from '../../server/automation.functions';
+import { requestTour } from '../tour/request';
 import { useToast } from '../Toasts';
 import { SearchIcon } from './icons';
 
@@ -73,6 +74,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           { value: 'go-launches', label: 'Launches', keywords: 'home releases', run: go('/') },
           { value: 'go-write', label: 'Write', keywords: 'article blog', run: go('/write') },
           { value: 'go-channels', label: 'Channels', keywords: 'accounts networks', run: go('/channels') },
+          { value: 'go-comments', label: 'Comments', keywords: 'replies answers mentions', run: go('/comments') },
           { value: 'go-stats', label: 'Stats', keywords: 'numbers metrics charts', run: go('/stats') },
           { value: 'go-automation', label: 'Automation', keywords: 'rounds webhooks polling', run: go('/automation') },
           { value: 'go-ai', label: 'AI settings', keywords: 'provider model prompts tone claude', run: go('/ai') },
@@ -101,6 +103,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               await router.invalidate();
             },
           },
+          { value: 'tour', label: 'Take the tour', keywords: 'help guide walkthrough', run: requestTour },
+          { value: 'setup', label: 'Finish setting up', keywords: 'onboarding setup brand provider', run: go('/onboarding') },
           { value: 'token', label: 'Create an API token', keywords: 'rest mcp script', run: go('/tokens') },
           { value: 'sign-out', label: 'Sign out', keywords: 'log out leave', run: signOut },
         ],

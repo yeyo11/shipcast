@@ -1,7 +1,9 @@
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
+import { requestTour } from '../components/tour/request';
+import { TourHost } from '../components/tour/TourHost';
 import { ToastProvider } from '../components/Toasts';
 import { Avatar } from '../components/ui';
 import { CommandPalette, useShortcutLabel } from '../components/ui/CommandPalette';
@@ -9,16 +11,22 @@ import { Drawer, DrawerClose } from '../components/ui/Drawer';
 import { ChannelsIcon, LaunchesIcon, MoreIcon, SearchIcon, StatsIcon, WriteIcon } from '../components/ui/icons';
 import { Menu } from '../components/ui/Menu';
 import { Tooltip, TooltipProvider } from '../components/ui/Tooltip';
+import { getOnboardingState } from '../server/onboarding.functions';
 import { whoAmI } from '../server/session.functions';
 
 export const Route = createFileRoute('/_app')({
-  loader: () => whoAmI(),
+  loader: async () => {
+    const [who, onboarding] = await Promise.all([whoAmI(), getOnboardingState()]);
+    // A new install opens on the onboarding until it is finished or set aside; an install already working never does
+    if (onboarding.autoOpen) throw redirect({ to: '/onboarding' });
+    return who;
+  },
   component: Shell,
   notFoundComponent: NotFoundPage,
   errorComponent: ErrorPage,
 });
 
-type To = '/' | '/write' | '/channels' | '/stats' | '/automation' | '/ai' | '/tokens' | '/settings' | '/launch';
+type To = '/' | '/write' | '/channels' | '/comments' | '/stats' | '/automation' | '/ai' | '/tokens' | '/settings' | '/launch';
 
 interface Section {
   to: To;
@@ -31,6 +39,7 @@ interface Section {
 const LAUNCHES: Section = { to: '/', label: 'Launches', icon: LaunchesIcon, match: (p) => p === '/' || p === '/launch' || p.startsWith('/launches/') };
 const WRITE: Section = { to: '/write', label: 'Write', icon: WriteIcon, match: (p) => p === '/write' };
 const CHANNELS: Section = { to: '/channels', label: 'Channels', icon: ChannelsIcon, match: (p) => p.startsWith('/channels') };
+const COMMENTS: Section = { to: '/comments', label: 'Comments', match: (p) => p.startsWith('/comments') };
 const STATS: Section = { to: '/stats', label: 'Stats', icon: StatsIcon, match: (p) => p.startsWith('/stats') };
 const AUTOMATION: Section = { to: '/automation', label: 'Automation', match: (p) => p.startsWith('/automation') };
 const AI: Section = { to: '/ai', label: 'AI', match: (p) => p.startsWith('/ai') };
@@ -38,10 +47,10 @@ const API: Section = { to: '/tokens', label: 'API', match: (p) => p.startsWith('
 const SETTINGS: Section = { to: '/settings', label: 'Settings', match: (p) => p.startsWith('/settings') };
 
 /** Wide screens: every section in the top bar */
-const TOP = [LAUNCHES, WRITE, CHANNELS, STATS, AUTOMATION, AI, API];
+const TOP = [LAUNCHES, WRITE, CHANNELS, COMMENTS, STATS, AUTOMATION, AI, API];
 /** Phones: the four in reach of the thumb; the rest behind More */
 const BOTTOM = [LAUNCHES, WRITE, CHANNELS, STATS];
-const MORE = [AUTOMATION, AI, API, SETTINGS];
+const MORE = [COMMENTS, AUTOMATION, AI, API, SETTINGS];
 
 function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
   return (
@@ -104,6 +113,7 @@ function Shell() {
                     { kind: 'note', label: name ? `${name} (@${login})` : `@${login}` },
                     { kind: 'separator' },
                     { label: 'Settings', onSelect: () => void navigate({ to: '/settings' }) },
+                    { label: 'Take the tour', onSelect: requestTour },
                     { label: 'Sign out', onSelect: () => signOut.current?.requestSubmit() },
                   ]}
                 />
@@ -112,7 +122,7 @@ function Shell() {
             </div>
           </div>
         </header>
-        <main id="main" className="wrap" tabIndex={-1}>
+        <main id="main" className="wrap" tabIndex={-1} data-path={path}>
           <Outlet />
         </main>
         <nav className="bottom-bar" aria-label="Sections">
@@ -154,6 +164,17 @@ function Shell() {
                     Search sections and actions
                   </button>
                 </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMore(false);
+                      requestTour();
+                    }}
+                  >
+                    Take the tour
+                  </button>
+                </li>
               </ul>
             </nav>
             <div className="drawer-who">
@@ -169,6 +190,7 @@ function Shell() {
           </Drawer>
         </nav>
         <CommandPalette open={palette} onOpenChange={setPalette} />
+        <TourHost />
       </TooltipProvider>
     </ToastProvider>
   );
