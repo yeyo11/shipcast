@@ -227,6 +227,9 @@
 .settings-body { min-width: 0; }
 .section-intro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px 24px; margin-bottom: 28px; }
 .section-intro p { margin: 8px 0 0; max-width: 680px; }
+/* Beside the title, as in a page band: decoration, so off on a phone where it only pushes the text down */
+.section-intro-art { margin-left: auto; align-self: center; }
+@media (max-width: 760px) { .section-intro-art { display: none; } }
 .ph.settings-title { margin: 0; font-size: clamp(36px, 5vw, 56px); }
 @media (max-width: 760px) {
   .settings-shell { grid-template-columns: minmax(0, 1fr); gap: 16px; }

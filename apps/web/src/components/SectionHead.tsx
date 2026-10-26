@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 /** The title of one Settings section: the page's own h1 is Settings, so each section is an h2 with its lead and main action */
-export function SectionHead({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
+export function SectionHead({ title, children, action, art }: { title: ReactNode; children?: ReactNode; action?: ReactNode; art?: ReactNode }) {
   return (
     <header className="section-intro">
       <div>
@@ -9,6 +9,7 @@ export function SectionHead({ title, children, action }: { title: ReactNode; chi
         {children && <p className="muted">{children}</p>}
       </div>
       {action && <div className="row">{action}</div>}
+      {art && <div className="section-intro-art">{art}</div>}
     </header>
   );
 }

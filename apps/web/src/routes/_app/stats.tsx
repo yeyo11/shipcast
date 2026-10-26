@@ -3,7 +3,7 @@ import { useMemo, type ReactNode } from 'react';
 import { dayLabel, overlayComparison, seriesCsv, type ChartSeries } from '../../components/charts/data';
 import { assignColours } from '../../components/charts/palette';
 import { TimeChart } from '../../components/charts/TimeChart';
-import { OnboardMeasure } from '../../components/illustrations';
+import { OnboardMeasure, Scale } from '../../components/illustrations';
 import { Empty, PageHead } from '../../components/PageHead';
 import { Accounts } from '../../components/stats/Accounts';
 import { FilterBar, METRIC_NAMES } from '../../components/stats/FilterBar';
@@ -51,7 +51,7 @@ const TAB_NAMES: Record<StatsTab, string> = { overview: 'Overview', ranking: 'Ra
 function Loading() {
   return (
     <div className="stats-page">
-      <PageHead title="Stats">How every launch did, channel by channel, over time.</PageHead>
+      <PageHead title="Stats" art={<Scale width={200} />}>How every launch did, channel by channel, over time.</PageHead>
       <div className="stats-loading" role="status">
         <OnboardMeasure width={200} />
         <p className="muted">Counting the numbers…</p>
@@ -171,6 +171,7 @@ function Stats() {
     <div className="stats-page">
       <PageHead
         title="Stats"
+        art={<Scale width={200} />}
         action={
           <>
             {/* One of the two shows (stats.css): the words on a desktop, the glyph beside the title on a phone */}
