@@ -59,7 +59,7 @@ test('the scheduled run waits while automation is off; the brand is never read',
 });
 
 test('the owner hears of a run only when something waits for them', () => {
-  const empty: CommentRunResult = { posts: 3, found: 2, added: [], answeredByHand: 0, problems: [], drafted: [], sent: [], toDismiss: 0 };
+  const empty: CommentRunResult = { posts: 3, found: 2, added: [], answeredByHand: 0, gone: [], problems: [], drafted: [], sent: [], toDismiss: 0 };
   assert.equal(commentsNotice(empty), undefined);
   const drafted = { status: 'draft-ready', draft: 'Thanks!' } as CommentRecord;
   const notice = commentsNotice({ ...empty, added: [drafted, drafted], drafted: [drafted, drafted], toDismiss: 1 }, 'https://shipcast.example/');

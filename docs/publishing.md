@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:20:23.589869057Z
-updated_at: 2026-10-25T20:27:25.793174826Z
+created_at: 2026-10-25T20:37:32.920301347Z
+updated_at: 2026-10-26T19:44:22.195920403Z
 tags:
     - publishing
     - connectors
@@ -209,7 +209,9 @@ the post went out with when the owner approves it, or at once on a channel set t
 - **Reading:** a `comments` job every 30 minutes and on demand ("Check comments now") reads every
   live post of the last 30 days, records each comment once (`comments` table, unique per channel and
   network id), keeps the owner's own replies for the thread's context, and marks a comment the owner
-  answered on the network as answered.
+  answered on the network as answered. A post the network says no longer exists (Bluesky's
+  `NotFound`, Mastodon's own `Record not found`) is marked `deleted` and never read again, instead of
+  failing the read every half hour; any other refusal stays a problem in the job's log.
 - **Drafting:** the `replies` AI task and the editable `reply` prompt, closed by locked rules: the
   code and the launch's analysis are the truth, never a promise they do not back, the comment's
   language, short, and no reply to spam or abuse (suggested for dismissal instead).

@@ -18,6 +18,18 @@ export class ConnectorError extends Error {
   }
 }
 
+/**
+ * The network says the piece itself no longer exists (deleted by hand, or by moderation): reading it
+ * again will fail the same way, so the caller records it as deleted instead of trying every run.
+ */
+export class PostGone extends ConnectorError {
+  override name = 'PostGone';
+
+  constructor(network: string, message: string, status?: number) {
+    super(network, message, status, false);
+  }
+}
+
 /** A published piece: the network's own id for it, and the URL a person opens. */
 export interface Published {
   externalId: string;

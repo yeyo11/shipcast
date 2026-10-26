@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Bluesky, ConnectorError, Devto, htmlToText, Instagram, Mastodon } from '../src/index.ts';
+import { Bluesky, ConnectorError, Devto, htmlToText, Instagram, Mastodon, PostGone } from '../src/index.ts';
 import { fakeFetch, type Call } from './fake.ts';
 
 const bodyOf = (call: Call | undefined) => JSON.parse(String(call?.body)) as Record<string, unknown>;
@@ -148,6 +148,21 @@ test('Bluesky threads a reply with strong references to the root post and the co
 test('Bluesky refuses to reply to a comment that is gone', async () => {
   const bluesky = new Bluesky({ identifier: 'me', appPassword: 'p', fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts', () => Response.json({ posts: [] })]], []) });
   await assert.rejects(bluesky.reply({ postExternalId: 'at://a/b/c', commentExternalId: 'at://d/e/f', authorHandle: '@x' }, 'hi'), (e: unknown) => e instanceof ConnectorError && e.status === 404);
+});
+
+test('a deleted post is PostGone on Bluesky and Mastodon; any other refusal stays a plain failure', async () => {
+  const notFound = () => Response.json({ error: 'NotFound', message: 'Post not found: at://did:plc:me/app.bsky.feed.post/x' }, { status: 400 });
+  const bluesky = new Bluesky({ identifier: 'me', appPassword: 'p', fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread', notFound]], []) });
+  await assert.rejects(bluesky.comments('at://did:plc:me/app.bsky.feed.post/x'), (e: unknown) => e instanceof PostGone && !e.retryable);
+  const invalid = () => Response.json({ error: 'InvalidRequest', message: 'bad uri' }, { status: 400 });
+  const confused = new Bluesky({ identifier: 'me', appPassword: 'p', fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread', invalid]], []) });
+  await assert.rejects(confused.comments('nope'), (e: unknown) => e instanceof ConnectorError && !(e instanceof PostGone));
+
+  const mastodon = (body: unknown) =>
+    new Mastodon({ instance: 'https://mastodon.social', accessToken: 't', fetch: fakeFetch([['GET https://mastodon.social/api/v1/statuses/100/context', () => Response.json(body, { status: 404 })]], []) });
+  await assert.rejects(mastodon({ error: 'Record not found' }).comments('100'), (e: unknown) => e instanceof PostGone);
+  // A 404 that is not Mastodon's own (a wrong instance address) must not delete every post
+  await assert.rejects(mastodon({ message: 'nothing here' }).comments('100'), (e: unknown) => e instanceof ConnectorError && !(e instanceof PostGone));
 });
 
 test('Instagram reads a post’s comments and their replies, page by page, and replies under a comment', async () => {
