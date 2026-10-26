@@ -29,7 +29,8 @@ export function SectionHead({ title, children, art }: { title: ReactNode; childr
           )}
         </div>
         {art && (
-          <motion.div className="section-intro-art" initial={false} animate={{ opacity: compact ? 0 : 1 }}>
+          // Its height goes to zero as well, or it keeps the row taller than the folded head
+          <motion.div className="section-intro-art" initial={false} animate={{ opacity: compact ? 0 : 1, height: compact ? 0 : 'auto' }}>
             {art}
           </motion.div>
         )}

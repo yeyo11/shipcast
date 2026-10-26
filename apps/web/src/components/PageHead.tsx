@@ -50,7 +50,9 @@ export function PageHead({ title, children, art }: { title: ReactNode; children?
           )}
         </div>
         {art && (
-          <motion.div className="page-band-art" initial={false} animate={{ opacity: compact ? 0 : 1, scale: compact ? 0.8 : 1 }}>
+          // The art's height goes to zero too: it sets the grid row's height, so left in place it made
+          // the row taller than the folded band and pushed the title down, cut at the bottom edge
+          <motion.div className="page-band-art" initial={false} animate={{ opacity: compact ? 0 : 1, scale: compact ? 0.8 : 1, height: compact ? 0 : 'auto' }}>
             {art}
           </motion.div>
         )}

@@ -44,11 +44,11 @@ main { padding-block: 32px 96px; }
    pages never shifts the work area; folded (data-compact, components/PageHead.tsx) it is 104 px,
    the title at the same size with the lead and the illustration gone. Motion sets the height inline; the
    phone's rules below win */
-.page-band { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 28px; align-items: center; height: 200px; margin-bottom: 36px; padding: 0 clamp(24px, 4vw, 48px); border-radius: var(--sc-radius-band); background: var(--sc-raised); overflow: hidden; }
+.page-band { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); gap: 0 28px; align-items: center; height: 200px; margin-bottom: 36px; padding: 0 clamp(24px, 4vw, 48px); border-radius: var(--sc-radius-band); background: var(--sc-raised); overflow: hidden; }
 .page-band-text { min-width: 0; }
 .page-band h1 { font-size: 64px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .page-band-lead { margin: 0; font: var(--sc-body-lg); color: var(--sc-muted); max-width: 680px; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-.page-band-art { width: clamp(120px, 18vw, 200px); display: grid; place-items: center; pointer-events: none; }
+.page-band-art { width: clamp(120px, 18vw, 200px); display: grid; place-items: center; pointer-events: none; overflow: hidden; }
 .page-band-art svg { width: 100%; height: auto; max-height: 168px; }
 /* Folded, the lead leaves the accessibility tree once its fade is over */
 .page-band[data-compact] .page-band-lead { visibility: hidden; transition: visibility 0s linear .25s; }
