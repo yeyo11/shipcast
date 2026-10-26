@@ -44,7 +44,7 @@ import { id, InvalidInput, object } from './input.ts';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { channelList, postChanges } from './post-changes.ts';
-import { articleRequest, channelName, launchRequest } from './requests.ts';
+import { articleRequest, channelName, launchRequest, moment } from './requests.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 import { commentView, commentViews } from './comment-view.ts';
 
@@ -297,16 +297,6 @@ async function onSchedule<T>(work: () => Promise<T>): Promise<T> {
     }
     throw error;
   }
-}
-
-/** A moment with its offset; a time without one would be read in the server's zone, which is nobody's choice */
-function moment(value: unknown, name: string): Date {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
-    throw new InvalidInput(`${name} is an ISO 8601 date-time with its offset, such as 2026-10-27T17:00:00+01:00`);
-  }
-  const at = new Date(value);
-  if (Number.isNaN(at.getTime())) throw new InvalidInput(`${name} is not a real date`);
-  return at;
 }
 
 const dateTime = { type: 'string', format: 'date-time', description: 'ISO 8601 with its offset; a time already past sends it on the next run' };
@@ -879,7 +869,8 @@ const launchProperties = {
     },
   },
   failures: { type: 'array', items: { type: 'object', properties: { channel: { type: 'string' }, message: { type: 'string' } } } },
-  headline: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } } } },
+  replies: { type: 'object', description: 'Replies Shipcast sent under the launch’s posts, counted per channel', additionalProperties: { type: 'integer' } },
+  headline:{ type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } } } },
 };
 
 /** The OpenAPI 3.1 description, built from ROUTES so it cannot drift from what is served */

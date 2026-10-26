@@ -32,6 +32,16 @@ export function articleRequest(input: unknown): { input: ArticleInput; direct: b
   return { input: { title, markdown, lang, channels }, direct: o.direct === true };
 }
 
+/** A moment with its offset; a time without one would be read in the server's zone, which is nobody's choice */
+export function moment(value: unknown, name: string): Date {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    throw new InvalidInput(`${name} is an ISO 8601 date-time with its offset, such as 2026-10-27T17:00:00+01:00`);
+  }
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) throw new InvalidInput(`${name} is not a real date`);
+  return at;
+}
+
 export function channelName(value: unknown): Channel {
   const channel = text(value, 'channel', 40);
   if (!(CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput('unknown channel');

@@ -2,6 +2,7 @@ import { newWebhookSecret, WEBHOOK_SECRET_KEY, writeAutomation, type AutomationM
 import { createServerFn } from '@tanstack/react-start';
 import { automationChanged, automationView, roundNow } from './automation.server';
 import { appContext } from './context.server';
+import { jobsView } from './jobs.server';
 import { InvalidInput, object } from './input';
 
 export const getAutomation = createServerFn({ method: 'GET' }).handler(async () => {
@@ -14,6 +15,8 @@ export const getAutomation = createServerFn({ method: 'GET' }).handler(async () 
     appWebhooks: Boolean(ctx.config.githubApp?.webhookSecret),
     launchesRepo: ctx.settings.launchesRepo(),
     owner: (await ctx.brand()).github,
+    /** The queue's work of the last day: drafting, publishing, GitHub's deliveries (moved here from the launches list) */
+    jobs: await jobsView(ctx.registry),
   };
 });
 

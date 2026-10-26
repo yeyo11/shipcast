@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:33:47.239913855Z
-updated_at: 2026-10-26T09:17:51.174761147Z
+updated_at: 2026-10-26T09:58:59.66270882Z
 tags:
     - web-app
     - dashboard
@@ -19,6 +19,7 @@ tags:
     - base-ui
     - accessibility
     - mobile
+    - launch-page
     - stats
 ---
 # The web app
@@ -99,15 +100,32 @@ runs on the owner's machine.
 
 ## Sections
 
-- **Launches** (`/`): every launch as the specimen's launch card (state pill, one row per channel
-  with its post), what is waiting for the owner on a yellow band, and the last day's jobs of the
-  queue, refreshed while something runs. `/api/launches` gives the same as JSON behind the session,
-  with each launch's jobs; scripts and the MCP server use the [REST API](api.md) instead.
-- **A launch** (`/launches/<id>`): its drafts read from the pull request's branch, each article and
-  channel text editable (a save is a commit on that branch), the media, **Approve and publish**
-  (merges the pull request with a squash, then queues the publishing, which waits for the site to
-  deploy), failed channels with **Try again** (that launch only, as a job of its own), the launch's
-  jobs, and the latest numbers by source.
+- **Launches** (`/`): one summary card per launch in a grid (two columns on a desktop): its title
+  and state pill, the repo and the date in the owner's zone, its views, reactions, comments and
+  clicks, the views per day since the launch as an area chart, and one **mark** per channel (its
+  glyph, a state dot: green published, yellow ring scheduled, red failed, dotted not launched; a
+  small count when it went out on more than one of the brand's accounts). The marks stay on one row:
+  problems first, as many as the card's width holds (measured), the rest behind a "+n" menu. Every
+  mark opens the same menu (`ResponsiveMenu`), a line per post (labelled by account, language or
+  kind; a link in a new tab, or its state) and a way to the channel on the launch page; while it is
+  open the card's numbers and chart turn to that channel against the launch's own scale, counted
+  and morphed with Motion (instant under reduced motion), without the card changing height. A launch
+  waiting for the owner is the yellow card under the yellow band. The queue's jobs are not here any
+  more: they are on Automation. `/api/launches` gives the launches as JSON behind the session; scripts
+  and the MCP server use the [REST API](api.md) instead.
+- **A launch** (`/launches/<id>`): a compact header (title, repo, launch date, state pill, Publish
+  what is pending, Open the article), the yellow band with **Approve and publish** while its drafts
+  wait, then **its numbers first**: the totals (views, reactions, comments, clicks, stars) and views
+  per day as bars. One quiet line links what waits on the owner (comments to answer, a channel's
+  scheduled time, a running job). Below, four tabs kept in the address (`?tab=`, and `?channel=`):
+  **Channels**, a strip of channel chips (glyph and state dot) choosing one channel, shown with its
+  totals, each piece with its link, its numbers over time, Edit and Delete (or Unpublish) where its
+  network allows them or Retry when it failed, its time while it is not out yet, and what the
+  network allows in a line; Edit selected and Delete everything sit above the panel. **Content**,
+  what went out (or the drafts, editable while the pull request is open: a save is a commit on its
+  branch) and the media, folded rows opened on demand. **Search engines**, each engine's view of
+  each language's article. **Details**, the properties, the accounts it went out with and how their
+  followers moved, the last reading of every number, and the launch's jobs.
 - **Launch a repo** (`/launch`): the owner's repos (a combobox with a search) and their releases (a
   select), the [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice,
   and the choice between reviewing the drafts first or publishing without review. Drafting is a job
@@ -160,8 +178,12 @@ on the [approved design direction](decisions/app-design-direction.md).
   `window.confirm`: disconnecting an account, rotating the webhook secret, revoking a token,
   clearing a setting), Combobox, Select (a release, a connection's brand, the AI page's providers and
   preview launch), Menu (an account's secondary actions), Tabs, Tooltip, Popover, Drawer, the toasts
-  and the palette. See [decisions/component-layer.md](decisions/component-layer.md). They are
-  reviewed running at the hidden route `/design/components`.
+  and the palette. **ResponsiveMenu** is one menu in two shapes: the Popover on a desktop (in a
+  portal, flipped and shifted by Base UI to stay on screen, so opening it never scrolls the page) and
+  the Drawer as a bottom sheet on a phone (640 px wide or a coarse pointer), with the same content and
+  open state and nothing that needs hover; the launch cards' channel menus use it. See
+  [decisions/component-layer.md](decisions/component-layer.md). They are reviewed running at the
+  hidden route `/design/components`.
 - **Illustrations wired in**: the 404 page ("Return to sender") and the error boundary ("Damaged on
   the way", with Try again), both inside the shell when a section fails and on their own otherwise;
   the empty states for no launches, no drafts on a launch's page and no connected accounts; the
@@ -171,9 +193,8 @@ on the [approved design direction](decisions/app-design-direction.md).
   `minmax(min(100%, N), 1fr)`, forms and fields are `minmax(0, 1fr)` grids, flex and grid children get
   `min-width: 0`, segmented controls stack under 560 px, record tables become blocks under 640 px,
   long URLs, refs, paths, handles and secrets break with `overflow-wrap: anywhere` (`.break`,
-  `.copyable`, table cells), and on phones each launch row shows its piece and link under the
-  channel's name, wrapped where it must (on wide screens the link is clamped to one line with the
-  full address in a tooltip).
+  `.copyable`, table cells), and the strips that hold one row of marks (a launch's channel chips, its
+  tabs) scroll sideways on a phone instead of widening the page.
 - **The reflow check** (`apps/web/scripts/reflow-check.ts`): a Lighthouse gate cannot run in CI
   without a database and a session, so this script runs against a live instance instead. It signs in
   with a console link (or a session saved with `--state`), opens every page at the widths given (320
@@ -210,6 +231,9 @@ never run the same round twice.
   per-repo secret from before the App is still generated in the page (32 random bytes), kept in the
   keychain, shown once and rotatable after a confirmation, with the payload URL, the content type and
   what to tick on GitHub for a webhook set by hand.
+- **Work in progress**: the queue's jobs of the last day (drafting, publishing, GitHub's deliveries),
+  each with its last log line and its state, followed while one runs; it moved here from the
+  launches list, where it took the room of the launches.
 - **What happened**: the last round and the last delivery, with their lines; and **Run a round now**,
   which moves the round already queued to now (refused while one is running, in any process).
 - GitHub can only deliver once the app is reachable from it, which is the VPS's job; signed test
@@ -281,6 +305,11 @@ it has the section band, and its Clear asks first (`src/routes/_app/settings.tsx
   runs after it; the wait for a deploy is a retry every 30 seconds for 20 minutes. The pages and the
   REST API's `/jobs` read the registry's `jobs` rows (`src/server/jobs.server.ts`): title, state,
   attempts, log lines, link.
+- **A launch at a glance** (`src/server/launch-summary.ts`, tested, and its `.server.ts`): a launch's
+  totals from the latest reading of each counter through the stats section's metric families
+  ([stats.md](stats.md)), GitHub's stars apart from reactions; each channel's totals with only what
+  its network counts (a metric it does not count shows a dash, not 0); and views per day for every
+  launch and channel of the list in one query, the engine's daily series grouped by `launchChannel`.
 - **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
   `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
   OpenAPI document is built from it. Requests that start work are checked by the same functions as

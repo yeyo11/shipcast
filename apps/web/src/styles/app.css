@@ -80,7 +80,9 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .btn svg { flex: none; }
 /* On touch screens every control is at least 44 px tall, the size a thumb hits without aiming */
 @media (pointer: coarse) { .btn-small { min-height: 44px; } }
-.btn-link { background: none; border: 0; padding: 0; min-height: 0; font: var(--sc-label); text-decoration: underline; color: var(--sc-muted); }
+.btn-link { background: none; border: 0; padding: 0; min-height: 0; font: var(--sc-label); text-decoration: underline; text-underline-offset: 3px; color: var(--sc-muted); cursor: pointer; }
+.btn-link:hover { color: var(--sc-text); }
+@media (pointer: coarse) { .btn-link { min-height: 44px; } }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .row > * { min-width: 0; }
 /* A field set in a row with other controls (a Select beside a model input) takes its share of it */
@@ -111,36 +113,114 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .card.manual { background: transparent; border-style: dashed; border-color: var(--sc-rail); }
 .card .foot { margin-top: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
-/* The launch card: black with a yellow stamp, one row per channel */
-.launch { background: var(--sc-black); color: var(--sc-on-black); border: var(--sc-border-card) solid var(--sc-on-black); border-radius: 28px; box-shadow: var(--sc-stamp-lg) var(--sc-yellow); overflow: hidden; margin-bottom: 36px; }
-.launch-head { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; padding: 22px 28px; border-bottom: 2px solid #2A2927; }
-.launch-head > div { min-width: 0; }
-.launch-head h2 { font: 900 40px/0.92 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); margin: 0; overflow-wrap: anywhere; }
-.launch-head h2 a { text-decoration: none; }
-.launch-head p { margin: 6px 0 0; color: #A9A69E; font-size: 15px; overflow-wrap: anywhere; }
-.launch ol { list-style: none; margin: 0; padding: 6px 28px 18px; }
-.launch li { display: grid; grid-template-columns: 30px 170px minmax(0, 1fr) auto; gap: 16px; align-items: center; min-height: 58px; border-bottom: 1px solid #222120; }
-.launch li:last-child { border-bottom: 0; }
-.launch li img { width: 24px; height: 24px; filter: invert(1); }
-.launch .ch { font-size: 22px; font-weight: 700; letter-spacing: var(--sc-tracking-title); }
-.launch .post { color: #A9A69E; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.launch .s-published { background: var(--sc-on-black); color: #000; }
-.launch .s-manual { color: #C8C5BC; border-color: #6B6963; }
-.launch .s-failed { color: #FF6B5B; border-color: #FF6B5B; }
-.launch .s-draft { color: #C8C5BC; border-color: #6B6963; }
-@media (max-width: 760px) {
-  .launch { box-shadow: 6px 6px 0 var(--sc-yellow); }
-  .launch-head, .launch ol { padding-inline: 18px; }
-  /* Several rows share a channel (a blog article per language, a post with its story and comment):
-     the piece and its link sit under the channel's name, or the rows would look identical. The
-     address wraps where it must instead of being cut or pushing the page wide */
-  .launch li { grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; padding-block: 10px; min-height: 58px; }
-  .launch li > :first-child { grid-column: 1; grid-row: 1 / span 2; }
-  .launch .ch { grid-column: 2; grid-row: 1; font-size: 20px; }
-  .launch .post { grid-column: 2; grid-row: 2; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
-  .launch .post:empty { display: none; }
-  .launch li > .pill { grid-column: 3; grid-row: 1 / span 2; }
-}
+/* The launch cards (components/LaunchCard.tsx): black with a yellow stamp, a summary each, in a grid.
+   Waiting for the owner keeps the yellow card */
+.lcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 24px; align-items: start; }
+.lcards > * { min-width: 0; }
+.lcard { background: var(--sc-black); color: var(--sc-on-black); border: var(--sc-border-card) solid var(--sc-on-black); border-radius: var(--sc-radius-card); padding: 24px 26px; display: grid; gap: 14px; box-shadow: var(--sc-stamp-sm) var(--sc-yellow); min-width: 0; }
+.lcard header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.lcard h2 { margin: 0; font: 900 30px/0.92 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); overflow-wrap: anywhere; min-width: 0; }
+.lcard h2 a { text-decoration: none; }
+.lcard h2 a:hover { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; }
+.lcard-ref { font: 600 14px/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: #A9A69E; vertical-align: 4px; }
+.lcard p { margin: 0; }
+.lcard-meta { color: #A9A69E; font-size: 13.5px; overflow-wrap: anywhere; }
+/* Which channel the numbers are for. Peeking never moves the card: one fixed line height here, and
+   fixed columns below that do not wrap when a value's width changes */
+.lcard-scope { display: flex; align-items: center; gap: 6px; height: 20px; margin: 0 0 -6px; overflow: hidden; white-space: nowrap; font: var(--sc-label); line-height: 20px; color: #A9A69E; }
+.lcard-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: 10px; background: #1F1F1D; overflow: hidden; }
+.lcard-pill.is-on { background: color-mix(in srgb, var(--sc-yellow) 16%, #000); color: var(--sc-yellow); }
+.lcard-pill-name { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.lcard.waiting .lcard-scope { color: #2a2a2a; }
+.lcard.waiting .lcard-pill { background: rgb(0 0 0 / .1); }
+.lcard.waiting .lcard-pill.is-on { background: #000; color: var(--sc-yellow); }
+.lcard.waiting .lcard-pill.is-on .glyph.icon, [data-theme="day"] .lcard.waiting .lcard-pill.is-on .glyph.icon { filter: invert(1); }
+.lcard-stats { display: grid; grid-template-columns: minmax(84px, auto) repeat(3, minmax(64px, auto)); grid-template-rows: auto auto; grid-auto-flow: column; justify-content: start; column-gap: 26px; margin: 4px 0 0; align-items: end; }
+/* The labels share one line and the numbers the next, whatever each number's size */
+.lcard-stats > div { display: contents; }
+.lcard-stats dd { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lcard-stats dt { font: var(--sc-label); color: #A9A69E; }
+.lcard-stats dd { margin: 4px 0 0; font: 900 30px/0.9 var(--sc-font-display); }
+.lcard-stats .is-lead dd { font-size: 52px; }
+@media (max-width: 420px) { .lcard-stats { column-gap: 14px; grid-template-columns: minmax(72px, auto) repeat(3, minmax(52px, auto)); } .lcard-stats .is-lead dd { font-size: 44px; } .lcard-stats dd:not(.is-lead dd) { font-size: 26px; } }
+/* Views per day, alone on its row: an area with its line, the days under it */
+.darea { margin: 0; }
+.darea svg { display: block; width: 100%; height: 96px; }
+.darea-fill { fill: color-mix(in srgb, var(--sc-yellow) 18%, transparent); }
+.darea-line { stroke: var(--sc-yellow); }
+.darea figcaption { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: #A9A69E; }
+.lcard-none { color: #A9A69E; font-size: 14px; }
+.lcard .s-published { background: var(--sc-on-black); color: #000; }
+.lcard .s-manual, .lcard .s-draft { color: #C8C5BC; border-color: #6B6963; }
+.lcard .s-failed { color: #FF6B5B; border-color: #FF6B5B; }
+.lcard.waiting { background: var(--sc-yellow); color: var(--sc-on-yellow); border-color: #000; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); }
+.lcard.waiting .pill.s-waiting { background: #000; color: var(--sc-yellow); }
+.lcard.waiting .lcard-ref, .lcard.waiting .lcard-meta, .lcard.waiting .lcard-stats dt, .lcard.waiting .darea figcaption, .lcard.waiting .lcard-none { color: #2a2a2a; }
+.lcard.waiting .darea-fill { fill: rgb(0 0 0 / .12); }
+.lcard.waiting .darea-line { stroke: #000; }
+
+/* A channel's mark: its glyph in a rounded square, the state dot on its corner */
+/* The row is measured, so it takes the card's width and never widens the card with its own content */
+.marks { list-style: none; padding: 6px 0 0; margin: 0; display: flex; flex-wrap: nowrap; gap: 8px; min-width: 0; width: 100%; }
+.marks > li { flex: none; }
+.marks[data-full] { justify-content: space-between; gap: 4px; }
+/* "+n": the channels that went fine, folded so the marks stay on one row */
+.marks-more > button { height: 36px; min-width: 44px; padding: 0 10px; border-radius: 10px; border: 2px dashed #5A5853; background: none; color: inherit; font: 700 14px/1 var(--sc-font-text); cursor: pointer; }
+.marks-more > button:hover, .marks-more > button:focus-visible { border-style: solid; border-color: currentColor; }
+.lcard.waiting .marks-more > button { border-color: #000; }
+/* How many of the brand's accounts a channel went out on, quiet in the tile's lower corner */
+.mark-accounts { position: absolute; right: -5px; bottom: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--sc-on-black); color: var(--sc-black); font: 800 10.5px/16px var(--sc-font-text); text-align: center; box-shadow: 0 0 0 2px var(--sc-black); }
+.lcard.waiting .mark-accounts { background: #000; color: var(--sc-yellow); box-shadow: 0 0 0 2px var(--sc-yellow); }
+.marks-more > button[data-popup-open] { border-style: solid; border-color: currentColor; }
+/* Marks that open: the tile is the link or the menu's button */
+.mark.is-link > a, .mark.is-link > button, .pop-channels .mark > a, .pop-channels .mark > span { position: relative; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 8px; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.mark.is-link:hover { border-color: #6B6963; }
+/* The mark whose menu is open keeps a solid border in the text colour until it closes */
+.mark.is-link[data-active] { border-color: currentColor; background: #1A1A18; }
+.lcard.waiting .mark.is-link[data-active] { background: rgb(0 0 0 / .1); }
+.mark.is-link:has(:focus-visible) { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.mark.is-link :focus-visible { outline: none; }
+.lcard.waiting .mark.is-link:has(:focus-visible) { outline-color: #000; }
+/* A mark's menu (Base UI's Popover, in a portal on the page's ground) */
+.ui-popover.pop { width: auto; min-width: 280px; max-width: min(360px, calc(100vw - 16px)); padding: 10px; }
+.pop .ui-popover-body { display: grid; gap: 2px; }
+.pop-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 0 0 6px !important; padding: 2px 6px; font: var(--sc-label); }
+.pop-net { display: inline-flex; align-items: center; gap: 8px; }
+.pop-line { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 10px 8px; border-radius: 10px; font: var(--sc-label); text-decoration: none; color: var(--sc-text); }
+.pop-line > span:first-child { white-space: nowrap; }
+a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
+.pop-line.is-quiet { color: var(--sc-muted); }
+.pop-host { font-weight: 500; font-size: 12.5px; color: var(--sc-muted); overflow-wrap: anywhere; text-align: right; }
+.pop-foot { margin-top: 6px; padding: 10px 8px 4px; border-top: 1px solid var(--sc-hairline); font: var(--sc-label); color: var(--sc-muted); }
+.pop-foot:hover { color: var(--sc-text); }
+.pop-channels { list-style: none; margin: 0; padding: 4px; display: grid; gap: 10px; }
+.pop-channels > li { display: flex; align-items: center; gap: 12px; }
+.pop .mark { flex: none; border-color: var(--sc-hairline); }
+.pop .mark.m-failed { border-color: var(--sc-failure); }
+.pop .mark .dot i { box-shadow: 0 0 0 2px var(--sc-ground); }
+.pop .mark .dot.d-scheduled i { box-shadow: inset 0 0 0 3px var(--sc-yellow), 0 0 0 2px var(--sc-ground); }
+.pop .mark-accounts { background: var(--sc-text); color: var(--sc-ground); box-shadow: 0 0 0 2px var(--sc-ground); }
+.pop-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* On a phone the menu is a bottom sheet (ResponsiveMenu), with the channel's numbers on top */
+.ui-sheet-menu { display: grid; gap: 2px; }
+/* The sheet is titled with the network already: its head keeps only the state */
+.ui-sheet-menu .pop-net { display: none; }
+.pop-numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+.pop-numbers div { background: var(--sc-raised); border-radius: 12px; padding: 10px; }
+.pop-numbers dt { font: var(--sc-label); color: var(--sc-muted); font-size: 12px; }
+.pop-numbers dd { margin: 4px 0 0; font: 900 24px/1 var(--sc-font-display); font-variant-numeric: tabular-nums; }
+.pop-chips > * { padding: 7px 11px; border-radius: var(--sc-radius-pill); border: 1.5px solid var(--sc-rail); font: 700 12.5px/1 var(--sc-font-text); color: var(--sc-text); text-decoration: none; }
+.pop-chips > a:hover, .pop-chips > a:focus-visible { background: var(--sc-text); color: var(--sc-ground); }
+.pop-chips > .is-quiet { color: var(--sc-muted); border-style: dashed; }
+.mark { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 2px solid #3A3936; }
+.mark.m-failed { border-color: #FF6B5B; }
+.mark .dot { position: absolute; right: -5px; top: -5px; }
+.mark .dot i { width: 12px; height: 12px; box-shadow: 0 0 0 2px var(--sc-black); }
+.lcard.waiting .mark { border-color: #000; }
+.lcard.waiting .mark .dot i { box-shadow: 0 0 0 2px var(--sc-yellow); }
+/* Glyphs on the black card stay light in either theme */
+.lcard .glyph.icon, [data-theme="day"] .lcard .glyph.icon { filter: invert(1); }
+.lcard.waiting .glyph.icon, [data-theme="day"] .lcard.waiting .glyph.icon { filter: none; }
 
 /* Bands */
 .band { border-radius: var(--sc-radius-band); padding: clamp(28px, 5vw, var(--sc-band-padding)); margin-block: 36px; }
@@ -218,6 +298,159 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .preview { white-space: pre-wrap; font-size: 14.5px; line-height: 1.55; }
 .thumbs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
 .thumbs img { height: 180px; max-width: none; border-radius: 12px; border: 2px solid var(--sc-hairline); }
+
+/* Glyphs and state dots, shared by the cards and a launch's page (components/launch/Glance.tsx) */
+.glyph { flex: none; display: inline-block; }
+.glyph-letter { display: inline-grid; place-items: center; border-radius: 6px; border: 2px solid currentColor; font-weight: 800; line-height: 1; }
+/* A state dot is round in every state: filled green published, a yellow ring scheduled, filled red
+   failed, a dotted ring not launched. A failure never rests on colour alone: its mark or chip has a red
+   outline, and its word is beside the dot or in the mark's accessible name */
+.dot { display: inline-flex; align-items: center; gap: 8px; font: 700 13px/1 var(--sc-font-text); white-space: nowrap; }
+.dot i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.dot.d-published i { background: var(--sc-success); }
+.dot.d-scheduled i { background: var(--sc-black); box-shadow: inset 0 0 0 3px var(--sc-yellow); }
+.dot.d-failed { color: var(--sc-failure); }
+.dot.d-failed i { background: var(--sc-failure); }
+.dot.d-off { color: var(--sc-muted); }
+.dot.d-off i { border: 2px dotted var(--sc-muted); }
+.mark .dot.d-scheduled i { box-shadow: inset 0 0 0 3px var(--sc-yellow), 0 0 0 2px var(--sc-black); }
+.mark .dot.d-off i { background: var(--sc-black); }
+
+/* A launch's page: a compact header, the numbers first, one quiet line, then the tabs */
+.lhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px 24px; margin: 8px 0 20px; }
+.lhead-text { min-width: 0; }
+.lhead-back { display: inline-block; margin-bottom: 10px; font: var(--sc-label); color: var(--sc-muted); }
+.lhead h1 { font-size: clamp(40px, 6vw, 72px); overflow-wrap: anywhere; }
+.lhead-ref { font: 600 clamp(16px, 2vw, 22px)/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: var(--sc-muted); vertical-align: middle; }
+.lhead p { margin: 10px 0 0; font-size: 15px; overflow-wrap: anywhere; }
+.lhead-actions { justify-content: flex-end; }
+.lhead + .notice, .notice + .notice { margin-bottom: 16px; }
+.band.band-slim { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px 24px; padding: 20px 24px; margin-block: 0 20px; }
+.band-slim h2.ph { margin: 0; font-size: 30px; }
+.band-slim p { margin: 6px 0 0; max-width: 60ch; font-size: 14.5px; }
+.hero-numbers { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: stretch; margin-bottom: 12px; }
+.totals { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.totals div { background: var(--sc-raised); border-radius: 18px; padding: 14px 16px; min-width: 0; display: grid; align-content: space-between; gap: 8px; }
+.totals dt { font: var(--sc-label); color: var(--sc-muted); }
+.totals dd { margin: 0; font: 900 44px/0.9 var(--sc-font-display); }
+.daily { margin: 0; background: var(--sc-raised); border-radius: 18px; padding: 12px 16px; display: grid; grid-template-rows: auto 1fr; gap: 8px; min-width: 0; }
+.daily-title { font: var(--sc-label); color: var(--sc-muted); }
+.daily-empty { align-content: center; font-size: 14px; }
+.daily-bars { display: flex; gap: 6px; align-items: end; height: 96px; }
+.daily-bars div { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 4px; }
+.daily-bars span { width: 100%; max-width: 40px; background: var(--sc-yellow); border: 2px solid #000; border-radius: 5px 5px 0 0; }
+.daily-bars span[data-zero] { background: var(--sc-hairline); border-color: var(--sc-hairline); }
+.daily-bars small { color: var(--sc-muted); font-size: 11px; white-space: nowrap; min-height: 1em; }
+@media (max-width: 1100px) { .hero-numbers { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .totals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .totals dd { font-size: 34px; }
+}
+.quiet { margin: 0 0 18px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; color: var(--sc-muted); }
+.quiet > span { display: inline-flex; gap: 10px; }
+.quiet a { color: var(--sc-muted); text-underline-offset: 3px; }
+.quiet a:hover { color: var(--sc-text); }
+.tab-title { font: var(--sc-label); text-transform: uppercase; letter-spacing: .06em; color: var(--sc-muted); margin: 0 0 10px; }
+.content-tab { display: grid; gap: 18px; }
+.drafts { display: grid; gap: 8px; }
+/* A folded row is one line; it grows only when opened */
+.content-tab .draft { padding: 6px 18px; border-radius: 16px; }
+.content-tab .draft[open] { padding-bottom: 18px; }
+.draft-title { margin: 0; font: 700 17px/1.2 var(--sc-font-text); flex: 1 1 auto; overflow-wrap: anywhere; }
+
+/* The Channels tab (components/launch/Channels.tsx): the chips, then one channel's panel */
+.chan { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.chan-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.chan-strip { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+.chan-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: var(--sc-radius-pill); background: none; color: var(--sc-text); border: var(--sc-border-control) solid var(--sc-hairline); cursor: pointer; }
+.chan-chip:hover { border-color: var(--sc-rail); }
+.chan-chip[aria-pressed="true"] { border-color: var(--sc-text); background: var(--sc-raised); }
+.chan-chip.m-failed { border-color: var(--sc-failure); }
+.chan-bulk { display: flex; flex-wrap: wrap; gap: 8px; }
+.chan-panel { background: var(--sc-raised); border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); padding: 18px 20px; display: grid; gap: 14px; min-width: 0; }
+.chan-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
+h2.ph.chan-title { display: inline-flex; align-items: center; gap: 12px; margin: 0; font-size: 36px; }
+.chan-numbers { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; color: var(--sc-muted); }
+.chan-numbers strong { color: var(--sc-text); font-size: 18px; font-variant-numeric: tabular-nums; }
+.chan-replies { font-size: 13.5px; color: var(--sc-muted); }
+.chan-failure { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
+.chan-failure .problem { margin: 0; flex: 1 1 300px; }
+.chan-can { margin: 0; font-size: 13.5px; color: var(--sc-muted); }
+.chan-can strong { color: var(--sc-text); }
+.chan-selected { margin: 0; font-size: 13.5px; }
+.chan-panel .sched { background: var(--sc-ground); }
+.post-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.post-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 8px 16px; align-items: center; padding: 12px 14px; border-radius: 14px; background: var(--sc-ground); border: 1px solid var(--sc-hairline); }
+.post-item[data-status="failed"] { border-color: var(--sc-failure); }
+.post-item[data-status="deleted"] .post-main { opacity: .7; }
+.post-check { display: inline-grid; place-items: center; width: 32px; height: 44px; }
+.post-check input { width: 18px; height: 18px; accent-color: var(--sc-yellow); }
+.post-main { display: grid; gap: 4px; min-width: 0; }
+.post-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: 700 14.5px/1.2 var(--sc-font-text); }
+.post-what .pill { height: 24px; font-size: 11.5px; padding: 0 9px; }
+.post-account { font-weight: 400; font-size: 13px; }
+.post-link { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sc-muted); }
+a.post-link:hover { color: var(--sc-text); }
+.post-metrics { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--sc-muted); }
+.post-metrics li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.post-metrics strong { color: var(--sc-text); font-size: 15px; }
+.post-actions { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
+.post-none { font-size: 13px; }
+@media (max-width: 860px) {
+  .post-item { grid-template-columns: 32px minmax(0, 1fr); }
+  .post-metrics, .post-actions { grid-column: 2; justify-content: flex-start; }
+  .post-link { white-space: normal; overflow-wrap: anywhere; }
+}
+@media (max-width: 640px) {
+  .chan-strip { flex-wrap: nowrap; overflow-x: auto; padding: 6px 2px; margin: -6px -2px; scrollbar-width: thin; }
+  .chan-chip { flex: none; }
+  .chan-panel { padding: 16px 14px; }
+  h2.ph.chan-title { font-size: 30px; }
+}
+
+/* The Details tab: properties, accounts, the last readings and the jobs */
+.details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 28px 40px; align-items: start; font-size: 14.5px; }
+.details-wide { grid-column: 1 / -1; }
+.props-title { font: var(--sc-label); text-transform: uppercase; letter-spacing: .06em; color: var(--sc-muted); margin: 0 0 10px; }
+.props-list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 16px; margin: 0; align-items: center; }
+.props-list dt { color: var(--sc-muted); }
+.props-list dd { margin: 0; min-width: 0; }
+.props-accounts { list-style: none; margin: 0; padding: 0; }
+.props-accounts li { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--sc-hairline); }
+.props-accounts li:first-child { padding-top: 0; }
+.props-followers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.latest { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px 24px; align-items: start; }
+.latest-table caption { text-align: left; font-weight: 700; padding-bottom: 4px; }
+.latest-table caption .muted { font-weight: 400; font-size: 12.5px; }
+.latest-table th, .latest-table td { padding: 6px 4px; }
+.details .list { margin-bottom: 0 !important; }
+.spark { flex: none; color: var(--sc-text); vertical-align: middle; overflow: visible; }
+
+/* Times for what is not out yet (components/launch/Schedule.tsx) */
+.sched { display: grid; gap: 12px; padding: 16px 18px; border: var(--sc-border-card) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); }
+.sched-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.sched-head .ch { font-weight: 700; }
+.sched-when { flex: 1 1 auto; }
+.sched-body { display: grid; gap: 10px; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 40px; padding: 0 14px; border-radius: var(--sc-radius-pill); border: var(--sc-border-control) solid var(--sc-rail); background: transparent; color: var(--sc-text); font: 600 14px/1 var(--sc-font-text); cursor: pointer; }
+.chip:hover { background: var(--sc-ground); }
+.chip[data-best] { border-color: #000; background: var(--sc-yellow); color: var(--sc-on-yellow); }
+.chip[data-best]::after { content: " · best"; font-weight: 500; }
+@media (pointer: coarse) { .chip { min-height: 44px; } }
+.sched-pick { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.sched-pick .input { flex: 1 1 220px; width: auto; min-width: 0; }
+
+/* The edit dialogs: the form and what it does, side by side when there is room */
+.edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
+.edit-form { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.edit-preview { min-width: 0; padding: 14px 16px; border: 1px solid var(--sc-hairline); border-radius: 16px; background: var(--sc-ground); align-self: start; }
+.edit-preview p { margin: 10px 0 0; font-size: 13.5px; }
+.ph-small { font: var(--sc-label); text-transform: uppercase; letter-spacing: .06em; color: var(--sc-muted); margin: 0 0 8px; }
+.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.plan li { display: grid; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--sc-hairline); overflow-wrap: anywhere; }
+.plan li[data-ok="false"] strong { color: var(--sc-muted); }
+.ui-dialog-text p { margin: 0 0 8px; }
 
 /* The sign-in page */
 /* dvh: on a phone 100vh counts the browser's toolbar, which makes a page that should fit scroll */

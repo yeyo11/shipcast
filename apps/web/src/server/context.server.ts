@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { GitHubApp, GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
 import {
+  buildServices,
   createRuntime,
   loadAppConfig,
   startWorking,
@@ -15,6 +16,7 @@ import {
   type WorkDeps,
 } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
+import { fakeNetworks, previewFetch, previewServices } from './preview.server';
 
 /**
  * The repository's root, where `.env`, `data/` and `workspace/` live: the nearest folder up from where
@@ -73,7 +75,20 @@ async function createContext(): Promise<AppContext> {
   const runtime = await createRuntime({ root: ROOT, log: console.log });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app' });
-  const work: WorkDeps = { env: process.env, registry, github, secrets, pipeline: deps, brand, refresh: runtime.refresh };
+  const work: WorkDeps = {
+    env: process.env,
+    registry,
+    github,
+    secrets,
+    pipeline: deps,
+    brand,
+    refresh: runtime.refresh,
+    // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
+    ...(fakeNetworks() && {
+      services: async (b: Brand) => previewServices(await buildServices({ env: process.env, brand: b, registry, github, secrets, fetch: previewFetch })),
+      fetch: previewFetch,
+    }),
+  };
   const ctx: AppContext = {
     config,
     app,

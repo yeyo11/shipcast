@@ -42,6 +42,7 @@ Components use the role names, never raw hex values, so the theme is one attribu
 | `--sc-on-yellow` | `#000000` | `#000000` | Text on yellow |
 | `--sc-cream` | `#FFF8DC` | `#FFF8DC` | Cards sitting on a yellow band |
 | `--sc-failure` | `#FF6B5B` | `#B42318` | Failure only, always with its word |
+| `--sc-success` | `#6FD58E` | `#157A3E` | Published / done, always with a word or a shape (the filled state dot); 10.2:1 and 5.4:1 on the ground |
 
 Run `node design/scripts/contrast.mjs` after any colour change; it prints the full table. Every text
 pair passes AA in both themes, and control borders pass 3:1.
@@ -75,6 +76,11 @@ A state is always a word and a shape; colour repeats what the shape says.
 | Failed | Red outline, diamond marker | Red outline, with what happened and the fix |
 
 Reddit and Hacker News are always Manual.
+
+**State dots** mark a channel where a pill would not fit (a launch card's channel marks, the launch
+page's channel chips): a filled `--sc-success` circle for published, a yellow ring for scheduled, a
+`--sc-failure` diamond for failed, a dotted `--sc-muted` ring for not launched. The dot never stands
+alone: its word is beside it or in the mark's accessible name.
 
 **Toasts** carry an action's outcome in the app: a card with the 2.5 px outline and the small stamp,
 its state pill first (Done, Failed, Waiting for you), a short title, what to do, and any technical

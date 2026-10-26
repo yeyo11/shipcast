@@ -2,6 +2,7 @@ import { approveLaunch, claimArticle, claimManual, preflight, type ArticleInput,
 import type { Channel } from '@shipcast/schema';
 import { armScheduled, startDrafting, startPublishing as queuePublishing } from '@shipcast/runtime';
 import { appContext } from './context.server';
+import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 
 /*
  * What the owner starts from the app becomes a job of the queue: it runs in this process (or in
@@ -22,6 +23,7 @@ export async function startPublishing(launch: Launch, retryChannel?: Channel): P
 
 /** Drafts a repo's launch after its pre-flight passes; publishing directly goes on to publish */
 export async function startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<Started> {
+  if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
   const { queue, deps, github, brand } = await appContext();
   const check = await preflight(repo, ref, { github });
   if (!check.ok) return { ok: false, problem: check.checks.filter((c) => !c.ok && c.required).map((c) => c.detail).join(' ') };
@@ -34,6 +36,7 @@ export async function startLaunch(repo: string, ref: string | undefined, direct:
 
 /** Drafts an article written in the app; publishing directly goes on to publish */
 export async function startArticle(input: ArticleInput, direct: boolean): Promise<Started> {
+  if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
   const { queue, deps, brand } = await appContext();
   const claim = await claimArticle(input, await brand(), deps);
   if (!claim.claimed && claim.launch.status !== 'failed') return { ok: false, problem: `An article titled like this exists already (${claim.launch.status}). Change the title.` };
@@ -43,6 +46,8 @@ export async function startArticle(input: ArticleInput, direct: boolean): Promis
 
 /** Approving merges the pull request; publishing follows as a job */
 export async function approve(launchId: number): Promise<Started> {
+  // Approving merges a real pull request on the launches repo
+  if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
   const { registry, deps, github } = await appContext();
   const launch = await registry.get(launchId);
   if (!launch) return { ok: false, problem: 'no such launch' };

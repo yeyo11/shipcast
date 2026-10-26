@@ -661,6 +661,19 @@ export class Registry {
       .orderBy(asc(metrics.takenAt));
   }
 
+  /**
+   * Every reading of every piece of a launch, oldest first: the curves a launch's page draws beside
+   * each piece. Site-level readings (no piece) are left out; `metricHistory` has those.
+   */
+  async postMetricHistory(launchId: number): Promise<Array<{ postId: number; name: string; value: number; takenAt: string }>> {
+    const rows = await this.#db
+      .select({ postId: metrics.postId, name: metrics.name, value: metrics.value, takenAt: metrics.takenAt })
+      .from(metrics)
+      .where(and(eq(metrics.launchId, launchId), sql`${metrics.postId} IS NOT NULL`))
+      .orderBy(asc(metrics.takenAt));
+    return rows.flatMap((r) => (r.postId === null ? [] : [{ postId: r.postId, name: r.name, value: r.value, takenAt: r.takenAt }]));
+  }
+
   /** The newest reading of every metric of one piece. */
   async postMetrics(postId: number): Promise<MetricReading[]> {
     const last = this.#db
@@ -1106,6 +1119,20 @@ export class Registry {
       .orderBy(desc(comments.createdAt), desc(comments.id))
       .limit(filter.limit ?? 200);
     return rows.map((r) => toComment(r.comment, r.launchId));
+  }
+
+  /**
+   * How many replies Shipcast sent under a launch's posts, per channel: the number a launch's card
+   * shows instead of a row for every comment, since an answered thread can run to dozens.
+   */
+  async sentReplies(launchId: number): Promise<Record<string, number>> {
+    const rows = await this.#db
+      .select({ channel: comments.channel, n: count() })
+      .from(comments)
+      .innerJoin(posts, eq(comments.postId, posts.id))
+      .where(and(eq(posts.launchId, launchId), eq(comments.status, 'sent'), eq(comments.own, false)))
+      .groupBy(comments.channel);
+    return Object.fromEntries(rows.map((r) => [r.channel, Number(r.n)]));
   }
 
   /**

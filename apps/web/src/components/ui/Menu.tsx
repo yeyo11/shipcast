@@ -2,7 +2,8 @@ import { Menu as Base } from '@base-ui/react/menu';
 import type { ReactElement, ReactNode } from 'react';
 
 export type MenuEntry =
-  | { kind?: 'item'; label: ReactNode; onSelect: () => void; disabled?: boolean; tone?: 'danger' }
+  /** `hint`: a second, smaller line; on a disabled item, why it is disabled, so a refusal is read rather than guessed */
+  | { kind?: 'item'; label: ReactNode; onSelect: () => void; disabled?: boolean; tone?: 'danger'; hint?: ReactNode }
   | { kind: 'link'; label: ReactNode; href: string }
   | { kind: 'separator' }
   | { kind: 'note'; label: ReactNode };
@@ -40,8 +41,15 @@ export function Menu({ trigger, entries, align = 'end' }: MenuProps) {
                   </Base.LinkItem>
                 );
               return (
-                <Base.Item key={i} className={`ui-option${entry.tone === 'danger' ? ' ui-option-danger' : ''}`} onClick={entry.onSelect} disabled={entry.disabled}>
-                  {entry.label}
+                <Base.Item key={i} className={`ui-option${entry.tone === 'danger' ? ' ui-option-danger' : ''}${entry.hint ? ' ui-option-with-hint' : ''}`} onClick={entry.onSelect} disabled={entry.disabled}>
+                  {entry.hint ? (
+                    <span className="ui-option-text">
+                      <span>{entry.label}</span>
+                      <span className="ui-option-hint">{entry.hint}</span>
+                    </span>
+                  ) : (
+                    entry.label
+                  )}
                 </Base.Item>
               );
             })}
