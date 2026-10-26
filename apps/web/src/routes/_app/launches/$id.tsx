@@ -6,6 +6,8 @@ import { DailyBars, TotalsRow } from '../../../components/launch/Glance';
 import { AccountNumbers } from '../../../components/launch/Numbers';
 import { EmptyDrafts } from '../../../components/illustrations';
 import { Empty } from '../../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
+import { ChevronIcon, ExternalIcon, SendIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Notice, number, Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
@@ -274,9 +276,6 @@ function LaunchPage() {
     <>
       <header className="lhead">
         <div className="lhead-text">
-          <Link className="lhead-back" to="/">
-            All launches
-          </Link>
           <h1 className="ph">
             {launch.ref.startsWith('article:') ? 'Article' : launch.repo.split('/')[1]}
             {!launch.ref.startsWith('article:') && <span className="lhead-ref"> {launch.ref}</span>}
@@ -285,29 +284,42 @@ function LaunchPage() {
             {launch.repo} · {launch.kind} · launched {launchDateLabel(launch.createdAt, timezone)}
           </p>
         </div>
-        <div className="row lhead-actions">
-          <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
-          {launch.status === 'drafted' && !open && !running && (
-            <button
-              type="button"
-              className="btn btn-small"
-              onClick={async () => {
-                const answer = await publishAgain({ data: { id: launch.id } });
-                if (answer.ok) toast.done('Publishing what is still pending');
-                else toast.fail(answer.problem);
-                await router.invalidate();
-              }}
-            >
-              Publish what is pending
-            </button>
-          )}
-          {article?.url && (
-            <a className="btn btn-small" href={article.url} target="_blank" rel="noreferrer">
-              Open the article<span className="visually-hidden"> (opens in a new tab)</span>
-            </a>
-          )}
-        </div>
       </header>
+      <PageToolbar
+        label="This launch"
+        controls={
+          <>
+            <Link className="tb-back" to="/">
+              <ChevronIcon dir="left" size={16} /> All launches
+            </Link>
+            <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
+          </>
+        }
+        actions={
+          <>
+            {article?.url && (
+              <ToolbarAction
+                label="Open the article"
+                icon={<ExternalIcon />}
+                render={<a href={article.url} target="_blank" rel="noreferrer" aria-label="Open the article (opens in a new tab)" />}
+              />
+            )}
+            {launch.status === 'drafted' && !open && !running && (
+              <ToolbarAction
+                primary
+                label="Publish what is pending"
+                icon={<SendIcon />}
+                onClick={async () => {
+                  const answer = await publishAgain({ data: { id: launch.id } });
+                  if (answer.ok) toast.done('Publishing what is pending');
+                  else toast.fail(answer.problem);
+                  await router.invalidate();
+                }}
+              />
+            )}
+          </>
+        }
+      />
 
       {data.fakeNetworks && (
         <Notice tone="wait">

@@ -2,7 +2,9 @@ import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { JobsPanel } from '../../../components/Jobs';
 import { Automation as SortingMachine } from '../../../components/illustrations';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { SectionHead } from '../../../components/SectionHead';
+import { CheckIcon, RefreshIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
 import { ConfirmButton } from '../../../components/ui/ConfirmButton';
@@ -82,28 +84,31 @@ function Automation() {
 
   return (
     <>
-      <SectionHead
-        title="Automation"
-        art={<SortingMachine width={180} />}
-        action={
-          <button
-            className="btn"
-            disabled={data.running}
-            onClick={async () => {
-              const answer = await runRoundNow();
-              if (answer.started) toast.done('A round has started', 'It checks for releases, publishes what is ready and reads the numbers when due.');
-              else toast.show({ tone: 'wait', title: 'A round is already running' });
-              await router.invalidate();
-            }}
-          >
-            {data.running ? 'A round is running…' : 'Run a round now'}
-          </button>
-        }
-      >
+      <SectionHead title="Automation" art={<SortingMachine width={180} />}>
         How Shipcast hears about your releases and merges without you starting anything.
       </SectionHead>
+      <PageToolbar
+        label="Automation"
+        actions={
+          <>
+            <ToolbarAction
+              label={data.running ? 'A round is running…' : 'Run a round now'}
+              icon={<RefreshIcon />}
+              disabled={data.running}
+              onClick={async () => {
+                const answer = await runRoundNow();
+                if (answer.started) toast.done('A round has started', 'It checks for releases, publishes what is ready and reads the numbers when due.');
+                else toast.show({ tone: 'wait', title: 'A round is already running' });
+                await router.invalidate();
+              }}
+            />
+            <ToolbarAction primary type="submit" form="automation-form" label="Save automation" busyLabel={busy && 'Saving…'} icon={<CheckIcon />} disabled={busy} />
+          </>
+        }
+      />
 
       <form
+        id="automation-form"
         className="form"
         onSubmit={(e) => {
           e.preventDefault();
@@ -133,11 +138,6 @@ function Automation() {
             </small>
           </div>
         )}
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? 'Saving…' : 'Save automation'}
-          </button>
-        </div>
       </form>
 
       {mode === 'webhook' && (

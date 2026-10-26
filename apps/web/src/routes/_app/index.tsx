@@ -3,6 +3,8 @@ import { MotionConfig } from 'motion/react';
 import { useEffect } from 'react';
 import { LaunchCard } from '../../components/LaunchCard';
 import { Empty, PageHead } from '../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
+import { PlusIcon } from '../../components/ui/icons';
 import { EmptyLaunches, Parcels } from '../../components/illustrations';
 import { listLaunches } from '../../server/launches.functions';
 
@@ -25,17 +27,14 @@ function Launches() {
 
   return (
     <>
-      <PageHead
-        title="Launches"
-        art={<Parcels width={200} />}
-        action={
-          <Link className="btn btn-primary" to="/launch">
-            Launch a repo
-          </Link>
-        }
-      >
+      <PageHead title="Launches" art={<Parcels width={200} />}>
         Every launch, where it went and how it did.
       </PageHead>
+      <PageToolbar
+        label="Launches"
+        controls={launches.length > 0 && <p className="tb-note">{launches.length === 1 ? '1 launch' : `${launches.length} launches`}</p>}
+        actions={<ToolbarAction primary label="Launch a repo" icon={<PlusIcon />} render={<Link to="/launch" />} />}
+      />
       {launches.length === 0 ? (
         <Empty
           art={<EmptyLaunches width={280} />}

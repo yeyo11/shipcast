@@ -118,3 +118,23 @@ export const PlusIcon = (p: IconProps) => (
     <path d="M12 5v14M5 12h14" />
   </Glyph>
 );
+export const RefreshIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4" />
+  </Glyph>
+);
+export const ExternalIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M13.5 4.5h6v6M19.5 4.5L11 13M17 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H10" />
+  </Glyph>
+);
+export const SendIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M4.5 12L20 4.5 15.5 20l-3.5-6.5L4.5 12zM12 13.5l8-9" />
+  </Glyph>
+);
+export const ImportIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M12 3.5v10M8 9.5l4 4 4-4M4.5 14v4.5a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V14" />
+  </Glyph>
+);

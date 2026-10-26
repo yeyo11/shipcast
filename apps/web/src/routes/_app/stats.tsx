@@ -5,6 +5,7 @@ import { assignColours } from '../../components/charts/palette';
 import { TimeChart } from '../../components/charts/TimeChart';
 import { OnboardMeasure, Scale } from '../../components/illustrations';
 import { Empty, PageHead } from '../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { Accounts } from '../../components/stats/Accounts';
 import { FilterBar, METRIC_NAMES } from '../../components/stats/FilterBar';
 import { Kpis } from '../../components/stats/Kpis';
@@ -169,24 +170,17 @@ function Stats() {
 
   return (
     <div className="stats-page">
-      <PageHead
-        title="Stats"
-        art={<Scale width={200} />}
-        action={
-          <>
-            {/* One of the two shows (stats.css): the words on a desktop, the glyph beside the title on a phone */}
-            <button type="button" className="btn btn-primary stats-export-text" onClick={exportCsv} disabled={series.length === 0}>
-              Export CSV
-            </button>
-            <button type="button" className="ui-icon-button stats-export-icon" onClick={exportCsv} disabled={series.length === 0} aria-label="Export CSV">
-              <DownloadIcon />
-            </button>
-          </>
-        }
-      >
+      <PageHead title="Stats" art={<Scale width={200} />}>
         How every launch did, channel by channel, over time.
       </PageHead>
-      <FilterBar search={search} period={stats.period} options={stats.options} onChange={change} range={range} />
+      <PageToolbar
+        label="What to show"
+        controls={<FilterBar search={search} period={stats.period} options={stats.options} onChange={change} />}
+        actions={<ToolbarAction primary label="Export CSV" icon={<DownloadIcon />} onClick={exportCsv} disabled={series.length === 0} />}
+      />
+      <p className="stats-range muted" aria-live="polite">
+        {range}
+      </p>
       <Tabs<StatsTab>
         label="Stats sections"
         variant="underline"

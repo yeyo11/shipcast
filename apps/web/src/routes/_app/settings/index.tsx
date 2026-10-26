@@ -30,7 +30,7 @@ function Settings() {
 
       {data.missing.length > 0 && <Notice tone="wait">Still to set: {data.missing.join(', ')}. Launching and drafting wait for them.</Notice>}
 
-      <SettingsForm settings={data.settings.filter((s) => !AI_SETTING_NAMES.has(s.name))} />
+      <SettingsForm toolbar settings={data.settings.filter((s) => !AI_SETTING_NAMES.has(s.name))} />
 
       <h2 className="ph">GitHub</h2>
       <table className="table">

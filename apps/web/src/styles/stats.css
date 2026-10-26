@@ -8,13 +8,13 @@
 
 /* ---------- The filter bar: the period at hand, the rest behind "Filters" ---------- */
 
-.stats-filterbar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; margin-bottom: 8px; }
+.stats-filterbar { display: flex; flex-wrap: nowrap; gap: 10px 12px; align-items: center; min-width: 0; }
 .stats-period { border-width: var(--sc-border-control); border-color: var(--sc-rail); padding: 3px; gap: 2px; border-radius: var(--sc-radius-pill); }
 .stats-period span { min-height: 36px; padding: 0 14px; border-radius: var(--sc-radius-pill); font-size: 13.5px; font-weight: 700; color: var(--sc-muted); }
 .stats-period input:checked + span { color: var(--sc-ground); }
 .stats-filters-button { gap: 8px; }
 .stats-filters-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--sc-radius-pill); background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 12px/1 var(--sc-font-text); }
-.stats-range { margin: 0 0 0 4px; font-size: 14px; }
+.stats-range { margin: -14px 0 12px; font-size: 13.5px; }
 .stats-filters-popup { width: min(640px, calc(100vw - 16px), var(--available-width, 640px)); max-width: none; max-height: min(var(--available-height, 680px), 680px); }
 /* Two columns where there is room (what to count, how to draw it), one on a phone */
 .stats-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 18px 24px; padding-top: 6px; }
@@ -27,7 +27,6 @@
 .stats-filters-range > .label, .stats-filters-range > small { grid-column: 1 / -1; }
 /* The period as a Select is the phone's shape (below); the desktop keeps the segmented control */
 .stats-period-select { display: none; }
-.stats-export-icon { display: none; }
 /* The app's segmented controls stack on a phone; these have a few short words, which fit side by side */
 @media (max-width: 560px) {
   .stats-period, .stats-filters .seg, .section-head .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); justify-self: stretch; border-radius: var(--sc-radius-pill); }
@@ -36,25 +35,19 @@
   .stats-filters .seg label + label span, .section-head .seg label + label span { border-top: 0; border-left: 1px solid var(--sc-rail); }
   .stats-period label + label span { border-top: 0; }
   .section-head .seg { flex: 1 1 100%; }
-  .stats-range { margin: 0; }
 }
 /*
- * A phone: Export CSV is an icon beside the title, the period (a Select) and Filters share one row,
- * and the range is a small caption under them, so the data starts right below
+ * A phone: the toolbar's one row holds the period (a Select) and Filters, Export CSV is the toolbar's
+ * glyph, and the range is the small caption under the bar, so the data starts right below
  */
 @media (max-width: 640px) {
-  /* Only the Export button moves: the icon sits beside the title, the band keeps its look */
-  .stats-page .page-band, .stats-page .page-band.has-art { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
-  .stats-page .page-band-action, .stats-page .page-band.has-art .page-band-action { grid-column: 2; grid-row: 1; }
-  .stats-export-text { display: none; }
-  .stats-export-icon { display: inline-grid; }
-  .stats-filterbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .stats-filterbar { gap: 6px 8px; }
   .stats-filterbar .stats-period { display: none; }
-  .stats-period-select { display: block; min-width: 0; }
+  .stats-period-select { display: block; min-width: 140px; }
   .stats-period-select .field { gap: 0; }
   .stats-period-select .ui-trigger { min-height: 44px; }
   .stats-filterbar .stats-filters-button { min-height: 44px; }
-  .stats-range { grid-column: 1 / -1; margin: 0; font-size: 13px; }
+  .stats-range { margin-top: -18px; font-size: 13px; }
 }
 
 /* ---------- KPIs: one strip that is also the chart's metric switch ---------- */

@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { NoAccounts, Pigeonholes } from '../../../components/illustrations';
 import { ChannelIcon } from '../../../components/launch/Glance';
 import { Empty, PageHead } from '../../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { useToast } from '../../../components/Toasts';
 import { Avatar, number, Pill, Problem, when } from '../../../components/ui';
 import { ConfirmDialog } from '../../../components/ui/ConfirmButton';
-import { DotsIcon } from '../../../components/ui/icons';
+import { DotsIcon, ImportIcon, PlusIcon } from '../../../components/ui/icons';
 import { Menu } from '../../../components/ui/Menu';
 import { Tabs } from '../../../components/ui/Tabs';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount, syncAccountNow } from '../../../server/channels.functions';
@@ -267,40 +268,54 @@ function Channels() {
   }, [search.connected, search.focus, tab, navigate, toast]);
   const connected = data.networks.filter((n) => n.accounts.length > 0);
   const envCount = data.networks.filter((n) => n.usesEnv).length;
+  const importFromEnv = async () => {
+    setBusy(true);
+    const results = await importEnv().catch((error: unknown) => {
+      toast.fail(error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    setBusy(false);
+    if (results) {
+      const imported = results.filter((r) => r.ok).map((r) => r.network);
+      if (imported.length > 0) toast.done(`Imported ${imported.length} from .env`, imported.join(', '));
+      else if (results.length === 0) toast.done('Nothing to import');
+      for (const r of results) if (!r.ok && r.problem) toast.fail(r.problem);
+    }
+    await router.invalidate();
+  };
   return (
     <>
       <PageHead title="Channels" art={<Pigeonholes width={200} />}>
         Every network Shipcast can publish to or read from, the accounts connected to each, and what they may do. Credentials are kept in {data.secretsKind}.
       </PageHead>
+      <PageToolbar
+        label="Channels"
+        actions={
+          <>
+            {envCount > 0 && <ToolbarAction label={busy ? 'Importing…' : `Import ${envCount} from .env`} icon={<ImportIcon />} disabled={busy} onClick={importFromEnv} />}
+            <Menu
+              align="end"
+              entries={data.networks
+                .filter((n) => n.auth !== 'none')
+                .map((n) => ({ kind: 'link' as const, label: n.accounts.length > 0 ? `${n.name} (another account)` : n.name, href: `/channels/${n.id}` }))}
+              trigger={
+                <button type="button" className="btn btn-small btn-primary tb-action">
+                  <PlusIcon />
+                  <span className="tb-label">Connect a network</span>
+                </button>
+              }
+            />
+          </>
+        }
+      />
       {envCount > 0 && (
         <div className="strip strip-yellow">
           <p className="strip-text">
             <strong>
               {envCount} {envCount === 1 ? 'network still works' : 'networks still work'} from .env.
             </strong>{' '}
-            Importing checks each credential and moves it into the keychain; your .env stays as it is.
+            Import in the bar above checks each credential and moves it into the keychain; your .env stays as it is.
           </p>
-          <button
-            className="btn btn-primary btn-small"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              const results = await importEnv().catch((error: unknown) => {
-                toast.fail(error instanceof Error ? error.message : String(error));
-                return null;
-              });
-              setBusy(false);
-              if (results) {
-                const connected = results.filter((r) => r.ok).map((r) => r.network);
-                if (connected.length > 0) toast.done(`Imported ${connected.length} from .env`, connected.join(', '));
-                else if (results.length === 0) toast.done('Nothing to import');
-                for (const r of results) if (!r.ok && r.problem) toast.fail(r.problem);
-              }
-              await router.invalidate();
-            }}
-          >
-            {busy ? 'Importing…' : `Import ${envCount} from .env`}
-          </button>
         </div>
       )}
       {connected.length === 0 && (

@@ -13,7 +13,7 @@ import { DAYS_LIMIT, MAX_DAYS, daysBetween, isDay, type Bucket, type GroupBy, ty
  * filters, the grouping, the chart's kind and interval, the comparison, a custom range) one click
  * away behind "Filters". Every change goes to the address (the page's search params), which is what
  * loads the numbers, so a view is always shareable. On a phone the bar is one row (the period as a
- * Select, Filters as a bottom sheet) with the range as a caption under it.
+ * Select, Filters as a bottom sheet). It sits in the page's toolbar; the range is the caption under it.
  */
 
 export const METRIC_NAMES: Record<Metric, string> = { views: 'Views', reactions: 'Reactions', comments: 'Comments', shares: 'Shares', clicks: 'Clicks', impressions: 'Impressions' };
@@ -36,11 +36,9 @@ export interface FilterBarProps {
   period: { from: string; to: string; days: number };
   options: { channels: Array<Option<string>>; accounts: Array<Option<string>>; launches: Array<Option<string>> };
   onChange: (patch: Partial<StatsSearch>) => void;
-  /** The period in words, with the comparison when there is one */
-  range: string;
 }
 
-export function FilterBar({ search, period, options, onChange, range }: FilterBarProps) {
+export function FilterBar({ search, period, options, onChange }: FilterBarProps) {
   const id = useId();
   // How many choices narrow or reshape the view, so a closed "Filters" still says something is set
   const set =
@@ -91,14 +89,11 @@ export function FilterBar({ search, period, options, onChange, range }: FilterBa
           {filters}
         </Popover>
       )}
-      <p className="stats-range muted" aria-live="polite">
-        {range}
-      </p>
     </section>
   );
 }
 
-function Filters({ search, period, options, onChange }: Omit<FilterBarProps, 'range'>) {
+function Filters({ search, period, options, onChange }: FilterBarProps) {
   const id = useId();
   const [from, setFrom] = useState(period.from);
   const [to, setTo] = useState(period.to);

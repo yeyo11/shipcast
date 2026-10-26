@@ -1,6 +1,8 @@
 import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { PageHead } from '../../../components/PageHead';
+import { PageToolbar } from '../../../components/PageToolbar';
+import { ChevronIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Avatar, Notice, when } from '../../../components/ui';
 import { Select } from '../../../components/ui/Select';
@@ -46,14 +48,17 @@ function Connect() {
             {network.name}
           </span>
         }
-        action={
-          <Link className="btn" to="/channels">
-            Back to channels
-          </Link>
-        }
       >
         {network.howTo}
       </PageHead>
+      <PageToolbar
+        label={network.name}
+        controls={
+          <Link className="tb-back" to="/channels">
+            <ChevronIcon dir="left" size={16} /> Back to channels
+          </Link>
+        }
+      />
       <div className="grid-2">
         <form
           className="form"

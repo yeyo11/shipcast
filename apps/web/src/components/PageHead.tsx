@@ -2,17 +2,17 @@ import type { ReactNode } from 'react';
 
 /**
  * A section's header as a Cartel band (docs/decisions/app-design-direction.md): the huge uppercase
- * title, a line under it, and the section's main action, yellow when there is one. The band is the
- * neutral one, the same on every section; what waits for the owner is in the top bar's bell.
+ * title, a line under it and the section's illustration. Every band has the same height, so moving
+ * between sections never makes the page jump; the page's actions are in the `PageToolbar` under it,
+ * and what waits for the owner is in the top bar's bell.
  */
-export function PageHead({ title, children, action, art }: { title: ReactNode; children?: ReactNode; action?: ReactNode; art?: ReactNode }) {
+export function PageHead({ title, children, art }: { title: ReactNode; children?: ReactNode; art?: ReactNode }) {
   return (
     <header className={`page-band${art ? ' has-art' : ''}`}>
       <div className="page-band-text">
         <h1 className="ph">{title}</h1>
         {children && <div className="page-band-lead">{children}</div>}
       </div>
-      {action && <div className="page-band-action">{action}</div>}
       {art && <div className="page-band-art">{art}</div>}
     </header>
   );

@@ -1,8 +1,10 @@
 import { useRouter } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { saveSettings } from '../server/settings.functions';
 import { useToast } from './Toasts';
+import { PageToolbar, ToolbarAction } from './PageToolbar';
 import { ConfirmButton } from './ui/ConfirmButton';
+import { CheckIcon } from './ui/icons';
 
 export interface SettingView {
   name: string;
@@ -26,9 +28,10 @@ const SOURCE: Record<string, string> = {
 
 /**
  * A group of the runtime settings as one form. General and AI each show their own group, so a
- * setting is configured in exactly one place.
+ * setting is configured in exactly one place. With `toolbar`, its Save is the page toolbar's action.
  */
-export function SettingsForm({ settings, submit = 'Save settings' }: { settings: SettingView[]; submit?: string }) {
+export function SettingsForm({ settings, submit = 'Save settings', toolbar = false }: { settings: SettingView[]; submit?: string; toolbar?: boolean }) {
+  const formId = useId();
   const router = useRouter();
   const toast = useToast();
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -52,6 +55,7 @@ export function SettingsForm({ settings, submit = 'Save settings' }: { settings:
 
   return (
     <form
+      id={formId}
       className="form"
       onSubmit={(e) => {
         e.preventDefault();
@@ -91,11 +95,19 @@ export function SettingsForm({ settings, submit = 'Save settings' }: { settings:
           </small>
         </div>
       ))}
-      <div className="row">
-        <button className="btn btn-primary" type="submit" disabled={busy || Object.keys(changed).length === 0}>
-          {busy ? 'Saving…' : submit}
-        </button>
-      </div>
+      {/* The page's own form saves from its toolbar; a form among others keeps its button under it */}
+      {toolbar ? (
+        <PageToolbar
+          label="Settings"
+          actions={<ToolbarAction primary type="submit" form={formId} label={submit} busyLabel={busy && 'Saving…'} icon={<CheckIcon />} disabled={busy || Object.keys(changed).length === 0} />}
+        />
+      ) : (
+        <div className="row">
+          <button className="btn btn-primary" type="submit" disabled={busy || Object.keys(changed).length === 0}>
+            {busy ? 'Saving…' : submit}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

@@ -528,7 +528,6 @@ html.lenis, html.lenis body { height: auto; }
 .ccard-add { border-style: dashed; border-color: var(--sc-rail); }
 .ui-tab-count { font-variant-numeric: tabular-nums; color: var(--sc-muted); font-weight: 600; }
 
-/* Comments: the filters in a wrapping row (the search takes the first line on a phone), and the pager */
-.comment-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 14px; align-items: end; margin: 8px 0 20px; }
-.comment-filters > .field:first-child { grid-column: 1 / -1; }
+/* Comments: the filters behind the toolbar's Filters (layout.css has the bar's search), and the pager */
+.comment-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 14px; align-items: end; padding-top: 6px; }
 .comment-pager { justify-content: center; gap: 16px; margin: 24px 0; }

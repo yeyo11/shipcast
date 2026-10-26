@@ -5,6 +5,8 @@ import { ChatPanel } from '../../components/assistant/ChatPanel';
 import { useAssistant } from '../../components/assistant/session';
 import { Typewriter } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
+import { SendIcon } from '../../components/ui/icons';
 import { useToast } from '../../components/Toasts';
 import { getChannels } from '../../server/channels.functions';
 import { writeArticle } from '../../server/launches.functions';
@@ -42,8 +44,14 @@ function Write() {
   return (
     <>
       <PageHead title="Write" art={<Typewriter width={200} />}>An article of your own, in your words. Shipcast translates it, writes a piece for each channel you choose and publishes it on the blog.</PageHead>
+      {/* The submit sits in the bar, always in view while the article grows; `form` ties it to the form below */}
+      <PageToolbar
+        label="Write"
+        actions={<ToolbarAction primary type="submit" form="write-form" label={direct ? 'Publish the article' : 'Prepare the pieces'} busyLabel={busy && 'Starting…'} icon={<SendIcon />} disabled={busy} />}
+      />
       <div className={`writer${chatOpen ? ' with-chat' : ''}`}>
       <form
+        id="write-form"
         className="form"
         onSubmit={async (e) => {
           e.preventDefault();
@@ -112,11 +120,6 @@ function Write() {
             </label>
           </div>
         </fieldset>
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? 'Starting…' : direct ? 'Publish the article' : 'Prepare the pieces'}
-          </button>
-        </div>
       </form>
       <ChatPanel assistant={assistant} open={chatOpen} onOpenChange={setChatOpen} />
       </div>

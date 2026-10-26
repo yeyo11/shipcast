@@ -2,9 +2,14 @@ import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useEffect, useState } from 'react';
 import { Mailbox } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
+import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { useToast } from '../../components/Toasts';
 import { ChannelName, Pill, when } from '../../components/ui';
 import { ConfirmButton } from '../../components/ui/ConfirmButton';
+import { Drawer } from '../../components/ui/Drawer';
+import { RefreshIcon } from '../../components/ui/icons';
+import { Popover } from '../../components/ui/Popover';
+import { usePhone } from '../../components/ui/ResponsiveMenu';
 import { Select, type Option } from '../../components/ui/Select';
 import { approveReply, checkCommentsNow, dismissReply, listComments, redraftReply, saveCommentSettings, saveReply } from '../../server/comments.functions';
 import { COMMENT_STATE_NAMES, COMMENT_STATES, readCommentsSearch, type CommentsSearch, type CommentState } from '../../server/comments-search';
@@ -196,6 +201,7 @@ const ALL = 'all';
 /** The filters: each one is a change of the address, which is what loads the page */
 function Filters({ data, search }: { data: Data; search: CommentsSearch }) {
   const navigate = useNavigate();
+  const phone = usePhone();
   const go = (patch: Partial<Record<keyof CommentsSearch, CommentsSearch[keyof CommentsSearch] | undefined>>) => {
     // Any change of filter starts again from the first page; a launch change drops its post
     const next = { ...search, page: undefined, ...(('launch' in patch) && { post: undefined }), ...patch };
@@ -208,9 +214,30 @@ function Filters({ data, search }: { data: Data; search: CommentsSearch }) {
   const channels: Array<Option> = [{ value: ALL, label: 'All channels' }, ...data.facets.channels.map((c) => ({ value: c.channel, label: `${CHANNEL_NAMES[c.channel] ?? c.channel} (${c.count})` }))];
   const launches: Array<Option> = [{ value: ALL, label: 'All launches' }, ...data.facets.launches.map((l) => ({ value: String(l.id), label: `${l.repo.split('/')[1] ?? l.repo} ${l.ref} (${l.count})` }))];
   const posts: Array<Option> = [{ value: ALL, label: 'All posts' }, ...data.facets.posts.map((p) => ({ value: String(p.id), label: `${CHANNEL_NAMES[p.channel] ?? p.channel}${p.kind === 'post' ? '' : ` · ${p.kind}`} (${p.count})` }))];
+  const set = (search.state ? 1 : 0) + (search.channel ? 1 : 0) + (search.launch ? 1 : 0) + (search.post ? 1 : 0);
+  const trigger = (
+    <button type="button" className="btn btn-small stats-filters-button">
+      Filters
+      {set > 0 && (
+        <span className="stats-filters-count">
+          {set}
+          <span className="visually-hidden"> set</span>
+        </span>
+      )}
+    </button>
+  );
+  const fields = (
+    <div className="comment-filters">
+      <Select<CommentState | typeof ALL> label="State" options={states} value={search.state ?? ALL} onValueChange={(v) => go({ state: v === ALL ? undefined : v })} />
+      <Select label="Channel" options={channels} value={search.channel ?? ALL} onValueChange={(v) => go({ channel: v === ALL ? undefined : v })} />
+      <Select label="Launch" options={launches} value={search.launch ? String(search.launch) : ALL} onValueChange={(v) => go({ launch: v === ALL ? undefined : Number(v) })} />
+      {search.launch && <Select label="Post" options={posts} value={search.post ? String(search.post) : ALL} onValueChange={(v) => go({ post: v === ALL ? undefined : Number(v) })} />}
+    </div>
+  );
+  // The words in the bar, the rest one click away: the bar is one row, and a filter set still shows by its count
   return (
     <form
-      className="comment-filters"
+      className="comment-toolbar"
       role="search"
       aria-label="Filter the comments"
       onSubmit={(e) => {
@@ -218,10 +245,15 @@ function Filters({ data, search }: { data: Data; search: CommentsSearch }) {
       }}
     >
       <SearchBox key={search.q ?? ''} value={search.q ?? ''} onSearch={(q) => go({ q: q || undefined })} />
-      <Select<CommentState | typeof ALL> label="State" options={states} value={search.state ?? ALL} onValueChange={(v) => go({ state: v === ALL ? undefined : v })} />
-      <Select label="Channel" options={channels} value={search.channel ?? ALL} onValueChange={(v) => go({ channel: v === ALL ? undefined : v })} />
-      <Select label="Launch" options={launches} value={search.launch ? String(search.launch) : ALL} onValueChange={(v) => go({ launch: v === ALL ? undefined : Number(v) })} />
-      {search.launch && <Select label="Post" options={posts} value={search.post ? String(search.post) : ALL} onValueChange={(v) => go({ post: v === ALL ? undefined : Number(v) })} />}
+      {phone ? (
+        <Drawer title="Filters" trigger={trigger}>
+          {fields}
+        </Drawer>
+      ) : (
+        <Popover title="Filters" className="comment-filters-popup" align="start" trigger={trigger}>
+          {fields}
+        </Popover>
+      )}
     </form>
   );
 }
@@ -235,13 +267,13 @@ function SearchBox({ value, onSearch }: { value: string; onSearch: (q: string) =
     return () => clearTimeout(timer);
   }, [text, value, onSearch]);
   return (
-    <div className="field">
-      <label className="label" htmlFor="comment-search">
+    <div className="comment-search">
+      <label className="visually-hidden" htmlFor="comment-search">
         Search
       </label>
       <input
         id="comment-search"
-        className="input"
+        className="input input-small"
         type="search"
         placeholder="Words in the comment or its author"
         value={text}
@@ -281,28 +313,26 @@ function Comments() {
   const filtered = Object.keys(search).some((k) => k !== 'page');
   return (
     <>
-      <PageHead
-        title="Comments"
-        art={<Mailbox width={200} />}
-        action={
-          <button
-            className="btn"
-            type="button"
+      <PageHead title="Comments" art={<Mailbox width={200} />}>
+        The comments on your posts, read every half hour, each with a reply drafted from the repo and the launch’s analysis. Nothing is sent without your click on a channel in approval mode.
+      </PageHead>
+      <PageToolbar
+        label="Comments"
+        controls={<Filters data={data} search={search} />}
+        actions={
+          <ToolbarAction
+            primary
+            label="Check comments now"
+            icon={<RefreshIcon />}
             onClick={async () => {
               const answer = await checkCommentsNow();
               if (answer.ok) toast.done('Checking the comments', 'The drafts appear here when the job ends.');
               else toast.fail(answer.problem);
               await router.invalidate();
             }}
-          >
-            Check comments now
-          </button>
+          />
         }
-      >
-        The comments on your posts, read every half hour, each with a reply drafted from the repo and the launch’s analysis. Nothing is sent without your click on a channel in approval mode.
-      </PageHead>
-
-      <Filters data={data} search={search} />
+      />
       <h2 className="ph">
         {data.page.total} {data.page.total === 1 ? 'comment' : 'comments'}
       </h2>
