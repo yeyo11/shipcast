@@ -3,12 +3,11 @@ import { useEffect, useId, useState } from 'react';
 import { cancelSchedule, moveSchedule, recommendedTimes, schedulePiece } from '../../server/posts.functions';
 import { countdown, isoToZonedInput, scheduleChips, zonedInputToIso, zonedLabel, type Chip } from '../../server/pieces';
 import type { SchedulingChannel } from '../../server/pieces.server';
-import { ChannelName } from '../ui';
 import { useToast } from '../Toasts';
 import { Tooltip } from '../ui/Tooltip';
 
 /*
- * A time for each channel a drafted launch has not published yet: the recommended times as chips
+ * A time for a channel a drafted launch has not published yet, shown in that channel's panel: the recommended times as chips
  * (their reason on hover and in the accessible name), a picker for any other, and for a scheduled
  * one its countdown and Cancel. Times read and write in the owner's zone (docs/scheduling.md).
  */
@@ -22,7 +21,7 @@ function useNow(): Date {
   return now;
 }
 
-function ChannelSchedule({ launchId, item, timezone }: { launchId: number; item: SchedulingChannel; timezone: string }) {
+export function ChannelSchedule({ launchId, item, timezone }: { launchId: number; item: SchedulingChannel; timezone: string }) {
   const router = useRouter();
   const toast = useToast();
   const now = useNow();
@@ -57,9 +56,9 @@ function ChannelSchedule({ launchId, item, timezone }: { launchId: number; item:
   const picked = zonedInputToIso(value, timezone);
 
   return (
-    <li className="sched">
+    <div className="sched">
       <div className="sched-head">
-        <ChannelName channel={item.channel} />
+        <strong>{scheduled ? 'Goes out' : 'Not out yet'}</strong>
         {scheduled?.scheduledAt && (
           <span className="sched-when">
             <strong>{zonedLabel(scheduled.scheduledAt, timezone)}</strong> <span className="muted">{countdown(scheduled.scheduledAt, now)}</span>
@@ -98,25 +97,8 @@ function ChannelSchedule({ launchId, item, timezone }: { launchId: number; item:
             {scheduled ? 'Move' : 'Schedule'}
           </button>
         </div>
-        <small className="muted">Times in {timezone}</small>
+        <small className="muted">Times in {timezone}. Left without a time, it publishes when the pull request is merged.</small>
       </div>
-    </li>
-  );
-}
-
-export function Schedule({ launchId, scheduling }: { launchId: number; scheduling: { timezone: string; channels: SchedulingChannel[] } }) {
-  if (scheduling.channels.length === 0) return null;
-  return (
-    <section aria-labelledby="sched-title">
-      <h2 className="ph section" id="sched-title">
-        Not out yet
-      </h2>
-      <p className="muted">Give a channel its own time, or leave it: it publishes when the pull request is merged.</p>
-      <ul className="sched-list">
-        {scheduling.channels.map((item) => (
-          <ChannelSchedule key={item.channel} launchId={launchId} item={item} timezone={scheduling.timezone} />
-        ))}
-      </ul>
-    </section>
+    </div>
   );
 }

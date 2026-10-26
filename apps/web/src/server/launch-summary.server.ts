@@ -1,0 +1,74 @@
+import { METRIC_FAMILIES, readTimezone, statsSeries, type Launch, type Registry } from '@shipcast/engine';
+import { dailyViews, postAccountNames, latestByPiece, launchTotals, type Day, type LaunchNumbers, type Totals } from './launch-summary.ts';
+
+/** Sources read for the launch as a whole rather than for one of its pieces (as in the engine's stats) */
+const SITE_SOURCES = ['blog', 'search', 'bing', 'github'];
+
+/**
+ * A launch's totals: each piece's latest number, read per piece so pieces read at different times
+ * all count, plus the latest reading of each launch-wide source.
+ */
+async function totalsOf(registry: Registry, launch: Launch): Promise<Totals> {
+  const [site, history, posts] = await Promise.all([registry.latestMetrics(launch.id), registry.postMetricHistory(launch.id), registry.posts(launch.id)]);
+  const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
+  const pieces = latestByPiece(history).flatMap((r) => {
+    const source = channel.get(r.postId);
+    return source ? [{ source, name: r.name, value: r.value }] : [];
+  });
+  return launchTotals([...site.filter((m) => SITE_SOURCES.includes(m.source)), ...pieces], METRIC_FAMILIES);
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Views per day for several launches in one query: the stats section's daily series grouped by
+ * launch, from the oldest launch's day (at most 399 days back, the series' limit) to today. A
+ * failure to read it leaves the charts empty rather than the page broken.
+ */
+async function dailyOf(registry: Registry, launches: readonly Launch[]): Promise<Map<number, Day[]>> {
+  const out = new Map<number, Day[]>();
+  if (launches.length === 0) return out;
+  const floor = new Date(Date.now() - 399 * 86_400_000).toISOString().slice(0, 10);
+  const oldest = launches.map((l) => l.createdAt.slice(0, 10)).sort()[0] ?? today();
+  try {
+    const series = await statsSeries(registry, {
+      metric: 'views',
+      groupBy: 'launch',
+      bucket: 'day',
+      from: oldest < floor ? floor : oldest,
+      to: today(),
+      launches: launches.map((l) => l.id),
+      limit: launches.length,
+    });
+    const byId = new Map(series.groups.map((g) => [Number(g.key), g.points]));
+    for (const launch of launches) out.set(launch.id, dailyViews(byId.get(launch.id) ?? [], launch.createdAt));
+  } catch {
+    // An empty chart says "no views read yet", which is the truth the page can still tell
+  }
+  return out;
+}
+
+/** The totals and the views per day of each launch, for the list's cards and a launch's page */
+export async function launchNumbers(registry: Registry, launches: readonly Launch[]): Promise<Map<number, LaunchNumbers>> {
+  const [totals, daily] = await Promise.all([Promise.all(launches.map((l) => totalsOf(registry, l))), dailyOf(registry, launches)]);
+  return new Map(launches.map((l, i) => [l.id, { totals: totals[i]!, daily: daily.get(l.id) ?? [] }]));
+}
+
+/**
+ * The account each post of each launch went out with, as the brand's handle: a card marks a channel
+ * published on more than one account and tells its posts apart by it. One read of the accounts for
+ * every launch.
+ */
+export async function postAccounts(registry: Registry, launches: readonly Launch[]): Promise<Map<number, Record<number, string>>> {
+  const accounts = new Map((await registry.accounts()).map((a) => [a.id, a.identity ?? a.label]));
+  const posts = await Promise.all(launches.map((l) => registry.posts(l.id)));
+  return new Map(launches.map((l, i) => [l.id, postAccountNames(posts[i] ?? [], accounts)]));
+}
+
+/** What a launch's page says in its quiet line, besides what is scheduled: the comments still to answer */
+export async function waitingComments(registry: Registry, launchId: number): Promise<number> {
+  const comments = await registry.comments({ launchId, own: false, limit: 200 });
+  return comments.filter((c) => c.status === 'new' || c.status === 'draft-ready' || c.status === 'failed').length;
+}
+
+export { readTimezone };

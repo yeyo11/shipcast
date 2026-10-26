@@ -1,4 +1,5 @@
 import type { Capability, EditField, PostChanges } from '@shipcast/engine';
+import { markOf, type Mark } from './launch-summary.ts';
 
 /*
  * The launch page's published pieces, as plain data the page and the tests share: a row per piece
@@ -255,22 +256,9 @@ export function accountRows(input: {
 /** A signed change for reading: +12, −3, or 0 */
 export const signed = (n: number) => (n > 0 ? `+${n.toLocaleString('en')}` : n < 0 ? `−${Math.abs(n).toLocaleString('en')}` : '0');
 
-/* ---------- One row per channel ---------- */
+/* ---------- A channel's pieces as one state ---------- */
 
 export type GroupTone = 'published' | 'partial' | 'failed' | 'scheduled' | 'deleted';
-
-/** A channel's row: its pieces, folded into a summary when there are several */
-export interface ChannelGroup {
-  channel: string;
-  pieces: PieceRow[];
-  /** `EN · ES`, `Post · Story · Comment`: the pieces at a glance while the row is folded */
-  summary: string;
-  state: { label: string; tone: GroupTone };
-  /** A row with a failed piece opens on its own, so the failure is seen */
-  failed: boolean;
-  /** The comments read under its pieces (the comment assistant's), shown as a count, never as rows */
-  replies: number;
-}
 
 const OUT: readonly PieceStatus[] = ['live', 'edited'];
 
@@ -292,13 +280,49 @@ export function groupState(pieces: readonly Pick<PieceRow, 'status'>[]): { label
   return { label: `${out} of ${total} published`, tone: 'partial' };
 }
 
-/** The rows grouped by channel, in the order each channel first appears */
-export function channelGroups(rows: readonly PieceRow[], replies: Readonly<Record<string, number>> = {}): ChannelGroup[] {
-  const groups = new Map<string, PieceRow[]>();
-  for (const row of rows) groups.set(row.channel, [...(groups.get(row.channel) ?? []), row]);
-  return [...groups].map(([channel, pieces]) => {
-    const state = groupState(pieces);
-    return { channel, pieces, summary: pieces.map(pieceName).join(' · '), state, failed: state.tone === 'failed', replies: replies[channel] ?? 0 };
+/* ---------- The channels of a launch's page ---------- */
+
+/** A channel's chip and panel on the launch page: what went out there, what failed, what still waits for a time */
+export interface ChannelEntry {
+  channel: string;
+  pieces: PieceRow[];
+  /** The publishing failure of this launch on this channel, kept until it is tried again */
+  failure: string | undefined;
+  /** Set while the channel can still be given a time: its scheduled piece, or null for none yet */
+  scheduling: { scheduled: { id: number; scheduledAt: string | null } | null } | undefined;
+  mark: Mark;
+  /** The state in words, beside the dot: `All published`, `Failed`, `Scheduled`, `Not out yet` */
+  label: string;
+  replies: number;
+}
+
+/**
+ * One entry per channel of a launch, in the order its pieces went out, then the channels that failed
+ * before anything went out, then those still waiting for a time. No channel appears twice: a channel's
+ * pieces (a language, a story) are the detail of its one entry.
+ */
+export function channelEntries(input: {
+  rows: readonly PieceRow[];
+  failures: ReadonlyArray<{ channel: string; message: string }>;
+  scheduling: ReadonlyArray<{ channel: string; scheduled: { id: number; scheduledAt: string | null } | null }>;
+  replies?: Readonly<Record<string, number>>;
+}): ChannelEntry[] {
+  const order: string[] = [];
+  const note = (channel: string) => {
+    if (!order.includes(channel)) order.push(channel);
+  };
+  for (const r of input.rows) note(r.channel);
+  for (const f of input.failures) note(f.channel);
+  for (const s of input.scheduling) note(s.channel);
+  return order.map((channel) => {
+    const pieces = input.rows.filter((r) => r.channel === channel);
+    const failure = input.failures.find((f) => f.channel === channel)?.message;
+    const sched = input.scheduling.find((s) => s.channel === channel);
+    const statuses: string[] = [...pieces.map((p) => p.status), ...(sched?.scheduled ? ['scheduled'] : [])];
+    const mark = markOf(statuses, failure !== undefined);
+    const label =
+      failure !== undefined ? 'Failed' : pieces.length > 0 ? groupState(pieces).label : sched?.scheduled ? 'Scheduled' : 'Not out yet';
+    return { channel, pieces, failure, scheduling: sched ? { scheduled: sched.scheduled } : undefined, mark, label, replies: input.replies?.[channel] ?? 0 };
   });
 }
 

@@ -4,7 +4,7 @@ import { CAPABILITIES, METRIC_FAMILIES } from '@shipcast/engine';
 import {
   accountRows,
   allowance,
-  channelGroups,
+  channelEntries,
   composedText,
   countdown,
   draftPrefill,
@@ -102,23 +102,40 @@ test('what a piece can do follows the capability map and its state, with the rea
   assert.equal(withStatus(mastodon!, 'edited', at).edit.allowed, true);
 });
 
-test('pieces group by channel in the order they first appear, with the state of the lot and the replies', () => {
+test('the launch page has one entry per channel: what went out, what failed, what waits for a time', () => {
   const rows = rowsOf([
     post('blog', { kind: 'article:en' }),
     post('mastodon'),
     post('blog', { kind: 'article:es', status: 'deleted' }),
     post('instagram'),
     post('instagram', { kind: 'story' }),
+    post('threads', { status: 'deleted' }),
   ]);
-  const groups = channelGroups(rows, { mastodon: 3 });
+  const entries = channelEntries({
+    rows,
+    failures: [
+      { channel: 'instagram', message: 'story refused' },
+      { channel: 'bluesky', message: 'auth failed' },
+    ],
+    scheduling: [
+      { channel: 'linkedin', scheduled: { id: 90, scheduledAt: '2026-10-28T08:30:00.000Z' } },
+      { channel: 'telegram', scheduled: null },
+    ],
+    replies: { mastodon: 3 },
+  });
   assert.deepEqual(
-    groups.map((g) => [g.channel, g.pieces.length, g.summary, g.state.label, g.replies]),
+    entries.map((e) => [e.channel, e.pieces.length, e.mark, e.label, e.replies, e.failure ?? null, e.scheduling ? 'can schedule' : null]),
     [
-      ['blog', 2, 'EN · ES', '1 of 2 published', 0],
-      ['mastodon', 1, 'Post', 'Published', 3],
-      ['instagram', 2, 'Post · Story', 'All published', 0],
+      ['blog', 2, 'published', '1 of 2 published', 0, null, null],
+      ['mastodon', 1, 'published', 'Published', 3, null, null],
+      ['instagram', 2, 'failed', 'Failed', 0, 'story refused', null],
+      ['threads', 1, 'off', 'Deleted', 0, null, null],
+      ['bluesky', 0, 'failed', 'Failed', 0, 'auth failed', null],
+      ['linkedin', 0, 'scheduled', 'Scheduled', 0, null, 'can schedule'],
+      ['telegram', 0, 'off', 'Not out yet', 0, null, 'can schedule'],
     ],
   );
+  assert.deepEqual(channelEntries({ rows: [], failures: [], scheduling: [] }), []);
   assert.deepEqual(groupState([{ status: 'failed' }, { status: 'live' }]), { label: 'Failed', tone: 'failed' });
   assert.deepEqual(groupState([{ status: 'deleted' }, { status: 'deleted' }]), { label: 'All deleted', tone: 'deleted' });
   assert.deepEqual(groupState([{ status: 'scheduled' }]), { label: 'Scheduled', tone: 'scheduled' });

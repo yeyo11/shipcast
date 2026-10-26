@@ -1,6 +1,5 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect } from 'react';
-import { Jobs } from '../../components/Jobs';
 import { LaunchCard } from '../../components/LaunchCard';
 import { Empty, PageHead } from '../../components/PageHead';
 import { EmptyLaunches } from '../../components/illustrations';
@@ -13,9 +12,9 @@ export const Route = createFileRoute('/_app/')({
 });
 
 function Launches() {
-  const { launches, jobs } = Route.useLoaderData();
+  const { launches, timezone } = Route.useLoaderData();
   const router = useRouter();
-  const busy = jobs.some((j) => j.state === 'running') || launches.some((l) => l.status === 'generating');
+  const busy = launches.some((l) => l.status === 'generating');
   // While something runs, the page follows it without a reload
   useEffect(() => {
     if (!busy) return;
@@ -36,7 +35,6 @@ function Launches() {
       >
         Every launch, where it went and how it did.
       </PageHead>
-      <Jobs jobs={jobs} />
       {waiting.length > 0 && (
         <div className="band band-yellow">
           <h2 className="ph" style={{ margin: 0 }}>
@@ -60,7 +58,11 @@ function Launches() {
           Launch a repo with a release and a .github/launch.yml, or write an article of your own.
         </Empty>
       ) : (
-        launches.map((launch) => <LaunchCard key={launch.id} launch={launch} />)
+        <div className="lcards">
+          {launches.map((launch) => (
+            <LaunchCard key={launch.id} launch={launch} numbers={launch.numbers} postAccounts={launch.postAccounts} timezone={timezone} />
+          ))}
+        </div>
       )}
     </>
   );

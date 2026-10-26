@@ -3,6 +3,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
 import { jobsView } from './jobs.server';
+import { launchNumbers, postAccounts, readTimezone, waitingComments } from './launch-summary.server';
 import { launchPieces } from './pieces.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchDetail, launchView, publishAgain as publishAgainFor } from './launches.server';
@@ -12,7 +13,14 @@ import { approve, startArticle, startLaunch, startPublishing } from './work.serv
 export const listLaunches = createServerFn({ method: 'GET' }).handler(async () => {
   const { registry } = await appContext();
   const launches = await registry.recent(60);
-  return { launches: await Promise.all(launches.map((l) => launchView(registry, l))), jobs: await jobsView(registry) };
+  const [views, numbers, accounts, timezone] = await Promise.all([
+    Promise.all(launches.map((l) => launchView(registry, l))),
+    launchNumbers(registry, launches),
+    postAccounts(registry, launches),
+    readTimezone(registry),
+  ]);
+  // The queue's jobs are Automation's now: the list is launches only
+  return { launches: views.map((v) => ({ ...v, numbers: numbers.get(v.id) ?? null, postAccounts: accounts.get(v.id) ?? {} })), timezone };
 });
 
 export const getLaunch = createServerFn({ method: 'GET' })
@@ -27,6 +35,8 @@ export const getLaunch = createServerFn({ method: 'GET' })
       ...detail,
       pieces: await launchPieces(registry, launch, { github, launchesRepo: deps.launchesRepo, draftPaths }),
       jobs: await jobsView(registry, { launchId: launch.id }),
+      numbers: (await launchNumbers(registry, [launch])).get(launch.id)!,
+      waitingComments: await waitingComments(registry, launch.id),
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
       fakeNetworks: fakeNetworks(),
     };
