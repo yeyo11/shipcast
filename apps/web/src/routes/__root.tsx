@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
+import { SessionExpiry } from '../components/SessionExpiry';
 import appCss from '../styles/app.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
@@ -40,6 +41,7 @@ function Document({ children }: { children: ReactNode }) {
       <body>
         {/* Isolated (components.css), so Base UI's portals at the end of the body (dialogs, menus, toasts) always sit above the app */}
         <div className="app-root">{children}</div>
+        <SessionExpiry />
         <Scripts />
       </body>
     </html>

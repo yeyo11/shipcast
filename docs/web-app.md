@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:33:47.239913855Z
-updated_at: 2026-10-26T09:58:59.66270882Z
+created_at: 2026-10-26T11:02:25.586416449Z
+updated_at: 2026-10-26T11:13:00.348898706Z
 tags:
     - web-app
     - dashboard
@@ -85,7 +85,12 @@ runs on the owner's machine.
   app uses, which then failed to start; that is why. A preview points at a throwaway Postgres restored
   from a copy of the registry, with automation Off.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
-  `/login` and answers everything else with 401; Start's CSRF middleware refuses any change whose
+  `/login?next=<the page>` and answers everything else with 401, marked `x-shipcast-session: required`.
+  When a session ends while a page is open, `components/SessionExpiry.tsx` reads that mark on the next
+  server call and sends the owner to sign in again instead of showing an error; `next` rides through
+  GitHub in a ten-minute `sc_next` cookie (and on a console link) and brings them back to the same
+  page. Only a path of the app is followed (`server/next-path.ts`): never another site, the sign-in
+  itself, the API or MCP. Start's CSRF middleware refuses any change whose
   `Sec-Fetch-Site`, `Origin` or `Referer` is not the app's own. Server functions check the shape of
   their input (`src/server/input.ts`) before using it. Two paths are public on purpose: `/api/health`
   (it answers `ok` and nothing else) and the GitHub webhook, which carries its own proof.

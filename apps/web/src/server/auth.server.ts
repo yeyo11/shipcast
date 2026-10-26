@@ -3,7 +3,11 @@ import { imageUrl } from '@shipcast/connectors';
 import { exchangeCode, GitHubSignInError } from '@shipcast/runtime';
 import { consoleLinks } from './console-links';
 import { appContext } from './context.server';
+import { safeNext } from './next-path';
 import { cookieOf, createSession, SESSION_COOKIE, setCookie, STATE_COOKIE } from './session.server';
+
+/** Where to land after GitHub sends the browser back, kept for as long as the state is */
+const NEXT_COOKIE = 'sc_next';
 
 const redirect = (location: string, cookies: string[] = []) => {
   const headers = new Headers({ location });
@@ -21,12 +25,13 @@ const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.char
 
 const callbackUrl = (app: { publicUrl: string }) => `${app.publicUrl}/auth/github/callback`;
 
-/** Sends the browser to GitHub with a fresh state, remembered in a short-lived cookie */
-export async function startGitHubSignIn(): Promise<Response> {
+/** Sends the browser to GitHub with a fresh state, and the page to come back to, in short-lived cookies */
+export async function startGitHubSignIn(request: Request): Promise<Response> {
   const { app } = await appContext();
   const state = randomBytes(18).toString('base64url');
   const query = new URLSearchParams({ client_id: app.github.clientId, redirect_uri: callbackUrl(app), state, allow_signup: 'false' });
-  return redirect(`https://github.com/login/oauth/authorize?${query}`, [setCookie(STATE_COOKIE, state, 600)]);
+  const next = safeNext(new URL(request.url).searchParams.get('next'));
+  return redirect(`https://github.com/login/oauth/authorize?${query}`, [setCookie(STATE_COOKIE, state, 600), setCookie(NEXT_COOKIE, next ?? '', next ? 600 : 0)]);
 }
 
 /**
@@ -67,7 +72,7 @@ export async function finishGitHubSignIn(request: Request): Promise<Response> {
   const avatarUrl = imageUrl(user.avatar_url);
   const name = user.name?.trim().slice(0, 100);
   const session = await createSession(secrets, login, Date.now(), { ...(name && { name }), ...(avatarUrl && { avatarUrl }) });
-  return redirect('/', [clearState, setCookie(SESSION_COOKIE, session.value, session.maxAge)]);
+  return redirect(safeNext(cookieOf(request, NEXT_COOKIE)) ?? '/', [clearState, setCookie(NEXT_COOKIE, '', 0), setCookie(SESSION_COOKIE, session.value, session.maxAge)]);
 }
 
 /** A console link signs in as the first allowed login: it is the owner at their own terminal */
@@ -76,7 +81,7 @@ export async function redeemConsoleLink(request: Request): Promise<Response> {
   const token = new URL(request.url).searchParams.get('token') ?? '';
   if (!consoleLinks().redeem(token)) return page(403, 'This sign-in link was used already or has expired. The app prints a new one when it starts.');
   const session = await createSession(secrets, app.allowedLogins[0]!);
-  return redirect('/', [setCookie(SESSION_COOKIE, session.value, session.maxAge)]);
+  return redirect(safeNext(new URL(request.url).searchParams.get('next')) ?? '/', [setCookie(SESSION_COOKIE, session.value, session.maxAge)]);
 }
 
 export function signOut(): Response {
