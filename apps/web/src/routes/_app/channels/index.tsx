@@ -273,15 +273,15 @@ function Channels() {
         Every network Shipcast can publish to or read from, the accounts connected to each, and what they may do. Credentials are kept in {data.secretsKind}.
       </PageHead>
       {envCount > 0 && (
-        <div className="band band-yellow">
-          <h2 className="ph" style={{ margin: 0 }}>
-            {envCount} {envCount === 1 ? 'network still works' : 'networks still work'} from .env
-          </h2>
-          <p className="muted" style={{ margin: '10px 0 20px' }}>
-            Importing checks each credential and moves it into the keychain as a connected account. Your .env stays as it is.
+        <div className="strip strip-yellow">
+          <p className="strip-text">
+            <strong>
+              {envCount} {envCount === 1 ? 'network still works' : 'networks still work'} from .env.
+            </strong>{' '}
+            Importing checks each credential and moves it into the keychain; your .env stays as it is.
           </p>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-small"
             disabled={busy}
             onClick={async () => {
               setBusy(true);

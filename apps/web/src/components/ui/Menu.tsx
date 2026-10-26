@@ -6,13 +6,67 @@ export type MenuEntry =
   | { kind?: 'item'; label: ReactNode; onSelect: () => void; disabled?: boolean; tone?: 'danger'; hint?: ReactNode }
   | { kind: 'link'; label: ReactNode; href: string }
   | { kind: 'separator' }
-  | { kind: 'note'; label: ReactNode };
+  | { kind: 'note'; label: ReactNode }
+  /** An item that opens a nested list: Right arrow opens it, Left closes it (Base UI's own keys) */
+  | { kind: 'submenu'; label: ReactNode; entries: ReadonlyArray<MenuEntry> };
 
 export interface MenuProps {
   /** The button that opens it; its accessible name says what the menu is about */
   trigger: ReactElement;
   entries: ReadonlyArray<MenuEntry>;
   align?: 'start' | 'center' | 'end';
+}
+
+function Entries({ entries }: { entries: ReadonlyArray<MenuEntry> }) {
+  return (
+    <>
+      {entries.map((entry, i) => {
+        if (entry.kind === 'separator') return <Base.Separator key={i} className="ui-separator" />;
+        if (entry.kind === 'note')
+          return (
+            <div key={i} className="ui-menu-note">
+              {entry.label}
+            </div>
+          );
+        if (entry.kind === 'link')
+          return (
+            <Base.LinkItem key={i} className="ui-option" href={entry.href}>
+              {entry.label}
+            </Base.LinkItem>
+          );
+        if (entry.kind === 'submenu')
+          return (
+            <Base.SubmenuRoot key={i}>
+              <Base.SubmenuTrigger className="ui-option ui-option-submenu">
+                <span>{entry.label}</span>
+                <span className="ui-option-chevron" aria-hidden="true">
+                  ›
+                </span>
+              </Base.SubmenuTrigger>
+              <Base.Portal>
+                <Base.Positioner className="ui-positioner" sideOffset={4} alignOffset={-8} collisionPadding={8}>
+                  <Base.Popup className="ui-popup ui-menu">
+                    <Entries entries={entry.entries} />
+                  </Base.Popup>
+                </Base.Positioner>
+              </Base.Portal>
+            </Base.SubmenuRoot>
+          );
+        return (
+          <Base.Item key={i} className={`ui-option${entry.tone === 'danger' ? ' ui-option-danger' : ''}${entry.hint ? ' ui-option-with-hint' : ''}`} onClick={entry.onSelect} disabled={entry.disabled}>
+            {entry.hint ? (
+              <span className="ui-option-text">
+                <span>{entry.label}</span>
+                <span className="ui-option-hint">{entry.hint}</span>
+              </span>
+            ) : (
+              entry.label
+            )}
+          </Base.Item>
+        );
+      })}
+    </>
+  );
 }
 
 /**
@@ -26,33 +80,7 @@ export function Menu({ trigger, entries, align = 'end' }: MenuProps) {
       <Base.Portal>
         <Base.Positioner className="ui-positioner" sideOffset={6} align={align}>
           <Base.Popup className="ui-popup ui-menu">
-            {entries.map((entry, i) => {
-              if (entry.kind === 'separator') return <Base.Separator key={i} className="ui-separator" />;
-              if (entry.kind === 'note')
-                return (
-                  <div key={i} className="ui-menu-note">
-                    {entry.label}
-                  </div>
-                );
-              if (entry.kind === 'link')
-                return (
-                  <Base.LinkItem key={i} className="ui-option" href={entry.href}>
-                    {entry.label}
-                  </Base.LinkItem>
-                );
-              return (
-                <Base.Item key={i} className={`ui-option${entry.tone === 'danger' ? ' ui-option-danger' : ''}${entry.hint ? ' ui-option-with-hint' : ''}`} onClick={entry.onSelect} disabled={entry.disabled}>
-                  {entry.hint ? (
-                    <span className="ui-option-text">
-                      <span>{entry.label}</span>
-                      <span className="ui-option-hint">{entry.hint}</span>
-                    </span>
-                  ) : (
-                    entry.label
-                  )}
-                </Base.Item>
-              );
-            })}
+            <Entries entries={entries} />
           </Base.Popup>
         </Base.Positioner>
       </Base.Portal>

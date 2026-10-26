@@ -51,6 +51,11 @@ export const SearchIcon = (p: IconProps) => (
     <path d="M15.5 15.5L20 20" />
   </Glyph>
 );
+export const BellIcon = (p: IconProps) => (
+  <Glyph {...p}>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15L6 16.5zM10 21h4" />
+  </Glyph>
+);
 export const DotsIcon = (p: IconProps) => (
   <Glyph {...p} strokeWidth={3}>
     <path d="M5 12h.01M12 12h.01M19 12h.01" />

@@ -23,7 +23,6 @@ function Launches() {
     return () => clearInterval(timer);
   }, [busy, router]);
 
-  const waiting = launches.filter((l) => l.state.tone === 'waiting');
   return (
     <>
       <PageHead
@@ -37,16 +36,6 @@ function Launches() {
       >
         Every launch, where it went and how it did.
       </PageHead>
-      {waiting.length > 0 && (
-        <div className="band band-yellow">
-          <h2 className="ph" style={{ margin: 0 }}>
-            {waiting.length === 1 ? '1 launch waits for you' : `${waiting.length} launches wait for you`}
-          </h2>
-          <p className="muted" style={{ margin: '10px 0 0' }}>
-            Review the drafts and approve them: approving publishes on every channel.
-          </p>
-        </div>
-      )}
       {launches.length === 0 ? (
         <Empty
           art={<EmptyLaunches width={280} />}

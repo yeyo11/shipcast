@@ -4,11 +4,7 @@
  * night on the root and day under [data-theme="day"].
  */
 
-/* ---------- The page: a compact header, so the data starts above the fold ---------- */
-
-.stats-page .page-band { background: none; padding: 0; margin-bottom: 20px; border-radius: 0; gap: 16px 24px; }
-.stats-page .page-band h1 { font-size: clamp(40px, 6vw, 72px); }
-.stats-page .page-band-lead { margin-top: 8px; }
+/* The page's banner is the app's own .page-band (app.css), the same as every section's: no override here */
 
 /* ---------- The filter bar: the period at hand, the rest behind "Filters" ---------- */
 
@@ -47,8 +43,9 @@
  * and the range is a small caption under them, so the data starts right below
  */
 @media (max-width: 640px) {
-  .stats-page .page-band { grid-template-columns: minmax(0, 1fr) auto; align-items: start; margin-bottom: 14px; }
-  .stats-page .page-band-action { grid-column: 2; }
+  /* Only the Export button moves: the icon sits beside the title, the band keeps its look */
+  .stats-page .page-band, .stats-page .page-band.has-art { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .stats-page .page-band-action, .stats-page .page-band.has-art .page-band-action { grid-column: 2; grid-row: 1; }
   .stats-export-text { display: none; }
   .stats-export-icon { display: inline-grid; }
   .stats-filterbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }

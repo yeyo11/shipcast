@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 /**
  * A section's header as a Cartel band (docs/decisions/app-design-direction.md): the huge uppercase
  * title, a line under it, and the section's main action, yellow when there is one. The band is the
- * neutral one: yellow bands stay for what waits for the owner, black for a page's close.
+ * neutral one, the same on every section; what waits for the owner is in the top bar's bell.
  */
 export function PageHead({ title, children, action, art }: { title: ReactNode; children?: ReactNode; action?: ReactNode; art?: ReactNode }) {
   return (
