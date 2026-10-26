@@ -43,7 +43,6 @@ function Write() {
       <div className={`writer${chatOpen ? ' with-chat' : ''}`}>
       <form
         className="form"
-        data-tour="write"
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);

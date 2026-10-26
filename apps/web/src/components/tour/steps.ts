@@ -47,8 +47,9 @@ export function tourSteps({ launchId }: { launchId: number | null }): TourStep[]
       : []),
     {
       route: '/write',
-      selector: on('/write', '[data-tour="write"]'),
-      side: 'top',
+      // The page's title, not the form: the form is taller than a screen, and a card above it lands off-screen
+      selector: on('/write'),
+      side: 'bottom-left',
       title: 'Write',
       content: 'An article of your own, in your words. Shipcast translates it and writes a piece for each channel you tick.',
     },
@@ -91,4 +92,28 @@ export function tourSteps({ launchId }: { launchId: number | null }): TourStep[]
       ...(prev && prev.route !== step.route && { prevRoute: prev.route }),
     };
   });
+}
+
+export interface Notch {
+  /** The card's edge that faces the target */
+  edge: 'top' | 'bottom' | 'left' | 'right';
+  /** Where along that edge: over the target's start, its middle or its end, as the card is aligned to it */
+  align: 'start' | 'center' | 'end';
+}
+
+/**
+ * The card's notch for a NextStep side (where the card sits relative to the target, after NextStep
+ * moves it away from a cut-off edge): "bottom-left" puts the card under the target, left edges
+ * aligned, so the notch is on the card's top edge near its left end, over the target's start.
+ * Nothing for an unknown side: no notch beats one pointing the wrong way.
+ */
+export function notchFor(side: string): Notch | null {
+  const [main, along] = side.split('-');
+  const edge = ({ bottom: 'top', top: 'bottom', left: 'right', right: 'left' } as const)[main as 'bottom' | 'top' | 'left' | 'right'];
+  if (!edge) return null;
+  if (along === undefined) return { edge, align: 'center' };
+  const start = along === 'left' || along === 'top';
+  const end = along === 'right' || along === 'bottom';
+  if (!start && !end) return null;
+  return { edge, align: start ? 'start' : 'end' };
 }

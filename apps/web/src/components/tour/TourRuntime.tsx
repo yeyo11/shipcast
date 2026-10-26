@@ -1,9 +1,9 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router';
-import { NextStepProvider, NextStepReact, useNextStep, type CardComponentProps, type NavigationAdapter } from 'nextstepjs';
+import { NextStepProvider, NextStepReact, useNextStep, type ArrowComponentProps, type CardComponentProps, type NavigationAdapter } from 'nextstepjs';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { listLaunches } from '../../server/launches.functions';
 import { CloseIcon } from '../ui/icons';
-import { tourSteps, TOUR_NAME, type TourStep } from './steps';
+import { notchFor, tourSteps, TOUR_NAME, type TourStep } from './steps';
 
 /*
  * The tour, on NextStep: a spotlight per step and a Cartel card. Loaded lazily by TourHost, so its
@@ -23,6 +23,34 @@ function useTanStackAdapter(): NavigationAdapter {
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * NextStep only scrolls to a target outside the window, and a target under the phone's fixed bottom
+ * bar counts as inside it: such a target is brought to the middle, and the spotlight and card, laid
+ * out in page coordinates, follow it.
+ */
+function revealAboveBottomBar(selector: string | undefined, reduced: boolean) {
+  if (!selector) return;
+  window.setTimeout(() => {
+    const target = document.querySelector(selector);
+    const bar = document.querySelector('.bottom-bar');
+    // No boxes: the bar is hidden (wide screens), nothing covers the page
+    if (!target || !bar || bar.getClientRects().length === 0) return;
+    const barTop = bar.getBoundingClientRect().top;
+    if (target.getBoundingClientRect().bottom > barTop) target.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+  }, 400);
+}
+
+/**
+ * The pointer is part of the card: a notch on the edge facing the target, in the card's own fill and
+ * outline (features.css). NextStep's positioning style is left out on purpose: it centres its caret
+ * on the target, which for a full-width heading lands at the card's far corner, over the text.
+ */
+function TourNotch({ side }: ArrowComponentProps) {
+  const notch = notchFor(side);
+  if (!notch) return null;
+  return <span className="tour-notch" data-edge={notch.edge} data-align={notch.align} aria-hidden="true" />;
 }
 
 /**
@@ -115,12 +143,14 @@ export default function TourRuntime({ onEnd }: { onEnd: () => void }) {
       <NextStepReact
         steps={[{ tour: TOUR_NAME, steps }]}
         cardComponent={TourCard}
+        arrowComponent={TourNotch}
         navigationAdapter={useTanStackAdapter}
         cardTransition={reduced ? { duration: 0 } : { ease: 'easeOut', duration: 0.25 }}
         shadowRgb="10, 10, 10"
         shadowOpacity="0.6"
         disableConsoleLogs
         scrollToTop={false}
+        onStepChange={(index) => revealAboveBottomBar(steps[index]?.selector, reduced)}
         onComplete={onEnd}
         onSkip={onEnd}
       >

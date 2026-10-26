@@ -93,8 +93,9 @@ export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assist
   };
 
   return (
-    <aside className="chat-panel" aria-label="The assistant’s chat" data-tour="assistant">
-      <header className="chat-head">
+    <aside className="chat-panel" aria-label="The assistant’s chat">
+      {/* The tour points at the header, not the panel: on a phone the panel is taller than the room left for the card */}
+      <header className="chat-head" data-tour="assistant">
         <strong>Assistant</strong>
         <div className="row">
           {assistant.chat.length > 0 && (
