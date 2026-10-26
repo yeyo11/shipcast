@@ -128,7 +128,13 @@
 .chat-head .ui-icon-button { border: 0; }
 .chat-list { overflow-y: auto; overscroll-behavior: contain; padding: 16px; display: grid; align-content: start; gap: 14px; }
 .chat-empty { margin: 0; font-size: 14.5px; line-height: 1.5; }
-.chat-mine { justify-self: end; max-width: 88%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--sc-text); color: var(--sc-ground); white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+.chat-row-mine { grid-template-columns: minmax(0, 1fr) 28px; justify-items: end; }
+.chat-avatar { display: grid; place-items: center; width: 28px; height: 28px; overflow: hidden; border-radius: var(--sc-radius-pill); }
+.chat-avatar .avatar { width: 28px; height: 28px; border-radius: var(--sc-radius-pill); object-fit: cover; }
+.chat-avatar-mark { border-radius: 0; overflow: visible; }
+.chat-initial { display: grid; place-items: center; width: 28px; height: 28px; background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 13px/1 var(--sc-font-text); }
+.chat-mine { justify-self: end; max-width: 100%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--sc-text); color: var(--sc-ground); white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-answer { display: grid; gap: 10px; min-width: 0; }
 .chat-prose { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .chat-proposal { display: grid; gap: 8px; }
@@ -144,7 +150,14 @@
 .chat-session-title { overflow-wrap: anywhere; }
 .chat-fab { position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 20; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--sc-radius-pill); border: 2px solid #000; background: var(--sc-yellow); color: var(--sc-on-yellow); box-shadow: var(--sc-stamp-sm) var(--sc-stamp); cursor: pointer; }
 @media (max-width: 1099px) { .chat-panel { position: static; height: 560px; } }
-@media (max-width: 860px) { .chat-fab { bottom: calc(92px + env(safe-area-inset-bottom)); } }
+/* The bottom bar is about 70px tall plus the safe area: the bubble floats above it */
+@media (max-width: 860px) { .chat-fab { bottom: calc(86px + env(safe-area-inset-bottom)); right: max(16px, env(safe-area-inset-right)); } }
+/* On a phone the chat is a sheet over the whole screen, closed back to the bubble */
+.chat-sheet { position: fixed; inset: 0; z-index: 61; display: grid; background: var(--sc-ground); color: var(--sc-text); outline: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); transition: transform var(--ui-move) var(--ui-ease), opacity var(--ui-move) var(--ui-ease); }
+.chat-sheet[data-starting-style], .chat-sheet[data-ending-style] { opacity: 0; transform: translateY(24px); }
+.chat-panel-sheet { position: static; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+.chat-panel-sheet .chat-form { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) { .chat-sheet { transition: none; } }
 
 /* ---------- The drafts editor: the drafts on the left, the text and its chat beside ---------- */
 .drafts-editor { display: grid; grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 28px; align-items: start; }

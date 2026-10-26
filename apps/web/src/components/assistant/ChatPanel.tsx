@@ -1,10 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dialog } from '@base-ui/react/dialog';
+import { getRouteApi } from '@tanstack/react-router';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useToast } from '../Toasts';
+import { Avatar } from '../ui';
 import { ChatIcon, CloseIcon, HistoryIcon, PlusIcon } from '../ui/icons';
 import { listAssistantSessions, type SessionSummary } from '../../server/assistant.functions';
 import { splitProposals } from './diff';
 import { DiffView } from './DiffView';
 import type { Assistant, ChatMessage } from './session';
+
+/** The Shipcast mark (design/logo/mark.svg), inline so it needs no request and takes no theme */
+function ShipcastMark({ size }: { size: number }) {
+  return (
+    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false">
+      <rect x="10" y="10" width="50" height="50" rx="14" fill="#F4F2EC" />
+      <rect x="4" y="4" width="50" height="50" rx="14" fill="#FFD43B" stroke="#000" strokeWidth="4" />
+      <circle cx="29" cy="29" r="9" fill="#000" />
+    </svg>
+  );
+}
+
+const SHELL = getRouteApi('/_app');
+
+/** The signed-in owner's GitHub picture, from the shell's loader; their initial while there is none */
+function Mine({ children }: { children: string }) {
+  const { login, avatarUrl } = SHELL.useLoaderData();
+  return (
+    <div className="chat-row chat-row-mine">
+      <p className="chat-mine">{children}</p>
+      <span className="chat-avatar">{avatarUrl ? <Avatar src={avatarUrl} alt="" size={28} /> : <span className="chat-initial" aria-hidden="true">{login.slice(0, 1).toUpperCase()}</span>}</span>
+    </div>
+  );
+}
 
 function Answer({ message, assistant }: { message: ChatMessage; assistant: Assistant }) {
   const toast = useToast();
@@ -14,53 +41,58 @@ function Answer({ message, assistant }: { message: ChatMessage; assistant: Assis
   let ordinal = -1;
   const before = message.range ? (message.original ?? '') : assistant.target.value;
   return (
-    <div className="chat-answer">
-      {pieces.map((piece, i) => {
-        if (piece.type === 'prose')
+    <div className="chat-row">
+      <span className="chat-avatar chat-avatar-mark">
+        <ShipcastMark size={28} />
+      </span>
+      <div className="chat-answer">
+        {pieces.map((piece, i) => {
+          if (piece.type === 'prose')
+            return (
+              <p key={i} className="chat-prose">
+                {piece.text}
+              </p>
+            );
+          const n = ++ordinal;
           return (
-            <p key={i} className="chat-prose">
-              {piece.text}
-            </p>
+            <div key={i} className="chat-proposal">
+              <DiffView before={before} after={piece.text} label={`Proposal ${n + 1} from the chat`} />
+              {!piece.complete ? (
+                <p className="muted">Still writing this proposal…</p>
+              ) : settled[n] ? (
+                <p className="muted">{settled[n] === 'accepted' ? 'Accepted' : 'Rejected'}</p>
+              ) : (
+                <div className="row">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-small"
+                    onClick={() => {
+                      const ok = assistant.accept({ range: message.range, original: before, text: piece.text });
+                      if (ok) assistant.settle(message, n, 'accepted');
+                      else toast.fail('The text changed under this proposal: ask again on the text as it is now.');
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button type="button" className="btn btn-small" onClick={() => assistant.settle(message, n, 'rejected')}>
+                    Reject
+                  </button>
+                </div>
+              )}
+            </div>
           );
-        const n = ++ordinal;
-        return (
-          <div key={i} className="chat-proposal">
-            <DiffView before={before} after={piece.text} label={`Proposal ${n + 1} from the chat`} />
-            {!piece.complete ? (
-              <p className="muted">Still writing this proposal…</p>
-            ) : settled[n] ? (
-              <p className="muted">{settled[n] === 'accepted' ? 'Accepted' : 'Rejected'}</p>
-            ) : (
-              <div className="row">
-                <button
-                  type="button"
-                  className="btn btn-primary btn-small"
-                  onClick={() => {
-                    const ok = assistant.accept({ range: message.range, original: before, text: piece.text });
-                    if (ok) assistant.settle(message, n, 'accepted');
-                    else toast.fail('The text changed under this proposal: ask again on the text as it is now.');
-                  }}
-                >
-                  Accept
-                </button>
-                <button type="button" className="btn btn-small" onClick={() => assistant.settle(message, n, 'rejected')}>
-                  Reject
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {message.streaming && (
-        <p className="muted chat-wait" role="status">
-          {message.whole ? 'Writing… with this provider the answer arrives all at once' : message.content ? '' : 'Writing…'}
-        </p>
-      )}
-      {message.problem && (
-        <p className="problem" role="alert">
-          {message.problem}
-        </p>
-      )}
+        })}
+        {message.streaming && (
+          <p className="muted chat-wait" role="status">
+            {message.whole ? 'Writing… with this provider the answer arrives all at once' : message.content ? '' : 'Writing…'}
+          </p>
+        )}
+        {message.problem && (
+          <p className="problem" role="alert">
+            {message.problem}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -157,34 +189,60 @@ function History({ assistant, onChosen }: { assistant: Assistant; onChosen: () =
   );
 }
 
-/**
- * The side chat: open requests about the text ("make the opening punchier", "is this too long for
- * Bluesky?"). A proposed rewrite comes as a diff to accept or reject; it replaces what was selected
- * when the question was sent, or the whole text. The header's history button lists the past sessions
- * to take one up again. Closes to an icon.
- */
-export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assistant; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [draft, setDraft] = useState('');
-  const [view, setView] = useState<'chat' | 'history'>('chat');
+const PHONE = '(max-width: 760px)';
+
+/** Whether the screen is a phone's: the chat becomes a bubble and a full-screen sheet there */
+function usePhone(): boolean {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = window.matchMedia(PHONE);
+      query.addEventListener('change', notify);
+      return () => query.removeEventListener('change', notify);
+    },
+    () => window.matchMedia(PHONE).matches,
+    () => false,
+  );
+}
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+interface SurfaceProps {
+  assistant: Assistant;
+  draft: string;
+  setDraft: (draft: string) => void;
+  view: 'chat' | 'history';
+  setView: (view: 'chat' | 'history') => void;
+  onClose: () => void;
+  /** In the sheet the panel is the whole screen, not a card beside the text */
+  sheet?: boolean;
+}
+
+/** The chat itself: header with the history and the new session, the conversation, the form */
+function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: SurfaceProps) {
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  // Whether the reader is at the bottom: only then does a new message pull the view down with it
+  const following = useRef(true);
+  const seen = useRef(0);
   const busy = assistant.chat.some((m) => m.streaming);
   const last = assistant.chat.at(-1);
 
   useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [assistant.chat.length, last?.content, view]);
+    const el = list.current;
+    if (!el) return;
+    const grew = assistant.chat.length !== seen.current;
+    seen.current = assistant.chat.length;
+    // The owner's own question always scrolls into view, even from further up
+    if (last?.role === 'user' && grew) following.current = true;
+    if (!following.current) return;
+    // Lenis only drives the page's root scroller, so this nested one scrolls natively; a new message
+    // glides, the text growing token by token just stays pinned, and reduced motion never animates
+    el.scrollTo({ top: el.scrollHeight, behavior: grew && !reducedMotion() ? 'smooth' : 'auto' });
+  }, [assistant.chat.length, last?.content, view, last?.role]);
 
   useEffect(() => {
-    if (open && view === 'chat') input.current?.focus();
-  }, [open, view]);
-
-  if (!open)
-    return (
-      <button type="button" className="chat-fab" onClick={() => onOpenChange(true)} aria-label="Open the assistant’s chat" aria-expanded="false" data-tour="assistant">
-        <ChatIcon size={22} />
-      </button>
-    );
+    if (view === 'chat') input.current?.focus();
+  }, [view]);
 
   const submit = () => {
     if (!draft.trim() || busy) return;
@@ -193,7 +251,7 @@ export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assist
   };
 
   return (
-    <aside className="chat-panel" aria-label="The assistant’s chat">
+    <aside className={`chat-panel${sheet ? ' chat-panel-sheet' : ''}`} aria-label="The assistant’s chat">
       {/* The tour points at the header, not the panel: on a phone the panel is taller than the room left for the card */}
       <header className="chat-head" data-tour="assistant">
         <strong>{view === 'history' ? 'Past sessions' : 'Assistant'}</strong>
@@ -219,12 +277,20 @@ export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assist
           >
             <PlusIcon />
           </button>
-          <button type="button" className="ui-icon-button" onClick={() => onOpenChange(false)} aria-label="Close the chat" aria-expanded="true">
+          <button type="button" className="ui-icon-button" onClick={onClose} aria-label="Close the chat" aria-expanded="true">
             <CloseIcon />
           </button>
         </div>
       </header>
-      <div className="chat-list" ref={list}>
+      <div
+        className="chat-list"
+        ref={list}
+        data-lenis-prevent
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
+        }}
+      >
         {view === 'history' ? (
           <History assistant={assistant} onChosen={() => setView('chat')} />
         ) : assistant.chat.length === 0 ? (
@@ -232,15 +298,7 @@ export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assist
             Ask for anything about the text. Select a passage first to work on it alone; otherwise the assistant answers about the whole text. Every change it proposes is a diff you accept or reject.
           </p>
         ) : (
-          assistant.chat.map((m) =>
-            m.role === 'user' ? (
-              <p key={m.id} className="chat-mine">
-                {m.content}
-              </p>
-            ) : (
-              <Answer key={m.id} message={m} assistant={assistant} />
-            ),
-          )
+          assistant.chat.map((m) => (m.role === 'user' ? <Mine key={m.id}>{m.content}</Mine> : <Answer key={m.id} message={m} assistant={assistant} />))
         )}
       </div>
       {view === 'chat' && (
@@ -283,4 +341,40 @@ export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assist
       )}
     </aside>
   );
+}
+
+/**
+ * The side chat: open requests about the text ("make the opening punchier", "is this too long for
+ * Bluesky?"). A proposed rewrite comes as a diff to accept or reject; it replaces what was selected
+ * when the question was sent, or the whole text. The header's history button lists the past sessions
+ * to take one up again. Closes to an icon. On a phone it is a floating bubble that opens the chat as
+ * a full-screen sheet; the selection made in the text stays, so the chat still works on it.
+ */
+export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assistant; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const phone = usePhone();
+  const [sheet, setSheet] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [view, setView] = useState<'chat' | 'history'>('chat');
+
+  const bubble = (props: { onClick?: () => void }) => (
+    <button type="button" className="chat-fab" aria-label="Open the assistant’s chat" aria-expanded={false} data-tour="assistant" {...props}>
+      <ChatIcon size={22} />
+    </button>
+  );
+
+  if (phone)
+    return (
+      <Dialog.Root open={sheet} onOpenChange={setSheet}>
+        {/* The bubble is the dialog's trigger, so closing the sheet gives the focus back to it */}
+        <Dialog.Trigger render={bubble({})} />
+        <Dialog.Portal>
+          <Dialog.Popup className="chat-sheet" aria-label="The assistant’s chat">
+            <Surface assistant={assistant} draft={draft} setDraft={setDraft} view={view} setView={setView} onClose={() => setSheet(false)} sheet />
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+
+  if (!open) return bubble({ onClick: () => onOpenChange(true) });
+  return <Surface assistant={assistant} draft={draft} setDraft={setDraft} view={view} setView={setView} onClose={() => onOpenChange(false)} />;
 }
