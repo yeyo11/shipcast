@@ -251,7 +251,7 @@ test('LinkedIn: an article post with its uploaded thumbnail, through the Posts A
   });
   assert.deepEqual(published, { externalId: 'urn:li:share:777', url: 'https://www.linkedin.com/feed/update/urn:li:share:777/' });
   const post = calls.find((c) => c.url === 'https://api.linkedin.com/rest/posts')!;
-  assert.equal(post.headers['linkedin-version'], '202609');
+  assert.equal(post.headers['linkedin-version'], '202610');
   assert.equal(post.headers['x-restli-protocol-version'], '2.0.0');
   const body = JSON.parse(String(post.body)) as Record<string, unknown>;
   assert.equal(body.author, 'urn:li:person:abc123');

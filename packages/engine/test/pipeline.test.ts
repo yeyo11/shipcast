@@ -54,6 +54,7 @@ const pack = {
   devto: { tags: ['ai'] },
   bluesky: { lang: 'en', text: 'b' },
   mastodon: { lang: 'en', text: 'm' },
+  githubDiscussions: { title: 'claudio 0.9', body: 'What shipped. https://josegarrido.dev/en/claudio/?ref=github' },
 };
 
 class FakeAi implements AiProvider {

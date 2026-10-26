@@ -39,7 +39,7 @@ test('the public parts of each account come from the brand profiles', () => {
 test('only the networks with credentials are configured', async () => {
   const services = await buildServices(await deps({ DEVTO_API_KEY: 'd', BLUESKY_APP_PASSWORD: 'b', INSTAGRAM_USER_ID: '1' }));
   assert.deepEqual(services.configured, ['devto', 'bluesky', 'github discussions', 'github']);
-  assert.deepEqual(Object.keys(services.publishers), ['devto', 'bluesky']);
+  assert.deepEqual(Object.keys(services.publishers), ['devto', 'bluesky', 'githubDiscussions'], 'GitHub Discussions needs no account: the App posts it');
   assert.equal(services.sources.blog, undefined);
   assert.equal(services.instagram, undefined, 'no token, no Instagram');
   assert.deepEqual(services.origins.devto, { kind: 'env' });

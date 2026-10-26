@@ -19,8 +19,8 @@ export interface LinkedInOptions {
   now?: () => number;
 }
 
-/** A version LinkedIn ships monthly and supports for a year; the newest documented on 2026-10-25 is 202610 */
-export const LINKEDIN_VERSION = '202609';
+/** A version LinkedIn ships monthly and supports for about a year; 202610 is the newest documented on 2026-10-26 */
+export const LINKEDIN_VERSION = '202610';
 
 /**
  * LinkedIn on the owner's personal profile, with `w_member_social` ("Share on LinkedIn"): an article
