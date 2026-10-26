@@ -30,11 +30,43 @@ type Data = Awaited<ReturnType<typeof getChannels>>;
 type NetworkView = Data['networks'][number];
 type AccountView = NetworkView['accounts'][number];
 
-/** The key number of an account: what its network counts most, with the other counts as a line under it */
-function keyNumber(snapshot: AccountView['snapshot']): { value: number | null; label: string; others: string | null } {
-  if (!snapshot) return { value: null, label: 'Followers', others: null };
-  const others = [snapshot.following !== null ? `${number(snapshot.following)} following` : null, snapshot.posts !== null ? `${number(snapshot.posts)} posts` : null].filter(Boolean).join(' · ');
-  return { value: snapshot.followers, label: 'Followers', others: others || null };
+/**
+ * The number an account's card leads with: what its network counts that matters (followers on a
+ * social network, a channel's members, Reddit's karma, the newsletter's subscribers, the blog's
+ * visits, search clicks), under its own name, with the network's other counts on a line below.
+ * Null where the network gives nothing to read (Discord, LinkedIn): the card shows its activity only.
+ */
+export function keyMetric(network: string, snapshot: AccountView['snapshot']): { value: number | null; label: string; others: string | null; followers: boolean } | null {
+  const extra = (snapshot?.extra ?? {}) as Record<string, number | undefined>;
+  const n = (v: number | null | undefined, word: string) => (v === null || v === undefined ? null : `${number(v)} ${word}`);
+  const line = (...parts: Array<string | null>) => parts.filter(Boolean).join(' · ') || null;
+  switch (network) {
+    case 'discord':
+    case 'linkedin':
+      return null;
+    case 'telegram':
+      return { value: snapshot?.followers ?? null, label: 'Members', others: null, followers: true };
+    case 'reddit':
+      return { value: extra.karma ?? null, label: 'Karma', others: line(n(snapshot?.followers, 'followers')), followers: false };
+    case 'brevo':
+      return { value: snapshot?.followers ?? null, label: 'Subscribers', others: null, followers: true };
+    case 'cloudflare':
+      return { value: extra.visits7d ?? null, label: 'Visits, last 7 days', others: null, followers: false };
+    case 'searchConsole':
+    case 'bingWebmaster':
+      return { value: extra.clicks28d ?? null, label: 'Clicks, last 28 days', others: line(n(extra.impressions28d, 'impressions')), followers: false };
+    case 'devto':
+    case 'hashnode':
+      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.posts, 'articles')), followers: true };
+    default:
+      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(snapshot?.posts, 'posts')), followers: true };
+  }
+}
+
+/** What Shipcast published with an account, for a network it publishes on */
+function activityLine(activity: AccountView['activity']): string {
+  if (activity.count === 0) return 'Nothing published with it yet';
+  return `${number(activity.count)} ${activity.count === 1 ? 'piece' : 'pieces'} published by Shipcast, the last on ${(activity.last ?? '').slice(0, 10)}`;
 }
 
 /** The card's dot: green when its check passed, red when it failed, the dotted ring while it is unchecked */
@@ -87,7 +119,7 @@ function AccountCard({ network, account, brands }: { network: NetworkView; accou
       else toast.done(`Syncing ${account.label}`, 'It is still running: reload the page in a minute to see it.');
     });
   const brand = brands.find((b) => b.id === account.brand)?.name ?? account.brand;
-  const key = keyNumber(account.snapshot);
+  const key = keyMetric(network.id, account.snapshot);
   const status = account.status === 'ok' ? 'Connected' : account.status === 'failed' ? 'Not working' : 'Not checked';
   return (
     <li id={`account-${account.id}`} tabIndex={-1} className={`lcard ccard${account.status === 'failed' ? ' is-failed' : ''}`}>
@@ -131,14 +163,25 @@ function AccountCard({ network, account, brands }: { network: NetworkView; accou
           </p>
         </div>
       </div>
-      <dl className="lcard-stats ccard-stats">
-        <div className="is-lead">
-          <dt>{key.label}</dt>
-          <dd title={key.value === null ? 'This network does not count it' : undefined}>{key.value === null ? '—' : number(key.value)}</dd>
-        </div>
-      </dl>
+      {key && (
+        <dl className="lcard-stats ccard-stats">
+          <div className="is-lead">
+            <dt>{key.label}</dt>
+            <dd title={key.value === null ? 'Not read yet: Sync now reads it' : undefined}>
+              {key.value === null ? '—' : number(key.value)}
+              {key.followers && account.weekChange !== null && account.weekChange !== 0 && (
+                <span className={`ccard-delta${account.weekChange > 0 ? ' is-up' : ''}`}>
+                  {account.weekChange > 0 ? '+' : ''}
+                  {number(account.weekChange)} this week
+                </span>
+              )}
+            </dd>
+          </div>
+        </dl>
+      )}
+      {key?.others && <p className="lcard-meta">{key.others}</p>}
+      {network.channel && <p className="ccard-activity">{activityLine(account.activity)}</p>}
       <p className="lcard-meta">
-        {key.others ? `${key.others} · ` : ''}
         {account.syncedAt ? `synced ${when(account.syncedAt)}` : 'never synced'}
         {account.stale && <span className="stale"> · not synced for over 36 hours</span>}
       </p>

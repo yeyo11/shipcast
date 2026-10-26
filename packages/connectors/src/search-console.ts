@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto';
-import { checkProblem, json, type Check, type Metrics } from './http.ts';
+import { checkProblem, json, statsOf, type Check, type Metrics, type ProfileStats } from './http.ts';
 
 /** The fields of a Google service account key file that signing needs. */
 export interface ServiceAccount {
@@ -70,6 +70,21 @@ export class SearchConsole {
     } catch (error) {
       return checkProblem(error);
     }
+  }
+
+  /**
+   * The property's clicks and impressions over the last 28 days, every page, ending two days back
+   * since Google reports late: the numbers its card shows
+   */
+  async profileStats(): Promise<ProfileStats> {
+    const day = (back: number) => new Date(Date.now() - back * 86_400_000).toISOString().slice(0, 10);
+    const response = await this.#fetch(`https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(this.#property)}/searchAnalytics/query`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${await this.#accessToken()}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ startDate: day(29), endDate: day(2) }),
+    });
+    const { rows } = await json<{ rows?: Array<{ clicks: number; impressions: number }> }>('Search Console', response, 'site metrics');
+    return statsOf({}, { clicks28d: rows?.[0]?.clicks ?? 0, impressions28d: rows?.[0]?.impressions ?? 0 });
   }
 
   /** Search numbers of one page URL between two dates (YYYY-MM-DD); Google reports with ~2 days of delay. */

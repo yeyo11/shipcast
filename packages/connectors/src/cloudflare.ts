@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, type Check, type Metrics } from './http.ts';
+import { checkProblem, ConnectorError, json, statsOf, type Check, type Metrics, type ProfileStats } from './http.ts';
 
 export interface PageVisits {
   /** Page views of the path in the period */
@@ -54,8 +54,16 @@ export class CloudflareAnalytics {
     }
   }
 
-  /** Views of `path` (e.g. `/en/claudio/`) between two dates (YYYY-MM-DD, inclusive). */
-  async pageVisits(path: string, since: string, until: string): Promise<PageVisits> {
+  /** The blog's visits over the last seven days, every page: the number its card shows */
+  async profileStats(): Promise<ProfileStats> {
+    const until = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+    const visits = await this.pageVisits(undefined, since, until);
+    return statsOf({}, { visits7d: visits.views });
+  }
+
+  /** Views of `path` (e.g. `/en/claudio/`), or of the whole site without one, between two dates (YYYY-MM-DD, inclusive). */
+  async pageVisits(path: string | undefined, since: string, until: string): Promise<PageVisits> {
     const query = `query($account: String!, $filter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject!) {
       viewer { accounts(filter: { accountTag: $account }) {
         rumPageloadEventsAdaptiveGroups(limit: 1000, filter: $filter) {
@@ -71,7 +79,7 @@ export class CloudflareAnalytics {
         query,
         variables: {
           account: this.#account,
-          filter: { siteTag: this.#siteTag, requestPath: path, date_geq: since, date_leq: until },
+          filter: { siteTag: this.#siteTag, ...(path !== undefined && { requestPath: path }), date_geq: since, date_leq: until },
         },
       }),
     });

@@ -14,6 +14,7 @@ import {
   threadsAuthorizeUrl,
 } from '@shipcast/connectors';
 import { connectAccount, credentialsFor, getJson, isStale, lastSynced, NETWORKS, type AccountDeps } from '@shipcast/runtime';
+import { accountGrowth } from '@shipcast/engine';
 import { appContext, type AppContext } from './context.server';
 
 export async function accountDeps(): Promise<AccountDeps> {
@@ -27,13 +28,18 @@ export async function channelsView() {
   const { registry, secrets, brand } = ctx;
   const current = await brand();
   const snapshots = await registry.lastSnapshots();
+  const activity = await registry.postActivity();
   const now = new Date();
-  // Each account with its latest numbers and how fresh they are: the page warns about a stale one
-  const accounts = (await registry.accounts()).map((account) => {
-    const snapshot = snapshots.get(account.id) ?? null;
-    const syncedAt = lastSynced(account, snapshot?.takenAt);
-    return { ...account, snapshot, syncedAt, stale: isStale(syncedAt, now) };
-  });
+  const week = { from: new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) };
+  // Each account with its latest numbers, its week's change, what Shipcast published with it and how fresh it is
+  const accounts = await Promise.all(
+    (await registry.accounts()).map(async (account) => {
+      const snapshot = snapshots.get(account.id) ?? null;
+      const syncedAt = lastSynced(account, snapshot?.takenAt);
+      const weekChange = snapshot?.followers != null ? (await accountGrowth(registry, account.id, week)).change.followers : null;
+      return { ...account, snapshot, weekChange, activity: activity.get(account.id) ?? { count: 0, last: null }, syncedAt, stale: isStale(syncedAt, now) };
+    }),
+  );
   const fromEnv: string[] = [];
   for (const network of NETWORKS) {
     if (accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;

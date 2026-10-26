@@ -1059,6 +1059,19 @@ export class Registry {
     return new Map(rows.map((row) => [row.accountId, toSnapshot(row)]));
   }
 
+  /**
+   * What Shipcast has published with each account: how many pieces went out (not the scheduled ones)
+   * and when the last did, for the account's card
+   */
+  async postActivity(): Promise<Map<number, { count: number; last: string | null }>> {
+    const rows = await this.#db
+      .select({ accountId: posts.accountId, count: count(), last: max(posts.publishedAt) })
+      .from(posts)
+      .where(and(sql`${posts.accountId} is not null`, notInArray(posts.status, ['scheduled'])))
+      .groupBy(posts.accountId);
+    return new Map(rows.map((r) => [r.accountId!, { count: Number(r.count), last: r.last ?? null }]));
+  }
+
   /** A token for the REST API, by its hash; the token itself is shown once and never stored */
   async addApiToken(token: { name: string; hash: string; scopes: ApiScope[] }): Promise<ApiToken> {
     const [row] = await this.#db.insert(apiTokens).values(token).returning();

@@ -29,11 +29,11 @@ const networks = (async (input: string | URL | Request) => {
   if (url === 'https://mastodon.social/api/v1/accounts/verify_credentials') {
     return Response.json({ acct: 'me', avatar: 'https://files.mastodon.social/me.png', followers_count: 30, following_count: 12, statuses_count: 200 });
   }
-  if (url === 'https://api.brevo.com/v3/account') return Response.json({ email: 'me@x.dev' });
+  if (url.startsWith('https://discord.com/api/webhooks/1/t')) return Response.json({ id: '1', name: 'Launches' });
   return new Response('unexpected', { status: 500 });
 }) as typeof fetch;
 
-/** Three connected accounts, each with its secrets in the keychain; Brevo counts nothing */
+/** Three connected accounts, each with its secrets in the keychain; a Discord webhook counts nothing */
 async function connected(registry: Registry, secrets: MemoryStore): Promise<Record<string, number>> {
   const ids: Record<string, number> = {};
   const add = async (network: string, label: string, settings: Record<string, string>, secret: Record<string, string>) => {
@@ -43,7 +43,7 @@ async function connected(registry: Registry, secrets: MemoryStore): Promise<Reco
   };
   await add('devto', '@me', {}, { apiKey: 'k' });
   await add('mastodon', '@me@mastodon.social', { instance: 'https://mastodon.social' }, { accessToken: 't' });
-  await add('brevo', 'me@x.dev', {}, { apiKey: 'b' });
+  await add('discord', 'Launches', {}, { webhookUrl: 'https://discord.com/api/webhooks/1/t' });
   return ids;
 }
 
@@ -72,13 +72,13 @@ test('the daily job checks every account, records a snapshot where the network c
   const last = await registry.lastSnapshots();
   assert.deepEqual([last.get(ids.devto!)?.followers, last.get(ids.devto!)?.posts, last.get(ids.devto!)?.following], [2, 1, null]);
   assert.deepEqual([last.get(ids.mastodon!)?.followers, last.get(ids.mastodon!)?.following, last.get(ids.mastodon!)?.posts], [30, 12, 200]);
-  assert.equal(last.has(ids.brevo!), false, 'Brevo gives no counts');
+  assert.equal(last.has(ids.discord!), false, 'a webhook gives no counts');
 
   // Every account was checked again, and the picture the check found is kept
   assert.equal((await registry.account(ids.mastodon!))?.avatarUrl, 'https://files.mastodon.social/me.png');
   assert.equal((await registry.account(ids.devto!))?.avatarUrl, 'https://media.dev.to/me.png');
-  assert.equal((await registry.account(ids.brevo!))?.status, 'ok');
-  assert.ok(lines.some((l) => /Newsletter \(Brevo\) me@x\.dev: checked; its network gives no follower counts/.test(l)), lines.join('\n'));
+  assert.equal((await registry.account(ids.discord!))?.status, 'ok');
+  assert.ok(lines.some((l) => /Discord Launches: checked; its network gives no follower counts/.test(l)), lines.join('\n'));
   assert.ok(lines.some((l) => /Mastodon @me@mastodon\.social: 30 followers, 12 following, 200 posts/.test(l)), lines.join('\n'));
 });
 

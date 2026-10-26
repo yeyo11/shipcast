@@ -366,7 +366,7 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     }
     case 'brevo': {
       const brevo = new Brevo({ apiKey: v('apiKey'), fetch: http });
-      return { brevo, check: () => brevo.check() };
+      return { brevo, check: () => brevo.check(), profileStats: () => brevo.profileStats() };
     }
     case 'hashnode': {
       const hashnode = new Hashnode({ token: v('token'), publicationHost: all.publicationHost || undefined, fetch: http });
@@ -382,7 +382,7 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     }
     case 'cloudflare': {
       const cloudflare = new CloudflareAnalytics({ apiToken: v('apiToken'), accountId: v('accountId'), siteTag: v('siteTag'), fetch: http });
-      return { cloudflare, check: () => cloudflare.check() };
+      return { cloudflare, check: () => cloudflare.check(), profileStats: () => cloudflare.profileStats() };
     }
     case 'searchConsole': {
       let account: ServiceAccount;
@@ -393,11 +393,11 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
       }
       if (!account.client_email || !account.private_key) throw new MissingField('the JSON key has no client_email or private_key');
       const searchConsole = new SearchConsole({ serviceAccount: account, property: `sc-domain:${new URL(brand.site).host}`, fetch: http });
-      return { searchConsole, check: () => searchConsole.check() };
+      return { searchConsole, check: () => searchConsole.check(), profileStats: () => searchConsole.profileStats() };
     }
     case 'bingWebmaster': {
       const bing = new BingWebmaster({ apiKey: v('apiKey'), site: `${new URL(brand.site).origin}/`, fetch: http });
-      return { bing, check: () => bing.check() };
+      return { bing, check: () => bing.check(), profileStats: () => bing.profileStats() };
     }
     // The AI providers are built by the AI settings (ai.ts); here they are only checked
     case 'anthropic': {

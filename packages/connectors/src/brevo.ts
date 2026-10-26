@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, type Check, type Metrics, type Published } from './http.ts';
+import { checkProblem, ConnectorError, json, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface BrevoCampaign {
   /** The campaign's name in Brevo's dashboard, also its UTM campaign */
@@ -63,6 +63,13 @@ export class Brevo {
   async subscribers(listId: number): Promise<number> {
     const list = await json<{ uniqueSubscribers: number; totalBlacklisted: number }>('Brevo', await this.#request('GET', `/contacts/lists/${listId}`), 'read the list');
     return Math.max(0, list.uniqueSubscribers - list.totalBlacklisted);
+  }
+
+  /** The newsletter's readers: every list's contacts who can still receive it, added up */
+  async profileStats(): Promise<ProfileStats> {
+    const { lists } = await json<{ lists?: Array<{ uniqueSubscribers?: number; totalBlacklisted?: number }> }>('Brevo', await this.#request('GET', '/contacts/lists?limit=50'), 'read the lists');
+    const subscribers = (lists ?? []).reduce((sum, l) => sum + Math.max(0, (l.uniqueSubscribers ?? 0) - (l.totalBlacklisted ?? 0)), 0);
+    return statsOf({ followers: subscribers });
   }
 
   /** Creates the campaign and sends it now. Its id is what the metrics are read with. */

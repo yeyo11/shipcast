@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, type Check, type Metrics } from './http.ts';
+import { checkProblem, ConnectorError, json, statsOf, type Check, type Metrics, type ProfileStats } from './http.ts';
 import type { IndexStatus } from './search-console.ts';
 
 const API = 'https://ssl.bing.com/webmaster/api.svc/json';
@@ -48,6 +48,14 @@ export class BingWebmaster {
     } catch (error) {
       return checkProblem(error);
     }
+  }
+
+  /** The site's clicks and impressions on Bing over the last 28 days, from its daily traffic: the numbers its card shows */
+  async profileStats(): Promise<ProfileStats> {
+    const days = await this.#get<Array<{ Date?: string; Clicks?: number; Impressions?: number }>>('GetRankAndTrafficStats', { siteUrl: this.#site }, 'site traffic');
+    const since = Date.now() - 28 * 86_400_000;
+    const recent = days.filter((d) => (wcfDate(d.Date)?.getTime() ?? 0) >= since);
+    return statsOf({}, { clicks28d: recent.reduce((s, d) => s + (d.Clicks ?? 0), 0), impressions28d: recent.reduce((s, d) => s + (d.Impressions ?? 0), 0) });
   }
 
   /** Bing's clicks and impressions of one page, over the period Bing keeps (about six months) */

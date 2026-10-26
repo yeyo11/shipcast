@@ -530,6 +530,12 @@ html.lenis, html.lenis body { height: auto; }
 .ccard-who .avatar { border-color: var(--sc-rail); }
 .ccard-name { min-width: 0; flex: 1; display: grid; gap: 2px; }
 .ccard-stats { grid-template-columns: auto; margin: 0; }
+/* The week's change beside the lead number: small, in words; green only when it grew */
+.ccard-stats dd { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.ccard-delta { font: 700 13px/1.2 var(--sc-font-text); color: var(--sc-muted); }
+.ccard-delta.is-up { color: var(--sc-success); }
+/* What Shipcast did with the account: the line every publishing card has, whatever its network counts */
+.ccard-activity { margin: 0; padding-top: 10px; border-top: 1px solid var(--sc-hairline); font-size: 13.5px; }
 .ccard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 4px; }
 .ccard .btn { color: inherit; border-color: var(--sc-rail); }
 .ccard .btn:hover:not(:disabled), .ccard .btn:focus-visible { border-color: currentColor; }
