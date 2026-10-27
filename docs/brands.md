@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-24T19:13:43.624502722Z
-updated_at: 2026-10-24T23:07:14.929629447Z
+created_at: 2026-10-27T23:21:05.33725432Z
+updated_at: 2026-10-27T23:21:28.958675931Z
 tags:
     - brands
     - config
     - decision
     - tone
+    - linkedin
 ---
 # Brands
 
@@ -35,7 +36,8 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `handles.reddit` | <https://www.reddit.com/user/josegarridodev/> |
 | `handles.instagram` | <https://www.instagram.com/josegarridodev> |
 | `languages.blog` | `[en, es]` |
-| `handles.x`, `handles.linkedin`, `languages.x`, `languages.linkedin` | not set: the owner does not publish on X or LinkedIn and does not link those profiles from the site (removed on 2026-10-24); the schema keeps them optional for brands that do |
+| `languages.linkedin` | `es` (set by the owner on 2026-10-28): the LinkedIn post is written in Spanish and its card shares the Spanish article. Unset, or a language the blog does not have, it is English and the card shares the lead (English) article |
+| `handles.x`, `handles.linkedin`, `languages.x` | not set: the owner does not publish on X and links neither profile from the site (removed on 2026-10-24); the schema keeps them optional for brands that do |
 | `tone` | First person, didactic and direct; problem first, then evidence (command, config, output); talks about what works today, with no section or line on what does not work yet (changed by the owner on 2026-10-25; the analysis still lists limitations for them, and nothing that does not work is presented as working); no hype. Calm articles without emojis; short social posts with a hook and a few emojis as markers. Spanish from Spain. Set by the owner on 2026-10-24, to refine with real launches (phase 5) |
 | `support` | <https://buymeacoffee.com/yeyo11>, linked from the blog's footer |
 | `newsletter` | Sender `José Garrido <me@josegarrido.dev>`, Brevo lists 4 (en) and 5 (es), and each language's subscription form ([publishing.md](publishing.md#the-newsletter)) |
@@ -50,14 +52,23 @@ this file as a test fixture (`test/fixtures/brand.yml`), refreshed when the bran
 `brand.yml` and these documents are public. What a tone was drawn from, or any other internal
 reference behind a brand decision, is not written in either.
 
+## LinkedIn's language
+
+Every other social post is written in English and links the English article. LinkedIn follows
+`languages.linkedin` instead, because the owner's LinkedIn network reads Spanish (decided on
+2026-10-28). One setting drives both ends: the drafting prompt asks for the post in that language
+(`{{linkedinLanguage}}`), and publishing shares that language's article as the card, its URL, title
+and description read from the article as merged. LinkedIn takes one post per launch, so there is no
+"both languages".
+
 ## What the schema has to enforce
 
 The brand schema in `packages/schema` validates this file: `id` and `displayName` required, handles
 and `support` optional (a channel without a handle cannot publish), languages from `en` and `es`, the
-blog in at least one, X and LinkedIn optional. A launch's `launch.yml` names its brand by `id`, and
-the engine refuses a launch whose brand does not match the launches repo it would write to — the
-mechanical form of "brands never mix".
+blog in at least one, X and LinkedIn optional; `languages.linkedin` is a single language. A launch's
+`launch.yml` names its brand by `id`, and the engine refuses a launch whose brand does not match the
+launches repo it would write to — the mechanical form of "brands never mix".
 
 ## Related
 
-[[decisions/mvp-scope.md]] · [[launches-repo.md]] · [[plans/shipcast.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[publishing.md]]
+[[decisions/mvp-scope.md]] · [[launches-repo.md]] · [[plans/shipcast.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[publishing.md]] · [[decisions/new-networks.md]]
