@@ -35,12 +35,15 @@ test('each task has its own provider and model; until set, claudio does everythi
   });
   assert.deepEqual(saved, {
     // A client that does not know the replies task yet leaves it as it was
-    tasks: { pack: { provider: 'claudio' }, article: { provider: 'anthropic', model: 'claude-opus-5-5' }, assistant: { provider: 'openaiCompatible' }, replies: { provider: 'claudio' } },
+    tasks: { pack: { provider: 'claudio' }, article: { provider: 'anthropic', model: 'claude-opus-5-5' }, assistant: { provider: 'openaiCompatible' }, replies: { provider: 'claudio' }, profile: { provider: 'claudio' } },
     tone: 'Short sentences.',
   });
   assert.deepEqual(await readAiSettings(registry), saved);
   const replies = await writeAiSettings(registry, { tasks: { ...saved.tasks, replies: { provider: 'anthropic', model: 'claude-opus-5-5' } } });
   assert.deepEqual(replies.tasks.replies, { provider: 'anthropic', model: 'claude-opus-5-5' });
+  const profile = await writeAiSettings(registry, { tasks: { pack: saved.tasks.pack, article: saved.tasks.article, assistant: saved.tasks.assistant, profile: { provider: 'anthropic' } } });
+  assert.deepEqual(profile.tasks.profile, { provider: 'anthropic' });
+  assert.deepEqual(profile.tasks.replies, { provider: 'anthropic', model: 'claude-opus-5-5' }, 'a task left out keeps what it had');
   await assert.rejects(writeAiSettings(registry, { tasks: { ...saved.tasks, pack: { provider: 'gpt' } } }), InvalidAiSettings);
   await assert.rejects(writeAiSettings(registry, { tasks: saved.tasks, maxBudgetUsd: 3 }), InvalidAiSettings, 'nothing but tasks and tone');
 });

@@ -25,3 +25,4 @@ export * from './comments.ts';
 export * from './db/snapshot.ts';
 export * from './assistant.ts';
 export * from './fake-ai.ts';
+export * from './profile.ts';

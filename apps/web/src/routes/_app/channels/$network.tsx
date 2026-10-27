@@ -2,27 +2,35 @@ import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-ro
 import { useEffect, useState } from 'react';
 import { PageHead } from '../../../components/PageHead';
 import { PageToolbar } from '../../../components/PageToolbar';
+import { ProfileReview } from '../../../components/ProfileReview';
 import { ChevronIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Avatar, Notice, when } from '../../../components/ui';
 import { Select } from '../../../components/ui/Select';
 import { connectWithForm, getChannels } from '../../../server/channels.functions';
+import { getProfileReview } from '../../../server/profiles.functions';
 import { channelIcon } from '../../../server/view';
 
 export const Route = createFileRoute('/_app/channels/$network')({
-  validateSearch: (search: Record<string, unknown>): { problem?: string } => (typeof search.problem === 'string' ? { problem: search.problem } : {}),
+  validateSearch: (search: Record<string, unknown>): { problem?: string; review?: number } => ({
+    ...(typeof search.problem === 'string' && { problem: search.problem }),
+    // A review's job links back here, to its account's panel
+    ...(typeof search.review === 'number' && Number.isInteger(search.review) && { review: search.review }),
+  }),
   loader: async ({ params }) => {
     const data = await getChannels();
     const network = data.networks.find((n) => n.id === params.network);
     if (!network) throw notFound();
-    return { network, brands: data.brands, oauthReady: data.oauthReady, secretsKind: data.secretsKind };
+    // Each account's profile capability and latest review; null for a network with no profile
+    const reviews = await Promise.all(network.accounts.map((a) => getProfileReview({ data: a.id })));
+    return { network, brands: data.brands, oauthReady: data.oauthReady, secretsKind: data.secretsKind, reviews };
   },
   head: ({ loaderData }) => ({ meta: [{ title: `Connect ${loaderData?.network.name ?? ''} · Shipcast` }] }),
   component: Connect,
 });
 
 function Connect() {
-  const { network, brands, oauthReady, secretsKind } = Route.useLoaderData();
+  const { network, brands, oauthReady, secretsKind, reviews } = Route.useLoaderData();
   const search = Route.useSearch();
   const [brand, setBrand] = useState(brands[0]?.id ?? 'personal');
   const [label, setLabel] = useState('');
@@ -34,7 +42,7 @@ function Connect() {
   useEffect(() => {
     if (!search.problem) return;
     toast.fail(search.problem);
-    void navigate({ to: '/channels/$network', params: { network: network.id }, search: {}, replace: true });
+    void navigate({ to: '/channels/$network', params: { network: network.id }, search: (prev) => ({ ...prev, problem: undefined }), replace: true });
   }, [search.problem, network.id, navigate, toast]);
   const icon = channelIcon(network.channel ?? network.id);
   const oauthUrl = `/auth/${network.id}?${new URLSearchParams({ brand, label, ...(network.id === 'mastodon' ? { instance: values.instance ?? '' } : {}) })}`;
@@ -168,6 +176,17 @@ function Connect() {
           )}
         </aside>
       </div>
+      {network.accounts.some((_, i) => reviews[i]?.capability) && (
+        <>
+          <h2 className="ph">Profile review</h2>
+          <p className="muted">The AI reads the profile, how the account grew and your brand, and proposes each field’s new text. Nothing changes until you apply a proposal.</p>
+          <div className="profile-reviews">
+            {network.accounts.map((a, i) => (
+              <ProfileReview key={a.id} account={{ id: a.id, label: a.label }} network={network.id} initial={reviews[i] ?? null} focused={search.review === a.id} />
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

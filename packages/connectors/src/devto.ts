@@ -1,4 +1,4 @@
-import { checkProblem, expectOk, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, expectOk, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 /** What an edit may change; whatever is left out stays as it is */
 export type DevtoEdit = Partial<DevtoArticle>;
@@ -19,7 +19,7 @@ export interface DevtoArticle {
  * and its views, reactions and comments read back from the author's own list. An article can be
  * edited; Forem's API has no delete, so `delete` unpublishes it (it stays in the author's drafts).
  */
-export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader {
+export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, ProfileReader {
   readonly #key: string;
   readonly #fetch: typeof fetch;
   readonly #base: string;
@@ -163,6 +163,24 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader {
       if (items.length < 1000) break;
     }
     return total;
+  }
+
+  /** The profile as /users/me has it; Forem's API cannot change it, so a review's proposals are to copy */
+  async profile(): Promise<Profile> {
+    const me = await json<{ name?: string; summary?: string | null; website_url?: string | null; location?: string | null; profile_image?: string }>(
+      'dev.to',
+      await this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() }),
+      'read the profile',
+    );
+    return {
+      ...(me.name?.trim() && { displayName: me.name }),
+      ...(me.summary?.trim() && { bio: me.summary }),
+      links: [
+        ...(me.website_url ? [{ name: 'Website', value: me.website_url }] : []),
+        ...(me.location ? [{ name: 'Location', value: me.location }] : []),
+      ],
+      hasAvatar: imageUrl(me.profile_image) !== undefined,
+    };
   }
 
   async profileStats(): Promise<ProfileStats> {

@@ -7,8 +7,13 @@ import { REDDIT_SCOPES } from './reddit.ts';
  * here keeps state; the caller holds the `state` value and the app's client credentials.
  */
 
-/** What publishing and the metrics need on Mastodon, and nothing more */
-export const MASTODON_SCOPES = 'read:accounts read:statuses write:statuses write:media';
+/**
+ * What publishing, the metrics and profile edits need on Mastodon, and nothing more. `write:accounts`
+ * (for `update_credentials`) joined on 2026-10-27: a token granted before lacks it and keeps working
+ * for the rest, and an instance's client registered before is registered again, since an
+ * authorisation may only ask for the scopes its client was registered with.
+ */
+export const MASTODON_SCOPES = 'read:accounts read:statuses write:statuses write:media write:accounts';
 
 /**
  * Mastodon has no central developer portal: each instance registers its own apps, so Shipcast

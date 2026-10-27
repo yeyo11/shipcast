@@ -10,7 +10,7 @@ import { z } from 'zod';
 import type { PromptTexts } from './prompt.ts';
 
 /** What Shipcast asks an AI for; each one has its own provider and model in the AI settings */
-export const AI_TASKS = ['pack', 'article', 'assistant', 'replies'] as const;
+export const AI_TASKS = ['pack', 'article', 'assistant', 'replies', 'profile'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
 export const AI_PROVIDERS = ['claudio', 'anthropic', 'openaiCompatible'] as const;

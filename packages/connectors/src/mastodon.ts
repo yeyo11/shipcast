@@ -14,6 +14,10 @@ import {
   type Deletable,
   type Editable,
   type Metrics,
+  type Profile,
+  type ProfileEdit,
+  type ProfileEditor,
+  type ProfileReader,
   type ProfileStats,
   type Published,
   type Replier,
@@ -29,7 +33,19 @@ interface MastodonAccount {
   followers_count?: number;
   following_count?: number;
   statuses_count?: number;
+  avatar_static?: string;
+  header?: string;
+  note?: string;
+  fields?: Array<{ name: string; value: string }>;
+  /** The owner's own account only: the note and fields as plain text, as they were written */
+  source?: { note?: string; fields?: Array<{ name: string; value: string }> };
 }
+
+/** Mastodon gives an account with no picture or banner a placeholder image, named `missing` */
+const placeholder = (url: string | undefined) => !url || /\/missing\.png(\?|$)/.test(url);
+
+/** The scope `update_credentials` needs, which tokens from before 2026-10-27 were not granted */
+export const MASTODON_PROFILE_SCOPE = 'write:accounts';
 
 interface MastodonStatus {
   id: string;
@@ -69,7 +85,7 @@ export interface MastodonEdit {
  * readers), and its favourites, boosts and replies read back from the status. A status can be edited
  * (text and media) and deleted, and the replies under it read and answered.
  */
-export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReader, Replier {
+export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReader, Replier, ProfileReader, ProfileEditor {
   readonly #instance: string;
   readonly #token: string;
   readonly #fetch: typeof fetch;
@@ -153,6 +169,49 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
   async profileStats(): Promise<ProfileStats> {
     const me = await this.#me('read the profile');
     return statsOf({ followers: me.followers_count, following: me.following_count, posts: me.statuses_count });
+  }
+
+  /** The profile as the owner wrote it: the plain source of the note and the fields, not their HTML */
+  async profile(): Promise<Profile> {
+    const me = await this.#me('read the profile');
+    // The source is plain text; the account's own fields are HTML (a link becomes an anchor)
+    const fields = me.source?.fields ?? (me.fields ?? []).map((f) => ({ name: f.name, value: htmlToText(f.value) }));
+    const bio = me.source?.note ?? (me.note ? htmlToText(me.note) : '');
+    return {
+      ...(me.display_name?.trim() && { displayName: me.display_name }),
+      ...(bio.trim() && { bio }),
+      links: fields.map((f) => ({ name: f.name, value: f.value })),
+      hasAvatar: !placeholder(me.avatar),
+      hasBanner: !placeholder(me.header),
+    };
+  }
+
+  /**
+   * `update_credentials` with what changes: the name, the note, and the fields as a whole list (the
+   * ones left out are removed). It needs `write:accounts`, which a token from an older connection
+   * lacks: Mastodon answers 403, said as what to do.
+   */
+  async editProfile(edit: ProfileEdit): Promise<void> {
+    const form = new URLSearchParams();
+    if (edit.displayName !== undefined) form.set('display_name', edit.displayName);
+    if (edit.bio !== undefined) form.set('note', edit.bio);
+    if (edit.links) {
+      // An empty list still has to say so, or Mastodon keeps the fields it has
+      const links = edit.links.length > 0 ? edit.links : [{ name: '', value: '' }];
+      links.forEach((link, i) => {
+        form.set(`fields_attributes[${i}][name]`, link.name);
+        form.set(`fields_attributes[${i}][value]`, link.value);
+      });
+    }
+    const response = await this.#fetch(`${this.#instance}/api/v1/accounts/update_credentials`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${this.#token}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: form,
+    });
+    if (response.status === 403) {
+      throw new ConnectorError('Mastodon', `the token was not granted ${MASTODON_PROFILE_SCOPE}: connect the account again to allow profile edits`, 403, false);
+    }
+    await expectOk('Mastodon', response, 'edit the profile');
   }
 
   /** The token's own account id, read once: what tells the owner's replies from the others' */

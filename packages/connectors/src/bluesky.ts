@@ -12,6 +12,10 @@ import {
   type CommentReader,
   type Deletable,
   type Metrics,
+  type Profile,
+  type ProfileEdit,
+  type ProfileEditor,
+  type ProfileReader,
   type ProfileStats,
   type Published,
   type Replier,
@@ -46,6 +50,8 @@ interface Session {
 
 interface BlueskyProfile {
   avatar?: string;
+  banner?: string;
+  description?: string;
   displayName?: string;
   followersCount?: number;
   followsCount?: number;
@@ -76,7 +82,7 @@ export function linkFacets(text: string): Array<{ index: { byteStart: number; by
  * Bluesky through the AT Protocol: a session from the handle and an app password, a post record with
  * link facets and a link card, and its counts read from the public AppView, which needs no login.
  */
-export class Bluesky implements Deletable, CommentReader, Replier {
+export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader, ProfileEditor {
   readonly #identifier: string;
   readonly #password: string;
   readonly #fetch: typeof fetch;
@@ -256,6 +262,62 @@ export class Bluesky implements Deletable, CommentReader, Replier {
     }
     const profile = await this.#profile(session.did).catch(() => undefined);
     return okCheck(`@${session.handle}`, { avatarUrl: profile?.avatar, displayName: profile?.displayName });
+  }
+
+  /** The public profile: name, description, and whether it has a picture and a banner. Bluesky has no links */
+  async profile(): Promise<Profile> {
+    const profile = await this.#profile(this.#session?.did ?? this.#identifier);
+    return {
+      ...(profile.displayName?.trim() && { displayName: profile.displayName }),
+      ...(profile.description?.trim() && { bio: profile.description }),
+      links: [],
+      hasAvatar: imageUrl(profile.avatar) !== undefined,
+      hasBanner: imageUrl(profile.banner) !== undefined,
+    };
+  }
+
+  /**
+   * Rewrites the `app.bsky.actor.profile/self` record. The record holds more than the name and the
+   * description (the avatar and banner blobs, pinned post, labels…), so it is read first and written
+   * back with only those two changed; `swapRecord` makes the write fail rather than overwrite a
+   * change made in between. An empty value removes the field.
+   */
+  async editProfile(edit: ProfileEdit): Promise<void> {
+    if (edit.links !== undefined) throw new ConnectorError('Bluesky', 'a Bluesky profile has no links to edit', 400, false);
+    const session = await this.#login();
+    const auth = { authorization: `Bearer ${session.accessJwt}` };
+    const query = new URLSearchParams({ repo: session.did, collection: 'app.bsky.actor.profile', rkey: 'self' });
+    let current: { cid?: string; value: Record<string, unknown> } = { value: {} };
+    try {
+      current = await json<{ cid: string; value: Record<string, unknown> }>(
+        'Bluesky',
+        await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.getRecord?${query}`, { headers: auth }),
+        'read the profile record',
+      );
+    } catch (error) {
+      // An account that never set a profile has no record yet: it is created
+      if (!(error instanceof ConnectorError && error.status === 400 && error.message.includes('RecordNotFound'))) throw error;
+    }
+    const record: Record<string, unknown> = { ...current.value, $type: 'app.bsky.actor.profile' };
+    for (const [key, value] of [
+      ['displayName', edit.displayName],
+      ['description', edit.bio],
+    ] as const) {
+      if (value === undefined) continue;
+      if (value === '') delete record[key];
+      else record[key] = value;
+    }
+    const response = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.putRecord`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ repo: session.did, collection: 'app.bsky.actor.profile', rkey: 'self', record, ...(current.cid && { swapRecord: current.cid }) }),
+    });
+    if (response.status === 400) {
+      const text = await response.text();
+      if (text.includes('InvalidSwap')) throw new ConnectorError('Bluesky', 'the profile changed while it was being edited: read it again and retry', 409, false);
+      throw new ConnectorError('Bluesky', `edit the profile: 400 ${text.slice(0, 300)}`, 400);
+    }
+    await expectOk('Bluesky', response, 'edit the profile');
   }
 
   async profileStats(): Promise<ProfileStats> {

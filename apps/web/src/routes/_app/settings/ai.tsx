@@ -31,6 +31,7 @@ const TASKS: Record<Task, { label: string; text: string }> = {
   article: { label: 'Article distribution', text: 'Translates an article you wrote and writes each channel’s piece from it.' },
   assistant: { label: 'Writing assistant', text: 'The streamed suggestions beside Write and each draft (coming next).' },
   replies: { label: 'Comment replies', text: 'Drafts a reply to each comment on your posts, grounded in the repo and the launch’s analysis; it reads the code when a comment asks about it.' },
+  profile: { label: 'Profile review', text: 'Reviews an account’s profile against its numbers and the brand, and proposes each field’s new text; nothing changes until you apply a proposal.' },
 };
 
 const CHANNEL_NAMES: Record<string, string> = {
@@ -52,6 +53,7 @@ const CHANNEL_NAMES: Record<string, string> = {
 function promptLabel(id: string): string {
   if (id === 'article') return 'Article: the translation';
   if (id === 'reply') return 'Comment reply';
+  if (id === 'profile') return 'Profile review';
   const [group, name = ''] = id.split('.');
   if (group === 'pack') return `Pack brief: ${name === 'launch' ? 'first launch' : `${name} version`}`;
   return `Channel brief: ${CHANNEL_NAMES[name] ?? name}`;
@@ -299,6 +301,9 @@ function AiSettingsPage() {
         </AccordionItem>
         <AccordionItem value="Rules for a reply to a comment" className="card" summary={<span>Rules for a reply to a comment</span>}>
           <Log text={data.locked.replyRules.join('\n')} />
+        </AccordionItem>
+        <AccordionItem value="Rules for a profile review" className="card" summary={<span>Rules for a profile review</span>}>
+          <Log text={data.locked.profileRules.join('\n')} />
         </AccordionItem>
         <AccordionItem value="Rules for the writing assistant, on a launch’s pieces" className="card" summary={<span>Rules for the writing assistant, on a launch’s pieces</span>}>
           <Log text={data.locked.assistantLaunchRules.join('\n')} />

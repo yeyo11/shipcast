@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T21:05:32.672714711Z
-updated_at: 2026-10-26T21:25:22.797550311Z
+created_at: 2026-10-27T08:35:19.764965645Z
+updated_at: 2026-10-27T17:44:55.760943883Z
 tags:
     - accounts
     - channels
@@ -12,6 +12,7 @@ tags:
     - avatars
     - github-app
     - reddit
+    - profiles
 ---
 # Accounts and channels
 
@@ -125,6 +126,24 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
   today's numbers; the page waits up to 20 seconds for it and says what it found.
 - **Not built yet:** updates pushed by the networks (Instagram webhooks, Mastodon's streaming API).
 
+## Profile review and edits
+
+Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.md)).
+
+- **A review per account.** On a network's page (`/channels/<network>`), under **Profile review**,
+  each connected account has a panel: **Review this profile** sends a `profile-review` job, which reads
+  the profile (name, bio, links, whether there is a picture), the account's growth from its snapshots
+  and the brand, and asks the AI settings' `profile` task for proposals, in the brand's language and
+  within the network's limits. The latest review is kept per account.
+- **Each proposal** is a word diff against the field as it is, with an editable text, **Copy**, and,
+  where the network and the credential allow it, **Apply**, which asks in an alert dialog before it
+  changes the real profile.
+- **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description; the
+  profile record is written back whole, guarded by `swapRecord`) and a Telegram channel (title and
+  description; the bot needs the "Change channel info" admin right). dev.to and Hashnode are read but
+  not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their profile
+  for a review and copies the proposals.
+
 ## The keychain
 
 `KeychainStore` (`packages/runtime/src/secrets.ts`) uses the desktop keyring through its own
@@ -142,9 +161,12 @@ a second install or a test copy keeps its own.
 state (ten minutes, in memory) and the client credentials.
 
 - **Mastodon** has no central developer portal: Shipcast registers itself on the instance the owner
-  names (`POST /api/v1/apps`, scopes `read:accounts read:statuses write:statuses write:media`) the
-  first time, keeps that client in the keychain, and sends the owner to authorise. The token does not
-  expire.
+  names (`POST /api/v1/apps`, scopes `read:accounts read:statuses write:statuses write:media
+  write:accounts`) the first time, keeps that client in the keychain with its scopes, and sends the
+  owner to authorise. `write:accounts`, for profile edits, joined on 2026-10-27: a client registered
+  with other scopes is registered again on the next connection, and the scopes granted are kept in
+  the account's public settings (`scopes`). A token from before keeps working for everything else;
+  connecting the account again allows profile edits. The token does not expire.
 - **Instagram Login** needs the Instagram app id and secret of the owner's Meta app, set in the
   Settings page (imported from `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` in `.env` on an older
   install), and the callback listed exactly in its business login settings. The code becomes a
@@ -158,4 +180,4 @@ state (ten minutes, in memory) and the client credentials.
 
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]]
