@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-27T12:05:52.898495777Z
-updated_at: 2026-10-27T12:05:52.898495777Z
+created_at: 2026-10-27T12:09:30.457091857Z
+updated_at: 2026-10-27T15:08:10.223494496Z
 tags:
     - plan
     - goal
@@ -11,27 +11,28 @@ tags:
     - phase-11
     - handoff
 ---
-# Goal: close the after-MVP phase, add YouTube and the GitHub Action, launch v0.2.0
+# Goal: close the after-MVP phase, add the GitHub Action and YouTube, launch v0.2.0
 
 The brief of an autonomous run, agreed with the owner on 2026-10-27. It finishes what
 [goal-after-mvp.md](goal-after-mvp.md) left open (milestone 9 and its Outcome), clears every pending
 fix the agent can solve alone, brings two items the roadmap held for later
-([after-mvp.md](after-mvp.md), phase 11: YouTube, and the GitHub Action mode with a one-command
-install), and ends by launching Shipcast v0.2.0 with Shipcast on the owner's real accounts. Where this
-brief and a guess disagree, this brief wins; where it is silent, [../../CLAUDE.md](../../CLAUDE.md),
-[handoff-2026-10-26.md](handoff-2026-10-26.md) ("How work is done here") and the decisions in
-`docs/decisions/` decide.
+([after-mvp.md](after-mvp.md), phase 11: the GitHub Action mode with a one-command install, and
+YouTube), and launches Shipcast v0.2.0 with Shipcast on the owner's real accounts. **YouTube is the
+last milestone**, after the launch. Where this brief and a guess disagree, this brief wins; where it is
+silent, [../../CLAUDE.md](../../CLAUDE.md), [handoff-2026-10-26.md](handoff-2026-10-26.md) ("How work
+is done here") and the decisions in `docs/decisions/` decide.
 
-**Everything that needs the owner is at the end** ("What the owner does after the run"), except the
-YouTube preparation, which the owner does **before** the run starts ("Before the run").
+**Everything that needs the owner is at the end** ("What the owner does after the run"). The run never
+waits for the owner.
 
 ## Decisions the owner took for this run
 
 | Question | Decision |
 | --- | --- |
+| Order | The fixes, the review of milestones 1 to 8, the GitHub Action, the v0.2.0 launch, the docs, and **YouTube last** |
 | YouTube video | Two per launch: a **Short** (9:16, under 60 s) and a **horizontal video** (16:9, 1 to 3 min). Slides, demo and subtitles, **no voice** |
 | YouTube's audit | Google keeps API uploads of an unaudited project **private**. Build everything, upload private, prepare the audit form; the owner requests the audit at the end |
-| Connecting YouTube | Before the run, the owner prepares Google Cloud and leaves a refresh token in `data/youtube-oauth.json`; the run imports it into the keychain and deletes the file |
+| Connecting YouTube | The owner prepares Google Cloud and leaves a refresh token in `data/youtube-oauth.json` (steps below). If the file is there when the run reaches YouTube, it is imported into the keychain and deleted; if not, connecting is an owner step at the end |
 | GitHub Action and install | **Both**: a published Action and a one-command install, for other developers |
 | AI in CI | Any of the SDK providers Shipcast already supports (**Anthropic or OpenAI**), chosen by a variable, the key as a repository secret |
 | Distribution | The CLI on **npm as `@yeyo11/shipcast`** (`shipcast` is taken on npm), with the `shipcast` command; the Action on the **GitHub Marketplace**. The owner publishes both at the end |
@@ -60,22 +61,6 @@ YouTube preparation, which the owner does **before** the run starts ("Before the
 - **Secrets** never go in a repository, a log, a commit message or a screenshot.
 - Commit after every point, so a session limit loses nothing; sub-agents each in a worktree and branch,
   merged by the lead (the handoff's rules).
-
-## Before the run (the owner, already done when the run starts)
-
-The run checks these first and stops with a clear message if one is missing:
-
-1. A YouTube channel on the owner's Google account.
-2. In the Google Cloud project of the Search Console service account: **YouTube Data API v3** enabled;
-   the OAuth consent screen *External*, with the scopes `youtube.upload`, `youtube.readonly` and
-   `youtube.force-ssl`, **published** ("In production"; a consent screen left in *Testing* makes refresh
-   tokens expire after 7 days); an OAuth client of type *Web application* with the redirect URIs
-   `https://shipcast.josegarrido.dev/auth/youtube/callback` and
-   `https://developers.google.com/oauthplayground`.
-3. A refresh token for those three scopes, made in the OAuth Playground with the owner's own client
-   (offline access), saved with the client as
-   `data/youtube-oauth.json` (`{ "client_id", "client_secret", "refresh_token" }`, mode 600). `data/`
-   is gitignored.
 
 ## Milestone 1: the pending fixes
 
@@ -111,7 +96,64 @@ the four not checked again on 2026-10-26: the AI review of accounts and profile 
 the Lighthouse gate (milestone 3), the content written for search (milestone 4), and each README
 linking the blog (milestone 8). Fix what is missing and fits the run; list what does not, with why.
 
-## Milestone 3: YouTube
+## Milestone 3: the GitHub Action mode and the one-command install
+
+Write the design as `decisions/github-action.md` before building. What it must satisfy:
+
+- **For another developer, on their own repo**, with no Postgres, no keychain and no claudio:
+  - the AI through an SDK provider, **Anthropic or OpenAI**, chosen by a variable, the key a secret;
+  - the networks' credentials as repository secrets (environment variables), never the keychain;
+  - **a launch happens once**: the record lives where CI can read it without a database (the launches
+    repo's files, for instance a record per launch), so a re-run or a second workflow never repeats a
+    campaign;
+  - the drafts pull request in their launches repo, and publishing when it is merged (a workflow in
+    that repo on merge), modes per channel from `launch.yml` as today.
+- **The Action**: `yeyo11/shipcast-action`, public, `action.yml` at the root with branding for the
+  Marketplace, on `release: published` (and `workflow_dispatch`), documented inputs and outputs,
+  versioned with a `v1` tag and a first release. Test it end to end on a throwaway public test repo
+  created for it, in a **dry-run mode that publishes nothing** (the drafts pull request is fine);
+  delete the test repo at the end or list it for the owner.
+- **The CLI on npm**: `@yeyo11/shipcast` with the `shipcast` bin, built so `npx @yeyo11/shipcast` works
+  without the monorepo; `npm pack` and a clean install in an empty directory prove it. **Do not
+  publish**: the owner does.
+- **The one-command install**: `npx @yeyo11/shipcast init` (or an equivalent you justify) that asks for
+  or detects the repo, writes `.github/launch.yml`, `brand.yml` and the two workflows (the Action on
+  release, publishing on merge in the launches repo), and prints the secrets to set, each with the link
+  to get it. Test it in an empty repo.
+- **Docs**: a getting-started guide in the README and in `docs/`, the Action's README, and the
+  decision. The owner's own install (local, Postgres, keychain, claudio) stays as it is.
+
+## Milestone 4: release v0.2.0 and the final test (milestone 9 of the after-MVP goal)
+
+On the owner's real accounts, with milestones 1 to 3 deployed. YouTube is not part of this launch yet
+(milestone 6 adds its videos to it afterwards, if it can be connected):
+
+1. **The release**: changelog since v0.1.0 (the after-MVP phases, Reddit, the GitHub App's traffic,
+   the redesign, articles with images, the GitHub Action and the install), version bumps, the tag and
+   the GitHub release `v0.2.0` on `yeyo11/shipcast`.
+2. **Noticed through the GitHub App** (webhook or round), not launched by hand; if it is not noticed,
+   that is a bug to fix before going on.
+3. **The drafts improved with the writing assistant**, each change kept in the pull request.
+4. **Scheduled at the recommended times** for the channels that can wait; the others at once.
+5. **Approved and published by the agent**, every connected channel the launch's `launch.yml` turns on.
+   Reddit only if `launch.yml` says so and its subreddits accept it; when in doubt, off.
+6. **One comment answered** through the assistant once one arrives (the agent approves the reply); if
+   none arrives within the run, say so in the report rather than inventing one.
+7. **The numbers** in Stats and on the launch's page after the first reading.
+8. **Edit** one live post where the network allows it (Mastodon), and prove **delete** end to end on a
+   preview with fake networks (`SHIPCAST_PREVIEW_FAKE_NETWORKS=1`), not on the real launch.
+9. **Everything published is listed** in the report, with links.
+
+## Milestone 5: close the phase in the docs
+
+- Write the **Outcome** of [goal-after-mvp.md](goal-after-mvp.md) (milestones 1 to 9, with the table of
+  milestone 2).
+- Update [../status.md](../status.md) and the roadmap's ticks in [after-mvp.md](after-mvp.md) (the
+  Action done; YouTube as milestone 6 leaves it).
+- A new handoff, `plans/handoff-<date>.md`, in the format of the last one. Milestone 6 updates both
+  when it ends.
+
+## Milestone 6: YouTube (last)
 
 A channel of its own, like the others: it publishes itself, never a draft for the owner to post
 ([../decisions/automatic-channels-only.md](../decisions/automatic-channels-only.md)). Write the decision
@@ -142,104 +184,69 @@ as `decisions/youtube.md` first.
   unaudited project), record it on the post and show it in the app ("private until Google audits the
   project"), and do not count it as a failure.
 - **Connecting**: the OAuth flow at `/auth/youtube/callback`, the client id and secret in Settings,
-  like Reddit and LinkedIn; and the one-time import of `data/youtube-oauth.json` into the keychain as
-  the connected account (then delete the file and say so).
+  like Reddit and LinkedIn; and a one-time import of `data/youtube-oauth.json` into the keychain as the
+  connected account (then delete the file and say so).
 - **Edit and delete** in the launch page and the API, capabilities, Channels' card with its own number
-  (subscribers), docs (`accounts.md`, `publishing.md`, `content-pack.md`, `stats.md`, the API), tests.
+  (subscribers), docs (`accounts.md`, `publishing.md`, `content-pack.md`, `stats.md`, the API), tests
+  with the network faked.
+- **v0.2.0 on YouTube**: if `data/youtube-oauth.json` is there (or the owner connected YouTube in the
+  app meanwhile), import it, turn `youtube` on in Shipcast's own `launch.yml` and publish v0.2.0's two
+  videos through the launch's normal path (private until the audit), then edit one's description and
+  delete nothing. If it is not there, stop short of any real upload: the connection and v0.2.0's
+  videos join the owner's steps.
 - **The audit form**: prepare, in `docs/plans/youtube-audit.md`, everything Google's YouTube API audit
   form asks (what the app does, the scopes and why, the screens, the data kept, the privacy policy's
   address; update the blog's privacy page for YouTube data). The owner sends it at the end.
+- Update `status.md`, the roadmap and the handoff for YouTube.
 
-## Milestone 4: the GitHub Action mode and the one-command install
+### Preparing YouTube (the owner, any time before milestone 6)
 
-Write the design as `decisions/github-action.md` before building. What it must satisfy:
-
-- **For another developer, on their own repo**, with no Postgres, no keychain and no claudio:
-  - the AI through an SDK provider, **Anthropic or OpenAI**, chosen by a variable, the key a secret;
-  - the networks' credentials as repository secrets (environment variables), never the keychain;
-  - **a launch happens once**: the record lives where CI can read it without a database (the launches
-    repo's files, for instance a record per launch), so a re-run or a second workflow never repeats a
-    campaign;
-  - the drafts pull request in their launches repo, and publishing when it is merged (a workflow in
-    that repo on merge), modes per channel from `launch.yml` as today.
-- **The Action**: `yeyo11/shipcast-action`, public, `action.yml` at the root with branding for the
-  Marketplace, on `release: published` (and `workflow_dispatch`), documented inputs and outputs,
-  versioned with a `v1` tag and a first release. Test it end to end on a throwaway public test repo
-  created for it, in a **dry-run mode that publishes nothing** (the drafts pull request is fine);
-  delete the test repo at the end or list it for the owner.
-- **The CLI on npm**: `@yeyo11/shipcast` with the `shipcast` bin, built so `npx @yeyo11/shipcast` works
-  without the monorepo; `npm pack` and a clean install in an empty directory prove it. **Do not
-  publish**: the owner does.
-- **The one-command install**: `npx @yeyo11/shipcast init` (or an equivalent you justify) that asks for
-  or detects the repo, writes `.github/launch.yml`, `brand.yml` and the two workflows (the Action on
-  release, publishing on merge in the launches repo), and prints the secrets to set, each with the link
-  to get it. Test it in an empty repo.
-- **Docs**: a getting-started guide in the README and in `docs/`, the Action's README, and the
-  decision. The owner's own install (local, Postgres, keychain, claudio) stays as it is.
-
-## Milestone 5: release v0.2.0 and the final test (milestone 9 of the after-MVP goal)
-
-On the owner's real accounts, with everything above deployed:
-
-1. **The release**: changelog since v0.1.0 (the after-MVP phases, Reddit, the GitHub App's traffic,
-   the redesign, articles with images, YouTube, the Action), version bumps, the tag and the GitHub
-   release `v0.2.0` on `yeyo11/shipcast`.
-2. **Noticed through the GitHub App** (webhook or round), not launched by hand; if it is not noticed,
-   that is a bug to fix before going on.
-3. **The drafts improved with the writing assistant**, each change kept in the pull request.
-4. **Scheduled at the recommended times** for the channels that can wait; the others at once.
-5. **Approved and published by the agent**, every connected channel the launch's `launch.yml` turns on,
-   plus YouTube (private until the audit). Reddit only if `launch.yml` says so and its subreddits accept
-   it; when in doubt, off.
-6. **One comment answered** through the assistant once one arrives (the agent approves the reply); if
-   none arrives within the run, say so in the report rather than inventing one.
-7. **The numbers** in Stats and on the launch's page after the first reading.
-8. **Edit** one live post where the network allows it (Mastodon or YouTube's description), and prove
-   **delete** end to end on a preview with fake networks (`SHIPCAST_PREVIEW_FAKE_NETWORKS=1`), not on
-   the real launch.
-9. **Everything published is listed** in the report, with links.
-
-## Milestone 6: close the phase in the docs
-
-- Write the **Outcome** of [goal-after-mvp.md](goal-after-mvp.md) (milestones 1 to 9, with the table of
-  milestone 2) and of this brief.
-- Update [../status.md](../status.md) and the roadmap's ticks in [after-mvp.md](after-mvp.md)
-  (YouTube and the Action done; what is next).
-- A new handoff, `plans/handoff-<date>.md`, in the format of the last one.
+1. A YouTube channel on the owner's Google account.
+2. In the Google Cloud project of the Search Console service account: **YouTube Data API v3** enabled;
+   the OAuth consent screen *External*, with the scopes `youtube.upload`, `youtube.readonly` and
+   `youtube.force-ssl`, **published** ("In production"; a consent screen left in *Testing* makes refresh
+   tokens expire after 7 days); an OAuth client of type *Web application* with the redirect URIs
+   `https://shipcast.josegarrido.dev/auth/youtube/callback` and
+   `https://developers.google.com/oauthplayground`.
+3. A refresh token for those three scopes, made in the OAuth Playground with the owner's own client
+   (offline access), saved with the client as `data/youtube-oauth.json`
+   (`{ "client_id", "client_secret", "refresh_token" }`, mode 600). `data/` is gitignored.
 
 ## Done when
 
-- [ ] the YouTube preparation found in place, the token imported into the keychain and the file deleted
 - [ ] milestone 1's eight fixes done, each verified and deployed
 - [ ] milestones 1 to 8 checked point by point, gaps fixed or listed
-- [ ] YouTube publishing, editing, deleting, numbers and comments, with both videos, tested and deployed
 - [ ] the Action released as `v1` and tested end to end in dry run; the npm package and the init
       command proven from a clean directory; both documented
 - [ ] Shipcast v0.2.0 released and launched by Shipcast on the real accounts, everything published
       listed
-- [ ] the Outcomes, `status.md`, the roadmap and a new handoff written
+- [ ] the Outcome, `status.md`, the roadmap and a new handoff written
+- [ ] YouTube publishing, editing, deleting, numbers and comments, with both videos, tested and
+      deployed; v0.2.0's videos uploaded if the token was there, or listed for the owner if not
 - [ ] the report to the owner, in Spanish, ending with the list below
 
 ## What the owner does after the run
 
 The run prepares each of these and ends its report with them, in this order:
 
-1. **Request YouTube's audit** with the form prepared in `docs/plans/youtube-audit.md`; until Google
+1. **Connect YouTube**, if the run did not find the token (the steps above, or the app's Connect
+   button now that it exists), and publish v0.2.0's two videos from the launch page.
+2. **Request YouTube's audit** with the form prepared in `docs/plans/youtube-audit.md`; until Google
    answers, videos stay private.
-2. **Publish the CLI on npm** (`npm publish --access public` from the prepared package, with the
+3. **Publish the CLI on npm** (`npm publish --access public` from the prepared package, with the
    owner's npm account).
-3. **List the Action on the GitHub Marketplace** (it needs the owner to accept the Marketplace
+4. **List the Action on the GitHub Marketplace** (it needs the owner to accept the Marketplace
    agreement in the browser).
-4. **Review the design changes**: the launch page's banner illustration, the YouTube videos' look, the
+5. **Review the design changes**: the launch page's banner illustration, the YouTube videos' look, the
    blog's table style.
-5. **Review the REA article** (launches pull request #10), staged on 2026-10-27, and approve it in the
+6. **Review the REA article** (launches pull request #10), staged on 2026-10-27, and approve it in the
    app.
-6. **Connect Hashnode** if it should publish (it is not connected).
-7. **Say whose "Trendify Media" is**, the second Instagram account under the personal brand; if it is
+7. **Connect Hashnode** if it should publish (it is not connected).
+8. **Say whose "Trendify Media" is**, the second Instagram account under the personal brand; if it is
    not the owner's, disconnect it (brands never mix).
-8. **The Threads use case's redirect URL** in Meta (pending since 2026-10-26).
-9. **`main`'s branch protection** on GitHub still requires the `test` check; remove it or keep it.
-10. **Disk space**: about 10 GB free on 2026-10-27.
+9. **The Threads use case's redirect URL** in Meta (pending since 2026-10-26).
+10. **`main`'s branch protection** on GitHub still requires the `test` check; remove it or keep it.
+11. **Disk space**: about 10 GB free on 2026-10-27.
 
 ## Related
 
