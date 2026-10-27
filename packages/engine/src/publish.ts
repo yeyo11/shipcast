@@ -108,6 +108,23 @@ export function draftBody(markdown: string): string {
     .trim();
 }
 
+/**
+ * The article's Markdown with its root-relative links and images (`](/articles/x/a.png)`) on the
+ * blog's address: the blog and its preview resolve them, dev.to and Hashnode do not. Code blocks are
+ * left as written.
+ */
+export function absoluteLinks(markdown: string, site: string): string {
+  const origin = new URL(site).origin;
+  let fenced = false;
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+      return fenced ? line : line.replace(/\]\((\/(?!\/))/g, `](${origin}/`);
+    })
+    .join('\n');
+}
+
 function splitFrontMatter(markdown: string): { data: Record<string, unknown>; body: string } {
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(markdown);
   if (!match) return { data: {}, body: markdown };
@@ -224,7 +241,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             const tags = /Tags: (.+)$/m.exec(draft ?? '')?.[1]?.match(/`([^`]+)`/g)?.map((t) => t.slice(1, -1)) ?? pack.devto!.tags;
             return deps.publishers.devto!.publish({
               title,
-              markdown: articleBody,
+              markdown: absoluteLinks(articleBody, brand.site),
               tags,
               canonicalUrl: articleUrl,
               mainImage: `${brand.site}${mediaPath(launch, 'og.png')}`,
@@ -238,7 +255,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             const tags = /Tags: (.+)$/m.exec(draft ?? '')?.[1]?.match(/`([^`]+)`/g)?.map((t) => t.slice(1, -1)) ?? pack.hashnode!.tags;
             return deps.publishers.hashnode!.publish({
               title,
-              markdown: articleBody,
+              markdown: absoluteLinks(articleBody, brand.site),
               tags,
               canonicalUrl: articleUrl,
               coverImageUrl: `${brand.site}${mediaPath(launch, 'og.png')}`,

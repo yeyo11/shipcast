@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand, parseLaunchConfig } from '@shipcast/schema';
-import { cancelScheduledPost, deletePost, draftBody, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+import { absoluteLinks, cancelScheduledPost, deletePost, draftBody, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -696,4 +696,24 @@ test('a Reddit post whose answer was lost is found instead of posted twice, and 
   assert.ok(result.state === 'published' || result.state === 'partial');
   const problems = result.state === 'published' || result.state === 'partial' ? result.problems : [];
   assert.ok(problems.some((p) => /reddit: .*r\/strict refused the post/.test(p) && !p.includes('will retry')), JSON.stringify(problems));
+});
+
+test('an article body sent to dev.to and Hashnode has its root-relative links on the blog', () => {
+  const body = [
+    'See ![the player](/articles/rea/player.png) and [the guide](/es/guia/).',
+    'Already absolute: [x](https://example.com/a), protocol-relative: [y](//cdn.example.com/b), relative: [z](notes.md).',
+    '```md',
+    '![kept](/inside/a/fence.png)',
+    '```',
+  ].join('\n');
+  assert.equal(
+    absoluteLinks(body, 'https://josegarrido.dev/'),
+    [
+      'See ![the player](https://josegarrido.dev/articles/rea/player.png) and [the guide](https://josegarrido.dev/es/guia/).',
+      'Already absolute: [x](https://example.com/a), protocol-relative: [y](//cdn.example.com/b), relative: [z](notes.md).',
+      '```md',
+      '![kept](/inside/a/fence.png)',
+      '```',
+    ].join('\n'),
+  );
 });
