@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConfigError, launchTarget, loadCiConfig, networkEnv, publishTarget } from '../src/index.ts';
+import { LaunchConfig } from '@shipcast/schema';
+import { channelPlan, ConfigError, launchTarget, loadCiConfig, networkEnv, publishTarget } from '../src/index.ts';
 
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----';
 
@@ -91,4 +92,29 @@ test('the workflow’s event becomes what to launch or publish', () => {
   assert.deepEqual(publishTarget({ eventName: 'pull_request', payload: merged, launchesRepo: 'me/launches' }), { pullRequest: 'https://github.com/me/launches/pull/3' });
   assert.ok('ignore' in (publishTarget({ eventName: 'pull_request', payload: { ...merged, pull_request: { merged: false } }, launchesRepo: 'me/launches' }) ?? {}));
   assert.equal(publishTarget({ eventName: 'schedule', launchesRepo: 'me/launches' }), undefined);
+});
+
+test('SHIPCAST_AI_PROVIDER chooses Anthropic, OpenAI or the fake provider, the key from its own secret or SHIPCAST_AI_API_KEY', () => {
+  const base = { SHIPCAST_LAUNCHES_REPO: 'me/launches', GITHUB_TOKEN: 'ghs_x' };
+  assert.deepEqual(loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-o' }, { needAi: true }).ai, { kind: 'openai', apiKey: 'sk-o', model: undefined });
+  assert.deepEqual(loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'OpenAI', SHIPCAST_AI_API_KEY: 'sk-g', SHIPCAST_AI_MODEL: 'gpt-5.4' }, { needAi: true }).ai, { kind: 'openai', apiKey: 'sk-g', model: 'gpt-5.4' });
+  assert.deepEqual(loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'anthropic', SHIPCAST_AI_API_KEY: 'sk-a', OPENAI_API_KEY: 'ignored' }, { needAi: true }).ai, { kind: 'anthropic', apiKey: 'sk-a', model: undefined });
+  assert.equal(loadCiConfig({ ...base, OPENAI_API_KEY: 'sk-o' }, { needAi: true }).ai?.kind, 'openai', 'a lone OpenAI key picks OpenAI');
+  assert.deepEqual(loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'fake' }, { needAi: true }).ai, { kind: 'fake' });
+  assert.throws(() => loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'openai' }, { needAi: true }), /OPENAI_API_KEY/);
+  assert.throws(() => loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'gemini' }, { needAi: false }), /must be one of anthropic, openai, openai-compatible, fake/);
+  assert.equal(loadCiConfig({ ...base, SHIPCAST_AI_PROVIDER: 'openai' }, { needAi: false }).ai, undefined, 'publishing needs no key');
+});
+
+test('a dry run’s channel plan names the secrets each channel lacks, never a value', () => {
+  const config = LaunchConfig.parse({ enabled: true, brand: 'me', publishing: { instagram: 'off', reddit: 'approval', mastodon: 'auto' } });
+  const plan = channelPlan(config, { DEVTO_API_KEY: 'secret-value', MASTODON_ACCESS_TOKEN: 'secret-too' });
+  const by = Object.fromEntries(plan.map((p) => [p.channel, p]));
+  assert.deepEqual(Object.keys(by), ['blog', 'devto', 'bluesky', 'mastodon', 'reddit', 'githubDiscussions']);
+  assert.equal(by.devto?.ready, true);
+  assert.equal(by.mastodon?.mode, 'auto');
+  assert.equal(by.mastodon?.ready, true, 'the instance can come from brand.yml');
+  assert.match(by.bluesky?.note ?? '', /BLUESKY_HANDLE and BLUESKY_APP_PASSWORD/);
+  assert.equal(by.reddit?.ready, false);
+  assert.doesNotMatch(JSON.stringify(plan), /secret-value|secret-too/);
 });

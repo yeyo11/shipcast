@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-26T07:30:58.697365263Z
-updated_at: 2026-10-26T07:30:58.697365263Z
+created_at: 2026-10-26T07:37:46.160887007Z
+updated_at: 2026-10-27T17:34:31.086344807Z
 tags:
     - install
     - cli
     - github-app
     - action-mode
+    - github-action
     - phase-11
 ---
 # Installing Shipcast
@@ -16,8 +17,9 @@ one of two ways:
 
 - **A local install**: the engine, the web app and the registry's Postgres on a machine of yours
   (a laptop, or a server once it has an address). This is how the owner runs it.
-- **Action mode**: no machine at all; the same engine runs in GitHub Actions
-  ([decisions/action-mode.md](decisions/action-mode.md)).
+- **The GitHub Action**: no machine at all; the same engine runs in GitHub Actions on your own repos,
+  set up by `npx @yeyo11/shipcast init` ([getting-started.md](getting-started.md),
+  [decisions/github-action.md](decisions/github-action.md)).
 
 ## A local install, in one command
 
@@ -27,7 +29,9 @@ curl -fsSL https://raw.githubusercontent.com/yeyo11/shipcast/main/scripts/instal
 
 `scripts/install.sh` checks for git, Node 24 (with corepack, for pnpm) and Docker, clones Shipcast
 into `./shipcast` (`SHIPCAST_DIR` chooses another folder), installs it and runs `shipcast init`,
-passing on its arguments. In a clone, `pnpm shipcast init` does the same.
+passing on its arguments. In a clone, `pnpm shipcast init` does the same: inside Shipcast's own
+checkout `init` is the local install, anywhere else it is the GitHub Action setup (`--local` and
+`--action` choose explicitly).
 
 ### What `shipcast init` does
 
@@ -62,27 +66,30 @@ measurement, automation) is set in the web app's onboarding, after `pnpm app`.
 | `--skip-github-app` | Create the App later |
 | `--yes` | Ask nothing; take the flags and the defaults |
 
-## Action mode
+## The GitHub Action
 
 `shipcast ci launch | publish | round` runs headless in a workflow, configured by the environment
 only, with the registry kept as a JSON snapshot on the launches repo's `shipcast-state` branch and a
-lease so a launch still happens once across repos
-([decisions/action-mode.md](decisions/action-mode.md)). What a developer copies:
+lease so a launch still happens once across repos ([decisions/action-mode.md](decisions/action-mode.md)).
+Since 2026-10-27 it is packaged for other developers ([decisions/github-action.md](decisions/github-action.md)):
 
-- **In each project repo**: `templates/shipcast-release.yml` as `.github/workflows/shipcast.yml`. On a
-  published release (or a repo made public, or a run by hand) it drafts the launch as a pull request
-  in the launches repo.
-- **In the launches repo**: `templates/shipcast-publish.yml`, which publishes a launch when its drafts
-  pull request is merged, and can run a scheduled round.
-- **Secrets and variables**: `SHIPCAST_LAUNCHES_REPO` (a variable), the GitHub App's id and private
-  key, the AI key (`ANTHROPIC_API_KEY`, or an OpenAI-compatible server's URL, key and model), and each
-  network's credentials under the names `.env.example` lists. claudio does not run in Actions, so the
-  content is written through the API with read-only tools over the release's checkout.
+- **The Action** is [yeyo11/shipcast-action](https://github.com/yeyo11/shipcast-action) (`v1`), a
+  composite action with the bundled CLI and its lockfile committed. Its sources are `action/` here;
+  `pnpm --filter @shipcast/cli build:action <dir>` builds the CLI and assembles the Action's repo in
+  `<dir>`.
+- **The CLI** is `@yeyo11/shipcast` on npm, built by `pnpm --filter @shipcast/cli build` into
+  `apps/cli/dist-npm` (esbuild bundles the workspace packages; third-party ones stay dependencies).
+- **The setup** is `npx @yeyo11/shipcast init` in a project repo: `.github/launch.yml` and the launch
+  workflow there, `brand.yml` and the publish workflow in the launches repo, and the secrets to set.
+  `templates/` holds the two workflows as `init` writes them.
+- **The AI** is `SHIPCAST_AI_PROVIDER` (`anthropic` or `openai`, a repository variable) with its key as
+  a secret; `fake` writes a placeholder pack for tests. The networks' credentials are secrets of the
+  launches repo, under the names `.env.example` lists. claudio does not run in Actions.
 
-Both templates call the reusable workflow `.github/workflows/shipcast.yml` of this repo, which wraps
-the composite action at its root (`action.yml`). `shipcast ci --dry-run` shows what a run would do
-without writing anything: no state pushed, no AI call, no pull request, no post.
+`--dry-run` (the Action's `dry-run` input, or the variable `SHIPCAST_DRY_RUN=true` in the workflows
+`init` writes) publishes nothing: no state pushed, no AI call, no pull request, no post, and publishing
+lists what each channel would do.
 
 ## Related
 
-[[decisions/action-mode.md]] · [[decisions/github-app.md]] · [[plans/goal-after-mvp.md]] · [[web-app.md]] · [[accounts.md]] · [[launches-repo.md]]
+[[getting-started.md]] · [[decisions/github-action.md]] · [[decisions/action-mode.md]] · [[decisions/github-app.md]] · [[plans/goal-after-mvp.md]] · [[web-app.md]] · [[accounts.md]] · [[launches-repo.md]]

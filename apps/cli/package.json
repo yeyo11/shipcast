@@ -1,19 +1,25 @@
 {
   "name": "@shipcast/cli",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "The shipcast command: launch a release by hand, watch for releases and publish them, see the launches and their numbers",
+  "description": "The shipcast command: launch a release by hand, watch for releases and publish them, see the launches and their numbers; published to npm as @yeyo11/shipcast by scripts/build.ts",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test \"test/**/*.test.ts\"",
+    "build": "node scripts/build.ts",
+    "build:action": "node scripts/build.ts --action"
   },
   "dependencies": {
     "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
     "@shipcast/mcp": "workspace:*",
-    "@shipcast/schema": "workspace:*",
-    "@shipcast/runtime": "workspace:*"
+    "@shipcast/runtime": "workspace:*",
+    "@shipcast/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "yaml": "^2.9.1"
   }
 }

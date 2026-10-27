@@ -3,6 +3,7 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { z } from 'zod';
@@ -66,7 +67,8 @@ export interface TextRequest {
  * article's distribution, and streamed text for the writing assistant.
  */
 export interface AiProvider {
-  readonly id: AiProviderId | 'test';
+  /** `openai` and `test` are only built outside the AI settings: Action mode's OpenAI API, and fakes */
+  readonly id: AiProviderId | 'openai' | 'test';
   generateObject(request: ObjectRequest): Promise<ObjectResult>;
   streamText(request: TextRequest): AsyncIterable<string>;
 }
@@ -83,15 +85,23 @@ export interface AiSetup {
 /** Anthropic's current Opus, the default when the Anthropic API is chosen without a model */
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
 
+/** The OpenAI API's default in Action mode, where a developer picks OpenAI by a variable */
+export const DEFAULT_OPENAI_MODEL = 'gpt-5.5';
+
 /** How many tool rounds an SDK provider may take reading a repo before it must answer */
 const MAX_STEPS = 40;
 /** Room for a whole content pack, every language and channel, in one answer */
 const MAX_OUTPUT_TOKENS = 32_000;
 
+/** What `generateText` takes as provider options: a JSON object per provider */
+type ProviderOptions = Record<string, Record<string, string | number | boolean | null>>;
+
 export interface SdkProviderOptions {
-  id: AiProviderId | 'test';
+  id: AiProviderId | 'openai' | 'test';
   /** The model for an id, or the default one without */
   model: (id: string | undefined) => LanguageModel;
+  /** Passed with every structured request */
+  providerOptions?: ProviderOptions;
 }
 
 /**
@@ -100,12 +110,14 @@ export interface SdkProviderOptions {
  * checkout on this machine, the same reach claudio's Claude Code has with Read, Grep and git log.
  */
 export class SdkProvider implements AiProvider {
-  readonly id: AiProviderId | 'test';
+  readonly id: AiProviderId | 'openai' | 'test';
   readonly #model: (id: string | undefined) => LanguageModel;
+  readonly #providerOptions: ProviderOptions | undefined;
 
   constructor(options: SdkProviderOptions) {
     this.id = options.id;
     this.#model = options.model;
+    this.#providerOptions = options.providerOptions;
   }
 
   async generateObject(request: ObjectRequest): Promise<ObjectResult> {
@@ -116,6 +128,7 @@ export class SdkProvider implements AiProvider {
       prompt: request.prompt,
       output: Output.object({ schema: jsonSchema(request.jsonSchema as JSONSchema7), name: 'content_pack' }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
+      ...(this.#providerOptions && { providerOptions: this.#providerOptions }),
       ...(tools ? { tools, stopWhen: stepCountIs(request.maxTurns ?? MAX_STEPS) } : {}),
     });
     return { output: result.output, costUsd: null };
@@ -137,6 +150,16 @@ export class SdkProvider implements AiProvider {
 export function anthropicProvider(options: { apiKey: string; fetch?: typeof fetch }): SdkProvider {
   const anthropic = createAnthropic({ apiKey: options.apiKey, fetch: options.fetch });
   return new SdkProvider({ id: 'anthropic', model: (id) => anthropic(id ?? DEFAULT_ANTHROPIC_MODEL) });
+}
+
+/**
+ * The OpenAI API itself, through its own SDK provider: its current models refuse the `max_tokens`
+ * that Chat Completions servers take, and the Responses API speaks their parameters. Strict JSON
+ * Schema is off because the pack's schema has optional fields, which strict mode refuses.
+ */
+export function openAiProvider(options: { apiKey: string; fetch?: typeof fetch }): SdkProvider {
+  const openai = createOpenAI({ apiKey: options.apiKey, fetch: options.fetch });
+  return new SdkProvider({ id: 'openai', model: (id) => openai(id ?? DEFAULT_OPENAI_MODEL), providerOptions: { openai: { strictJsonSchema: false } } });
 }
 
 export function openAiCompatibleProvider(options: { baseUrl: string; apiKey?: string; model: string; fetch?: typeof fetch }): SdkProvider {

@@ -17,6 +17,8 @@ export interface CiDeps {
   draft(launch: Launch, brand: Brand, registry: Registry): Promise<DraftResult>;
   /** One try at publishing a drafted launch, on the leased registry */
   publish(launch: Launch, brand: Brand, registry: Registry): Promise<PublishResult>;
+  /** For a dry run: what publishing a launch would do, one line per channel */
+  plan?(launch: Launch): Promise<string[]>;
   /** The AI a draft would use, in words, for a dry run */
   aiLabel: string;
   dryRun: boolean;
@@ -163,7 +165,10 @@ export async function ciPublish(deps: CiDeps, options: PublishOptions): Promise<
     await deps.state.scratch(async (registry) => {
       const launches = options.pullRequest ? [await launchOfPullRequest({ registry }, options.pullRequest)].filter((l) => l !== undefined) : (await registry.recent(100)).filter((l) => l.status === 'drafted');
       if (launches.length === 0) deps.log('Dry run: no drafted launch to publish');
-      for (const launch of launches) deps.log(`Dry run: would publish ${nameOf(launch)} once its pull request is merged and its article is live (${launch.detail ?? ''})`);
+      for (const launch of launches) {
+        deps.log(`Dry run: would publish ${nameOf(launch)} once its pull request is merged and its article is live (${launch.detail ?? ''})`);
+        for (const line of (await deps.plan?.(launch)) ?? []) deps.log(`  ${line}`);
+      }
     });
     return { code: 0, outputs: { status: 'dry-run' } };
   }
@@ -221,6 +226,7 @@ export async function ciRound(deps: CiDeps, options: { detect: boolean }): Promi
     for (const launch of (await registry.recent(100)).filter((l) => l.status === 'drafted')) {
       if (deps.dryRun) {
         deps.log(`Dry run: would try to publish ${nameOf(launch)}`);
+        for (const line of (await deps.plan?.(launch)) ?? []) deps.log(`  ${line}`);
         continue;
       }
       const r = await deps.publish(launch, brand, registry);
