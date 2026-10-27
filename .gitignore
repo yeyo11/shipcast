@@ -21,3 +21,5 @@ docs/internal/
 data/
 # TanStack Start's scratch folder
 .tanstack/
+# The npm package built by apps/cli/scripts/build.ts
+dist-npm

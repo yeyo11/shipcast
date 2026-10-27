@@ -38,6 +38,13 @@ importers:
       '@shipcast/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
 
   apps/web:
     dependencies:

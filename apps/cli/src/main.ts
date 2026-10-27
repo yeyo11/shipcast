@@ -1,5 +1,6 @@
 import { runCi } from './ci.ts';
 import { runInit } from './init.ts';
+import { isShipcastCheckout, runSetup } from './setup.ts';
 import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
@@ -26,8 +27,35 @@ import {
   type RoundDeps,
 } from '@shipcast/runtime';
 
-/** The repo's root, where `.env` is: two folders up from this file */
-const ROOT = resolve(import.meta.dirname, '../../..');
+/**
+ * The repo's root, where `.env` is: three folders up from this file in Shipcast's checkout. Installed
+ * from npm the CLI is a bundle in node_modules, with no checkout around it (IN_CHECKOUT false).
+ */
+const SOURCE_ROOT = resolve(import.meta.dirname, '../../..');
+const IN_CHECKOUT = isShipcastCheckout(SOURCE_ROOT);
+const ROOT = IN_CHECKOUT ? SOURCE_ROOT : process.cwd();
+
+/** The package's version, set by the npm build; the checkout's is its package.json's */
+declare const SHIPCAST_VERSION: string | undefined;
+const VERSION = typeof SHIPCAST_VERSION === 'string' ? SHIPCAST_VERSION : (JSON.parse(readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8')) as { version: string }).version;
+
+/** What the npm package offers a developer outside Shipcast's checkout */
+const PACKAGE_USAGE = `Usage: shipcast <command>   (npx @yeyo11/shipcast <command>)
+
+Shipcast launches your GitHub projects: on each release it reads the code, writes the launch
+content (article, posts) with the AI you choose and opens a drafts pull request in your launches
+repo; merging it publishes everything, once.
+
+  init                    Set up the GitHub Action in this repo: launch.yml, brand.yml, the two
+                          workflows, and the secrets to set (shipcast init --help)
+  ci <launch|publish|round> [flags]
+                          What the Action runs, configured by the environment (shipcast ci --help)
+  mcp [--url <url>] [--token <token>]
+                          The MCP server over stdio, for a Shipcast app you run
+  --version               This version
+
+Guide: https://github.com/yeyo11/shipcast/blob/main/docs/getting-started.md
+`;
 
 const USAGE = `Usage: shipcast <command>
 
@@ -52,7 +80,9 @@ const USAGE = `Usage: shipcast <command>
   token revoke <id>                   Revoke an API token at once
   init [--public-url <https://host>] [--login <login>]
                                       Set up a local install in this checkout: the bootstrap .env,
-                                      Postgres, and your GitHub App from a manifest (docs/install.md)
+                                      Postgres, and your GitHub App from a manifest (docs/install.md);
+                                      init --action sets up the GitHub Action in another repo instead
+                                      (docs/getting-started.md)
   ci <launch|publish|round> [flags]   Action mode: the same work in GitHub Actions, configured by the
                                       environment, the registry kept on the launches repo's
                                       shipcast-state branch (shipcast ci --help, docs/decisions/action-mode.md)
@@ -125,8 +155,18 @@ async function main(argv: string[]): Promise<number> {
   // Action mode: its own flags and configuration (the environment only, no .env, no keychain), so it
   // is routed before the local install's arguments and runtime (docs/decisions/action-mode.md)
   if (argv[0] === 'ci') return runCi(argv.slice(1));
-  // Before there is an install to load: it writes the .env the runtime reads
-  if (argv[0] === 'init') return runInit(argv.slice(1), ROOT);
+  if (argv[0] === '--version' || argv[0] === '-v') {
+    console.log(VERSION);
+    return 0;
+  }
+  // Before there is an install to load. In Shipcast's own checkout it is the local install (it writes
+  // the .env the runtime reads); anywhere else, the GitHub Action setup of a developer's own repo
+  // (docs/decisions/github-action.md). --local and --action choose explicitly.
+  if (argv[0] === 'init') {
+    const rest = argv.slice(1);
+    const local = rest.includes('--local') || (IN_CHECKOUT && !rest.includes('--action'));
+    return local ? runInit(rest.filter((a) => a !== '--local'), ROOT) : runSetup(rest, process.cwd());
+  }
 
   const { positionals, values } = parseArgs({
     args: argv,
@@ -135,8 +175,13 @@ async function main(argv: string[]): Promise<number> {
   });
   const [command, ...rest] = positionals;
   if (values.help || !command) {
-    console.log(USAGE);
-    return command ? 0 : 1;
+    console.log(IN_CHECKOUT ? USAGE : PACKAGE_USAGE);
+    return values.help ? 0 : 1;
+  }
+  // Outside the checkout there is no local install: no .env, no Postgres, no keychain
+  if (!IN_CHECKOUT && command !== 'mcp') {
+    console.error(`"${command}" is a command of the local install, run from Shipcast's own checkout.\n\n${PACKAGE_USAGE}`);
+    return 2;
   }
 
   // Before the runtime: the MCP server needs no database or keychain, only the app's URL and a token

@@ -1,0 +1,134 @@
+name: Shipcast Launch
+description: Launch a GitHub project on each release - the AI writes the article and posts from the code, a pull request holds them, merging publishes
+author: Jose Antonio Garrido
+branding:
+  icon: send
+  color: blue
+
+# Built from github.com/yeyo11/shipcast (action/ and apps/cli): a composite action that installs the
+# bundled Shipcast CLI committed beside this file, with its lockfile, and runs `shipcast ci`
+# (docs/decisions/github-action.md). The networks' credentials are not inputs: give them as `env:` on
+# the step, under the names the publish workflow uses (DEVTO_API_KEY, BLUESKY_APP_PASSWORD, ...).
+inputs:
+  command:
+    description: "launch (a release: claim it and open its drafts pull request), publish (a merged drafts pull request) or round (whatever is due)"
+    required: true
+  launches-repo:
+    description: Your launches repo, owner/name, where the drafts pull requests and the launch record (the shipcast-state branch) live
+    required: true
+  github-token:
+    description: A token that reads the project repo and writes the launches repo (a fine-grained personal access token). Without one, the workflow's own token, which only reaches its own repo
+    required: false
+    default: ""
+  github-app-id:
+    description: Instead of a token, a GitHub App's id; with github-app-private-key the run mints its own installation token
+    required: false
+    default: ""
+  github-app-private-key:
+    description: The GitHub App's private key (PEM), from a secret
+    required: false
+    default: ""
+  ai-provider:
+    description: "The AI the content is written with: anthropic or openai (openai-compatible with ai-base-url; fake writes a placeholder pack, for tests)"
+    required: false
+    default: anthropic
+  ai-api-key:
+    description: The AI's API key, from a secret (ANTHROPIC_API_KEY or OPENAI_API_KEY). Only launch needs it
+    required: false
+    default: ""
+  ai-model:
+    description: The model; claude-opus-5-5 with Anthropic and gpt-5.5 with OpenAI by default
+    required: false
+    default: ""
+  ai-base-url:
+    description: "openai-compatible only: the server's address"
+    required: false
+    default: ""
+  repo:
+    description: "launch: the repo to launch by hand, owner/name (the workflow's own repo on workflow_dispatch)"
+    required: false
+    default: ""
+  ref:
+    description: "launch: the release's tag to launch by hand (the workflow_dispatch input tag, else the latest release)"
+    required: false
+    default: ""
+  pull-request:
+    description: "publish: the merged drafts pull request's URL (the workflow's pull_request event without one)"
+    required: false
+    default: ""
+  detect:
+    description: "round: also poll your public GitHub events for releases no workflow claimed"
+    required: false
+    default: "false"
+  wait-minutes:
+    description: "publish: how long to wait for the blog to deploy the article before leaving it to the next round"
+    required: false
+    default: "20"
+  dry-run:
+    description: "Publish nothing: launch claims nothing, asks no AI and opens no pull request; publish and round list what each channel would post. The launch record is not written"
+    required: false
+    default: "false"
+outputs:
+  status:
+    description: "launch: drafted, already-launched, ignored, failed or dry-run; publish: published, partial, waiting, nothing, ignored or dry-run; round: done"
+    value: ${{ steps.shipcast.outputs.status }}
+  launch-id:
+    description: The launch's id in the launch record
+    value: ${{ steps.shipcast.outputs.launch-id }}
+  pull-request:
+    description: "launch: the drafts pull request's URL, when one was opened"
+    value: ${{ steps.shipcast.outputs.pull-request }}
+  claimed:
+    description: "round: how many releases it claimed"
+    value: ${{ steps.shipcast.outputs.claimed }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+    - name: Install Shipcast
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      # The lockfile pins every dependency; no dependency's install script runs on this runner
+      run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
+    - name: shipcast ci
+      id: shipcast
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        SHIPCAST_LAUNCHES_REPO: ${{ inputs.launches-repo }}
+        SHIPCAST_GITHUB_TOKEN: ${{ inputs.github-token }}
+        SHIPCAST_GITHUB_APP_ID: ${{ inputs.github-app-id }}
+        SHIPCAST_GITHUB_APP_PRIVATE_KEY: ${{ inputs.github-app-private-key }}
+        SHIPCAST_AI_PROVIDER: ${{ inputs.ai-provider }}
+        SHIPCAST_AI_API_KEY: ${{ inputs.ai-api-key }}
+        SHIPCAST_AI_MODEL: ${{ inputs.ai-model }}
+        SHIPCAST_AI_BASE_URL: ${{ inputs.ai-base-url }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_REPO: ${{ inputs.repo }}
+        INPUT_REF: ${{ inputs.ref }}
+        INPUT_PULL_REQUEST: ${{ inputs.pull-request }}
+        INPUT_DETECT: ${{ inputs.detect }}
+        INPUT_WAIT: ${{ inputs.wait-minutes }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        # Inputs reach the shell as variables, never spliced into the script, so a tag or a title
+        # cannot inject a command
+        args=("$INPUT_COMMAND")
+        [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
+        case "$INPUT_COMMAND" in
+          launch)
+            [ -n "$INPUT_REPO" ] && args+=(--repo "$INPUT_REPO")
+            [ -n "$INPUT_REF" ] && args+=(--ref "$INPUT_REF")
+            ;;
+          publish)
+            [ -n "$INPUT_PULL_REQUEST" ] && args+=(--pull-request "$INPUT_PULL_REQUEST")
+            args+=(--wait "$INPUT_WAIT")
+            ;;
+          round)
+            [ "$INPUT_DETECT" = "true" ] && args+=(--detect)
+            ;;
+        esac
+        exec node "$GITHUB_ACTION_PATH/dist/cli/shipcast.js" ci "${args[@]}"
