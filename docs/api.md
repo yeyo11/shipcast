@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-10-25T20:26:04.582677797Z
+updated_at: 2026-10-27T17:44:32.63899982Z
 tags:
     - api
     - reference
@@ -14,6 +14,7 @@ tags:
     - phase-10
     - mcp
     - comments
+    - lists
 ---
 # The REST API
 
@@ -49,7 +50,7 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats
 
 | Route | Scope | Does |
 | --- | --- | --- |
-| `GET /launches?limit=&cursor=&status=` | read | The launches, newest first, 20 a page (up to 100). `next` is the cursor of the following page, `null` on the last. `status` is `detected`, `generating`, `drafted`, `published`, `skipped` or `failed` |
+| `GET /launches?limit=&cursor=&status=&trigger=&kind=&repo=&q=&sort=` | read | The launches, newest first, 20 a page (up to 100). `next` is the cursor of the following page, `null` on the last; send it with the same filters and sort. Every parameter is optional and they all hold together: `status` is `detected`, `generating`, `drafted`, `published`, `skipped` or `failed`; `trigger` is `release`, `manual`, `public`, `enabled` or `article`; `kind` is `launch`, `major` or `minor`; `repo` is one repository, `owner/name`; `q` is words in the repository, the ref or an article's title (case-insensitive, up to 200 characters); `sort` is `newest` (the default) or `oldest`. A cursor walks the sort it was given with: an `oldest` cursor sent without `sort=oldest` is a 400 ([decisions/lists.md](decisions/lists.md)) |
 | `GET /launches/{id}` | read | One launch: its posts (each with its `status` and `scheduledAt`), failures, latest number of each metric, each search engine's index status per article, and its drafts pull request with the list of files (their text stays in the pull request) |
 | `GET /accounts` | read | The connected accounts with their public settings and last check; secrets stay in the keychain |
 | `GET /accounts/{accountId}/growth?from=&to=` | read | An account's followers, following and posts per day from its snapshots, with the change since the one before; the last 90 days by default ([stats.md](stats.md)) |
@@ -94,7 +95,7 @@ answers **200**. Errors are `{ "error": { "code", "message" } }`:
 
 | Status | Code | When |
 | --- | --- | --- |
-| 400 | `invalid_input` | A field, a query parameter or the cursor is not valid; an edit with a field that network does not take; a period backwards or a series of more than 400 buckets; a time without its offset, a channel with no time, a zone that is not IANA; a reply that is empty, over the channel's limit, or approved with no draft |
+| 400 | `invalid_input` | A field, a query parameter or the cursor is not valid (a cursor sent with another sort included); an edit with a field that network does not take; a period backwards or a series of more than 400 buckets; a time without its offset, a channel with no time, a zone that is not IANA; a reply that is empty, over the channel's limit, or approved with no draft |
 | 401 | `unauthorized` | No token, a wrong one, a revoked one, or only the session cookie |
 | 403 | `insufficient_scope` | The token lacks the route's scope |
 | 404 | `not_found` | No such launch, post, account, comment or route |
@@ -111,6 +112,8 @@ APP=https://your-shipcast.example
 TOKEN=shipcast_2_...
 
 curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches?limit=5&status=published"
+curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches?repo=owner/name&sort=oldest"
+curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches?trigger=article&q=hello%20world"
 curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches/3"
 curl -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"repo":"owner/name","ref":"v1.0.0"}' "$APP/api/v1/launches"
@@ -142,15 +145,16 @@ Unit tests on a PGlite registry cover the tokens (creation, hash, verification, 
 foreign pepper), the scopes, the limit on wrong tokens and every route's answers
 (`packages/runtime/test/api-tokens.test.ts`, `apps/web/test/api.test.ts`,
 `apps/web/test/stats-api.test.ts`), the edit, delete, scheduling and comment routes included, with
-fake connectors. On 2026-10-25 the built app ran against a copy of the live registry in a throwaway
-Postgres, with automation off: tokens made with the CLI, every read route answered, and the 400, 401
-(none, wrong, cookie only, revoked), 403, 404, 405, 409, 415 and 429 cases answered as above. No
-write that starts real work was sent. The stats queries were run the same day against another such
-copy ([stats.md](stats.md#checked)), the recommendations against a third
+fake connectors; the launches' search, filters, sort and cursors also in
+`packages/engine/test/launches-list.test.ts`. On 2026-10-25 the built app ran against a copy of the
+live registry in a throwaway Postgres, with automation off: tokens made with the CLI, every read route
+answered, and the 400, 401 (none, wrong, cookie only, revoked), 403, 404, 405, 409, 415 and 429 cases
+answered as above. No write that starts real work was sent. The stats queries were run the same day
+against another such copy ([stats.md](stats.md#checked)), the recommendations against a third
 ([scheduling.md](scheduling.md#checked)), and the comment assistant's reading, drafting and one send
 to a test post of its own against a fourth
 ([decisions/comment-assistant.md](decisions/comment-assistant.md#checked)).
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/lists.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
