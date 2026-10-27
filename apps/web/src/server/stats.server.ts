@@ -16,6 +16,7 @@ import {
 import { isStale, lastSynced } from '@shipcast/runtime';
 import { effectiveBucket, resolvePeriod, type StatsSearch } from './stats-search.ts';
 import { CHANNEL_NAMES } from './view.ts';
+import { accountAvatar } from './pieces.ts';
 
 /*
  * What the Stats page shows, read from the engine's stats queries in the app's own process
@@ -218,7 +219,7 @@ export async function loadGrowth(registry: Registry, range: { from: string; to: 
         label: a.label,
         network: a.network,
         channel: channelOfNetwork(a.network),
-        avatarUrl: a.avatarUrl,
+        avatarUrl: accountAvatar(a),
         syncedAt,
         stale: isStale(syncedAt, now),
         latest: snapshot ? { followers: snapshot.followers ?? null, following: snapshot.following ?? null, posts: snapshot.posts ?? null } : null,

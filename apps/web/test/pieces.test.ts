@@ -274,7 +274,7 @@ test('each account the launch went out with shows its followers from the day bef
   });
   assert.deepEqual(rows, [
     { id: 1, network: 'mastodon', label: 'Mastodon', handle: '@me@fosstodon.org', avatarUrl: null, channels: ['mastodon'], followers: { before: 100, now: 130, change: 30, series: [100, 112, 130], from: '2026-10-23', to: '2026-10-26' } },
-    { id: 2, network: 'bluesky', label: 'Bluesky', handle: 'me.bsky.social', avatarUrl: 'https://cdn/a.jpg', channels: ['bluesky'], followers: null },
+    { id: 2, network: 'bluesky', label: 'Bluesky', handle: 'me.bsky.social', avatarUrl: '/avatars/2', channels: ['bluesky'], followers: null },
   ]);
   assert.equal(signed(30), '+30');
   assert.equal(signed(-1200), '−1,200');

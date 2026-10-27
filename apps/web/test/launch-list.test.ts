@@ -33,8 +33,8 @@ test('the split keeps the list order within each lane', () => {
 });
 
 test('the project picture is its owner’s public GitHub avatar, and only for a real login', () => {
-  assert.equal(ownerAvatarUrl('yeyo11/claudio'), 'https://github.com/yeyo11.png?size=80');
-  assert.equal(ownerAvatarUrl('some-org/x'), 'https://github.com/some-org.png?size=80');
+  assert.equal(ownerAvatarUrl('yeyo11/claudio'), 'https://avatars.githubusercontent.com/yeyo11?size=80');
+  assert.equal(ownerAvatarUrl('some-org/x'), 'https://avatars.githubusercontent.com/some-org?size=80');
   assert.equal(ownerAvatarUrl('../evil/x'), null);
   assert.equal(ownerAvatarUrl('-bad/x'), null);
   assert.equal(ownerAvatarUrl(''), null);

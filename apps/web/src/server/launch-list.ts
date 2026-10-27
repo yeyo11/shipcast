@@ -40,5 +40,5 @@ export function ownerAvatarUrl(repo: string): string | null {
   const owner = repo.split('/')[0] ?? '';
   // GitHub logins are letters, digits and single hyphens; anything else is not asked for
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/.test(owner)) return null;
-  return `https://github.com/${owner}.png?size=80`;
+  return `https://avatars.githubusercontent.com/${owner}?size=80`;
 }

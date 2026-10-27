@@ -16,6 +16,7 @@ import {
 import { connectAccount, credentialsFor, getJson, isStale, lastSynced, NETWORKS, type AccountDeps } from '@shipcast/runtime';
 import { accountGrowth } from '@shipcast/engine';
 import { appContext, type AppContext } from './context.server';
+import { accountAvatar } from './pieces.ts';
 
 export async function accountDeps(): Promise<AccountDeps> {
   const { registry, secrets, brands } = await appContext();
@@ -37,7 +38,7 @@ export async function channelsView() {
       const snapshot = snapshots.get(account.id) ?? null;
       const syncedAt = lastSynced(account, snapshot?.takenAt);
       const weekChange = snapshot?.followers != null ? (await accountGrowth(registry, account.id, week)).change.followers : null;
-      return { ...account, snapshot, weekChange, activity: activity.get(account.id) ?? { count: 0, last: null }, syncedAt, stale: isStale(syncedAt, now) };
+      return { ...account, avatarUrl: accountAvatar(account), snapshot, weekChange, activity: activity.get(account.id) ?? { count: 0, last: null }, syncedAt, stale: isStale(syncedAt, now) };
     }),
   );
   const fromEnv: string[] = [];

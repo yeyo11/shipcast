@@ -33,6 +33,7 @@ import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
 import { Route as AuthRedditRouteImport } from './routes/auth/reddit'
 import { Route as AuthThreadsRouteImport } from './routes/auth/threads'
+import { Route as AvatarsAccountIdRouteImport } from './routes/avatars.$accountId'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
 import { Route as AppDesignComponentsRouteImport } from './routes/_app/design/components'
@@ -171,6 +172,11 @@ const AuthThreadsRoute = AuthThreadsRouteImport.update({
   path: '/auth/threads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AvatarsAccountIdRoute = AvatarsAccountIdRouteImport.update({
+  id: '/avatars/$accountId',
+  path: '/avatars/$accountId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppChannelsIndexRoute = AppChannelsIndexRouteImport.update({
   id: '/channels/',
   path: '/channels/',
@@ -286,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/auth/reddit': typeof AuthRedditRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
@@ -327,6 +334,7 @@ export interface FileRoutesByTo {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/auth/reddit': typeof AuthRedditRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
@@ -372,6 +380,7 @@ export interface FileRoutesById {
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/auth/reddit': typeof AuthRedditRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
   '/_app/design/components': typeof AppDesignComponentsRoute
@@ -418,6 +427,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/auth/reddit'
     | '/auth/threads'
+    | '/avatars/$accountId'
     | '/channels/$network'
     | '/design/components'
     | '/design/illustrations'
@@ -459,6 +469,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/auth/reddit'
     | '/auth/threads'
+    | '/avatars/$accountId'
     | '/'
     | '/channels/$network'
     | '/design/components'
@@ -503,6 +514,7 @@ export interface FileRouteTypes {
     | '/auth/mastodon'
     | '/auth/reddit'
     | '/auth/threads'
+    | '/avatars/$accountId'
     | '/_app/'
     | '/_app/channels/$network'
     | '/_app/design/components'
@@ -540,6 +552,7 @@ export interface RootRouteChildren {
   AuthMastodonRoute: typeof AuthMastodonRouteWithChildren
   AuthRedditRoute: typeof AuthRedditRouteWithChildren
   AuthThreadsRoute: typeof AuthThreadsRouteWithChildren
+  AvatarsAccountIdRoute: typeof AvatarsAccountIdRoute
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
 }
@@ -712,6 +725,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/threads'
       fullPath: '/auth/threads'
       preLoaderRoute: typeof AuthThreadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/avatars/$accountId': {
+      id: '/avatars/$accountId'
+      path: '/avatars/$accountId'
+      fullPath: '/avatars/$accountId'
+      preLoaderRoute: typeof AvatarsAccountIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/channels/': {
@@ -987,6 +1007,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthMastodonRoute: AuthMastodonRouteWithChildren,
   AuthRedditRoute: AuthRedditRouteWithChildren,
   AuthThreadsRoute: AuthThreadsRouteWithChildren,
+  AvatarsAccountIdRoute: AvatarsAccountIdRoute,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
 }

@@ -1,6 +1,7 @@
 import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
+import { accountAvatar } from './pieces.ts';
 
 /** A channel a drafted launch can still put on a time, and its scheduled piece when it has one */
 export interface SchedulingChannel {
@@ -23,7 +24,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
     registry.sentReplies(launch.id),
   ]);
   const out = posts.filter((p) => p.status !== 'scheduled');
-  const shaped = accounts.map((a) => ({ id: a.id, network: a.network, label: a.label, identity: a.identity, avatarUrl: a.avatarUrl }));
+  const shaped = accounts.map((a) => ({ id: a.id, network: a.network, label: a.label, identity: a.identity, avatarUrl: accountAvatar(a) }));
   const rows = pieceRows({ posts: out, accounts: shaped, readings, capabilities: CAPABILITIES });
   // A week before the launch's day, so the line shows where the followers stood before it
   const since = new Date(Date.parse(launch.createdAt) - 7 * 86_400_000).toISOString().slice(0, 10);

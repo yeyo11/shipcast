@@ -166,7 +166,7 @@ export function pieceRows(input: {
       channel: post.channel,
       kind: post.kind,
       piece: pieceLabel(post.kind),
-      account: account ? { label: account.label, handle: account.identity, avatarUrl: account.avatarUrl } : null,
+      account: account ? { label: account.label, handle: account.identity, avatarUrl: accountAvatar(account) } : null,
       status,
       url: post.url,
       publishedAt: post.publishedAt,
@@ -248,7 +248,7 @@ export function accountRows(input: {
         network: a.network,
         label: a.label,
         handle: a.identity,
-        avatarUrl: a.avatarUrl,
+        avatarUrl: accountAvatar(a),
         channels,
         followers:
           last && before ? { before: before.followers, now: last.followers, change: last.followers - before.followers, series: shown.map((s) => s.followers), from: before.day, to: last.day } : null,
@@ -561,3 +561,9 @@ export function allowance(capability: Pick<Capability, 'edit' | 'delete'>): stri
   if (remove) return 'Delete only, no edit';
   return 'Neither edit nor delete';
 }
+
+/**
+ * Where a page shows a connected account's avatar: the app's own `/avatars/<id>`, never the network's
+ * image host, whose cookies and expiring addresses stay out of the browser (routes/avatars.$accountId.ts)
+ */
+export const accountAvatar = (account: { id: number; avatarUrl: string | null }): string | null => (account.avatarUrl ? `/avatars/${account.id}` : null);

@@ -12,6 +12,6 @@ import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
 export const whoAmI = createServerFn({ method: 'GET' }).handler(async () => {
   const session = await readSession((await appContext()).secrets, cookieOf(getRequest(), SESSION_COOKIE));
   const login = session?.login ?? '';
-  const fallback = login ? `https://github.com/${encodeURIComponent(login)}.png?size=64` : null;
+  const fallback = login ? `https://avatars.githubusercontent.com/${encodeURIComponent(login)}?size=64` : null;
   return { login, name: session?.name ?? null, avatarUrl: imageUrl(session?.avatarUrl) ?? fallback };
 });

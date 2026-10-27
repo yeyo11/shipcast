@@ -5,8 +5,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { chromium, type BrowserContext, type Page } from 'playwright-core';
 
 /**
- * The app's reflow and accessibility check, standing in for a Lighthouse gate CI cannot run (it needs
- * a database and a session). Against a running app, it signs in with a console link, opens every
+ * The app's reflow and accessibility check, beside lighthouse-check.ts: neither runs in CI (they
+ * need a database and a session). Against a running app, it signs in with a console link, opens every
  * page at each width and fails on horizontal overflow (WCAG 2.2 reflow: nothing wider than a 320 px
  * screen) or on an axe-core violation of serious or critical impact. It also opens the command
  * palette and an alert dialog, so the popups are checked too. Not part of `pnpm test`.
