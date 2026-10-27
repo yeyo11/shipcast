@@ -349,14 +349,8 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .mark .dot.d-off i { background: var(--sc-raised); }
 
 /* A launch's page: a compact header, the numbers first, one quiet line, then the tabs */
-.lhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px 24px; margin: 8px 0 20px; }
-.lhead-text { min-width: 0; }
-.lhead-back { display: inline-block; margin-bottom: 10px; font: var(--sc-label); color: var(--sc-muted); }
-.lhead h1 { font-size: clamp(40px, 6vw, 72px); overflow-wrap: anywhere; }
 .lhead-ref { font: 600 clamp(16px, 2vw, 22px)/1 var(--sc-font-mono); text-transform: none; letter-spacing: 0; color: var(--sc-muted); vertical-align: middle; }
-.lhead p { margin: 10px 0 0; font-size: 15px; overflow-wrap: anywhere; }
-.lhead-actions { justify-content: flex-end; }
-.lhead + .notice, .notice + .notice { margin-bottom: 16px; }
+.notice + .notice { margin-bottom: 16px; }
 /* A one-line strip: what waits for the owner on a page, without the weight of a poster band */
 .strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 16px; margin: 0 0 20px; border-radius: var(--sc-radius-card); }
 .strip-yellow { background: var(--sc-yellow); color: var(--sc-on-yellow); }

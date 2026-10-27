@@ -60,7 +60,6 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
 @media (pointer: coarse) { .input.input-small { min-height: 44px; } }
 
 /* A launch's compact header is not a band: the bar follows it without pulling up */
-.lhead + .page-toolbar-sentinel + .page-toolbar { margin-top: 0; }
 
 /* ---------- A Settings section's head: one height like the page bands, folding with them ---------- */
 .section-intro { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); align-items: center; gap: 0 24px; height: 140px; margin-bottom: 20px; overflow: hidden; }

@@ -4,8 +4,8 @@ import { Jobs } from '../../../components/Jobs';
 import { Channels, metricWords } from '../../../components/launch/Channels';
 import { ChannelIcon, DailyBars, TotalsRow } from '../../../components/launch/Glance';
 import { AccountNumbers } from '../../../components/launch/Numbers';
-import { EmptyDrafts } from '../../../components/illustrations';
-import { Empty } from '../../../components/PageHead';
+import { Automation, EmptyDrafts, PublishFailed, Shipped, WaitingForYou } from '../../../components/illustrations';
+import { Empty, PageHead } from '../../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { ChevronIcon, ExternalIcon, SendIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
@@ -23,6 +23,15 @@ type TabId = (typeof TABS)[number];
 interface LaunchSearch {
   tab?: TabId;
   channel?: string;
+}
+
+/** The banner's illustration tells where the launch is: shipped, waiting, failed, on its way or set aside */
+function LaunchArt({ status }: { status: string }) {
+  if (status === 'published') return <Shipped width={200} />;
+  if (status === 'drafted') return <WaitingForYou width={200} />;
+  if (status === 'failed') return <PublishFailed width={200} />;
+  if (status === 'skipped') return <EmptyDrafts width={200} />;
+  return <Automation width={200} />;
 }
 
 export const Route = createFileRoute('/_app/launches/$id')({
@@ -302,17 +311,17 @@ function LaunchPage() {
 
   return (
     <>
-      <header className="lhead">
-        <div className="lhead-text">
-          <h1 className="ph">
+      <PageHead
+        title={
+          <>
             {launch.ref.startsWith('article:') ? 'Article' : launch.repo.split('/')[1]}
             {!launch.ref.startsWith('article:') && <span className="lhead-ref"> {launch.ref}</span>}
-          </h1>
-          <p className="muted">
-            {launch.repo} · {launch.kind} · launched {launchDateLabel(launch.createdAt, timezone)}
-          </p>
-        </div>
-      </header>
+          </>
+        }
+        art={<LaunchArt status={launch.status} />}
+      >
+        {launch.repo} · {launch.kind} · launched {launchDateLabel(launch.createdAt, timezone)}
+      </PageHead>
       <PageToolbar
         label="This launch"
         controls={
