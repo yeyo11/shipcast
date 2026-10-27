@@ -1,7 +1,7 @@
 {
   "name": "shipcast",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
   "description": "Launch your GitHub projects: on each release, analyse the repo with Claude, generate the launch content and publish it per channel after your approval",
   "license": "MIT",
   "type": "module",

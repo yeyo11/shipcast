@@ -1,6 +1,6 @@
 {
   "name": "@shipcast/web",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Shipcast's web app: launches and their numbers, the channels and their accounts, drafts to review and articles to publish",
   "license": "MIT",

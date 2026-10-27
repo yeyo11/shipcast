@@ -10,6 +10,11 @@ publishing:
   mastodon: approval
   instagram: approval
   newsletter: approval
+  threads: approval
+  linkedin: approval
+  telegram: approval
+  discord: approval
+  githubDiscussions: approval
 
 assets:
   demo: docs/media/tour.gif
