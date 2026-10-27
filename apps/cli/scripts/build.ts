@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, write
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { build, type Plugin } from 'esbuild';
+import { parse } from 'yaml';
 
 /*
  * Builds the npm package `@yeyo11/shipcast` and, with --action, the contents of the Action's repo
@@ -109,6 +110,9 @@ const manifest = {
   bugs: 'https://github.com/yeyo11/shipcast/issues',
   keywords: ['launch', 'release', 'github-action', 'devto', 'bluesky', 'mastodon', 'blog', 'ai', 'claude', 'openai'],
   dependencies,
+  // The workspace's security overrides (pnpm-workspace.yaml): npm honours them where this package is
+  // the root project, which is the Action's install
+  overrides: (parse(readFileSync(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')) as { overrides?: Record<string, string> }).overrides ?? {},
 };
 writeFileSync(join(out, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`Built ${NAME}@${version} in ${out} (${Object.keys(dependencies).length} dependencies)`);
