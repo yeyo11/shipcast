@@ -154,9 +154,10 @@ const telegramRules = (member: unknown, calls: Call[], extra: Array<[string, () 
   fakeFetch(
     [
       ...extra,
+      // getChatMember first: the rules match by prefix, and getChat is a prefix of it
+      ['POST https://api.telegram.org/botT/getChatMember', () => Response.json({ ok: true, result: member })],
       ['POST https://api.telegram.org/botT/getChat', () => Response.json({ ok: true, result: { title: 'Shipcast news', description: 'Releases', username: 'shipnews', photo: { small_file_id: 'f' } } })],
       ['POST https://api.telegram.org/botT/getMe', () => Response.json({ ok: true, result: { id: 42, username: 'bot' } })],
-      ['POST https://api.telegram.org/botT/getChatMember', () => Response.json({ ok: true, result: member })],
     ],
     calls,
   );

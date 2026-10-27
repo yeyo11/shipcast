@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-10-25T20:26:04.582677797Z
+created_at: 2026-10-27T17:44:50.219306517Z
+updated_at: 2026-10-27T17:45:56.266034156Z
 tags:
     - api
     - reference
@@ -14,6 +14,7 @@ tags:
     - phase-10
     - mcp
     - comments
+    - profiles
 ---
 # The REST API
 
@@ -45,7 +46,7 @@ wrong ones.
 
 The OpenAPI 3.1 document is at `GET /api/v1/openapi.json`, public, built from the same table the
 routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats routes of
-`stats-api.ts`), so it cannot drift.
+`stats-api.ts` and the profile routes of `profile-api.ts`), so it cannot drift.
 
 | Route | Scope | Does |
 | --- | --- | --- |
@@ -53,6 +54,8 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats
 | `GET /launches/{id}` | read | One launch: its posts (each with its `status` and `scheduledAt`), failures, latest number of each metric, each search engine's index status per article, and its drafts pull request with the list of files (their text stays in the pull request) |
 | `GET /accounts` | read | The connected accounts with their public settings and last check; secrets stay in the keychain |
 | `GET /accounts/{accountId}/growth?from=&to=` | read | An account's followers, following and posts per day from its snapshots, with the change since the one before; the last 90 days by default ([stats.md](stats.md)) |
+| `GET /profile-capabilities` | read | What each network lets Shipcast do with an account's profile: `{ read, edit, fields, editable, limits, note }` per network ([decisions/account-analysis.md](decisions/account-analysis.md)) |
+| `GET /accounts/{accountId}/profile-review` | read | `{ capability, review }`: the account's profile capability, narrowed by its credential (`edit: "reconnect"` for a Mastodon token without `write:accounts`, `"no"` for a Telegram bot without the admin right), and its latest AI review with its proposals (`field`, `current`, `proposed`, `why`, `problem`, `appliedAt`), `null` until one ran |
 | `GET /stats/overview?from=&to=&compare=previous` | read | Totals per family (views, reactions, comments, shares, clicks, impressions) overall, per channel and per account, against the previous period or `compareFrom`/`compareTo`, with deltas ([stats.md](stats.md)) |
 | `GET /stats/series?metric=&groupBy=&bucket=` | read | One series per channel, account or launch, per day or week: the increase per bucket and the running total ([stats.md](stats.md)) |
 | `GET /stats/ranking?by=&order=&limit=&offset=` | read | Posts, launches or accounts ranked by popularity normalised per network, with the raw numbers and each network's yardstick ([stats.md](stats.md)) |
@@ -74,6 +77,8 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats
 | `DELETE /posts/{postId}` | write | Deletes one published post (dev.to unpublishes it). Answers `{ "post" }`, now `deleted`; the launch never publishes it again |
 | `PATCH /launches/{id}/posts` | write | The same change to every live post of the launch, or of `"channels": [...]`, each network taking the fields it has; scheduled pieces are left out. Answers `{ "outcomes": [...] }`, one per post: `ok` with the post, or the `reason` (`unsupported`, `invalid`, `no_credentials`, `failed`…) and the `problem` |
 | `DELETE /launches/{id}/posts?channels=a,b` | write | Deletes every live post of the launch, or of the channels named; answers the outcomes the same way |
+| `POST /accounts/{accountId}/profile-review` | write | A job reviews the account's profile with the AI settings' `profile` task; nothing changes on the network. The body is optional: `{ "pasted"?: { "displayName"?, "bio"?, "links"?: "Label: value\n…" }, "language"?: "es" }`, `pasted` for a network whose API cannot read the profile (Instagram, Threads, LinkedIn, Reddit), `language` one of the brand's |
+| `PATCH /accounts/{accountId}/profile` | write | `{ "displayName"?, "bio"?, "links"?: [{ "name", "value" }] }`, at least one: changes the profile on its network with the account's own credential (Mastodon, Bluesky, a Telegram channel), only the fields sent, within the network's limits. Answers `{ "profile" }`, as the network has it now, or `null` |
 | `POST /comments/check` | write | Check comments now: a job reads every live post's comments and drafts the new ones' replies |
 | `POST /comments/{commentId}/draft` | write | A job drafts the comment's reply again with the AI |
 | `PATCH /comments/{commentId}` | write | `{ "draft": "…" }`: writes or edits the reply, within the channel's limit; it waits for approval. Answers `{ "comment" }` |
@@ -89,20 +94,20 @@ the server's zone, which is nobody's choice, and is refused.
 
 The post ids are the ones `GET /launches/{id}` lists under `posts`, the comment ids the ones
 `GET /comments` lists. A write that starts work answers **202** with `{ "job": "<id>" }`, to follow at
-`/jobs`; an edit, a delete, a schedule, or a reply sent or dismissed is made during the request and
-answers **200**. Errors are `{ "error": { "code", "message" } }`:
+`/jobs`; an edit, a delete, a schedule, a profile edit, or a reply sent or dismissed is made during the
+request and answers **200**. Errors are `{ "error": { "code", "message" } }`:
 
 | Status | Code | When |
 | --- | --- | --- |
-| 400 | `invalid_input` | A field, a query parameter or the cursor is not valid; an edit with a field that network does not take; a period backwards or a series of more than 400 buckets; a time without its offset, a channel with no time, a zone that is not IANA; a reply that is empty, over the channel's limit, or approved with no draft |
+| 400 | `invalid_input` | A field, a query parameter or the cursor is not valid; an edit with a field that network does not take; a period backwards or a series of more than 400 buckets; a time without its offset, a channel with no time, a zone that is not IANA; a reply that is empty, over the channel's limit, or approved with no draft; a profile field over the network's limit, links not written as `Label: value`, or a review of a network that cannot read the profile with nothing pasted |
 | 401 | `unauthorized` | No token, a wrong one, a revoked one, or only the session cookie |
 | 403 | `insufficient_scope` | The token lacks the route's scope |
 | 404 | `not_found` | No such launch, post, account, comment or route |
 | 405 | `method_not_allowed` | The route exists with another method (`Allow` lists them) |
-| 409 | `refused` | The work was refused: launched already, a failing pre-flight, drafts that do not merge; a network that cannot edit or delete, a post deleted already or still scheduled, no credentials for the account it went out with; a schedule for a piece out already or a launch done; a reply on a network that cannot send one (dev.to), to the owner's own comment, or to a comment sent, being sent or dismissed already |
+| 409 | `refused` | The work was refused: launched already, a failing pre-flight, drafts that do not merge; a network that cannot edit or delete, a post deleted already or still scheduled, no credentials for the account it went out with; a schedule for a piece out already or a launch done; a reply on a network that cannot send one (dev.to), to the owner's own comment, or to a comment sent, being sent or dismissed already; a profile edit on a network that cannot make it, or with a credential that must be connected again |
 | 415 | `unsupported_media_type` | A body that is not `application/json` |
 | 429 | `rate_limited` | Ten wrong tokens from this client in ten minutes; see `Retry-After` |
-| 502 | `upstream` | The network refused the edit, the delete or the reply; the message is what it said |
+| 502 | `upstream` | The network refused the edit, the delete, the reply or the profile edit; the message is what it said |
 
 ## Examples
 
@@ -130,6 +135,10 @@ curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/comments?status=draft-ready"
 curl -X PATCH -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"draft":"Not yet: it is planned."}' "$APP/api/v1/comments/7"
 curl -X POST -H "authorization: Bearer $TOKEN" "$APP/api/v1/comments/7/approve"
+curl -X POST -H "authorization: Bearer $TOKEN" "$APP/api/v1/accounts/2/profile-review"
+curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/accounts/2/profile-review"
+curl -X PATCH -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"bio":"The proposed bio"}' "$APP/api/v1/accounts/2/profile"
 curl "$APP/api/v1/openapi.json"
 ```
 
@@ -141,16 +150,17 @@ cookie, for what used it before.
 Unit tests on a PGlite registry cover the tokens (creation, hash, verification, revocation, a
 foreign pepper), the scopes, the limit on wrong tokens and every route's answers
 (`packages/runtime/test/api-tokens.test.ts`, `apps/web/test/api.test.ts`,
-`apps/web/test/stats-api.test.ts`), the edit, delete, scheduling and comment routes included, with
-fake connectors. On 2026-10-25 the built app ran against a copy of the live registry in a throwaway
-Postgres, with automation off: tokens made with the CLI, every read route answered, and the 400, 401
-(none, wrong, cookie only, revoked), 403, 404, 405, 409, 415 and 429 cases answered as above. No
-write that starts real work was sent. The stats queries were run the same day against another such
-copy ([stats.md](stats.md#checked)), the recommendations against a third
-([scheduling.md](scheduling.md#checked)), and the comment assistant's reading, drafting and one send
-to a test post of its own against a fourth
-([decisions/comment-assistant.md](decisions/comment-assistant.md#checked)).
+`apps/web/test/stats-api.test.ts`, `apps/web/test/profile-api.test.ts`), the edit, delete,
+scheduling, comment and profile routes included, with fake connectors. On 2026-10-25 the built app
+ran against a copy of the live registry in a throwaway Postgres, with automation off: tokens made with
+the CLI, every read route answered, and the 400, 401 (none, wrong, cookie only, revoked), 403, 404,
+405, 409, 415 and 429 cases answered as above. No write that starts real work was sent. The stats
+queries were run the same day against another such copy ([stats.md](stats.md#checked)), the
+recommendations against a third ([scheduling.md](scheduling.md#checked)), and the comment
+assistant's reading, drafting and one send to a test post of its own against a fourth
+([decisions/comment-assistant.md](decisions/comment-assistant.md#checked)). The profile routes of
+2026-10-27 were checked with fake networks only; no real profile was read or edited.
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
