@@ -25,8 +25,14 @@ export const launches = pgTable(
     createdAt: text('created_at').notNull().default(nowIso),
     updatedAt: text('updated_at').notNull().default(nowIso),
   },
-  // The claim: a second launch of the same repo and ref is refused by the database, not by a check
-  (t) => [unique('launches_repo_ref_unique').on(t.repo, t.ref)],
+  (t) => [
+    // The claim: a second launch of the same repo and ref is refused by the database, not by a check
+    unique('launches_repo_ref_unique').on(t.repo, t.ref),
+    // The list's order, alone or after a status or a repo, read forwards or backwards (newest or oldest first)
+    index('launches_by_newest').on(t.createdAt.desc(), t.id.desc()),
+    index('launches_by_status').on(t.status, t.createdAt.desc(), t.id.desc()),
+    index('launches_by_repo').on(t.repo, t.createdAt.desc(), t.id.desc()),
+  ],
 );
 
 // One row per published piece: the post itself, an Instagram story or comment, one newsletter issue

@@ -340,7 +340,7 @@ export default function TourRuntime({ onEnd }: { onEnd: () => void }) {
   // The launch page the tour shows is the newest launch's; without one, that step is left out
   const [launchId, setLaunchId] = useState<number | null | undefined>(undefined);
   useEffect(() => {
-    void listLaunches()
+    void listLaunches({ data: {} })
       .then((data) => setLaunchId(data.launches[0]?.id ?? null))
       .catch(() => setLaunchId(null));
   }, []);

@@ -59,6 +59,18 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
 .comment-filters-popup { width: min(560px, calc(100vw - 16px), var(--available-width, 560px)); max-width: none; }
 @media (pointer: coarse) { .input.input-small { min-height: 44px; } }
 
+/* Launches' bar: the Comments bar, then the order as a compact Select */
+.launch-toolbar { flex: 0 1 auto; }
+.launch-sort { flex: none; min-width: 150px; }
+.launch-sort .field { gap: 0; }
+.launch-filters-clear { grid-column: 1 / -1; justify-self: start; }
+.launch-nomatch { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 8px 0 28px; }
+.launch-nomatch p { margin: 0; }
+@media (max-width: 640px) {
+  .launch-toolbar .comment-search { flex: none; width: min(260px, 70vw); min-width: 0; }
+  .launch-sort .ui-trigger { min-height: 44px; }
+}
+
 /* A launch's compact header is not a band: the bar follows it without pulling up */
 
 /* ---------- A Settings section's head: one height like the page bands, folding with them ---------- */
