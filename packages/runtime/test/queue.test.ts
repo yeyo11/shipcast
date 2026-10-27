@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
 import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
 import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
-import { armScheduled, MemoryStore, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
+import { armScheduled, LOST_RUNNING, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
 
 /*
  * The queue on PGlite: the real pg-boss and the real SQL in this process. Installing pg-boss's schema
@@ -180,7 +180,24 @@ test('a row whose job the queue no longer has is not left running after a start'
   await queueOn(db).start();
   const row = await db.registry.job('00000000-0000-4000-8000-000000000000');
   assert.equal(row?.state, 'failed');
-  assert.deepEqual(row?.log, ['The queue no longer has this job']);
+  assert.deepEqual(row?.log, [LOST_RUNNING]);
+});
+
+test('a round queued in a copy whose pg-boss jobs were cleared by hand says it never ran', async () => {
+  // What a preview copy did on 2026-10-26: production's next round was queued when it was dumped,
+  // and the copy ran `delete from pgboss.job where state in ('created','retry')` before starting
+  const db = await database();
+  const first = queueOn(db);
+  const id = await scheduleRound(first, 'polling', 300);
+  assert.equal((await db.registry.job(id!))?.state, 'created');
+  await first.stop(1000);
+  await db.client.exec("DELETE FROM pgboss.job WHERE state IN ('created', 'retry')");
+
+  await queueOn(db).start();
+  const row = await db.registry.job(id!);
+  assert.equal(row?.state, 'failed');
+  assert.deepEqual(row?.log, [NEVER_RAN]);
+  assert.match(NEVER_RAN, /^The queue no longer has this job/, 'the line the owner saw still starts the same way');
 });
 
 test('a launch left generating by a draft that was cut short is failed at a start, so it can be launched again', async () => {

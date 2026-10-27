@@ -117,6 +117,11 @@ export interface QueueOptions {
   retryDelaySeconds?: number;
 }
 
+/** The last line of a row whose pg-boss job is gone: waiting, it never ran, so nothing was done */
+export const NEVER_RAN = 'The queue no longer has this job: it was removed before it ran, so nothing was done';
+/** …and one that had started, whose end nobody recorded */
+export const LOST_RUNNING = 'The queue no longer has this job: it stopped without its end being recorded';
+
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** The registry's state of a job pg-boss reports, the cancelled ones among the failed */
@@ -188,8 +193,11 @@ export class WorkQueue {
       if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
       const [job] = await this.#boss.findJobs(record.queue, { id: record.id });
       if (!job) {
+        // pg-boss only deletes a waiting job after its retention (14 days) and an ended one a week
+        // after it ended, so in practice a row lands here when pg-boss's tables were edited by hand,
+        // as a preview copy that clears the queued work does. One that never started did nothing.
         await this.#registry.updateJob(record.id, { state: 'failed', ended: true });
-        await this.#registry.logJob(record.id, 'The queue no longer has this job');
+        await this.#registry.logJob(record.id, record.state === 'created' ? NEVER_RAN : LOST_RUNNING);
         continue;
       }
       const state = stateOf(job.state);

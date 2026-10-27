@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Channel } from '@shipcast/schema';
 import type { CommentStatus, Registry } from '../src/index.ts';
+import { connectPglite } from '../src/db/connect.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 /** Two launches, a post each on two channels, and `n` comments spread over them with every status */
@@ -101,4 +102,21 @@ test('the facets count what each filter would offer, in grouped queries', async 
       ['bluesky', 1],
     ],
   );
+});
+
+test('the search has trigram indexes on the text and both author columns, and the planner can use them', async () => {
+  const { client, close } = await connectPglite();
+  try {
+    const { rows } = await client.query<{ indexname: string }>("SELECT indexname FROM pg_indexes WHERE tablename = 'comments' AND indexdef LIKE '%gin_trgm_ops%' ORDER BY indexname");
+    assert.deepEqual(
+      rows.map((r) => r.indexname),
+      ['comments_author_handle_trgm', 'comments_author_name_trgm', 'comments_text_trgm'],
+    );
+    // With sequential scans priced out, an ILIKE inside the text must still find an index path
+    await client.exec('SET enable_seqscan = off');
+    const plan = await client.query<{ 'QUERY PLAN': string }>("EXPLAIN SELECT id FROM comments WHERE text ILIKE '%install%' OR author_handle ILIKE '%install%' OR author_name ILIKE '%install%'");
+    assert.match(plan.rows.map((r) => r['QUERY PLAN']).join('\n'), /comments_text_trgm/);
+  } finally {
+    await close();
+  }
 });

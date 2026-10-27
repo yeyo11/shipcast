@@ -217,6 +217,11 @@ export const comments = pgTable(
     // The page's filters: a channel's newest, and the newest of all, both in the order they are listed
     index('comments_by_channel').on(t.channel, t.createdAt.desc(), t.id.desc()),
     index('comments_by_newest').on(t.createdAt.desc(), t.id.desc()),
+    // The page's search is ILIKE '%words%' on these three: only trigram indexes serve a match
+    // inside the text, and Postgres ORs their bitmaps (pg_trgm is created by migration 0010)
+    index('comments_text_trgm').using('gin', t.text.op('gin_trgm_ops')),
+    index('comments_author_handle_trgm').using('gin', t.authorHandle.op('gin_trgm_ops')),
+    index('comments_author_name_trgm').using('gin', t.authorName.op('gin_trgm_ops')),
   ],
 );
 

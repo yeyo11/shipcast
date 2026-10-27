@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T15:51:51.332167626Z
-updated_at: 2026-10-26T16:22:19.718539155Z
+created_at: 2026-10-26T16:39:38.711118317Z
+updated_at: 2026-10-27T17:40:56.888542084Z
 tags:
     - web-app
     - dashboard
@@ -85,6 +85,20 @@ runs on the owner's machine.
   another data folder obtained a certificate there and wrote its key over the keychain entry the real
   app uses, which then failed to start; that is why. A preview points at a throwaway Postgres restored
   from a copy of the registry, with automation Off.
+- **A preview with fake networks writes nowhere.** With `SHIPCAST_PREVIEW_FAKE_NETWORKS=1` as well
+  (it only works with `SHIPCAST_APP_TLS=off`, which production never is), `src/server/preview.server.ts`
+  swaps every connector that would change a post for a fake that answers success, sends the
+  connectors' other writes to a fetch that answers an empty success, and, since 2026-10-27, makes the
+  GitHub client's writes **dry runs**: `previewGitHubFetch`, passed to `createRuntime` as
+  `githubFetch`, lets reads through (drafts, releases, `brand.yml`) and answers every write to a repo
+  (a drafts pull request, a commit of an article or of `brand.yml`, a merge) with a logged, plausible
+  fake: shas of the right shape, pull request number 0. Before that the GitHub client was the real one
+  on a preview, so the onboarding's **Commit brand.yml**, and the drafting a round would start were
+  automation left on, wrote to the owner's repos for real; the drafting, draft edits and approving
+  the owner starts were already refused, and still are, since they would spend an AI run or act on a
+  real pull request. The App's token minting and the sign-in keep the real fetch: without them a
+  preview could not read. `apps/web/test/preview-github.test.ts` drives the REST client's writes and
+  a runtime through it with a GitHub that fails on any write.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
   `/login?next=<the page>` and answers everything else with 401, marked `x-shipcast-session: required`.
   When a session ends while a page is open, `components/SessionExpiry.tsx` reads that mark on the next
@@ -188,8 +202,15 @@ runs on the owner's machine.
   comments, with counts. The query is `Registry.commentsPage` (one join of comment and post, a count
   of the same filter for the total, the indexes on status, channel and date; no query per row) and
   `commentFacets` (three grouped queries); "waiting" covers new, drafted, being sent and failed
-  comments. **Approve and send** asks first in the app's alert dialog (the network, and that the reply
-  cannot be edited afterwards). Each channel's reply mode is below the list.
+  comments. **The words** are `ILIKE '%words%'` on the text, the author's handle and the author's
+  name, which no btree index can serve; since 2026-10-27 migration `0010_comments_search` creates
+  `pg_trgm` (if absent) and a GIN trigram index on each of the three, and Postgres ORs their bitmaps.
+  Measured on a copy of production with 50,000 synthetic comments: a word found in one comment went
+  from 130 ms (a sequential scan) to 2 ms, an author's handle from 138 ms to 6 ms, a word in an
+  eighth of the comments from 121 ms to 54 ms (the count; the page likewise). Words of one or two
+  letters have no trigram and still scan, which on this table is the 130 ms of before. **Approve and
+  send** asks first in the app's alert dialog (the network, and that the reply cannot be edited
+  afterwards). Each channel's reply mode is below the list.
 - **Stats** (`/stats`): how the launches did, under the toolbar (the period, the rest behind Filters,
   and Export CSV, its glyph alone on a phone; the range is the caption under it) in four tabs:
   Overview (the totals, which pick the chart's metric, and the time chart), Ranking (the posts
@@ -391,11 +412,14 @@ never run the same round twice.
   what to tick on GitHub for a webhook set by hand.
 - **Work in progress**: the queue's jobs of the last day (drafting, publishing, GitHub's deliveries),
   each with its last log line and its state, followed while one runs; it moved here from the
-  launches list, where it took the room of the launches. Ten to a page, cut on the server
-  (`jobsPage` in `src/server/jobs.server.ts`, which the registry's query cannot do itself: it has no
-  offset and the list drops some rows after it), with a filter by state (All, Running, Failed, Done,
-  each with its count) and a box of bounded height that scrolls with ScrollArea. A launch's own jobs
-  (on its Details tab) are a bounded list too.
+  launches list, where it took the room of the launches. Ten to a page, with a filter by state (All,
+  Running, Failed, Done, each with its count) and a box of bounded height that scrolls with
+  ScrollArea. Since 2026-10-27 the database cuts the pages (`jobsPage` in `src/server/jobs.server.ts`
+  over `Registry.jobs` with an offset and `Registry.jobCounts`, one grouped count per state): the
+  rule of what the list leaves out (rounds that ended well, jobs that found automation off) is the
+  registry's `listed` filter, in SQL. Before, the day's newest 200 rows were read and cut in memory,
+  so a busy day lost its earliest jobs. A launch's own jobs (on its Details tab) are a bounded list
+  too. See [api.md](api.md#paging-the-work-list) for why the page uses an offset and the API a cursor.
 - **What happened**: the last round and the last delivery, with their lines; and **Run a round now**
   (in the toolbar), which moves the round already queued to now (refused while one is running, in
   any process).

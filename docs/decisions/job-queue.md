@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:18:39.160320016Z
-updated_at: 2026-10-25T15:18:39.160320016Z
+created_at: 2026-10-25T15:23:21.947209247Z
+updated_at: 2026-10-27T17:29:19.251508053Z
 tags:
     - decision
     - job-queue
@@ -84,9 +84,31 @@ around every handler writes it at each transition; a job a schedule sent gets it
 At start the queue reconciles the rows still waiting or running with pg-boss, so a job it expired or
 deleted is not left showing "running". The round prunes rows that ended over a fortnight ago.
 
-The Launches page lists the last day's jobs (rounds only while running or failed; the Automation page
-has the last round), a launch's page its own, `/api/launches` each launch's, and the REST API's
-`GET /jobs` the last day's ([api.md](../api.md)).
+The Automation page's work list has the last day's jobs (rounds only while running or failed; the
+same page has the last round), paged and counted in the database; a launch's page has its own,
+`/api/launches` each launch's, and the REST API's `GET /jobs` the last day's, a cursor at a time
+([api.md](../api.md)).
+
+## "The queue no longer has this job"
+
+The line a row gets when the reconciliation at start finds no pg-boss job for it. pg-boss deletes a
+job on its own only once it is old: a waiting one 14 days after its start time (its retention), an
+ended one a week after it ended. So in practice the line means pg-boss's tables were changed by hand.
+
+It was seen once, on 2026-10-26, as a failed "Automation round" in a preview, never in production:
+the production registry and every backup in `data/backups/` were searched on 2026-10-27 and none has
+the line. The preview (port 8763, the onboarding's copy of live data) was made from a `pg_dump` of
+production taken while production's next round was queued, and its recipe then ran
+`delete from pgboss.job where state in ('created','retry')` so the copy would not run production's
+queued work. The registry's row of that round stayed `created`; at the preview's start the
+reconciliation found no job for it and failed it with this line, and the work list shows a failed
+round. Nothing ran and nothing was lost: it is harmless.
+
+Since 2026-10-27 the line says which case it was. A row still waiting reads "The queue no longer has
+this job: it was removed before it ran, so nothing was done"; one that had started reads "…: it
+stopped without its end being recorded". `packages/runtime/test/queue.test.ts` reproduces the
+preview's recipe. A preview that wants no queued work can keep doing so, or turn automation off
+(`automation:mode`) and let the queued round find it off.
 
 ## Stopping
 

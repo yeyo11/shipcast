@@ -75,6 +75,11 @@ export interface RuntimeOptions {
   secrets?: SecretStore;
   registry?: Registry;
   fetch?: typeof fetch;
+  /**
+   * The fetch of the GitHub REST client alone, over `fetch`: a preview's dry run of the writes to
+   * repos. Not the App's token minting or the sign-in, whose POSTs must stay real to read at all.
+   */
+  githubFetch?: typeof fetch;
 }
 
 const BRAND_TTL_MS = 5 * 60_000;
@@ -103,7 +108,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         ...(options.fetch && { fetch: options.fetch }),
       })
     : undefined;
-  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(options.fetch && { fetch: options.fetch }) });
+  const githubFetch = options.githubFetch ?? options.fetch;
+  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }) });
   const access: GitHubAccess = app ? { kind: 'app', slug: app.slug, bot: app.slug ? `${app.slug}[bot]` : undefined } : { kind: 'token' };
   const userTokens = app ? new GitHubUserTokens({ secrets, client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
 
