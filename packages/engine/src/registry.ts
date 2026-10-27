@@ -41,6 +41,48 @@ export interface JobChange {
   ended?: boolean;
 }
 
+/** Where a page of the work list starts: the last job of the previous one */
+export interface JobCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** Which jobs: a page's bounds aside */
+export interface JobConditions {
+  launchId?: number;
+  /** Created at or after this moment */
+  since?: string;
+  states?: readonly JobState[];
+  queues?: readonly string[];
+  /**
+   * Only what the work list shows: rounds run all day and Automation has the last one, so a round
+   * is listed only while running or when it failed, and a job that found automation off not at all.
+   * Kept in SQL so a page and its counts are cut by the database, never after the query.
+   */
+  listed?: boolean;
+}
+
+export interface JobFilter extends JobConditions {
+  limit?: number;
+  /** For numbered pages: how many of the newest to skip */
+  offset?: number;
+  /** For a cursor: only the jobs older than this one */
+  before?: JobCursor;
+}
+
+function jobConditions(filter: JobConditions): SQL[] {
+  const where: SQL[] = [];
+  if (filter.launchId !== undefined) where.push(eq(jobs.launchId, filter.launchId));
+  if (filter.since !== undefined) where.push(gte(jobs.createdAt, filter.since));
+  if (filter.states) where.push(inArray(jobs.state, [...filter.states]));
+  if (filter.queues) where.push(inArray(jobs.queue, [...filter.queues]));
+  if (filter.listed) {
+    where.push(sql`(${jobs.queue} <> 'round' OR ${jobs.state} IN ('active', 'failed'))`);
+    where.push(sql`NOT (${jobs.state} = 'completed' AND coalesce(${jobs.log} ->> 0, '') LIKE 'Automation is off%')`);
+  }
+  return where;
+}
+
 function toJob(row: typeof jobs.$inferSelect): JobRecord {
   return { ...row, state: row.state as JobState, log: Array.isArray(row.log) ? row.log : [] };
 }
@@ -1160,20 +1202,31 @@ export class Registry {
     return row ? toJob(row) : undefined;
   }
 
-  /** The newest first: a launch's, those created since a moment, those in some states */
-  async jobs(filter: { launchId?: number; since?: string; states?: readonly JobState[]; queues?: readonly string[]; limit?: number } = {}): Promise<JobRecord[]> {
-    const where: SQL[] = [];
-    if (filter.launchId !== undefined) where.push(eq(jobs.launchId, filter.launchId));
-    if (filter.since !== undefined) where.push(gte(jobs.createdAt, filter.since));
-    if (filter.states) where.push(inArray(jobs.state, [...filter.states]));
-    if (filter.queues) where.push(inArray(jobs.queue, [...filter.queues]));
-    const rows = await this.#db
+  /** The newest first: a launch's, those created since a moment, those in some states; a page at a time with `offset` or `before` */
+  async jobs(filter: JobFilter = {}): Promise<JobRecord[]> {
+    const where = jobConditions(filter);
+    // Keyset: the jobs strictly older than the last one of the previous page, in the list's own order
+    if (filter.before) where.push(sql`(${jobs.createdAt}, ${jobs.id}) < (${filter.before.createdAt}, ${filter.before.id})`);
+    const query = this.#db
       .select()
       .from(jobs)
       .where(and(...where))
       .orderBy(desc(jobs.createdAt), desc(jobs.id))
-      .limit(filter.limit ?? 100);
-    return rows.map(toJob);
+      .limit(filter.limit ?? 100)
+      .$dynamic();
+    return (await (filter.offset ? query.offset(filter.offset) : query)).map(toJob);
+  }
+
+  /** How many jobs of a filter are in each state, from one grouped query whatever their number */
+  async jobCounts(filter: JobConditions = {}): Promise<Record<JobState, number>> {
+    const rows = await this.#db
+      .select({ state: jobs.state, n: count() })
+      .from(jobs)
+      .where(and(...jobConditions(filter)))
+      .groupBy(jobs.state);
+    const counts: Record<JobState, number> = { created: 0, active: 0, retry: 0, completed: 0, failed: 0 };
+    for (const row of rows) if (row.state in counts) counts[row.state as JobState] = Number(row.n);
+    return counts;
   }
 
   /** Forgets the jobs that ended before a moment; returns how many */

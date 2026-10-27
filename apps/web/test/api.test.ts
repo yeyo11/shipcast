@@ -6,6 +6,7 @@ import { memoryRegistry } from '@shipcast/engine/testing';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
 import { checkBearer, FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
+import { jobsFeed } from '../src/server/jobs.server.ts';
 import { createSession, SESSION_COOKIE } from '../src/server/session.server.ts';
 
 const github: ReviewGitHub = {
@@ -48,7 +49,7 @@ async function setup(): Promise<Setup> {
     launchesRepo: 'yeyo11/launches',
     publicUrl: 'https://shipcast.example',
     limiter: new FailureLimiter(3, 60_000),
-    jobs: async () => [{ id: 'j1', title: 'Drafting', state: 'running', log: [], link: null, startedAt: '2026-10-25T00:00:00.000Z' }],
+    jobs: (page) => jobsFeed(registry, page),
     startLaunch: async (repo, ref, direct) => {
       calls.push(`launch ${repo} ${ref ?? '-'} ${direct}`);
       return repo === 'yeyo11/old' ? { ok: false, problem: 'launched already' } : { ok: true, job: 'j2' };
@@ -222,7 +223,31 @@ test('accounts come without secrets, and jobs as the app lists them', async () =
   assert.equal(accounts.status, 200);
   assert.match(text, /"network":"devto"/);
   assert.doesNotMatch(text, /secret/);
+  await s.registry.recordJob({ id: 'j1', queue: 'draft', title: 'Drafting' });
   assert.deepEqual(((await body(await call(s.deps, 'GET', '/jobs', { token: s.read }))).jobs as Array<{ id: string }>).map((j) => j.id), ['j1']);
+});
+
+test('jobs come a page at a time, and the cursor walks the whole day', async () => {
+  const s = await setup();
+  // Recorded in order, so newest first is j5..j1 whether or not two share a millisecond
+  for (let i = 1; i <= 5; i++) await s.registry.recordJob({ id: `j${i}`, queue: 'draft', title: `Drafting ${i}` });
+  // A round that ended well is not listed: Automation shows the last one
+  await s.registry.recordJob({ id: 'r1', queue: 'round', title: 'Round' });
+  await s.registry.updateJob('r1', { state: 'completed', ended: true });
+  const seen: string[] = [];
+  let cursor: string | null = null;
+  for (let pages = 0; pages < 5; pages++) {
+    const page: Record<string, unknown> = await body(await call(s.deps, 'GET', `/jobs?limit=2${cursor ? `&cursor=${cursor}` : ''}`, { token: s.read }));
+    seen.push(...(page.jobs as Array<{ id: string }>).map((j) => j.id));
+    cursor = page.next as string | null;
+    if (cursor === null) break;
+  }
+  assert.deepEqual(seen, ['j5', 'j4', 'j3', 'j2', 'j1']);
+  assert.equal((await call(s.deps, 'GET', '/jobs?limit=0', { token: s.read })).status, 400);
+  assert.equal((await call(s.deps, 'GET', '/jobs?cursor=nope', { token: s.read })).status, 400);
+  // A launches' cursor (a numeric id) is not a jobs' one
+  const launchCursor = Buffer.from(JSON.stringify(['2026-10-25T00:00:00.000Z', 3])).toString('base64url');
+  assert.equal((await call(s.deps, 'GET', `/jobs?cursor=${launchCursor}`, { token: s.read })).status, 400);
 });
 
 test('the writes start the same work the pages do, with their checks', async () => {

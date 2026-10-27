@@ -1,6 +1,6 @@
 import { FailureLimiter, type ApiDeps } from './api';
 import { appContext } from './context.server';
-import { jobsView } from './jobs.server';
+import { jobsFeed } from './jobs.server';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { editingDeps } from './posts.server';
 import { approve, armSchedule, startArticle, startLaunch, startPublishing } from './work.server';
@@ -18,7 +18,7 @@ export async function apiDeps(): Promise<ApiDeps> {
     launchesRepo: ctx.deps.launchesRepo,
     publicUrl: ctx.app.publicUrl,
     limiter,
-    jobs: () => jobsView(ctx.registry),
+    jobs: (page) => jobsFeed(ctx.registry, page),
     startLaunch,
     approve,
     startArticle,

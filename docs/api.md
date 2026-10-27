@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-10-25T20:26:04.582677797Z
+created_at: 2026-10-25T20:37:21.531797003Z
+updated_at: 2026-10-27T17:03:49.278519235Z
 tags:
     - api
     - reference
@@ -56,7 +56,7 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats
 | `GET /stats/overview?from=&to=&compare=previous` | read | Totals per family (views, reactions, comments, shares, clicks, impressions) overall, per channel and per account, against the previous period or `compareFrom`/`compareTo`, with deltas ([stats.md](stats.md)) |
 | `GET /stats/series?metric=&groupBy=&bucket=` | read | One series per channel, account or launch, per day or week: the increase per bucket and the running total ([stats.md](stats.md)) |
 | `GET /stats/ranking?by=&order=&limit=&offset=` | read | Posts, launches or accounts ranked by popularity normalised per network, with the raw numbers and each network's yardstick ([stats.md](stats.md)) |
-| `GET /jobs` | read | The work running or finished in the last day |
+| `GET /jobs?limit=&cursor=` | read | The work running or finished in the last day, newest first, as the app's work list shows it (rounds that ended well and jobs that found automation off are left out), 30 a page (up to 100). `next` is the cursor of the following page, `null` on the last; it is a keyset on the job's creation time and id, so a page never repeats or skips a job when new ones arrive. A launches' cursor is refused here |
 | `GET /capabilities` | read | What each channel can do with a published post: `{ edit, delete, note, fields }` per channel ([decisions/edit-delete.md](decisions/edit-delete.md)) |
 | `GET /recommendations?channel=&days=&count=` | read | The best times to publish on a channel Shipcast publishes, for the next `days` (7, up to 30), `count` of them (5, up to 30), one per day, best first: `{ channel, timezone, slots: [{ at, local, score, basis, reason }], history, audience }` ([scheduling.md](scheduling.md#recommended-times)) |
 | `GET /settings/timezone` | read | `{ "timezone" }`: the owner's IANA zone, `Europe/Madrid` until set |
@@ -112,6 +112,7 @@ TOKEN=shipcast_2_...
 
 curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches?limit=5&status=published"
 curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches/3"
+curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/jobs?limit=50"
 curl -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"repo":"owner/name","ref":"v1.0.0"}' "$APP/api/v1/launches"
 curl -X POST -H "authorization: Bearer $TOKEN" "$APP/api/v1/launches/3/retry/devto"
@@ -136,21 +137,32 @@ curl "$APP/api/v1/openapi.json"
 `/api/launches`, the older JSON list of the last hundred launches, still answers behind the session
 cookie, for what used it before.
 
+## Paging the work list
+
+`GET /jobs` and the Automation page's work list read the same rows (the registry's `jobs` table)
+with the same filter, `listed`, applied in SQL, so a page and its counts are the database's. Until
+2026-10-27 both read the day's newest 200 rows and cut them in memory, so a busy day lost its
+earliest jobs. Now the API pages with a keyset cursor on `(created_at, id)`, which suits a client
+walking the list, and the page with numbered pages over an offset plus one grouped count per state,
+because it shows "Page 2 of 5" and jumps by number; the list covers one day and ended jobs are pruned
+after two weeks, so the offset stays small.
+
 ## Checked
 
 Unit tests on a PGlite registry cover the tokens (creation, hash, verification, revocation, a
 foreign pepper), the scopes, the limit on wrong tokens and every route's answers
 (`packages/runtime/test/api-tokens.test.ts`, `apps/web/test/api.test.ts`,
 `apps/web/test/stats-api.test.ts`), the edit, delete, scheduling and comment routes included, with
-fake connectors. On 2026-10-25 the built app ran against a copy of the live registry in a throwaway
-Postgres, with automation off: tokens made with the CLI, every read route answered, and the 400, 401
-(none, wrong, cookie only, revoked), 403, 404, 405, 409, 415 and 429 cases answered as above. No
-write that starts real work was sent. The stats queries were run the same day against another such
-copy ([stats.md](stats.md#checked)), the recommendations against a third
-([scheduling.md](scheduling.md#checked)), and the comment assistant's reading, drafting and one send
-to a test post of its own against a fourth
+fake connectors. The jobs' cursor is walked to the end, and the work list's pages are checked on a day
+of more than 200 jobs (`apps/web/test/jobs-page.test.ts`). On 2026-10-25 the built app ran against a
+copy of the live registry in a throwaway Postgres, with automation off: tokens made with the CLI,
+every read route answered, and the 400, 401 (none, wrong, cookie only, revoked), 403, 404, 405, 409,
+415 and 429 cases answered as above. No write that starts real work was sent. The stats queries were
+run the same day against another such copy ([stats.md](stats.md#checked)), the recommendations
+against a third ([scheduling.md](scheduling.md#checked)), and the comment assistant's reading,
+drafting and one send to a test post of its own against a fourth
 ([decisions/comment-assistant.md](decisions/comment-assistant.md#checked)).
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]

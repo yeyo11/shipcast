@@ -31,6 +31,7 @@ import {
   type ApiScope,
   type ArticleInput,
   type EditDeps,
+  type JobCursor,
   type Launch,
   type LaunchStatus,
   type Post,
@@ -79,7 +80,8 @@ export interface ApiDeps {
   /** The public origin the OpenAPI document names as its server */
   publicUrl: string;
   limiter: FailureLimiter;
-  jobs(): Promise<JobView[]>;
+  /** A page of the last day's work list, the newest first; `next` starts the following page */
+  jobs(page: { limit: number; before?: JobCursor }): Promise<{ jobs: JobView[]; next: JobCursor | null }>;
   startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<WorkAnswer>;
   approve(launchId: number): Promise<WorkAnswer>;
   startArticle(input: ArticleInput, direct: boolean): Promise<WorkAnswer>;
@@ -172,17 +174,38 @@ async function launchResource(deps: ApiDeps, launch: Launch) {
 
 const STATUSES: readonly LaunchStatus[] = ['detected', 'generating', 'drafted', 'published', 'skipped', 'failed'];
 
-/** An opaque position in the launches' order: the last launch's creation time and id */
-const encodeCursor = (at: { createdAt: string; id: number }) => Buffer.from(JSON.stringify([at.createdAt, at.id])).toString('base64url');
+/** An opaque position in a list's order (launches, jobs): the last row's creation time and id */
+const encodeCursor = (at: { createdAt: string; id: number | string }) => Buffer.from(JSON.stringify([at.createdAt, at.id])).toString('base64url');
 
-function decodeCursor(cursor: string): { createdAt: string; id: number } {
+function readCursor(cursor: string): [string, unknown] {
   try {
     const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
-    if (Array.isArray(value) && typeof value[0] === 'string' && Number.isInteger(value[1])) return { createdAt: value[0], id: value[1] as number };
+    if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'string') return [value[0], value[1]];
   } catch {
     // falls through to the error below
   }
   throw new InvalidInput('cursor is not one this API gave');
+}
+
+function decodeCursor(cursor: string): { createdAt: string; id: number } {
+  const [createdAt, id] = readCursor(cursor);
+  if (!Number.isInteger(id)) throw new InvalidInput('cursor is not one this API gave');
+  return { createdAt, id: id as number };
+}
+
+/** A job's id is pg-boss's, a string */
+function decodeJobCursor(cursor: string): JobCursor {
+  const [createdAt, id] = readCursor(cursor);
+  if (typeof id !== 'string') throw new InvalidInput('cursor is not one this API gave');
+  return { createdAt, id };
+}
+
+/** `limit` of a list: an integer in its range, or the default when left out */
+function listLimit(url: URL, fallback: number): number {
+  const text = url.searchParams.get('limit');
+  const limit = text === null ? fallback : Number(text);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new InvalidInput('limit is an integer from 1 to 100');
+  return limit;
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -328,9 +351,7 @@ export const ROUTES: ApiRoute[] = [
     ],
     response: { status: 200, description: 'A page of launches', schema: { type: 'object', required: ['launches', 'next'], properties: { launches: { type: 'array', items: ref('Launch') }, next: { type: ['string', 'null'] } } } },
     async handle(deps, { url }) {
-      const limitText = url.searchParams.get('limit');
-      const limit = limitText === null ? 20 : Number(limitText);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new InvalidInput('limit is an integer from 1 to 100');
+      const limit = listLimit(url, 20);
       const status = url.searchParams.get('status');
       if (status !== null && !(STATUSES as readonly string[]).includes(status)) throw new InvalidInput(`status is one of ${STATUSES.join(', ')}`);
       const cursor = url.searchParams.get('cursor');
@@ -370,10 +391,17 @@ export const ROUTES: ApiRoute[] = [
     path: '/jobs',
     scope: 'read',
     operationId: 'listJobs',
-    summary: 'The work running or finished in the last day, the newest first',
-    response: { status: 200, description: 'The jobs', schema: { type: 'object', required: ['jobs'], properties: { jobs: { type: 'array', items: ref('Job') } } } },
-    async handle(deps) {
-      return json(200, { jobs: await deps.jobs() });
+    summary: 'The work running or finished in the last day, the newest first, a page at a time',
+    query: [
+      { name: 'limit', description: 'How many, 1 to 100 (30 by default)', schema: { type: 'integer', minimum: 1, maximum: 100, default: 30 } },
+      { name: 'cursor', description: 'The `next` of the previous page', schema: { type: 'string' } },
+    ],
+    response: { status: 200, description: 'A page of jobs', schema: { type: 'object', required: ['jobs', 'next'], properties: { jobs: { type: 'array', items: ref('Job') }, next: { type: ['string', 'null'] } } } },
+    async handle(deps, { url }) {
+      const limit = listLimit(url, 30);
+      const cursor = url.searchParams.get('cursor');
+      const page = await deps.jobs({ limit, ...(cursor !== null && { before: decodeJobCursor(cursor) }) });
+      return json(200, { jobs: page.jobs, next: page.next ? encodeCursor(page.next) : null });
     },
   },
   {

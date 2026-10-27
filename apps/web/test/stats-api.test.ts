@@ -19,7 +19,7 @@ async function setup() {
     launchesRepo: 'yeyo11/launches',
     publicUrl: 'https://shipcast.example',
     limiter: new FailureLimiter(),
-    jobs: async () => [],
+    jobs: async () => ({ jobs: [], next: null }),
     startLaunch: unused,
     approve: unused,
     startArticle: unused,
