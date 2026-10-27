@@ -32,17 +32,23 @@ import {
   type ArticleInput,
   type EditDeps,
   type Launch,
-  type LaunchStatus,
+  LAUNCH_ORDERS,
+  LAUNCH_STATUSES,
+  TRIGGERS,
+  type LaunchCursor,
+  type LaunchFilter,
+  type LaunchOrder,
   type Post,
   type Registry,
   type ReviewGitHub,
 } from '@shipcast/engine';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { hasScope, readWebMcp, verifyApiToken, type SecretStore } from '@shipcast/runtime';
-import type { Channel } from '@shipcast/schema';
+import { PackKind, type Channel } from '@shipcast/schema';
 import { id, InvalidInput, object } from './input.ts';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
+import { isRepo } from './launches-search.ts';
 import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest, moment } from './requests.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
@@ -170,19 +176,63 @@ async function launchResource(deps: ApiDeps, launch: Launch) {
   return { ...detail.launch, detail: detail.detail, metrics: detail.metrics, index: detail.index, drafts };
 }
 
-const STATUSES: readonly LaunchStatus[] = ['detected', 'generating', 'drafted', 'published', 'skipped', 'failed'];
+const STATUSES = LAUNCH_STATUSES;
 
-/** An opaque position in the launches' order: the last launch's creation time and id */
-const encodeCursor = (at: { createdAt: string; id: number }) => Buffer.from(JSON.stringify([at.createdAt, at.id])).toString('base64url');
+/**
+ * An opaque position in the launches' order: the last launch's creation time and id, and the order
+ * when it is the oldest first. A newest-first cursor is the two-item one this API always gave, so
+ * cursors handed out before the order existed still work.
+ */
+const encodeCursor = (at: LaunchCursor, order: LaunchOrder = 'newest') =>
+  Buffer.from(JSON.stringify(order === 'oldest' ? [at.createdAt, at.id, order] : [at.createdAt, at.id])).toString('base64url');
 
-function decodeCursor(cursor: string): { createdAt: string; id: number } {
+function decodeCursor(cursor: string, order: LaunchOrder = 'newest'): LaunchCursor {
+  let value: unknown;
   try {
-    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
-    if (Array.isArray(value) && typeof value[0] === 'string' && Number.isInteger(value[1])) return { createdAt: value[0], id: value[1] as number };
+    value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
   } catch {
     // falls through to the error below
   }
+  if (Array.isArray(value) && typeof value[0] === 'string' && Number.isInteger(value[1]) && (value.length === 2 || value.length === 3)) {
+    // A cursor walks the order it was given in: another order's would skip or repeat launches
+    if ((value[2] ?? 'newest') !== order) throw new InvalidInput('cursor belongs to the other sort: send the sort it was given with');
+    return { createdAt: value[0], id: value[1] as number };
+  }
   throw new InvalidInput('cursor is not one this API gave');
+}
+
+/** One of a closed list, or nothing when the parameter is absent; anything else is the client's mistake */
+function choice<T extends string>(params: URLSearchParams, name: string, allowed: readonly T[]): T | undefined {
+  const value = params.get(name);
+  if (value === null) return undefined;
+  if (!(allowed as readonly string[]).includes(value)) throw new InvalidInput(`${name} is one of ${allowed.join(', ')}`);
+  return value as T;
+}
+
+/** `GET /launches`' query as the registry's page request; every parameter is optional, as before */
+export function readLaunchesQuery(params: URLSearchParams): LaunchFilter & { limit: number; after?: LaunchCursor } {
+  const limitText = params.get('limit');
+  const limit = limitText === null ? 20 : Number(limitText);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new InvalidInput('limit is an integer from 1 to 100');
+  const status = choice(params, 'status', STATUSES);
+  const trigger = choice(params, 'trigger', TRIGGERS);
+  const kind = choice(params, 'kind', PackKind.options);
+  const order = choice(params, 'sort', LAUNCH_ORDERS);
+  const repo = params.get('repo');
+  if (repo !== null && !isRepo(repo)) throw new InvalidInput('repo is owner/name');
+  const q = params.get('q')?.trim() ?? '';
+  if (q.length > 200) throw new InvalidInput('q is at most 200 characters');
+  const cursor = params.get('cursor');
+  return {
+    limit,
+    ...(status && { status }),
+    ...(trigger && { trigger }),
+    ...(kind && { kind }),
+    ...(repo !== null && { repo }),
+    ...(q && { search: q }),
+    ...(order && { order }),
+    ...(cursor !== null && { after: decodeCursor(cursor, order) }),
+  };
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -320,26 +370,22 @@ export const ROUTES: ApiRoute[] = [
     path: '/launches',
     scope: 'read',
     operationId: 'listLaunches',
-    summary: 'The launches, the newest first, a page at a time',
+    summary: 'The launches, the newest first, a page at a time, filtered and searched',
     query: [
       { name: 'limit', description: 'How many, 1 to 100 (20 by default)', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
-      { name: 'cursor', description: 'The `next` of the previous page', schema: { type: 'string' } },
+      { name: 'cursor', description: 'The `next` of the previous page, sent with the same filters and sort', schema: { type: 'string' } },
       { name: 'status', description: 'Only launches in this state', schema: { type: 'string', enum: STATUSES } },
+      { name: 'trigger', description: 'Only launches started this way', schema: { type: 'string', enum: TRIGGERS } },
+      { name: 'kind', description: 'Only launches of this pack', schema: { type: 'string', enum: PackKind.options } },
+      { name: 'repo', description: 'Only one repository’s launches, `owner/name`', schema: { type: 'string' } },
+      { name: 'q', description: 'Words in the repository, the ref or an article’s title, case-insensitive', schema: { type: 'string', maxLength: 200 } },
+      { name: 'sort', description: 'The newest first (the default) or the oldest first', schema: { type: 'string', enum: LAUNCH_ORDERS, default: 'newest' } },
     ],
     response: { status: 200, description: 'A page of launches', schema: { type: 'object', required: ['launches', 'next'], properties: { launches: { type: 'array', items: ref('Launch') }, next: { type: ['string', 'null'] } } } },
     async handle(deps, { url }) {
-      const limitText = url.searchParams.get('limit');
-      const limit = limitText === null ? 20 : Number(limitText);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new InvalidInput('limit is an integer from 1 to 100');
-      const status = url.searchParams.get('status');
-      if (status !== null && !(STATUSES as readonly string[]).includes(status)) throw new InvalidInput(`status is one of ${STATUSES.join(', ')}`);
-      const cursor = url.searchParams.get('cursor');
-      const page = await deps.registry.launchesPage({
-        limit,
-        ...(status !== null && { status: status as LaunchStatus }),
-        ...(cursor !== null && { after: decodeCursor(cursor) }),
-      });
-      return json(200, { launches: await Promise.all(page.launches.map((l) => launchView(deps.registry, l))), next: page.next ? encodeCursor(page.next) : null });
+      const query = readLaunchesQuery(url.searchParams);
+      const page = await deps.registry.launchesPage(query);
+      return json(200, { launches: await Promise.all(page.launches.map((l) => launchView(deps.registry, l))), next: page.next ? encodeCursor(page.next, query.order) : null });
     },
   },
   {

@@ -187,6 +187,35 @@ test('launches are paged by cursor and filtered by status', async () => {
   }
 });
 
+test('launches are searched, filtered and sorted, and a cursor keeps its sort', async () => {
+  const s = await setup();
+  const claim = (repo: string, ref: string, trigger: 'release' | 'manual' | 'article' = 'release', kind: 'launch' | 'minor' = 'minor') =>
+    s.registry.claim({ repo, ref, trigger, kind, brand: 'personal' });
+  await claim('yeyo11/claudio', 'v1.0.0', 'release', 'launch');
+  await claim('yeyo11/claudio', 'v1.1.0', 'manual');
+  await claim('yeyo11/shipcast', 'v0.1.0');
+  await claim('yeyo11/launches', 'article:hello-world', 'article', 'launch');
+  const refs = async (query: string) => ((await body(await call(s.deps, 'GET', `/launches${query}`, { token: s.read }))).launches as Array<{ ref: string }>).map((l) => l.ref);
+
+  assert.deepEqual(await refs('?repo=yeyo11/claudio'), ['v1.1.0', 'v1.0.0']);
+  assert.deepEqual(await refs('?trigger=manual'), ['v1.1.0']);
+  assert.deepEqual(await refs('?kind=launch'), ['article:hello-world', 'v1.0.0']);
+  assert.deepEqual(await refs(`?q=${encodeURIComponent('Hello World')}`), ['article:hello-world']);
+  assert.deepEqual(await refs('?q=SHIP'), ['v0.1.0']);
+  assert.deepEqual(await refs('?sort=oldest&limit=2'), ['v1.0.0', 'v1.1.0']);
+
+  const first = await body(await call(s.deps, 'GET', '/launches?sort=oldest&limit=3', { token: s.read }));
+  const rest = await refs(`?sort=oldest&limit=3&cursor=${first.next as string}`);
+  assert.deepEqual(rest, ['article:hello-world']);
+  const mixed = await call(s.deps, 'GET', `/launches?limit=3&cursor=${first.next as string}`, { token: s.read });
+  assert.equal(mixed.status, 400, "an oldest-first cursor does not walk the newest-first order");
+
+  for (const bad of ['?trigger=cron', '?kind=patch', '?sort=views', '?repo=not-a-repo', `?q=${'x'.repeat(201)}`]) {
+    const response = await call(s.deps, 'GET', `/launches${bad}`, { token: s.read });
+    assert.equal(response.status, 400, bad);
+  }
+});
+
 test('a launch comes with its posts, numbers, index status and drafts summary', async () => {
   const s = await setup();
   const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });

@@ -5,6 +5,7 @@ import { appContext } from './context.server';
 import { id, object, text } from './input';
 import { jobsView } from './jobs.server';
 import { ownerAvatarUrl } from './launch-list';
+import { readLaunchesSearch } from './launches-search';
 import { launchNumbers, postAccounts, readTimezone, waitingComments } from './launch-summary.server';
 import { launchPieces } from './pieces.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
@@ -12,21 +13,42 @@ import { launchDetail, launchView, publishAgain as publishAgainFor } from './lau
 import { articleRequest, channelName, launchRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing } from './work.server';
 
-export const listLaunches = createServerFn({ method: 'GET' }).handler(async () => {
-  const { registry } = await appContext();
-  const launches = await registry.recent(60);
-  const [views, numbers, accounts, timezone] = await Promise.all([
-    Promise.all(launches.map((l) => launchView(registry, l))),
-    launchNumbers(registry, launches),
-    postAccounts(registry, launches),
-    readTimezone(registry),
-  ]);
-  // The queue's jobs are Automation's now: the list is launches only
-  return {
-    launches: views.map((v) => ({ ...v, numbers: numbers.get(v.id) ?? null, postAccounts: accounts.get(v.id) ?? {}, avatarUrl: imageUrl(ownerAvatarUrl(v.repo)) ?? null })),
-    timezone,
-  };
-});
+/** A page holds a few rows of cards on any screen, two or three across, and each card reads its own numbers */
+const LAUNCHES_PAGE = 24;
+
+/** One page of launches for the filters in the address, with what the filters can offer: a handful of queries whatever the list's size */
+export const listLaunches = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => readLaunchesSearch(object(input ?? {}, 'input')))
+  .handler(async ({ data }) => {
+    const { registry } = await appContext();
+    const [page, facets] = await Promise.all([
+      registry.launchList({
+        pageSize: LAUNCHES_PAGE,
+        ...(data.q && { search: data.q }),
+        ...(data.status && { status: data.status }),
+        ...(data.trigger && { trigger: data.trigger }),
+        ...(data.kind && { kind: data.kind }),
+        ...(data.repo && { repo: data.repo }),
+        ...(data.sort && { order: data.sort }),
+        ...(data.page && { page: data.page }),
+      }),
+      registry.launchFacets(),
+    ]);
+    const launches = page.launches;
+    const [views, numbers, accounts, timezone] = await Promise.all([
+      Promise.all(launches.map((l) => launchView(registry, l))),
+      launchNumbers(registry, launches),
+      postAccounts(registry, launches),
+      readTimezone(registry),
+    ]);
+    // The queue's jobs are Automation's now: the list is launches only
+    return {
+      launches: views.map((v) => ({ ...v, numbers: numbers.get(v.id) ?? null, postAccounts: accounts.get(v.id) ?? {}, avatarUrl: imageUrl(ownerAvatarUrl(v.repo)) ?? null })),
+      page: { number: page.page, pages: page.pages, total: page.total, size: page.pageSize },
+      facets,
+      timezone,
+    };
+  });
 
 export const getLaunch = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))

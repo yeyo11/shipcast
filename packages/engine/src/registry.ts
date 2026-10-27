@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, max, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import type { Channel, Language, PackKind } from '@shipcast/schema';
+import { PackKind, type Channel, type Language } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
 import { accounts, accountSnapshots, apiTokens, assistantMessages, assistantSessions, attentionDismissals, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
@@ -69,6 +69,61 @@ export interface Launch {
   createdAt: string;
   updatedAt: string;
 }
+
+export const LAUNCH_STATUSES: readonly LaunchStatus[] = ['detected', 'generating', 'drafted', 'published', 'skipped', 'failed'];
+export const TRIGGERS: readonly Trigger[] = ['release', 'manual', 'public', 'enabled', 'article'];
+
+/** The launches' two orders, both on (created_at, id): the newest first, or the oldest first */
+export type LaunchOrder = 'newest' | 'oldest';
+export const LAUNCH_ORDERS: readonly LaunchOrder[] = ['newest', 'oldest'];
+
+/** What narrows the launches list; every field is optional and they all hold together */
+export interface LaunchFilter {
+  status?: LaunchStatus;
+  trigger?: Trigger;
+  kind?: PackKind;
+  /** `owner/name`, exactly */
+  repo?: string;
+  /** Words to find in the repo, the ref or an article's title, case-insensitive */
+  search?: string;
+  order?: LaunchOrder;
+}
+
+/** A position in the launches' order: the last launch of a page */
+export interface LaunchCursor {
+  createdAt: string;
+  id: number;
+}
+
+/** One numbered page of the launches list; `page` counts from 1 */
+export interface LaunchPage {
+  launches: Launch[];
+  /** Every launch the filter matches, not only this page's */
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}
+
+/** What the list's filters can offer: only the values some launch has, with how many */
+export interface LaunchFacets {
+  repos: Array<{ repo: string; count: number }>;
+  statuses: Array<{ status: LaunchStatus; count: number }>;
+  triggers: Array<{ trigger: Trigger; count: number }>;
+  kinds: Array<{ kind: PackKind; count: number }>;
+}
+
+/**
+ * Words as an article's ref holds its title (`article:<slug>`, see article.ts' `articleSlug`): the
+ * title is only in the ref, so "Hello, world" finds `article:hello-world`
+ */
+const slugOf = (words: string) =>
+  words
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 /**
  * What a piece is: the channel's post itself, Instagram's story or first comment after it, one
@@ -1105,22 +1160,101 @@ export class Registry {
   }
 
   /**
-   * A page of launches, the newest first, for the REST API. Keyset paging on (created_at, id), the
-   * order `recent` uses, so a launch claimed while a client pages never shifts or repeats a page.
+   * The launch filter as conditions. Status and repo have an index each that also holds the order
+   * (migration 0010); the words are a LIKE over the repo and the ref, which no btree serves, and
+   * scan a table that has one row per release, small next to comments or metrics.
    */
-  async launchesPage(options: { limit: number; status?: LaunchStatus; after?: { createdAt: string; id: number } }): Promise<{ launches: Launch[]; next?: { createdAt: string; id: number } }> {
+  #launchConditions(filter: LaunchFilter): SQL[] {
     const where: SQL[] = [];
-    if (options.status !== undefined) where.push(eq(launches.status, options.status));
-    if (options.after) where.push(sql`(${launches.createdAt}, ${launches.id}) < (${options.after.createdAt}, ${options.after.id})`);
+    if (filter.status !== undefined) where.push(eq(launches.status, filter.status));
+    if (filter.trigger !== undefined) where.push(eq(launches.trigger, filter.trigger));
+    if (filter.kind !== undefined) where.push(eq(launches.kind, filter.kind));
+    if (filter.repo !== undefined) where.push(eq(launches.repo, filter.repo));
+    const words = filter.search?.trim();
+    if (words) {
+      const slug = slugOf(words);
+      const match = or(
+        ilike(launches.repo, likePattern(words)),
+        ilike(launches.ref, likePattern(words)),
+        ...(slug && slug !== words.toLowerCase() ? [ilike(launches.ref, likePattern(slug))] : []),
+      );
+      if (match) where.push(match);
+    }
+    return where;
+  }
+
+  #launchOrder(order: LaunchOrder = 'newest') {
+    return order === 'oldest' ? [asc(launches.createdAt), asc(launches.id)] : [desc(launches.createdAt), desc(launches.id)];
+  }
+
+  /**
+   * A page of launches for the REST API, the newest first unless asked otherwise. Keyset paging on
+   * (created_at, id), the order `recent` uses, so a launch claimed while a client pages never shifts
+   * or repeats a page. `after` is the last launch of the previous page in the same order.
+   */
+  async launchesPage(options: LaunchFilter & { limit: number; after?: LaunchCursor }): Promise<{ launches: Launch[]; next?: LaunchCursor }> {
+    const where = this.#launchConditions(options);
+    if (options.after) {
+      const position = sql`(${launches.createdAt}, ${launches.id})`;
+      const after = sql`(${options.after.createdAt}, ${options.after.id})`;
+      where.push(options.order === 'oldest' ? sql`${position} > ${after}` : sql`${position} < ${after}`);
+    }
     const rows = await this.#db
       .select()
       .from(launches)
       .where(and(...where))
-      .orderBy(desc(launches.createdAt), desc(launches.id))
+      .orderBy(...this.#launchOrder(options.order))
       .limit(options.limit + 1);
     const page = rows.slice(0, options.limit).map(toLaunch);
     const last = page.at(-1);
     return rows.length > options.limit && last ? { launches: page, next: { createdAt: last.createdAt, id: last.id } } : { launches: page };
+  }
+
+  /**
+   * One numbered page of launches for the Launches page: the filter is one WHERE, the total a count
+   * of it, so the list is never read whole to be paged. Numbered (offset) rather than keyset because
+   * the page shows "Page 2 of 5" and keeps the page in its address; the launches are few enough that
+   * the offset costs nothing, and the API keeps its cursor for clients that walk the whole list.
+   */
+  async launchList(filter: LaunchFilter & { page?: number; pageSize?: number } = {}): Promise<LaunchPage> {
+    const where = this.#launchConditions(filter);
+    const condition = where.length > 0 ? and(...where) : undefined;
+    const pageSize = Math.min(Math.max(Math.trunc(filter.pageSize ?? 24), 1), 100);
+    const [totalRow] = await this.#db.select({ n: count() }).from(launches).where(condition);
+    const total = Number(totalRow?.n ?? 0);
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    // A page past the end (a link kept after the list shrank) shows the last one
+    const page = Math.min(Math.max(Math.trunc(filter.page ?? 1), 1), pages);
+    const rows = await this.#db
+      .select()
+      .from(launches)
+      .where(condition)
+      .orderBy(...this.#launchOrder(filter.order))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    return { launches: rows.map(toLaunch), total, page, pageSize, pages };
+  }
+
+  /** The options of the list's filters, from grouped counts whatever the number of launches */
+  async launchFacets(): Promise<LaunchFacets> {
+    const [repos, statuses, triggers, kinds] = await Promise.all([
+      this.#db.select({ value: launches.repo, n: count() }).from(launches).groupBy(launches.repo).orderBy(asc(launches.repo)),
+      this.#db.select({ value: launches.status, n: count() }).from(launches).groupBy(launches.status),
+      this.#db.select({ value: launches.trigger, n: count() }).from(launches).groupBy(launches.trigger),
+      this.#db.select({ value: launches.kind, n: count() }).from(launches).groupBy(launches.kind),
+    ]);
+    // In the vocabulary's own order, not the database's, so the options never move around
+    const ordered = <T extends string>(rows: Array<{ value: string; n: number }>, known: readonly T[]) =>
+      known.flatMap((value) => {
+        const row = rows.find((r) => r.value === value);
+        return row ? [{ value, count: Number(row.n) }] : [];
+      });
+    return {
+      repos: repos.map((r) => ({ repo: r.value, count: Number(r.n) })),
+      statuses: ordered(statuses, LAUNCH_STATUSES).map((r) => ({ status: r.value, count: r.count })),
+      triggers: ordered(triggers, TRIGGERS).map((r) => ({ trigger: r.value, count: r.count })),
+      kinds: ordered(kinds, PackKind.options).map((r) => ({ kind: r.value, count: r.count })),
+    };
   }
 
   /** Records a job of the queue; a second record of the same id keeps the first and returns it */
