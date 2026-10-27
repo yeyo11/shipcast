@@ -73,7 +73,10 @@ export async function connectPostgres(url: string, migrateOptions: MigrateOption
 export async function connectPglite(dataDir?: string, options: MigrateOptions = {}): Promise<Connection & { client: PGlite }> {
   const { PGlite } = await import('@electric-sql/pglite');
   const { drizzle } = await import('drizzle-orm/pglite');
-  const client = new PGlite(dataDir);
+  // PGlite ships contrib extensions as separate modules: pg_trgm must be loaded for migration 0010
+  const { pg_trgm } = await import('@electric-sql/pglite/contrib/pg_trgm');
+  // The options-only form: with a first argument of `undefined`, PGlite drops the options
+  const client = new PGlite({ ...(dataDir !== undefined && { dataDir }), extensions: { pg_trgm } });
   const db = drizzle({ client });
   await migrateDatabase(db, options);
   return { db, client, close: () => client.close() };
