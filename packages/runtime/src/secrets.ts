@@ -14,7 +14,8 @@ export interface SecretStore {
 
 export class SecretStoreError extends Error {}
 
-function run(command: string, args: string[], input?: string): Promise<{ code: number; stdout: string; stderr: string }> {
+/** Runs a keychain tool; its exit code is the answer, so a tool that quits before reading its input is not an error */
+export function run(command: string, args: string[], input?: string): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
@@ -25,6 +26,9 @@ function run(command: string, args: string[], input?: string): Promise<{ code: n
       reject(error.code === 'ENOENT' ? new SecretStoreError(`${command} is not installed`) : error),
     );
     child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    // A tool that exits before reading stdin (a locked keyring, a refused lookup) breaks the pipe; unhandled,
+    // that EPIPE took the whole app down on 2026-10-27, so its exit code is what reports the failure
+    child.stdin.on('error', () => undefined);
     child.stdin.end(input ?? '');
   });
 }
