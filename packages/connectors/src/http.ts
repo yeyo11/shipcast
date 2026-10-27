@@ -206,3 +206,42 @@ export function htmlToText(html: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+/** One labelled link of a profile: a Mastodon field, a website, a channel's public address */
+export interface ProfileLink {
+  name: string;
+  value: string;
+}
+
+/**
+ * An account's own profile as its network shows it: what the AI review reads and what an edit
+ * changes. Text is plain (Mastodon's HTML note is read from its plain source).
+ */
+export interface Profile {
+  displayName?: string;
+  bio?: string;
+  links: ProfileLink[];
+  hasAvatar: boolean;
+  /** Left out where the network has no banner */
+  hasBanner?: boolean;
+  /** Whether this credential may change the profile, when the network can say so before trying */
+  editable?: { ok: true } | { ok: false; why: string };
+}
+
+/** A change to a profile; what is left out stays as it is */
+export interface ProfileEdit {
+  displayName?: string;
+  bio?: string;
+  /** The whole list, replacing the one there */
+  links?: ProfileLink[];
+}
+
+/** A connector that reads the account's own profile */
+export interface ProfileReader {
+  profile(): Promise<Profile>;
+}
+
+/** A connector that changes the account's own profile (Mastodon, Bluesky, a Telegram channel) */
+export interface ProfileEditor {
+  editProfile(edit: ProfileEdit): Promise<void>;
+}

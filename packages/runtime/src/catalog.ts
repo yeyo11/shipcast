@@ -18,6 +18,8 @@ import {
   Threads,
   statsOf,
   type Check,
+  type Profile,
+  type ProfileEdit,
   type ProfileStats,
   type ServiceAccount,
 } from '@shipcast/connectors';
@@ -78,7 +80,7 @@ export const NETWORKS: readonly Network[] = [
       { key: 'handle', label: 'Handle', secret: false, placeholder: 'name.bsky.social' },
       { key: 'appPassword', label: 'App password', secret: true, help: 'Never the account password' },
     ],
-    permissions: ['Posts with a link card', 'Reads likes, reposts and replies (public)'],
+    permissions: ['Posts with a link card', 'Reads likes, reposts and replies (public)', 'Changes the profile’s name and description when you apply a review’s proposal'],
     howTo: 'Bluesky → Settings → Privacy and security → App passwords → Add App Password.',
   },
   {
@@ -97,7 +99,11 @@ export const NETWORKS: readonly Network[] = [
         help: 'Only to paste one instead of authorising: Preferences → Development → an app with read and write scopes',
       },
     ],
-    permissions: ['Posts a public status with an image (write:statuses, write:media)', 'Reads its favourites, boosts and replies (read:statuses)'],
+    permissions: [
+      'Posts a public status with an image (write:statuses, write:media)',
+      'Reads its favourites, boosts and replies (read:statuses)',
+      'Changes the profile’s name, bio and fields when you apply a review’s proposal (write:accounts)',
+    ],
     howTo: 'Name your instance: Shipcast registers itself there and sends you to authorise it. Or paste an access token.',
   },
   {
@@ -190,7 +196,7 @@ export const NETWORKS: readonly Network[] = [
       { key: 'chatId', label: 'Chat or channel', secret: false, placeholder: '@channel or -100…', help: 'Where posts go; notifications go there too unless a notification chat is set' },
       { key: 'notifyChatId', label: 'Notification chat', secret: false, optional: true, help: 'Your private chat with the bot, for “drafts are waiting” messages' },
     ],
-    permissions: ['Posts to the channel', 'Tells you when drafts are waiting, published or failed'],
+    permissions: ['Posts to the channel', 'Tells you when drafts are waiting, published or failed', 'Changes the channel’s title and description when you apply a review’s proposal (the “Change channel info” admin right)'],
     howTo: 'Talk to @BotFather, send /newbot and copy the token; add the bot as an admin of the channel.',
   },
   {
@@ -311,6 +317,10 @@ export interface Built {
   check(): Promise<Check>;
   /** The account's own followers, following and posts, on the networks whose API counts them */
   profileStats?(): Promise<ProfileStats>;
+  /** The account's own profile, on the networks whose API gives it */
+  profile?(): Promise<Profile>;
+  /** Changes the profile, on the networks whose API allows it (Mastodon, Bluesky, a Telegram channel) */
+  editProfile?(edit: ProfileEdit): Promise<void>;
   devto?: Devto;
   bluesky?: Bluesky;
   mastodon?: Mastodon;
@@ -337,15 +347,15 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
   switch (id) {
     case 'devto': {
       const devto = new Devto({ apiKey: v('apiKey'), fetch: http });
-      return { devto, check: () => devto.check(), profileStats: () => devto.profileStats() };
+      return { devto, check: () => devto.check(), profileStats: () => devto.profileStats(), profile: () => devto.profile() };
     }
     case 'bluesky': {
       const bluesky = new Bluesky({ identifier: v('handle'), appPassword: v('appPassword'), fetch: http });
-      return { bluesky, check: () => bluesky.check(), profileStats: () => bluesky.profileStats() };
+      return { bluesky, check: () => bluesky.check(), profileStats: () => bluesky.profileStats(), profile: () => bluesky.profile(), editProfile: (e) => bluesky.editProfile(e) };
     }
     case 'mastodon': {
       const mastodon = new Mastodon({ instance: v('instance'), accessToken: v('accessToken'), fetch: http });
-      return { mastodon, check: () => mastodon.check(), profileStats: () => mastodon.profileStats() };
+      return { mastodon, check: () => mastodon.check(), profileStats: () => mastodon.profileStats(), profile: () => mastodon.profile(), editProfile: (e) => mastodon.editProfile(e) };
     }
     case 'instagram': {
       const instagram = new Instagram({ userId: v('userId'), accessToken: v('accessToken'), fetch: http });
@@ -370,11 +380,11 @@ export function buildConnector(id: string, credentials: Credentials, brand: Bran
     }
     case 'hashnode': {
       const hashnode = new Hashnode({ token: v('token'), publicationHost: all.publicationHost || undefined, fetch: http });
-      return { hashnode, check: () => hashnode.check(), profileStats: () => hashnode.profileStats() };
+      return { hashnode, check: () => hashnode.check(), profileStats: () => hashnode.profileStats(), profile: () => hashnode.profile() };
     }
     case 'telegram': {
       const telegram = new Telegram({ botToken: v('botToken'), chatId: v('chatId'), fetch: http });
-      return { telegram, check: () => telegram.check(), profileStats: () => telegram.profileStats() };
+      return { telegram, check: () => telegram.check(), profileStats: () => telegram.profileStats(), profile: () => telegram.profile(), editProfile: (e) => telegram.editProfile(e) };
     }
     case 'discord': {
       const discord = new Discord({ webhookUrl: v('webhookUrl'), fetch: http });

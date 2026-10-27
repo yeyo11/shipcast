@@ -1,4 +1,4 @@
-import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 export interface HashnodeArticle {
   title: string;
@@ -27,7 +27,7 @@ function tagInput(name: string): { slug: string; name: string } {
  * set to the blog, and its views, reactions and comments read back. Since May 2026 the API answers
  * only publications on the Pro plan. A post can be edited (`updatePost`) and removed (`removePost`).
  */
-export class Hashnode implements Editable<HashnodeEdit>, Deletable {
+export class Hashnode implements Editable<HashnodeEdit>, Deletable, ProfileReader {
   readonly #token: string;
   #publicationId: string | undefined;
   readonly #publicationHost: string | undefined;
@@ -135,6 +135,23 @@ export class Hashnode implements Editable<HashnodeEdit>, Deletable {
     } catch (error) {
       return checkProblem(error, 'the token was rejected, or the publication is not on the Pro plan the API now needs');
     }
+  }
+
+  /** The author's name, bio and links; Hashnode's API has no mutation for them, so proposals are to copy */
+  async profile(): Promise<Profile> {
+    const { me } = await this.#query<{
+      me: { name?: string; tagline?: string | null; bio?: { text?: string | null } | null; profilePicture?: string | null; socialMediaLinks?: Record<string, string | null> | null };
+    }>('read the profile', 'query { me { name tagline bio { text } profilePicture socialMediaLinks { website github twitter linkedin } } }');
+    // The tagline stands in only for a bio never written: the review proposes one text for the bio
+    const bio = me.bio?.text?.trim() || me.tagline?.trim() || '';
+    return {
+      ...(me.name?.trim() && { displayName: me.name }),
+      ...(bio && { bio }),
+      links: Object.entries(me.socialMediaLinks ?? {})
+        .filter((e): e is [string, string] => typeof e[1] === 'string' && e[1] !== '')
+        .map(([name, value]) => ({ name: name[0]!.toUpperCase() + name.slice(1), value })),
+      hasAvatar: typeof me.profilePicture === 'string' && me.profilePicture !== '',
+    };
   }
 
   async profileStats(): Promise<ProfileStats> {

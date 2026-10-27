@@ -8,6 +8,7 @@ import {
   exchangeThreadsCode,
   instagramAuthorizeUrl,
   linkedinAuthorizeUrl,
+  MASTODON_SCOPES,
   mastodonAuthorizeUrl,
   redditAuthorizeUrl,
   registerMastodonApp,
@@ -93,10 +94,11 @@ export async function startMastodon(request: Request): Promise<Response> {
   const redirectUri = `${app.publicUrl}/auth/mastodon/callback`;
   const key = `app:mastodon-client:${new URL(instance).host}`;
   let client = await getJson(secrets, key);
-  if (!client?.clientId || client.redirectUri !== redirectUri) {
+  // A client registered with fewer scopes cannot be asked for more: it is registered again
+  if (!client?.clientId || client.redirectUri !== redirectUri || client.scopes !== MASTODON_SCOPES) {
     try {
       const registered = await registerMastodonApp(instance, redirectUri);
-      client = { ...registered, redirectUri };
+      client = { ...registered, redirectUri, scopes: MASTODON_SCOPES };
       await secrets.set(key, JSON.stringify(client), `Mastodon app on ${new URL(instance).host}`);
     } catch (error) {
       return back('mastodon', `${new URL(instance).host} refused to register Shipcast: ${error instanceof Error ? error.message : String(error)}`);
@@ -122,7 +124,8 @@ export async function finishMastodon(request: Request): Promise<Response> {
       network: 'mastodon',
       brand: flow.brand,
       label: flow.label,
-      credentials: { settings: { instance: flow.instance }, secrets: { accessToken } },
+      // The scopes granted are public and tell the app whether this token may edit the profile
+      credentials: { settings: { instance: flow.instance, scopes: MASTODON_SCOPES }, secrets: { accessToken } },
     });
     return result.ok ? connected(result.account) : back('mastodon', result.problem);
   } catch (error) {

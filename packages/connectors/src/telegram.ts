@@ -1,4 +1,20 @@
-import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type ProfileStats, type Published } from './http.ts';
+import {
+  ConnectorError,
+  json,
+  checkProblem,
+  okCheck,
+  statsOf,
+  type Check,
+  type Deletable,
+  type Editable,
+  type Metrics,
+  type Profile,
+  type ProfileEdit,
+  type ProfileEditor,
+  type ProfileReader,
+  type ProfileStats,
+  type Published,
+} from './http.ts';
 
 export interface TelegramEdit {
   /** The message's text, or its caption when it is a photo */
@@ -48,7 +64,7 @@ function messageUrl(chatId: string, chat: SentMessage['chat'], messageId: number
  * notifications to the owner's own chat. A message the bot sent can be edited (text or caption, and
  * a photo's photo) and deleted; Telegram refuses to delete one older than 48 hours.
  */
-export class Telegram implements Editable<TelegramEdit>, Deletable {
+export class Telegram implements Editable<TelegramEdit>, Deletable, ProfileReader, ProfileEditor {
   readonly #token: string;
   readonly #chatId: string;
   readonly #fetch: typeof fetch;
@@ -132,6 +148,45 @@ export class Telegram implements Editable<TelegramEdit>, Deletable {
     } catch (error) {
       return checkProblem(error, 'the bot token was rejected, or the bot cannot see that chat (add it as an admin)');
     }
+  }
+
+  /**
+   * The channel's title, description and public link, and whether the bot may change them: Telegram
+   * needs the "Change channel info" admin right for that, which the bot's own membership says.
+   */
+  async profile(): Promise<Profile> {
+    const chat = await this.#call<{ title?: string; description?: string; username?: string; photo?: unknown }>('getChat', 'read the chat', { chat_id: this.#chatId });
+    const me = await this.#call<{ id: number }>('getMe', 'read the bot');
+    const member = await this.#call<{ status: string; can_change_info?: boolean }>('getChatMember', 'read the bot’s rights', { chat_id: this.#chatId, user_id: me.id });
+    const allowed = member.status === 'creator' || member.can_change_info === true;
+    return {
+      ...(chat.title?.trim() && { displayName: chat.title }),
+      ...(chat.description?.trim() && { bio: chat.description }),
+      links: chat.username ? [{ name: 'Link', value: `https://t.me/${chat.username}` }] : [],
+      hasAvatar: chat.photo !== undefined,
+      editable: allowed ? { ok: true } : { ok: false, why: 'the bot is not allowed to change the channel’s info: give it the “Change channel info” admin right' },
+    };
+  }
+
+  /** The title and the description; sending what they already say is not a failure */
+  async editProfile(edit: ProfileEdit): Promise<void> {
+    if (edit.links !== undefined) throw new ConnectorError('Telegram', 'a channel’s link is its username, which a bot cannot change', 400, false);
+    const run = async (method: string, params: Record<string, unknown>) => {
+      try {
+        await this.#call(method, 'edit the channel', { chat_id: this.#chatId, ...params });
+      } catch (error) {
+        if (said(error, /not modified/i)) return;
+        if (said(error, /not enough rights|CHAT_ADMIN_REQUIRED/i)) {
+          throw new ConnectorError('Telegram', 'the bot is not allowed to change the channel’s info: give it the “Change channel info” admin right', 400, false);
+        }
+        throw error;
+      }
+    };
+    if (edit.displayName !== undefined) {
+      if (!edit.displayName.trim()) throw new ConnectorError('Telegram', 'a channel’s title cannot be empty', 400, false);
+      await run('setChatTitle', { title: edit.displayName });
+    }
+    if (edit.bio !== undefined) await run('setChatDescription', { description: edit.bio });
   }
 
   /** A channel's or group's members: the one count the Bot API gives */
