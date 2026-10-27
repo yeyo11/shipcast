@@ -1,4 +1,5 @@
 import { articleUrl as urlOf, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import type { GitHubSource } from './github.ts';
 import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
 
@@ -78,6 +79,26 @@ export function asPublishedDirectly(files: DraftFile[]): DraftFile[] {
     'content' in f && f.path.endsWith('.md') && pending.test(f.content)
       ? { ...f, content: f.content.replace(pending, '> **Published directly:** sent out without a pull request; edit it on the channel itself.') }
       : f,
+  );
+}
+
+/**
+ * An article written again over one already on the blog (a later launch whose slug is the same, or the
+ * same launch drafted twice) keeps the day it was first published and says when it changed:
+ * `pubDate` from the file on the launches repo's main branch, `updatedDate` today. New articles are
+ * left as rendered.
+ */
+export async function keepPubDates(files: readonly DraftFile[], github: Pick<GitHubSource, 'fileAt'>, launchesRepo: string, date: Date): Promise<DraftFile[]> {
+  const today = date.toISOString().slice(0, 10);
+  return Promise.all(
+    files.map(async (file) => {
+      if (!('content' in file) || !/^src\/content\/posts\/(en|es)\/[^/]+\.md$/.test(file.path)) return file;
+      const existing = await github.fileAt(launchesRepo, file.path, 'HEAD');
+      const first = existing && /^pubDate: (\S+)$/m.exec(existing)?.[1];
+      if (!first || first === today) return file;
+      const content = file.content.replace(/^pubDate: \S+$/m, `pubDate: ${first}\nupdatedDate: ${today}`);
+      return { ...file, content };
+    }),
   );
 }
 

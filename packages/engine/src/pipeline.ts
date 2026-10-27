@@ -1,7 +1,7 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
 import type { AiProvider, AiSetup, AiTask } from './ai.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { asPublishedDirectly, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
+import { asPublishedDirectly, keepPubDates, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
 import { generatePack } from './generate.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
@@ -157,8 +157,9 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout, projects: known.projects, projectsText: known.text, fetch: deps.fetch, capture: deps.capture });
   if (!assets.ok) return fail([assets.problem]);
 
+  const now = (deps.now ?? (() => new Date()))();
   const files = [
-    ...renderDrafts(generated.pack, launch, config, brand, (deps.now ?? (() => new Date()))(), assets.media.ogPng, screenshotPaths(assets.files)),
+    ...(await keepPubDates(renderDrafts(generated.pack, launch, config, brand, now, assets.media.ogPng, screenshotPaths(assets.files)), github, deps.launchesRepo, now)),
     ...assets.files,
   ];
   const name = `${projectSlug(launch.repo)} ${launch.ref}`;

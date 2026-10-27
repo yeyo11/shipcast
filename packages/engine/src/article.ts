@@ -9,7 +9,7 @@ import {
   type Language,
 } from '@shipcast/schema';
 import { stringify } from 'yaml';
-import { launchDir, renderDrafts, screenshotPaths } from './drafts.ts';
+import { keepPubDates, launchDir, renderDrafts, screenshotPaths } from './drafts.ts';
 import { buildAssets } from './launch-assets.ts';
 import { deliverDrafts, readProjects, setupFor, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
 import { buildArticlePrompt } from './prompt.ts';
@@ -124,8 +124,9 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
   if (!assets.ok) return fail([assets.problem]);
 
   const dir = launchDir(launch);
+  const now = (deps.now ?? (() => new Date()))();
   const files = [
-    ...renderDrafts(pack, launch, config, brand, (deps.now ?? (() => new Date()))(), assets.media.ogPng, screenshotPaths(assets.files)),
+    ...(await keepPubDates(renderDrafts(pack, launch, config, brand, now, assets.media.ogPng, screenshotPaths(assets.files)), deps.github, deps.launchesRepo, now)),
     ...assets.files,
     { path: `${dir}/launch.yml`, content: `# The channels chosen in Shipcast for this article\n${stringify({ enabled: true, brand: brand.id, publishing: config.publishing })}` },
   ];

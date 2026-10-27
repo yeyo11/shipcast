@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, ContentPack, LaunchConfig } from '@shipcast/schema';
-import { buildPrompt, GitHubRest, launchDir, parseDiscussionDraft, pullRequestBody, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
+import { buildPrompt, GitHubRest, keepPubDates, launchDir, parseDiscussionDraft, pullRequestBody, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const text = (file: DraftFile | undefined): string => (file && 'content' in file ? file.content : '');
@@ -291,4 +291,20 @@ test('the prompt briefs the new pieces only when their channel is on', () => {
   assert.match(prompt, /- linkedin: one post in English on the author's own profile, at most 1300 characters/);
   const plain = buildPrompt(launch, LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { githubDiscussions: 'off' } }), brand).prompt;
   assert.doesNotMatch(plain, /- (threads|linkedin|githubDiscussions):/);
+});
+
+test('an article drafted over one already on the blog keeps its first date and says when it changed', async () => {
+  const onMain: Record<string, string> = {
+    'src/content/posts/en/claudio.md': '---\ntitle: "Old"\npubDate: 2026-10-20\nlang: en\n---\n\nOld body\n',
+  };
+  const github = { fileAt: async (_repo: string, path: string) => onMain[path] };
+  const files = [
+    { path: 'src/content/posts/en/claudio.md', content: '---\ntitle: "New"\npubDate: 2026-11-02\nlang: en\n---\n\nNew body\n' },
+    { path: 'src/content/posts/es/claudio-nuevo.md', content: '---\ntitle: "Nuevo"\npubDate: 2026-11-02\nlang: es\n---\n\nCuerpo\n' },
+    { path: 'launches/claudio/v1.0.0/bluesky.md', content: 'pubDate: 2026-11-02' },
+    { path: 'public/launches/claudio/v1.0.0/og.png', bytes: new Uint8Array([1]) },
+  ];
+  const out = await keepPubDates(files, github, 'yeyo11/launches', new Date('2026-11-02T10:00:00Z'));
+  assert.equal((out[0] as { content: string }).content, '---\ntitle: "New"\npubDate: 2026-10-20\nupdatedDate: 2026-11-02\nlang: en\n---\n\nNew body\n');
+  assert.deepEqual(out.slice(1), files.slice(1), 'a new article, a channel draft and an image are left as rendered');
 });
