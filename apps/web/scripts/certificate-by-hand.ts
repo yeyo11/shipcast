@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { KeychainStore, loadAppConfig, loadConfig } from '@shipcast/runtime';
+import { loadAppConfig, loadConfig, secretStoreFor } from '@shipcast/runtime';
 import { ensureCertificate, type DnsSolver } from '../tls.ts';
 
 /**
@@ -35,7 +35,7 @@ const byHand: DnsSolver = {
 };
 
 const certificate = await ensureCertificate(
-  { domain: new URL(app.publicUrl).hostname, dns: byHand, secrets: new KeychainStore(config.keychainService), dataDir: config.dataDir, log: console.log, staging: process.argv.includes('--staging') },
+  { domain: new URL(app.publicUrl).hostname, dns: byHand, secrets: secretStoreFor(config), dataDir: config.dataDir, log: console.log, staging: process.argv.includes('--staging') },
   process.argv.includes('--force') ? new Date(Date.now() + 365 * 86_400_000) : new Date(),
 );
 console.log(`Certificate valid until ${certificate.expires.toISOString()}`);

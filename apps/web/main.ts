@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { ConfigError, KeychainStore, loadAppConfig, loadConfig } from '@shipcast/runtime';
+import { ConfigError, loadAppConfig, loadConfig, secretStoreFor } from '@shipcast/runtime';
 import { serve } from './server.ts';
 import { consoleLinks, signInPath } from './src/server/console-links.ts';
 import { cloudflareDns, current, ensureCertificate } from './tls.ts';
@@ -11,7 +11,8 @@ import { cloudflareDns, current, ensureCertificate } from './tls.ts';
  * certificate and asks Tailscale Serve to forward the tailnet's port 443 to it, so the domain (whose
  * DNS record points at this machine's tailnet address) reaches it from the owner's devices only.
  * With a Cloudflare token the certificate is obtained and renewed here; without one, a certificate
- * already on disk is used until it expires; with neither, plain HTTP on localhost.
+ * already on disk is used until it expires; with neither, plain HTTP on localhost. On a server behind
+ * a proxy (SHIPCAST_APP_TLS=proxy) the proxy does TLS and the app serves plain HTTP.
  */
 
 const run = promisify(execFile);
@@ -22,12 +23,25 @@ async function main(): Promise<void> {
   const config = loadConfig(process.env, ROOT);
   const app = loadAppConfig(process.env);
   // The bootstrap's keychain service: the TLS key lives there, so a second install or a test copy never touches another's
-  const secrets = new KeychainStore(config.keychainService);
+  const secrets = secretStoreFor(config);
   const domain = new URL(app.publicUrl).hostname;
   // A preview copy (SHIPCAST_APP_TLS=off) never reads, issues or writes certificate material
   const tls = process.env.SHIPCAST_APP_TLS !== 'off';
   const token = tls ? app.tlsCloudflareToken : undefined;
   const options = { domain, secrets, dataDir: config.dataDir, log: console.log };
+
+  /*
+   * Behind a reverse proxy that terminates TLS (Traefik on a server, SHIPCAST_APP_TLS=proxy): plain
+   * HTTP inside, on SHIPCAST_APP_HOST (every interface in a container, reachable by the proxy only),
+   * and the public https origin outside, so the URLs the app builds point where the browser is and
+   * its cookies keep the Secure flag. No certificate code and no Tailscale Serve.
+   */
+  if (process.env.SHIPCAST_APP_TLS === 'proxy') {
+    await serve({ host: app.host, port: app.port, origin: app.publicUrl });
+    console.log(`Shipcast on ${app.publicUrl}, behind a proxy (plain HTTP on ${app.host}:${app.port}); secrets in ${secrets.kind}`);
+    console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(consoleLinks().create())}`);
+    return;
+  }
 
   const certificate = !tls ? undefined : token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
   if (!certificate || certificate.expires.getTime() < Date.now()) {

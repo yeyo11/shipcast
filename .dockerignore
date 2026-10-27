@@ -1,0 +1,17 @@
+# Nothing of the owner's machine goes into the image: secrets, state, clones, builds, agents' files
+.env
+.env.*
+!.env.example
+data/
+workspace/
+node_modules
+**/node_modules
+dist
+dist-npm
+.tanstack
+.pando
+.claude
+.playwright-mcp
+docs/internal
+.git
+*.log
