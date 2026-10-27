@@ -211,6 +211,20 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     return ogJpeg;
   };
 
+  // LinkedIn speaks the brand's language for it (`languages.linkedin`), and its card shares that
+  // language's article, read as merged like the lead one; without it, or without that article, the lead
+  const linkedinLang = brand.languages.linkedin && pack.article?.[brand.languages.linkedin] ? brand.languages.linkedin : lead;
+  const linkedinCard = async () => {
+    if (linkedinLang === lead) return { url: articleUrl, title, description };
+    const piece = pack.article![linkedinLang]!;
+    const { data } = splitFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
+    return {
+      url: urlOf(pack, brand.site, linkedinLang) ?? articleUrl,
+      title: typeof data.title === 'string' ? data.title : piece.title,
+      description: typeof data.description === 'string' ? data.description : piece.description,
+    };
+  };
+
   const accountOf = (channel: Channel) => deps.accounts?.[channel] ?? null;
   const now = deps.now?.() ?? new Date();
   // The languages with a list and an issue in the pack: the newsletter is out once each has its issue
@@ -297,12 +311,14 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         : undefined,
     linkedin:
       deps.publishers.linkedin && pack.linkedin
-        ? async () =>
-            deps.publishers.linkedin!.publish({
+        ? async () => {
+            const card = await linkedinCard();
+            return deps.publishers.linkedin!.publish({
               text: draftBody((await read(`${dir}/linkedin.md`)) ?? pack.linkedin!.text),
               // The thumbnail is uploaded to LinkedIn: it does not read the article's page
-              article: { url: `${articleUrl}?ref=linkedin`, title, description, thumbnail: { bytes: await image(), mimeType: 'image/jpeg' } },
-            })
+              article: { ...card, url: `${card.url}?ref=linkedin`, thumbnail: { bytes: await image(), mimeType: 'image/jpeg' } },
+            });
+          }
         : undefined,
     bluesky:
       deps.publishers.bluesky && pack.bluesky

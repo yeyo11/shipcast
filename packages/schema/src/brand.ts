@@ -30,7 +30,7 @@ export const Brand = z.strictObject({
   languages: z
     .strictObject({
       blog: z.array(Language).min(1).default(['en', 'es']),
-      // Not read yet: the pack's LinkedIn post is in English whatever this says
+      // The language of the LinkedIn post and of the article its card shares; English when unset
       linkedin: Language.optional(),
     })
     .prefault({}),

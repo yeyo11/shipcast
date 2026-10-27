@@ -570,6 +570,41 @@ test('the newsletter’s scheduled row goes once its issues are out', async () =
   assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.status]), [['issue:en', 'live']]);
 });
 
+test('LinkedIn speaks the brand\'s language for it and shares that language\'s article', async () => {
+  const files = {
+    ...merged,
+    [`yeyo11/launches/${D}/pack.json@HEAD`]: JSON.stringify({
+      ...pack,
+      article: { ...pack.article, es: { slug: 'claudio-como-servicio', title: 'AI título', description: 'AI descripción', markdown: 'm' } },
+      linkedin: { text: 'AI linkedin' },
+    }),
+    'yeyo11/launches/src/content/posts/es/claudio-como-servicio.md@HEAD': '---\ntitle: "Título editado"\ndescription: "Descripción editada"\n---\n\nCuerpo.\n',
+    [`yeyo11/launches/${D}/linkedin.md@HEAD`]: '# LinkedIn\n\n> **Approval:** x\n\nEn español\n',
+    'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\npublishing:\n  linkedin: approval\n',
+  };
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const { calls, publishers } = recorder();
+  publishers.linkedin = {
+    publish: async (input: unknown) => {
+      calls.push({ channel: 'linkedin', input });
+      return { externalId: 'li-1', url: 'https://linkedin.example/1' };
+    },
+  };
+  const spanish = Brand.parse({ ...brand, languages: { blog: ['en', 'es'], linkedin: 'es' } });
+  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  assert.equal((await publishLaunch(launch, spanish, deps)).state, 'published');
+  assert.deepEqual(calls.find((c) => c.channel === 'linkedin')!.input, {
+    text: 'En español',
+    article: {
+      url: 'https://josegarrido.dev/es/claudio-como-servicio/?ref=linkedin',
+      title: 'Título editado',
+      description: 'Descripción editada',
+      thumbnail: { bytes: new Uint8Array([0xff, 0xd8, 0xff]), mimeType: 'image/jpeg' },
+    },
+  });
+});
+
 test('GitHub Discussions, Threads and LinkedIn are published once with the edited drafts', async () => {
   const files = {
     ...merged,

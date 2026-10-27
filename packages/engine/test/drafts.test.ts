@@ -291,6 +291,8 @@ test('the prompt briefs the new pieces only when their channel is on', () => {
   assert.match(prompt, /- linkedin: one post in English on the author's own profile, at most 1300 characters/);
   const plain = buildPrompt(launch, LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { githubDiscussions: 'off' } }), brand).prompt;
   assert.doesNotMatch(plain, /- (threads|linkedin|githubDiscussions):/);
+  const spanish = Brand.parse({ ...brand, languages: { blog: ['en', 'es'], linkedin: 'es' } });
+  assert.match(buildPrompt(launch, on, spanish).prompt, /- linkedin: one post in Spanish on the author's own profile/);
 });
 
 test('an article drafted over one already on the blog keeps its first date and says when it changed', async () => {

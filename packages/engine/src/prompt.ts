@@ -61,7 +61,7 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
   'channel.threads':
     "threads: one post in English, at most {{limit.threadsText}} characters (an emoji counts as four), conversational, ending with the English article's link {{site}}/en/<English slug>/?ref=threads. It goes with the launch image. At most two hashtags, or none.",
   'channel.linkedin':
-    "linkedin: one post in English on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
+    "linkedin: one post in {{linkedinLanguage}} on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
   'channel.newsletter':
     "newsletter: one issue per language ({{newsletterLanguages}}), each with a subject (at most {{limit.newsletterSubject}} characters), a preview text (at most {{limit.newsletterPreview}}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language ({{site}}/<lang>/<that language's slug>/?ref=newsletter). Not the article itself; no images.",
   article:
@@ -124,6 +124,8 @@ export function promptVariables(brand: Brand, config: LaunchConfig, extra: Recor
     redditTarget: subs.length > 0 ? `one post for each of r/${subs.join(', r/')}` : 'one or two posts, each naming a fitting subreddit',
     demoNote: hasDemo(config) ? ' (the demo plays as its second slide)' : '',
     otherLanguages: 'the other blog languages',
+    // The card shares the article in this language, so the post is written in it too
+    linkedinLanguage: brand.languages.linkedin && brand.languages.blog.includes(brand.languages.linkedin) ? (LANGUAGE_NAMES[brand.languages.linkedin] ?? 'English') : 'English',
     ...Object.fromEntries(Object.entries(LIMITS).map(([key, value]) => [`limit.${key}`, String(value)])),
     ...extra,
   };
@@ -137,6 +139,7 @@ export const PROMPT_VARIABLES: readonly string[] = [
   'redditTarget',
   'demoNote',
   'otherLanguages',
+  'linkedinLanguage',
   ...Object.keys(LIMITS).map((key) => `limit.${key}`),
 ];
 
