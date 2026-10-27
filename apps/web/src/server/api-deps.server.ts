@@ -3,6 +3,7 @@ import { appContext } from './context.server';
 import { jobsView } from './jobs.server';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { editingDeps } from './posts.server';
+import { profileApi } from './profiles.server';
 import { approve, armSchedule, startArticle, startLaunch, startPublishing } from './work.server';
 
 /** One per process and shared by /api/v1 and /mcp, so wrong tokens count once whichever door they knock on */
@@ -28,5 +29,6 @@ export async function apiDeps(): Promise<ApiDeps> {
     comments: commentDeps,
     checkComments,
     redraftComment,
+    profiles: profileApi,
   };
 }

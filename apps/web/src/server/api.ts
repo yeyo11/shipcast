@@ -46,6 +46,7 @@ import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest, moment } from './requests.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
+import { PROFILE_ROUTES, PROFILE_SCHEMAS, type ProfileApi } from './profile-api.ts';
 import { commentView, commentViews } from './comment-view.ts';
 
 /*
@@ -94,6 +95,8 @@ export interface ApiDeps {
   checkComments(): Promise<WorkAnswer>;
   /** Queues a fresh draft of one comment's reply */
   redraftComment(commentId: number): Promise<WorkAnswer>;
+  /** Account analysis: a profile's review as a job, and its edit on the network */
+  profiles?: ProfileApi;
 }
 
 /**
@@ -515,6 +518,7 @@ export const ROUTES: ApiRoute[] = [
     },
   },
   ...STATS_ROUTES,
+  ...PROFILE_ROUTES,
   {
     method: 'POST',
     path: '/launches/{id}/schedule',
@@ -1091,6 +1095,7 @@ export function openApiDocument(publicUrl: string) {
           },
         },
         ...STATS_SCHEMAS,
+        ...PROFILE_SCHEMAS,
       },
     },
   };

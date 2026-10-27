@@ -9,6 +9,7 @@ import { buildServices, type Services } from './services.ts';
 import { takeSnapshots } from './snapshots.ts';
 import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
 import { COMMENTS_CRON, COMMENTS_KEY, commentsNotice, replyDeps } from './comments.ts';
+import { runProfileReview } from './profiles.ts';
 
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
 export interface WorkDeps {
@@ -355,6 +356,14 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       if (notice) await notify(await servicesFor(brand), notice);
       // A run that could read nothing at all failed; one network failing is in the log
       if (result.posts === 0 && result.problems.length > 0) throw new Error(result.problems.join('; '));
+    },
+
+    /** An account's profile reviewed by the AI, sent by hand only; it changes nothing on the network */
+    async 'profile-review'(request, job) {
+      const account = await registry.account(request.accountId);
+      if (account) job.link(`/channels/${account.network}?review=${account.id}`);
+      const brand = await d.brand();
+      await runProfileReview({ registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) }, request, (line) => job.log(line));
     },
   };
 }

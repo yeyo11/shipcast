@@ -26,6 +26,8 @@ export interface JobData {
   scheduled: { postId: number; launchId: number };
   /** Every live post's comments read and drafted, or one comment's reply drafted again */
   comments: { reason: string; commentId?: number };
+  /** One account's profile reviewed by the AI, with what the owner pasted where the network cannot read it */
+  'profile-review': { accountId: number; pasted?: { displayName?: string; bio?: string; links?: string }; language?: string };
 }
 
 export type QueueName = keyof JobData;
@@ -65,6 +67,8 @@ const QUEUES: Record<QueueName, QueueSpec> = {
   scheduled: { title: 'A scheduled post', policy: 'stately', retryLimit: 2, retryDelay: 60, expireInSeconds: 10 * 60, concurrency: 1 },
   // No retries: a run drafts with the AI, and the next run, half an hour later, is the retry
   comments: { title: 'Reading the comments', policy: 'stately', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
+  // One per account (its key); no retries: a review costs an AI run, and the owner asks again
+  'profile-review': { title: 'Reviewing a profile', policy: 'stately', retryLimit: 0, expireInSeconds: 30 * 60, concurrency: 1 },
 };
 
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];
