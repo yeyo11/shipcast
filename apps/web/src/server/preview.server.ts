@@ -5,9 +5,11 @@ import type { Services } from '@shipcast/runtime';
  * A preview copy that cannot reach a real network. With SHIPCAST_PREVIEW_FAKE_NETWORKS=1 on a copy
  * served over plain HTTP (SHIPCAST_APP_TLS=off, which production never is), every connector that
  * would change something on a network is swapped for an in-memory fake that answers success, and
- * whatever would write to GitHub is refused, so the owner can try Edit, Delete and Schedule on a
- * copy of his own data without touching one real post. Reading stays real: a page still shows the
- * drafts and the numbers as they are.
+ * the GitHub client's writes are dry runs (`previewGitHubFetch`), so the owner can try Edit, Delete,
+ * Schedule or the onboarding's Commit brand.yml on a copy of his own data without touching one real
+ * post or repo. Drafting, draft edits and approving are refused outright on top of that: they would
+ * spend an AI run, or act on a real pull request the dry run cannot pretend to change. Reading
+ * stays real: a page still shows the drafts and the numbers as they are.
  */
 
 /** Whether this process is a preview with fake networks; the TLS condition keeps the switch from ever working in production */
@@ -79,6 +81,63 @@ export const previewFetch: typeof fetch = async (input, init) => {
   say(`would ${method} ${new URL(url).origin}${new URL(url).pathname}`);
   return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
 };
+
+let fakeShas = 0;
+/** A sha of the right shape that names no real object: a counter, so each fake commit differs */
+const fakeSha = () => (++fakeShas).toString(16).padStart(40, '0');
+
+const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+async function bodyOf(init: RequestInit | undefined): Promise<Record<string, unknown>> {
+  if (typeof init?.body !== 'string') return {};
+  try {
+    const parsed = JSON.parse(init.body) as unknown;
+    return parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * What GitHub would answer to a write on a repo, faked: enough of each answer's shape for the REST
+ * client to carry on (a blob, tree or commit has a sha, a new branch a ref, a pull request a number
+ * and an address, a merge its commit) so the work that wrote it ends as it would, and nothing left
+ * the machine. The pull request is number 0, which GitHub never gives, so it cannot pass for a real one.
+ */
+export async function dryRunGitHubWrite(method: string, url: URL, init: RequestInit | undefined): Promise<Response> {
+  const path = url.pathname;
+  const body = await bodyOf(init);
+  const repo = /^\/repos\/([^/]+\/[^/]+)\//.exec(path)?.[1] ?? 'unknown/unknown';
+  const what = typeof body.message === 'string' ? `: ${body.message}` : typeof body.title === 'string' ? `: ${body.title}` : '';
+  say(`would ${method} ${path} on GitHub${what}`);
+  if (method === 'DELETE') return new Response(null, { status: 204 });
+  if (method === 'POST' && /\/git\/(blobs|trees)$/.test(path)) return json(201, { sha: fakeSha() });
+  if (method === 'POST' && path.endsWith('/git/commits')) return json(201, { sha: fakeSha(), tree: { sha: typeof body.tree === 'string' ? body.tree : fakeSha() }, message: body.message });
+  if (method === 'POST' && path.endsWith('/git/refs')) return json(201, { ref: body.ref, object: { sha: body.sha, type: 'commit' } });
+  if (method === 'PATCH' && path.includes('/git/refs/')) return json(200, { ref: path.slice(path.indexOf('/git/') + 5), object: { sha: body.sha, type: 'commit' } });
+  if (method === 'POST' && path.endsWith('/pulls')) {
+    return json(201, { number: 0, html_url: `https://github.com/${repo}/pull/0`, state: 'open', title: body.title, head: { ref: body.head } });
+  }
+  if (method === 'PUT' && /\/pulls\/\d+\/merge$/.test(path)) return json(200, { sha: fakeSha(), merged: true, message: 'Pull Request successfully merged (preview: not really)' });
+  if (method === 'PUT' && path.includes('/contents/')) {
+    return json(201, { content: { path: path.slice(path.indexOf('/contents/') + 10), sha: fakeSha() }, commit: { sha: fakeSha(), message: body.message } });
+  }
+  return json(200, {});
+}
+
+/**
+ * The GitHub REST client's fetch on a preview: reading goes to GitHub as it is (the drafts, the
+ * releases, the launches repo), and every write to a repo (a drafts pull request, a commit of an
+ * article or of brand.yml, a merge) is logged and answered by `dryRunGitHubWrite`, so a preview can
+ * walk through the onboarding or a round without one commit on the owner's repos.
+ */
+export function previewGitHubFetch(real: typeof fetch = fetch): typeof fetch {
+  return async (input, init) => {
+    const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    if (method === 'GET' || method === 'HEAD') return real(input, init);
+    return dryRunGitHubWrite(method, new URL(input instanceof Request ? input.url : String(input)), init);
+  };
+}
 
 /** The real services with their writing parts replaced: fake publishers, no notifier, no Search Console ping */
 export function previewServices(real: Services): Services {

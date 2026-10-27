@@ -16,7 +16,7 @@ import {
   type WorkDeps,
 } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
-import { fakeNetworks, previewFetch, previewServices } from './preview.server';
+import { fakeNetworks, previewFetch, previewGitHubFetch, previewServices } from './preview.server';
 
 /**
  * The repository's root, where `.env`, `data/` and `workspace/` live: the nearest folder up from where
@@ -72,7 +72,8 @@ export function appContext(): Promise<AppContext> {
 
 async function createContext(): Promise<AppContext> {
   const app = loadAppConfig(process.env);
-  const runtime = await createRuntime({ root: ROOT, log: console.log });
+  // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
+  const runtime = await createRuntime({ root: ROOT, log: console.log, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app' });
   const work: WorkDeps = {
