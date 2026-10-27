@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.88",
+    "@ai-sdk/openai": "^4.0.103",
     "@ai-sdk/openai-compatible": "^3.0.78",
     "@electric-sql/pglite": "^0.5.11",
     "@shipcast/assets": "workspace:*",

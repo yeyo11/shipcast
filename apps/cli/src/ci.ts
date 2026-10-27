@@ -5,18 +5,26 @@ import {
   checkout,
   currentPrompts,
   draftLaunch,
+  fakePackProvider,
   GitHubApp,
   GitHubRest,
+  launchConfigOf,
   loadBrand,
   openAiCompatibleProvider,
+  openAiProvider,
   readAiSettings,
   Registry,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_OPENAI_MODEL,
   type AiProvider,
+  type Launch,
   type PipelineDeps,
 } from '@shipcast/engine';
+import type { Brand } from '@shipcast/schema';
 import {
   BranchState,
   buildServices,
+  channelPlan,
   ciLaunch,
   ciPublish,
   ciRound,
@@ -70,24 +78,47 @@ class MemorySecrets implements SecretStore {
 }
 
 /** Stands in where a dry run asks for an AI: it never gets one, so an accidental call is loud */
+const NO_AI = 'no AI provider is configured (SHIPCAST_AI_PROVIDER, anthropic or openai, with ANTHROPIC_API_KEY or OPENAI_API_KEY)';
 const noAi: AiProvider = {
   id: 'anthropic',
   generateObject() {
-    throw new Error('no AI provider is configured (ANTHROPIC_API_KEY, or SHIPCAST_AI_BASE_URL with SHIPCAST_AI_MODEL)');
+    throw new Error(NO_AI);
   },
   streamText() {
-    throw new Error('no AI provider is configured (ANTHROPIC_API_KEY, or SHIPCAST_AI_BASE_URL with SHIPCAST_AI_MODEL)');
+    throw new Error(NO_AI);
   },
 };
 
-export function aiProviderOf(ai: CiAi | undefined): AiProvider {
+/**
+ * The provider a launch is drafted with. The fake one is built per launch, since its placeholder pack
+ * names the launch it was asked for.
+ */
+export function aiProviderOf(ai: CiAi | undefined, launch?: { launch: Launch; brand: Brand }): AiProvider {
   if (!ai) return noAi;
-  return ai.kind === 'anthropic' ? anthropicProvider({ apiKey: ai.apiKey }) : openAiCompatibleProvider({ baseUrl: ai.baseUrl, apiKey: ai.apiKey, model: ai.model });
+  switch (ai.kind) {
+    case 'anthropic':
+      return anthropicProvider({ apiKey: ai.apiKey });
+    case 'openai':
+      return openAiProvider({ apiKey: ai.apiKey });
+    case 'openaiCompatible':
+      return openAiCompatibleProvider({ baseUrl: ai.baseUrl, apiKey: ai.apiKey, model: ai.model });
+    case 'fake':
+      return launch ? fakePackProvider(launch.launch, launch.brand) : noAi;
+  }
 }
 
 export function aiLabelOf(ai: CiAi | undefined): string {
   if (!ai) return 'the AI (none configured)';
-  return ai.kind === 'anthropic' ? `the Anthropic API${ai.model ? ` (${ai.model})` : ''}` : `${ai.baseUrl} (${ai.model})`;
+  switch (ai.kind) {
+    case 'anthropic':
+      return `the Anthropic API (${ai.model ?? DEFAULT_ANTHROPIC_MODEL})`;
+    case 'openai':
+      return `the OpenAI API (${ai.model ?? DEFAULT_OPENAI_MODEL})`;
+    case 'openaiCompatible':
+      return `${ai.baseUrl} (${ai.model})`;
+    case 'fake':
+      return 'the fake AI provider (a placeholder pack, for tests: no model reads the code)';
+  }
 }
 
 /** Writes the action's outputs, when GitHub gave a file for them */
@@ -183,17 +214,20 @@ export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, opti
   }
 
   mkdirSync(config.workDir, { recursive: true });
-  const provider = aiProviderOf(config.ai);
   const brand = () => loadBrand(github, config.launchesRepo);
-  const pipelineFor = (registry: Registry): PipelineDeps => ({
+  const model = config.ai && 'model' in config.ai ? config.ai.model : undefined;
+  const pipelineFor = (registry: Registry, launch?: { launch: Launch; brand: Brand }): PipelineDeps => {
+    const provider = aiProviderOf(config.ai, launch);
+    return {
     github,
     ai: provider,
     // The edited prompts and the tone override live in the registry; the provider is always CI's own
-    aiSetup: async () => ({ provider, ...(config.ai?.model && { model: config.ai.model }), prompts: await currentPrompts(registry), tone: (await readAiSettings(registry)).tone }),
+    aiSetup: async () => ({ provider, ...(model && { model }), prompts: await currentPrompts(registry), tone: (await readAiSettings(registry)).tone }),
     registry,
     launchesRepo: config.launchesRepo,
     checkout: authenticatedCheckout(token, join(config.workDir, 'workspace')),
-  });
+    };
+  };
 
   return {
     launchesRepo: config.launchesRepo,
@@ -201,10 +235,15 @@ export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, opti
     state,
     brand,
     aiLabel: aiLabelOf(config.ai),
+    async plan(launch) {
+      const launchConfig = await launchConfigOf(github, config.launchesRepo, launch);
+      if (!launchConfig) return [`launch.yml of ${launch.repo} at ${launch.ref} cannot be read`];
+      return channelPlan(launchConfig, env).map((p) => `${p.channel} (${p.mode}): ${p.ready ? (p.mode === 'auto' ? 'would publish at once' : 'would publish') : 'skipped'}; ${p.note}`);
+    },
     dryRun: options.dryRun,
     log: options.log,
     async draft(launch, brandOf, registry) {
-      return draftLaunch(launch, brandOf, pipelineFor(registry));
+      return draftLaunch(launch, brandOf, pipelineFor(registry, { launch, brand: brandOf }));
     },
     async publish(launch, brandOf, registry) {
       const services = await buildServices({
