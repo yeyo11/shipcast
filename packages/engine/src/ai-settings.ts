@@ -13,6 +13,7 @@ import {
   isPromptId,
   LOCKED_ARTICLE_RULES,
   LOCKED_LAUNCH_RULES,
+  LOCKED_PROFILE_RULES,
   LOCKED_REPLY_RULES,
   PROMPT_IDS,
   templateProblems,
@@ -41,7 +42,7 @@ const TaskChoice = z.strictObject({
 export type TaskChoice = z.infer<typeof TaskChoice>;
 
 const AiSettings = z.strictObject({
-  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice }),
+  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice, profile: TaskChoice }),
   /** Replaces brand.yml's tone in every prompt when set */
   tone: z.string().trim().max(2000).optional(),
 });
@@ -49,12 +50,12 @@ export type AiSettings = z.infer<typeof AiSettings>;
 
 // A client written before a task existed saves without it; that task keeps what it had
 const AiSettingsInput = AiSettings.extend({
-  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice.optional() }),
+  tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice.optional(), profile: TaskChoice.optional() }),
 });
 
 /** claudio for everything, as before the settings existed */
 export const DEFAULT_AI_SETTINGS: AiSettings = {
-  tasks: { pack: { provider: 'claudio' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' }, replies: { provider: 'claudio' } },
+  tasks: { pack: { provider: 'claudio' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' }, replies: { provider: 'claudio' }, profile: { provider: 'claudio' } },
 };
 
 export class InvalidAiSettings extends Error {}
@@ -88,8 +89,10 @@ export async function readAiSettings(registry: Registry): Promise<AiSettings> {
 export async function writeAiSettings(registry: Registry, input: unknown): Promise<AiSettings> {
   const parsed = AiSettingsInput.safeParse(input);
   if (!parsed.success) throw new InvalidAiSettings(parsed.error.issues.map((i) => `${i.path.join('.') || 'settings'}: ${i.message}`).join('; '));
-  const replies = parsed.data.tasks.replies ?? (await readAiSettings(registry)).tasks.replies;
-  const settings = clean({ ...parsed.data, tasks: { ...parsed.data.tasks, replies } });
+  const stored = await readAiSettings(registry);
+  const replies = parsed.data.tasks.replies ?? stored.tasks.replies;
+  const profile = parsed.data.tasks.profile ?? stored.tasks.profile;
+  const settings = clean({ ...parsed.data, tasks: { ...parsed.data.tasks, replies, profile } });
   await registry.setSetting(AI_SETTINGS_KEY, settings);
   return settings;
 }
@@ -107,6 +110,7 @@ export function lockedPrompts(): {
   launchRules: readonly string[];
   articleRules: readonly string[];
   replyRules: readonly string[];
+  profileRules: readonly string[];
   assistantLaunchRules: readonly string[];
   assistantArticleRules: readonly string[];
   packSchema: Record<string, unknown>;
@@ -115,6 +119,7 @@ export function lockedPrompts(): {
     launchRules: LOCKED_LAUNCH_RULES,
     articleRules: LOCKED_ARTICLE_RULES,
     replyRules: LOCKED_REPLY_RULES,
+    profileRules: LOCKED_PROFILE_RULES,
     assistantLaunchRules: LOCKED_ASSISTANT_LAUNCH_RULES,
     assistantArticleRules: LOCKED_ASSISTANT_ARTICLE_RULES,
     packSchema: contentPackJsonSchema(),

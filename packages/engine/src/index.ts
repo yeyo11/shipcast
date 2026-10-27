@@ -24,3 +24,4 @@ export * from './stats.ts';
 export * from './comments.ts';
 export * from './db/snapshot.ts';
 export * from './assistant.ts';
+export * from './profile.ts';
