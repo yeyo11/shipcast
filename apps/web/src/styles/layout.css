@@ -67,7 +67,11 @@ main:has(.page-toolbar) { scroll-padding-top: 72px; }
 .launch-nomatch { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 8px 0 28px; }
 .launch-nomatch p { margin: 0; }
 @media (max-width: 640px) {
-  .launch-toolbar .comment-search { flex: none; width: min(260px, 70vw); min-width: 0; }
+  /* Two rows on a phone: the search across the top, the filters, the order and the count under it */
+  .launch-toolbar { flex-wrap: wrap; }
+  .launch-toolbar .comment-search { flex: 1 1 100%; width: auto; min-width: 0; }
+  .launch-toolbar .comment-search .input { width: 100%; }
+  .launch-sort { min-width: 0; flex: 1 1 130px; }
   .launch-sort .ui-trigger { min-height: 44px; }
 }
 

@@ -174,6 +174,8 @@
 
 /* Account analysis: one panel per account on its network's page, its proposals as diffs; one column, so a 320 px screen reflows */
 .profile-reviews { display: grid; gap: 16px; }
+/* An account's handle is one long word (@name@instance.social): it breaks rather than leave the card */
+.profile-review .ph { overflow-wrap: anywhere; font-size: clamp(20px, 6vw, 32px); min-width: 0; }
 .profile-paste { display: grid; gap: 10px; }
 .profile-proposals { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .profile-proposals .textarea { width: 100%; }
