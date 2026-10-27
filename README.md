@@ -19,13 +19,29 @@ channel did.
 > [!NOTE]
 > Shipcast is **alpha**, built for and used by its author: it launched
 > [claudio](https://github.com/yeyo11/claudio) v0.9.0 and its own v0.1.0. It runs on your own machine
-> with your own accounts, or in GitHub Actions; [installing it](#what-you-need) takes one command and
-> the app's onboarding.
+> with your own accounts, or in GitHub Actions on your own repos: [in Actions](#get-started-on-your-own-repos)
+> it takes one command, [on your machine](#what-you-need) one command and the app's onboarding.
 
 Read the launch article, written and published by Shipcast itself:
 [Shipcast: launch your GitHub projects without writing the announcement ten times](https://josegarrido.dev/en/shipcast-launch-your-github-projects/)
 ([en español](https://josegarrido.dev/es/shipcast-lanza-tus-proyectos-de-github/)), and every launch
 on [the project's page](https://josegarrido.dev/en/projects/shipcast/) of the author's blog.
+
+## Get started on your own repos
+
+The quickest way: the [Shipcast Launch](https://github.com/yeyo11/shipcast-action) GitHub Action,
+with your own AI key (Anthropic or OpenAI) and nothing to host. In your project's repo:
+
+```bash
+npx @yeyo11/shipcast init
+```
+
+It writes `.github/launch.yml` and a launch workflow in the project, `brand.yml` and a publish
+workflow for your launches repo (your blog), and prints every secret to set with the link to get it.
+Then publish a release: the drafts pull request arrives in your launches repo, and merging it
+publishes the article and every channel you turned on (dev.to, Bluesky, Mastodon, Hashnode, Telegram,
+Discord, GitHub Discussions), once. The whole walk-through is
+[docs/getting-started.md](docs/getting-started.md).
 
 ## How it works
 
@@ -109,9 +125,10 @@ Or by hand, in a clone: `pnpm install`, then `pnpm shipcast init`. Everything el
 repo, the AI provider, the channels) is set in the app's onboarding. See
 [docs/install.md](docs/install.md).
 
-**Without a machine of your own**, Shipcast runs in GitHub Actions: `shipcast ci` with the composite
-action at this repo's root and the workflows in `templates/`
-([docs/decisions/action-mode.md](docs/decisions/action-mode.md)).
+**Without a machine of your own**, Shipcast runs in GitHub Actions:
+[yeyo11/shipcast-action](https://github.com/yeyo11/shipcast-action), set up by
+`npx @yeyo11/shipcast init` ([get started](#get-started-on-your-own-repos),
+[docs/decisions/github-action.md](docs/decisions/github-action.md)).
 
 An install from before Postgres keeps its registry in `data/shipcast.db`: stop the app and the CLI,
 start Postgres, then `pnpm sqlite-to-postgres` copies every row into the database at
