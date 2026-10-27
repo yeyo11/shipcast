@@ -7,10 +7,14 @@ import { useToast } from '../../../components/Toasts';
 import { Pill, when } from '../../../components/ui';
 import { ConfirmButton } from '../../../components/ui/ConfirmButton';
 import { createToken, listTokens, revokeToken } from '../../../server/tokens.functions';
+import { getWebMcp, setWebMcp } from '../../../server/webmcp.functions';
 
 export const Route = createFileRoute('/_app/settings/api')({
   head: () => ({ meta: [{ title: 'API · Shipcast' }] }),
-  loader: () => listTokens(),
+  loader: async () => {
+    const [tokens, webMcp] = await Promise.all([listTokens(), getWebMcp()]);
+    return { ...tokens, webMcp: webMcp.enabled };
+  },
   component: Api,
 });
 
@@ -143,6 +147,26 @@ function Api() {
           </tbody>
         </table>
       )}
+
+      <h2 className="ph">WebMCP</h2>
+      <div className="form">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={data.webMcp}
+            onChange={async (e) => {
+              const answer = await setWebMcp({ data: { enabled: e.target.checked } });
+              toast.done(answer.enabled ? 'WebMCP on' : 'WebMCP off', answer.enabled ? 'Reload the app for an agent in this browser to see the tools.' : 'The tools are no longer offered, and the API refuses their calls.');
+              await router.invalidate();
+            }}
+          />
+          Offer Shipcast’s tools to an agent built into this browser
+        </label>
+        <small>
+          An experiment that follows a draft standard: while the app is open, a browser with WebMCP can call the same tools as the MCP server, with your session and
+          both scopes. Off by default; turning it off also makes the API refuse those calls.
+        </small>
+      </div>
     </>
   );
 }

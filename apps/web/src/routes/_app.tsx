@@ -6,6 +6,7 @@ import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { requestTour } from '../components/tour/request';
 import { TourHost } from '../components/tour/TourHost';
+import { WebMcpHost } from '../components/WebMcpHost';
 import { ToastProvider } from '../components/Toasts';
 import { Avatar } from '../components/ui';
 import { CommandPalette, useShortcutLabel } from '../components/ui/CommandPalette';
@@ -17,13 +18,14 @@ import { getBanner } from '../server/banner.functions';
 import { getOnboardingState } from '../server/onboarding.functions';
 import { currentSettingsPage, inSettings } from '../server/settings-pages';
 import { whoAmI } from '../server/session.functions';
+import { getWebMcp } from '../server/webmcp.functions';
 
 export const Route = createFileRoute('/_app')({
   loader: async () => {
-    const [who, onboarding, banner] = await Promise.all([whoAmI(), getOnboardingState(), getBanner()]);
+    const [who, onboarding, banner, webMcp] = await Promise.all([whoAmI(), getOnboardingState(), getBanner(), getWebMcp()]);
     // A new install opens on the onboarding until it is finished or set aside; an install already working never does
     if (onboarding.autoOpen) throw redirect({ to: '/onboarding' });
-    return { ...who, banner };
+    return { ...who, banner, webMcp: webMcp.enabled };
   },
   component: Shell,
   notFoundComponent: NotFoundPage,
@@ -74,7 +76,7 @@ function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
 }
 
 function Shell() {
-  const { login, name, avatarUrl, banner } = Route.useLoaderData();
+  const { login, name, avatarUrl, banner, webMcp } = Route.useLoaderData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [palette, setPalette] = useState(false);
   const [more, setMore] = useState(false);
@@ -228,6 +230,7 @@ function Shell() {
         </nav>
         <CommandPalette open={palette} onOpenChange={setPalette} />
         <TourHost />
+        <WebMcpHost enabled={webMcp} />
       </TooltipProvider>
     </ToastProvider>
   );

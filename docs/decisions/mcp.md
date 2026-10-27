@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:31:39.787213136Z
-updated_at: 2026-10-25T19:31:39.787213136Z
+created_at: 2026-10-25T20:03:17.775522423Z
+updated_at: 2026-10-27T17:29:29.401059953Z
 tags:
     - decision
     - mcp
@@ -75,9 +75,14 @@ only when all of these hold (`webMcpSession` in `apps/web/src/server/api.ts`):
 - the owner turned WebMCP on (`webmcp:enabled` in the registry, false by default);
 - the session is valid. It then has both scopes, as the owner does in the pages.
 
-Off is both halves: the app's shell does not mount the tools (`mountWebMcp({ enabled })` registers
-nothing unless told the setting is on), and the API refuses the cookie path. The toggle in the UI and
-the mounting come with the app's shell; until then the module is tested with a fake registry.
+Off is both halves: the app's shell does not mount the tools, and the API refuses the cookie path.
+
+**The toggle and the mounting (2026-10-27).** *Settings › API* has a "WebMCP" checkbox
+(`getWebMcp`/`setWebMcp` in `apps/web/src/server/webmcp.functions.ts`, over `readWebMcp` and
+`writeWebMcp`). The `_app` loader reads the setting and `WebMcpHost` (`apps/web/src/components/WebMcpHost.tsx`)
+mounts the tools while it is on: it imports `@shipcast/mcp/webmcp` only then, so the shell carries none
+of the module while the experiment is off, and it unmounts them when the setting goes off or the shell
+leaves. A browser without the proposal's registry gets nothing registered.
 
 Rejected: a token kept in the page for WebMCP (a long-lived secret in the browser's JavaScript, for
 an experiment), and opening the API to the cookie with the usual same-origin check alone (every
