@@ -110,9 +110,10 @@ export function aiRunSetup(deps: AiDeps): (task: AiTask) => Promise<AiRunSetup> 
 }
 
 /**
- * The AI task runner (`ai-runner` flag), on the same settings and keychain as the old providers. No
- * task uses it yet: built beside them, so moving a task is a swap. `archives` is the GitHub client,
- * which gives Claudio's workspaces the repo's download URL and keeps its token to itself.
+ * The AI task runner (`ai-runner` flag), on the same settings and keychain as the old providers: the
+ * one place it is built, so every task (through the pipeline's deps) runs on the same one. `archives`
+ * is the GitHub client, which gives Claudio's workspaces the repo's download URL and keeps its token
+ * to itself.
  */
 export function aiRunnerFor(deps: AiDeps & { archives: RepoArchiveSource; telemetry?: AiTelemetry }): AiTaskRunner {
   return new AiTaskRunner({

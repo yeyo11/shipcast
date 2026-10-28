@@ -19,6 +19,7 @@ import {
   templateProblems,
   type Prompt,
   type PromptId,
+  type PromptOptions,
   type PromptTexts,
 } from './prompt.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
@@ -161,6 +162,16 @@ export async function currentPrompts(registry: Pick<Repositories, 'settings'>): 
     if (last) texts[id] = last.text;
   }
   return texts;
+}
+
+/**
+ * The owner's prompts and tone, as the AI settings have them now: what a task on the AI task runner
+ * builds its prompt with, read before each run so an edit applies to the next one. The runner itself
+ * chooses only the provider and the model.
+ */
+export async function currentAiTexts(registry: Pick<Repositories, 'settings'>): Promise<PromptOptions> {
+  const [prompts, settings] = await Promise.all([currentPrompts(registry), readAiSettings(registry)]);
+  return { prompts, ...(settings.tone && { tone: settings.tone }) };
 }
 
 function checkId(id: string): PromptId {

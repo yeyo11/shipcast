@@ -1,6 +1,7 @@
 import {
   checkout,
   Claudio,
+  currentAiTexts,
   GitHubApp,
   GitHubRest,
   loadBrand,
@@ -45,7 +46,7 @@ export interface Runtime {
   /** The owner's user token from the last sign-in through the App; absent without an App */
   userTokens: GitHubUserTokens | undefined;
   pipeline: PipelineDeps;
-  /** With `ai-runner`: the AI task runner, built beside the old providers; no task runs on it yet */
+  /** With `ai-runner`: the AI task runner every AI task runs on, through `pipeline.aiRunner` */
   aiRunner: AiTaskRunner | undefined;
   /** The brand the launches repo speaks for, read again every few minutes; SettingMissing without a launches repo */
   brand(): Promise<Brand>;
@@ -204,6 +205,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),
+    // With `ai-runner` the tasks run on the runner, with the owner's prompts and tone read before each
+    ...(aiRunner && { aiRunner, aiTexts: () => currentAiTexts(registry) }),
   };
 
   return {

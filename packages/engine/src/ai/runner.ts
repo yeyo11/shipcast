@@ -175,11 +175,13 @@ export class AiTaskRunner {
       const first = submit ? await this.#submitCall(plan, plan.messages, false) : await this.#nativeCall(plan, plan.messages);
       usage = add(usage, first.usage);
       steps += first.steps;
+      let last = first.providerMetadata;
+      // The conversation is worth reading when the answer is what failed: the error carries where it is
+      const chat = () => chatIdIn(last, plan.setup.provider.id);
       if (submit && !first.submitted && first.steps >= plan.limits.maxSteps) {
-        throw new AiError('ai_no_answer', `the ${plan.setup.provider.name} used all ${plan.limits.maxSteps} steps of ${task.id} without answering`, { provider: plan.setup.provider.id });
+        throw new AiError('ai_no_answer', `the ${plan.setup.provider.name} used all ${plan.limits.maxSteps} steps of ${task.id} without answering`, { provider: plan.setup.provider.id, ...withChat(chat()) });
       }
       const checked = check(output.schema, submit ? first.submitted?.input : parseJson(first.text));
-      let last = first.providerMetadata;
       const done = (value: T, repaired: boolean): AiRunResult<T> => ({ output: value, usage, steps, repaired, provider: plan.setup.provider.id, model: plan.modelId, ...(last && { providerMetadata: last }) });
       if (checked.ok) return done(checked.value, false);
 
@@ -194,7 +196,7 @@ export class AiTaskRunner {
       last = second.providerMetadata ?? last;
       const again = check(output.schema, submit ? second.submitted?.input : parseJson(second.text));
       if (again.ok) return done(again.value, true);
-      throw new AiError('ai_invalid_output', `the ${plan.setup.provider.name}'s answer to ${task.id} is not valid, even after a repair: ${again.problems}`.slice(0, 2000), { provider: plan.setup.provider.id });
+      throw new AiError('ai_invalid_output', `the ${plan.setup.provider.name}'s answer to ${task.id} is not valid, even after a repair: ${again.problems}`.slice(0, 2000), { provider: plan.setup.provider.id, ...withChat(chat()) });
     }));
   }
 
@@ -402,6 +404,26 @@ export class AiTaskRunner {
     const [steps, usage, response, providerMetadata] = await Promise.all([result.steps, result.totalUsage, result.response, result.providerMetadata]);
     return { text, steps: steps.length, usage, responseMessages: response.messages, providerMetadata, ...(submitted && { submitted }) };
   }
+}
+
+/** A provider's conversation id in a call's metadata, under the provider's own key (`providerMetadata.claudio.chatId`) */
+function chatIdIn(metadata: ProviderMetadata | undefined, provider: string): string | undefined {
+  const chatId = metadata?.[provider]?.chatId;
+  return typeof chatId === 'string' && chatId ? chatId : undefined;
+}
+
+const withChat = (chatId: string | undefined) => (chatId ? { chatId } : {});
+
+/**
+ * Where to read a run's whole conversation, when its provider keeps one (Claudio's chat): from the
+ * result of a run, or from the AiError of one whose answer was what failed. What the old path
+ * recorded as `claudio chat: <id>` beside a failed launch's problems.
+ */
+export function chatIdOf(outcome: Pick<AiRunResult<unknown>, 'provider' | 'providerMetadata'> | unknown): string | undefined {
+  if (outcome instanceof AiError) return outcome.chatId;
+  if (typeof outcome !== 'object' || outcome === null || !('provider' in outcome) || typeof outcome.provider !== 'string') return undefined;
+  const metadata = 'providerMetadata' in outcome ? (outcome.providerMetadata as ProviderMetadata | undefined) : undefined;
+  return chatIdIn(metadata, outcome.provider);
 }
 
 /** Two sets of provider options as one, per provider: a cache breakpoint beside the provider's own options */

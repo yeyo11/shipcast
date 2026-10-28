@@ -1,8 +1,11 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
-import type { AiProvider, AiSetup, AiTask } from './ai.ts';
+import type { AiTask } from '@shipcast/schema';
+import type { AiProvider, AiSetup } from './ai.ts';
+import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, keepPubDates, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
-import { generatePack } from './generate.ts';
+import { generatePack, generatePackOnRunner, type Generated } from './generate.ts';
+import type { PromptOptions } from './prompt.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
@@ -15,6 +18,14 @@ export interface PipelineDeps {
   ai: AiProvider;
   /** What a task runs with, read from the AI settings each time, so an edit applies to the next draft */
   aiSetup?: (task: AiTask) => Promise<AiSetup>;
+  /**
+   * With `ai-runner`: the AI task runner every task runs on instead of `ai` and `aiSetup`, which
+   * reads the task's provider and model from the AI settings when it runs. Built by the runtime's
+   * aiRunnerFor only.
+   */
+  aiRunner?: AiTaskRunner;
+  /** The owner's prompts and tone from the AI settings, read before each task on the runner; the defaults in code without */
+  aiTexts?: () => Promise<PromptOptions>;
   registry: Pick<Repositories, 'launches'>;
   /** The repo whose blog and drafts this engine writes to, e.g. `yeyo11/launches` */
   launchesRepo: string;
@@ -30,6 +41,11 @@ export interface PipelineDeps {
   aiWorkdir?: string;
   /** With `github-events`: the drafts snapshot written as the pull request is opened, so the page never reads GitHub */
   drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
+}
+
+/** The prompts and tone a task on the runner is written with: the settings', or the ones in code */
+export async function aiTextsOf(deps: Pick<PipelineDeps, 'aiTexts'>): Promise<PromptOptions> {
+  return deps.aiTexts ? deps.aiTexts() : {};
 }
 
 /** A task's provider, model and prompts: the settings', or the default provider with the prompts in code */
@@ -132,23 +148,34 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     return fail([`could not clone ${launch.repo} at ${ref}: ${error instanceof Error ? error.message : String(error)}`]);
   }
 
-  let setup: AiSetup;
-  try {
-    setup = await setupFor(deps, 'pack');
-  } catch (error) {
-    return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
+  let generated: Generated;
+  if (deps.aiRunner) {
+    let texts: PromptOptions;
+    try {
+      texts = await aiTextsOf(deps);
+    } catch (error) {
+      return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
+    }
+    generated = await generatePackOnRunner({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
+  } else {
+    let setup: AiSetup;
+    try {
+      setup = await setupFor(deps, 'pack');
+    } catch (error) {
+      return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
+    }
+    generated = await generatePack({
+      ai: setup.provider,
+      model: setup.model,
+      prompts: setup.prompts,
+      tone: setup.tone,
+      launch,
+      config,
+      brand,
+      checkout,
+      maxBudgetUsd: deps.maxBudgetUsd,
+    });
   }
-  const generated = await generatePack({
-    ai: setup.provider,
-    model: setup.model,
-    prompts: setup.prompts,
-    tone: setup.tone,
-    launch,
-    config,
-    brand,
-    checkout,
-    maxBudgetUsd: deps.maxBudgetUsd,
-  });
   if (!generated.ok) {
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }
