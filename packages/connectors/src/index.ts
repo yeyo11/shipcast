@@ -1,4 +1,6 @@
 export * from './http.ts';
+export * from './quota.ts';
+export * from './http-client.ts';
 export * from './devto.ts';
 export * from './bluesky.ts';
 export * from './mastodon.ts';
