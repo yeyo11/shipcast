@@ -616,7 +616,7 @@ test('each kind of refusal answers its status with the same body, whichever area
   assert.deepEqual(await errorOf(await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { telegram: 'auto' } } })), {
     status: 400,
     code: 'invalid_input',
-    message: 'telegram has no comments to read (mastodon, bluesky, instagram, devto, threads, githubDiscussions)',
+    message: 'telegram has no comments to read (devto, bluesky, mastodon, instagram, githubDiscussions, threads)',
   });
 
   const broken: ApiDeps = { ...s.deps, editing: async () => { throw new Error('the keychain is locked'); } };
