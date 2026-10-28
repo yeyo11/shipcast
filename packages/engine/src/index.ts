@@ -29,3 +29,4 @@ export * from './profile.ts';
 export * from './telemetry/histogram.ts';
 export * from './telemetry/store.ts';
 export * from './telemetry/checks.ts';
+export * from './telemetry/report.ts';

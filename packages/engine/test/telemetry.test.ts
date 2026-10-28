@@ -90,3 +90,29 @@ test('two rows with one network id are a duplicate', async () => {
   assert.equal(duplicate.ok, false);
   assert.equal(duplicate.value, 1);
 });
+
+test('the report reads each KPI from the stored hours and leaves the probe out', async () => {
+  const { windowNumbers, compareReport } = await import('../src/index.ts');
+  const range = { from: '2026-10-28T00:00:00.000Z', to: '2026-10-30T00:00:00.000Z' };
+  const call = (over: Partial<import('../src/index.ts').CallCount>) => ({ hour: '2026-10-28T10:00:00.000Z', process: 'web', origin: 'fn:getLaunch', provider: 'github', method: 'GET', endpoint: '/x', status: 200, calls: 0, totalMs: 0, bytes: 0, latency: {}, ...over });
+  const before = windowNumbers(
+    range,
+    [call({ calls: 180 }), call({ status: 304, calls: 20 }), call({ origin: 'probe', calls: 1000 }), call({ origin: 'job:metrics', provider: 'bluesky', calls: 40, quotaPeak: 0.3 })],
+    [
+      { hour: '2026-10-28T10:00:00.000Z', process: 'web', kind: 'fn', name: 'getLaunch', outcome: 'ok', count: 100, totalMs: 470_000, maxMs: 6000, latency: { '38': 100 } },
+      { hour: '2026-10-28T11:00:00.000Z', process: 'web', kind: 'job', name: 'metrics', outcome: 'ok', count: 8, totalMs: 8 * 39_400, maxMs: 40_000, latency: { '48': 8 } },
+    ],
+    [],
+  );
+  assert.equal(before.callsPerDay, 120, '240 calls over two days, the probe left out');
+  assert.equal(before.githubCallsPerDay, 100);
+  assert.equal(before.github304Share, 0.1);
+  assert.equal(before.callsPerFnRun.getLaunch, 2);
+  assert.equal(before.jobs.metrics?.runsPerDay, 4);
+  assert.equal(before.jobs.metrics?.callsPerRun, 5);
+  assert.equal(before.peakQuota.bluesky, 0.3);
+  const after = windowNumbers(range, [call({ status: 304, calls: 20 })], [], []);
+  const report = compareReport(before, after);
+  assert.match(report, /\| Total \| 120 \| 10 \| -91\.7 % \|/);
+  assert.match(report, /getLaunch p95/);
+});
