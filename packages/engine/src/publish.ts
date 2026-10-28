@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleUrl as urlOf, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleLink, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -161,7 +161,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   // English is the canonical version every channel links to; Spanish only where that is the only one
   const lead: 'en' | 'es' = pack.article?.en ? 'en' : 'es';
   const slug = pack.article?.[lead]?.slug;
-  const articleUrl = urlOf(pack, brand.site, lead) ?? brand.site;
+  const articleUrl = articleLink(pack, brand.site, lead);
   // The merge starts the deploy: wait until the article (and so the media) is live
   if (slug && config.publishing.blog !== 'off') {
     const live = await http(articleUrl, { method: 'HEAD' }).then((r) => r.ok, () => false);
@@ -174,7 +174,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     for (const lang of ['en', 'es'] as const) {
       const piece = pack.article?.[lang];
       if (!piece) continue;
-      await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: urlOf(pack, brand.site, lang) ?? articleUrl, externalId: piece.slug });
+      await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: articleLink(pack, brand.site, lang, lead), externalId: piece.slug });
     }
   }
 
@@ -202,7 +202,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     const piece = pack.article![linkedinLang]!;
     const { data } = parseFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
     return {
-      url: urlOf(pack, brand.site, linkedinLang) ?? articleUrl,
+      url: articleLink(pack, brand.site, linkedinLang, lead),
       title: typeof data.title === 'string' ? data.title : piece.title,
       description: typeof data.description === 'string' ? data.description : piece.description,
     };
@@ -425,7 +425,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                   project: pack.project.name,
                   look: lookOf(projects, isArticle(launch) ? launch.ref : projectSlug(launch.repo)),
                   title: typeof langTitle === 'string' ? langTitle : title,
-                  articleUrl: `${urlOf(pack, brand.site, lang) ?? articleUrl}?ref=newsletter`,
+                  articleUrl: `${articleLink(pack, brand.site, lang, lead)}?ref=newsletter`,
                   // No launch image: it carries the English headline, which the issue already sets on colour
                   lang,
                 }),

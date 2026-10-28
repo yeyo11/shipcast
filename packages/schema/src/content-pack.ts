@@ -263,6 +263,18 @@ export function articleUrl(pack: ContentPack, site: string, lang: 'en' | 'es'): 
   return version ? `${site}/${lang}/${version.slug}/` : undefined;
 }
 
+/**
+ * The address a piece links to: the article in the first of these languages the pack has, or the
+ * site's home when it has none of them (a pack without an article still links somewhere).
+ */
+export function articleLink(pack: ContentPack, site: string, ...langs: Array<'en' | 'es'>): string {
+  for (const lang of langs) {
+    const url = articleUrl(pack, site, lang);
+    if (url) return url;
+  }
+  return site;
+}
+
 /** Each channel's piece of the pack: every channel Shipcast knows publishes one */
 const PIECE_OF: Record<Channel, keyof ContentPack> = {
   blog: 'article',
