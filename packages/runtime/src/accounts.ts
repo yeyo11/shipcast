@@ -13,6 +13,11 @@ export interface AccountDeps {
   /** Every brand Shipcast speaks for, by id: an account belongs to one of them */
   brands: Map<string, Brand>;
   fetch?: typeof fetch;
+  /**
+   * How a credential is checked before it is kept; by default its network is asked. A preview with
+   * fake networks answers itself (preview/world.ts), so connecting never reaches a network there.
+   */
+  check?: (networkId: string, credentials: Credentials) => Promise<Check>;
 }
 
 export type Connected = { ok: true; account: Account } | { ok: false; problem: string };
@@ -61,7 +66,7 @@ export async function connectAccount(
   const info = network(input.network);
   if (!info) return { ok: false, problem: `${input.network} cannot be connected` };
   const brand = brandOf(deps, input.brand);
-  const result = await check(input.network, input.credentials, brand, deps.fetch);
+  const result = deps.check ? await deps.check(input.network, input.credentials) : await check(input.network, input.credentials, brand, deps.fetch);
   if (!result.ok) return result;
   const label = input.label?.trim() || result.account;
   const existing = (await deps.registry.accounts.accounts({ brand: input.brand, network: input.network })).find((a) => a.label === label);

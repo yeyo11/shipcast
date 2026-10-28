@@ -19,6 +19,11 @@ export interface RoundDeps {
   log?: (line: string) => void;
   /** With the publishing-service flag: every publish through it, under this holder's claims */
   publishing?: { service: PublishingService; holder: string };
+  /**
+   * The services the round publishes and notifies with, when the process builds its own (a preview's,
+   * whose networks are fake); otherwise the brand's, built from its credentials
+   */
+  services?: (brand: Brand) => Promise<Services>;
 }
 
 /** The owner's notices through the brand's Telegram, when it is connected (the engine's NotificationService) */
@@ -124,7 +129,7 @@ export interface RoundOptions {
  */
 export async function runRound(d: RoundDeps, options: RoundOptions): Promise<void> {
   const log = d.log ?? (() => {});
-  const services = await buildServices({ env: d.env, brand: d.brand, registry: d.registry, github: d.github, secrets: d.secrets });
+  const services = d.services ? await d.services(d.brand) : await buildServices({ env: d.env, brand: d.brand, registry: d.registry, github: d.github, secrets: d.secrets });
   const draft = options.draft ?? ((launch: Launch, s: Services) => draftClaimed(launch, d, s));
 
   if (options.detect) {
@@ -148,10 +153,10 @@ export async function runRound(d: RoundDeps, options: RoundOptions): Promise<voi
 }
 
 /** Every Instagram and Threads token that is due: the connected accounts', and an Instagram one still read from `.env` */
-export async function refreshInstagramTokens(d: Pick<RoundDeps, 'registry' | 'secrets'>, services: Services, now = new Date()): Promise<string[]> {
+export async function refreshInstagramTokens(d: Pick<RoundDeps, 'registry' | 'secrets'>, services: Services, now = new Date(), http?: typeof fetch): Promise<string[]> {
   // Every network whose tokens are refreshed, as their specs say (Instagram's and Threads')
   const lines: string[] = [];
-  for (const spec of NETWORK_SPECS) if (spec.refresh) lines.push(...(await refreshMetaAccounts(spec.id, d, now)));
+  for (const spec of NETWORK_SPECS) if (spec.refresh) lines.push(...(await refreshMetaAccounts(spec.id, d, now, http)));
   // A token still read from .env is refreshed where it lives, in the registry
   if (services.instagram?.origin.kind === 'env') {
     const line = await refreshInstagramToken(services, d, now);

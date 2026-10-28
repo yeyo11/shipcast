@@ -295,7 +295,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         // With github-events releases come by webhook; the round's own detection is the hourly safety net, in either mode
         const polling = flags.on('github-events') && (reason === BY_HAND || (await takeGitHubPoll(registry)));
         await runRound(
-          { env: d.env, registry, github: d.github, secrets: d.secrets, brand, pipeline: d.pipeline, log },
+          // A process with its own services (a preview's fake networks) publishes and notifies with them in the round too
+          { env: d.env, registry, github: d.github, secrets: d.secrets, brand, pipeline: d.pipeline, log, ...(d.services && { services: d.services }) },
           {
             detect: flags.on('github-events') ? polling : automation.mode === 'poll' || reason === BY_HAND,
             draft: async (claimed) => {
@@ -344,7 +345,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         job.log('Automation is off: no token refreshed');
         return;
       }
-      const lines = await refreshInstagramTokens(d, await servicesFor(await d.brand()));
+      const lines = await refreshInstagramTokens(d, await servicesFor(await d.brand()), new Date(), d.fetch);
       for (const line of lines) job.log(line);
       if (lines.length === 0) job.log('No token is due');
     },

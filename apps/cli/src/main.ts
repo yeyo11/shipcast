@@ -12,6 +12,8 @@ import { processState, RedisLock } from '@shipcast/runtime/redis';
 import {
   attachTelemetryStore,
   buildServices,
+  fakeNetworks,
+  previewDatabase,
   BY_HAND,
   ConfigError,
   createApiToken,
@@ -42,6 +44,9 @@ import {
   YouTubeImportRefused,
   type RoundDeps,
 } from '@shipcast/runtime';
+
+/** What the CLI still does on a preview's database: nothing that builds a network's connector */
+const PREVIEW_COMMANDS: ReadonlySet<string> = new Set(['token']);
 
 /**
  * The repo's root, where `.env` is: three folders up from this file in Shipcast's checkout. Installed
@@ -246,6 +251,13 @@ async function main(argv: string[]): Promise<number> {
   // Before the runtime, which imports .env settings into the current store at start: the migration's
   // source must be only read
   if (command === 'secrets') return migrateCommand(rest, values.from);
+
+  // A preview's database (…_preview) only runs in the app, whose networks are fake there: the CLI builds
+  // real connectors, so on a preview it only mints, lists and revokes API tokens
+  if ((previewDatabase(process.env.SHIPCAST_DATABASE_URL) || fakeNetworks(process.env)) && !PREVIEW_COMMANDS.has(command)) {
+    console.error(`"${command}" reaches the networks for real: on a preview with fake networks the CLI only runs ${[...PREVIEW_COMMANDS].join(', ')}`);
+    return 2;
+  }
 
   // Before the runtime, whose clients take the global fetch when they are built: every call is counted
   const telemetry = installTelemetry(command === 'watch' ? 'watch' : 'cli');
