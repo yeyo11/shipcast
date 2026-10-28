@@ -19,7 +19,6 @@ import { appContext } from './context.server';
 import { forOwner } from './errors';
 import { id, InvalidInput, object, text } from './input';
 
-
 const PROVIDER_NAMES: Record<AiProviderId, string> = { claudio: 'claudio', anthropic: 'Anthropic API', openaiCompatible: 'OpenAI-compatible server' };
 
 export const getAiSettings = createServerFn({ method: 'GET' }).handler(async () => {

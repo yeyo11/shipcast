@@ -11,7 +11,6 @@ import { loadGrowth, loadSearch, loadStats } from './stats.server';
  * caller's mistake, as in the API's stats routes.
  */
 
-
 export const getStats = createServerFn({ method: 'GET' })
   .validator((input: unknown) => parseStatsInput(input))
   .handler(async ({ data }) => forOwner(async () => loadStats((await appContext()).registry, data)));

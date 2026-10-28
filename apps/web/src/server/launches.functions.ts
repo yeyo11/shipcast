@@ -107,12 +107,7 @@ export const publishAgain = createServerFn({ method: 'POST' })
     const o = object(input, 'input');
     return { id: id(o.id), channel: o.channel === undefined ? undefined : channelName(o.channel) };
   })
-  .handler(async ({ data }) => {
-    const { registry } = await appContext();
-    const launch = await registry.get(data.id);
-    if (!launch) return { ok: false as const, problem: 'no such launch' };
-    return publishAgainFor(registry, launch, data.channel, startPublishing);
-  });
+  .handler(async ({ data }) => publishAgainFor((await appContext()).registry, data.id, data.channel, startPublishing));
 
 export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
   const { github, brand } = await appContext();

@@ -1,23 +1,6 @@
-import {
-  cancelScheduledPost,
-  deleteLaunchPosts,
-  deletePost,
-  editPost,
-  launchConfigOf,
-  PostRefused,
-  recommendFor,
-  reschedulePost,
-  SCHEDULABLE_CHANNELS,
-  scheduleLaunch,
-  ScheduleRefused,
-  type EditDeps,
-  type Post,
-  type PostChanges,
-  type PostOutcome,
-  type Registry,
-  type ReviewGitHub,
-} from '@shipcast/engine';
+import { SCHEDULABLE_CHANNELS, type Post, type PostChanges, type PostOutcome } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
+import { postService, scheduleService, type PieceServiceDeps } from './app-services.ts';
 import { reasonOf } from './errors.ts';
 import { id, InvalidInput, object, text } from './input.ts';
 import type { PieceState } from './pieces.ts';
@@ -26,22 +9,16 @@ import { channelName, moment } from './requests.ts';
 
 /*
  * What the launch page does to its published pieces and their times, on the engine's operations
- * (docs/decisions/edit-delete.md, docs/scheduling.md). The checks are the REST API's (post-changes.ts,
+ * (docs/decisions/edit-delete.md, docs/scheduling.md), through the engine's PostService and
+ * ScheduleService, as the REST API does. The checks are the REST API's (post-changes.ts,
  * requests.ts), so the page and the API accept the same things. Every answer is data: ok with the
  * piece as it is now, or the problem in the engine's or the network's words for the page to explain;
  * a page never sees a thrown error. The server functions in posts.functions.ts are thin over these,
  * and the tests run them on PGlite.
  */
 
-export interface PostActionDeps {
-  registry: Registry;
-  editing(): Promise<EditDeps>;
-  /** Queues (or moves) the wake-up of each scheduled piece */
-  armSchedule(posts: Post[]): Promise<void>;
-  /** For the launch's launch.yml: a channel it sets to off cannot be scheduled */
-  github: Pick<ReviewGitHub, 'fileAt'>;
-  launchesRepo: string;
-}
+/** What the actions need: the ports of the posts' and the schedule's services */
+export type PostActionDeps = PieceServiceDeps;
 
 export type Answer<T> = { ok: true; value: T } | { ok: false; problem: string; reason: string };
 
@@ -110,14 +87,14 @@ const checked = <R, T>(parse: () => R, run: (request: R) => Promise<T>) => answe
 export function editOne(deps: PostActionDeps, input: unknown): Promise<Answer<PieceState>> {
   return checked(
     () => editRequest(input),
-    async ({ postId, changes }) => state(await editPost(postId, changes, await deps.editing())),
+    async ({ postId, changes }) => state(await postService(deps).edit(postId, changes)),
   );
 }
 
 export function deleteOne(deps: PostActionDeps, input: unknown): Promise<Answer<PieceState>> {
   return checked(
     () => postRequest(input),
-    async ({ postId }) => state(await deletePost(postId, await deps.editing())),
+    async ({ postId }) => state(await postService(deps).delete(postId)),
   );
 }
 
@@ -129,30 +106,12 @@ const outcome = (o: PostOutcome): PieceOutcome =>
 /**
  * The same shared fields sent to each chosen piece, each network taking what it has; one piece's
  * refusal never stops the others. The pieces named, not their whole channels: choosing the blog's
- * English article leaves the Spanish one alone. One at a time, as the engine's editPosts does.
+ * English article leaves the Spanish one alone. The engine's one multi-edit (editPosts), by ids.
  */
 export function editMany(deps: PostActionDeps, input: unknown): Promise<Answer<PieceOutcome[]>> {
   return checked(
     () => editManyRequest(input),
-    async ({ launchId, postIds, changes }) => {
-      if (!(await deps.registry.get(launchId))) throw new PostRefused('not_found', 'no such launch');
-      const editing = await deps.editing();
-      const outcomes: PieceOutcome[] = [];
-      for (const postId of postIds) {
-        const post = await deps.registry.post(postId);
-        if (!post || post.launchId !== launchId) {
-          outcomes.push({ postId, channel: post?.channel ?? '', kind: post?.kind ?? '', ok: false, reason: 'not_found', problem: `post ${postId} is not a piece of this launch` });
-          continue;
-        }
-        try {
-          outcomes.push(outcome({ postId, channel: post.channel, kind: post.kind, ok: true, post: await editPost(postId, changes, editing, { strict: false }) }));
-        } catch (error) {
-          const reason = error instanceof PostRefused ? error.reason : 'failed';
-          outcomes.push({ postId, channel: post.channel, kind: post.kind, ok: false, reason, problem: error instanceof Error ? error.message : String(error) });
-        }
-      }
-      return outcomes;
-    },
+    async ({ launchId, postIds, changes }) => (await postService(deps).editMany(launchId, changes, { postIds })).map(outcome),
   );
 }
 
@@ -160,53 +119,36 @@ export function editMany(deps: PostActionDeps, input: unknown): Promise<Answer<P
 export function deleteAll(deps: PostActionDeps, input: unknown): Promise<Answer<PieceOutcome[]>> {
   return checked(
     () => deleteAllRequest(input),
-    async ({ launchId, confirm }) => {
-      const launch = await deps.registry.get(launchId);
-      if (!launch) throw new PostRefused('not_found', 'no such launch');
-      if (confirm !== launch.repo) throw new InvalidInput(`type ${launch.repo} to confirm`);
-      return (await deleteLaunchPosts(launchId, undefined, await deps.editing())).map(outcome);
-    },
+    async ({ launchId, confirm }) => (await postService(deps).deleteLaunch(launchId, confirm)).map(outcome),
   );
 }
 
 export function schedule(deps: PostActionDeps, input: unknown): Promise<Answer<PieceState>> {
   return checked(
     () => scheduleRequest(input),
-    async ({ launchId, channel, at }) => {
-      const launch = await deps.registry.get(launchId);
-      if (!launch) throw new ScheduleRefused('not_found', 'no such launch');
-      // Best effort, as the API does: a launch.yml that cannot be read leaves the check to the publish step
-      const config = await launchConfigOf(deps.github, deps.launchesRepo, launch).catch(() => undefined);
-      const posts = await scheduleLaunch(deps.registry, launchId, { [channel]: at }, config ? { config } : {});
-      await deps.armSchedule(posts);
-      return state(posts[0]!);
-    },
+    async ({ launchId, channel, at }) => state((await scheduleService(deps).schedule(launchId, { [channel]: at }))[0]!),
   );
 }
 
 export function move(deps: PostActionDeps, input: unknown): Promise<Answer<PieceState>> {
   return checked(
     () => moveRequest(input),
-    async ({ postId, at }) => {
-      const post = await reschedulePost(deps.registry, postId, at);
-      await deps.armSchedule([post]);
-      return state(post);
-    },
+    async ({ postId, at }) => state(await scheduleService(deps).move(postId, at)),
   );
 }
 
 export function cancel(deps: PostActionDeps, input: unknown): Promise<Answer<PieceState>> {
   return checked(
     () => postRequest(input),
-    async ({ postId }) => state(await cancelScheduledPost(deps.registry, postId)),
+    async ({ postId }) => state(await scheduleService(deps).cancel(postId)),
   );
 }
 
-export function recommend(deps: Pick<PostActionDeps, 'registry'>, input: unknown) {
+export function recommend(deps: PostActionDeps, input: unknown) {
   return checked(
     () => recommendRequest(input),
     async ({ channel }) => {
-      const r = await recommendFor(deps.registry, channel, { days: 7, count: 5 });
+      const r = await scheduleService(deps).recommend(channel, { days: 7, count: 5 });
       return { channel: r.channel, timezone: r.timezone, slots: r.slots.map((s) => ({ at: s.at, local: s.local, score: s.score, reason: s.reason })) };
     },
   );

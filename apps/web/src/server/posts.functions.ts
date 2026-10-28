@@ -47,4 +47,4 @@ export const cancelSchedule = createServerFn({ method: 'POST' })
 
 export const recommendedTimes = createServerFn({ method: 'GET' })
   .validator((input: { channel: string }) => input)
-  .handler(async ({ data }) => recommend({ registry: (await appContext()).registry }, data));
+  .handler(async ({ data }) => recommend(await deps(), data));

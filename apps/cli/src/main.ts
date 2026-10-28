@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
 import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
-import { claimManual, draftLaunch, preflight, PublishAttempts, retryChannelEverywhere, TelemetryStore, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
+import { draftLaunch, LaunchRefused, LaunchService, preflight, PublishAttempts, retryChannelEverywhere, TelemetryStore, type DraftResult, type Launch, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
   attachTelemetryStore,
@@ -304,24 +304,20 @@ async function main(argv: string[]): Promise<number> {
           console.error('launch needs a repo as owner/name');
           return 2;
         }
-        const check = await preflight(repo, values.ref, { github });
-        reportPreflight(check);
-        if (!check.ok) {
-          console.error(`${repo} is not ready to launch: fix the checks marked FAIL`);
+        let claimed: Launch;
+        try {
+          ({ launch: claimed } = await new LaunchService({ launches: registry, claims: deps, github }).claimManual(repo, values.ref, loadBrandNow, reportPreflight));
+        } catch (error) {
+          if (!(error instanceof LaunchRefused)) throw error;
+          const found = error.launch;
+          if (error.reason === 'not_ready') console.error(`${repo} is not ready to launch: fix the checks marked FAIL`);
+          else if (error.reason === 'launched' && found) console.error(`${repo} ${found.ref} was launched already (${found.status}${found.detail ? `: ${found.detail.split('\n')[0]}` : ''})`);
+          else console.error(error.message);
           return 1;
         }
         const brand = await loadBrandNow();
-        const claim = await claimManual(repo, values.ref, brand, deps);
-        if ('error' in claim) {
-          console.error(claim.error);
-          return 1;
-        }
-        if (!claim.claimed) {
-          console.error(`${repo} ${claim.launch.ref} was launched already (${claim.launch.status}${claim.launch.detail ? `: ${claim.launch.detail.split('\n')[0]}` : ''})`);
-          return 1;
-        }
-        console.log(`Drafting ${repo} ${claim.launch.ref} (${claim.launch.kind} pack); the analysis takes a few minutes...`);
-        const result = await draftLaunch(claim.launch, brand, deps);
+        console.log(`Drafting ${repo} ${claimed.ref} (${claimed.kind} pack); the analysis takes a few minutes...`);
+        const result = await draftLaunch(claimed, brand, deps);
         report(result);
         return result.ok ? 0 : 1;
       }
