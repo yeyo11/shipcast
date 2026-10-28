@@ -171,8 +171,14 @@ export const NETWORK_VARIABLES = [
   'BING_WEBMASTER_API_KEY',
 ] as const;
 
-/** The variables each channel publishes with in Action mode, the first set preferred */
-const CHANNEL_VARIABLES: Partial<Record<Channel, string[][]>> = {
+/**
+ * The variables each channel publishes with in Action mode, the first set preferred: the channels
+ * Action mode can publish, which `shipcast init` offers from (apps/cli/src/setup.ts). The blog and
+ * GitHub Discussions need none of their own. Reddit, LinkedIn and Threads sign in through the app.
+ */
+export const ACTION_VARIABLES: Readonly<Partial<Record<Channel, readonly (readonly string[])[]>>> = {
+  blog: [[]],
+  githubDiscussions: [[]],
   devto: [['DEVTO_API_KEY']],
   // The handle and the instance can also come from brand.yml's profile links
   bluesky: [['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'], ['BLUESKY_APP_PASSWORD']],
@@ -204,7 +210,7 @@ export function channelPlan(config: LaunchConfig, env: NodeJS.ProcessEnv): Chann
     const mode = config.publishing[channel];
     if (channel === 'blog') return { channel, mode, ready: true, note: 'the merge of the drafts pull request publishes it' };
     if (channel === 'githubDiscussions') return { channel, mode, ready: true, note: 'posted with the GitHub token' };
-    const options = CHANNEL_VARIABLES[channel];
+    const options = ACTION_VARIABLES[channel];
     if (!options) return { channel, mode, ready: false, note: 'needs a sign-in through the app: not available in Action mode' };
     const found = options.find((names) => names.every(set));
     if (found) return { channel, mode, ready: true, note: `credentials set (${found.join(', ')})` };
