@@ -6,7 +6,8 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./markdown": "./src/markdown.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

@@ -1,6 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
-import { parse as parseYaml } from 'yaml';
+import { articleUrl as urlOf, ContentPack, lookOf, parseFrontMatter, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -125,12 +124,6 @@ export function absoluteLinks(markdown: string, site: string): string {
     .join('\n');
 }
 
-function splitFrontMatter(markdown: string): { data: Record<string, unknown>; body: string } {
-  const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(markdown);
-  if (!match) return { data: {}, body: markdown };
-  return { data: (parseYaml(match[1]!) as Record<string, unknown>) ?? {}, body: match[2]!.trim() };
-}
-
 /**
  * The launch.yml a launch publishes by: the repo's at the release, or for an article the one its
  * drafts carry (on the launches repo's main branch once merged). Undefined when it cannot be read.
@@ -197,7 +190,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
 
   const read = (path: string) => github.fileAt(deps.launchesRepo, path, 'HEAD');
   const article = slug ? await read(`src/content/posts/${lead}/${slug}.md`) : undefined;
-  const { data: front, body: articleBody } = article ? splitFrontMatter(article) : { data: {}, body: '' };
+  const { data: front, body: articleBody } = article ? parseFrontMatter(article) : { data: {}, body: '' };
   const title = typeof front.title === 'string' ? front.title : pack.article?.en?.title ?? pack.project.name;
   const description = typeof front.description === 'string' ? front.description : pack.article?.en?.description ?? pack.analysis.summary;
   const ogJpegUrl = `${brand.site}${mediaPath(launch, 'og.jpg')}`;
@@ -217,7 +210,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const linkedinCard = async () => {
     if (linkedinLang === lead) return { url: articleUrl, title, description };
     const piece = pack.article![linkedinLang]!;
-    const { data } = splitFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
+    const { data } = parseFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
     return {
       url: urlOf(pack, brand.site, linkedinLang) ?? articleUrl,
       title: typeof data.title === 'string' ? data.title : piece.title,
@@ -432,7 +425,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               const issue = parseIssueDraft(draftBody((await read(`${dir}/newsletter-${lang}.md`)) ?? ''), fromPack);
               const langSlug = pack.article?.[lang]?.slug;
               const langArticle = langSlug ? await read(`src/content/posts/${lang}/${langSlug}.md`) : undefined;
-              const langTitle = langArticle ? splitFrontMatter(langArticle).data.title : undefined;
+              const langTitle = langArticle ? parseFrontMatter(langArticle).data.title : undefined;
               const result = await sender.send({
                 name: `${pack.project.name} ${pack.project.version ?? ''} (${lang})`.replace(/\s+/g, ' ').trim(),
                 subject: issue.subject,

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ConnectorError } from '@shipcast/connectors';
-import type { Channel } from '@shipcast/schema';
+import { splitFrontMatter, type Channel } from '@shipcast/schema';
 import { isScalar, parseDocument } from 'yaml';
 import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
@@ -241,7 +241,6 @@ function editorOf<K extends keyof Editors>(editors: Editors, channel: K, post: P
   return editor as NonNullable<Editors[K]>;
 }
 
-const splitFrontMatter = (markdown: string) => /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(markdown);
 const articlePath = (post: Post) => `src/content/posts/${kindLanguage(post.kind)}/${post.externalId}.md`;
 
 function blogOf(deps: EditDeps): NonNullable<EditDeps['blog']> {
@@ -254,10 +253,10 @@ async function editArticle(post: Post, changes: PostChanges, deps: EditDeps): Pr
   const { github, launchesRepo } = blogOf(deps);
   const path = articlePath(post);
   const current = await github.fileAt(launchesRepo, path, 'HEAD');
-  const parts = current === undefined ? null : splitFrontMatter(current);
+  const parts = current === undefined ? undefined : splitFrontMatter(current);
   if (!parts) throw new PostRefused('not_found', `${path} is not on the launches repo’s main branch, or has no front matter`);
   // The document API keeps the front matter as written: its quoting, order and comments
-  const front = parseDocument(parts[1]!);
+  const front = parseDocument(parts.front);
   const set = (key: string, value: string | string[]) => {
     const node = front.get(key, true);
     // A scalar changed in place keeps its quotes; a new one is written plain
@@ -267,7 +266,7 @@ async function editArticle(post: Post, changes: PostChanges, deps: EditDeps): Pr
   if (changes.title !== undefined) set('title', changes.title);
   if (changes.tags !== undefined) set('tags', changes.tags);
   set('updatedDate', (deps.now?.() ?? new Date()).toISOString().slice(0, 10));
-  const body = changes.text ?? parts[2]!;
+  const body = changes.text ?? parts.body;
   const content = `---\n${front.toString().trimEnd()}\n---\n\n${body.trim()}\n`;
   await github.commitToBranch(launchesRepo, 'main', `Edit the article ${post.externalId} (${kindLanguage(post.kind)})`, [{ path, content }]);
 }
