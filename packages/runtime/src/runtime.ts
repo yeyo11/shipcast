@@ -186,7 +186,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   };
   const workspace = { hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir };
   const recorder = telemetry();
-  const aiRunner = flags.on('ai-runner') ? aiRunnerFor({ ...aiDeps, workspace, ...(recorder && { telemetry: recorder }) }) : undefined;
+  const aiRunner = flags.on('ai-runner') ? aiRunnerFor({ ...aiDeps, archives: github, ...(recorder && { telemetry: recorder }) }) : undefined;
 
   const pipeline: PipelineDeps = {
     github,

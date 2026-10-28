@@ -15,7 +15,6 @@ import {
   claudioAiProvider,
   fakeAiProvider,
   SUBMIT_TOOL,
-  workspaceMount,
   type AiProviderDefinition,
   type AiRunSetup,
   type AiTelemetry,
@@ -80,10 +79,9 @@ async function workspace(): Promise<{ hostDir: string; repo: string }> {
   return { hostDir, repo };
 }
 
-function runnerWith(setup: AiRunSetup, options: { hostDir?: string; fetch?: typeof fetch; telemetry?: AiTelemetry } = {}): AiTaskRunner {
+function runnerWith(setup: AiRunSetup, options: { fetch?: typeof fetch; telemetry?: AiTelemetry } = {}): AiTaskRunner {
   return new AiTaskRunner({
     resolve: async () => setup,
-    mount: workspaceMount({ hostDir: options.hostDir ?? tmpdir(), providerDir: '/workspace' }),
     ...(options.telemetry && { telemetry: options.telemetry }),
     ...(options.fetch && { fetch: options.fetch }),
   });
@@ -108,10 +106,10 @@ test('a provider with a response format answers in it: no tools, the schema sent
 });
 
 test('with the repo’s tools, the model reads the checkout and answers through the submit tool', async () => {
-  const { hostDir, repo } = await workspace();
+  const { repo } = await workspace();
   const model = scripted(toolCall('git', { command: 'log', n: 5 }), toolCall('read_files', { files: [{ path: 'src/main.ts' }] }), toolCall(SUBMIT_TOOL, { answer: '42' }));
-  const runner = runnerWith({ provider: mockProvider(model), settings: { apiKey: 'k' } }, { hostDir });
-  const result = await runner.run(answerTask('always'), { prompt: 'What is the answer?', repo: { hostDir: repo } });
+  const runner = runnerWith({ provider: mockProvider(model), settings: { apiKey: 'k' } });
+  const result = await runner.run(answerTask('always'), { prompt: 'What is the answer?', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } });
   assert.deepEqual(result.output, { answer: '42' });
   assert.equal(result.steps, 3);
   assert.deepEqual(result.usage.totalTokens, 45, 'tokens summed over every step');
@@ -154,10 +152,10 @@ test('an invalid answer is sent back once with what is wrong, and the repaired o
 });
 
 test('a model that only reads until its step ceiling has no answer', async () => {
-  const { hostDir, repo } = await workspace();
+  const { repo } = await workspace();
   const model = scripted(toolCall('list_files', {}));
   await assert.rejects(
-    runnerWith({ provider: mockProvider(model), settings: { apiKey: 'k' } }, { hostDir }).run(answerTask('always', 3), { prompt: 'Answer.', repo: { hostDir: repo } }),
+    runnerWith({ provider: mockProvider(model), settings: { apiKey: 'k' } }).run(answerTask('always', 3), { prompt: 'Answer.', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } }),
     (error: unknown) => error instanceof AiError && error.code === 'ai_no_answer' && /all 3 steps/.test(error.message),
   );
   assert.equal(model.doStreamCalls.length, 3);
@@ -242,40 +240,17 @@ function recording(requests: Request[], answer: () => Response): typeof fetch {
   }) as typeof fetch;
 }
 
-test('claudio reads the repo itself: the checkout’s path and its read-only preset in headers, the response format, no tools', async () => {
-  const { hostDir, repo } = await workspace();
-  const requests: Request[] = [];
-  const fetch = recording(requests, () => sse({ role: 'assistant', content: '{"answer":"from claudio"}' }));
-  const runner = runnerWith({ provider: claudioAiProvider, settings: { url: 'http://claudio:8798/', token: 'tok-secret-1', toolPreset: 'read-only' } }, { hostDir, fetch });
-  const result = await runner.run(answerTask('always'), { prompt: 'Answer.', repo: { hostDir: repo } });
-  assert.deepEqual(result.output, { answer: 'from claudio' });
-  const [request] = requests;
-  assert.equal(request!.url, 'http://claudio:8798/api/v1/chat/completions');
-  assert.equal(request!.headers.get('x-claudio-cwd'), '/workspace/yeyo11__demo@v1');
-  assert.equal(request!.headers.get('x-claudio-tool-preset'), 'read-only');
-  assert.equal(request!.headers.get('authorization'), 'Bearer tok-secret-1');
-  assert.equal((request!.body.response_format as { type?: string }).type, 'json_schema');
-  assert.equal(request!.body.tools, undefined);
-  assert.equal(request!.body.model, 'default');
-
-  // No repo: an empty folder of the mount to work in, and no tools to explore with
-  await runner.run(answerTask('never'), { prompt: 'Answer.' });
-  assert.equal(requests[1]!.headers.get('x-claudio-cwd'), '/workspace/.shipcast-empty');
-  assert.equal(requests[1]!.headers.get('x-claudio-tool-preset'), null);
-});
-
 test('a local-tools provider over HTTP gets the repo’s tools and the submit tool, and no response format', async () => {
-  const { hostDir, repo } = await workspace();
+  const { repo } = await workspace();
   const requests: Request[] = [];
   const fetch = recording(requests, () => sse({ role: 'assistant', tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: SUBMIT_TOOL, arguments: '{"answer":"done"}' } }] }));
-  const runner = runnerWith({ provider: fakeAiProvider, settings: { apiKey: 'fake-secret-9' } }, { hostDir, fetch });
-  const result = await runner.run(answerTask('always'), { prompt: 'Answer.', repo: { hostDir: repo } });
+  const runner = runnerWith({ provider: fakeAiProvider, settings: { apiKey: 'fake-secret-9' } }, { fetch });
+  const result = await runner.run(answerTask('always'), { prompt: 'Answer.', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } });
   assert.deepEqual(result.output, { answer: 'done' });
   const body = requests[0]!.body;
   const tools = (body.tools as Array<{ function: { name: string } }>).map((t) => t.function.name).sort();
   assert.deepEqual(tools, ['git', 'list_files', 'read_files', 'repo_overview', 'search', SUBMIT_TOOL]);
   assert.equal(body.response_format, undefined);
-  assert.equal(requests[0]!.headers.get('x-claudio-cwd'), null);
 });
 
 test('no provider’s secret reaches an error message, whatever its server echoes', async () => {
@@ -302,15 +277,15 @@ test('a provider that caches gets its breakpoints on a run with the repo’s too
     const base = mockProvider(model);
     return { ...base, capabilities: { ...base.capabilities, promptCaching: caching }, providerOptions: { anthropic: { sendReasoning: false } } };
   };
-  const { hostDir, repo } = await workspace();
+  const { repo } = await workspace();
   const model = scripted(toolCall('repo_overview', {}), toolCall(SUBMIT_TOOL, { answer: '42' }));
   const toolCalls: string[] = [];
   const steps: Array<number | undefined> = [];
-  const runner = runnerWith({ provider: cachingProvider(model), settings: { apiKey: 'k' } }, { hostDir });
+  const runner = runnerWith({ provider: cachingProvider(model), settings: { apiKey: 'k' } });
   await runner.run(answerTask('always'), {
     system: 'Read the code.',
     prompt: 'What is the answer?',
-    repo: { hostDir: repo },
+    repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo },
     observer: { toolCall: (c) => toolCalls.push(c.name), step: (u) => steps.push(u.inputTokens) },
   });
   for (const call of model.doStreamCalls) {

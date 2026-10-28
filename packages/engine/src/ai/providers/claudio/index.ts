@@ -1,8 +1,8 @@
 import type { LanguageModel } from 'ai';
 import { aiProvider, type AiProviderSettings } from '../definition.ts';
-import { need, optional } from '../settings.ts';
+import { need } from '../settings.ts';
 import { CLAUDIO_ERRORS } from './errors.ts';
-import { CLAUDIO_DEFAULT_MODEL, createClaudio } from './model.ts';
+import { CLAUDIO_DEFAULT_MODEL, createClaudio, type ClaudioCallOptions } from './model.ts';
 import { claudioReady, ClaudioWorkspaces } from './workspaces.ts';
 export * from './errors.ts';
 export * from './model.ts';
@@ -11,9 +11,6 @@ export * from './workspaces.ts';
 const fields = [
   { key: 'url', label: 'URL', secret: false },
   { key: 'token', label: 'token', secret: true },
-  // The name of a claudio tool preset that only reads (Read, Grep, Glob, git log): whatever claudio
-  // calls it, so it is a setting and not a name written here
-  { key: 'toolPreset', label: 'read-only tool preset', secret: false, optional: true },
 ] as const;
 
 // What `need` names in its errors, apart from the definition so the module does not refer to itself
@@ -24,12 +21,12 @@ const NAME = 'Claude Code — your subscription (via Claudio)';
 const named = { id: self.id, name: NAME, errors: CLAUDIO_ERRORS };
 
 /**
- * claudio, through its OpenAI-compatible API at `/api/v1` (claudio 0.10). Behind it is an agent,
- * Claude Code, which reads the job's checkout where claudio mounts the workspace: so it gets no
- * client tools (claudio refuses client tools beside a response format), but its own read-only tools,
- * chosen by a preset header, and the folder to work in by another. Its /v1 takes no turn or budget
- * ceiling today, so the task's `maxTurns` and `maxBudgetUsd` are not sent; Shipcast's timeout and
- * output-token ceiling still hold.
+ * Claude Code on the owner's subscription, through Claudio's OpenAI-compatible API (createClaudio).
+ * Claudio is itself an agent: for a task that reads the repo it downloads the repository into a
+ * workspace of its own (from the codeload URL the runner gets from GitHub), Claude Code explores it
+ * with the declared read-only rules, and the answer comes in the response format; no client tools
+ * (Claudio refuses them beside a response format), no folder shared with this machine. Every call
+ * starts a chat of its own, with the task's turn and budget ceilings.
  */
 export const claudioAiProvider = aiProvider({
   ...self,
@@ -50,11 +47,13 @@ export const claudioAiProvider = aiProvider({
     };
   },
   ready: (settings, options = {}) => claudioReady({ baseURL: need(self, settings, 'url'), provider: named, ...(options.fetch && { fetch: options.fetch }) }),
-  requestHeaders(settings, context) {
-    const headers: Record<string, string> = {};
-    if (context.cwd) headers['X-Claudio-Cwd'] = context.cwd;
-    const preset = optional(settings, 'toolPreset');
-    if (context.needsRepo && preset) headers['X-Claudio-Tool-Preset'] = preset;
-    return headers;
+  callOptions(context) {
+    const options: ClaudioCallOptions = {
+      newChat: true,
+      ...(context.workspace && { workspace: context.workspace.id, allowedTools: [...context.workspace.allowedTools] }),
+      ...(context.limits.maxTurns !== undefined && { maxTurns: context.limits.maxTurns }),
+      ...(context.limits.maxBudgetUsd !== undefined && { maxBudgetUsd: context.limits.maxBudgetUsd }),
+    };
+    return { claudio: options };
   },
 });

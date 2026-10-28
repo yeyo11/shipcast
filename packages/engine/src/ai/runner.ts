@@ -1,19 +1,20 @@
-import { AiError, type AiTask, type AiTaskDefinition, type AiTaskLimits } from '@shipcast/schema';
-import { hasToolCall, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModelUsage, type ModelMessage, type OutputInterface, type StopCondition, type SystemModelMessage, type ToolSet } from 'ai';
+import { AiError, ANALYSIS_RULES, type AiTask, type AiTaskDefinition, type AiTaskLimits } from '@shipcast/schema';
+import { hasToolCall, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModelUsage, type ModelMessage, type OutputInterface, type ProviderMetadata, type StopCondition, type SystemModelMessage, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import type { TimingKind, TimingOutcome } from '../telemetry/store.ts';
 import { toAiError } from './errors.ts';
-import type { AiMessageOptions, AiProviderDefinition, AiProviderSettings, AiRequestContext } from './providers/definition.ts';
+import type { RepoArchiveSource } from '../github.ts';
+import type { AiCallContext, AiMessageOptions, AiProviderDefinition, AiProviderSettings } from './providers/definition.ts';
 import { repoTools } from './repo-tools.ts';
-import type { WorkspaceMount } from './workspace-mount.ts';
 
 /*
  * Shipcast is the agent: the AI task runner runs every task, whatever the provider, with the AI SDK.
  * A provider only answers model calls; the tool loop over the job's own checkout, the structured
  * answer, its validation and its one repair, the deadline, the errors and the counting are all here,
- * once. The exception is a provider that is itself an agent over the workspace (claudio's Claude
- * Code, `repoAccess: 'remote-workspace'`): it reads the checkout with its own tools, where the mount
- * puts it, so the runner gives it none and asks for the answer in the response format.
+ * once. The exception is a provider that is itself an agent (Claudio's Claude Code, `repoAccess:
+ * 'remote-workspace'`): it reads the repository with its own tools in a workspace on its side, which
+ * the runner prepares from the repo's archive URL and releases at the end of the run, so the runner
+ * gives it no tools and asks for the answer in the response format.
  */
 
 /** The tool a model answers through when the answer cannot come as a response format */
@@ -43,7 +44,8 @@ export interface AiTelemetry {
 export interface AiTaskRunnerDeps {
   /** The provider, its settings and model for one of the AI settings' tasks, read when the task runs */
   resolve(task: AiTask): Promise<AiRunSetup>;
-  mount: WorkspaceMount;
+  /** Where a remote agent's workspace downloads the repo from; needed only by a `remote-workspace` provider */
+  archives?: RepoArchiveSource;
   telemetry?: AiTelemetry;
   /** The process's fetch, so the calls are counted like any other */
   fetch?: typeof fetch;
@@ -54,8 +56,12 @@ export interface AiRunInput {
   /** The request, or the conversation so far */
   prompt?: string;
   messages?: ModelMessage[];
-  /** The job's checkout on this machine, for a task that reads the repo */
-  repo?: { hostDir: string };
+  /**
+   * The repo a task reads, at its ref. A `local-tools` provider reads the job's checkout on this
+   * machine (`hostDir`); a `remote-workspace` one, a workspace made from the repo's archive, so it
+   * needs no checkout.
+   */
+  repo?: { name: string; ref: string; hostDir?: string };
   abortSignal?: AbortSignal;
   /** This run's own ceilings over the task's: the spend ceiling from the settings */
   limits?: Partial<AiTaskLimits>;
@@ -87,6 +93,8 @@ export interface AiRunResult<T> {
   repaired: boolean;
   provider: string;
   model: string;
+  /** What the provider reported on its last call (Claudio's chat id and cost, under `claudio`) */
+  providerMetadata?: ProviderMetadata;
 }
 
 export interface AiTextStream {
@@ -114,11 +122,14 @@ interface Plan {
   modelId: string;
   limits: AiTaskLimits;
   tools: ToolSet;
-  headers: Record<string, string>;
+  /** The repo a remote agent reads in a workspace of its own, prepared for the run */
+  remoteRepo: { name: string; ref: string } | undefined;
+  /** What the provider's call options are made of, but the workspace, which is known once it is prepared */
+  call: AiCallContext;
   /** A message rather than a string when the provider caches it */
   system: string | SystemModelMessage | undefined;
   messages: ModelMessage[];
-  /** The provider's own, and its cache breakpoint on a run with tools */
+  /** The provider's own, its cache breakpoint on a run with tools, and its call options once the workspace is known */
   providerOptions: AiMessageOptions | undefined;
   observer: AiRunObserver | undefined;
   signal: AbortSignal;
@@ -136,6 +147,7 @@ interface Called {
   responseMessages: ModelMessage[];
   /** The submit tool's call, when the model made one */
   submitted?: { toolCallId: string; input: unknown };
+  providerMetadata: ProviderMetadata | undefined;
 }
 
 export class AiTaskRunner {
@@ -155,7 +167,7 @@ export class AiTaskRunner {
     const output = task.output;
     if (!output) throw new Error(`${task.id} answers with text: stream it`);
     const plan = await this.#plan(task as AiTaskDefinition<unknown>, input, setup);
-    return this.#timed(plan, async () => {
+    return this.#timed(plan, () => this.#prepared(plan, async (plan) => {
       const submit = Object.keys(plan.tools).length > 0 || plan.setup.provider.capabilities.structuredOutput === 'none';
       let usage = NO_USAGE;
       let steps = 0;
@@ -167,7 +179,8 @@ export class AiTaskRunner {
         throw new AiError('ai_no_answer', `the ${plan.setup.provider.name} used all ${plan.limits.maxSteps} steps of ${task.id} without answering`, { provider: plan.setup.provider.id });
       }
       const checked = check(output.schema, submit ? first.submitted?.input : parseJson(first.text));
-      const done = (value: T, repaired: boolean): AiRunResult<T> => ({ output: value, usage, steps, repaired, provider: plan.setup.provider.id, model: plan.modelId });
+      let last = first.providerMetadata;
+      const done = (value: T, repaired: boolean): AiRunResult<T> => ({ output: value, usage, steps, repaired, provider: plan.setup.provider.id, model: plan.modelId, ...(last && { providerMetadata: last }) });
       if (checked.ok) return done(checked.value, false);
 
       // One repair: the answer goes back with what is wrong with it, and only the answer may follow
@@ -178,10 +191,11 @@ export class AiTaskRunner {
       const second = submit ? await this.#submitCall(plan, conversation, true) : await this.#nativeCall(plan, conversation);
       usage = add(usage, second.usage);
       steps += second.steps;
+      last = second.providerMetadata ?? last;
       const again = check(output.schema, submit ? second.submitted?.input : parseJson(second.text));
       if (again.ok) return done(again.value, true);
       throw new AiError('ai_invalid_output', `the ${plan.setup.provider.name}'s answer to ${task.id} is not valid, even after a repair: ${again.problems}`.slice(0, 2000), { provider: plan.setup.provider.id });
-    });
+    }));
   }
 
   /** Runs a task that answers with text, streamed as it comes */
@@ -200,10 +214,12 @@ export class AiTaskRunner {
         let finished = false;
         const call = runner
           .#timed(plan, () =>
-            runner.#call(plan, plan.messages, { stopWhen: stepCountIs(1) }, (delta) => {
-              queue.push(delta);
-              wake?.();
-            }),
+            runner.#prepared(plan, (prepared) =>
+              runner.#call(prepared, prepared.messages, { stopWhen: stepCountIs(1) }, (delta) => {
+                queue.push(delta);
+                wake?.();
+              }),
+            ),
           )
           .finally(() => {
             finished = true;
@@ -237,13 +253,11 @@ export class AiTaskRunner {
     const limits: AiTaskLimits = { ...task.limits, ...input.limits };
     const repo = task.needsRepo === 'never' ? undefined : input.repo;
     const remote = provider.capabilities.repoAccess === 'remote-workspace';
-    // A remote agent reads its own mount of the checkout, or works in an empty folder; the others get tools here
-    const cwd = remote ? (repo ? this.#deps.mount.providerPath(repo.hostDir) : await this.#deps.mount.emptyDir()) : undefined;
-    const tools: ToolSet = repo && !remote ? repoTools(repo.hostDir) : {};
-    const context: AiRequestContext = {
+    if (repo && !remote && !repo.hostDir) throw new Error(`${task.id} reads the repository with the ${provider.name}'s tools: its checkout is missing`);
+    // A remote agent reads the repo in a workspace of its own, prepared when the run starts; the others get tools here
+    const tools: ToolSet = repo?.hostDir && !remote ? repoTools(repo.hostDir) : {};
+    const call: AiCallContext = {
       task: task.id,
-      needsRepo: repo !== undefined,
-      ...(cwd !== undefined && { cwd }),
       limits: { ...(limits.maxTurns !== undefined && { maxTurns: limits.maxTurns }), ...(limits.maxBudgetUsd !== undefined && { maxBudgetUsd: limits.maxBudgetUsd }) },
     };
     const deadline = AbortSignal.timeout(limits.timeoutMs);
@@ -259,7 +273,8 @@ export class AiTaskRunner {
       modelId: setup.model || provider.defaultModel(settings),
       limits,
       tools,
-      headers: provider.requestHeaders?.(settings, context) ?? {},
+      remoteRepo: repo && remote ? { name: repo.name, ref: repo.ref } : undefined,
+      call,
       system,
       messages,
       providerOptions,
@@ -268,6 +283,31 @@ export class AiTaskRunner {
       deadline,
       secrets,
     };
+  }
+
+  /**
+   * The run with the provider's call options, in a workspace of its own for a remote agent that reads
+   * the repo: made from the repo's archive URL (GitHub's codeload, so no GitHub token reaches the
+   * provider) and released however the run ends. A release that fails is left to the workspace's
+   * own expiry: it must not hide the run's outcome.
+   */
+  async #prepared<R>(plan: Plan, work: (plan: Plan) => Promise<R>): Promise<R> {
+    const { provider, settings } = plan.setup;
+    const withCall = (workspace?: AiCallContext['workspace']): Plan => {
+      const own = provider.callOptions?.({ ...plan.call, ...(workspace && { workspace }) });
+      return { ...plan, providerOptions: own ? mergeOptions(plan.providerOptions, own) : plan.providerOptions };
+    };
+    if (!plan.remoteRepo) return work(withCall());
+    const workspaces = provider.workspaces?.(settings, this.#deps.fetch ? { fetch: this.#deps.fetch } : {});
+    if (!workspaces) throw new Error(`the ${provider.name} reads the repository on its side but has no workspaces`);
+    if (!this.#deps.archives) throw new Error(`the ${provider.name} reads the repository from its archive: the runner has no archive source`);
+    const url = await this.#deps.archives.tarballUrl(plan.remoteRepo.name, plan.remoteRepo.ref);
+    const { id } = await workspaces.prepare({ url }, plan.signal);
+    try {
+      return await work(withCall({ id, allowedTools: ANALYSIS_RULES }));
+    } finally {
+      await workspaces.release(id).catch(() => undefined);
+    }
   }
 
   /** Times the run under its task and provider, and turns its failure into an AiError */
@@ -336,7 +376,6 @@ export class AiTaskRunner {
       maxOutputTokens: plan.limits.maxOutputTokens,
       maxRetries: 0,
       abortSignal: plan.signal,
-      headers: plan.headers,
       stopWhen: options.stopWhen,
       ...(options.tools && { tools: options.tools }),
       ...(options.toolChoice && { toolChoice: options.toolChoice }),
@@ -360,8 +399,8 @@ export class AiTaskRunner {
     }
     if (plan.signal.aborted) throw plan.signal.reason ?? new Error('aborted');
     if (failure) throw failure.error;
-    const [steps, usage, response] = await Promise.all([result.steps, result.totalUsage, result.response]);
-    return { text, steps: steps.length, usage, responseMessages: response.messages, ...(submitted && { submitted }) };
+    const [steps, usage, response, providerMetadata] = await Promise.all([result.steps, result.totalUsage, result.response, result.providerMetadata]);
+    return { text, steps: steps.length, usage, responseMessages: response.messages, providerMetadata, ...(submitted && { submitted }) };
   }
 }
 

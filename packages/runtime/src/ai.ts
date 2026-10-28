@@ -6,11 +6,10 @@ import {
   currentPrompts,
   openAiCompatibleProvider,
   readAiSettings,
-  workspaceMount,
   type AiProviderSettings,
   type AiRunSetup,
   type AiTelemetry,
-  type Workspace,
+  type RepoArchiveSource,
   type AiProvider,
   type AiProviderId,
   type AiSetup,
@@ -85,16 +84,14 @@ export function aiSetup(deps: AiDeps): (task: AiTask) => Promise<AiSetup> {
 
 /**
  * A provider's settings for the AI task runner, by its definition's field keys, read where the old
- * providers read them: claudio's URL and token from the settings (its read-only tool preset, while it
- * is not a setting of the app, from SHIPCAST_CLAUDIO_TOOL_PRESET), every other provider's from its
+ * providers read them: claudio's URL and token from the settings, every other provider's from its
  * connected account. The host of a provider at an address of its own is registered for the measurement.
  */
 export async function aiProviderSettings(id: string, deps: AiDeps): Promise<AiProviderSettings> {
   if (id === 'claudio') {
     const claudio = deps.claudio();
     registerAiHost(claudio.url, 'claudio');
-    const toolPreset = deps.env.SHIPCAST_CLAUDIO_TOOL_PRESET?.trim();
-    return { url: claudio.url, token: claudio.token, ...(toolPreset && { toolPreset }) };
+    return { url: claudio.url, token: claudio.token };
   }
   const found = await connectedAccount(id, deps);
   if (!found) throw new AiError('ai_not_connected', `the ${aiProviderDefinition(id)?.name ?? id} is chosen in the AI settings but no account is connected: connect one on the Channels page`, { provider: id });
@@ -114,12 +111,13 @@ export function aiRunSetup(deps: AiDeps): (task: AiTask) => Promise<AiRunSetup> 
 
 /**
  * The AI task runner (`ai-runner` flag), on the same settings and keychain as the old providers. No
- * task uses it yet: built beside them, so moving a task is a swap.
+ * task uses it yet: built beside them, so moving a task is a swap. `archives` is the GitHub client,
+ * which gives Claudio's workspaces the repo's download URL and keeps its token to itself.
  */
-export function aiRunnerFor(deps: AiDeps & { workspace: Pick<Workspace, 'hostDir' | 'providerDir'>; telemetry?: AiTelemetry }): AiTaskRunner {
+export function aiRunnerFor(deps: AiDeps & { archives: RepoArchiveSource; telemetry?: AiTelemetry }): AiTaskRunner {
   return new AiTaskRunner({
     resolve: aiRunSetup(deps),
-    mount: workspaceMount(deps.workspace),
+    archives: deps.archives,
     ...(deps.telemetry && { telemetry: deps.telemetry }),
     ...(deps.fetch && { fetch: deps.fetch }),
   });

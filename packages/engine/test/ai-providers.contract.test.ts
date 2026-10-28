@@ -34,7 +34,10 @@ function refusingFetch(seen: Seen[], status = 401, echo = ''): typeof fetch {
 for (const definition of ALL) {
   test(`${definition.id}: its capabilities hold together`, () => {
     const { capabilities } = definition;
-    if (capabilities.repoAccess === 'remote-workspace') assert.ok(definition.requestHeaders, 'a remote agent is told where to work by its headers');
+    if (capabilities.repoAccess === 'remote-workspace') {
+      assert.ok(definition.workspaces, 'a remote agent reads the repo in a workspace of its own');
+      assert.ok(definition.callOptions, 'and is told which one, and what it may run there, by its call options');
+    }
     if (capabilities.repoAccess === 'local-tools') assert.equal(capabilities.tools, true, 'local repo tools need a provider that takes tools');
     if (capabilities.structuredOutput === 'none') assert.equal(capabilities.tools, true, 'without a response format, the answer comes through the submit tool');
     assert.ok(definition.name.trim());

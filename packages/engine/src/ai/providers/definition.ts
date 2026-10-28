@@ -28,8 +28,9 @@ export type StructuredOutputSupport = 'native' | 'native-without-tools' | 'none'
 /**
  * How a task that reads a repository reaches it. `local-tools`: the runner gives the model read-only
  * tools over the job's checkout on this machine. `remote-workspace`: the provider is itself an agent
- * that reads the checkout where it is mounted on its side (claudio's Claude Code), told where by the
- * module's request headers; the runner passes no client tools then.
+ * that reads a copy of the repository on its own side (Claudio's Claude Code), which the runner
+ * prepares through the module's `workspaces` and names in the call's provider options; the runner
+ * passes no client tools then.
  */
 export type RepoAccess = 'remote-workspace' | 'local-tools';
 
@@ -60,17 +61,12 @@ export interface AiCapabilities {
 /** A provider's settings, by its fields' keys; an empty value is as good as none */
 export type AiProviderSettings = Readonly<Record<string, string | undefined>>;
 
-/** What one model call is for, which a remote agent's headers are made of */
-export interface AiRequestContext {
+/** What one model call is for, which a provider's own call options are made of */
+export interface AiCallContext {
   /** The task's id (`pack`, `assistant-check`…) */
   task: string;
-  /** Whether the task reads the repository */
-  needsRepo: boolean;
-  /**
-   * Where a remote agent works, as it sees the path: the job's checkout for a task that reads the
-   * repo, else a folder with nothing in it. Only set for a `remote-workspace` provider.
-   */
-  cwd?: string;
+  /** The workspace a remote agent reads the repository in, and what it may run there; none for a task without the repo */
+  workspace?: { id: string; allowedTools: readonly string[] };
   /** The task's own ceilings, for a provider that can be told them; Shipcast enforces its timeout and output tokens itself */
   limits: { maxTurns?: number; maxBudgetUsd?: number };
 }
@@ -110,8 +106,8 @@ export interface AiProviderDefinition<Id extends string = string> {
    * field and never its value. `fetch` is the process's, so its calls are counted like any other.
    */
   model(settings: AiProviderSettings, modelId: string | undefined, options?: { fetch?: typeof fetch }): LanguageModel;
-  /** Headers for one call, from what the call is for: how a remote agent is told where and with what to work */
-  requestHeaders?(settings: AiProviderSettings, context: AiRequestContext): Record<string, string>;
+  /** Provider options for one call, from what the call is for: how a remote agent is told where and with what to work */
+  callOptions?(context: AiCallContext): AiMessageOptions;
   /** Passed with every call */
   providerOptions?: AiProviderOptions;
   /** The workspaces of a `remote-workspace` provider */

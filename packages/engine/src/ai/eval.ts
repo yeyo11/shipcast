@@ -161,7 +161,7 @@ export function withAccess(provider: AiProviderDefinition, access: RepoAccess | 
 /**
  * The provider's settings from the environment, never from the owner's keychain: a secret field takes
  * SHIPCAST_EVAL_PROVIDER_TOKEN, a URL field SHIPCAST_EVAL_PROVIDER_URL, a `model` field
- * SHIPCAST_EVAL_MODEL, and any field SHIPCAST_EVAL_PROVIDER_<KEY> (toolPreset → _TOOL_PRESET).
+ * SHIPCAST_EVAL_MODEL, and any field SHIPCAST_EVAL_PROVIDER_<KEY> (baseUrl → _BASE_URL).
  */
 export function evalSettings(provider: AiProviderDefinition, env: Readonly<Record<string, string | undefined>>): AiProviderSettings {
   const settings: Record<string, string | undefined> = {};
@@ -269,7 +269,7 @@ export async function runEval(cases: readonly EvalCase[], options: EvalRunOption
         {
           system: asked.system,
           prompt: asked.prompt,
-          repo: { hostDir },
+          repo: { name: c.repo, ref: c.ref, hostDir },
           observer: {
             toolCall: (call) => toolCalls.push({ name: call.name, args: summarizeArgs(call.name, call.input) }),
             step: (u) => {

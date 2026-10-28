@@ -54,7 +54,7 @@ test('the AI providers are networks of the catalog, their keys checked before th
 });
 
 test('the AI task runner reads the same settings and keychain as the old providers', async () => {
-  const d = { ...(await deps()), env: { SHIPCAST_CLAUDIO_TOOL_PRESET: 'explore-read-only' } };
+  const d = await deps();
   const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
   await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-test' }), 'Anthropic API');
   await writeAiSettings(d.registry, { tasks: { pack: { provider: 'claudio' }, article: { provider: 'anthropic', model: 'claude-opus-5-5' }, assistant: { provider: 'openaiCompatible' } } });
@@ -62,13 +62,13 @@ test('the AI task runner reads the same settings and keychain as the old provide
   const setup = aiRunSetup(d);
   const pack = await setup('pack');
   assert.equal(pack.provider.id, 'claudio');
-  assert.deepEqual(pack.settings, { url: 'http://claudio:8798', token: 't', toolPreset: 'explore-read-only' });
+  assert.deepEqual(pack.settings, { url: 'http://claudio:8798', token: 't' }, 'claudio’s settings are still its URL and token');
   const article = await setup('article');
   assert.equal(article.provider.id, 'anthropic');
   assert.equal(article.model, 'claude-opus-5-5');
   assert.equal(article.settings.apiKey, 'sk-ant-test');
   await assert.rejects(setup('assistant'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Channels page/.test(e.message));
-  assert.ok(aiRunnerFor({ ...d, workspace: { hostDir: '/tmp/x', providerDir: '/workspace' } }));
+  assert.ok(aiRunnerFor({ ...d, archives: { tarballUrl: async () => 'https://codeload.github.com/o/r/tar.gz/v1' } }));
 });
 
 test('the ai-runner flag is off unless it is set', () => {

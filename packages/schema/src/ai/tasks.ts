@@ -51,6 +51,27 @@ export interface AiTaskDefinition<T = unknown> {
   limits: AiTaskLimits;
 }
 
+/**
+ * What an agent that reads the repository itself (Claudio's Claude Code, in a workspace) may run
+ * there, as Claude Code permission rules: its file tools, and the shell commands that only read.
+ * Claudio's guard lets a Bash call through only when every subcommand matches one of them, and the
+ * file tools only inside the workspace.
+ */
+export const ANALYSIS_RULES = [
+  'Read',
+  'Grep',
+  'Glob',
+  'Bash(ls *)',
+  'Bash(find *)',
+  'Bash(cat *)',
+  'Bash(head *)',
+  'Bash(tail *)',
+  'Bash(sed -n *)',
+  'Bash(grep *)',
+  'Bash(wc *)',
+  'Bash(cut *)',
+] as const;
+
 /** The AI SDK providers' tool rounds before they must answer (packages/engine/src/ai.ts, MAX_STEPS) */
 const SDK_MAX_STEPS = 40;
 /** Room for a whole content pack, every language and channel, in one answer (ai.ts, MAX_OUTPUT_TOKENS) */

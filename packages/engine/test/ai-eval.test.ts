@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Brand, parseLaunchConfig } from '@shipcast/schema';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { compareEvals, evalSettings, listDiff, loadEvalCases, readEvalDir, runEval, summarizeArgs, withAccess, type EvalRecord } from '../src/ai/eval.ts';
-import { aiProvider, anthropicAiProvider, AiTaskRunner, claudioAiProvider, fakePack, SUBMIT_TOOL, workspaceMount, type AiProviderDefinition, type Launch } from '../src/index.ts';
+import { aiProvider, anthropicAiProvider, AiTaskRunner, claudioAiProvider, openaiCompatibleAiProvider, fakePack, SUBMIT_TOOL, type AiProviderDefinition, type Launch } from '../src/index.ts';
 
 /*
  * The evaluation harness without a provider: the real cases file loads, a run goes through the
@@ -106,7 +106,7 @@ test('a run goes through the AI task runner and records the answer, steps, tool 
   );
   const provider = mockProvider(model);
   const setup = { provider, settings: { apiKey: 'k' }, model: '' };
-  const runner = new AiTaskRunner({ resolve: async () => setup, mount: workspaceMount({ hostDir: tmpdir(), providerDir: '/workspace' }) });
+  const runner = new AiTaskRunner({ resolve: async () => setup });
   const outDir = join(await mkdtemp(join(tmpdir(), 'shipcast-eval-out-')), 'run');
   const cloned: string[] = [];
   let now = 0;
@@ -160,7 +160,7 @@ test('a case that fails is recorded with its error, the provider’s secret take
     },
   });
   const setup = { provider: mockProvider(failing), settings: { apiKey: 'sekret-123456' }, model: '' };
-  const runner = new AiTaskRunner({ resolve: async () => setup, mount: workspaceMount({ hostDir: tmpdir(), providerDir: '/workspace' }) });
+  const runner = new AiTaskRunner({ resolve: async () => setup });
   const records = await runEval(
     [
       { id: 'no-config', task: 'pack', repo: 'me/demo', ref: 'v1' },
@@ -175,8 +175,9 @@ test('a case that fails is recorded with its error, the provider’s secret take
 });
 
 test('settings come from the environment by field, and the access override changes only how the repo is reached', () => {
-  const env = { SHIPCAST_EVAL_PROVIDER_URL: 'http://claudio:3000', SHIPCAST_EVAL_PROVIDER_TOKEN: 't0k3n', SHIPCAST_EVAL_PROVIDER_TOOL_PRESET: 'read-only' };
-  assert.deepEqual(evalSettings(claudioAiProvider, env), { url: 'http://claudio:3000', token: 't0k3n', toolPreset: 'read-only' });
+  const env = { SHIPCAST_EVAL_PROVIDER_URL: 'http://claudio:3000', SHIPCAST_EVAL_PROVIDER_TOKEN: 't0k3n', SHIPCAST_EVAL_PROVIDER_BASE_URL: 'http://llm:8080/v1' };
+  assert.deepEqual(evalSettings(claudioAiProvider, env), { url: 'http://claudio:3000', token: 't0k3n' });
+  assert.equal(evalSettings(openaiCompatibleAiProvider, env).baseUrl, 'http://llm:8080/v1', 'a field of its own wins over the shared URL');
   assert.deepEqual(evalSettings(anthropicAiProvider, env), { apiKey: 't0k3n' });
   const local = withAccess(claudioAiProvider, 'local-tools');
   assert.equal(local.capabilities.repoAccess, 'local-tools');
