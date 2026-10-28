@@ -17,7 +17,7 @@ import type { SecretStore } from './secrets.ts';
 /** What choosing a task's provider needs: the settings, the keychain, and claudio's address and token from the settings */
 export interface AiDeps {
   env: NodeJS.ProcessEnv;
-  registry: Repositories;
+  registry: Pick<Repositories, 'accounts' | 'settings' | 'cursors'>;
   secrets: SecretStore;
   /** Read when claudio is chosen; throws SettingMissing when its URL or token is not set */
   claudio: () => { url: string; token: string };

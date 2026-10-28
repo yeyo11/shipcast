@@ -110,7 +110,7 @@ export interface ProfileReview {
 const reviewKey = (accountId: number) => `profile-review:${accountId}`;
 
 /** The account's latest review; undefined when it has none, or the one stored no longer parses */
-export async function readProfileReview(registry: Repositories, accountId: number): Promise<ProfileReview | undefined> {
+export async function readProfileReview(registry: Pick<Repositories, 'cursors'>, accountId: number): Promise<ProfileReview | undefined> {
   const text = await registry.cursors.cursor(reviewKey(accountId));
   if (!text) return undefined;
   try {
@@ -165,7 +165,7 @@ export interface ProfileConnector {
 }
 
 export interface ProfileDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'accounts' | 'cursors' | 'queries'>;
   brand: Brand;
   /** The `profile` task's provider, model, prompts and tone, from the AI settings */
   setup(): Promise<AiSetup>;
@@ -176,7 +176,7 @@ export interface ProfileDeps {
   now?: () => Date;
 }
 
-async function existing(registry: Repositories, accountId: number): Promise<{ account: Account; capability: ProfileCapability }> {
+async function existing(registry: Pick<Repositories, 'accounts'>, accountId: number): Promise<{ account: Account; capability: ProfileCapability }> {
   const account = await registry.accounts.account(accountId);
   if (!account) throw new ProfileRefused('not_found', 'no such account');
   const capability = profileCapability(account);
@@ -185,7 +185,7 @@ async function existing(registry: Repositories, accountId: number): Promise<{ ac
 }
 
 /** The first and last count of each measure over the period, from the daily snapshots */
-async function growthOf(registry: Repositories, accountId: number, now: Date, days = 90): Promise<ProfileReviewInput['growth']> {
+async function growthOf(registry: Pick<Repositories, 'launches' | 'accounts' | 'cursors' | 'queries'>, accountId: number, now: Date, days = 90): Promise<ProfileReviewInput['growth']> {
   const to = now.toISOString().slice(0, 10);
   const from = new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
   const { points } = await accountGrowth(registry, accountId, { from, to });
@@ -201,7 +201,7 @@ async function growthOf(registry: Repositories, accountId: number, now: Date, da
 }
 
 /** The repos the brand launched, the newest first, each once */
-async function projectsOf(registry: Repositories): Promise<string[]> {
+async function projectsOf(registry: Pick<Repositories, 'launches'>): Promise<string[]> {
   const repos = (await registry.launches.recent(100)).filter((l) => l.status === 'published' && !isArticle(l)).map((l) => l.repo);
   return [...new Set(repos)].slice(0, 10);
 }

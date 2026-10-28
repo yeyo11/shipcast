@@ -24,7 +24,8 @@ import {
 
 /** What the posts' and the schedule's services need from the app */
 export interface PieceServiceDeps {
-  registry: Repositories;
+  /** The pieces and their schedule, and what the recommended times are read from */
+  registry: Pick<Repositories, 'launches' | 'posts' | 'accounts' | 'settings' | 'cursors' | 'queries'>;
   /** What editing and deleting needs: the connectors by account, and GitHub for the blog */
   editing(): Promise<EditDeps>;
   /** Queues (or moves) the wake-up of each scheduled piece at its time */
@@ -45,16 +46,16 @@ export const scheduleService = (deps: Pick<PieceServiceDeps, 'registry' | 'armSc
   });
 
 /** `sending` builds the connectors a reply goes out with; a reader that sends nothing may leave it out */
-export const commentService = (deps: { registry: Repositories; sending?: () => Promise<CommentDeps> }) =>
+export const commentService = (deps: { registry: Pick<Repositories, 'comments' | 'settings'>; sending?: () => Promise<CommentDeps> }) =>
   new CommentService({
     store: deps.registry,
     sending: deps.sending ?? (() => Promise.reject(new Error('this caller sends no replies'))),
   });
 
-export const accountService = (deps: { registry: Repositories }) => new AccountService(deps.registry.accounts);
+export const accountService = (deps: { registry: Pick<Repositories, 'accounts'> }) => new AccountService(deps.registry.accounts);
 
-export const settingsService = (deps: { registry: Repositories }) => new SettingsService(deps.registry);
+export const settingsService = (deps: { registry: Pick<Repositories, 'settings'> }) => new SettingsService(deps.registry);
 
 /** Over the app's pipeline (the claim's registry and launches repo) and its GitHub (the pre-flight, the merge) */
-export const launchService = (deps: { registry: Repositories; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest }) =>
+export const launchService = (deps: { registry: Pick<Repositories, 'launches'>; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest }) =>
   new LaunchService({ launches: deps.registry.launches, claims: deps.deps, github: deps.github });

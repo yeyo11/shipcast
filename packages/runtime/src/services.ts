@@ -18,7 +18,7 @@ export type Origin = { kind: 'account'; id: number } | { kind: 'env' };
 export interface ServiceDeps {
   env: NodeJS.ProcessEnv;
   brand: Brand;
-  registry: Repositories;
+  registry: Pick<Repositories, 'accounts' | 'cursors'>;
   /** The engine's GitHub client, also the metrics source while no GitHub account is connected */
   github: GitHubRest;
   secrets: SecretStore;
@@ -193,7 +193,7 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
  */
 export async function refreshInstagramToken(
   services: Services,
-  deps: { registry: Repositories; secrets: SecretStore },
+  deps: { registry: Pick<Repositories, 'accounts' | 'cursors'>; secrets: SecretStore },
   now = new Date(),
 ): Promise<string | undefined> {
   if (!services.instagram) return undefined;

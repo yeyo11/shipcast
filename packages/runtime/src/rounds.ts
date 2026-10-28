@@ -11,7 +11,7 @@ const TOKEN_REFRESH_EVERY_MS = 30 * 24 * 3600 * 1000;
 /** What a round needs: the engine's pieces and the brand it speaks for */
 export interface RoundDeps {
   env: NodeJS.ProcessEnv;
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'metrics' | 'accounts' | 'cursors'>;
   github: GitHubRest;
   secrets: SecretStore;
   brand: Brand;

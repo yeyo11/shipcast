@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { JobRecord, Repositories } from '@shipcast/engine';
+import type { JobRecord } from '@shipcast/engine';
 import { DelayedError, Queue, UnrecoverableError, Worker, type Job, type JobsOptions } from 'bullmq';
 import type { Redis } from 'ioredis';
-import { QUEUE_NAMES, QUEUES, reconcileRows, runJob, waitForJob, type Handler, type Handlers, type HeldCounts, type HeldJob, type JobData, type JobQueue, type QueueName, type SendOptions, type WorkQueue } from './queue.ts';
+import { QUEUE_NAMES, QUEUES, reconcileRows, runJob, waitForJob, type Handler, type Handlers, type HeldCounts, type HeldJob, type JobData, type JobQueue, type QueueName, type QueueRepositories, type SendOptions, type WorkQueue } from './queue.ts';
 import { RedisLock } from './redis/adapters.ts';
 import { Script, type RedisConnections } from './redis/connection.ts';
 import type { Lock } from './redis/ports.ts';
@@ -113,7 +113,7 @@ function heldOf(state: string, job: Job | undefined): HeldJob | undefined {
 export class BullQueue implements JobQueue {
   readonly #redis: Redis;
   readonly #connect: (suffix: string) => Redis;
-  readonly #registry: Repositories;
+  readonly #registry: QueueRepositories;
   readonly #prefix: string;
   readonly #lock: Lock;
   readonly #onError: (error: Error) => void;
@@ -132,7 +132,7 @@ export class BullQueue implements JobQueue {
    * `redis` serves the slots and locks; `connect` makes the connections BullMQ needs (each Queue and
    * Worker its own, with maxRetriesPerRequest null), all to redis-queue.
    */
-  constructor(redis: Redis, connect: (suffix: string) => Redis, registry: Repositories, options: BullQueueOptions = {}) {
+  constructor(redis: Redis, connect: (suffix: string) => Redis, registry: QueueRepositories, options: BullQueueOptions = {}) {
     this.#redis = redis;
     this.#connect = connect;
     this.#registry = registry;
@@ -146,12 +146,12 @@ export class BullQueue implements JobQueue {
   }
 
   /** The queue on a process's connections to redis-queue */
-  static on(connections: RedisConnections, registry: Repositories, options: BullQueueOptions = {}): BullQueue {
+  static on(connections: RedisConnections, registry: QueueRepositories, options: BullQueueOptions = {}): BullQueue {
     const name = options.instanceName ?? 'queue';
     return new BullQueue(connections.queue, (suffix) => connections.bullmq(`${name}-bullmq-${suffix}`), registry, options);
   }
 
-  get registry(): Repositories {
+  get registry(): QueueRepositories {
     return this.#registry;
   }
 

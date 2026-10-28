@@ -76,7 +76,7 @@ export function waitsUntil(post: Post, now: Date): string | undefined {
 
 export interface PublishDeps {
   github: GitHubSource;
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'cursors'>;
   launchesRepo: string;
   publishers: Publishers;
   /** For the deployed site: whether the article is live, and the launch image's bytes */

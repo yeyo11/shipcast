@@ -15,7 +15,7 @@ export interface PipelineDeps {
   ai: AiProvider;
   /** What a task runs with, read from the AI settings each time, so an edit applies to the next draft */
   aiSetup?: (task: AiTask) => Promise<AiSetup>;
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches'>;
   /** The repo whose blog and drafts this engine writes to, e.g. `yeyo11/launches` */
   launchesRepo: string;
   /** Clones a repo at a ref into the workspace shared with the AI */

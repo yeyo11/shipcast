@@ -81,7 +81,7 @@ export async function scheduleRound(queue: WorkQueue, reason: string, inSeconds 
 }
 
 /** Whether a round is running now, in any process */
-export async function roundRunning(registry: Repositories): Promise<boolean> {
+export async function roundRunning(registry: Pick<Repositories, 'jobs'>): Promise<boolean> {
   return (await registry.jobs.jobs({ queues: ['round'], states: ['active'], limit: 1 })).length > 0;
 }
 

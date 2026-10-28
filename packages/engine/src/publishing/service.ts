@@ -16,12 +16,12 @@ export type PublishConnectors = Pick<PublishDeps, 'publishers' | 'search' | 'acc
  * piece once, and a run cut short is never repeated where the network could post twice.
  */
 export class PublishingService {
-  readonly #registry: Repositories;
+  readonly #registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>;
   readonly #github: GitHubSource;
   readonly #launchesRepo: string;
   readonly #attempts: PublishAttempts;
 
-  constructor(deps: { registry: Repositories; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts }) {
+  constructor(deps: { registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts }) {
     this.#registry = deps.registry;
     this.#github = deps.github;
     this.#launchesRepo = deps.launchesRepo;

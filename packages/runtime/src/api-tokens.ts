@@ -16,7 +16,7 @@ export const API_TOKEN_PEPPER_KEY = 'app:api-token-pepper';
 const TOKEN = /^shipcast_(\d{1,10})_([A-Za-z0-9_-]{43})$/;
 
 export interface ApiTokenDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'apiTokens'>;
   secrets: SecretStore;
 }
 

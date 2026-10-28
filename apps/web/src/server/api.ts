@@ -62,7 +62,7 @@ export interface JobView {
 
 /** Everything the API touches, so the tests run it on a PGlite registry with the work faked */
 export interface ApiDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'metrics' | 'accounts' | 'comments' | 'settings' | 'cursors' | 'apiTokens' | 'queries'>;
   secrets: SecretStore;
   github: ReviewGitHub;
   launchesRepo: string;

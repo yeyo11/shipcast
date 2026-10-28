@@ -7,7 +7,7 @@ import { accountSecretKey, envBrand } from './services.ts';
 
 /** What connecting, checking and editing accounts needs */
 export interface AccountDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'accounts' | 'cursors'>;
   secrets: SecretStore;
   /** Every brand Shipcast speaks for, by id: an account belongs to one of them */
   brands: Map<string, Brand>;

@@ -143,7 +143,7 @@ export interface QueueOptions {
  * (test/queue-contract.test.ts) holds both to the same semantics.
  */
 export interface JobQueue {
-  readonly registry: Repositories;
+  readonly registry: QueueRepositories;
   start(): Promise<void>;
   send<Q extends QueueName>(queue: Q, data: JobData[Q], options?: SendOptions): Promise<string | null>;
   upsert<Q extends QueueName>(queue: Q, data: JobData[Q], options: SendOptions & { singletonKey: string }): Promise<string | null>;
@@ -172,7 +172,13 @@ export interface RunningJob<Q extends QueueName> {
  * and link, the timing of the attempt and of its wait, and the `job:<queue>` origin the calls made
  * inside it are counted under. It rethrows what the handler threw: the queue decides what follows.
  */
-export async function runJob<Q extends QueueName>(registry: Repositories, telemetry: TelemetryRecorder | undefined, job: RunningJob<Q>, handler: Handler<Q>): Promise<void> {
+/**
+ * What a queue keeps in the registry: its jobs' rows, and the launches and scheduled posts it
+ * reconciles them with at start
+ */
+export type QueueRepositories = Pick<Repositories, 'launches' | 'posts' | 'jobs'>;
+
+export async function runJob<Q extends QueueName>(registry: Pick<Repositories, 'jobs'>, telemetry: TelemetryRecorder | undefined, job: RunningJob<Q>, handler: Handler<Q>): Promise<void> {
   const { id, queue, attempt, lastAttempt } = job;
   // From when it could start to now: how long the queue kept it waiting
   telemetry?.timing({ kind: 'job-wait', name: queue, outcome: 'ok', ms: Math.max(0, Date.now() - job.readyAt) });
@@ -201,7 +207,7 @@ export async function runJob<Q extends QueueName>(registry: Repositories, teleme
 }
 
 /** Polls the registry's row until the job has ended, in any process; undefined when the time is up first */
-export async function waitForJob(registry: Repositories, id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
+export async function waitForJob(registry: Pick<Repositories, 'jobs'>, id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const record = await registry.jobs.job(id);
@@ -221,7 +227,7 @@ export interface HeldJob {
  * Brings the rows of jobs that were waiting or running when a process stopped in line with the
  * queue: a job it expired, failed or lost is not left showing "running". `find` answers for one row.
  */
-export async function reconcileRows(registry: Repositories, find: (record: JobRecord) => Promise<HeldJob | undefined>): Promise<void> {
+export async function reconcileRows(registry: Pick<Repositories, 'launches' | 'jobs'>, find: (record: JobRecord) => Promise<HeldJob | undefined>): Promise<void> {
   for (const record of await registry.jobs.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
     if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
     const job = await find(record);
@@ -265,14 +271,14 @@ function stateOf(state: string): JobRecord['state'] {
 
 export class WorkQueue implements JobQueue {
   readonly #boss: PgBoss;
-  readonly #registry: Repositories;
+  readonly #registry: QueueRepositories;
   readonly #polling: number;
   readonly #retryDelay: number | undefined;
   readonly #telemetry: TelemetryRecorder | undefined;
   #started: Promise<void> | undefined;
   #stopped = false;
 
-  constructor(boss: PgBoss, registry: Repositories, options: QueueOptions = {}) {
+  constructor(boss: PgBoss, registry: QueueRepositories, options: QueueOptions = {}) {
     this.#boss = boss;
     this.#registry = registry;
     this.#polling = options.pollingIntervalSeconds ?? 2;
@@ -286,17 +292,17 @@ export class WorkQueue implements JobQueue {
   }
 
   /** The queue on a Postgres server: the registry's, pg-boss in its own schema and pool */
-  static postgres(url: string, registry: Repositories, options: QueueOptions = {}): WorkQueue {
+  static postgres(url: string, registry: QueueRepositories, options: QueueOptions = {}): WorkQueue {
     // A small pool: the work is a handful of jobs at a time, and the registry has a pool of its own
     return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), connectionString: url, max: 4, application_name: `shipcast-${options.instanceName ?? 'queue'}` }), registry, options);
   }
 
   /** The queue on a PGlite instance, for tests: the same pg-boss and the same SQL, in this process */
-  static pglite(client: PGliteLike, registry: Repositories, options: QueueOptions = {}): WorkQueue {
+  static pglite(client: PGliteLike, registry: QueueRepositories, options: QueueOptions = {}): WorkQueue {
     return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), db: fromPglite(client), backend: 'pglite', registerInstance: false }), registry, options);
   }
 
-  get registry(): Repositories {
+  get registry(): QueueRepositories {
     return this.#registry;
   }
 

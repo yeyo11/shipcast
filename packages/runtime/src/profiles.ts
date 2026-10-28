@@ -12,7 +12,7 @@ import { accountSecretKey } from './services.ts';
  */
 
 export interface ProfileWorkDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'accounts' | 'cursors' | 'queries'>;
   secrets: SecretStore;
   pipeline: PipelineDeps;
   brand: Brand;

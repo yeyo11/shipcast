@@ -86,7 +86,7 @@ export interface CommentConnectors {
 }
 
 export interface CommentDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'comments' | 'settings'>;
   /** The connectors of a channel for the account a post went out with (null: the `.env` credentials) */
   connectors(channel: Channel, accountId: number | null): Promise<CommentConnectors>;
   now?: () => Date;

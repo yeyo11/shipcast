@@ -9,7 +9,7 @@ import { accountSecretKey, envBrand, INSTAGRAM_TOKEN_KEY } from './services.ts';
 export interface EditorDeps {
   env: NodeJS.ProcessEnv;
   brand: Brand;
-  registry: Repositories;
+  registry: Pick<Repositories, 'accounts' | 'cursors'>;
   secrets: SecretStore;
   readFile?: (path: string) => string;
   fetch?: typeof fetch;

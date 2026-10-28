@@ -15,7 +15,7 @@ export interface SchedulingChannel {
  * launch can still schedule. Read beside launchDetail, which the REST API shares and which keeps
  * its shape.
  */
-export async function launchPieces(registry: Repositories, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
+export async function launchPieces(registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
   const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts.posts(launch.id),
     registry.accounts.accounts(),
@@ -40,7 +40,7 @@ export async function launchPieces(registry: Repositories, launch: Launch, deps:
  * draft in the pull request), and nothing of which is out yet.
  */
 async function schedulingChannels(
-  registry: Repositories,
+  registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>,
   launch: Launch,
   posts: Awaited<ReturnType<Repositories['posts']['posts']>>,
   deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> },

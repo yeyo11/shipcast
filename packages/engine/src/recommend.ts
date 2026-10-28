@@ -285,7 +285,7 @@ const HISTORY_LIMIT = 100_000;
  * network's numbers are read the one way. Channels that read no numbers (Telegram, Discord) have no
  * history and keep their defaults.
  */
-export async function channelHistory(registry: Repositories, channel: Channel, now: Date = new Date()): Promise<HistoryPost[]> {
+export async function channelHistory(registry: Pick<Repositories, 'accounts' | 'queries'>, channel: Channel, now: Date = new Date()): Promise<HistoryPost[]> {
   if (!METRIC_FAMILIES[channel]) return [];
   const ranking = await statsRanking(registry, { by: 'post', channels: [channel], from: HISTORY_START, to: new Date(now.getTime() + 1).toISOString(), limit: HISTORY_LIMIT });
   const scores = new Map(ranking.entries.flatMap((e) => (e.postId === null ? [] : [[e.postId, e.score] as const])));
@@ -300,7 +300,7 @@ export async function channelHistory(registry: Repositories, channel: Channel, n
 }
 
 /** The recommendation for a channel from the registry: its history, the owner's zone, and Instagram's audience */
-export async function recommendFor(registry: Repositories, channel: Channel, options: { now?: Date; tz?: string; days?: number; count?: number } = {}): Promise<Recommendation> {
+export async function recommendFor(registry: Pick<Repositories, 'accounts' | 'settings' | 'cursors' | 'queries'>, channel: Channel, options: { now?: Date; tz?: string; days?: number; count?: number } = {}): Promise<Recommendation> {
   if (!SCHEDULABLE_CHANNELS.includes(channel)) throw new Error(`${channel} is not published by Shipcast, so it has no times`);
   const tz = options.tz ?? (await readTimezone(registry));
   let audience: StoredAudience | undefined;

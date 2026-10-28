@@ -102,7 +102,7 @@ export class SettingMissing extends ShipcastError {
 export class InvalidSetting extends InvalidRequest {}
 
 export interface SettingsDeps {
-  registry: Repositories;
+  registry: Pick<Repositories, 'settings'>;
   secrets: SecretStore;
   /** `.env`, a fallback until the owner removes what was imported from it */
   env: NodeJS.ProcessEnv;

@@ -13,7 +13,7 @@ export type Outcome =
 
 export interface DetectOptions {
   github: GitHubSource;
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'cursors'>;
   /** The brand of the launches repo this engine writes to; launches for any other are refused */
   brand: Brand;
 }

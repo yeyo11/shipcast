@@ -162,7 +162,7 @@ const numOrNull = (value: unknown): number | null => (value === null || value ==
  * increase is the highest reading in the window above that, never below zero: a dip (an unlike, a
  * network recounting) takes nothing away, and a reading missed is caught up by the next one.
  */
-async function counters(registry: Repositories, windows: readonly StatsWindow[], filter: StatsFilter): Promise<CounterRow[]> {
+async function counters(registry: Pick<Repositories, 'queries'>, windows: readonly StatsWindow[], filter: StatsFilter): Promise<CounterRow[]> {
   const joins = windows.map((w, i) => {
     const [b, x, f] = [`b${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL];
     return sql`
@@ -278,7 +278,7 @@ export interface OverviewOptions extends StatsFilter {
 }
 
 /** Totals per channel and per account in a period, and against another period when asked */
-export async function statsOverview(registry: Repositories, options: OverviewOptions): Promise<StatsOverview> {
+export async function statsOverview(registry: Pick<Repositories, 'accounts' | 'queries'>, options: OverviewOptions): Promise<StatsOverview> {
   const window = statsWindow(options.from, options.to);
   const compareTo = options.compareTo === 'previous' ? previousWindow(window) : options.compareTo;
   const windows = compareTo ? [window, compareTo] : [window];
@@ -396,7 +396,7 @@ export function bucketsOf(window: StatsWindow, bucket: SeriesBucket): string[] {
  * never goes below zero, a day with no reading shows no growth and the next reading carries what
  * happened in between. Only the period's readings are read, plus one per counter before it.
  */
-export async function statsSeries(registry: Repositories, options: SeriesOptions): Promise<StatsSeries> {
+export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'queries'>, options: SeriesOptions): Promise<StatsSeries> {
   const window = statsWindow(options.from, options.to);
   const buckets = bucketsOf(window, options.bucket);
   const limit = options.limit ?? 10;
@@ -474,7 +474,7 @@ export async function statsSeries(registry: Repositories, options: SeriesOptions
 }
 
 /** What a group is called on a chart, read in one query per kind rather than one per group */
-async function groupLabels(registry: Repositories, groupBy: SeriesGroupBy, keys: string[]): Promise<Map<string, string>> {
+async function groupLabels(registry: Pick<Repositories, 'accounts' | 'queries'>, groupBy: SeriesGroupBy, keys: string[]): Promise<Map<string, string>> {
   const labels = new Map<string, string>();
   if (groupBy === 'channel' || groupBy === 'launchChannel') for (const key of keys) labels.set(key, key);
   if (groupBy === 'account') {
@@ -491,7 +491,7 @@ async function groupLabels(registry: Repositories, groupBy: SeriesGroupBy, keys:
   return labels;
 }
 
-async function launchNames(registry: Repositories, ids: number[]): Promise<Map<number, string>> {
+async function launchNames(registry: Pick<Repositories, 'queries'>, ids: number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
   const rows = await registry.queries.selectRows<{ id: number; repo: string; ref: string }>(sql`SELECT id, repo, ref FROM launches WHERE ${inList(sql`id`, ids)}`);
   return new Map(rows.map((r) => [Number(r.id), `${r.repo} ${r.ref}`]));
@@ -573,7 +573,7 @@ function median(values: number[]): number {
  * dividing by zero; a family nobody grew in says nothing and would only pull every score to 1, and a
  * network with no active family has no yardstick, so its pieces are not ranked.
  */
-export async function statsRanking(registry: Repositories, options: RankingOptions): Promise<StatsRanking> {
+export async function statsRanking(registry: Pick<Repositories, 'accounts' | 'queries'>, options: RankingOptions): Promise<StatsRanking> {
   const window = statsWindow(options.from, options.to);
   const rows = await counters(registry, [window], options);
 
@@ -716,7 +716,7 @@ const diff = (a: number | null, b: number | null) => (a === null || b === null ?
  * included), with the change since the snapshot before each one, so the first day of the period
  * still has its change.
  */
-export async function accountGrowth(registry: Repositories, accountId: number, range: { from: string; to: string }): Promise<AccountGrowth> {
+export async function accountGrowth(registry: Pick<Repositories, 'queries'>, accountId: number, range: { from: string; to: string }): Promise<AccountGrowth> {
   if (!DATE.test(range.from) || !DATE.test(range.to)) throw new InvalidPeriod('from and to are days, YYYY-MM-DD');
   if (range.to < range.from) throw new InvalidPeriod('to comes after from');
   const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`

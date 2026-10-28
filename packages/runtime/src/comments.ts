@@ -19,7 +19,7 @@ export const COMMENTS_CRON = '*/30 * * * *';
 
 export interface CommentWorkDeps {
   env: NodeJS.ProcessEnv;
-  registry: Repositories;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'accounts' | 'comments' | 'settings' | 'cursors'>;
   secrets: SecretStore;
   pipeline: PipelineDeps;
   brand: Brand;

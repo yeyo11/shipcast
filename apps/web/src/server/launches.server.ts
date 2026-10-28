@@ -32,7 +32,7 @@ const HEADLINE: Array<[string, string, string]> = [
   ['newsletter', 'clicks', 'newsletter clicks'],
 ];
 
-export async function launchView(registry: Repositories, launch: Launch): Promise<LaunchView> {
+export async function launchView(registry: Pick<Repositories, 'posts' | 'metrics' | 'comments' | 'cursors'>, launch: Launch): Promise<LaunchView> {
   const [cursors, metrics, posts, replies] = await Promise.all([
     registry.cursors.cursorsWithPrefix(failurePrefix(launch.id)),
     registry.metrics.latestMetrics(launch.id),
@@ -67,7 +67,7 @@ export async function launchView(registry: Repositories, launch: Launch): Promis
  * number, each search engine's view of each language's article, and its drafts as they are now.
  * Google is always listed, as the engine that matters most; Bing once it has been read at all.
  */
-export async function launchDetail(registry: Repositories, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
+export async function launchDetail(registry: Pick<Repositories, 'posts' | 'metrics' | 'comments' | 'cursors'>, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
   // The pull request is read from GitHub, the rest from the registry: all at once
   const reviewing = readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
   const urls = articleUrls(await registry.posts.posts(launch.id, { channel: 'blog' }));
@@ -90,7 +90,7 @@ export async function launchDetail(registry: Repositories, launch: Launch, deps:
  * or a merged launch is followed; then its publishing is queued. A refusal is the answer's problem.
  */
 export async function publishAgain(
-  registry: Repositories,
+  registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'metrics' | 'comments' | 'cursors'>,
   launchId: number,
   channel: Channel | undefined,
   startPublishing: (launch: Launch, retryChannel?: Channel) => Promise<string>,

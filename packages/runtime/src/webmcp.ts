@@ -8,11 +8,11 @@ import type { Repositories } from '@shipcast/engine';
 
 const KEY = 'webmcp:enabled';
 
-export async function readWebMcp(registry: Repositories): Promise<boolean> {
+export async function readWebMcp(registry: Pick<Repositories, 'settings'>): Promise<boolean> {
   return (await registry.settings.setting<boolean>(KEY)) === true;
 }
 
-export async function writeWebMcp(registry: Repositories, enabled: boolean): Promise<boolean> {
+export async function writeWebMcp(registry: Pick<Repositories, 'settings'>, enabled: boolean): Promise<boolean> {
   await registry.settings.setSetting<boolean>(KEY, enabled);
   return readWebMcp(registry);
 }
