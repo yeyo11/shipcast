@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { seal, unseal } from './seal.ts';
 
 /**
  * Where secrets live: the operating system's keychain on a desktop, so a token never sits in a file
@@ -94,6 +94,10 @@ export class MemoryStore implements SecretStore {
   async delete(key: string): Promise<void> {
     this.#values.delete(key);
   }
+
+  async keys(): Promise<string[]> {
+    return [...this.#values.keys()];
+  }
 }
 
 /**
@@ -124,11 +128,9 @@ export class FileStore implements SecretStore {
     }
     const sealed = JSON.parse(text) as { v: number; iv: string; tag: string; data: string };
     if (sealed.v !== 1) throw new SecretStoreError(`${this.#path}: unknown format ${String(sealed.v)}`);
-    const decipher = createDecipheriv('aes-256-gcm', this.#key, Buffer.from(sealed.iv, 'base64'));
-    decipher.setAuthTag(Buffer.from(sealed.tag, 'base64'));
     let plain: string;
     try {
-      plain = Buffer.concat([decipher.update(Buffer.from(sealed.data, 'base64')), decipher.final()]).toString('utf8');
+      plain = unseal(this.#key, sealed).toString('utf8');
     } catch {
       throw new SecretStoreError(`${this.#path} does not open with this SHIPCAST_SECRETS_KEY`);
     }
@@ -136,10 +138,7 @@ export class FileStore implements SecretStore {
   }
 
   async #write(values: Map<string, string>): Promise<void> {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.#key, iv);
-    const data = Buffer.concat([cipher.update(JSON.stringify(Object.fromEntries(values)), 'utf8'), cipher.final()]);
-    const sealed = { v: 1, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') };
+    const sealed = { v: 1, ...seal(this.#key, JSON.stringify(Object.fromEntries(values))) };
     await mkdir(dirname(this.#path), { recursive: true, mode: 0o700 });
     const temporary = `${this.#path}.${process.pid}.tmp`;
     await writeFile(temporary, JSON.stringify(sealed), { mode: 0o600 });
@@ -160,6 +159,12 @@ export class FileStore implements SecretStore {
   async get(key: string): Promise<string | undefined> {
     await this.#queue;
     return (await this.#read()).get(key);
+  }
+
+  /** The keys held, never the values: what a copy into another store walks */
+  async keys(): Promise<string[]> {
+    await this.#queue;
+    return [...(await this.#read()).keys()];
   }
 
   set(key: string, value: string, _label?: string): Promise<void> {

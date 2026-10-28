@@ -382,3 +382,22 @@ export const publishAttempts = pgTable(
   },
   (t) => [primaryKey({ name: 'publish_attempts_piece', columns: [t.launchId, t.channel, t.kind] }), index('publish_attempts_by_state').on(t.state)],
 );
+
+/*
+ * Secrets on a server with several processes (docs/plans/performance-refactor.md, phase 5): one row
+ * per secret, written atomically, so two replicas never lose each other's writes the way two
+ * rewrites of one encrypted file would. Envelope encryption: each value is sealed with a data key of
+ * its own (AES-256-GCM), and that key is sealed with the master key from the environment
+ * (SHIPCAST_SECRETS_KEY), which is never in the database. `version` grows with every write, for a
+ * compare-and-set (a token refresh must not overwrite one another replica just wrote).
+ */
+export const secrets = pgTable('secrets', {
+  key: text('key').primaryKey(),
+  // What it is, for a person reading the list; never the value
+  label: text('label').notNull().default(''),
+  // base64 of: the value sealed with the data key, and the data key sealed with the master key (iv, tag and ciphertext each)
+  sealed: text('sealed').notNull(),
+  sealedKey: text('sealed_key').notNull(),
+  version: integer('version').notNull().default(1),
+  updatedAt: text('updated_at').notNull().default(nowIso),
+});
