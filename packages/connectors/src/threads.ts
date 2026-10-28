@@ -1,5 +1,7 @@
 import {
   checkProblem,
+  secretTag,
+  type IdentityCache,
   ConnectorError,
   json,
   okCheck,
@@ -32,6 +34,8 @@ export interface ThreadsOptions {
   pollMs?: number;
   timeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Where the account's username is kept between runs */
+  cache?: IdentityCache;
 }
 
 /** Meta moved Threads to threads.com in 2025; its API docs use this host now */
@@ -62,10 +66,12 @@ export class Threads implements Deletable, CommentReader, Replier {
   readonly #timeoutMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
   #username: Promise<string> | undefined;
+  readonly #cache: IdentityCache | undefined;
 
   constructor(options: ThreadsOptions) {
     this.#user = options.userId;
     this.#token = options.accessToken;
+    this.#cache = options.cache;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = `${THREADS_GRAPH}/${options.version ?? 'v1.0'}`;
     this.#pollMs = options.pollMs ?? 5_000;
@@ -135,8 +141,10 @@ export class Threads implements Deletable, CommentReader, Replier {
   }
 
   async #ownName(): Promise<string> {
-    this.#username ??= this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then(
-      (me) => me.username,
+    const load = () => this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then((me) => me.username);
+    // Kept a day between runs, so /me is not asked hourly
+    this.#username ??= (this.#cache ? this.#cache.remember(`threads-me:${secretTag(this.#token)}`, 86_400, load) : load()).then(
+      (name) => name,
       (error: unknown) => {
         this.#username = undefined;
         throw error;

@@ -1,5 +1,8 @@
 import {
   checkProblem,
+  chunks,
+  secretTag,
+  type IdentityCache,
   ConnectorError,
   expectOk,
   htmlToText,
@@ -90,8 +93,10 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
   readonly #token: string;
   readonly #fetch: typeof fetch;
   #ownAccount: Promise<string> | undefined;
+  readonly #cache: IdentityCache | undefined;
 
-  constructor(options: { instance: string; accessToken: string; fetch?: typeof fetch }) {
+  constructor(options: { instance: string; accessToken: string; fetch?: typeof fetch; cache?: IdentityCache }) {
+    this.#cache = options.cache;
     this.#instance = options.instance.replace(/\/+$/, '');
     this.#token = options.accessToken;
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -216,8 +221,11 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
 
   /** The token's own account id, read once: what tells the owner's replies from the others' */
   async #ownId(): Promise<string> {
-    this.#ownAccount ??= this.#me('read the account').then(
-      (me) => me.id,
+    // An account's id never changes: kept a day between runs, so verify_credentials is not asked hourly
+    const load = () => this.#me('read the account').then((me) => me.id);
+    const key = `mastodon-me:${secretTag(`${this.#instance}|${this.#token}`)}`;
+    this.#ownAccount ??= (this.#cache ? this.#cache.remember(key, 86_400, load) : load()).then(
+      (id) => id,
       (error: unknown) => {
         this.#ownAccount = undefined;
         throw error;
@@ -278,6 +286,50 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
     return { externalId: created.id, url: created.url };
   }
 
+  /**
+   * The numbers of many statuses, 20 per call through `GET /api/v1/statuses?id[]=` (Mastodon 4.3 and
+   * later). An instance older than that answers 404 there, and each status is read on its own. A
+   * status missing from the answer is gone, and is left out.
+   */
+  async metricsMany(ids: readonly string[]): Promise<Map<string, Metrics>> {
+    const out = new Map<string, Metrics>();
+    for (const batch of chunks(ids, 20)) {
+      const query = new URLSearchParams();
+      for (const id of batch) query.append('id[]', id);
+      const response = await this.#fetch(`${this.#instance}/api/v1/statuses?${query}`, { headers: { authorization: `Bearer ${this.#token}` } });
+      if (response.status === 404) {
+        for (const id of batch) out.set(id, await this.metrics(id));
+        continue;
+      }
+      const statuses = await json<Array<{ id: string; favourites_count: number; reblogs_count: number; replies_count: number }>>('Mastodon', response, 'metrics');
+      for (const status of statuses) out.set(status.id, { favourites: status.favourites_count, boosts: status.reblogs_count, replies: status.replies_count });
+    }
+    return out;
+  }
+
+  /**
+   * The mentions newer than `sinceId` (the newest notification seen last run), oldest first, five
+   * pages of 80 at most: one call in a quiet hour. A reply to the owner mentions them, so every
+   * comment under their posts, and every reply to those, arrives here.
+   */
+  async mentionsSince(sinceId: string | undefined): Promise<{ items: Array<{ id: string; inReplyTo: string | null; visibility: string }>; newest: string | undefined }> {
+    type Notification = { id: string; status?: { id: string; in_reply_to_id: string | null; visibility: string } };
+    const items: Array<{ id: string; inReplyTo: string | null; visibility: string }> = [];
+    let newest = sinceId;
+    for (let page = 0; page < 5; page++) {
+      const query = new URLSearchParams({ 'types[]': 'mention', limit: '80', ...(newest && { min_id: newest }) });
+      const list = await json<Notification[]>('Mastodon', await this.#fetch(`${this.#instance}/api/v1/notifications?${query}`, { headers: { authorization: `Bearer ${this.#token}` } }), 'read the notifications');
+      // min_id pages forward from the cursor; each page comes newest first
+      const sorted = [...list].sort((a, b) => compareIds(a.id, b.id));
+      for (const n of sorted) if (n.status) items.push({ id: n.status.id, inReplyTo: n.status.in_reply_to_id, visibility: n.status.visibility });
+      const last = sorted.at(-1);
+      if (last) newest = last.id;
+      // Without a cursor the first page sets one: what came before it is read per post this once
+      if (list.length < 80 || sinceId === undefined) break;
+    }
+    return { items, newest };
+  }
+
   async metrics(externalId: string): Promise<Metrics> {
     const response = await this.#fetch(`${this.#instance}/api/v1/statuses/${externalId}`, {
       headers: { authorization: `Bearer ${this.#token}` },
@@ -285,4 +337,9 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
     const status = await json<{ favourites_count: number; reblogs_count: number; replies_count: number }>('Mastodon', response, 'metrics');
     return { favourites: status.favourites_count, boosts: status.reblogs_count, replies: status.replies_count };
   }
+}
+
+/** Mastodon's ids are numbers written as strings, longer ones newer */
+function compareIds(a: string, b: string): number {
+  return a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 }

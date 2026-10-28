@@ -1,5 +1,5 @@
 import { HttpClient } from './http-client.ts';
-import { checkProblem, ConnectorError, imageUrl, okCheck, PostGone, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Metrics, type ProfileStats, type Published, type Replier, type ReplyTarget, type SentReply } from './http.ts';
+import { checkProblem, ConnectorError, secretTag, type IdentityCache, imageUrl, okCheck, PostGone, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Metrics, type ProfileStats, type Published, type Replier, type ReplyTarget, type SentReply } from './http.ts';
 
 /** The scopes Shipcast asks YouTube for: uploading, reading the channel's own data, and managing its videos, captions and comments */
 export const YOUTUBE_SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/youtube.force-ssl'];
@@ -30,6 +30,8 @@ export interface YouTubeOptions {
   fetch?: typeof fetch;
   /** Told the quota units each call spends, so the day's spend can be counted and capped */
   onUnits?: (units: number, call: keyof typeof YOUTUBE_UNITS) => void;
+  /** Where the channel's id is kept between runs, so the hourly reads do not ask for it each time */
+  cache?: IdentityCache;
 }
 
 export interface YouTubeVideo {
@@ -79,6 +81,7 @@ interface VideoResource {
 interface CommentThread {
   id: string;
   snippet: {
+    videoId?: string;
     topLevelComment: { id: string; snippet: CommentSnippet };
   };
   replies?: { comments: Array<{ id: string; snippet: CommentSnippet }> };
@@ -91,6 +94,7 @@ interface CommentSnippet {
   authorProfileImageUrl?: string;
   authorChannelId?: { value?: string };
   publishedAt: string;
+  updatedAt?: string;
   parentId?: string;
 }
 
@@ -145,13 +149,15 @@ export class YouTube implements Deletable, CommentReader, Replier {
 
   /** The channel the token belongs to: whose comments are the owner's own */
   #ownChannel(): Promise<string> {
-    this.#channelId ??= (async () => {
+    const load = async () => {
       this.#units('list');
       const answer = await this.#http.json<{ items?: Array<{ id: string }> }>(`${API}/channels?part=id&mine=true`, { headers: await this.#auth(), what: 'read the channel' });
       const id = answer.items?.[0]?.id;
       if (!id) throw new ConnectorError('YouTube', 'this Google account has no YouTube channel: create one, then connect again', 404, false);
       return id;
-    })();
+    };
+    const cache = this.#options.cache;
+    this.#channelId ??= cache ? cache.remember(`youtube-channel:${secretTag(this.#options.refreshToken)}`, 86_400, load) : load();
     this.#channelId.catch(() => (this.#channelId = undefined));
     return this.#channelId;
   }
@@ -342,6 +348,35 @@ export class YouTube implements Deletable, CommentReader, Replier {
       page = answer.nextPageToken;
     } while (page);
     return out;
+  }
+
+  /**
+   * The channel's comment threads with activity after `since`, newest first, through
+   * `allThreadsRelatedToChannelId`: one call (one unit) for every video at once in a quiet hour, five
+   * pages of 100 at most. Each says the video it is under and when it last moved, its replies (the
+   * few the answer carries) included.
+   */
+  async threadsSince(since: string | undefined): Promise<{ items: Array<{ videoId: string; at: string }>; newest: string | undefined }> {
+    const own = await this.#ownChannel();
+    const items: Array<{ videoId: string; at: string }> = [];
+    let newest = since;
+    let page: string | undefined;
+    for (let n = 0; n < 5; n++) {
+      this.#units('list');
+      const query = new URLSearchParams({ part: 'snippet,replies', allThreadsRelatedToChannelId: own, order: 'time', maxResults: '100', ...(page && { pageToken: page }) });
+      const answer = await this.#http.json<{ items?: CommentThread[]; nextPageToken?: string }>(`${API}/commentThreads?${query}`, { headers: await this.#auth(), what: 'read the channel comments' });
+      let older = false;
+      for (const thread of answer.items ?? []) {
+        const top = thread.snippet.topLevelComment.snippet;
+        const at = [top.publishedAt, top.updatedAt ?? '', ...(thread.replies?.comments ?? []).map((r) => r.snippet.publishedAt)].reduce((a, b) => (b > a ? b : a));
+        newest = newest === undefined || at > newest ? at : newest;
+        if (since !== undefined && at <= since) older = true;
+        else if (thread.snippet.videoId) items.push({ videoId: thread.snippet.videoId, at });
+      }
+      page = answer.nextPageToken;
+      if (older || !page || since === undefined) break;
+    }
+    return { items, newest };
   }
 
   /** A reply in the comment's thread: YouTube threads replies under the top-level comment */

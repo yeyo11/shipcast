@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { imageUrl, ShipcastError } from '@shipcast/schema';
 
 /** A connector's failure: which network, what it answered, and whether trying again could help. */
@@ -237,4 +238,26 @@ export interface ProfileReader {
 /** A connector that changes the account's own profile (Mastodon, Bluesky, a Telegram channel) */
 export interface ProfileEditor {
   editProfile(edit: ProfileEdit): Promise<void>;
+}
+
+/**
+ * Where an account's identity (its own id, its username, a session) is kept between runs, so the
+ * hourly reads do not ask for it again each time: the runtime's Cache (Redis, or a process's memory)
+ * satisfies it without an import upward. Values are strings; a connector encodes what it keeps.
+ */
+export interface IdentityCache {
+  remember<T extends string>(key: string, ttlSeconds: number, load: () => Promise<T>): Promise<T>;
+  delete(key: string): Promise<void>;
+}
+
+/** A key part that names an account without carrying its secret: the first bytes of its hash */
+export function secretTag(secret: string): string {
+  return createHash('sha256').update(secret).digest('hex').slice(0, 16);
+}
+
+/** `items` in slices of `size`, in order: one network call each */
+export function chunks<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }

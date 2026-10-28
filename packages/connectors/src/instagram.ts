@@ -1,5 +1,7 @@
 import {
   checkProblem,
+  secretTag,
+  type IdentityCache,
   ConnectorError,
   json,
   okCheck,
@@ -34,6 +36,8 @@ export interface InstagramOptions {
   /** How long Instagram may take to process a Reel */
   timeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Where the account's username is kept between runs */
+  cache?: IdentityCache;
 }
 
 /**
@@ -52,10 +56,12 @@ export class Instagram implements CommentReader, Replier {
   readonly #timeoutMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
   #username: Promise<string> | undefined;
+  readonly #cache: IdentityCache | undefined;
 
   constructor(options: InstagramOptions) {
     this.#user = options.userId;
     this.#token = options.accessToken;
+    this.#cache = options.cache;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = `https://graph.instagram.com/${options.version ?? 'v25.0'}`;
     this.#pollMs = options.pollMs ?? 10_000;
@@ -137,8 +143,10 @@ export class Instagram implements CommentReader, Replier {
 
   /** The account's own username, read once: what tells the owner's replies from the others' */
   async #ownName(): Promise<string> {
-    this.#username ??= this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then(
-      (me) => me.username,
+    const load = () => this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then((me) => me.username);
+    // Kept a day between runs, so /me is not asked hourly
+    this.#username ??= (this.#cache ? this.#cache.remember(`instagram-me:${secretTag(this.#token)}`, 86_400, load) : load()).then(
+      (name) => name,
       (error: unknown) => {
         this.#username = undefined;
         throw error;
@@ -189,6 +197,28 @@ export class Instagram implements CommentReader, Replier {
         add(comment);
         for (const reply of comment.replies?.data ?? []) add(reply, comment.id);
       }
+      after = answer.paging?.next ? answer.paging.cursors?.after : undefined;
+      if (!after) break;
+    }
+    return out;
+  }
+
+  /**
+   * Each of the account's media with how many comments it has (replies included), a hundred a page,
+   * five pages at most: one call that says which posts have comments to read, since Instagram has
+   * no feed of them to poll.
+   */
+  async commentCounts(): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    let after: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      let answer: { data: Array<{ id: string; comments_count?: number }>; paging?: { cursors?: { after?: string }; next?: string } };
+      try {
+        answer = await this.#get(`/${this.#user}/media`, { fields: 'id,comments_count', limit: '100', ...(after && { after }) }, 'count the comments');
+      } catch (error) {
+        throw this.#permission(error);
+      }
+      for (const m of answer.data) out.set(m.id, m.comments_count ?? 0);
       after = answer.paging?.next ? answer.paging.cursors?.after : undefined;
       if (!after) break;
     }

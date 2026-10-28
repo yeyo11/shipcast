@@ -103,6 +103,38 @@ export class Brevo {
   }
 
   /**
+   * The numbers of many campaigns from Brevo's list of sent campaigns with their global statistics,
+   * a hundred a call, newest first, until every one asked for is found (five pages at most). Brevo's
+   * list keeps statistics for six months only: a campaign the list has no statistics for is read on
+   * its own. An id of several (`12,13`, one issue per language) adds its campaigns up.
+   */
+  async metricsMany(externalIds: readonly string[]): Promise<Map<string, Metrics>> {
+    const wanted = new Set(externalIds.flatMap((id) => id.split(',')));
+    const found = new Map<string, Metrics>();
+    for (let page = 0; page < 5 && [...wanted].some((id) => !found.has(id)); page++) {
+      const answer = await json<{ campaigns?: Array<{ id: number; statistics?: { globalStats?: GlobalStats } }> }>(
+        'Brevo',
+        await this.#request('GET', `/emailCampaigns?status=sent&statistics=globalStats&limit=100&offset=${page * 100}&sort=desc`),
+        'metrics',
+      );
+      const campaigns = answer.campaigns ?? [];
+      for (const c of campaigns) {
+        const s = c.statistics?.globalStats;
+        if (s && wanted.has(String(c.id))) found.set(String(c.id), statsOfCampaign(s));
+      }
+      if (campaigns.length < 100) break;
+    }
+    for (const id of wanted) if (!found.has(id)) found.set(id, await this.metrics(id));
+    const out = new Map<string, Metrics>();
+    for (const externalId of externalIds) {
+      const total: Metrics = {};
+      for (const id of externalId.split(',')) for (const [name, value] of Object.entries(found.get(id) ?? {})) total[name] = (total[name] ?? 0) + value;
+      out.set(externalId, total);
+    }
+    return out;
+  }
+
+  /**
    * A campaign's numbers. Opens are unique opens, which Apple's privacy protection inflates; clicks
    * are the number to trust.
    */
@@ -121,15 +153,19 @@ export class Brevo {
       'metrics',
     );
     const s = campaign.statistics?.globalStats;
-    if (!s) return {};
-    return {
-      sent: s.sent,
-      delivered: s.delivered,
-      opens: s.uniqueViews,
-      clicks: s.uniqueClicks,
-      unsubscribes: s.unsubscriptions,
-      bounces: s.hardBounces + s.softBounces,
-      complaints: s.complaints,
-    };
+    return s ? statsOfCampaign(s) : {};
   }
+}
+
+/** A campaign's numbers. Opens are unique opens, which Apple's privacy protection inflates; clicks are the number to trust */
+function statsOfCampaign(s: GlobalStats): Metrics {
+  return {
+    sent: s.sent,
+    delivered: s.delivered,
+    opens: s.uniqueViews,
+    clicks: s.uniqueClicks,
+    unsubscribes: s.unsubscriptions,
+    bounces: s.hardBounces + s.softBounces,
+    complaints: s.complaints,
+  };
 }

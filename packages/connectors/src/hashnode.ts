@@ -1,4 +1,4 @@
-import { ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
+import { chunks, ConnectorError, json, checkProblem, okCheck, statsOf, type Check, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 export interface HashnodeArticle {
   title: string;
@@ -125,6 +125,24 @@ export class Hashnode implements Editable<HashnodeEdit>, Deletable, ProfileReade
     );
     if (!data.post) return {};
     return { views: data.post.views, reactions: data.post.reactionCount, comments: data.post.responseCount };
+  }
+
+  /**
+   * The numbers of many posts in one GraphQL query per twenty, each post an alias of its own. A post
+   * Hashnode answers null for is gone, and is left out.
+   */
+  async metricsMany(ids: readonly string[]): Promise<Map<string, Metrics>> {
+    const out = new Map<string, Metrics>();
+    for (const batch of chunks(ids, 20)) {
+      const variables = Object.fromEntries(batch.map((id, i) => [`id${i}`, id]));
+      const query = `query(${batch.map((_, i) => `$id${i}: ID!`).join(', ')}) { ${batch.map((_, i) => `p${i}: post(id: $id${i}) { views reactionCount responseCount }`).join(' ')} }`;
+      const data = await this.#query<Record<string, { views: number; reactionCount: number; responseCount: number } | null>>('metrics', query, variables);
+      batch.forEach((id, i) => {
+        const post = data[`p${i}`];
+        if (post) out.set(id, { views: post.views, reactions: post.reactionCount, comments: post.responseCount });
+      });
+    }
+    return out;
   }
 
   async check(): Promise<Check> {

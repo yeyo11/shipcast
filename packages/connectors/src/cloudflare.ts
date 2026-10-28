@@ -62,6 +62,42 @@ export class CloudflareAnalytics {
     return statsOf({}, { visits7d: visits.views });
   }
 
+  /**
+   * The visits of many paths in one query, grouped by path and referrer: what the hourly reads ask
+   * for every article at once, instead of one query per path. `since` is the earliest launch's: an
+   * article's path had no visits before it existed, so a wider window adds nothing to it.
+   */
+  async pageVisitsMany(paths: readonly string[], since: string, until: string): Promise<Map<string, PageVisits>> {
+    const out = new Map<string, PageVisits>(paths.map((p) => [p, { views: 0, bySource: {} }]));
+    if (paths.length === 0) return out;
+    const query = `query($account: String!, $filter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject!) {
+      viewer { accounts(filter: { accountTag: $account }) {
+        rumPageloadEventsAdaptiveGroups(limit: 10000, filter: $filter) {
+          count
+          dimensions { requestPath refererHost }
+        }
+      } }
+    }`;
+    const response = await this.#fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.#token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ query, variables: { account: this.#account, filter: { siteTag: this.#siteTag, requestPath_in: [...paths], date_geq: since, date_leq: until } } }),
+    });
+    const body = await json<{
+      data?: { viewer: { accounts: Array<{ rumPageloadEventsAdaptiveGroups: Array<{ count: number; dimensions: { requestPath?: string; refererHost?: string } }> }> } };
+      errors?: Array<{ message: string }> | null;
+    }>('Cloudflare', response, 'page visits');
+    if (body.errors?.length) throw new ConnectorError('Cloudflare', body.errors.map((e) => e.message).join('; '));
+    for (const group of body.data?.viewer.accounts[0]?.rumPageloadEventsAdaptiveGroups ?? []) {
+      const visits = group.dimensions.requestPath === undefined ? undefined : out.get(group.dimensions.requestPath);
+      if (!visits) continue;
+      visits.views += group.count;
+      const source = sourceOfReferrer(group.dimensions.refererHost);
+      visits.bySource[source] = (visits.bySource[source] ?? 0) + group.count;
+    }
+    return out;
+  }
+
   /** Views of `path` (e.g. `/en/claudio/`), or of the whole site without one, between two dates (YYYY-MM-DD, inclusive). */
   async pageVisits(path: string | undefined, since: string, until: string): Promise<PageVisits> {
     const query = `query($account: String!, $filter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject!) {
