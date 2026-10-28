@@ -1,4 +1,4 @@
-import { articleLink, discussionDraft, draftFile, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { articleLink, CHANNEL_DEFINITIONS, discussionDraft, draftFile, hasDemo, type Brand, type Channel, type ChannelDefinition, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import type { GitHubSource } from './github.ts';
 import { issueDraftBody } from './newsletter.ts';
 
@@ -214,6 +214,14 @@ export function renderDrafts(
         files.push(channelDraft(dir, 'newsletter', mode('newsletter'), issueDraftBody(issue), lang));
       }
     }
+  }
+  // The channels that lay out their own drafts (their definition's `draft.write`), with no branch above
+  for (const definition of CHANNEL_DEFINITIONS as readonly ChannelDefinition<Channel>[]) {
+    // A definition's `write` takes its own piece, which the pack holds under its key
+    const write = definition.draft?.write as ((piece: unknown) => Array<{ part: string; body: string }>) | undefined;
+    const piece: unknown = (pack as Record<string, unknown>)[definition.pack.key];
+    if (!write || piece === undefined || mode(definition.id) === 'off') continue;
+    for (const { part, body } of write(piece)) files.push(channelDraft(dir, definition.id, mode(definition.id), body, part));
   }
   if (pack.releaseNotes) {
     files.push({ path: `${dir}/release-notes.md`, content: `# Release notes\n\n${pack.releaseNotes.trim()}\n` });

@@ -1,13 +1,23 @@
 import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
-import type { Brand, Channel, Language } from '@shipcast/schema';
+import { isMainPiece, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import { kindLanguage, type Post, type Registry } from './registry.ts';
+
+/**
+ * A channel's reader of its pieces' numbers: one piece a call, or many at once where the network
+ * reads them in batches (YouTube, 50 videos a call), which a round then uses instead.
+ */
+export interface PostMetricReader {
+  metrics(externalId: string): Promise<Metrics>;
+  /** The numbers of many pieces in as few calls as the network allows; a piece missing from the answer is gone */
+  metricsMany?(externalIds: string[]): Promise<Map<string, Metrics>>;
+}
 
 /** Each source the engine can read numbers from; a source left out is not read. */
 export interface MetricSources {
   /** Per piece, by channel: the connectors' `metrics(externalId)`, read for each post and newsletter issue */
-  posts?: Partial<Record<Channel, { metrics(externalId: string): Promise<Metrics> }>>;
+  posts?: Partial<Record<Channel, PostMetricReader>>;
   /** The blog's visits per article path, by source */
   blog?: { pageVisits(path: string, since: string, until: string): Promise<PageVisits> };
   /** Google search numbers per article URL, whether Google indexed it, and resubmitting the sitemap */
@@ -93,20 +103,40 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
 
   let unindexed = false;
   const launches = (await registry.recent(500)).filter((l) => l.status === 'published');
+  const piecesOf = new Map<number, Post[]>();
+  for (const launch of launches) piecesOf.set(launch.id, await registry.posts(launch.id));
+  // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its
+  // own, and a post's own pieces (a subreddit's, each of YouTube's videos) are read like its post.
+  // A deleted piece answers nothing but not found; its last numbers stay as they were
+  const readable = (post: Post) =>
+    (post.kind === 'post' || post.kind.startsWith('issue:') || isMainPiece(post.channel, post.kind)) && post.externalId !== null && post.channel !== 'blog' && post.status !== 'deleted';
+
+  // The channels that read in batches are read first, all their pieces at once
+  const batched = new Map<string, Map<string, Metrics>>();
+  for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
+    if (!reader?.metricsMany) continue;
+    const ids = [...piecesOf.values()].flat().filter((p) => p.channel === channel && readable(p)).map((p) => p.externalId!);
+    if (ids.length === 0) continue;
+    const many = reader.metricsMany.bind(reader);
+    await attempt(channel, async () => void batched.set(channel, await many(ids)));
+  }
+
   for (const launch of launches) {
     const since = launch.createdAt.slice(0, 10);
     const until = day(now);
 
-    const pieces = await registry.posts(launch.id);
+    const pieces = piecesOf.get(launch.id) ?? [];
     for (const post of pieces) {
       const reader = sources.posts?.[post.channel];
-      // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its own
-      const read = post.kind === 'post' || post.kind.startsWith('issue:');
-      // A deleted piece answers nothing but not found; its last numbers stay as they were
-      if (reader && read && post.externalId && post.channel !== 'blog' && post.status !== 'deleted') {
-        const what = post.kind === 'post' ? post.channel : `${post.channel} ${post.kind}`;
-        await attempt(`${launch.repo} ${launch.ref} ${what}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!), post.id));
+      if (!reader || !readable(post)) continue;
+      if (reader.metricsMany) {
+        // Read in the batch above; a piece the answer left out is gone, and a failed batch was said once
+        const values = batched.get(post.channel)?.get(post.externalId!);
+        if (values) await record(launch.id, post.channel, values, post.id);
+        continue;
       }
+      const what = post.kind === 'post' ? post.channel : `${post.channel} ${post.kind}`;
+      await attempt(`${launch.repo} ${launch.ref} ${what}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!), post.id));
     }
 
     // The blog's sources are the site's, read per article URL and kept for the launch

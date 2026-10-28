@@ -63,6 +63,22 @@ export interface Editors {
   reddit?: { delete(id: string): Promise<void> };
 }
 
+/**
+ * The editor of a channel the engine has no field mapping built in for (`send` below): it takes the
+ * change as the engine has it, and its adapter maps the fields to what its API calls them. A new
+ * network edits through this instead of a branch here.
+ */
+export interface ChangeEditor {
+  edit?(id: string, changes: PostChanges): Promise<void>;
+  delete?(id: string): Promise<void>;
+}
+
+/** A channel's editor under its id when it is not one of Editors' typed ones */
+function changeEditorOf(editors: Editors, channel: string): ChangeEditor | undefined {
+  const found: unknown = (editors as object as Record<string, unknown>)[channel];
+  return found && typeof found === 'object' ? (found as ChangeEditor) : undefined;
+}
+
 /** The launches repo, for the blog's articles: read a file, commit onto a branch, list a folder */
 export interface BlogRepo {
   fileAt(repo: string, path: string, ref: string): Promise<string | undefined>;
@@ -260,8 +276,13 @@ async function send(post: Post, changes: PostChanges, deps: EditDeps): Promise<v
         ...(changes.title !== undefined && { title: changes.title }),
         ...(changes.text !== undefined && { body: changes.text }),
       });
-    default:
+    default: {
+      const editor = changeEditorOf(editors, post.channel);
+      if (editor?.edit) return editor.edit(id, changes);
+      // A channel that edits but whose editor is missing went out with credentials that are gone
+      if (CAPABILITIES[post.channel].edit !== 'no') editorOf(editors, post.channel as keyof Editors, post);
       throw new PostRefused('unsupported', `${nameOf(post.channel)} cannot edit a published post`);
+    }
   }
 }
 
@@ -312,8 +333,16 @@ export async function deletePost(postId: number, deps: EditDeps): Promise<Post> 
         await take(() => editor.delete(id));
         break;
       }
-      default:
+      default: {
+        const editor = changeEditorOf(editors, post.channel);
+        if (editor?.delete) {
+          const remove = editor.delete.bind(editor);
+          await take(() => remove(id));
+          break;
+        }
+        if (CAPABILITIES[post.channel].delete !== 'no') editorOf(editors, post.channel as keyof Editors, post);
         throw new PostRefused('unsupported', `${nameOf(post.channel)} cannot delete a published post`);
+      }
     }
   }
   return deps.registry.updatePost(post.id, { status: 'deleted' });

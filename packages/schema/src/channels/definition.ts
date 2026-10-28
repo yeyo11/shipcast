@@ -128,6 +128,11 @@ export interface ChannelDefinition<Id extends string = string> {
     match(name: string): string | undefined;
     /** The text an edit form starts from, out of the draft's body (what follows its mode line) */
     read(body: string): { text: string; title?: string };
+    /**
+     * Its draft files' bodies from its piece, one per part, for a channel the engine's renderDrafts
+     * has no layout built in for: a new channel brings its own instead of a branch there
+     */
+    write?(piece: never): Array<{ part: string; body: string }>;
   };
 
   /** The network's own caps, by a key unique across channels: prompts read them as `{{limit.<key>}}` */

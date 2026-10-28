@@ -1362,7 +1362,8 @@ export class Registry {
     const rows = await this.#db
       .select()
       .from(posts)
-      .where(and(gte(posts.publishedAt, since), inArray(posts.channel, [...channels]), eq(posts.kind, 'post'), inArray(posts.status, ['live', 'edited'])))
+      // A post's own pieces too (`post:<part>`): each of YouTube's two videos has its comments
+      .where(and(gte(posts.publishedAt, since), inArray(posts.channel, [...channels]), or(eq(posts.kind, 'post'), like(posts.kind, 'post:%')), inArray(posts.status, ['live', 'edited'])))
       .orderBy(asc(posts.publishedAt), asc(posts.id));
     return rows.map(toPost);
   }

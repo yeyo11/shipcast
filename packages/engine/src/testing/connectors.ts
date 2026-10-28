@@ -1,5 +1,5 @@
 import type { Comment, Metrics, Published, ReplyTarget, SentReply } from '@shipcast/connectors';
-import type { Channel } from '@shipcast/schema';
+import { CAPABILITIES, type Channel } from '@shipcast/schema';
 import { REPLY_CAPABILITIES, type CommentConnectors, type CommentDeps } from '../comments.ts';
 import type { EditDeps, Editors } from '../edit.ts';
 import type { MetricSources } from '../metrics.ts';
@@ -27,10 +27,6 @@ export interface ConnectorCall {
 
 export type PublishingChannel = (typeof PUBLISHED_BY_ENGINE)[number];
 
-/** The channels whose published pieces can be edited or deleted from Shipcast */
-type EditorChannel = keyof Editors;
-const EDITS: readonly EditorChannel[] = ['mastodon', 'telegram', 'discord', 'devto', 'hashnode', 'githubDiscussions'];
-const DELETES_ONLY: readonly EditorChannel[] = ['bluesky', 'threads', 'linkedin', 'reddit'];
 
 interface Failure {
   error: Error;
@@ -146,7 +142,9 @@ export class FakeConnectors {
         },
       },
     };
-    return Object.fromEntries(channels.map((c) => [c, all[c]])) as Publishers;
+    // A channel published through its adapter's strategy has no publisher here: its test hands in its own
+    const builtIn = (c: PublishingChannel): c is keyof Publishers => c in all;
+    return Object.fromEntries(channels.filter(builtIn).map((c) => [c, all[c]])) as Publishers;
   }
 
   /** The editors the engine builds per channel and account: one channel's at a time, none for an unconnected one */
@@ -155,9 +153,11 @@ export class FakeConnectors {
       if (this.unconnected.has(channel)) return {};
       const remove = async (id: string) => this.#call({ channel, action: 'delete', id, accountId });
       const edit = async (id: string, input: unknown) => this.#call({ channel, action: 'edit', id, input, accountId });
-      const name = channel as EditorChannel;
-      if (EDITS.includes(name)) return { [name]: { edit, delete: remove } } as Editors;
-      if (DELETES_ONLY.includes(name)) return { [name]: { delete: remove } } as Editors;
+      // What each channel's definition says it can do: an editor that edits and deletes, or only deletes
+      if (!(PUBLISHED_BY_ENGINE as readonly string[]).includes(channel)) return {};
+      const capability = CAPABILITIES[channel];
+      if (capability.edit !== 'no') return { [channel]: { edit, delete: remove } } as Editors;
+      if (capability.delete !== 'no') return { [channel]: { delete: remove } } as Editors;
       return {};
     };
   }
