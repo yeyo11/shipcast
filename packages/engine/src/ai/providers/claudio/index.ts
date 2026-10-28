@@ -1,7 +1,10 @@
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
-import { aiProvider, type AiProviderSettings } from './definition.ts';
-import { need, optional, trimSlash } from './settings.ts';
+import { aiProvider, type AiProviderSettings } from '../definition.ts';
+import { need, optional } from '../settings.ts';
+import { CLAUDIO_ERRORS } from './errors.ts';
+import { CLAUDIO_DEFAULT_MODEL, createClaudio } from './model.ts';
+export * from './errors.ts';
+export * from './model.ts';
 
 const fields = [
   { key: 'url', label: 'URL', secret: false },
@@ -12,7 +15,7 @@ const fields = [
 ] as const;
 
 // What `need` names in its errors, apart from the definition so the module does not refer to itself
-const self = { id: 'claudio', name: 'claudio', settings: fields } as const;
+const self = { id: 'claudio', name: 'Claudio', settings: fields } as const;
 
 /**
  * claudio, through its OpenAI-compatible API at `/api/v1` (claudio 0.10). Behind it is an agent,
@@ -24,19 +27,14 @@ const self = { id: 'claudio', name: 'claudio', settings: fields } as const;
  */
 export const claudioAiProvider = aiProvider({
   ...self,
+  name: 'Claude Code — your subscription (via Claudio)',
   listed: true,
+  errors: CLAUDIO_ERRORS,
   capabilities: { streaming: true, tools: false, structuredOutput: 'native-without-tools', repoAccess: 'remote-workspace' },
   // Its model catalog names its own default `default`
-  defaultModel: () => 'default',
+  defaultModel: () => CLAUDIO_DEFAULT_MODEL,
   model(settings: AiProviderSettings, modelId: string | undefined, options: { fetch?: typeof fetch } = {}): LanguageModel {
-    const openai = createOpenAICompatible({
-      name: 'claudio',
-      baseURL: `${trimSlash(need(self, settings, 'url'))}/api/v1`,
-      apiKey: need(self, settings, 'token'),
-      supportsStructuredOutputs: true,
-      ...(options.fetch && { fetch: options.fetch }),
-    });
-    return openai(modelId || 'default');
+    return createClaudio({ baseURL: need(self, settings, 'url'), token: need(self, settings, 'token'), ...(options.fetch && { fetch: options.fetch }) })(modelId);
   },
   requestHeaders(settings, context) {
     const headers: Record<string, string> = {};

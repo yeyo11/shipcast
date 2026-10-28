@@ -1,5 +1,5 @@
 import { anthropicAiProvider } from './anthropic.ts';
-import { claudioAiProvider } from './claudio.ts';
+import { claudioAiProvider } from './claudio/index.ts';
 import type { AiProviderDefinition } from './definition.ts';
 import { openaiAiProvider } from './openai.ts';
 import { openaiCompatibleAiProvider } from './openai-compatible.ts';

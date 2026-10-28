@@ -102,10 +102,13 @@ export class AiError extends ShipcastError {
   declare readonly code: AiErrorCode;
   /** The provider's id, when the failure is one provider's */
   readonly provider: string | undefined;
+  /** How long the provider asked to wait before the next try (its `Retry-After`), for a retryable failure */
+  readonly retryAfterMs: number | undefined;
 
-  constructor(code: AiErrorCode, message: string, options: { provider?: string; cause?: unknown } = {}) {
+  constructor(code: AiErrorCode, message: string, options: { provider?: string; cause?: unknown; retryAfterMs?: number } = {}) {
     super(message, { code, ...AI_ERRORS[code], cause: options.cause });
     this.name = 'AiError';
     this.provider = options.provider;
+    this.retryAfterMs = options.retryAfterMs;
   }
 }

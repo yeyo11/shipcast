@@ -1,4 +1,5 @@
 import type { LanguageModel, SystemModelMessage } from 'ai';
+import type { AiErrorTable } from '../errors.ts';
 
 /*
  * What Shipcast knows about one AI provider, as one module per provider in this folder, listed once
@@ -96,6 +97,8 @@ export interface AiProviderDefinition<Id extends string = string> {
   requestHeaders?(settings: AiProviderSettings, context: AiRequestContext): Record<string, string>;
   /** Passed with every call */
   providerOptions?: AiProviderOptions;
+  /** What the provider's own error codes mean; a code not in it is judged by its HTTP status */
+  errors?: AiErrorTable;
 }
 
 /** A provider's definition, its literal types kept so the registry can derive its ids */
