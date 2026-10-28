@@ -1,18 +1,13 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import type { SecretStore } from '@shipcast/runtime';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { appKey, type SecretStore } from '@shipcast/runtime';
 
 export const SESSION_COOKIE = 'sc_session';
 export const STATE_COOKIE = 'sc_oauth_state';
 const SESSION_DAYS = 14;
 
-/** The key sessions are signed with, made once and kept in the keychain */
+/** The key sessions are signed with: made once and kept in the secret store, or provisioned in the environment (runtime's app-keys) */
 async function sessionKey(secrets: SecretStore): Promise<Buffer> {
-  let key = await secrets.get('app:session-key');
-  if (!key) {
-    key = randomBytes(32).toString('base64url');
-    await secrets.set('app:session-key', key, 'web app session key');
-  }
-  return Buffer.from(key, 'base64url');
+  return Buffer.from(await appKey(secrets, 'app:session-key', 'web app session key'), 'base64url');
 }
 
 export interface Session {

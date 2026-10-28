@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { appKey } from './app-keys.ts';
 import { API_SCOPES, type ApiScope, type ApiToken, type Repositories } from '@shipcast/engine';
 import { InvalidRequest } from '@shipcast/schema';
 import type { SecretStore } from './secrets.ts';
@@ -21,12 +22,7 @@ export interface ApiTokenDeps {
 }
 
 async function pepper(secrets: SecretStore): Promise<Buffer> {
-  let value = await secrets.get(API_TOKEN_PEPPER_KEY);
-  if (!value) {
-    value = randomBytes(32).toString('base64url');
-    await secrets.set(API_TOKEN_PEPPER_KEY, value, 'API token pepper');
-  }
-  return Buffer.from(value, 'base64url');
+  return Buffer.from(await appKey(secrets, API_TOKEN_PEPPER_KEY, 'API token pepper'), 'base64url');
 }
 
 const digest = (key: Buffer, secret: string) => createHmac('sha256', key).update(secret).digest('hex');

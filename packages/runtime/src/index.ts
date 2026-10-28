@@ -28,4 +28,5 @@ export * from './telemetry/quota.ts';
 export * from './telemetry/recorder.ts';
 export * from './telemetry/fetch.ts';
 export * from './secrets-table.ts';
+export * from './app-keys.ts';
 export * from './logger.ts';

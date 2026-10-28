@@ -15,6 +15,7 @@ import {
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { aiSetup } from './ai.ts';
+import { provisionAppKeys } from './app-keys.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
 import { GitHubUserTokens } from './github-user.ts';
@@ -95,6 +96,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const registry = options.registry ?? (await connectRepositories(config.databaseUrl));
   const flags = Flags.fromEnv(env);
   const secrets = options.secrets ?? secretStoreFor(config, env, { flags, rows: new SecretRows(registry.database) });
+  // One session key and API pepper across replicas, read once per process (app-keys.ts)
+  provisionAppKeys(secrets, { env, lock: new PostgresLock(registry.database) });
   const settings = new RuntimeSettings({ registry, secrets, env });
 
   const { imported, skipped } = await importEnvSettings({ registry, secrets, env });
