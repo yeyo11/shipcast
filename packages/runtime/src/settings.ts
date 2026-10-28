@@ -1,4 +1,5 @@
 import type { Registry } from '@shipcast/engine';
+import { ShipcastError } from '@shipcast/schema';
 import type { SecretStore } from './secrets.ts';
 
 /**
@@ -88,11 +89,12 @@ export const SETTINGS: Record<SettingName, Definition> = {
 const NAMES = Object.keys(SETTINGS) as SettingName[];
 
 /** A setting a page or a job needs and nobody set: the message says which one and where to set it */
-export class SettingMissing extends Error {
+export class SettingMissing extends ShipcastError {
   readonly setting: SettingName;
 
   constructor(setting: SettingName, what = SETTINGS[setting].label) {
-    super(`${what} is not set: set it in Settings (/settings)`);
+    // Nothing wrong with the request: the app is not set up for it yet, until the owner sets it
+    super(`${what} is not set: set it in Settings (/settings)`, { code: 'setting_missing', httpStatus: 409 });
     this.setting = setting;
   }
 }

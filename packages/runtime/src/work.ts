@@ -1,5 +1,5 @@
 import { draftArticle, draftLaunch, draftReply, publishLaunch, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
-import type { Brand, Channel } from '@shipcast/schema';
+import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
 import { notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
@@ -208,7 +208,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
         job.log(`Waiting: the launch is ${current.status}; its publishing sends what is due`);
         return;
       }
-      const number = Number(/\/pull\/(\d+)$/.exec(current.detail ?? '')?.[1]);
+      const number = pullRequestNumber(current);
       if (number && (await d.github.pullRequestState(d.pipeline.launchesRepo, number)) === 'open') {
         job.log('Waiting for approval: it goes out once the drafts are merged');
         return;

@@ -1,4 +1,4 @@
-import { articleUrl as urlOf, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { articleLink, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import type { GitHubSource } from './github.ts';
 import { issueDraftBody } from './newsletter.ts';
 import type { Launch } from './registry.ts';
@@ -14,7 +14,7 @@ const q = (value: string): string => JSON.stringify(value);
  * and a question that invites an answer. Links in comments are not clickable either, hence the bio.
  */
 export function instagramComment(pack: ContentPack, brand: Brand): string {
-  const url = (urlOf(pack, brand.site, 'en') ?? urlOf(pack, brand.site, 'es') ?? brand.site).replace(/^https:\/\//, '');
+  const url = articleLink(pack, brand.site, 'en', 'es').replace(/^https:\/\//, '');
   return `Full write-up: ${url} (link in bio). What would you use it for?`;
 }
 
@@ -130,7 +130,6 @@ export function renderDrafts(
   const files: DraftFile[] = [];
   const dir = launchDir(launch);
   const mode = (c: Channel) => config.publishing[c];
-  const articleUrl = (lang: 'en' | 'es') => urlOf(pack, brand.site, lang) ?? brand.site;
   // Each language has its own slug; the key the blog pairs translations by is the first of them
   const translationKey = pack.article?.en?.slug ?? pack.article?.es?.slug ?? '';
 
@@ -162,7 +161,7 @@ export function renderDrafts(
       content: draft(
         'dev.to',
         mode('devto'),
-        `Republishes the English article with its canonical URL set to ${articleUrl('en')}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`,
+        `Republishes the English article with its canonical URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`,
       ),
     });
   }
@@ -172,7 +171,7 @@ export function renderDrafts(
       content: draft(
         'Hashnode',
         mode('hashnode'),
-        `Republishes the English article with its original URL set to ${articleUrl('en')}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`,
+        `Republishes the English article with its original URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`,
       ),
     });
   }

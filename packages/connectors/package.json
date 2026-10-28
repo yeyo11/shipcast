@@ -11,5 +11,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@shipcast/schema": "workspace:*"
   }
 }

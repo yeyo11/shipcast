@@ -1,5 +1,5 @@
 import type { Profile, ProfileEdit, ProfileLink } from '@shipcast/connectors';
-import { graphemeCount, type Brand } from '@shipcast/schema';
+import { graphemeCount, Refused, type Brand } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle } from './drafts.ts';
@@ -128,14 +128,7 @@ export function profileCapability(account: Pick<Account, 'network' | 'settings'>
 }
 
 /** Why a review or an edit was not made, so the API can answer 404, 409 or 400 */
-export class ProfileRefused extends Error {
-  readonly reason: 'not_found' | 'unsupported' | 'reconnect' | 'invalid';
-
-  constructor(reason: ProfileRefused['reason'], message: string) {
-    super(message);
-    this.reason = reason;
-  }
-}
+export class ProfileRefused extends Refused<'not_found' | 'unsupported' | 'reconnect' | 'invalid'> {}
 
 /** The answer the AI gives: the contract, whatever the provider */
 export const ProfileReviewAnswer = z.object({

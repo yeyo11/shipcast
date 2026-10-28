@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
+import { ShipcastError } from '@shipcast/schema';
 
 /** The GitHub App Shipcast signs in and works through (docs/decisions/github-app.md) */
 export interface GitHubAppConfig {
@@ -39,7 +40,12 @@ export interface Config {
   allowedLogins: string[];
 }
 
-export class ConfigError extends Error {}
+/** The process's own configuration (.env) is wrong: nothing a request or a retry can change */
+export class ConfigError extends ShipcastError {
+  constructor(message: string) {
+    super(message, { code: 'config' });
+  }
+}
 
 const APP_VARIABLES = ['SHIPCAST_GITHUB_APP_ID', 'SHIPCAST_GITHUB_APP_CLIENT_ID', 'SHIPCAST_GITHUB_APP_CLIENT_SECRET'] as const;
 

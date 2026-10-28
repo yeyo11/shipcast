@@ -1,6 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
-import { parse as parseYaml } from 'yaml';
+import { articleLink, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -98,16 +97,6 @@ export type PublishResult =
       scheduled: Array<{ channel: Channel; at: string }>;
     };
 
-/** A draft file's text as edited in the pull request: everything after its mode line. */
-export function draftBody(markdown: string): string {
-  const lines = markdown.split('\n');
-  const mode = lines.findIndex((l) => l.startsWith('> **'));
-  return lines
-    .slice(mode + 1)
-    .join('\n')
-    .trim();
-}
-
 /**
  * The article's Markdown with its root-relative links and images (`](/articles/x/a.png)`) on the
  * blog's address: the blog and its preview resolve them, dev.to and Hashnode do not. Code blocks are
@@ -123,12 +112,6 @@ export function absoluteLinks(markdown: string, site: string): string {
       return fenced ? line : line.replace(/\]\((\/(?!\/))/g, `](${origin}/`);
     })
     .join('\n');
-}
-
-function splitFrontMatter(markdown: string): { data: Record<string, unknown>; body: string } {
-  const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(markdown);
-  if (!match) return { data: {}, body: markdown };
-  return { data: (parseYaml(match[1]!) as Record<string, unknown>) ?? {}, body: match[2]!.trim() };
 }
 
 /**
@@ -159,7 +142,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   // Published without a pull request: the drafts went straight onto the launches repo's main branch
   const direct = launch.detail?.startsWith('direct:') ?? false;
   if (!direct) {
-    const number = Number(/\/pull\/(\d+)$/.exec(launch.detail ?? '')?.[1]);
+    const number = pullRequestNumber(launch);
     if (!number) return { state: 'waiting', launch, reason: 'no drafts pull request recorded' };
     const state = await github.pullRequestState(deps.launchesRepo, number);
     if (state === 'open') return { state: 'waiting', launch, reason: 'the drafts pull request is open' };
@@ -178,7 +161,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   // English is the canonical version every channel links to; Spanish only where that is the only one
   const lead: 'en' | 'es' = pack.article?.en ? 'en' : 'es';
   const slug = pack.article?.[lead]?.slug;
-  const articleUrl = urlOf(pack, brand.site, lead) ?? brand.site;
+  const articleUrl = articleLink(pack, brand.site, lead);
   // The merge starts the deploy: wait until the article (and so the media) is live
   if (slug && config.publishing.blog !== 'off') {
     const live = await http(articleUrl, { method: 'HEAD' }).then((r) => r.ok, () => false);
@@ -191,13 +174,13 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     for (const lang of ['en', 'es'] as const) {
       const piece = pack.article?.[lang];
       if (!piece) continue;
-      await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: urlOf(pack, brand.site, lang) ?? articleUrl, externalId: piece.slug });
+      await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: articleLink(pack, brand.site, lang, lead), externalId: piece.slug });
     }
   }
 
   const read = (path: string) => github.fileAt(deps.launchesRepo, path, 'HEAD');
   const article = slug ? await read(`src/content/posts/${lead}/${slug}.md`) : undefined;
-  const { data: front, body: articleBody } = article ? splitFrontMatter(article) : { data: {}, body: '' };
+  const { data: front, body: articleBody } = article ? parseFrontMatter(article) : { data: {}, body: '' };
   const title = typeof front.title === 'string' ? front.title : pack.article?.en?.title ?? pack.project.name;
   const description = typeof front.description === 'string' ? front.description : pack.article?.en?.description ?? pack.analysis.summary;
   const ogJpegUrl = `${brand.site}${mediaPath(launch, 'og.jpg')}`;
@@ -217,9 +200,9 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const linkedinCard = async () => {
     if (linkedinLang === lead) return { url: articleUrl, title, description };
     const piece = pack.article![linkedinLang]!;
-    const { data } = splitFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
+    const { data } = parseFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
     return {
-      url: urlOf(pack, brand.site, linkedinLang) ?? articleUrl,
+      url: articleLink(pack, brand.site, linkedinLang, lead),
       title: typeof data.title === 'string' ? data.title : piece.title,
       description: typeof data.description === 'string' ? data.description : piece.description,
     };
@@ -432,7 +415,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               const issue = parseIssueDraft(draftBody((await read(`${dir}/newsletter-${lang}.md`)) ?? ''), fromPack);
               const langSlug = pack.article?.[lang]?.slug;
               const langArticle = langSlug ? await read(`src/content/posts/${lang}/${langSlug}.md`) : undefined;
-              const langTitle = langArticle ? splitFrontMatter(langArticle).data.title : undefined;
+              const langTitle = langArticle ? parseFrontMatter(langArticle).data.title : undefined;
               const result = await sender.send({
                 name: `${pack.project.name} ${pack.project.version ?? ''} (${lang})`.replace(/\s+/g, ' ').trim(),
                 subject: issue.subject,
@@ -442,7 +425,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                   project: pack.project.name,
                   look: lookOf(projects, isArticle(launch) ? launch.ref : projectSlug(launch.repo)),
                   title: typeof langTitle === 'string' ? langTitle : title,
-                  articleUrl: `${urlOf(pack, brand.site, lang) ?? articleUrl}?ref=newsletter`,
+                  articleUrl: `${articleLink(pack, brand.site, lang, lead)}?ref=newsletter`,
                   // No launch image: it carries the English headline, which the issue already sets on colour
                   lang,
                 }),

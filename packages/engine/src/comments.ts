@@ -1,5 +1,5 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { ContentPack, graphemeCount, threadsLength, type Brand, type Channel } from '@shipcast/schema';
+import { ContentPack, graphemeCount, Refused, threadsLength, type Brand, type Channel } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
@@ -110,14 +110,7 @@ export async function writeCommentSettings(registry: Registry, input: unknown): 
 /** Why a draft, an edit, a send or a dismissal was not done, so the API can answer 404, 409 or 400 */
 export type CommentRefusal = 'not_found' | 'unsupported' | 'invalid' | 'state' | 'no_credentials';
 
-export class CommentRefused extends Error {
-  readonly reason: CommentRefusal;
-
-  constructor(reason: CommentRefusal, message: string) {
-    super(message);
-    this.reason = reason;
-  }
-}
+export class CommentRefused extends Refused<CommentRefusal> {}
 
 /** A channel's comment connectors, built with the account the post went out with */
 export interface CommentConnectors {
