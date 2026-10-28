@@ -19,6 +19,14 @@ import type { WorkspaceMount } from './workspace-mount.ts';
 /** The tool a model answers through when the answer cannot come as a response format */
 export const SUBMIT_TOOL = 'submit_answer';
 
+/**
+ * How the model is told to finish. Forcing the call (`tool_choice` any/tool, the SDK's 'required')
+ * is refused with a 400 by current Claude models (Opus 5.5, Sonnet 5.5, Fable 5.1) and is not
+ * portable anyway, so every provider gets `auto` with this instruction, and the submit tool is strict
+ * so its input follows the schema where the provider supports strict tools.
+ */
+const SUBMIT_INSTRUCTION = `When you have the answer, call the ${SUBMIT_TOOL} tool exactly once with the whole answer. Do not write the answer as text: only what ${SUBMIT_TOOL} receives is read.`;
+
 /** What one task runs with: as the AI settings chose it, or as a caller passes it */
 export interface AiRunSetup {
   provider: AiProviderDefinition;
@@ -297,12 +305,13 @@ export class AiTaskRunner {
     const submit = tool({
       description: 'Submit the final answer. Call it once, with the whole answer, when you are done; nothing after it is read.',
       inputSchema: jsonSchema(output.jsonSchema() as JSONSchema7),
+      strict: true,
     });
     const tools: ToolSet = repair ? { [SUBMIT_TOOL]: submit } : { ...plan.tools, [SUBMIT_TOOL]: submit };
     return this.#call(plan, messages, {
       tools,
-      // Every step calls a tool: reading the repo, or answering
-      toolChoice: repair ? { type: 'tool', toolName: SUBMIT_TOOL } : 'required',
+      toolChoice: 'auto',
+      instruction: SUBMIT_INSTRUCTION,
       stopWhen: repair ? stepCountIs(1) : [hasToolCall(SUBMIT_TOOL), stepCountIs(plan.limits.maxSteps)],
     });
   }
@@ -315,14 +324,14 @@ export class AiTaskRunner {
   async #call(
     plan: Plan,
     messages: ModelMessage[],
-    options: { tools?: ToolSet; toolChoice?: 'required' | { type: 'tool'; toolName: string }; stopWhen: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>; output?: OutputInterface },
+    options: { tools?: ToolSet; toolChoice?: 'auto'; instruction?: string; stopWhen: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>; output?: OutputInterface },
     onText?: (delta: string) => void,
   ): Promise<Called> {
     const { provider, settings } = plan.setup;
     const model = provider.model(settings, plan.setup.model, this.#deps.fetch ? { fetch: this.#deps.fetch } : {});
     const result = streamText({
       model,
-      ...(plan.system !== undefined && { system: plan.system }),
+      ...(withInstruction(plan.system, options.instruction) !== undefined && { system: withInstruction(plan.system, options.instruction)! }),
       messages,
       maxOutputTokens: plan.limits.maxOutputTokens,
       maxRetries: 0,
@@ -377,4 +386,15 @@ function check<T>(schema: z.ZodType<T>, value: unknown): { ok: true; value: T } 
   if (value === undefined) return { ok: false, problems: 'no JSON answer' };
   const parsed = schema.safeParse(value);
   return parsed.success ? { ok: true, value: parsed.data } : { ok: false, problems: problemsOf(parsed.error.issues) };
+}
+
+/**
+ * The task's system prompt with a standing instruction after it; kept a constant suffix, so a cached
+ * system prompt stays a stable prefix. The SDK takes system text only here, never inside `messages`.
+ */
+function withInstruction(system: string | SystemModelMessage | undefined, instruction: string | undefined): string | SystemModelMessage | undefined {
+  if (!instruction) return system;
+  if (system === undefined) return instruction;
+  if (typeof system === 'string') return `${system}\n\n${instruction}`;
+  return { ...system, content: `${system.content}\n\n${instruction}` };
 }

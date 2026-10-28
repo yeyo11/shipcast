@@ -118,7 +118,8 @@ test('with the repo’s tools, the model reads the checkout and answers through 
   const first = model.doStreamCalls[0]!;
   assert.deepEqual((first.tools ?? []).map((t) => t.name).sort(), ['git', 'list_files', 'read_files', 'repo_overview', 'search', SUBMIT_TOOL]);
   assert.equal(first.responseFormat?.type ?? 'text', 'text', 'no response format beside tools');
-  assert.deepEqual(first.toolChoice, { type: 'required' });
+  assert.deepEqual(first.toolChoice, { type: 'auto' }, 'never forced: current Claude models refuse a forced tool_choice');
+  assert.match(JSON.stringify(first.prompt), /call the submit_answer tool exactly once/, 'the model is told how to finish, in the system prompt');
   assert.match(promptText(model.doStreamCalls[1]!), /feat: the answer/, 'the git history came back to the model');
   assert.match(promptText(model.doStreamCalls[2]!), /export const answer = 42/, 'the file came back to the model');
 });
@@ -141,7 +142,8 @@ test('an invalid answer is sent back once with what is wrong, and the repaired o
   const submitModel = scripted(toolCall(SUBMIT_TOOL, { answer: '' }), toolCall(SUBMIT_TOOL, { answer: 'fixed' }, 'call-2'));
   const submitted = await runnerWith({ provider: mockProvider(submitModel, 'none'), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' });
   assert.deepEqual(submitted.output, { answer: 'fixed' });
-  assert.deepEqual(submitModel.doStreamCalls[1]!.toolChoice, { type: 'tool', toolName: SUBMIT_TOOL }, 'the repair may only submit');
+  assert.deepEqual(submitModel.doStreamCalls[1]!.toolChoice, { type: 'auto' }, 'the repair asks for the submit call, never forces it');
+  assert.deepEqual((submitModel.doStreamCalls[1]!.tools ?? []).map((t) => t.name), [SUBMIT_TOOL], 'the repair offers only the submit tool');
 
   const stubborn = scripted(textParts('not json'));
   await assert.rejects(
