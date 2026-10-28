@@ -1,4 +1,4 @@
-import { ADAPT_TARGETS, ContentPack, channelInSentence, languageName, ShipcastError, PIECE_LIMITS, type AdaptChannelId, type Brand, type ContentPack as Pack } from '@shipcast/schema';
+import { ADAPT_TARGETS, ContentPack, channelInSentence, languageName, ShipcastError, PIECE_LIMITS, type AdaptChannelId, type Brand, type ContentPack as Pack, CheckAnswer, checkJsonSchema } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
@@ -230,45 +230,8 @@ export function buildChat(
   return { system: assistantSystem(context, brand, { ...options, extra }), messages };
 }
 
-/** What checking a text against the code answers: the contract, whatever the provider */
-export const CheckAnswer = z.object({
-  revised: z.string(),
-  findings: z
-    .array(
-      z.object({
-        claim: z.string().max(500),
-        verdict: z.enum(['backed', 'planned', 'not-found', 'contradicted']),
-        evidence: z.string().max(1000),
-      }),
-    )
-    .max(40),
-});
-export type CheckAnswer = z.infer<typeof CheckAnswer>;
-
-export function checkJsonSchema(): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    required: ['revised', 'findings'],
-    properties: {
-      revised: { type: 'string', description: 'The text with every claim the code does not back corrected or removed; otherwise exactly as it was' },
-      findings: {
-        type: 'array',
-        description: 'One entry per factual claim checked',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['claim', 'verdict', 'evidence'],
-          properties: {
-            claim: { type: 'string', description: 'The claim, in a few words' },
-            verdict: { type: 'string', enum: ['backed', 'planned', 'not-found', 'contradicted'] },
-            evidence: { type: 'string', description: 'Where in the code (path, symbol), or what was looked for and not found' },
-          },
-        },
-      },
-    },
-  };
-}
+// Moved to packages/schema/src/ai/answers.ts with the AI task definitions; kept here for its callers
+export { CheckAnswer, checkJsonSchema } from '@shipcast/schema';
 
 export function buildCheckPrompt(text: string, context: AssistantContext, brand: Brand, options: { tone?: string } = {}): AssistantPrompt {
   const prompt = [

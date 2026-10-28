@@ -1,0 +1,111 @@
+import type { z } from 'zod';
+import { ContentPack, contentPackJsonSchema } from '../content-pack.ts';
+import { CheckAnswer, checkJsonSchema, ProfileReviewAnswer, profileReviewJsonSchema, ReplyAnswer, replyJsonSchema } from './answers.ts';
+
+/*
+ * What Shipcast asks an AI for, as data: one definition per task, the answer's schema and the
+ * ceilings of one run. The runner (packages/engine/src/ai/runner.ts) runs any of them the same way;
+ * the values are today's, taken from where each task sets them, so moving a task onto the runner
+ * changes how it is run and not how far it may go.
+ */
+
+/** The tasks the AI settings choose a provider and a model for */
+export const AI_TASKS = ['pack', 'article', 'assistant', 'replies', 'profile'] as const;
+export type AiTask = (typeof AI_TASKS)[number];
+
+export interface AiTaskLimits {
+  /** Model calls in one run, tool rounds included; the AI SDK providers' `MAX_STEPS`, or the task's `maxTurns` */
+  maxSteps: number;
+  /** Per model call */
+  maxOutputTokens: number;
+  /** The whole run, repair included; Shipcast enforces it whatever the provider */
+  timeoutMs: number;
+  /** An agent's turns, for a provider that takes a ceiling of its own (claudio's REST API took `maxTurns`) */
+  maxTurns?: number;
+  /** The spend ceiling, for a provider that takes one; set per run from the settings */
+  maxBudgetUsd?: number;
+}
+
+export interface AiTaskOutput<T> {
+  /** What the answer is validated with: never trusted as the model returns it */
+  schema: z.ZodType<T>;
+  /** What the model is given: the response format's schema, or the submit tool's input */
+  jsonSchema: () => Record<string, unknown>;
+  /** A short name for the response format (`content_pack`) */
+  name: string;
+}
+
+/**
+ * Whether the task reads the repository: `always` (the pack, a check against the code), `when-given`
+ * (a reply, when its launch's code is checked out) or `never`.
+ */
+export type RepoNeed = 'always' | 'when-given' | 'never';
+
+export interface AiTaskDefinition<T = unknown> {
+  id: string;
+  /** The AI settings' task whose provider and model it runs with */
+  settingsTask: AiTask;
+  /** The structured answer; none for a task that streams text (the writing assistant) */
+  output?: AiTaskOutput<T>;
+  needsRepo: RepoNeed;
+  limits: AiTaskLimits;
+}
+
+/** The AI SDK providers' tool rounds before they must answer (packages/engine/src/ai.ts, MAX_STEPS) */
+const SDK_MAX_STEPS = 40;
+/** Room for a whole content pack, every language and channel, in one answer (ai.ts, MAX_OUTPUT_TOKENS) */
+const MAX_OUTPUT_TOKENS = 32_000;
+/** How long claudio let a generation run before stopping it (claudio.ts, `timeoutMs`) */
+const TIMEOUT_MS = 30 * 60_000;
+
+const task = <T>(definition: AiTaskDefinition<T>): AiTaskDefinition<T> => definition;
+
+export const AI_TASK_DEFINITIONS = {
+  /** A release's content pack, from its code (generate.ts): no turn ceiling but the SDK's */
+  pack: task({
+    id: 'pack',
+    settingsTask: 'pack',
+    output: { schema: ContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
+    needsRepo: 'always',
+    limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS },
+  }),
+  /** An article's translation and pieces (article.ts): the owner's text is the truth, no repo */
+  article: task({
+    id: 'article',
+    settingsTask: 'article',
+    output: { schema: ContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
+    needsRepo: 'never',
+    limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS },
+  }),
+  /** A turn of the writing assistant, streamed (assistant.ts): text, no repo, no output ceiling set today */
+  assistant: task<string>({
+    id: 'assistant',
+    settingsTask: 'assistant',
+    needsRepo: 'never',
+    limits: { maxSteps: 1, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS },
+  }),
+  /** A launch's text checked against its code (assistant.ts, checkAgainstCode: maxTurns 30) */
+  assistantCheck: task({
+    id: 'assistant-check',
+    settingsTask: 'assistant',
+    output: { schema: CheckAnswer, jsonSchema: checkJsonSchema, name: 'check' },
+    needsRepo: 'always',
+    limits: { maxSteps: 30, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 30 },
+  }),
+  /** A reply to a comment (comments.ts: maxTurns 20), grounded in the code when it is checked out */
+  replies: task({
+    id: 'replies',
+    settingsTask: 'replies',
+    output: { schema: ReplyAnswer, jsonSchema: replyJsonSchema, name: 'reply' },
+    needsRepo: 'when-given',
+    limits: { maxSteps: 20, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 20 },
+  }),
+  /** A review of an account's profile (profile.ts: maxTurns 5) */
+  profile: task({
+    id: 'profile',
+    settingsTask: 'profile',
+    output: { schema: ProfileReviewAnswer, jsonSchema: profileReviewJsonSchema, name: 'profile_review' },
+    needsRepo: 'never',
+    limits: { maxSteps: 5, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 5 },
+  }),
+} as const;

@@ -1,5 +1,5 @@
 import type { Profile, ProfileEdit, ProfileLink } from '@shipcast/connectors';
-import { graphemeCount, PROFILE_CAPABILITIES, Refused, type Brand, type EditableField, type ProfileCapability } from '@shipcast/schema';
+import { graphemeCount, PROFILE_CAPABILITIES, Refused, type Brand, type EditableField, type ProfileCapability, ProfileReviewAnswer, profileReviewJsonSchema } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle } from './drafts.ts';
@@ -43,47 +43,8 @@ export function profileCapability(account: Pick<Account, 'network' | 'settings'>
 /** Why a review or an edit was not made, so the API can answer 404, 409 or 400 */
 export class ProfileRefused extends Refused<'not_found' | 'unsupported' | 'reconnect' | 'invalid'> {}
 
-/** The answer the AI gives: the contract, whatever the provider */
-export const ProfileReviewAnswer = z.object({
-  summary: z.string().max(1000),
-  proposals: z
-    .array(
-      z.object({
-        field: z.enum(['displayName', 'bio', 'links', 'avatar']),
-        current: z.string().max(5000),
-        proposed: z.string().max(5000),
-        why: z.string().max(1000),
-      }),
-    )
-    .max(12),
-});
-export type ProfileReviewAnswer = z.infer<typeof ProfileReviewAnswer>;
-
-export function profileReviewJsonSchema(): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    required: ['summary', 'proposals'],
-    properties: {
-      summary: { type: 'string', description: 'One line on how the profile reads now' },
-      proposals: {
-        type: 'array',
-        maxItems: 12,
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['field', 'current', 'proposed', 'why'],
-          properties: {
-            field: { type: 'string', enum: ['displayName', 'bio', 'links', 'avatar'], description: 'The field the proposal changes' },
-            current: { type: 'string', description: 'The field as it is now; empty when there is none' },
-            proposed: { type: 'string', description: 'The whole new value, ready to paste; links one per line as `Label: value`; for the picture, what it should show' },
-            why: { type: 'string', description: 'One or two sentences for the owner: why this is better' },
-          },
-        },
-      },
-    },
-  };
-}
+// Moved to packages/schema/src/ai/answers.ts with the AI task definitions; kept here for its callers
+export { ProfileReviewAnswer, profileReviewJsonSchema } from '@shipcast/schema';
 
 export interface ProfileProposal {
   field: ProfileFieldId;

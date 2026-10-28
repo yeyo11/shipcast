@@ -12,9 +12,8 @@ import { DEFAULT_OPENAI_MODEL } from './ai/providers/openai.ts';
 import { LISTED_AI_PROVIDERS, type ListedAiProviderId } from './ai/providers/registry.ts';
 import type { PromptTexts } from './prompt.ts';
 
-/** What Shipcast asks an AI for; each one has its own provider and model in the AI settings */
-export const AI_TASKS = ['pack', 'article', 'assistant', 'replies', 'profile'] as const;
-export type AiTask = (typeof AI_TASKS)[number];
+/** What Shipcast asks an AI for; each one has its own provider and model in the AI settings (packages/schema/src/ai/tasks.ts) */
+export { AI_TASKS, type AiTask } from '@shipcast/schema';
 
 /** The providers the AI settings offer: the registry's listed ones (ai/providers/registry.ts) */
 export const AI_PROVIDERS = LISTED_AI_PROVIDERS;

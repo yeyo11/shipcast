@@ -1,5 +1,5 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { channelDefinition, channelName, COMMENT_CHANNELS, ContentPack, InvalidRequest, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type Channel, type CommentChannelId, type ReplyCapability } from '@shipcast/schema';
+import { channelDefinition, channelName, COMMENT_CHANNELS, ContentPack, InvalidRequest, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type Channel, type CommentChannelId, type ReplyCapability, ReplyAnswer, replyJsonSchema } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
@@ -349,30 +349,8 @@ export interface ReplyDeps extends CommentDeps {
   context(launch: Launch): Promise<ReplyContext>;
 }
 
-/** The answer the AI gives for one comment: the contract, whatever the provider */
-export const ReplyAnswer = z.object({
-  classification: z.enum(['question', 'feedback', 'praise', 'bug', 'spam', 'abuse', 'other']),
-  language: z.string().max(10),
-  dismiss: z.boolean(),
-  reply: z.string().max(5000),
-  reason: z.string().max(1000),
-});
-export type ReplyAnswer = z.infer<typeof ReplyAnswer>;
-
-export function replyJsonSchema(): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    required: ['classification', 'language', 'dismiss', 'reply', 'reason'],
-    properties: {
-      classification: { type: 'string', enum: ['question', 'feedback', 'praise', 'bug', 'spam', 'abuse', 'other'], description: 'What the comment is' },
-      language: { type: 'string', description: 'The comment’s language, ISO 639-1 (en, es…)' },
-      dismiss: { type: 'boolean', description: 'True for spam, abuse or anything that should get no reply' },
-      reply: { type: 'string', description: 'The reply, in the comment’s language; empty when dismissed' },
-      reason: { type: 'string', description: 'One line for the owner: why this reply, or why to dismiss' },
-    },
-  };
-}
+// Moved to packages/schema/src/ai/answers.ts with the AI task definitions; kept here for its callers
+export { ReplyAnswer, replyJsonSchema } from '@shipcast/schema';
 
 /** A reply's length as the network counts it: graphemes on Bluesky, emoji bytes on Threads, characters elsewhere */
 export function replyLength(channel: CommentChannel, text: string): number {
