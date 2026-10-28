@@ -1,5 +1,6 @@
 import type { Database } from '../db/connect.ts';
 import { LaunchRepository } from './launches.ts';
+import { AssistantRepository } from './assistant.ts';
 import { AttentionRepository } from './attention.ts';
 import { ApiTokenRepository } from './api-tokens.ts';
 import { CommentRepository } from './comments.ts';
@@ -18,6 +19,7 @@ import { transaction } from './transaction.ts';
  */
 
 export * from './launches.ts';
+export * from './assistant.ts';
 export * from './attention.ts';
 export * from './api-tokens.ts';
 export * from './comments.ts';
@@ -35,6 +37,7 @@ export interface Repositories {
   /** The connection, for the stores that sit beside the repositories on the same schema and pool */
   readonly database: Database;
   readonly launches: LaunchRepository;
+  readonly assistant: AssistantRepository;
   readonly attention: AttentionRepository;
   readonly apiTokens: ApiTokenRepository;
   readonly comments: CommentRepository;
@@ -51,6 +54,7 @@ export function repositoriesOn(db: Database): Repositories {
   return {
     database: db,
     launches: new LaunchRepository(db),
+    assistant: new AssistantRepository(db),
     attention: new AttentionRepository(db),
     apiTokens: new ApiTokenRepository(db),
     comments: new CommentRepository(db),

@@ -26,7 +26,7 @@ export const listAssistantSessions = createServerFn({ method: 'GET' })
   })
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    const page = await registry.assistantSessions(data);
+    const page = await registry.assistant.assistantSessions(data);
     const sessions: SessionSummary[] = page.sessions.map((s) => ({ id: s.id, title: s.title, launchId: s.launchId, draftPath: s.draftPath, draftLabel: s.draftLabel, updatedAt: s.updatedAt }));
     return { sessions, next: page.next };
   });
@@ -35,11 +35,11 @@ export const loadAssistantSession = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    const session = await registry.assistantSession(data);
+    const session = await registry.assistant.assistantSession(data);
     if (!session) throw new InvalidInput('that session no longer exists');
     return {
       session: { id: session.id, title: session.title, launchId: session.launchId, draftPath: session.draftPath, draftLabel: session.draftLabel, updatedAt: session.updatedAt },
-      messages: await registry.assistantMessages(data),
+      messages: await registry.assistant.assistantMessages(data),
     };
   });
 
@@ -53,5 +53,5 @@ export const settleAssistantProposal = createServerFn({ method: 'POST' })
   })
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    return { ok: await registry.settleAssistantProposal(data.messageId, data.index, data.state) };
+    return { ok: await registry.assistant.settleAssistantProposal(data.messageId, data.index, data.state) };
   });
