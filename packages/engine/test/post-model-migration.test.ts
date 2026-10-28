@@ -75,8 +75,8 @@ test('the post model migration converts an install in place, losing nothing', as
     const [spanish] = await registry.posts.posts(3);
     assert.deepEqual([spanish?.kind, spanish?.externalId, spanish?.accountId], ['issue:es', '30', 4]);
 
-    assert.equal(await registry.setting('automation:mode'), 'webhook');
-    assert.equal(await registry.setting('automation:interval'), 120);
+    assert.equal(await registry.settings.setting('automation:mode'), 'webhook');
+    assert.equal(await registry.settings.setting('automation:interval'), 120);
 
     const left = (await registry.cursorsWithPrefix('')).map((c) => c.key);
     assert.deepEqual(left, ['automation:last-round', 'events-etag:yeyo11', 'newsletter-sent:99:en', 'publish-failed:3:devto'], 'only state, and what had nothing to become');

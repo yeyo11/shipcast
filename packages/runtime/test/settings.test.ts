@@ -35,7 +35,7 @@ test('.env is a fallback until a value is saved, and the source of each value is
   assert.equal(settings.sources().launchesRepo, 'settings');
   assert.equal(settings.sources().claudioToken, 'keychain');
   assert.equal(await secrets.get('app:claudio-token'), 'fresh', 'the token is in the keychain, not in the database');
-  assert.equal(await registry.setting('claudio-token'), undefined);
+  assert.equal(await registry.settings.setting('claudio-token'), undefined);
 
   await settings.write({ launchesRepo: null });
   assert.equal(settings.current().launchesRepo, 'yeyo11/launches', 'cleared, .env shows again');
@@ -59,8 +59,8 @@ test('the one-time import copies what .env holds, once, and never undoes an edit
   const first = await importEnvSettings(deps);
   assert.deepEqual(first.imported, ['SHIPCAST_CLAUDIO_URL', 'SHIPCAST_CLAUDIO_TOKEN', 'SHIPCAST_MAX_BUDGET_USD', 'INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET']);
   assert.deepEqual(first.skipped, ['SHIPCAST_LAUNCHES_REPO'], 'a value the Settings page would refuse stays in .env');
-  assert.equal(await registry.setting('claudio-url'), 'http://localhost:8798/');
-  assert.equal(await registry.setting('ai-budget-usd'), 5);
+  assert.equal(await registry.settings.setting('claudio-url'), 'http://localhost:8798/');
+  assert.equal(await registry.settings.setting('ai-budget-usd'), 5);
   assert.equal(await secrets.get('app:claudio-token'), 'claudio-token');
   assert.equal(await secrets.get('app:instagram-app-secret'), 'ig-secret');
 
@@ -70,12 +70,12 @@ test('the one-time import copies what .env holds, once, and never undoes an edit
   await settings.write({ claudioToken: 'edited', instagramAppId: null });
   await importEnvSettings(deps);
   assert.equal(await secrets.get('app:claudio-token'), 'edited', 'an edit is kept');
-  assert.equal(await registry.setting('instagram-app-id'), '', 'a clear is kept');
-  assert.ok(((await registry.setting<string[]>(IMPORTED_KEY)) ?? []).includes('INSTAGRAM_APP_ID'));
+  assert.equal(await registry.settings.setting('instagram-app-id'), '', 'a clear is kept');
+  assert.ok(((await registry.settings.setting<string[]>(IMPORTED_KEY)) ?? []).includes('INSTAGRAM_APP_ID'));
 
   // A value saved before the import ran is not replaced either
   const other = { registry: await memoryRegistry(), secrets: new MemoryStore(), env: OLD_ENV };
   await new RuntimeSettings(other).write({ launchesRepo: 'yeyo11/mine' });
   assert.ok(!(await importEnvSettings(other)).imported.includes('SHIPCAST_LAUNCHES_REPO'));
-  assert.equal(await other.registry.setting('launches-repo'), 'yeyo11/mine');
+  assert.equal(await other.registry.settings.setting('launches-repo'), 'yeyo11/mine');
 });

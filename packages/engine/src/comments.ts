@@ -6,7 +6,7 @@ import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { ANALYSIS_TOOLS, buildReplyPrompt, type ReplyPromptInput } from './prompt.ts';
 import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Registry } from './registry.ts';
-import type { CommentStore, SettingStore } from './ports.ts';
+import type { CommentStore, SettingReader, SettingStore } from './ports.ts';
 import type { Checkout } from './workspace.ts';
 
 /*
@@ -50,8 +50,8 @@ function modeFor(channel: CommentChannel, mode: ReplyMode): ReplyMode {
   return mode === 'auto' && !REPLY_CAPABILITIES[channel]?.reply ? 'approval' : mode;
 }
 
-export async function readCommentSettings(registry: Pick<SettingStore, 'setting'>): Promise<CommentSettings> {
-  const stored = await registry.setting<{ replies?: Record<string, unknown> }>(COMMENTS_SETTINGS_KEY);
+export async function readCommentSettings(registry: SettingReader): Promise<CommentSettings> {
+  const stored = await registry.settings.setting<{ replies?: Record<string, unknown> }>(COMMENTS_SETTINGS_KEY);
   const replies = { ...DEFAULT_COMMENT_SETTINGS.replies };
   for (const channel of COMMENT_CHANNELS) {
     const value = stored?.replies?.[channel];
@@ -70,7 +70,7 @@ export async function writeCommentSettings(registry: SettingStore, input: unknow
     if (typeof mode !== 'string' || !(REPLY_MODES as readonly string[]).includes(mode)) throw new InvalidCommentSettings(`${channel}: the mode is one of ${REPLY_MODES.join(', ')}`);
     current.replies[channel] = modeFor(channel, mode as ReplyMode);
   }
-  await registry.setSetting(COMMENTS_SETTINGS_KEY, current);
+  await registry.settings.setSetting(COMMENTS_SETTINGS_KEY, current);
   return current;
 }
 

@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, max, notInArr
 import type { Channel, Language } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
 import { LaunchRepository } from './repositories/launches.ts';
+import { SettingRepository } from './repositories/settings.ts';
 import { MetricRepository } from './repositories/metrics.ts';
 import { PostRepository } from './repositories/posts.ts';
 import { accounts, accountSnapshots, apiTokens, assistantMessages, assistantSessions, attentionDismissals, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
@@ -424,6 +425,7 @@ export class Registry {
   readonly #db: Database;
   readonly #close: () => Promise<void>;
   readonly launches: LaunchRepository;
+  readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
 
@@ -432,6 +434,7 @@ export class Registry {
     this.#db = db;
     this.#close = close;
     this.launches = new LaunchRepository(db);
+    this.settings = new SettingRepository(db);
     this.metrics = new MetricRepository(db);
     this.posts = new PostRepository(db);
   }
@@ -481,19 +484,6 @@ export class Registry {
     const result: unknown = await this.#db.execute(query);
     if (Array.isArray(result)) return result as T[];
     return (result as { rows: T[] }).rows;
-  }
-
-  /** Something the owner chose (automation today), as it was stored; undefined until it is first set */
-  async setting<T>(key: string): Promise<T | undefined> {
-    const [row] = await this.#db.select({ value: settings.value }).from(settings).where(eq(settings.key, key));
-    return row ? (row.value as T) : undefined;
-  }
-
-  async setSetting<T>(key: string, value: T): Promise<void> {
-    await this.#db
-      .insert(settings)
-      .values({ key, value })
-      .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: nowIso } });
   }
 
   /** Small pieces of polling state, such as the ETag of the last events page; what the owner chooses is a setting */

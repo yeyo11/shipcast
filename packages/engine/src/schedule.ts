@@ -1,6 +1,6 @@
 import { Refused, SCHEDULABLE_CHANNELS as SCHEDULABLE, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { cancelledKey } from './publish.ts';
-import type { ScheduleStore, SettingStore } from './ports.ts';
+import type { ScheduleStore, SettingReader, SettingStore } from './ports.ts';
 import type { Post } from './registry.ts';
 
 /*
@@ -38,14 +38,14 @@ export function isTimeZone(name: unknown): name is string {
 }
 
 /** The owner's time zone, or Madrid until one is set */
-export async function readTimezone(registry: Pick<SettingStore, 'setting'>): Promise<string> {
-  const stored = await registry.setting<string>(TIMEZONE_KEY);
+export async function readTimezone(registry: SettingReader): Promise<string> {
+  const stored = await registry.settings.setting<string>(TIMEZONE_KEY);
   return isTimeZone(stored) ? stored : DEFAULT_TIMEZONE;
 }
 
 export async function saveTimezone(registry: SettingStore, name: unknown): Promise<string> {
   if (!isTimeZone(name)) throw new ScheduleRefused('invalid', 'timezone is an IANA zone such as Europe/Madrid');
-  await registry.setSetting(TIMEZONE_KEY, name);
+  await registry.settings.setSetting(TIMEZONE_KEY, name);
   return name;
 }
 

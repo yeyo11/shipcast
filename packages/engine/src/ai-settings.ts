@@ -72,7 +72,7 @@ function clean(settings: AiSettings): AiSettings {
 
 /** The settings as stored, each task falling back on claudio; a stored value that no longer parses is ignored */
 export async function readAiSettings(registry: Registry): Promise<AiSettings> {
-  const stored = await registry.setting<unknown>(AI_SETTINGS_KEY);
+  const stored = await registry.settings.setting<unknown>(AI_SETTINGS_KEY);
   const tasks = { ...DEFAULT_AI_SETTINGS.tasks };
   let tone: string | undefined;
   if (stored && typeof stored === 'object') {
@@ -93,7 +93,7 @@ export async function writeAiSettings(registry: Registry, input: unknown): Promi
   const replies = parsed.data.tasks.replies ?? stored.tasks.replies;
   const profile = parsed.data.tasks.profile ?? stored.tasks.profile;
   const settings = clean({ ...parsed.data, tasks: { ...parsed.data.tasks, replies, profile } });
-  await registry.setSetting(AI_SETTINGS_KEY, settings);
+  await registry.settings.setSetting(AI_SETTINGS_KEY, settings);
   return settings;
 }
 
@@ -135,7 +135,7 @@ export class LockedPrompt extends ShipcastError {
 export class InvalidPrompt extends InvalidRequest {}
 
 export async function promptHistory(registry: Registry): Promise<PromptHistory> {
-  const stored = (await registry.setting<Record<string, PromptVersion[]>>(PROMPTS_KEY)) ?? {};
+  const stored = (await registry.settings.setting<Record<string, PromptVersion[]>>(PROMPTS_KEY)) ?? {};
   const history: PromptHistory = {};
   // Only known ids are read back: a prompt the code dropped, or anything else in the row, never reaches a prompt
   for (const id of PROMPT_IDS) {
@@ -169,7 +169,7 @@ export async function savePrompt(registry: Registry, id: string, text: string, n
   const promptId = checkId(id);
   const problems = templateProblems(text);
   if (problems.length > 0) throw new InvalidPrompt(problems.join('; '));
-  const stored = (await registry.setting<Record<string, PromptVersion[]>>(PROMPTS_KEY)) ?? {};
+  const stored = (await registry.settings.setting<Record<string, PromptVersion[]>>(PROMPTS_KEY)) ?? {};
   const versions = Array.isArray(stored[promptId]) ? [...stored[promptId]] : [];
   const current = versions.at(-1)?.text ?? DEFAULT_PROMPTS[promptId];
   if (text === current) return versions;
@@ -177,7 +177,7 @@ export async function savePrompt(registry: Registry, id: string, text: string, n
   if (versions.length === 0) versions.push({ text: DEFAULT_PROMPTS[promptId], savedAt: 'default' });
   versions.push({ text, savedAt: now.toISOString() });
   const kept = versions.slice(-MAX_PROMPT_VERSIONS);
-  await registry.setSetting(PROMPTS_KEY, { ...stored, [promptId]: kept });
+  await registry.settings.setSetting(PROMPTS_KEY, { ...stored, [promptId]: kept });
   return kept;
 }
 

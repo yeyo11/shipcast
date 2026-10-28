@@ -9,10 +9,10 @@ import type { Registry } from '@shipcast/engine';
 const KEY = 'webmcp:enabled';
 
 export async function readWebMcp(registry: Registry): Promise<boolean> {
-  return (await registry.setting<boolean>(KEY)) === true;
+  return (await registry.settings.setting<boolean>(KEY)) === true;
 }
 
 export async function writeWebMcp(registry: Registry, enabled: boolean): Promise<boolean> {
-  await registry.setSetting<boolean>(KEY, enabled);
+  await registry.settings.setSetting<boolean>(KEY, enabled);
   return readWebMcp(registry);
 }

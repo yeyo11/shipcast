@@ -12,7 +12,7 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   const account = await first.registry.addAccount({ network: 'devto', brand: 'personal', label: '@yeyo', settings: { a: 'b' } });
   await first.registry.setCursor('events-last-id:yeyo11', '123');
   await first.registry.setCursor('instagram-token', 'secret-token');
-  await first.registry.setSetting('ai', { tasks: {}, tone: 'plain' });
+  await first.registry.settings.setSetting('ai', { tasks: {}, tone: 'plain' });
   await first.registry.addApiToken({ name: 'cli', hash: 'abc', scopes: ['read'] });
   const text = formatSnapshot(await first.dump());
   await first.close();
@@ -34,7 +34,7 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   assert.equal((await second.registry.account(account.id))?.label, '@yeyo');
   assert.equal(await second.registry.cursor('events-last-id:yeyo11'), '123');
   assert.equal(await second.registry.cursor('instagram-token'), undefined);
-  assert.deepEqual(await second.registry.setting('ai'), { tasks: {}, tone: 'plain' });
+  assert.deepEqual(await second.registry.settings.setting('ai'), { tasks: {}, tone: 'plain' });
 
   // The same release again is refused; a new one takes the next id, after the restored ones
   assert.equal((await second.registry.launches.claim({ ...release, trigger: 'manual' })).claimed, false);

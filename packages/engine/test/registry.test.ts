@@ -104,14 +104,14 @@ test('removing an account keeps its pieces, no longer attributed', async () => {
 
 test('settings hold what the owner chose, typed as it was stored', async () => {
   const registry = await memory();
-  assert.equal(await registry.setting<string>('automation:mode'), undefined);
-  await registry.setSetting('automation:mode', 'webhook');
-  await registry.setSetting('automation:interval', 120);
-  await registry.setSetting('automation:interval', 600);
-  assert.equal(await registry.setting<string>('automation:mode'), 'webhook');
-  assert.equal(await registry.setting<number>('automation:interval'), 600);
-  await registry.setSetting('nested', { a: [1, 2], b: null });
-  assert.deepEqual(await registry.setting('nested'), { a: [1, 2], b: null });
+  assert.equal(await registry.settings.setting<string>('automation:mode'), undefined);
+  await registry.settings.setSetting('automation:mode', 'webhook');
+  await registry.settings.setSetting('automation:interval', 120);
+  await registry.settings.setSetting('automation:interval', 600);
+  assert.equal(await registry.settings.setting<string>('automation:mode'), 'webhook');
+  assert.equal(await registry.settings.setting<number>('automation:interval'), 600);
+  await registry.settings.setSetting('nested', { a: [1, 2], b: null });
+  assert.deepEqual(await registry.settings.setting('nested'), { a: [1, 2], b: null });
   assert.equal(await registry.cursor('automation:mode'), undefined, 'not a cursor');
 });
 

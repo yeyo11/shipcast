@@ -2,6 +2,7 @@ import type { Registry } from './registry.ts';
 import type { LaunchRepository } from './repositories/launches.ts';
 import type { MetricRepository } from './repositories/metrics.ts';
 import type { PostRepository } from './repositories/posts.ts';
+import type { SettingRepository } from './repositories/settings.ts';
 
 /*
  * The narrow views of the registry each use case reads and writes (interface segregation,
@@ -21,7 +22,10 @@ export type LaunchCatalog = LaunchLookup & Pick<LaunchRepository, 'recent' | 'la
 export type PostStore = { launches: LaunchLookup; posts: Pick<PostRepository, 'post' | 'posts' | 'updatePost'> };
 
 /** A setting row: the owner's choices stored as JSON (time zone, reply modes) */
-export type SettingStore = Pick<Registry, 'setting' | 'setSetting'>;
+export type SettingStore = { settings: Pick<SettingRepository, 'setting' | 'setSetting'> };
+
+/** Reading a setting only */
+export type SettingReader = { settings: Pick<SettingRepository, 'setting'> };
 
 /** A launch's scheduled pieces, with the cursor that remembers a channel cancelled, and the time zone */
 export type ScheduleStore = { launches: LaunchLookup; posts: Pick<PostRepository, 'post' | 'posts' | 'schedulePost' | 'reschedulePost' | 'unschedulePost'> } & Pick<Registry, 'setCursor' | 'deleteCursor'> & SettingStore;
