@@ -1,0 +1,127 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { ConnectorError, PostGone, YouTube, YOUTUBE_UNITS } from '../src/index.ts';
+import { fakeFetch, sequence, type Call } from './fake.ts';
+
+const TOKEN = 'POST https://oauth2.googleapis.com/token';
+const token = () => Response.json({ access_token: 'at', expires_in: 3599, token_type: 'Bearer' });
+const SESSION = 'https://www.googleapis.com/upload/youtube/v3/videos?upload_id=xyz';
+
+function youtube(rules: Array<[string, () => Response]>, calls: Call[] = [], units: string[] = []) {
+  return new YouTube({ clientId: 'cid', clientSecret: 'secret', refreshToken: 'rt', fetch: fakeFetch([[TOKEN, token], ...rules], calls), onUnits: (_n, call) => units.push(call) });
+}
+
+const video = { title: 'Shipcast v0.2.0', description: 'What it does', tags: ['shipcast'], lang: 'en', bytes: new Uint8Array([0, 0, 0, 1]), short: true };
+
+test('an upload: the session, then the bytes, then captions and the thumbnail; the units of each are reported', async () => {
+  const calls: Call[] = [];
+  const units: string[] = [];
+  const yt = youtube(
+    [
+      ['POST https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable', () => new Response(null, { status: 200, headers: { location: SESSION } })],
+      [`PUT ${SESSION}`, () => Response.json({ id: 'vid1', status: { privacyStatus: 'private', uploadStatus: 'uploaded' } })],
+      ['POST https://www.googleapis.com/upload/youtube/v3/captions', () => Response.json({ id: 'cap' })],
+      ['POST https://www.googleapis.com/upload/youtube/v3/thumbnails/set', () => Response.json({ error: { code: 403, message: 'forbidden' } }, { status: 403 })],
+    ],
+    calls,
+    units,
+  );
+  const result = await yt.publish({ ...video, captions: [{ lang: 'en', name: 'English', srt: '1\n00:00:00,000 --> 00:00:01,000\nHi\n' }], thumbnail: { bytes: new Uint8Array([1]), mimeType: 'image/jpeg' } });
+  assert.equal(result.externalId, 'vid1');
+  assert.equal(result.url, 'https://www.youtube.com/shorts/vid1');
+  assert.equal(result.privacy, 'private', 'Google kept it private: recorded, not a failure');
+  assert.equal(result.extras.length, 1);
+  assert.match(result.extras[0]!, /verified channel/);
+
+  const start = calls.find((c) => c.url.includes('uploadType=resumable'))!;
+  assert.equal(start.headers.authorization, 'Bearer at');
+  assert.equal(start.headers['x-upload-content-length'], '4');
+  const meta = JSON.parse(String(start.body)) as { snippet: { categoryId: string; defaultLanguage: string }; status: { privacyStatus: string } };
+  assert.deepEqual([meta.snippet.categoryId, meta.snippet.defaultLanguage, meta.status.privacyStatus], ['28', 'en', 'public']);
+  const caption = calls.find((c) => c.url.includes('/captions'))!;
+  assert.match(String(caption.headers['content-type']), /^multipart\/related; boundary=/);
+  assert.match(String(caption.body), /application\/x-subrip/);
+  assert.deepEqual(units, ['insert', 'captionsInsert', 'thumbnailsSet']);
+  assert.equal(calls.filter((c) => c.url.startsWith('https://oauth2.googleapis.com/token')).length, 1, 'one token for the run');
+});
+
+test('the upload session is never started twice: a lost answer fails rather than making a second video', async () => {
+  const calls: Call[] = [];
+  const yt = youtube([['POST https://www.googleapis.com/upload/youtube/v3/videos', () => Response.json({ error: 'backendError' }, { status: 503 })]], calls);
+  await assert.rejects(yt.publish({ ...video, short: false }), (error: unknown) => error instanceof ConnectorError && error.status === 503);
+  assert.equal(calls.filter((c) => c.url.includes('uploadType=resumable')).length, 1);
+});
+
+test('an expired refresh token says to connect again, and is not retried as temporary', async () => {
+  const yt = new YouTube({ clientId: 'c', clientSecret: 's', refreshToken: 'old', fetch: fakeFetch([[TOKEN, () => Response.json({ error: 'invalid_grant', error_description: 'Token has been expired or revoked.' }, { status: 400 })]], []) });
+  await assert.rejects(yt.delete('vid1'), (error: unknown) => error instanceof ConnectorError && error.retryable === false && /connect YouTube again/.test(error.message));
+});
+
+test('an edit reads the snippet and changes only the given fields; a gone video is PostGone; a delete of a gone video is done', async () => {
+  const calls: Call[] = [];
+  const yt = youtube(
+    [
+      ['GET https://www.googleapis.com/youtube/v3/videos?part=snippet&id=vid1', () => Response.json({ items: [{ id: 'vid1', snippet: { title: 'Old', description: 'Old d', tags: ['a'], categoryId: '28', defaultLanguage: 'es' } }] })],
+      ['GET https://www.googleapis.com/youtube/v3/videos?part=snippet&id=gone', () => Response.json({ items: [] })],
+      ['PUT https://www.googleapis.com/youtube/v3/videos?part=snippet', () => Response.json({ id: 'vid1' })],
+      ['DELETE https://www.googleapis.com/youtube/v3/videos?id=', () => Response.json({ error: { code: 404 } }, { status: 404 })],
+    ],
+    calls,
+  );
+  await yt.edit('vid1', { description: 'New d' });
+  const put = JSON.parse(String(calls.find((c) => c.method === 'PUT')!.body)) as { id: string; snippet: Record<string, unknown> };
+  assert.deepEqual(put, { id: 'vid1', snippet: { title: 'Old', description: 'New d', tags: ['a'], categoryId: '28', defaultLanguage: 'es' } });
+  await assert.rejects(yt.edit('gone', { title: 'x' }), PostGone);
+  await yt.delete('gone');
+});
+
+test('numbers are read 50 videos per call, and a video missing from the answer is left out', async () => {
+  const calls: Call[] = [];
+  const units: string[] = [];
+  const ids = Array.from({ length: 60 }, (_, i) => `v${i}`);
+  const yt = youtube(
+    [['GET https://www.googleapis.com/youtube/v3/videos?part=statistics', sequence(() => Response.json({ items: ids.slice(0, 49).map((id) => ({ id, statistics: { viewCount: '10', likeCount: '2', commentCount: '1' } })) }), () => Response.json({ items: ids.slice(50).map((id) => ({ id, statistics: { viewCount: '5' } })) }))]],
+    calls,
+    units,
+  );
+  const read = await yt.metrics(ids);
+  assert.equal(calls.filter((c) => c.url.includes('part=statistics')).length, 2);
+  assert.equal(read.size, 59);
+  assert.deepEqual(read.get('v0'), { views: 10, likes: 2, comments: 1 });
+  assert.deepEqual(read.get('v55'), { views: 5 });
+  assert.equal(read.has('v49'), false);
+  assert.deepEqual(units, ['list', 'list']);
+  assert.equal(YOUTUBE_UNITS.list, 1);
+});
+
+test('comments: threads and replies as plain text, the owner’s own marked, disabled comments read as none', async () => {
+  const yt = youtube([
+    ['GET https://www.googleapis.com/youtube/v3/channels?part=id&mine=true', () => Response.json({ items: [{ id: 'UCme' }] })],
+    [
+      'GET https://www.googleapis.com/youtube/v3/commentThreads?part=snippet%2Creplies&videoId=vid1',
+      () =>
+        Response.json({
+          items: [
+            {
+              id: 't1',
+              snippet: { topLevelComment: { id: 'c1', snippet: { textOriginal: 'Nice!', authorDisplayName: '@ana', authorChannelId: { value: 'UCana' }, publishedAt: '2026-10-28T10:00:00Z', authorProfileImageUrl: 'javascript:alert(1)' } } },
+              replies: { comments: [{ id: 'c1.r1', snippet: { textOriginal: 'Thanks', authorDisplayName: '@me', authorChannelId: { value: 'UCme' }, publishedAt: '2026-10-28T11:00:00Z', parentId: 'c1' } }] },
+            },
+          ],
+        }),
+    ],
+    ['GET https://www.googleapis.com/youtube/v3/commentThreads?part=snippet%2Creplies&videoId=quiet', () => Response.json({ error: { errors: [{ reason: 'commentsDisabled' }] } }, { status: 403 })],
+    ['POST https://www.googleapis.com/youtube/v3/comments?part=snippet', () => Response.json({ id: 'c1.r2' })],
+  ]);
+  const comments = await yt.comments('vid1');
+  assert.deepEqual(
+    comments.map((c) => [c.externalId, c.text, c.own, c.inReplyTo ?? null, c.author.avatarUrl ?? null]),
+    [
+      ['c1', 'Nice!', false, null, null],
+      ['c1.r1', 'Thanks', true, 'c1', null],
+    ],
+  );
+  assert.deepEqual(await yt.comments('quiet'), []);
+  const sent = await yt.reply({ postExternalId: 'vid1', commentExternalId: 'c1', authorHandle: '@ana' }, 'Thank you!');
+  assert.equal(sent.externalId, 'c1.r2');
+});
