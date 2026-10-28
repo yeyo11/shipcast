@@ -70,6 +70,6 @@ describe('secretStoreFor', () => {
 
   it('says what is missing or wrong', () => {
     assert.throws(() => secretStoreFor(config, { SHIPCAST_SECRET_STORE: 'file' }), /SHIPCAST_SECRETS_KEY/);
-    assert.throws(() => secretStoreFor(config, { SHIPCAST_SECRET_STORE: 'vault' }), /"keychain" or "file"/);
+    assert.throws(() => secretStoreFor(config, { SHIPCAST_SECRET_STORE: 'vault' }), /"keychain", "file" or "table"/);
   });
 });

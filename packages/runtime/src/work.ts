@@ -2,7 +2,9 @@ import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
-import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type JobQueue, type WorkQueue } from './queue.ts';
+import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, RECONCILE_GRACE_MS, type Handlers, type JobQueue } from './queue.ts';
+import { handlersOf, runsTheClock, split, type Role } from './roles.ts';
+import type { Lock } from './redis/ports.ts';
 import { notifications, notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
@@ -45,7 +47,7 @@ const pageOf = (launchId: number) => `/launches/${launchId}`;
  * Queues the publishing of a drafted launch. A launch whose publishing is queued already keeps that
  * job, whose id comes back: asking twice never publishes twice.
  */
-export async function startPublishing(queue: WorkQueue, launch: Launch, retryChannel?: Channel): Promise<string | undefined> {
+export async function startPublishing(queue: JobQueue, launch: Launch, retryChannel?: Channel): Promise<string | undefined> {
   const title = retryChannel ? `Retrying ${retryChannel} for ${nameOf(launch)}` : `Publishing ${nameOf(launch)}`;
   const id = await queue.send('publish', { launchId: launch.id, ...(retryChannel && { retryChannel }) }, { title, launchId: launch.id, singletonKey: publishKey(launch.id) });
   if (id) return id;
@@ -68,7 +70,7 @@ export async function armScheduled(queue: JobQueue, post: Post, launch?: Launch)
   return queue.upsert('scheduled', { postId: post.id, launchId: post.launchId }, { singletonKey: scheduledKey(post.id), startAfter: at, title: `${post.channel}${of} at ${post.scheduledAt.slice(0, 16).replace('T', ' ')} UTC`, launchId: post.launchId });
 }
 
-export async function startDrafting(queue: WorkQueue, launch: Launch, direct = false): Promise<string | null> {
+export async function startDrafting(queue: JobQueue, launch: Launch, direct = false): Promise<string | null> {
   return queue.send('draft', { launchId: launch.id, direct }, { title: `Drafting ${launch.repo} ${launch.ref}`, launchId: launch.id });
 }
 
@@ -76,7 +78,7 @@ export async function startDrafting(queue: WorkQueue, launch: Launch, direct = f
  * Sends the next round, `inSeconds` from now. A round already queued is moved to that moment instead,
  * so "run a round now" and a changed interval never leave two waiting.
  */
-export async function scheduleRound(queue: WorkQueue, reason: string, inSeconds = 0): Promise<string | null> {
+export async function scheduleRound(queue: JobQueue, reason: string, inSeconds = 0): Promise<string | null> {
   return queue.upsert('round', { reason }, { singletonKey: ROUND_KEY, startAfter: inSeconds, title: reason === BY_HAND ? 'Automation round, by hand' : 'Automation round' });
 }
 
@@ -86,7 +88,7 @@ export async function roundRunning(registry: Pick<Repositories, 'jobs'>): Promis
 }
 
 /** The handlers of every queue; the app and `shipcast watch` run the same ones */
-export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
+export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const { registry } = d;
   const flags = d.flags ?? new Flags();
   const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo });
@@ -377,7 +379,7 @@ const syncKey = (accountId: number) => `account:${accountId}`;
  * Queues the sync of one account: its check, then its numbers. The job already queued for that
  * account, if any, is the one that answers, so clicking twice never syncs twice.
  */
-export async function syncNow(queue: WorkQueue, account: Pick<Account, 'id' | 'label'>): Promise<string | undefined> {
+export async function syncNow(queue: JobQueue, account: Pick<Account, 'id' | 'label'>): Promise<string | undefined> {
   const id = await queue.send('snapshots', { reason: BY_HAND, accountId: account.id }, { title: `Syncing ${account.label}`, singletonKey: syncKey(account.id) });
   if (id) return id;
   const [waiting] = await queue.queued('snapshots', syncKey(account.id));
@@ -397,23 +399,93 @@ export const ROUND_WATCHDOG_CRON = '*/10 * * * *';
 export const CHECKS_CRON = '7 * * * *';
 export const PROBE_CRON = '37 * * * *';
 
+export interface WorkingOptions {
+  firstRoundInSeconds?: number;
+  /** The handlers only the web app can give (the probe loads its pages) */
+  handlers?: Pick<Handlers, 'probe'>;
+  /** What this process takes on (roles.ts); `all`, today's one process, when not given */
+  role?: Role;
+  /**
+   * Whether the probe's cron is scheduled. By default where the probe is worked, as one process does;
+   * in a split the worker schedules it for the heavy workers when the web app is set to be probed
+   */
+  scheduleProbe?: boolean;
+}
+
 /**
- * Makes this process a worker of every queue: the handlers, the schedules, and a first round soon
- * after start (the round already queued, if any, is moved to then), so a restart never waits a
- * whole interval.
+ * Makes this process a worker of its role's queues (every queue for `all`): the handlers, and for
+ * the role that runs the clock, the schedules, a first round soon after start and the scheduled
+ * pieces armed, so a restart never waits a whole interval.
+ *
+ * In one process (`all`) a start moves the round already queued to soon, as it always did. Beside
+ * other processes (a split) a start never moves it: a worker restarting, or a new one joining, keeps
+ * the round where the chain put it and only sends one when none is queued.
  */
-export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { firstRoundInSeconds?: number; handlers?: Pick<Handlers, 'probe'> } = {}): Promise<void> {
-  await queue.work({ ...workHandlers(queue, d), ...options.handlers });
+export async function startWorking(queue: JobQueue, d: WorkDeps, options: WorkingOptions = {}): Promise<void> {
+  const role = options.role ?? 'all';
+  const handlers = handlersOf(role, { ...workHandlers(queue, d), ...options.handlers });
+  if (Object.keys(handlers).length > 0) await queue.work(handlers);
+  if (!runsTheClock(role)) return;
   await queue.schedule('checks', CHECKS_CRON, { reason: 'hourly' });
   // Only a process that can load the pages (the web app) times them
-  if (options.handlers?.probe) await queue.schedule('probe', PROBE_CRON, { reason: 'hourly' });
+  if (options.scheduleProbe ?? options.handlers?.probe !== undefined) await queue.schedule('probe', PROBE_CRON, { reason: 'hourly' });
   await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
   await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });
   await queue.schedule('comments', COMMENTS_CRON, { reason: 'every 30 minutes' }, { singletonKey: COMMENTS_KEY });
   // The round's key: a watchdog round is dropped while the chain has one queued
   await queue.schedule('round', ROUND_WATCHDOG_CRON, { reason: 'watchdog' }, { singletonKey: ROUND_KEY });
-  if ((await readAutomation(d.registry)).mode !== 'off') await scheduleRound(queue, 'after a start', options.firstRoundInSeconds ?? 15);
+  if ((await readAutomation(d.registry)).mode !== 'off') {
+    const inSeconds = options.firstRoundInSeconds ?? 15;
+    if (split(role)) await queue.send('round', { reason: 'after a start' }, { singletonKey: ROUND_KEY, startAfter: inSeconds, title: 'Automation round' });
+    else await scheduleRound(queue, 'after a start', inSeconds);
+  }
   // Every scheduled piece has its wake-up queued; one missing (or one whose time passed while the machine was off) is armed now
   for (const post of await d.registry.posts.scheduledPosts()) await armScheduled(queue, post);
+}
+
+/** Every ten minutes: the maintenance of a process that runs beside others */
+export const MAINTENANCE_EVERY_MS = 10 * 60_000;
+
+export interface MaintenanceDeps {
+  queue: JobQueue & { reconcileScheduled?: () => Promise<number | undefined> };
+  /** A lock every process shares (Redis's, with `redis-state` on) */
+  lock: Lock;
+  /** Whether the `jobs` rows are reconciled here, rather than at each queue's start */
+  reconcileRows: boolean;
+  everyMs?: number;
+  log?: (line: string) => void;
+}
+
+/**
+ * The work no single process's boot should do once processes run side by side, done at start and
+ * every ten minutes under a lock, by whichever holds it: the `jobs` rows brought in line with the
+ * queue, sparing what is younger than RECONCILE_GRACE_MS (a draft just starting is never failed by
+ * another process's boot), and on BullMQ the scheduled posts' wake-ups rebuilt from Postgres. The
+ * returned function stops it.
+ */
+export function startMaintenance(deps: MaintenanceDeps): () => void {
+  const log = deps.log ?? ((line: string) => console.error(line));
+  let running: Promise<void> | undefined;
+  const tick = () => {
+    running ??= deps.lock
+      .withLock(
+        'maintenance',
+        async () => {
+          if (deps.reconcileRows) await deps.queue.reconcile({ graceMs: RECONCILE_GRACE_MS });
+          await deps.queue.reconcileScheduled?.();
+        },
+        { ttlMs: 5 * 60_000 },
+      )
+      .then(() => undefined)
+      .catch((error: unknown) => log(`maintenance: ${error instanceof Error ? error.message : String(error)}`))
+      .finally(() => {
+        running = undefined;
+      });
+    return running;
+  };
+  void tick();
+  const timer = setInterval(() => void tick(), deps.everyMs ?? MAINTENANCE_EVERY_MS);
+  timer.unref();
+  return () => clearInterval(timer);
 }

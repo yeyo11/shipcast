@@ -2,7 +2,7 @@ import { launchReplyContext, setupFor, type CommentRunResult, type PipelineDeps,
 import type { GitHubTokenSource } from '@shipcast/connectors';
 import type { Brand } from '@shipcast/schema';
 import { commentConnectors } from './edits.ts';
-import type { WorkQueue } from './queue.ts';
+import type { JobQueue } from './queue.ts';
 import type { SecretStore } from './secrets.ts';
 
 /*
@@ -63,7 +63,7 @@ export function commentsNotice(result: CommentRunResult, publicUrl?: string): st
  * Queues a run by hand ("Check comments now"); the run already queued, if any, is the one that
  * answers, so clicking twice never reads twice.
  */
-export async function checkComments(queue: WorkQueue, reason: string): Promise<string | undefined> {
+export async function checkComments(queue: JobQueue, reason: string): Promise<string | undefined> {
   const id = await queue.send('comments', { reason }, { title: 'Reading the comments, by hand', singletonKey: COMMENTS_KEY });
   if (id) return id;
   const [waiting] = await queue.queued('comments', COMMENTS_KEY);
@@ -71,7 +71,7 @@ export async function checkComments(queue: WorkQueue, reason: string): Promise<s
 }
 
 /** Queues a fresh draft of one comment's reply; a second click while it waits is the same job */
-export async function redraftComment(queue: WorkQueue, commentId: number, reason: string): Promise<string | undefined> {
+export async function redraftComment(queue: JobQueue, commentId: number, reason: string): Promise<string | undefined> {
   const key = `comment:${commentId}`;
   const id = await queue.send('comments', { reason, commentId }, { title: `Drafting the reply to comment ${commentId}`, singletonKey: key });
   if (id) return id;

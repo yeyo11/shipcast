@@ -3,7 +3,10 @@ import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import { SecretRows } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { copySecrets, MemoryStore, SecretStoreError, TableStore } from '../src/index.ts';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { copySecrets, FileStore, Flags, MemoryStore, migrateSecrets, migrationLines, SecretStoreError, secretStoreFor, TableStore } from '../src/index.ts';
 
 async function table(key = randomBytes(32)) {
   const registry = await memoryRegistry();
@@ -56,4 +59,58 @@ test('a copy reads every value back, and never overwrites a different value alre
   const again = await copySecrets(from, store);
   assert.deepEqual(again.copied, []);
   assert.deepEqual(again.same.sort(), ['a', 'b']);
+});
+
+test('SHIPCAST_SECRET_STORE=table is the table, only with the secrets-table flag; off, the old stores as they were', async () => {
+  const registry = await memoryRegistry();
+  const rows = new SecretRows(registry.database);
+  const config = { keychainService: 'shipcast-test', dataDir: '/tmp/shipcast-data' };
+  const env = { SHIPCAST_SECRET_STORE: 'table', SHIPCAST_SECRETS_KEY: randomBytes(32).toString('base64') };
+  assert.ok(secretStoreFor(config, env, { flags: new Flags(['secrets-table']), rows }) instanceof TableStore);
+  assert.throws(() => secretStoreFor(config, env, { flags: new Flags(), rows }), /secrets-table flag/);
+  assert.throws(() => secretStoreFor(config, env), /does not open the registry/);
+  assert.throws(() => secretStoreFor(config, { SHIPCAST_SECRET_STORE: 'table' }, { flags: new Flags(['secrets-table']), rows }), /SHIPCAST_SECRETS_KEY/);
+  const file = { SHIPCAST_SECRET_STORE: 'file', SHIPCAST_SECRETS_KEY: env.SHIPCAST_SECRETS_KEY };
+  assert.ok(secretStoreFor(config, file, { flags: new Flags(['secrets-table']), rows }) instanceof FileStore, 'the flag alone moves nothing');
+});
+
+test('the migration copies a file store into the table, reads each back, names keys only, and leaves the file as it was', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'shipcast-secrets-'));
+  try {
+    const key = randomBytes(32);
+    const file = new FileStore(join(dir, 'secrets.enc'), key);
+    await file.set('app:session-key', 'session-value-1');
+    await file.set('account:4', '{"token":"t0ken-value"}');
+    const before = await readFile(join(dir, 'secrets.enc'), 'utf8');
+    const { store } = await table(key);
+    await store.set('account:9', 'tab1e-value');
+    await file.set('account:9', 'the-file-one');
+    const before2 = await readFile(join(dir, 'secrets.enc'), 'utf8');
+    assert.notEqual(before, before2);
+
+    const result = await migrateSecrets(file, store);
+    assert.deepEqual(result.copied.sort(), ['account:4', 'app:session-key']);
+    assert.deepEqual(result.conflicts, ['account:9']);
+    assert.equal(await store.get('app:session-key'), 'session-value-1');
+    assert.equal(await store.get('account:9'), 'tab1e-value', 'a different value already there is never overwritten');
+    assert.equal(await readFile(join(dir, 'secrets.enc'), 'utf8'), before2, 'the source was only read');
+    const text = migrationLines(result).join('\n');
+    assert.match(text, /copied and read back: 2: account:4, app:session-key/);
+    assert.doesNotMatch(text, /session-value|t0ken|the-file-one|tab1e-value/, 'no value is ever printed');
+
+    const again = await migrateSecrets(file, store);
+    assert.deepEqual([again.copied, again.same.sort()], [[], ['account:4', 'app:session-key']], 'running it again copies nothing');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('two replicas on one table: what each writes, the other reads', async () => {
+  const registry = await memoryRegistry();
+  const key = randomBytes(32);
+  const one = new TableStore(new SecretRows(registry.database), key);
+  const two = new TableStore(new SecretRows(registry.database), key);
+  await Promise.all([one.set('account:1', 'from-one'), two.set('account:2', 'from-two')]);
+  assert.equal(await one.get('account:2'), 'from-two');
+  assert.equal(await two.get('account:1'), 'from-one');
 });

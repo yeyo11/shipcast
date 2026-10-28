@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as LivezRouteImport } from './routes/livez'
+import { Route as ReadyzRouteImport } from './routes/readyz'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
@@ -67,6 +69,16 @@ const LoginRoute = LoginRouteImport.update({
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LivezRoute = LivezRouteImport.update({
+  id: '/livez',
+  path: '/livez',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReadyzRoute = ReadyzRouteImport.update({
+  id: '/readyz',
+  path: '/readyz',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -284,6 +296,8 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/livez': typeof LivezRoute
+  '/readyz': typeof ReadyzRoute
   '/onboarding': typeof OnboardingRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
@@ -329,6 +343,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/livez': typeof LivezRoute
+  '/readyz': typeof ReadyzRoute
   '/onboarding': typeof OnboardingRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
@@ -376,6 +392,8 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/livez': typeof LivezRoute
+  '/readyz': typeof ReadyzRoute
   '/onboarding': typeof OnboardingRoute
   '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
@@ -425,6 +443,8 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/mcp'
+    | '/livez'
+    | '/readyz'
     | '/onboarding'
     | '/ai'
     | '/automation'
@@ -470,6 +490,8 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/mcp'
+    | '/livez'
+    | '/readyz'
     | '/onboarding'
     | '/ai'
     | '/automation'
@@ -516,6 +538,8 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/mcp'
+    | '/livez'
+    | '/readyz'
     | '/onboarding'
     | '/_app/ai'
     | '/_app/automation'
@@ -564,6 +588,8 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
+  LivezRoute: typeof LivezRoute
+  ReadyzRoute: typeof ReadyzRoute
   OnboardingRoute: typeof OnboardingRoute
   ApiAssistantRoute: typeof ApiAssistantRoute
   ApiHealthRoute: typeof ApiHealthRoute
@@ -603,6 +629,20 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp'
       preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/livez': {
+      id: '/livez'
+      path: '/livez'
+      fullPath: '/livez'
+      preLoaderRoute: typeof LivezRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/readyz': {
+      id: '/readyz'
+      path: '/readyz'
+      fullPath: '/readyz'
+      preLoaderRoute: typeof ReadyzRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -1046,6 +1086,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
+  LivezRoute: LivezRoute,
+  ReadyzRoute: ReadyzRoute,
   OnboardingRoute: OnboardingRoute,
   ApiAssistantRoute: ApiAssistantRoute,
   ApiHealthRoute: ApiHealthRoute,

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { TelemetryStore, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { TelemetryStore, type GitHubApp, type GitHubRest, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   attachTelemetryStore,
   buildServices,
@@ -9,16 +9,27 @@ import {
   type TelemetryRecorder,
   createRuntime,
   loadAppConfig,
+  onStop,
+  queuePoolMax,
+  replicaEvents,
+  roleFromEnv,
+  runsTheClock,
+  split,
+  startMaintenance,
   startWorking,
-  WorkQueue,
+  stopOnSignals,
   type AppConfig,
   type Config,
   type GitHubAccess,
   type GitHubUserTokens,
+  type JobQueue,
+  type Role,
   type RuntimeSettings,
   type SecretStore,
   type WorkDeps,
 } from '@shipcast/runtime';
+import { jobQueue } from '@shipcast/runtime/queue-factory';
+import { processState, RedisLock, type EventName, type ProcessState, type ShipcastEvents } from '@shipcast/runtime/redis';
 import type { Brand } from '@shipcast/schema';
 import { fakeNetworks, previewFetch, previewGitHubFetch, previewServices } from './preview.server';
 
@@ -51,8 +62,19 @@ export interface AppContext {
   deps: PipelineDeps;
   /** Reads the settings again, after the Settings page saved them */
   refresh(): Promise<void>;
-  /** The durable work: pg-boss on the registry's Postgres, worked by this process */
-  queue: WorkQueue;
+  /**
+   * After a save in Settings: this process reads the settings again, and with `redis-state` on every
+   * other replica is told to (settings.changed)
+   */
+  settingsSaved(key?: string): Promise<void>;
+  /** Tells every replica (with `redis-state` on), and this process, of a change they cache */
+  announce<E extends EventName>(event: E, payload: ShipcastEvents[E]): Promise<void>;
+  /** The durable work: pg-boss on the registry's Postgres, or BullMQ with `bullmq` on; worked here by the role's queues */
+  queue: JobQueue;
+  /** What this process takes on (SHIPCAST_ROLE) */
+  role: Role;
+  /** The shared ephemeral state and Redis connections of this process */
+  process: ProcessState;
   /** The refactor's switches (SHIPCAST_FLAGS), one per phase that changes behaviour */
   flags: Flags;
   /** The measurement: outbound calls, server functions, requests and jobs, counted per hour */
@@ -82,12 +104,26 @@ async function createContext(): Promise<AppContext> {
   // First, so the clients built below take the counting fetch
   const telemetry = installTelemetry('web');
   const flags = Flags.fromEnv(process.env);
+  const role = roleFromEnv(process.env);
   const app = loadAppConfig(process.env);
+  const proc = processState(process.env, role === 'all' ? 'app' : role);
   // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
   const runtime = await createRuntime({ root: ROOT, log: console.log, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
-  const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app', telemetry });
+  const clock = runsTheClock(role);
+  /*
+   * One process (`all`) does what it always did: pg-boss's cron and maintenance, and the rows
+   * reconciled at its start. In a split only the worker runs pg-boss's cron and maintenance, and no
+   * start reconciles: the worker does, under a lock (startMaintenance)
+   */
+  const queue = jobQueue({
+    flags,
+    registry,
+    databaseUrl: config.databaseUrl,
+    redis: proc.redis,
+    options: { instanceName: role === 'all' ? 'app' : role, telemetry, schedule: clock, supervise: clock, reconcileAtStart: !split(role), poolMax: queuePoolMax(process.env) },
+  });
   const work: WorkDeps = {
     env: process.env,
     registry,
@@ -103,6 +139,8 @@ async function createContext(): Promise<AppContext> {
       fetch: previewFetch,
     }),
   };
+  // Another replica's save, the App's installation and the brand reach this process's caches
+  const events = await replicaEvents(proc.shared, runtime);
   const ctx: AppContext = {
     config,
     app,
@@ -115,7 +153,11 @@ async function createContext(): Promise<AppContext> {
     secrets,
     deps,
     refresh: runtime.refresh,
+    settingsSaved: events.settingsSaved,
+    announce: events.announce,
     queue,
+    role,
+    process: proc,
     flags,
     telemetry,
     brand,
@@ -124,30 +166,24 @@ async function createContext(): Promise<AppContext> {
       return new Map([[b.id, b]]);
     },
   };
-  // The app works every queue: what it sends, and the rounds and schedules nobody starts by hand
-  const { probePages } = await import('./probe.server');
-  await startWorking(queue, work, { handlers: { probe: (_data, job) => probePages(ctx, job) } });
-  stopOnSignal(queue, registry, telemetry);
-  return ctx;
-}
+  // The steps of a stop, in their phases (lifecycle.ts): the HTTP server's own is main.ts's
+  onStop('queue', 'the job queue', () => queue.stop());
+  onStop('telemetry', 'the telemetry', () => telemetry.stop());
+  onStop('redis', 'Redis', () => proc.close());
+  onStop('db', 'the registry', () => registry.close());
+  stopOnSignals(process.env);
 
-/**
- * On SIGTERM or SIGINT the workers stop taking jobs and the running ones get a while to finish; one
- * still running after that is expired and retried (or failed) by pg-boss, never silently lost.
- */
-function stopOnSignal(queue: WorkQueue, registry: Pick<OpenRepositories, 'close'>, telemetry: TelemetryRecorder): void {
-  let stopping = false;
-  const stop = (signal: NodeJS.Signals) => {
-    if (stopping) return;
-    stopping = true;
-    console.log(`${signal}: stopping the job queue`);
-    queue
-      .stop()
-      .then(() => telemetry.stop())
-      .then(() => registry.close())
-      .catch((error: unknown) => console.error(`stopping the job queue: ${error instanceof Error ? error.message : String(error)}`))
-      .finally(() => process.exit(0));
-  };
-  process.once('SIGTERM', stop);
-  process.once('SIGINT', stop);
+  // The web role only sends work; every other works its own queues (all of them for `all`)
+  if (role !== 'web') {
+    const { probePages } = await import('./probe.server');
+    await startWorking(queue, work, { role, handlers: { probe: (_data, job) => probePages(ctx, job) } });
+    // Beside other processes, or on BullMQ whose scheduled posts are rebuilt from Postgres: under a lock, every ten minutes
+    if (clock && (split(role) || flags.on('bullmq'))) {
+      // Redis's lock whenever Redis is there, so workers never run it twice at once even without redis-state
+      const lock = proc.redis ? new RedisLock(proc.redis.queue) : proc.shared.lock;
+      const stop = startMaintenance({ queue, lock, reconcileRows: split(role) });
+      onStop('queue', 'the maintenance', async () => stop());
+    }
+  }
+  return ctx;
 }

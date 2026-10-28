@@ -1,4 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -14,6 +16,29 @@ export interface Workspace {
   providerDir: string;
   /** Where a repo is cloned from; GitHub over HTTPS unless a test points elsewhere */
   cloneUrl?: (repo: string) => string;
+  /**
+   * A folder of its own for every clone, removed when the job that made it ends (withJobWorkspace):
+   * what processes side by side need, since two jobs of one repo and ref would otherwise share a
+   * folder and each delete the other's clone. Off, one folder per repo and ref, kept until the next
+   * clone of it, as a single process has always done
+   */
+  perJob?: boolean;
+}
+
+/** The clones a running job made, removed when it ends */
+const jobClones = new AsyncLocalStorage<Set<string>>();
+
+/**
+ * Runs a job's work so that every per-job clone it makes is removed at its end, however it ends.
+ * A clone made outside one (the CLI drafting in its own process) is left as before.
+ */
+export async function withJobWorkspace<T>(work: () => Promise<T>): Promise<T> {
+  const clones = new Set<string>();
+  try {
+    return await jobClones.run(clones, work);
+  } finally {
+    await Promise.all([...clones].map((path) => rm(path, { recursive: true, force: true }).catch(() => undefined)));
+  }
 }
 
 export interface Checkout {
@@ -34,8 +59,10 @@ export function checkoutName(repo: string, ref: string): string {
  * time so a previous run can never leak into this one.
  */
 export async function checkout(workspace: Workspace, repo: string, ref: string): Promise<Checkout> {
-  const name = checkoutName(repo, ref);
+  const clones = workspace.perJob ? jobClones.getStore() : undefined;
+  const name = clones ? `${checkoutName(repo, ref)}~${randomUUID()}` : checkoutName(repo, ref);
   const hostPath = join(workspace.hostDir, name);
+  clones?.add(hostPath);
   await mkdir(workspace.hostDir, { recursive: true });
   await rm(hostPath, { recursive: true, force: true });
 

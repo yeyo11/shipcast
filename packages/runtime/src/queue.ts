@@ -1,4 +1,4 @@
-import type { ArticleInput, JobRecord, Repositories } from '@shipcast/engine';
+import { withJobWorkspace, type ArticleInput, type JobRecord, type Repositories } from '@shipcast/engine';
 import { ShipcastError, type Channel } from '@shipcast/schema';
 import { fromPglite, PgBoss, type ConstructorOptions, type PGliteLike, type Queue } from 'pg-boss';
 import { withOrigin } from './telemetry/origin.ts';
@@ -134,6 +134,14 @@ export interface QueueOptions {
   retryDelaySeconds?: number;
   /** Where each job's duration and wait are counted, and whose calls are counted under `job:<queue>` */
   telemetry?: TelemetryRecorder;
+  /**
+   * Whether start() reconciles the `jobs` rows with the queue, as a single process does at its boot
+   * (the default). Off when processes run side by side: the worker reconciles under a lock, with a
+   * grace for what others are in the middle of (startMaintenance)
+   */
+  reconcileAtStart?: boolean;
+  /** pg-boss's pool: 4 unless the process type says otherwise (SHIPCAST_QUEUE_POOL_MAX) */
+  poolMax?: number;
 }
 
 /**
@@ -151,6 +159,8 @@ export interface JobQueue {
   queued(queue: QueueName, singletonKey?: string): Promise<string[]>;
   work(handlers: Handlers): Promise<void>;
   wait(id: string, timeoutMs: number, everyMs?: number): Promise<JobRecord | undefined>;
+  /** Brings the `jobs` rows in line with what the queue holds (see reconcileRows) */
+  reconcile(options?: ReconcileOptions): Promise<void>;
   stop(timeoutMs?: number): Promise<void>;
 }
 
@@ -193,7 +203,8 @@ export async function runJob<Q extends QueueName>(registry: Pick<Repositories, '
   };
   let link: string | undefined;
   try {
-    await withOrigin(`job:${queue}`, () => handler(job.data, { id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal }));
+    // Every per-job clone it makes is removed when the attempt ends (engine's workspace.ts)
+    await withJobWorkspace(() => withOrigin(`job:${queue}`, () => handler(job.data, { id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal })));
   } catch (error) {
     telemetry?.timing({ kind: 'job', name: queue, outcome: lastAttempt ? 'error' : 'retry', ms: performance.now() - started });
     log(error instanceof RetryLater ? `Waiting: ${message(error)}` : message(error));
@@ -227,9 +238,25 @@ export interface HeldJob {
  * Brings the rows of jobs that were waiting or running when a process stopped in line with the
  * queue: a job it expired, failed or lost is not left showing "running". `find` answers for one row.
  */
-export async function reconcileRows(registry: Pick<Repositories, 'launches' | 'jobs'>, find: (record: JobRecord) => Promise<HeldJob | undefined>): Promise<void> {
+export interface ReconcileOptions {
+  /**
+   * Rows and launches touched within this many milliseconds are left alone: what another process is
+   * in the middle of (a row recorded a moment before its job is added, a draft the CLI runs in its own
+   * process) is not mistaken for what a stop cut short. 0 at a start, as before; RECONCILE_GRACE_MS
+   * when it runs beside other live processes.
+   */
+  graceMs?: number;
+}
+
+/** How young a row or a generating launch must be for a reconcile beside live processes to leave it alone */
+export const RECONCILE_GRACE_MS = 30 * 60_000;
+
+export async function reconcileRows(registry: Pick<Repositories, 'launches' | 'jobs'>, find: (record: JobRecord) => Promise<HeldJob | undefined>, options: ReconcileOptions = {}): Promise<void> {
+  const grace = options.graceMs ?? 0;
+  const young = (at: string | null) => grace > 0 && at !== null && Date.now() - Date.parse(at) < grace;
   for (const record of await registry.jobs.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
     if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
+    if (young(record.startedAt ?? record.createdAt)) continue;
     const job = await find(record);
     if (!job) {
       // pg-boss only deletes a waiting job after its retention (14 days) and an ended one a week
@@ -249,6 +276,7 @@ export async function reconcileRows(registry: Pick<Repositories, 'launches' | 'j
   const drafting = new Set(live.map((j) => j.launchId));
   const { launches } = await registry.launches.launchesPage({ status: 'generating', limit: 100 });
   for (const launch of launches) {
+    if (young(launch.updatedAt)) continue;
     if (!drafting.has(launch.id)) await registry.launches.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
   }
 }
@@ -275,11 +303,13 @@ export class WorkQueue implements JobQueue {
   readonly #polling: number;
   readonly #retryDelay: number | undefined;
   readonly #telemetry: TelemetryRecorder | undefined;
+  readonly #reconcileAtStart: boolean;
   #started: Promise<void> | undefined;
   #stopped = false;
 
   constructor(boss: PgBoss, registry: QueueRepositories, options: QueueOptions = {}) {
     this.#boss = boss;
+    this.#reconcileAtStart = options.reconcileAtStart ?? true;
     this.#registry = registry;
     this.#polling = options.pollingIntervalSeconds ?? 2;
     this.#retryDelay = options.retryDelaySeconds;
@@ -294,7 +324,7 @@ export class WorkQueue implements JobQueue {
   /** The queue on a Postgres server: the registry's, pg-boss in its own schema and pool */
   static postgres(url: string, registry: QueueRepositories, options: QueueOptions = {}): WorkQueue {
     // A small pool: the work is a handful of jobs at a time, and the registry has a pool of its own
-    return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), connectionString: url, max: 4, application_name: `shipcast-${options.instanceName ?? 'queue'}` }), registry, options);
+    return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), connectionString: url, max: options.poolMax ?? 4, application_name: `shipcast-${options.instanceName ?? 'queue'}` }), registry, options);
   }
 
   /** The queue on a PGlite instance, for tests: the same pg-boss and the same SQL, in this process */
@@ -320,7 +350,7 @@ export class WorkQueue implements JobQueue {
         // createQueue leaves an existing queue as it was; a setting changed here reaches it this way
         await this.#boss.updateQueue(name, settings);
       }
-      await this.#reconcile();
+      if (this.#reconcileAtStart) await this.#reconcile();
     })();
     return this.#started;
   }
@@ -329,11 +359,20 @@ export class WorkQueue implements JobQueue {
    * Brings the rows of jobs that were waiting or running when a process stopped in line with
    * pg-boss: a job it expired, failed or deleted (by retention) is not left showing "running".
    */
-  async #reconcile(): Promise<void> {
-    await reconcileRows(this.#registry, async (record) => {
-      const [job] = await this.#boss.findJobs(record.queue, { id: record.id });
-      return job && { state: stateOf(job.state), retryCount: job.retryCount };
-    });
+  async #reconcile(options: ReconcileOptions = {}): Promise<void> {
+    await reconcileRows(
+      this.#registry,
+      async (record) => {
+        const [job] = await this.#boss.findJobs(record.queue, { id: record.id });
+        return job && { state: stateOf(job.state), retryCount: job.retryCount };
+      },
+      options,
+    );
+  }
+
+  async reconcile(options: ReconcileOptions = {}): Promise<void> {
+    await this.start();
+    await this.#reconcile(options);
   }
 
   /** How many jobs pg-boss holds queued and running per queue, from its own table: what drainPgBoss reads */

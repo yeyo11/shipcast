@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { ConfigError, loadAppConfig, loadConfig, secretStoreFor } from '@shipcast/runtime';
+import { ConfigError, loadAppConfig, loadConfig, roleFromEnv, secretStoreFor } from '@shipcast/runtime';
+import { parseTrustedProxies } from './src/server/client-address.ts';
 import { serve } from './server.ts';
 import { consoleLinks, signInPath } from './src/server/console-links.ts';
 import { cloudflareDns, current, ensureCertificate } from './tls.ts';
@@ -22,13 +23,32 @@ const DAY = 24 * 3600 * 1000;
 async function main(): Promise<void> {
   const config = loadConfig(process.env, ROOT);
   const app = loadAppConfig(process.env);
+  const role = roleFromEnv(process.env);
+  const trustedProxies = parseTrustedProxies(process.env.SHIPCAST_TRUSTED_PROXIES);
+
+  /*
+   * A worker or a heavy worker (SHIPCAST_ROLE): the same image and entry, no page and no API. It
+   * listens in plain HTTP for its orchestrator's /livez and /readyz only, and its context (started
+   * by serve) works its queues. No certificate, no Tailscale, no sign-in link.
+   */
+  if (role === 'worker' || role === 'heavy') {
+    await serve({ host: app.host, port: app.port, origin: app.publicUrl, healthOnly: true });
+    console.log(`Shipcast ${role} on ${app.host}:${app.port} (/livez and /readyz only)`);
+    return;
+  }
+
+  const proxied = process.env.SHIPCAST_APP_TLS === 'proxy';
+  // The registry's table opens with the registry, inside the app's context: certificates are the proxy's job there
+  const inTable = process.env.SHIPCAST_SECRET_STORE?.trim() === 'table';
+  if (inTable && !proxied) throw new ConfigError('SHIPCAST_SECRET_STORE=table runs behind a proxy that does TLS: set SHIPCAST_APP_TLS=proxy');
   // The bootstrap's keychain service: the TLS key lives there, so a second install or a test copy never touches another's
-  const secrets = secretStoreFor(config);
+  const secrets = inTable ? undefined : secretStoreFor(config);
+  const secretsKind = secrets?.kind ?? 'the registry’s encrypted secrets table';
   const domain = new URL(app.publicUrl).hostname;
   // A preview copy (SHIPCAST_APP_TLS=off) never reads, issues or writes certificate material
   const tls = process.env.SHIPCAST_APP_TLS !== 'off';
   const token = tls ? app.tlsCloudflareToken : undefined;
-  const options = { domain, secrets, dataDir: config.dataDir, log: console.log };
+
 
   /*
    * Behind a reverse proxy that terminates TLS (Traefik on a server, SHIPCAST_APP_TLS=proxy): plain
@@ -36,13 +56,15 @@ async function main(): Promise<void> {
    * and the public https origin outside, so the URLs the app builds point where the browser is and
    * its cookies keep the Secure flag. No certificate code and no Tailscale Serve.
    */
-  if (process.env.SHIPCAST_APP_TLS === 'proxy') {
-    await serve({ host: app.host, port: app.port, origin: app.publicUrl });
-    console.log(`Shipcast on ${app.publicUrl}, behind a proxy (plain HTTP on ${app.host}:${app.port}); secrets in ${secrets.kind}`);
-    console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(consoleLinks().create())}`);
+  if (proxied) {
+    await serve({ host: app.host, port: app.port, origin: app.publicUrl, ...(trustedProxies && { trustedProxies }) });
+    console.log(`Shipcast on ${app.publicUrl}, behind a proxy (plain HTTP on ${app.host}:${app.port}); secrets in ${secretsKind}`);
+    console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(await consoleLinks().create())}`);
     return;
   }
 
+  // Not proxied, so never the table: the store is the keychain or the file
+  const options = { domain, secrets: secrets!, dataDir: config.dataDir, log: console.log };
   const certificate = !tls ? undefined : token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
   if (!certificate || certificate.expires.getTime() < Date.now()) {
     const port = app.port;
@@ -57,7 +79,7 @@ async function main(): Promise<void> {
     await serve({ host, port, origin, plainHttp: !tls });
     const why = tls ? 'no certificate and no SHIPCAST_TLS_CLOUDFLARE_TOKEN' : 'SHIPCAST_APP_TLS=off';
     console.log(`Shipcast on ${origin} (${why}: plain HTTP${tls ? ', this machine only' : ''}; GitHub sign-in needs ${app.publicUrl})`);
-    console.log(`Sign in without GitHub, once: ${origin}${signInPath(consoleLinks().create())}`);
+    console.log(`Sign in without GitHub, once: ${origin}${signInPath(await consoleLinks().create())}`);
     return;
   }
 
@@ -70,7 +92,7 @@ async function main(): Promise<void> {
     }
   }
   console.log(`Shipcast on ${app.publicUrl} (tailnet only); certificate valid until ${certificate.expires.toISOString().slice(0, 10)}`);
-  console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(consoleLinks().create())}`);
+  console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(await consoleLinks().create())}`);
 
   if (!token) {
     const days = Math.floor((certificate.expires.getTime() - Date.now()) / DAY);

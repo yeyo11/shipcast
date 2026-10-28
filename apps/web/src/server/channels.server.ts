@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
 import { exchangeMastodonCode, MASTODON_SCOPES, mastodonAuthorizeUrl, registerMastodonApp } from '@shipcast/connectors';
 import { connectAccount, credentialsFor, getJson, isStale, lastSynced, network, NETWORK_SPECS, networkSpec, NETWORKS, type AccountDeps, type Credentials } from '@shipcast/runtime';
 import { accountGrowth } from '@shipcast/engine';
+import { processState } from '@shipcast/runtime/redis';
 import { appContext, type AppContext } from './context.server';
 import { accountAvatar } from './pieces.ts';
 
@@ -49,15 +49,35 @@ export async function channelsView() {
   };
 }
 
-/** OAuth sign-ins in flight, by state: which network, brand and instance they are for. Ten minutes each. */
+/**
+ * OAuth sign-ins in flight, by state: which network, brand and instance they are for, ten minutes
+ * each and good once. In the process's one-time store: memory, or Redis with `redis-state` on, so a
+ * sign-in started on one replica finishes on whichever one the network's redirect reaches.
+ */
 type OAuthNetwork = string;
-const pending = new Map<string, { network: OAuthNetwork; brand: string; instance?: string; label?: string; expires: number }>();
+interface Flow {
+  network: OAuthNetwork;
+  brand: string;
+  instance?: string;
+  label?: string;
+}
+const OAUTH_NAMESPACE = 'oauth-state';
 
-function remember(entry: { network: OAuthNetwork; brand: string; instance?: string; label?: string }): string {
-  const state = randomBytes(18).toString('base64url');
-  for (const [key, value] of pending) if (value.expires < Date.now()) pending.delete(key);
-  pending.set(state, { ...entry, expires: Date.now() + 10 * 60_000 });
-  return state;
+function remember(entry: Flow): Promise<string> {
+  // JSON keeps no undefined: the fields not given are left out
+  const value: Record<string, string> = { network: entry.network, brand: entry.brand };
+  if (entry.instance !== undefined) value.instance = entry.instance;
+  if (entry.label !== undefined) value.label = entry.label;
+  return processState().shared.oneTime.put(OAUTH_NAMESPACE, value, 10 * 60);
+}
+
+/** The flow a callback belongs to, taken once: a state is never good twice, on any replica */
+async function takeFlow(url: URL, network: OAuthNetwork): Promise<Flow | undefined> {
+  const state = url.searchParams.get('state') ?? '';
+  if (!state) return undefined;
+  const flow = await processState().shared.oneTime.take<Record<string, string>>(OAUTH_NAMESPACE, state);
+  if (!flow || flow.network !== network || flow.brand === undefined) return undefined;
+  return { network, brand: flow.brand, ...(flow.instance !== undefined && { instance: flow.instance }), ...(flow.label !== undefined && { label: flow.label }) };
 }
 
 const redirect = (location: string) => new Response(null, { status: 302, headers: { location } });
@@ -92,16 +112,15 @@ export async function startMastodon(request: Request): Promise<Response> {
       return back('mastodon', `${new URL(instance).host} refused to register Shipcast: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  const state = remember({ network: 'mastodon', brand, instance, label: url.searchParams.get('label') ?? undefined });
+  const state = await remember({ network: 'mastodon', brand, instance, label: url.searchParams.get('label') ?? undefined });
   return redirect(mastodonAuthorizeUrl(instance, client.clientId!, redirectUri, state));
 }
 
 export async function finishMastodon(request: Request): Promise<Response> {
   const { app, secrets } = await appContext();
   const url = new URL(request.url);
-  const flow = pending.get(url.searchParams.get('state') ?? '');
-  pending.delete(url.searchParams.get('state') ?? '');
-  if (!flow || flow.network !== 'mastodon' || !flow.instance || flow.expires < Date.now()) return back('mastodon', 'This authorisation is stale or was not started here: try again.');
+  const flow = await takeFlow(url, 'mastodon');
+  if (!flow?.instance) return back('mastodon', 'This authorisation is stale or was not started here: try again.');
   const code = url.searchParams.get('code');
   if (!code) return back('mastodon', `Mastodon did not authorise Shipcast: ${url.searchParams.get('error_description') ?? 'cancelled'}.`);
   const client = await getJson(secrets, `app:mastodon-client:${new URL(flow.instance).host}`);
@@ -121,14 +140,6 @@ export async function finishMastodon(request: Request): Promise<Response> {
   }
 }
 
-/** The flow a callback belongs to, taken once: a state is never good twice */
-function takeFlow(url: URL, network: OAuthNetwork) {
-  const state = url.searchParams.get('state') ?? '';
-  const flow = pending.get(state);
-  pending.delete(state);
-  return flow && flow.network === network && flow.expires >= Date.now() ? flow : undefined;
-}
-
 /**
  * A network's sign-in with the owner's app (its id and secret in Settings), for every network whose
  * spec has `oauth` (packages/runtime/src/channels): Instagram, Threads, LinkedIn, Reddit, and any
@@ -141,7 +152,7 @@ export async function startOAuth(networkId: string, request: Request): Promise<R
   const app = ctx.settings.oauthApp(networkId);
   if (!app) return back(networkId, `Set the ${spec.app.name} ${spec.app.term} id and secret in Settings (/settings) first.`);
   const url = new URL(request.url);
-  const state = remember({ network: networkId, brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
+  const state = await remember({ network: networkId, brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
   return redirect(spec.authorizeUrl(app, `${ctx.app.publicUrl}/auth/${networkId}/callback`, state));
 }
 
@@ -150,7 +161,7 @@ export async function finishOAuth(networkId: string, request: Request): Promise<
   const spec = networkSpec(networkId)?.oauth;
   const app = ctx.settings.oauthApp(networkId);
   const url = new URL(request.url);
-  const flow = takeFlow(url, networkId);
+  const flow = await takeFlow(url, networkId);
   if (!flow || !spec) return back(networkId, 'This authorisation is stale or was not started here: try again.');
   const code = url.searchParams.get('code');
   const name = network(networkId)?.name ?? networkId;

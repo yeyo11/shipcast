@@ -6,6 +6,7 @@ import {
   loadBrand,
   connectRepositories,
   PostgresLock,
+  SecretRows,
   type OpenRepositories,
   type AiProvider,
   type ObjectRequest,
@@ -14,7 +15,10 @@ import {
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { aiSetup } from './ai.ts';
+import { provisionAppKeys } from './app-keys.ts';
 import { loadConfig, type Config } from './config.ts';
+import { Flags } from './flags.ts';
+import { poolOptions, roleFromEnv, split } from './roles.ts';
 import { GitHubUserTokens } from './github-user.ts';
 import { secretStoreFor, type SecretStore } from './secrets.ts';
 import { importEnvSettings, RuntimeSettings } from './settings.ts';
@@ -39,6 +43,8 @@ export interface Runtime {
   brand(): Promise<Brand>;
   /** Reads the settings again: after a save in the app, and before each round */
   refresh(): Promise<void>;
+  /** Forgets the cached brand, so the next call reads it from the launches repo again */
+  invalidateBrand(): void;
 }
 
 /**
@@ -90,8 +96,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const env = options.env ?? process.env;
   const log = options.log ?? (() => undefined);
   const config = loadConfig(env, options.root);
-  const registry = options.registry ?? (await connectRepositories(config.databaseUrl));
-  const secrets = options.secrets ?? secretStoreFor(config);
+  const registry = options.registry ?? (await connectRepositories(config.databaseUrl, poolOptions(env)));
+  const flags = Flags.fromEnv(env);
+  const secrets = options.secrets ?? secretStoreFor(config, env, { flags, rows: new SecretRows(registry.database) });
+  // One session key and API pepper across replicas, read once per process (app-keys.ts)
+  provisionAppKeys(secrets, { env, lock: new PostgresLock(registry.database) });
   const settings = new RuntimeSettings({ registry, secrets, env });
 
   const { imported, skipped } = await importEnvSettings({ registry, secrets, env });
@@ -143,7 +152,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     get maxBudgetUsd() {
       return settings.current().maxBudgetUsd;
     },
-    checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir }, repo, ref),
+    // Beside other processes each job clones into a folder of its own, removed at its end
+    checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir, perJob: split(roleFromEnv(env)) }, repo, ref),
   };
 
   return {
@@ -159,6 +169,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     brand,
     refresh: async () => {
       await settings.read();
+    },
+    invalidateBrand: () => {
+      cached = undefined;
     },
   };
 }

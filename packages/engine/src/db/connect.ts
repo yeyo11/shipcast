@@ -46,7 +46,26 @@ export async function migrateDatabase(db: Database, options: MigrateOptions = {}
  * Opens a Postgres server at a `postgres://` URL and brings its schema up to date. The migrator records
  * what it applied in `drizzle.__drizzle_migrations`, so a second start applies nothing.
  */
-export async function connectPostgres(url: string, migrateOptions: MigrateOptions = {}): Promise<Connection> {
+/**
+ * The pool of one process, so a deployment can size each process type to fit behind PgBouncer.
+ * Unset, the pool is postgres.js's default (10) and the migrations run on `url`, as before.
+ */
+export interface PoolOptions {
+  /** postgres.js's `max` connections */
+  max?: number;
+  /**
+   * False behind PgBouncer in transaction mode, where a server connection is not the same between two
+   * statements, so a named prepared statement may not be there
+   */
+  prepare?: boolean;
+  /**
+   * Where the migrator connects: a direct URL past PgBouncer, since its session advisory lock needs
+   * the same server connection for its whole life, which transaction pooling does not give
+   */
+  migrateUrl?: string;
+}
+
+export async function connectPostgres(url: string, migrateOptions: MigrateOptions = {}, pool: PoolOptions = {}): Promise<Connection> {
   const { default: postgres } = await import('postgres');
   const { drizzle } = await import('drizzle-orm/postgres-js');
   // `onnotice` off: every idempotent `CREATE … IF NOT EXISTS` of the migrator would print a notice
@@ -54,7 +73,7 @@ export async function connectPostgres(url: string, migrateOptions: MigrateOption
 
   // Drizzle's migrator takes no lock, and the app and the CLI may start together. A session lock
   // needs one connection for its whole life, hence a client of its own with `max: 1`
-  const migrator = postgres(url, { ...options, max: 1 });
+  const migrator = postgres(pool.migrateUrl ?? url, { ...options, max: 1 });
   try {
     await migrator`SELECT pg_advisory_lock(${MIGRATION_LOCK})`;
     await migrateDatabase(drizzle({ client: migrator }), migrateOptions);
@@ -62,7 +81,7 @@ export async function connectPostgres(url: string, migrateOptions: MigrateOption
     await migrator.end();
   }
 
-  const client = postgres(url, options);
+  const client = postgres(url, { ...options, ...(pool.max !== undefined && { max: pool.max }), ...(pool.prepare !== undefined && { prepare: pool.prepare }) });
   return { db: drizzle({ client }), close: () => client.end() };
 }
 
@@ -80,4 +99,10 @@ export async function connectPglite(dataDir?: string, options: MigrateOptions = 
   const db = drizzle({ client });
   await migrateDatabase(db, options);
   return { db, client, close: () => client.close() };
+}
+
+/** One round trip to the database, for a readiness check: throws when it cannot answer */
+export async function pingDatabase(db: Database): Promise<void> {
+  const { sql } = await import('drizzle-orm');
+  await db.execute(sql`SELECT 1`);
 }

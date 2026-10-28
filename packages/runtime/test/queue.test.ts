@@ -3,7 +3,8 @@ import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
 import type { GitHubRest, PipelineDeps, Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, FakeGitHub, registryOn } from '@shipcast/engine/testing';
-import { armScheduled, currentOrigin, LOST_RUNNING, TelemetryRecorder, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
+import { armScheduled, currentOrigin, LOST_RUNNING, TelemetryRecorder, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, RECONCILE_GRACE_MS, startMaintenance, type JobQueue, type QueueOptions, type WorkDeps } from '../src/index.ts';
+import { MemoryLock } from '../src/redis/index.ts';
 
 /*
  * The queue on PGlite: the real pg-boss and the real SQL in this process. Installing pg-boss's schema
@@ -312,4 +313,43 @@ test('a due piece of a launch whose drafts still wait for approval waits for the
   const done = await queue.wait((await armScheduled(queue, post))!, 20_000, 100);
   assert.deepEqual(done?.log, ['Waiting for approval: it goes out once the drafts are merged']);
   assert.equal(publishes, 0);
+});
+
+test('beside live processes a reconcile spares a draft just starting, and fails one cut short long ago', async () => {
+  const db = await database();
+  // A process that does not reconcile at its start: a worker in a split
+  const queue = queueOn(db, { reconcileAtStart: false });
+  const starting = await launch(db.registry);
+  // A draft the CLI runs in its own process, with no job row: generating since a moment ago
+  await db.registry.launches.setStatus(starting, 'generating');
+  await queue.start();
+  assert.equal((await db.registry.launches.get(starting))?.status, 'generating', 'no reconcile at the start');
+
+  await queue.reconcile({ graceMs: RECONCILE_GRACE_MS });
+  assert.equal((await db.registry.launches.get(starting))?.status, 'generating', 'spared: too young to be cut short');
+
+  await db.client.exec(`UPDATE launches SET updated_at = '2020-01-01T00:00:00.000Z' WHERE id = ${starting}`);
+  await queue.reconcile({ graceMs: RECONCILE_GRACE_MS });
+  assert.equal((await db.registry.launches.get(starting))?.status, 'failed');
+});
+
+test('the maintenance runs in one process at a time, whichever holds the lock', async () => {
+  const lock = new MemoryLock();
+  let running = 0;
+  let most = 0;
+  let runs = 0;
+  const slow = {
+    reconcile: async () => {
+      running++;
+      runs++;
+      most = Math.max(most, running);
+      await new Promise((r) => setTimeout(r, 200));
+      running--;
+    },
+  } as unknown as JobQueue;
+  const stops = [startMaintenance({ queue: slow, lock, reconcileRows: true, log: () => {} }), startMaintenance({ queue: slow, lock, reconcileRows: true, log: () => {} })];
+  await new Promise((r) => setTimeout(r, 400));
+  for (const stop of stops) stop();
+  assert.equal(most, 1);
+  assert.equal(runs, 1, 'the other found it held and left it');
 });
