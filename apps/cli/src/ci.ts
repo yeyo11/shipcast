@@ -197,6 +197,25 @@ function authenticatedCheckout(token: () => Promise<string>, workspaceDir: strin
   };
 }
 
+/** What a pipeline in Action mode is built on besides its AI: the run's GitHub client, scratch registry and clone */
+export type CiPipelineBase = Pick<PipelineDeps, 'github' | 'launchesRepo' | 'checkout' | 'fetch' | 'now'> & { registry: Repositories };
+
+/**
+ * The pipeline a draft or a publish runs with: the AI the environment chose, and the owner's edited
+ * prompts and tone from the registry. A draft passes its launch, which the fake provider's pack names.
+ */
+export function ciPipeline(ai: CiAi | undefined, base: CiPipelineBase, launch?: { launch: Launch; brand: Brand }): PipelineDeps {
+  const { registry } = base;
+  const provider = aiProviderOf(ai, launch);
+  const model = ai && 'model' in ai ? ai.model : undefined;
+  return {
+    ...base,
+    ai: provider,
+    // The edited prompts and the tone override live in the registry; the provider is always CI's own
+    aiSetup: async () => ({ provider, ...(model && { model }), prompts: await currentPrompts(registry), tone: (await readAiSettings(registry)).tone }),
+  };
+}
+
 /** Everything a `ci` command needs, built from the environment */
 export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, options: { dryRun: boolean; log: (line: string) => void }): Promise<CiDeps> {
   const auth = config.github.kind === 'app' ? new GitHubApp({ appId: config.github.appId, ...(config.github.clientId && { clientId: config.github.clientId }), privateKey: config.github.privateKey, account: () => config.launchesRepo }) : undefined;
@@ -213,19 +232,8 @@ export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, opti
 
   mkdirSync(config.workDir, { recursive: true });
   const brand = () => loadBrand(github, config.launchesRepo);
-  const model = config.ai && 'model' in config.ai ? config.ai.model : undefined;
-  const pipelineFor = (registry: Repositories, launch?: { launch: Launch; brand: Brand }): PipelineDeps => {
-    const provider = aiProviderOf(config.ai, launch);
-    return {
-    github,
-    ai: provider,
-    // The edited prompts and the tone override live in the registry; the provider is always CI's own
-    aiSetup: async () => ({ provider, ...(model && { model }), prompts: await currentPrompts(registry), tone: (await readAiSettings(registry)).tone }),
-    registry,
-    launchesRepo: config.launchesRepo,
-    checkout: authenticatedCheckout(token, join(config.workDir, 'workspace')),
-    };
-  };
+  const pipelineFor = (registry: Repositories, launch?: { launch: Launch; brand: Brand }): PipelineDeps =>
+    ciPipeline(config.ai, { github, registry, launchesRepo: config.launchesRepo, checkout: authenticatedCheckout(token, join(config.workDir, 'workspace')) }, launch);
 
   return {
     launchesRepo: config.launchesRepo,
