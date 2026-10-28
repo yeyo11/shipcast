@@ -13,7 +13,7 @@ import { Notice, number, Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
 import { Tabs } from '../../../components/ui/Tabs';
 import { launchDateLabel } from '../../../server/launch-summary';
-import { approveDrafts, getLaunch, publishAgain, saveDraft } from '../../../server/launches.functions';
+import { approveDrafts, getLaunch, launchRepo, publishAgain, saveDraft } from '../../../server/launches.functions';
 import { zonedLabel } from '../../../server/pieces';
 import { CHANNEL_NAMES } from '../../../server/view';
 
@@ -256,7 +256,7 @@ function LaunchPage() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const { launch, review, index, jobs, pieces, numbers } = data;
-  const running = jobs.some((j) => j.state === 'running') || launch.status === 'generating';
+  const running = jobs.some((j) => j.state === 'running' && !j.queued) || launch.status === 'generating';
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => router.invalidate(), 5000);
@@ -269,8 +269,10 @@ function LaunchPage() {
   const media = reviewOk?.drafts.filter((d) => d.kind === 'image' || d.kind === 'video') ?? [];
   const timezone = pieces.scheduling.timezone;
   const hasChannels = pieces.rows.length > 0 || launch.failures.length > 0 || pieces.scheduling.channels.length > 0;
-  // A launch with nothing out yet opens on its drafts, the only thing there is to read
-  const tab: TabId = search.tab ?? (hasChannels ? 'channels' : 'content');
+  // A launch with nothing out yet opens on its drafts, the only thing there is to read; one that
+  // failed before drafting has none, so it opens on its details, where the job's log says why
+  const failedEmpty = Boolean(launch.problem) && !hasChannels && texts.length === 0;
+  const tab: TabId = search.tab ?? (hasChannels ? 'channels' : failedEmpty ? 'details' : 'content');
   const go = (next: LaunchSearch) => navigate({ search: (prev) => ({ ...prev, ...next }), replace: true, resetScroll: false });
   const article = pieces.rows.find((r) => r.channel === 'blog' && r.url && (r.status === 'live' || r.status === 'edited'));
   const shown = Object.values(numbers.totals).some((n) => n > 0) || pieces.rows.length > 0;
@@ -300,6 +302,19 @@ function LaunchPage() {
       </Link>,
     );
   }
+
+  // A failed release published nothing, so launching it again retries it (claimManual); an article is written again in Write
+  const relaunch = async () => {
+    setBusy(true);
+    const answer = await launchRepo({ data: { repo: launch.repo, ref: launch.ref, direct: false } }).catch((error: unknown) => ({
+      ok: false as const,
+      problem: error instanceof Error ? error.message : String(error),
+    }));
+    setBusy(false);
+    if (answer.ok) toast.done(`Drafting ${launch.repo.split('/')[1]} ${launch.ref}`, 'The analysis takes a few minutes; it shows here while it runs.');
+    else toast.fail(answer.problem);
+    await router.invalidate();
+  };
 
   const approve = async () => {
     setBusy(true);
@@ -368,6 +383,11 @@ function LaunchPage() {
         <Notice tone="bad">
           <strong>The launch failed.</strong>
           <div className="preview">{launch.problem}</div>
+          {!launch.ref.startsWith('article:') && launch.posts.length === 0 && (
+            <button type="button" className="btn btn-small" disabled={busy || running} onClick={relaunch}>
+              Launch it again
+            </button>
+          )}
         </Notice>
       )}
 
@@ -434,6 +454,11 @@ function LaunchPage() {
             panel: (
               <div className="content-tab">
                 {review && 'error' in review && <Notice tone="bad">Could not read the drafts: {review.error}</Notice>}
+                {failedEmpty && (
+                  <Empty art={<EmptyDrafts width={220} />} title="Nothing was drafted">
+                    The launch failed before its drafts were written: the reason is above, and the job’s log is in Details.
+                  </Empty>
+                )}
                 {texts.length === 0 && launch.posts.length === 0 && !launch.problem && (
                   <Empty art={<EmptyDrafts width={220} />} title={running ? 'Drafting…' : 'No drafts here'}>
                     {running
