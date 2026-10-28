@@ -25,6 +25,7 @@ import {
   type GitHubCaches,
   type GitHubUserTokens,
   type JobQueue,
+  LiveHub,
   type Role,
   type RuntimeSettings,
   type SecretStore,
@@ -88,6 +89,8 @@ export interface AppContext {
   /** With `github-events`: the drafts snapshots the launch page reads, and the caches deliveries invalidate */
   drafts: DraftSnapshotService | undefined;
   githubCaches: GitHubCaches | undefined;
+  /** With `realtime-ui`, in a process that serves pages: the tabs' event streams (GET /api/events) */
+  live: LiveHub | undefined;
 }
 
 let context: Promise<AppContext> | undefined;
@@ -178,7 +181,16 @@ async function createContext(): Promise<AppContext> {
     },
     drafts: runtime.drafts,
     githubCaches: runtime.githubCaches,
+    live: undefined,
   };
+  // Subscribed before the first page asks, so a change made meanwhile is already in the ring
+  if (flags.on('realtime-ui') && (role === 'web' || role === 'all')) {
+    const live = new LiveHub({ bus: proc.shared.events });
+    await live.start();
+    ctx.live = live;
+    // With the HTTP server's own step: the streams end at once, so its close does not wait them out
+    onStop('http', 'the event streams', () => live.drain());
+  }
   // The steps of a stop, in their phases (lifecycle.ts): the HTTP server's own is main.ts's
   onStop('queue', 'the job queue', () => queue.stop());
   onStop('telemetry', 'the telemetry', () => telemetry.stop());

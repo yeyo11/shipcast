@@ -41,7 +41,7 @@ function serveStatic(pathname: string, response: ServerResponse): boolean {
   return true;
 }
 
-function toRequest(request: IncomingMessage, origin: string, proxies: BlockList | undefined): Request {
+function toRequest(request: IncomingMessage, origin: string, proxies: BlockList | undefined, signal?: AbortSignal): Request {
   const headers = new Headers();
   for (const [name, value] of Object.entries(request.headers)) {
     if (Array.isArray(value)) for (const v of value) headers.append(name, v);
@@ -53,7 +53,7 @@ function toRequest(request: IncomingMessage, origin: string, proxies: BlockList 
   headers.set('x-shipcast-peer', clientAddress(request.socket.remoteAddress, Array.isArray(forwarded) ? forwarded.join(',') : forwarded, proxies));
   const method = request.method ?? 'GET';
   const body = method === 'GET' || method === 'HEAD' ? undefined : (Readable.toWeb(request) as ReadableStream<Uint8Array>);
-  return new Request(new URL(request.url ?? '/', origin), { method, headers, body, duplex: 'half' } as RequestInit);
+  return new Request(new URL(request.url ?? '/', origin), { method, headers, body, duplex: 'half', ...(signal && { signal }) } as RequestInit);
 }
 
 async function send(response: ServerResponse, answer: Response, plainHttp = false): Promise<void> {
@@ -69,7 +69,19 @@ async function send(response: ServerResponse, answer: Response, plainHttp = fals
     response.end();
     return;
   }
-  for await (const chunk of answer.body as unknown as AsyncIterable<Uint8Array>) response.write(chunk);
+  // A stream that never ends on its own (an event stream) is cancelled when the client goes
+  const reader = answer.body.getReader();
+  const gone = () => void reader.cancel().catch(() => undefined);
+  response.once('close', gone);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      response.write(value);
+    }
+  } finally {
+    response.off('close', gone);
+  }
   response.end();
 }
 
@@ -105,7 +117,10 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
         return;
       }
       if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && serveStatic(pathname, response)) return;
-      await send(response, await entry.default.fetch(toRequest(request, options.origin, options.trustedProxies)), options.plainHttp === true && !options.tls);
+      // The request's signal aborts when the client goes, so a handler that waits on it (an event stream) lets go
+      const left = new AbortController();
+      response.once('close', () => left.abort());
+      await send(response, await entry.default.fetch(toRequest(request, options.origin, options.trustedProxies, left.signal)), options.plainHttp === true && !options.tls);
     } catch (error) {
       console.error(error);
       if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' });

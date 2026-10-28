@@ -10,11 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as LivezRouteImport } from './routes/livez'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
-import { Route as LivezRouteImport } from './routes/livez'
-import { Route as ReadyzRouteImport } from './routes/readyz'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as ReadyzRouteImport } from './routes/readyz'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
@@ -25,6 +25,7 @@ import { Route as AppStatsRouteImport } from './routes/_app/stats'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
 import { Route as ApiAssistantRouteImport } from './routes/api/assistant'
+import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLaunchesRouteImport } from './routes/api/launches'
 import { Route as AuthGithubRouteImport } from './routes/auth/github'
@@ -34,8 +35,8 @@ import { Route as AuthLinkedinRouteImport } from './routes/auth/linkedin'
 import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthMastodonRouteImport } from './routes/auth/mastodon'
 import { Route as AuthRedditRouteImport } from './routes/auth/reddit'
-import { Route as AuthYoutubeRouteImport } from './routes/auth/youtube'
 import { Route as AuthThreadsRouteImport } from './routes/auth/threads'
+import { Route as AuthYoutubeRouteImport } from './routes/auth/youtube'
 import { Route as AvatarsAccountIdRouteImport } from './routes/avatars.$accountId'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
@@ -53,12 +54,17 @@ import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagr
 import { Route as AuthLinkedinCallbackRouteImport } from './routes/auth/linkedin.callback'
 import { Route as AuthMastodonCallbackRouteImport } from './routes/auth/mastodon.callback'
 import { Route as AuthRedditCallbackRouteImport } from './routes/auth/reddit.callback'
-import { Route as AuthYoutubeCallbackRouteImport } from './routes/auth/youtube.callback'
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
+import { Route as AuthYoutubeCallbackRouteImport } from './routes/auth/youtube.callback'
 import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LivezRoute = LivezRouteImport.update({
+  id: '/livez',
+  path: '/livez',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -71,19 +77,14 @@ const McpRoute = McpRouteImport.update({
   path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LivezRoute = LivezRouteImport.update({
-  id: '/livez',
-  path: '/livez',
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReadyzRoute = ReadyzRouteImport.update({
   id: '/readyz',
   path: '/readyz',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -136,6 +137,11 @@ const ApiAssistantRoute = ApiAssistantRouteImport.update({
   path: '/api/assistant',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEventsRoute = ApiEventsRouteImport.update({
+  id: '/api/events',
+  path: '/api/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
@@ -181,14 +187,14 @@ const AuthRedditRoute = AuthRedditRouteImport.update({
   path: '/auth/reddit',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthYoutubeRoute = AuthYoutubeRouteImport.update({
-  id: '/auth/youtube',
-  path: '/auth/youtube',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthThreadsRoute = AuthThreadsRouteImport.update({
   id: '/auth/threads',
   path: '/auth/threads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthYoutubeRoute = AuthYoutubeRouteImport.update({
+  id: '/auth/youtube',
+  path: '/auth/youtube',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AvatarsAccountIdRoute = AvatarsAccountIdRouteImport.update({
@@ -276,15 +282,15 @@ const AuthRedditCallbackRoute = AuthRedditCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => AuthRedditRoute,
 } as any)
-const AuthYoutubeCallbackRoute = AuthYoutubeCallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
-  getParentRoute: () => AuthYoutubeRoute,
-} as any)
 const AuthThreadsCallbackRoute = AuthThreadsCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
   getParentRoute: () => AuthThreadsRoute,
+} as any)
+const AuthYoutubeCallbackRoute = AuthYoutubeCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthYoutubeRoute,
 } as any)
 const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
   id: '/launches/$id_/edit',
@@ -294,11 +300,11 @@ const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/livez': typeof LivezRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
-  '/livez': typeof LivezRoute
-  '/readyz': typeof ReadyzRoute
   '/onboarding': typeof OnboardingRoute
+  '/readyz': typeof ReadyzRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/assistant': typeof ApiAssistantRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
@@ -317,8 +324,8 @@ export interface FileRoutesByFullPath {
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/auth/reddit': typeof AuthRedditRouteWithChildren
-  '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
@@ -334,18 +341,18 @@ export interface FileRoutesByFullPath {
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/reddit/callback': typeof AuthRedditCallbackRoute
-  '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
+  '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/channels/': typeof AppChannelsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
 }
 export interface FileRoutesByTo {
+  '/livez': typeof LivezRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
-  '/livez': typeof LivezRoute
-  '/readyz': typeof ReadyzRoute
   '/onboarding': typeof OnboardingRoute
+  '/readyz': typeof ReadyzRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -354,6 +361,7 @@ export interface FileRoutesByTo {
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
   '/api/assistant': typeof ApiAssistantRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
@@ -363,8 +371,8 @@ export interface FileRoutesByTo {
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/auth/reddit': typeof AuthRedditRouteWithChildren
-  '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
@@ -381,8 +389,8 @@ export interface FileRoutesByTo {
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/reddit/callback': typeof AuthRedditCallbackRoute
-  '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
+  '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/channels': typeof AppChannelsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
@@ -390,11 +398,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/livez': typeof LivezRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
-  '/livez': typeof LivezRoute
-  '/readyz': typeof ReadyzRoute
   '/onboarding': typeof OnboardingRoute
+  '/readyz': typeof ReadyzRoute
   '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
@@ -404,6 +412,7 @@ export interface FileRoutesById {
   '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
   '/api/assistant': typeof ApiAssistantRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
   '/auth/github': typeof AuthGithubRouteWithChildren
@@ -413,8 +422,8 @@ export interface FileRoutesById {
   '/auth/logout': typeof AuthLogoutRoute
   '/auth/mastodon': typeof AuthMastodonRouteWithChildren
   '/auth/reddit': typeof AuthRedditRouteWithChildren
-  '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/auth/threads': typeof AuthThreadsRouteWithChildren
+  '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
@@ -431,8 +440,8 @@ export interface FileRoutesById {
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
   '/auth/mastodon/callback': typeof AuthMastodonCallbackRoute
   '/auth/reddit/callback': typeof AuthRedditCallbackRoute
-  '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
+  '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/_app/channels/': typeof AppChannelsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
@@ -441,11 +450,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/livez'
     | '/login'
     | '/mcp'
-    | '/livez'
-    | '/readyz'
     | '/onboarding'
+    | '/readyz'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -455,6 +464,7 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/write'
     | '/api/assistant'
+    | '/api/events'
     | '/api/health'
     | '/api/launches'
     | '/auth/github'
@@ -464,8 +474,8 @@ export interface FileRouteTypes {
     | '/auth/logout'
     | '/auth/mastodon'
     | '/auth/reddit'
-    | '/auth/youtube'
     | '/auth/threads'
+    | '/auth/youtube'
     | '/avatars/$accountId'
     | '/channels/$network'
     | '/design/components'
@@ -481,18 +491,18 @@ export interface FileRouteTypes {
     | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
     | '/auth/reddit/callback'
-    | '/auth/youtube/callback'
     | '/auth/threads/callback'
+    | '/auth/youtube/callback'
     | '/channels/'
     | '/settings/'
     | '/launches/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/livez'
     | '/login'
     | '/mcp'
-    | '/livez'
-    | '/readyz'
     | '/onboarding'
+    | '/readyz'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -501,6 +511,7 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/write'
     | '/api/assistant'
+    | '/api/events'
     | '/api/health'
     | '/api/launches'
     | '/auth/github'
@@ -510,8 +521,8 @@ export interface FileRouteTypes {
     | '/auth/logout'
     | '/auth/mastodon'
     | '/auth/reddit'
-    | '/auth/youtube'
     | '/auth/threads'
+    | '/auth/youtube'
     | '/avatars/$accountId'
     | '/'
     | '/channels/$network'
@@ -528,19 +539,19 @@ export interface FileRouteTypes {
     | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
     | '/auth/reddit/callback'
-    | '/auth/youtube/callback'
     | '/auth/threads/callback'
+    | '/auth/youtube/callback'
     | '/channels'
     | '/settings'
     | '/launches/$id/edit'
   id:
     | '__root__'
     | '/_app'
+    | '/livez'
     | '/login'
     | '/mcp'
-    | '/livez'
-    | '/readyz'
     | '/onboarding'
+    | '/readyz'
     | '/_app/ai'
     | '/_app/automation'
     | '/_app/comments'
@@ -550,6 +561,7 @@ export interface FileRouteTypes {
     | '/_app/tokens'
     | '/_app/write'
     | '/api/assistant'
+    | '/api/events'
     | '/api/health'
     | '/api/launches'
     | '/auth/github'
@@ -559,8 +571,8 @@ export interface FileRouteTypes {
     | '/auth/logout'
     | '/auth/mastodon'
     | '/auth/reddit'
-    | '/auth/youtube'
     | '/auth/threads'
+    | '/auth/youtube'
     | '/avatars/$accountId'
     | '/_app/'
     | '/_app/channels/$network'
@@ -577,8 +589,8 @@ export interface FileRouteTypes {
     | '/auth/linkedin/callback'
     | '/auth/mastodon/callback'
     | '/auth/reddit/callback'
-    | '/auth/youtube/callback'
     | '/auth/threads/callback'
+    | '/auth/youtube/callback'
     | '/_app/channels/'
     | '/_app/settings/'
     | '/_app/launches/$id_/edit'
@@ -586,12 +598,13 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  LivezRoute: typeof LivezRoute
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
-  LivezRoute: typeof LivezRoute
-  ReadyzRoute: typeof ReadyzRoute
   OnboardingRoute: typeof OnboardingRoute
+  ReadyzRoute: typeof ReadyzRoute
   ApiAssistantRoute: typeof ApiAssistantRoute
+  ApiEventsRoute: typeof ApiEventsRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLaunchesRoute: typeof ApiLaunchesRoute
   AuthGithubRoute: typeof AuthGithubRouteWithChildren
@@ -601,8 +614,8 @@ export interface RootRouteChildren {
   AuthLogoutRoute: typeof AuthLogoutRoute
   AuthMastodonRoute: typeof AuthMastodonRouteWithChildren
   AuthRedditRoute: typeof AuthRedditRouteWithChildren
-  AuthYoutubeRoute: typeof AuthYoutubeRouteWithChildren
   AuthThreadsRoute: typeof AuthThreadsRouteWithChildren
+  AuthYoutubeRoute: typeof AuthYoutubeRouteWithChildren
   AvatarsAccountIdRoute: typeof AvatarsAccountIdRoute
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
@@ -615,6 +628,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/livez': {
+      id: '/livez'
+      path: '/livez'
+      fullPath: '/livez'
+      preLoaderRoute: typeof LivezRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -631,11 +651,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/livez': {
-      id: '/livez'
-      path: '/livez'
-      fullPath: '/livez'
-      preLoaderRoute: typeof LivezRouteImport
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/readyz': {
@@ -643,13 +663,6 @@ declare module '@tanstack/react-router' {
       path: '/readyz'
       fullPath: '/readyz'
       preLoaderRoute: typeof ReadyzRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -722,6 +735,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAssistantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/events': {
+      id: '/api/events'
+      path: '/api/events'
+      fullPath: '/api/events'
+      preLoaderRoute: typeof ApiEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/health': {
       id: '/api/health'
       path: '/api/health'
@@ -785,18 +805,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRedditRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/youtube': {
-      id: '/auth/youtube'
-      path: '/auth/youtube'
-      fullPath: '/auth/youtube'
-      preLoaderRoute: typeof AuthYoutubeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth/threads': {
       id: '/auth/threads'
       path: '/auth/threads'
       fullPath: '/auth/threads'
       preLoaderRoute: typeof AuthThreadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/youtube': {
+      id: '/auth/youtube'
+      path: '/auth/youtube'
+      fullPath: '/auth/youtube'
+      preLoaderRoute: typeof AuthYoutubeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/avatars/$accountId': {
@@ -918,19 +938,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRedditCallbackRouteImport
       parentRoute: typeof AuthRedditRoute
     }
-    '/auth/youtube/callback': {
-      id: '/auth/youtube/callback'
-      path: '/callback'
-      fullPath: '/auth/youtube/callback'
-      preLoaderRoute: typeof AuthYoutubeCallbackRouteImport
-      parentRoute: typeof AuthYoutubeRoute
-    }
     '/auth/threads/callback': {
       id: '/auth/threads/callback'
       path: '/callback'
       fullPath: '/auth/threads/callback'
       preLoaderRoute: typeof AuthThreadsCallbackRouteImport
       parentRoute: typeof AuthThreadsRoute
+    }
+    '/auth/youtube/callback': {
+      id: '/auth/youtube/callback'
+      path: '/callback'
+      fullPath: '/auth/youtube/callback'
+      preLoaderRoute: typeof AuthYoutubeCallbackRouteImport
+      parentRoute: typeof AuthYoutubeRoute
     }
     '/_app/launches/$id_/edit': {
       id: '/_app/launches/$id_/edit'
@@ -1050,24 +1070,12 @@ interface AuthRedditRouteChildren {
   AuthRedditCallbackRoute: typeof AuthRedditCallbackRoute
 }
 
-interface AuthYoutubeRouteChildren {
-  AuthYoutubeCallbackRoute: typeof AuthYoutubeCallbackRoute
-}
-
 const AuthRedditRouteChildren: AuthRedditRouteChildren = {
   AuthRedditCallbackRoute: AuthRedditCallbackRoute,
 }
 
-const AuthYoutubeRouteChildren: AuthYoutubeRouteChildren = {
-  AuthYoutubeCallbackRoute: AuthYoutubeCallbackRoute,
-}
-
 const AuthRedditRouteWithChildren = AuthRedditRoute._addFileChildren(
   AuthRedditRouteChildren,
-)
-
-const AuthYoutubeRouteWithChildren = AuthYoutubeRoute._addFileChildren(
-  AuthYoutubeRouteChildren,
 )
 
 interface AuthThreadsRouteChildren {
@@ -1082,14 +1090,27 @@ const AuthThreadsRouteWithChildren = AuthThreadsRoute._addFileChildren(
   AuthThreadsRouteChildren,
 )
 
+interface AuthYoutubeRouteChildren {
+  AuthYoutubeCallbackRoute: typeof AuthYoutubeCallbackRoute
+}
+
+const AuthYoutubeRouteChildren: AuthYoutubeRouteChildren = {
+  AuthYoutubeCallbackRoute: AuthYoutubeCallbackRoute,
+}
+
+const AuthYoutubeRouteWithChildren = AuthYoutubeRoute._addFileChildren(
+  AuthYoutubeRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  LivezRoute: LivezRoute,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
-  LivezRoute: LivezRoute,
-  ReadyzRoute: ReadyzRoute,
   OnboardingRoute: OnboardingRoute,
+  ReadyzRoute: ReadyzRoute,
   ApiAssistantRoute: ApiAssistantRoute,
+  ApiEventsRoute: ApiEventsRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLaunchesRoute: ApiLaunchesRoute,
   AuthGithubRoute: AuthGithubRouteWithChildren,
@@ -1099,8 +1120,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLogoutRoute: AuthLogoutRoute,
   AuthMastodonRoute: AuthMastodonRouteWithChildren,
   AuthRedditRoute: AuthRedditRouteWithChildren,
-  AuthYoutubeRoute: AuthYoutubeRouteWithChildren,
   AuthThreadsRoute: AuthThreadsRouteWithChildren,
+  AuthYoutubeRoute: AuthYoutubeRouteWithChildren,
   AvatarsAccountIdRoute: AvatarsAccountIdRoute,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
