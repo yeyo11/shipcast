@@ -1,4 +1,4 @@
-import { WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { parseInstagramDraft, singleDraft } from './text.ts';
 
 const limits = {
@@ -84,6 +84,7 @@ export const instagram = {
   metrics: {
     families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'], impressions: ['reach'] },
     primary: ['views', 'likes'],
+    cadence: HOURLY_BATCHED,
   },
   chartSlot: 2,
 } as const satisfies ChannelDefinition<'instagram'>;

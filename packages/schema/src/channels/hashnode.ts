@@ -1,4 +1,4 @@
-import { MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { singleDraft } from './text.ts';
 
 const limits = { hashnodeTags: 5 } as const;
@@ -57,6 +57,6 @@ export const hashnode = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.2 },
     ],
   },
-  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'] },
+  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'], cadence: HOURLY_BATCHED },
   chartSlot: 4,
 } as const satisfies ChannelDefinition<'hashnode'>;

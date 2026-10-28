@@ -1,4 +1,4 @@
-import { MIDWEEK, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, MIDWEEK, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { parseIssueDraft } from './text.ts';
 
 const limits = { newsletterSubject: 90, newsletterPreview: 140 } as const;
@@ -55,6 +55,6 @@ export const newsletter = {
       { days: MIDWEEK, from: 17, to: 19, weight: 0.5 },
     ],
   },
-  metrics: { families: { views: ['opens'], clicks: ['clicks'], impressions: ['delivered'] }, primary: ['opens', 'clicks'] },
+  metrics: { families: { views: ['opens'], clicks: ['clicks'], impressions: ['delivered'] }, primary: ['opens', 'clicks'], cadence: HOURLY_BATCHED },
   chartSlot: 6,
 } as const satisfies ChannelDefinition<'newsletter'>;

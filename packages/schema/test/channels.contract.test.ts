@@ -66,6 +66,8 @@ for (const d of definitions) {
       for (const family of Object.keys(d.metrics.families)) assert.ok((STATS_METRICS as readonly string[]).includes(family));
       const readings = Object.values(d.metrics.families).flat();
       for (const name of d.metrics.primary) assert.ok(readings.includes(name), `${name} is one of its readings`);
+      // Never read faster than hourly: the owner's rule for every source
+      assert.ok(d.metrics.cadence.hours >= 1, `${d.id} is read at most hourly`);
     }
     for (const w of d.posting?.windows ?? []) assert.ok(w.from < w.to && w.weight > 0 && w.weight <= 1);
   });
@@ -92,7 +94,7 @@ test('a channel added to the registry lands in every derived table from its modu
     comments: { read: true, reply: true, note: 'It coos back', replyLimit: 40 },
     profile: { read: true, edit: 'no', fields: ['bio'], editable: [], limits: {}, note: 'Read only' },
     posting: { note: 'dawn', windows: [{ days: [0], from: 6, to: 8, weight: 1 }] },
-    metrics: { families: { reactions: ['coos'] }, primary: ['coos'] },
+    metrics: { families: { reactions: ['coos'] }, primary: ['coos'], cadence: { hours: 1, read: 'batched', why: 'pigeons are quick' } },
     chartSlot: 3,
   };
   const t = channelTables([...CHANNEL_DEFINITIONS, fake]);

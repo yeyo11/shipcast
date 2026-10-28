@@ -1,4 +1,4 @@
-import type { ChannelDefinition, PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
 
 const limits = { articleDescription: 200, imageAlt: 140 } as const;
 
@@ -61,6 +61,7 @@ export const blog = {
     fieldNames: { text: 'the whole article body', link: 'the canonical URL', image: 'the cover' },
   },
   // Read for the launch as a whole (a site source), not per piece: no row leads with it
-  metrics: { families: { views: ['views'] }, primary: [] },
+  // Cloudflare Web Analytics' page views of the article's paths, one grouped query for every path
+  metrics: { families: { views: ['views'] }, primary: [], cadence: HOURLY_BATCHED },
   chartSlot: 5,
 } as const satisfies ChannelDefinition<'blog'>;

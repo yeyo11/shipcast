@@ -1,4 +1,4 @@
-import { MIDWEEK, WEEKEND, WORKDAYS, type ArticleSummary, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ArticleSummary, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { singleDraft } from './text.ts';
 
 const limits = { devtoTags: 4 } as const;
@@ -62,7 +62,7 @@ export const devto = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.2 },
     ],
   },
-  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'] },
+  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'], cadence: HOURLY_BATCHED },
   // dev.to's brand is black, which fails on the night page: it takes the text colour
   chartSlot: 'ink',
 } as const satisfies ChannelDefinition<'devto'>;

@@ -1,4 +1,4 @@
-import { WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { singleDraft, threadsLength } from './text.ts';
 
 const limits = { threadsText: 500 } as const;
@@ -59,5 +59,6 @@ export const threads = {
   metrics: {
     families: { views: ['views'], reactions: ['likes'], comments: ['replies'], shares: ['reposts', 'quotes', 'shares'] },
     primary: ['views', 'likes'],
+    cadence: HOURLY_BATCHED,
   },
 } as const satisfies ChannelDefinition<'threads'>;
