@@ -31,7 +31,7 @@ import type { Brand, Channel } from '../packages/schema/src/index.ts';
  *
  *   node scripts/scale-test.ts seed --pieces 200 --hours 24 [--in-minutes 10] [--tag scale] [--channels a,b]
  *   node scripts/scale-test.ts exercise --dir <dir> [--until <iso>] [--every-seconds 60] [--oauth-every 5]
- *   node scripts/scale-test.ts check --dir <dir> [--grace-minutes 10]
+ *   node scripts/scale-test.ts check --dir <dir> [--grace-minutes 10] [--ignore-unreachable]
  *   node scripts/scale-test.ts run --pieces 200 --hours 24           seed, exercise until the last piece is due + 15 min, check
  *   node scripts/scale-test.ts active-publish [--timeout-seconds 900] prints the publish job running now, for chaos (a)
  *
@@ -56,6 +56,7 @@ const { positionals, values } = parseArgs({
     'oauth-every': { type: 'string', default: '5' },
     'grace-minutes': { type: 'string', default: '10' },
     'timeout-seconds': { type: 'string', default: '900' },
+    'ignore-unreachable': { type: 'boolean', default: false },
   },
 });
 const command = positionals[0];
@@ -325,6 +326,7 @@ async function check(dir: string): Promise<boolean> {
       secrets: exercise.filter((e) => e.kind === 'secret').map((e) => ({ label: e.detail ?? '?', accountId: null, secretFound: e.ok })),
       now,
       graceMs: Number(values['grace-minutes']) * 60_000,
+      ignoreUnreachable: values['ignore-unreachable'] === true,
     });
     const hour = (t: number) => new Date(Math.floor(t / 3600_000) * 3600_000).toISOString();
     const kpis = await readWindow(new TelemetryStore(registry.database), { from: hour(Date.parse(plan.createdAt)), to: hour(now.getTime() + 3600_000) });

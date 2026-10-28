@@ -291,6 +291,12 @@ export interface CheckInput {
   graceMs?: number;
   /** A piece out later than this after its time is late (a KPI, not a failure) */
   lateMs?: number;
+  /**
+   * Requests no replica answered (status 0) are counted apart instead of as failures: during a
+   * rolling deploy the driver, which reaches each replica by address, may send one to a container in
+   * the second it stops; whether a client saw a failure is then the proxy's traffic to say
+   */
+  ignoreUnreachable?: boolean;
 }
 
 export type PieceState = 'ok' | 'duplicate' | 'mismatch' | 'missed' | 'unknown' | 'pending';
@@ -323,6 +329,8 @@ export interface ScaleSummary {
   secrets: { written: number; lost: number; examples: string[] };
   /** Failed requests of any kind: the rolling deploy's check reads this */
   failedRequests: number;
+  /** Requests no replica answered, when they are counted apart (ignoreUnreachable) */
+  unreachable: number;
   delays: { p50Seconds: number | null; p95Seconds: number | null; maxSeconds: number | null };
   pieces: PieceResult[];
   /** Why the verdict is not a pass, one line each */
@@ -380,14 +388,16 @@ export function checkScale(input: CheckInput): ScaleSummary {
     const events = input.exercise.filter((e) => e.kind === kind);
     groups[kind] = { total: events.length, failed: events.filter((e) => !e.ok).length, p50Ms: percentile(events.map((e) => e.ms), 50), p95Ms: percentile(events.map((e) => e.ms), 95) };
   }
-  const reads = input.exercise.filter((e) => e.kind === 'settings-read');
-  const callbacks = input.exercise.filter((e) => e.kind === 'oauth-callback');
+  const exercised = input.ignoreUnreachable ? input.exercise.filter((e) => e.ok || e.status !== 0 || e.kind === 'secret') : input.exercise;
+  const reads = exercised.filter((e) => e.kind === 'settings-read');
+  const callbacks = exercised.filter((e) => e.kind === 'oauth-callback');
   const lost = input.secrets.filter((s) => !s.secretFound);
   const delays = pieces.map((p) => p.delaySeconds).filter((d): d is number => d !== null);
 
   const counts = { ok: 0, duplicate: 0, mismatch: 0, missed: 0, unknown: 0, pending: 0, pieces: pieces.length, late: delays.filter((d) => d * 1000 > lateMs).length };
   for (const p of pieces) counts[p.state] += 1;
-  const failedRequests = input.exercise.filter((e) => !e.ok && e.kind !== 'settings-read' && e.kind !== 'secret' && e.kind !== 'oauth-callback').length;
+  const unreachable = input.ignoreUnreachable ? input.exercise.filter((e) => !e.ok && e.status === 0 && e.kind !== 'secret').length : 0;
+  const failedRequests = exercised.filter((e) => !e.ok && e.kind !== 'settings-read' && e.kind !== 'secret' && e.kind !== 'oauth-callback').length;
   const staleReads = reads.filter((e) => !e.ok).length;
 
   const problems: string[] = [];
@@ -415,6 +425,7 @@ export function checkScale(input: CheckInput): ScaleSummary {
     oauth: { started: input.exercise.filter((e) => e.kind === 'oauth-start').length, callbacks: callbacks.length, failedCallbacks: callbacks.filter((e) => !e.ok).length },
     secrets: { written: input.secrets.length, lost: lost.length, examples: lost.slice(0, 10).map((s) => s.label) },
     failedRequests,
+    unreachable,
     delays: { p50Seconds: percentile(delays, 50), p95Seconds: percentile(delays, 95), maxSeconds: delays.length ? Math.max(...delays) : null },
     pieces,
     problems,
@@ -442,7 +453,7 @@ export function scaleMarkdown(summary: ScaleSummary, kpis?: string): string {
     `| Settings saves / stale reads on another replica | ${summary.settings.saves} / ${summary.settings.staleReads} |`,
     `| OAuth round trips / failed callbacks | ${summary.oauth.callbacks} / ${summary.oauth.failedCallbacks} |`,
     `| Secret writes / lost | ${summary.secrets.written} / ${summary.secrets.lost} |`,
-    `| Failed requests | ${summary.failedRequests} |`,
+    `| Failed requests | ${summary.failedRequests}${summary.unreachable ? ` (and ${summary.unreachable} to a replica that was stopping, counted apart)` : ''} |`,
     '',
   ];
   if (summary.problems.length > 0) lines.push('## Problems', '', ...summary.problems.map((p) => `- ${p}`), '');

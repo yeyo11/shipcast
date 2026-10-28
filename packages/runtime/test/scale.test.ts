@@ -224,3 +224,17 @@ test('the exercise: failed requests, stale settings, failed callbacks and lost s
   assert.equal(summary.problems.length, 4);
   assert.equal(summary.verdict, 'fail');
 });
+
+test("during a rollout a replica that stopped answering is counted apart, never a request it answered badly", () => {
+  const at = START.toISOString();
+  const exercise: ExerciseEvent[] = [
+    { at, kind: 'page', replica: '172.18.0.5', ok: false, status: 0, ms: 3, detail: 'connect ECONNREFUSED' },
+    { at, kind: 'settings-read', replica: '172.18.0.5', ok: false, status: 0, ms: 3 },
+    { at, kind: 'page', replica: '172.18.0.6', ok: true, status: 200, ms: 40 },
+  ];
+  assert.equal(checkScale(input({ exercise })).verdict, 'fail');
+  const rolled = checkScale(input({ exercise, ignoreUnreachable: true }));
+  assert.equal(rolled.verdict, 'pass', rolled.problems.join('; '));
+  assert.equal(rolled.unreachable, 2);
+  assert.equal(checkScale(input({ exercise: [...exercise, { at, kind: 'page', replica: '172.18.0.6', ok: false, status: 502, ms: 9 }], ignoreUnreachable: true })).failedRequests, 1, 'a 502 is always a failure');
+});
