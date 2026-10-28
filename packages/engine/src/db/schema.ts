@@ -281,3 +281,71 @@ export const attentionDismissals = pgTable('attention_dismissals', {
   key: text('key').primaryKey(),
   dismissedAt: text('dismissed_at').notNull().default(nowIso),
 });
+
+/*
+ * Measurement (docs/plans/performance-refactor.md, phase 0): counters aggregated per UTC hour, so a
+ * day of numbers is a few hundred rows and the before/after comparison reads stored values, not
+ * estimates. Each process adds its own counts to the hour's row (`process` keeps them apart); a
+ * latency is a histogram of fixed buckets ({bucket: count}, see telemetry/histogram.ts), which adds
+ * up across processes and flushes where percentiles would not.
+ */
+
+// Every outbound HTTP call, by who made it (`origin`: a server function, a job, a page) and where it went
+export const providerCalls = pgTable(
+  'provider_calls',
+  {
+    // The hour's start, ISO 8601 in UTC: 2026-10-28T14:00:00.000Z
+    hour: text('hour').notNull(),
+    process: text('process').notNull(),
+    origin: text('origin').notNull(),
+    provider: text('provider').notNull(),
+    method: text('method').notNull(),
+    // The path with its ids replaced (`/repos/:owner/:repo/pulls/:n`); never a query string, which can carry a token
+    endpoint: text('endpoint').notNull(),
+    // 0 when no answer came (a refused connection, a timeout)
+    status: integer('status').notNull(),
+    calls: integer('calls').notNull(),
+    totalMs: doublePrecision('total_ms').notNull(),
+    // From Content-Length where the answer has one: a lower bound
+    bytes: doublePrecision('bytes').notNull().default(0),
+    latency: jsonb('latency').$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+    // The highest share of its quota the provider reported in the hour (0 to 1), from its rate-limit headers
+    quotaPeak: doublePrecision('quota_peak'),
+    quotaLimit: integer('quota_limit'),
+  },
+  (t) => [primaryKey({ name: 'provider_calls_key', columns: [t.hour, t.process, t.origin, t.provider, t.method, t.endpoint, t.status] })],
+);
+
+// How long the app's own work took: server functions, requests, jobs and their wait, browser page loads
+export const timings = pgTable(
+  'timings',
+  {
+    hour: text('hour').notNull(),
+    process: text('process').notNull(),
+    // fn, request, job, job-wait or browser
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    // ok, error, or retry for a job that will be tried again
+    outcome: text('outcome').notNull(),
+    count: integer('count').notNull(),
+    totalMs: doublePrecision('total_ms').notNull(),
+    maxMs: doublePrecision('max_ms').notNull(),
+    latency: jsonb('latency').$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => [primaryKey({ name: 'timings_key', columns: [t.hour, t.process, t.kind, t.name, t.outcome] })],
+);
+
+// The freshness and correctness checks' results, one row per check per run
+export const checks = pgTable(
+  'checks',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    takenAt: text('taken_at').notNull().default(nowIso),
+    // freshness, missed-schedules, late-posts, duplicate-pieces, gone-posts…
+    name: text('name').notNull(),
+    ok: boolean('ok').notNull(),
+    value: doublePrecision('value').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => [index('checks_by_name').on(t.name, t.takenAt)],
+);

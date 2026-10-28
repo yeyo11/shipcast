@@ -38,7 +38,24 @@ const requireSession = createMiddleware().server(async ({ request, pathname, nex
   return new Response('Sign in first', { status: 401, headers: { [SESSION_HEADER]: 'required' } });
 });
 
+/**
+ * The measurement (server/timing.server.ts): pages and API requests timed, with a Server-Timing
+ * header; a server function's request only marked, since its function is timed on its own below
+ */
+const timeRequests = createMiddleware().server(async ({ request, pathname, handlerType, next }) => {
+  const { markServerFnRequest, timeRequest } = await import('./server/timing.server');
+  if (handlerType === 'serverFn') return markServerFnRequest(request, () => Promise.resolve(next()));
+  const result = await timeRequest(request, pathname, async () => (await next()).response);
+  return result;
+});
+
+/** Every server function, timed under its own name, whether the page's render or the browser called it */
+const timeServerFns = createMiddleware({ type: 'function' }).server(async ({ serverFnMeta, next }) => {
+  const { timeServerFn } = await import('./server/timing.server');
+  return timeServerFn(serverFnMeta.name, () => Promise.resolve(next()));
+});
+
 /** Anything that changes something must come from the app's own pages */
 const sameOrigin = createCsrfMiddleware({ filter: ({ request, pathname }) => request.method !== 'GET' && request.method !== 'HEAD' && pathname !== WEBHOOK && !API.test(pathname) && !MCP.test(pathname) });
 
-export const startInstance = createStart(() => ({ requestMiddleware: [sameOrigin, requireSession] }));
+export const startInstance = createStart(() => ({ requestMiddleware: [timeRequests, sameOrigin, requireSession], functionMiddleware: [timeServerFns] }));

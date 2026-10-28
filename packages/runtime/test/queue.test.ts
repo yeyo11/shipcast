@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
 import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
 import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
-import { armScheduled, LOST_RUNNING, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
+import { armScheduled, currentOrigin, LOST_RUNNING, TelemetryRecorder, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
 
 /*
  * The queue on PGlite: the real pg-boss and the real SQL in this process. Installing pg-boss's schema
@@ -86,6 +86,34 @@ test('a job that cannot finish yet is tried again, and its row tells each attemp
   assert.deepEqual(done?.log, ['Waiting: the site has not deployed yet', 'Waiting: the site has not deployed yet', 'devto: https://dev.to/x']);
   assert.equal(done?.launchId, launchId);
   assert.ok(done?.startedAt && done.endedAt);
+});
+
+test('each attempt is timed, its wait counted, and its work runs under the job’s origin', async () => {
+  const db = await database();
+  const launchId = await launch(db.registry);
+  const timings: Array<{ kind: string; name: string; outcome: string }> = [];
+  const telemetry = new TelemetryRecorder({ process: 'test', store: () => undefined });
+  const record = telemetry.timing.bind(telemetry);
+  telemetry.timing = (sample) => {
+    timings.push({ kind: sample.kind, name: sample.name, outcome: sample.outcome });
+    record(sample);
+  };
+  const queue = queueOn(db, { telemetry });
+  const origins: string[] = [];
+  await queue.work({
+    async publish(_data, job) {
+      origins.push(currentOrigin().name);
+      if (job.attempt < 2) throw new RetryLater('not yet');
+    },
+  });
+  const id = await queue.send('publish', { launchId }, { launchId, singletonKey: `launch:${launchId}` });
+  assert.equal((await queue.wait(id!, 20_000, 100))?.state, 'completed');
+  assert.deepEqual(origins, ['job:publish', 'job:publish']);
+  assert.deepEqual(
+    timings.filter((t) => t.kind === 'job').map((t) => t.outcome),
+    ['retry', 'ok'],
+  );
+  assert.equal(timings.filter((t) => t.kind === 'job-wait').length, 2);
 });
 
 test('a job that fails with no retries left is failed, with its error in the log', async () => {

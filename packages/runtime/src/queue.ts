@@ -1,6 +1,8 @@
 import type { ArticleInput, JobRecord, Registry } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import { fromPglite, PgBoss, type ConstructorOptions, type PGliteLike, type Queue } from 'pg-boss';
+import { withOrigin } from './telemetry/origin.ts';
+import type { TelemetryRecorder } from './telemetry/recorder.ts';
 import type { WebhookAction } from './webhooks.ts';
 
 /*
@@ -28,6 +30,10 @@ export interface JobData {
   comments: { reason: string; commentId?: number };
   /** One account's profile reviewed by the AI, with what the owner pasted where the network cannot read it */
   'profile-review': { accountId: number; pasted?: { displayName?: string; bio?: string; links?: string }; language?: string };
+  /** The measurement's freshness and correctness checks, from the registry only */
+  checks: { reason: string };
+  /** The measurement's browser page loads of fixed pages; worked by the web app only */
+  probe: { reason: string };
 }
 
 export type QueueName = keyof JobData;
@@ -69,6 +75,9 @@ const QUEUES: Record<QueueName, QueueSpec> = {
   comments: { title: 'Reading the comments', policy: 'stately', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
   // One per account (its key); no retries: a review costs an AI run, and the owner asks again
   'profile-review': { title: 'Reviewing a profile', policy: 'stately', retryLimit: 0, expireInSeconds: 30 * 60, concurrency: 1 },
+  // The measurement (docs/plans/performance-refactor.md, phase 0): no retries, the next hour's run is the retry
+  checks: { title: 'Checking freshness and correctness', policy: 'stately', retryLimit: 0, expireInSeconds: 10 * 60, concurrency: 1 },
+  probe: { title: 'Timing the pages', policy: 'stately', retryLimit: 0, expireInSeconds: 10 * 60, concurrency: 1 },
 };
 
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];
@@ -119,6 +128,8 @@ export interface QueueOptions {
   onError?: (error: Error) => void;
   /** Seconds between any queue's attempts instead of its own: tests make the waits short */
   retryDelaySeconds?: number;
+  /** Where each job's duration and wait are counted, and whose calls are counted under `job:<queue>` */
+  telemetry?: TelemetryRecorder;
 }
 
 /** The last line of a row whose pg-boss job is gone: waiting, it never ran, so nothing was done */
@@ -139,6 +150,7 @@ export class WorkQueue {
   readonly #registry: Registry;
   readonly #polling: number;
   readonly #retryDelay: number | undefined;
+  readonly #telemetry: TelemetryRecorder | undefined;
   #started: Promise<void> | undefined;
   #stopped = false;
 
@@ -147,6 +159,7 @@ export class WorkQueue {
     this.#registry = registry;
     this.#polling = options.pollingIntervalSeconds ?? 2;
     this.#retryDelay = options.retryDelaySeconds;
+    this.#telemetry = options.telemetry;
     boss.on('error', options.onError ?? ((error) => console.error(`job queue: ${error.message}`)));
   }
 
@@ -278,8 +291,13 @@ export class WorkQueue {
   async #work<Q extends QueueName>(queue: Q, handler: Handler<Q>): Promise<void> {
     const spec = QUEUES[queue];
     const registry = this.#registry;
-    await this.#boss.work<JobData[Q]>(queue, { pollingIntervalSeconds: this.#polling, localConcurrency: spec.concurrency }, async ([job]) => {
+    const telemetry = this.#telemetry;
+    const options = { pollingIntervalSeconds: this.#polling, localConcurrency: spec.concurrency, includeMetadata: true } as const;
+    await this.#boss.work<JobData[Q], void, typeof options>(queue, options, async ([job]) => {
       if (!job) return;
+      // From when it could start (its time, for a delayed job) to now: how long the queue kept it waiting
+      telemetry?.timing({ kind: 'job-wait', name: queue, outcome: 'ok', ms: Math.max(0, Date.now() - Math.max(job.startAfter.getTime(), job.createdOn.getTime())) });
+      const started = performance.now();
       const attempt = job.retryCount + 1;
       const lastAttempt = job.retryCount >= (spec.retryLimit ?? 0);
       // A job a schedule sent, or one sent before its row existed, is recorded when it starts
@@ -292,14 +310,16 @@ export class WorkQueue {
       };
       let link: string | undefined;
       try {
-        await handler(job.data, { id: job.id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal });
+        await withOrigin(`job:${queue}`, () => handler(job.data, { id: job.id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal }));
       } catch (error) {
+        telemetry?.timing({ kind: 'job', name: queue, outcome: lastAttempt ? 'error' : 'retry', ms: performance.now() - started });
         log(error instanceof RetryLater ? `Waiting: ${message(error)}` : message(error));
         await written;
         await registry.updateJob(job.id, { state: lastAttempt ? 'failed' : 'retry', ended: lastAttempt, ...(link !== undefined && { link }) });
         // pg-boss decides what follows: another attempt after the queue's delay, or failed for good
         throw error;
       }
+      telemetry?.timing({ kind: 'job', name: queue, outcome: 'ok', ms: performance.now() - started });
       await written;
       await registry.updateJob(job.id, { state: 'completed', ended: true, ...(link !== undefined && { link }) });
     });

@@ -1,8 +1,12 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { GitHubApp, GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
+import { TelemetryStore, type GitHubApp, type GitHubRest, type PipelineDeps, type Registry } from '@shipcast/engine';
 import {
+  attachTelemetryStore,
   buildServices,
+  Flags,
+  installTelemetry,
+  type TelemetryRecorder,
   createRuntime,
   loadAppConfig,
   startWorking,
@@ -49,6 +53,10 @@ export interface AppContext {
   refresh(): Promise<void>;
   /** The durable work: pg-boss on the registry's Postgres, worked by this process */
   queue: WorkQueue;
+  /** The refactor's switches (SHIPCAST_FLAGS), one per phase that changes behaviour */
+  flags: Flags;
+  /** The measurement: outbound calls, server functions, requests and jobs, counted per hour */
+  telemetry: TelemetryRecorder;
   /** The brand the launches repo speaks for, read again every few minutes */
   brand(): Promise<Brand>;
   /** Every brand, by id; one per launches repo, so one today */
@@ -71,11 +79,15 @@ export function appContext(): Promise<AppContext> {
 }
 
 async function createContext(): Promise<AppContext> {
+  // First, so the clients built below take the counting fetch
+  const telemetry = installTelemetry('web');
+  const flags = Flags.fromEnv(process.env);
   const app = loadAppConfig(process.env);
   // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
   const runtime = await createRuntime({ root: ROOT, log: console.log, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
-  const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app' });
+  attachTelemetryStore(new TelemetryStore(registry.database));
+  const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app', telemetry });
   const work: WorkDeps = {
     env: process.env,
     registry,
@@ -103,6 +115,8 @@ async function createContext(): Promise<AppContext> {
     deps,
     refresh: runtime.refresh,
     queue,
+    flags,
+    telemetry,
     brand,
     brands: async () => {
       const b = await brand();
@@ -110,8 +124,9 @@ async function createContext(): Promise<AppContext> {
     },
   };
   // The app works every queue: what it sends, and the rounds and schedules nobody starts by hand
-  await startWorking(queue, work);
-  stopOnSignal(queue, registry);
+  const { probePages } = await import('./probe.server');
+  await startWorking(queue, work, { handlers: { probe: (_data, job) => probePages(ctx, job) } });
+  stopOnSignal(queue, registry, telemetry);
   return ctx;
 }
 
@@ -119,7 +134,7 @@ async function createContext(): Promise<AppContext> {
  * On SIGTERM or SIGINT the workers stop taking jobs and the running ones get a while to finish; one
  * still running after that is expired and retried (or failed) by pg-boss, never silently lost.
  */
-function stopOnSignal(queue: WorkQueue, registry: Registry): void {
+function stopOnSignal(queue: WorkQueue, registry: Registry, telemetry: TelemetryRecorder): void {
   let stopping = false;
   const stop = (signal: NodeJS.Signals) => {
     if (stopping) return;
@@ -127,6 +142,7 @@ function stopOnSignal(queue: WorkQueue, registry: Registry): void {
     console.log(`${signal}: stopping the job queue`);
     queue
       .stop()
+      .then(() => telemetry.stop())
       .then(() => registry.close())
       .catch((error: unknown) => console.error(`stopping the job queue: ${error instanceof Error ? error.message : String(error)}`))
       .finally(() => process.exit(0));

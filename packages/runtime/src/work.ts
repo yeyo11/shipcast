@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, draftReply, publishLaunch, runComments, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, draftReply, publishLaunch, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
@@ -358,6 +358,13 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       if (result.posts === 0 && result.problems.length > 0) throw new Error(result.problems.join('; '));
     },
 
+    /** The measurement's checks (docs/plans/performance-refactor.md), from the registry only: no provider is called */
+    async checks(_data, job) {
+      for (const result of await runChecks(registry, new TelemetryStore(registry.database), { cadenceHours: METRICS_CADENCE_HOURS })) {
+        job.log(`${result.name}: ${result.ok ? 'ok' : 'NOT OK'} (${Math.round(result.value * 1000) / 1000})`);
+      }
+    },
+
     /** An account's profile reviewed by the AI, sent by hand only; it changes nothing on the network */
     async 'profile-review'(request, job) {
       const account = await registry.account(request.accountId);
@@ -384,19 +391,27 @@ export async function syncNow(queue: WorkQueue, account: Pick<Account, 'id' | 'l
 
 /** When the scheduled jobs are sent, in UTC: the numbers every six hours, the tokens and the accounts once a day */
 export const METRICS_CRON = '0 */6 * * *';
+/** The hours between two runs of METRICS_CRON: how old a reading may be and still be fresh */
+export const METRICS_CADENCE_HOURS = 6;
 export const TOKENS_CRON = '30 3 * * *';
 // After the token refresh, so an Instagram token renewed that night is the one that reads
 export const SNAPSHOTS_CRON = '0 4 * * *';
 /** A round every ten minutes at most if the chain of rounds broke (a crash between two links) */
 export const ROUND_WATCHDOG_CRON = '*/10 * * * *';
+/** The measurement's checks and page timings, hourly, off the round's minutes */
+export const CHECKS_CRON = '7 * * * *';
+export const PROBE_CRON = '37 * * * *';
 
 /**
  * Makes this process a worker of every queue: the handlers, the schedules, and a first round soon
  * after start (the round already queued, if any, is moved to then), so a restart never waits a
  * whole interval.
  */
-export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { firstRoundInSeconds?: number } = {}): Promise<void> {
-  await queue.work(workHandlers(queue, d));
+export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { firstRoundInSeconds?: number; handlers?: Pick<Handlers, 'probe'> } = {}): Promise<void> {
+  await queue.work({ ...workHandlers(queue, d), ...options.handlers });
+  await queue.schedule('checks', CHECKS_CRON, { reason: 'hourly' });
+  // Only a process that can load the pages (the web app) times them
+  if (options.handlers?.probe) await queue.schedule('probe', PROBE_CRON, { reason: 'hourly' });
   await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
   await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });

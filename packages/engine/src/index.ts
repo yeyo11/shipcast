@@ -26,3 +26,6 @@ export * from './db/snapshot.ts';
 export * from './assistant.ts';
 export * from './fake-ai.ts';
 export * from './profile.ts';
+export * from './telemetry/histogram.ts';
+export * from './telemetry/store.ts';
+export * from './telemetry/checks.ts';

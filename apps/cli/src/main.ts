@@ -5,14 +5,16 @@ import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
 import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
-import { claimManual, draftLaunch, preflight, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
+import { claimManual, draftLaunch, preflight, TelemetryStore, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
+  attachTelemetryStore,
   buildServices,
   BY_HAND,
   ConfigError,
   createApiToken,
   createRuntime,
+  installTelemetry,
   InvalidScopes,
   MIN_INTERVAL_SECONDS,
   parseScopes,
@@ -187,8 +189,11 @@ async function main(argv: string[]): Promise<number> {
   // Before the runtime: the MCP server needs no database or keychain, only the app's URL and a token
   if (command === 'mcp') return mcp(values.url, values.token);
 
+  // Before the runtime, whose clients take the global fetch when they are built: every call is counted
+  const telemetry = installTelemetry(command === 'watch' ? 'watch' : 'cli');
   const runtime = await createRuntime({ root: ROOT, log: (line) => console.error(line) });
   const { config, registry, github, secrets, settings, pipeline: deps } = runtime;
+  attachTelemetryStore(new TelemetryStore(registry.database));
   const loadBrandNow = () => runtime.brand();
 
   try {
@@ -239,7 +244,7 @@ async function main(argv: string[]): Promise<number> {
       case 'metrics': {
         // A job of the queue, sent and worked here, so the app lists it like any other reading
         const brand = await loadBrandNow();
-        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5 });
+        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5, telemetry });
         try {
           const id = await queue.send('metrics', { reason: BY_HAND }, { title: 'Reading the numbers, by hand', singletonKey: BY_HAND });
           if (!id) {
@@ -265,7 +270,7 @@ async function main(argv: string[]): Promise<number> {
           return 2;
         }
         const brand = await loadBrandNow();
-        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5 });
+        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5, telemetry });
         try {
           const id = await queue.send(
             'snapshots',
@@ -345,7 +350,7 @@ async function main(argv: string[]): Promise<number> {
           await writeAutomation(registry, { ...(await readAutomation(registry)), intervalSeconds: Math.max(MIN_INTERVAL_SECONDS, seconds) });
         }
         const automation = await readAutomation(registry);
-        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch' });
+        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch', telemetry });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
         await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh }, { firstRoundInSeconds: 0 });
         console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
@@ -399,6 +404,7 @@ async function main(argv: string[]): Promise<number> {
         return 2;
     }
   } finally {
+    await telemetry.stop();
     await registry.close();
   }
 }

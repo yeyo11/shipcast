@@ -78,6 +78,13 @@
       "when": 1793121716566,
       "tag": "0011_launches_list",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793184511539,
+      "tag": "0012_telemetry",
+      "breakpoints": true
     }
   ]
 }

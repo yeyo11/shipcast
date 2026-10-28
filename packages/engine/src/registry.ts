@@ -614,6 +614,14 @@ export class Registry {
     this.#close = close;
   }
 
+  /**
+   * The connection, for the stores that sit beside the registry on the same schema and pool (the
+   * measurement's, then the repositories the registry is split into)
+   */
+  get database(): Database {
+    return this.#db;
+  }
+
   /** The registry on a Postgres server (`SHIPCAST_DATABASE_URL`), its migrations applied */
   static async connect(url: string): Promise<Registry> {
     const { db, close } = await connectPostgres(url);
