@@ -349,7 +349,7 @@ function contract(name: string, make: () => Backend, skip: false | string) {
       const launchId = await launch(db.registry);
       const before = backend.process(db);
       const id = await before.send('draft', { launchId }, { title: 'Drafting claudio v1.0.0', launchId });
-      assert.equal((await db.registry.job(id!))?.state, 'created');
+      assert.equal((await db.registry.jobs.job(id!))?.state, 'created');
       await before.stop();
       const afterRestart = backend.process(db);
       await afterRestart.work({
@@ -364,10 +364,10 @@ function contract(name: string, make: () => Backend, skip: false | string) {
     });
 
     run('a row whose job the queue no longer has is not left running after a start', async (backend, db) => {
-      await db.registry.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
-      await db.registry.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
+      await db.registry.jobs.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
+      await db.registry.jobs.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
       await backend.process(db).start();
-      const row = await db.registry.job('00000000-0000-4000-8000-000000000000');
+      const row = await db.registry.jobs.job('00000000-0000-4000-8000-000000000000');
       assert.equal(row?.state, 'failed');
       assert.deepEqual(row?.log, [LOST_RUNNING]);
     });
@@ -385,7 +385,7 @@ function contract(name: string, make: () => Backend, skip: false | string) {
       const id = await queue.send('snapshots', { reason: 'by hand' });
       await until(() => started);
       await queue.stop(10_000);
-      const row = await db.registry.job(id!);
+      const row = await db.registry.jobs.job(id!);
       assert.equal(row?.state, 'completed');
       assert.deepEqual(row?.log, ['synced']);
     });

@@ -146,7 +146,7 @@ test('Sync now queues one job for that account, a second click is the same job, 
   const first = await syncNow(queue, account);
   assert.ok(first);
   assert.equal(await syncNow(queue, account), first, 'a second click while it waits is the same job');
-  assert.equal((await registry.job(first))?.title, `Syncing ${account.label}`);
+  assert.equal((await registry.jobs.job(first))?.title, `Syncing ${account.label}`);
   assert.deepEqual(await queue.queued('snapshots', `account:${ids.devto}`), [], 'another account has nothing queued');
 
   await queue.work({ snapshots: workHandlers(queue, workDeps(registry, secrets)).snapshots! });

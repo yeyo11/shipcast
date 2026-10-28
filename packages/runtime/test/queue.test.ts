@@ -186,7 +186,7 @@ test('a job sent before a restart runs after it, in the next process', async () 
   const launchId = await launch(db.registry);
   const before = queueOn(db);
   const id = await before.send('draft', { launchId }, { title: 'Drafting claudio v1.0.0', launchId });
-  assert.equal((await db.registry.job(id!))?.state, 'created');
+  assert.equal((await db.registry.jobs.job(id!))?.state, 'created');
   await before.stop();
 
   const afterRestart = queueOn(db);
@@ -203,10 +203,10 @@ test('a job sent before a restart runs after it, in the next process', async () 
 
 test('a row whose job the queue no longer has is not left running after a start', async () => {
   const db = await database();
-  await db.registry.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
-  await db.registry.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
+  await db.registry.jobs.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
+  await db.registry.jobs.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
   await queueOn(db).start();
-  const row = await db.registry.job('00000000-0000-4000-8000-000000000000');
+  const row = await db.registry.jobs.job('00000000-0000-4000-8000-000000000000');
   assert.equal(row?.state, 'failed');
   assert.deepEqual(row?.log, [LOST_RUNNING]);
 });
@@ -217,12 +217,12 @@ test('a round queued in a copy whose pg-boss jobs were cleared by hand says it n
   const db = await database();
   const first = queueOn(db);
   const id = await scheduleRound(first, 'polling', 300);
-  assert.equal((await db.registry.job(id!))?.state, 'created');
+  assert.equal((await db.registry.jobs.job(id!))?.state, 'created');
   await first.stop(1000);
   await db.client.exec("DELETE FROM pgboss.job WHERE state IN ('created', 'retry')");
 
   await queueOn(db).start();
-  const row = await db.registry.job(id!);
+  const row = await db.registry.jobs.job(id!);
   assert.equal(row?.state, 'failed');
   assert.deepEqual(row?.log, [NEVER_RAN]);
   assert.match(NEVER_RAN, /^The queue no longer has this job/, 'the line the owner saw still starts the same way');

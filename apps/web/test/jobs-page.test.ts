@@ -11,8 +11,8 @@ async function seeded(states: readonly JobState[], launchId?: number): Promise<R
   const registry = await memoryRegistry();
   for (const [i, state] of states.entries()) {
     const id = `job-${String(i).padStart(4, '0')}`;
-    await registry.recordJob({ id, queue: 'launch', title: `Job ${i}`, launchId: launchId ?? null });
-    if (state !== 'created') await registry.updateJob(id, { state, ...(state === 'completed' || state === 'failed' ? { ended: true } : {}) });
+    await registry.jobs.recordJob({ id, queue: 'launch', title: `Job ${i}`, launchId: launchId ?? null });
+    if (state !== 'created') await registry.jobs.updateJob(id, { state, ...(state === 'completed' || state === 'failed' ? { ended: true } : {}) });
   }
   return registry;
 }
@@ -60,13 +60,13 @@ test('a busy day is paged whole: no job is cut past a fixed number of rows', asy
 
 test('rounds that ended well and jobs that found automation off are neither listed nor counted', async () => {
   const registry = await seeded(['completed', 'failed']);
-  await registry.recordJob({ id: 'round-ok', queue: 'round', title: 'Round' });
-  await registry.updateJob('round-ok', { state: 'completed', ended: true });
-  await registry.recordJob({ id: 'round-running', queue: 'round', title: 'Round' });
-  await registry.updateJob('round-running', { state: 'active', started: true });
-  await registry.recordJob({ id: 'off', queue: 'launch', title: 'Launch' });
-  await registry.logJob('off', 'Automation is off: nothing to do');
-  await registry.updateJob('off', { state: 'completed', ended: true });
+  await registry.jobs.recordJob({ id: 'round-ok', queue: 'round', title: 'Round' });
+  await registry.jobs.updateJob('round-ok', { state: 'completed', ended: true });
+  await registry.jobs.recordJob({ id: 'round-running', queue: 'round', title: 'Round' });
+  await registry.jobs.updateJob('round-running', { state: 'active', started: true });
+  await registry.jobs.recordJob({ id: 'off', queue: 'launch', title: 'Launch' });
+  await registry.jobs.logJob('off', 'Automation is off: nothing to do');
+  await registry.jobs.updateJob('off', { state: 'completed', ended: true });
   const view = await jobsPage(registry, { page: 1, state: 'all' });
   assert.deepEqual(ids(view), ['round-running', 'job-0001', 'job-0000']);
   assert.deepEqual(view.counts, { all: 3, running: 1, failed: 1, done: 1 });
@@ -75,7 +75,7 @@ test('rounds that ended well and jobs that found automation off are neither list
 test('a launch’s jobs are listed whenever they ran', async () => {
   const registry = await memoryRegistry();
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.recordJob({ id: 'a', queue: 'draft', title: 'Drafting', launchId: launch.id });
-  await registry.recordJob({ id: 'b', queue: 'draft', title: 'Other' });
+  await registry.jobs.recordJob({ id: 'a', queue: 'draft', title: 'Drafting', launchId: launch.id });
+  await registry.jobs.recordJob({ id: 'b', queue: 'draft', title: 'Other' });
   assert.deepEqual((await jobsView(registry, { launchId: launch.id })).map((j) => j.id), ['a']);
 });

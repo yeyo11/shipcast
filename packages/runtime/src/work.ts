@@ -49,7 +49,7 @@ export async function startPublishing(queue: WorkQueue, launch: Launch, retryCha
   const title = retryChannel ? `Retrying ${retryChannel} for ${nameOf(launch)}` : `Publishing ${nameOf(launch)}`;
   const id = await queue.send('publish', { launchId: launch.id, ...(retryChannel && { retryChannel }) }, { title, launchId: launch.id, singletonKey: publishKey(launch.id) });
   if (id) return id;
-  const [waiting] = await queue.registry.jobs({ launchId: launch.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 });
+  const [waiting] = await queue.registry.jobs.jobs({ launchId: launch.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 });
   return waiting?.id;
 }
 
@@ -82,7 +82,7 @@ export async function scheduleRound(queue: WorkQueue, reason: string, inSeconds 
 
 /** Whether a round is running now, in any process */
 export async function roundRunning(registry: Registry): Promise<boolean> {
-  return (await registry.jobs({ queues: ['round'], states: ['active'], limit: 1 })).length > 0;
+  return (await registry.jobs.jobs({ queues: ['round'], states: ['active'], limit: 1 })).length > 0;
 }
 
 /** The handlers of every queue; the app and `shipcast watch` run the same ones */
@@ -271,7 +271,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
               },
             }),
             // A launch with its own publish job waiting for the deploy is left to that job
-            busy: async (drafted) => (await registry.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
+            busy: async (drafted) => (await registry.jobs.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
           },
         );
       } finally {
@@ -286,7 +286,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
           await queue.send('round', { reason: next.mode === 'poll' ? 'polling' : 'maintenance' }, { singletonKey: ROUND_KEY, startAfter: next.intervalSeconds, title: 'Automation round' });
         }
         // The rows of finished jobs are kept a fortnight; the round is what keeps them from growing
-        await registry.pruneJobs(new Date(Date.now() - 14 * 86_400_000).toISOString());
+        await registry.jobs.pruneJobs(new Date(Date.now() - 14 * 86_400_000).toISOString());
       }
     },
 

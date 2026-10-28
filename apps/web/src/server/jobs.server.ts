@@ -24,7 +24,7 @@ const lastDay = () => new Date(Date.now() - 86_400_000).toISOString();
 
 /** A launch's jobs, whenever they ran: a handful */
 export async function jobsView(registry: Registry, filter: { launchId: number }): Promise<JobView[]> {
-  return (await registry.jobs({ launchId: filter.launchId, listed: true, limit: 20 })).map(jobView);
+  return (await registry.jobs.jobs({ launchId: filter.launchId, listed: true, limit: 20 })).map(jobView);
 }
 
 export const JOBS_FEED_LIMIT = 30;
@@ -33,7 +33,7 @@ export const JOBS_FEED_LIMIT = 30;
 export async function jobsFeed(registry: Registry, page: { limit?: number; before?: JobCursor } = {}): Promise<{ jobs: JobView[]; next: JobCursor | null }> {
   const limit = page.limit ?? JOBS_FEED_LIMIT;
   // One more than asked tells whether a next page exists, without a count
-  const rows = await registry.jobs({ since: lastDay(), listed: true, limit: limit + 1, ...(page.before && { before: page.before }) });
+  const rows = await registry.jobs.jobs({ since: lastDay(), listed: true, limit: limit + 1, ...(page.before && { before: page.before }) });
   const shown = rows.slice(0, limit);
   const last = shown.at(-1);
   return { jobs: shown.map(jobView), next: rows.length > limit && last ? { createdAt: last.createdAt, id: last.id } : null };
@@ -61,14 +61,14 @@ const STATES: Record<Exclude<JobStateFilter, 'all'>, readonly JobState[]> = { ru
  */
 export async function jobsPage(registry: Registry, { page, state }: { page: number; state: JobStateFilter }): Promise<JobsPageView> {
   const since = lastDay();
-  const byState = await registry.jobCounts({ since, listed: true });
+  const byState = await registry.jobs.jobCounts({ since, listed: true });
   const running = byState.created + byState.active + byState.retry;
   const counts: Record<JobStateFilter, number> = { all: running + byState.failed + byState.completed, running, failed: byState.failed, done: byState.completed };
   const total = counts[state];
   const pageCount = Math.max(1, Math.ceil(total / JOB_PAGE_SIZE));
   // A page past the end (the list shrank since it was shown) falls back to the last one
   const at = Math.min(Math.max(1, page), pageCount);
-  const jobs = await registry.jobs({
+  const jobs = await registry.jobs.jobs({
     since,
     listed: true,
     ...(state !== 'all' && { states: STATES[state] }),

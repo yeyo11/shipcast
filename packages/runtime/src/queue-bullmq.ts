@@ -226,7 +226,7 @@ export class BullQueue implements JobQueue {
 
   /** The row first, then the job: a worker may take a BullMQ job the moment it is added */
   async #record(name: QueueName, id: string, options: SendOptions): Promise<JobRecord> {
-    return this.#registry.recordJob({ id, queue: name, title: options.title ?? QUEUES[name].title, launchId: options.launchId ?? null });
+    return this.#registry.jobs.recordJob({ id, queue: name, title: options.title ?? QUEUES[name].title, launchId: options.launchId ?? null });
   }
 
   async send<Q extends QueueName>(name: Q, data: JobData[Q], options: SendOptions = {}): Promise<string | null> {
@@ -262,7 +262,7 @@ export class BullQueue implements JobQueue {
       return fresh;
     });
     const record = await this.#record(name, id, options);
-    if (options.title && record.title !== options.title) await this.#registry.updateJob(id, { title: options.title });
+    if (options.title && record.title !== options.title) await this.#registry.jobs.updateJob(id, { title: options.title });
     return id;
   }
 
@@ -359,12 +359,12 @@ export class BullQueue implements JobQueue {
     try {
       if (attempt - 1 > retryLimit) {
         // It stalled (its process died) on its last attempt: as a pg-boss expiry, that was the attempt
-        await this.#registry.recordJob({ id, queue: name, title: spec.title });
-        await this.#registry.logJob(id, 'The process running it stopped, and it has no attempts left');
-        await this.#registry.updateJob(id, { state: 'failed', ended: true });
+        await this.#registry.jobs.recordJob({ id, queue: name, title: spec.title });
+        await this.#registry.jobs.logJob(id, 'The process running it stopped, and it has no attempts left');
+        await this.#registry.jobs.updateJob(id, { state: 'failed', ended: true });
         throw new UnrecoverableError('stalled with no attempts left');
       }
-      if (job.stalledCounter > 0) await this.#registry.logJob(id, 'Tried again: the process running it stopped');
+      if (job.stalledCounter > 0) await this.#registry.jobs.logJob(id, 'Tried again: the process running it stopped');
       const lastAttempt = attempt - 1 >= retryLimit;
       // A timer of our own, cleared when the handler settles: a job leaves nothing behind for its expiry
       const expiry = new AbortController();
@@ -385,7 +385,7 @@ export class BullQueue implements JobQueue {
       } catch (error) {
         if (lastAttempt) throw new UnrecoverableError(message(error));
         if (stately && !(await this.#takeRetry(name, key, id))) {
-          await this.#registry.updateJob(id, { state: 'failed', ended: true });
+          await this.#registry.jobs.updateJob(id, { state: 'failed', ended: true });
           throw new UnrecoverableError(`${message(error)} (another job of its key is already waiting to retry)`);
         }
         const backoff = (this.#retryDelay ?? spec.retryDelay ?? 0) * 1000;

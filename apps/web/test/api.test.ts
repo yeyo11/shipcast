@@ -252,17 +252,17 @@ test('accounts come without secrets, and jobs as the app lists them', async () =
   assert.equal(accounts.status, 200);
   assert.match(text, /"network":"devto"/);
   assert.doesNotMatch(text, /secret/);
-  await s.registry.recordJob({ id: 'j1', queue: 'draft', title: 'Drafting' });
+  await s.registry.jobs.recordJob({ id: 'j1', queue: 'draft', title: 'Drafting' });
   assert.deepEqual(((await body(await call(s.deps, 'GET', '/jobs', { token: s.read }))).jobs as Array<{ id: string }>).map((j) => j.id), ['j1']);
 });
 
 test('jobs come a page at a time, and the cursor walks the whole day', async () => {
   const s = await setup();
   // Recorded in order, so newest first is j5..j1 whether or not two share a millisecond
-  for (let i = 1; i <= 5; i++) await s.registry.recordJob({ id: `j${i}`, queue: 'draft', title: `Drafting ${i}` });
+  for (let i = 1; i <= 5; i++) await s.registry.jobs.recordJob({ id: `j${i}`, queue: 'draft', title: `Drafting ${i}` });
   // A round that ended well is not listed: Automation shows the last one
-  await s.registry.recordJob({ id: 'r1', queue: 'round', title: 'Round' });
-  await s.registry.updateJob('r1', { state: 'completed', ended: true });
+  await s.registry.jobs.recordJob({ id: 'r1', queue: 'round', title: 'Round' });
+  await s.registry.jobs.updateJob('r1', { state: 'completed', ended: true });
   const seen: string[] = [];
   let cursor: string | null = null;
   for (let pages = 0; pages < 5; pages++) {

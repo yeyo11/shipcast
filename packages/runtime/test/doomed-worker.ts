@@ -15,12 +15,14 @@ import { redisClient } from '../src/redis/index.ts';
 const [url, prefix, queue] = process.argv.slice(2) as [string, string, QueueName];
 
 const registry = {
-  jobs: async () => [],
   launches: { launchesPage: async () => ({ launches: [] }) },
-  recordJob: async () => ({}),
-  updateJob: async () => undefined,
-  logJob: async () => undefined,
-  job: async () => undefined,
+  jobs: {
+    jobs: async () => [],
+    recordJob: async () => ({}),
+    updateJob: async () => undefined,
+    logJob: async () => undefined,
+    job: async () => undefined,
+  },
 } as unknown as Registry;
 
 const bull = new BullQueue(redisClient(url, 'queue', { name: 'doomed' }), () => redisClient(url, 'bullmq', { name: 'doomed' }), registry, { prefix, lockSeconds: 1, onError: () => {} });

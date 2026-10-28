@@ -222,25 +222,25 @@ test('metrics keep every reading; the latest of each is the newest', async () =>
 test('a job row keeps its first record, a bounded log, and is forgotten once old', async () => {
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
-  const job = await registry.recordJob({ id: 'a', queue: 'publish', title: 'Publishing claudio v0.9.0', launchId: launch.id });
+  const job = await registry.jobs.recordJob({ id: 'a', queue: 'publish', title: 'Publishing claudio v0.9.0', launchId: launch.id });
   assert.equal(job.state, 'created');
-  assert.equal((await registry.recordJob({ id: 'a', queue: 'publish', title: 'another' })).title, 'Publishing claudio v0.9.0');
-  for (let i = 0; i < JOB_LOG_LINES + 5; i++) await registry.logJob('a', `line ${i}`);
-  const logged = await registry.job('a');
+  assert.equal((await registry.jobs.recordJob({ id: 'a', queue: 'publish', title: 'another' })).title, 'Publishing claudio v0.9.0');
+  for (let i = 0; i < JOB_LOG_LINES + 5; i++) await registry.jobs.logJob('a', `line ${i}`);
+  const logged = await registry.jobs.job('a');
   assert.equal(logged?.log.length, JOB_LOG_LINES);
   assert.equal(logged?.log[0], 'line 5', 'the oldest lines go first');
   assert.equal(logged?.log.at(-1), `line ${JOB_LOG_LINES + 4}`);
 
-  await registry.updateJob('a', { state: 'active', attempts: 1, started: true });
-  const started = (await registry.job('a'))?.startedAt;
+  await registry.jobs.updateJob('a', { state: 'active', attempts: 1, started: true });
+  const started = (await registry.jobs.job('a'))?.startedAt;
   assert.ok(started);
-  await registry.updateJob('a', { state: 'retry', started: true });
-  assert.equal((await registry.job('a'))?.startedAt, started, 'a later attempt keeps the first start');
-  await registry.updateJob('a', { state: 'completed', ended: true, link: '/launches/1' });
-  assert.deepEqual((await registry.jobs({ launchId: launch.id })).map((j) => [j.id, j.state, j.link]), [['a', 'completed', '/launches/1']]);
-  assert.deepEqual(await registry.jobs({ states: ['active', 'retry'] }), []);
-  assert.equal(await registry.pruneJobs('2000-01-01T00:00:00.000Z'), 0);
-  assert.equal(await registry.pruneJobs('2999-01-01T00:00:00.000Z'), 1);
+  await registry.jobs.updateJob('a', { state: 'retry', started: true });
+  assert.equal((await registry.jobs.job('a'))?.startedAt, started, 'a later attempt keeps the first start');
+  await registry.jobs.updateJob('a', { state: 'completed', ended: true, link: '/launches/1' });
+  assert.deepEqual((await registry.jobs.jobs({ launchId: launch.id })).map((j) => [j.id, j.state, j.link]), [['a', 'completed', '/launches/1']]);
+  assert.deepEqual(await registry.jobs.jobs({ states: ['active', 'retry'] }), []);
+  assert.equal(await registry.jobs.pruneJobs('2000-01-01T00:00:00.000Z'), 0);
+  assert.equal(await registry.jobs.pruneJobs('2999-01-01T00:00:00.000Z'), 1);
 });
 
 test('a launch’s sent replies are counted per channel: only others’ comments answered, never another launch’s', async () => {
