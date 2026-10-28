@@ -1,4 +1,4 @@
-import { articleUrls, indexStatus, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, PublishAttempts, readReview, retryChannel, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -34,7 +34,7 @@ const HEADLINE: Array<[string, string, string]> = [
 
 export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
   const [cursors, metrics, posts, replies] = await Promise.all([
-    registry.cursorsWithPrefix(`publish-failed:${launch.id}:`),
+    registry.cursorsWithPrefix(failurePrefix(launch.id)),
     registry.latestMetrics(launch.id),
     registry.posts(launch.id),
     registry.sentReplies(launch.id),
@@ -96,8 +96,7 @@ export async function publishAgain(
   startPublishing: (launch: Launch, retryChannel?: Channel) => Promise<string>,
 ): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
   if (channel) {
-    await registry.deleteCursor(`publish-failed:${launch.id}:${channel}`);
-    if (launch.status === 'published') await registry.setStatus(launch.id, 'drafted', launch.detail);
+    await retryChannel(registry, launch.id, channel, new PublishAttempts(registry.database));
   } else if (launch.status !== 'drafted') {
     return { ok: false, problem: `the launch is ${launch.status}` };
   }

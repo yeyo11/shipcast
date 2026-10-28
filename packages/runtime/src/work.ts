@@ -1,6 +1,7 @@
-import { draftArticle, draftLaunch, draftReply, publishLaunch, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
+import { Flags } from './flags.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
 import { notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
@@ -25,6 +26,8 @@ export interface WorkDeps {
   fetch?: typeof fetch;
   /** Reads the settings again, before each round, so a change made in the app reaches every worker */
   refresh?: () => Promise<void>;
+  /** The refactor's switches; all off when not given */
+  flags?: Flags;
 }
 
 /** The one key of the round queue: whichever process sends a round, there is one queued and one running at most */
@@ -85,6 +88,8 @@ export async function roundRunning(registry: Registry): Promise<boolean> {
 /** The handlers of every queue; the app and `shipcast watch` run the same ones */
 export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
   const { registry } = d;
+  const flags = d.flags ?? new Flags();
+  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
   const launch = async (id: number) => {
     const found = await registry.get(id);
@@ -137,9 +142,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       let current = await launch(launchId);
       job.link(pageOf(launchId));
       if (retryChannel && job.attempt === 1) {
-        // Only this launch's failure is forgotten; the channel stays failed for any other launch
-        await registry.deleteCursor(`publish-failed:${launchId}:${retryChannel}`);
-        if (current.status === 'published') current = await registry.setStatus(launchId, 'drafted', current.detail);
+        current = (await publishing.retry(launchId, retryChannel)) ?? current;
       }
       if (current.status !== 'drafted') {
         job.log(`Nothing to publish: the launch is ${current.status}`);
@@ -147,14 +150,10 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       }
       const brand = await d.brand();
       const services = await servicesFor(brand);
-      const result = await publishLaunch(current, brand, {
-        github: d.github,
-        registry,
-        launchesRepo: d.pipeline.launchesRepo,
-        publishers: services.publishers,
-        search: services.sources.search,
-        accounts: services.accounts,
-      });
+      const connectors = { publishers: services.publishers, search: services.sources.search, accounts: services.accounts };
+      const result = flags.on('publishing-service')
+        ? await publishing.publish(current, brand, connectors, job.id)
+        : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });
       if (result.state === 'waiting') {
         const minutes = Math.round((PUBLISH_RETRIES * PUBLISH_RETRY_SECONDS) / 60);
         if (job.lastAttempt) throw new Error(`still waiting after ${minutes} minutes (${result.reason}); the next publish round will pick it up`);
@@ -167,7 +166,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       for (const p of result.posted) job.log(`${p.channel}: ${p.url}`);
       for (const p of result.problems) job.log(p);
       for (const p of result.scheduled) job.log(`${p.channel}: scheduled for ${p.at}`);
-      const willRetry = result.state === 'partial' && result.problems.some((p) => p.includes('(will retry)'));
+      const willRetry = result.state === 'partial' && result.failures.some((f) => f.retryable);
       // An attempt that only finds the same channels still failing tells the owner nothing new
       // Nor does one that only finds channels still waiting for their time
       const news = result.posted.length > 0 || result.problems.length > 0 || result.state === 'published';
@@ -275,6 +274,12 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
               log(`Claimed ${claimed.repo} ${claimed.ref}: drafting`);
               await startDrafting(queue, claimed);
             },
+            // With the publishing service the round only queues: a launch is published by its own job, one at a time
+            ...(flags.on('publishing-service') && {
+              enqueue: async (drafted: Launch) => {
+                if ((await publishing.approval(drafted)).state !== 'waiting') await startPublishing(queue, drafted);
+              },
+            }),
             // A launch with its own publish job waiting for the deploy is left to that job
             busy: async (drafted) => (await registry.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
           },

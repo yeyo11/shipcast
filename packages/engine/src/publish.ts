@@ -7,6 +7,10 @@ import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
 import { resubmitSitemap, type MetricSources } from './metrics.ts';
 import { loadProjects } from './pipeline.ts';
+import { isRetryable, notSentBecause, type PieceGuard } from './publishing/guard.ts';
+import { failureKey as failureKeyOf } from './publishing/retry.ts';
+
+const failureKey = (launch: Launch, channel: Channel) => failureKeyOf(launch.id, channel);
 import type { Launch, Post, Registry } from './registry.ts';
 
 /**
@@ -83,7 +87,26 @@ export interface PublishDeps {
   accounts?: Partial<Record<Channel, number>>;
   /** The clock a scheduled piece is due by; the tests move it */
   now?: () => Date;
+  /**
+   * Each channel's run claimed before it calls the network (docs/plans/performance-refactor.md,
+   * phase 2): two workers publishing the same launch at once send each piece once. Without it the
+   * registry's unique piece row is the only guard, and it is written after the call.
+   */
+  guard?: PieceGuard;
+  /**
+   * Keeps a launch drafted while a channel with a scheduled piece has no publisher (no credentials,
+   * no piece in the pack), instead of publishing it and leaving that piece scheduled for ever: what
+   * the characterisation tests found (publish.characterisation.test.ts). The publishing service's rule.
+   */
+  keepUnpublishable?: boolean;
 }
+
+/**
+ * The channels whose run may be repeated after a worker died in it: Mastodon takes the idempotency
+ * key, and Reddit looks for its submission before submitting again. Any other channel's run cut short
+ * is left `unknown` for the owner to check, rather than risking a second post.
+ */
+export const IDEMPOTENT_CHANNELS: ReadonlySet<EngineChannel> = new Set(['mastodon', 'reddit']);
 
 export type PublishResult =
   | { state: 'waiting'; launch: Launch; reason: string }
@@ -95,6 +118,10 @@ export type PublishResult =
       problems: string[];
       /** Channels waiting for their time: the launch stays drafted until they are out */
       scheduled: Array<{ channel: Channel; at: string }>;
+      /** Each channel that failed this time, typed: what the problems say in words */
+      failures: Array<{ channel: Channel; message: string; retryable: boolean }>;
+      /** Channels another worker is publishing, or whose last run's outcome is unknown: left alone */
+      heldElsewhere: Array<{ channel: Channel; why: string }>;
     };
 
 /**
@@ -127,7 +154,6 @@ export async function launchConfigOf(github: Pick<GitHubSource, 'fileAt'>, launc
   return parsed?.ok ? parsed.value : undefined;
 }
 
-const failureKey = (launch: Launch, channel: Channel) => `publish-failed:${launch.id}:${channel}`;
 
 /**
  * Publishes a drafted launch once its pull request is merged and the site is deployed. Every text
@@ -136,20 +162,27 @@ const failureKey = (launch: Launch, channel: Channel) => `publish-failed:${launc
  * of the same kind); a temporary failure is retried on the next round, a permanent one is recorded
  * and not retried.
  */
+/**
+ * Whether a drafted launch's drafts are approved: published straight onto the launches repo (`direct:`)
+ * or through a pull request that was merged. What a round asks before it queues the publishing, and
+ * what the publishing asks first.
+ */
+export async function approval(launch: Launch, deps: Pick<PublishDeps, 'github' | 'launchesRepo'>): Promise<{ state: 'approved' } | { state: 'waiting'; reason: string } | { state: 'closed' }> {
+  // Published without a pull request: the drafts went straight onto the launches repo's main branch
+  if (launch.detail?.startsWith('direct:') ?? false) return { state: 'approved' };
+  const number = pullRequestNumber(launch);
+  if (!number) return { state: 'waiting', reason: 'no drafts pull request recorded' };
+  const state = await deps.github.pullRequestState(deps.launchesRepo, number);
+  if (state === 'open') return { state: 'waiting', reason: 'the drafts pull request is open' };
+  return state === 'closed' ? { state: 'closed' } : { state: 'approved' };
+}
+
 export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {
   const { github, registry } = deps;
   const http = deps.fetch ?? globalThis.fetch;
-  // Published without a pull request: the drafts went straight onto the launches repo's main branch
-  const direct = launch.detail?.startsWith('direct:') ?? false;
-  if (!direct) {
-    const number = pullRequestNumber(launch);
-    if (!number) return { state: 'waiting', launch, reason: 'no drafts pull request recorded' };
-    const state = await github.pullRequestState(deps.launchesRepo, number);
-    if (state === 'open') return { state: 'waiting', launch, reason: 'the drafts pull request is open' };
-    if (state === 'closed') {
-      return { state: 'skipped', launch: await registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
-    }
-  }
+  const approved = await approval(launch, deps);
+  if (approved.state === 'waiting') return { state: 'waiting', launch, reason: approved.reason };
+  if (approved.state === 'closed') return { state: 'skipped', launch: await registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
 
   const dir = launchDir(launch);
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
@@ -226,6 +259,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const posted: Array<{ channel: Channel; url: string }> = [];
   const problems: string[] = [];
   const scheduled: Array<{ channel: Channel; at: string }> = [];
+  const failures: Array<{ channel: Channel; message: string; retryable: boolean }> = [];
+  const heldElsewhere: Array<{ channel: Channel; why: string }> = [];
   /** Channels whose run finished this round, though a piece may be left out (a list nobody is on yet) */
   const finished = new Set<EngineChannel>();
 
@@ -462,7 +497,15 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       continue;
     }
     try {
-      const result = await run();
+      // Claimed for this run, then checked again: a worker that read the pieces before another's went out sends nothing
+      const guarded = deps.guard
+        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !done(await registry.posts(launch.id), channel) && !(await registry.cursor(failureKey(launch, channel))) }, run)
+        : { ran: true as const, value: await run() };
+      if (!guarded.ran) {
+        if (guarded.attempt.state !== 'live') heldElsewhere.push({ channel, why: notSentBecause(guarded.attempt) });
+        continue;
+      }
+      const result = guarded.value;
       if (result) {
         await registry.recordPost({ launchId: launch.id, channel, kind: 'post', accountId: accountOf(channel), url: result.url, externalId: result.externalId });
         posted.push({ channel, url: result.url });
@@ -472,7 +515,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       await registry.clearSchedule(launch.id, channel);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const retryable = !(error instanceof Error && 'retryable' in error) || (error as { retryable: boolean }).retryable;
+      const retryable = isRetryable(error);
+      failures.push({ channel, message, retryable });
       if (!retryable) {
         await registry.setCursor(failureKey(launch, channel), message);
         // A retry of the channel is sent at once: its time has come already
@@ -486,9 +530,12 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const pending: EngineChannel[] = [];
   for (const c of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[c];
-    if (mode === 'off' || !publishers[c] || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
+    // A channel with nothing to publish it is not pending, unless the publishing service keeps it: a
+    // piece of it is scheduled, and publishing the launch would leave that piece waiting for ever
+    const unpublishable = !publishers[c] && !(deps.keepUnpublishable && piecesNow.some((p) => p.channel === c && p.status === 'scheduled'));
+    if (mode === 'off' || unpublishable || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
     if (!(await registry.cursor(failureKey(launch, c))) && !(await registry.cursor(cancelledKey(launch.id, c)))) pending.push(c);
   }
-  if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems, scheduled };
-  return { state: 'published', launch: await registry.setStatus(launch.id, 'published', launch.detail), posted, problems, scheduled };
+  if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems, scheduled, failures, heldElsewhere };
+  return { state: 'published', launch: await registry.setStatus(launch.id, 'published', launch.detail), posted, problems, scheduled, failures, heldElsewhere };
 }

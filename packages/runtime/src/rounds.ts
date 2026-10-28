@@ -1,5 +1,5 @@
 import { Instagram, Threads } from '@shipcast/connectors';
-import { collectMetrics, detect, draftLaunch, publishLaunch, type GitHubRest, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
+import { collectMetrics, detect, draftLaunch, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey, buildServices, refreshInstagramToken, type Services } from './services.ts';
@@ -17,6 +17,8 @@ export interface RoundDeps {
   pipeline: PipelineDeps;
   /** Each thing worth saying, as it happens */
   log?: (line: string) => void;
+  /** With the publishing-service flag: every publish through it, under this holder's claims */
+  publishing?: { service: PublishingService; holder: string };
 }
 
 /** A line to the owner's Telegram, when it is connected; a failed notice never stops the round */
@@ -42,7 +44,10 @@ export async function draftClaimed(launch: Launch, d: RoundDeps, services: Servi
 /** Publishes one drafted launch if it is ready, and tells the owner what went out */
 export async function publishOne(launch: Launch, d: RoundDeps, services: Services): Promise<PublishResult> {
   const log = d.log ?? (() => {});
-  const result = await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, publishers: services.publishers, search: services.sources.search, accounts: services.accounts });
+  const connectors = { publishers: services.publishers, search: services.sources.search, accounts: services.accounts };
+  const result = d.publishing
+    ? await d.publishing.service.publish(launch, d.brand, connectors, d.publishing.holder)
+    : await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });
   if ((result.state === 'published' || result.state === 'partial') && (result.posted.length > 0 || result.problems.length > 0)) {
     for (const p of result.posted) log(`${name(launch)} on ${p.channel}: ${p.url}`);
     for (const p of result.problems) log(`${name(launch)}: ${p}`);
@@ -113,6 +118,11 @@ export interface RoundOptions {
   draft?: (launch: Launch, services: Services) => Promise<void>;
   /** Whether other work is publishing a launch already, which the round then leaves to it */
   busy?: (launch: Launch) => Promise<boolean>;
+  /**
+   * With the publishing-service flag the round publishes nothing itself: it hands each drafted launch
+   * to this (which queues its publish job), so a launch is only ever published by its own job
+   */
+  enqueue?: (launch: Launch) => Promise<void>;
 }
 
 /**
@@ -136,6 +146,10 @@ export async function runRound(d: RoundDeps, options: RoundOptions): Promise<voi
   }
   await step('publish', log, async () => {
     for (const launch of (await d.registry.recent(100)).filter((l) => l.status === 'drafted')) {
+      if (options.enqueue) {
+        await options.enqueue(launch);
+        continue;
+      }
       if (await options.busy?.(launch)) continue;
       await publishOne(launch, d, services);
     }

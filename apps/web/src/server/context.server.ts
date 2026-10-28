@@ -96,6 +96,7 @@ async function createContext(): Promise<AppContext> {
     pipeline: deps,
     brand,
     refresh: runtime.refresh,
+    flags,
     // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
     ...(fakeNetworks() && {
       services: async (b: Brand) => previewServices(await buildServices({ env: process.env, brand: b, registry, github, secrets, fetch: previewFetch })),

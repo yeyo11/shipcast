@@ -26,10 +26,20 @@ export class PieceGuard {
   /**
    * Runs `send` for a piece if this worker can claim it; its result's `externalId` and `url` are kept
    * on the attempt. A failure is recorded (retryable or not) and thrown on, as if unguarded.
+   * `stillNeeded`, asked once the claim is held, is what makes a claim race-free: a worker that read
+   * the launch's pieces before another worker's piece went out finds it out now, and sends nothing.
    */
-  async run<T extends { externalId?: string | null; url?: string | null } | undefined>(piece: Piece, options: { idempotent: boolean }, send: () => Promise<T>): Promise<Guarded<T>> {
-    const claim = await this.#attempts.claim(piece, { holder: this.#holder, leaseMs: this.#leaseMs, idempotent: options.idempotent });
+  async run<T extends { externalId?: string | null; url?: string | null } | undefined>(
+    piece: Piece,
+    options: { idempotent: boolean; reclaimLive?: boolean; stillNeeded?: () => Promise<boolean> },
+    send: () => Promise<T>,
+  ): Promise<Guarded<T>> {
+    const claim = await this.#attempts.claim(piece, { holder: this.#holder, leaseMs: this.#leaseMs, idempotent: options.idempotent, ...(options.reclaimLive !== undefined && { reclaimLive: options.reclaimLive }) });
     if (!claim.claimed) return { ran: false, attempt: claim.attempt };
+    if (options.stillNeeded && !(await options.stillNeeded())) {
+      await this.#attempts.succeed(piece, this.#holder);
+      return { ran: false, attempt: { ...claim.attempt, state: 'live' } };
+    }
     let value: T;
     try {
       value = await send();

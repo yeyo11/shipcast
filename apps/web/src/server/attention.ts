@@ -1,3 +1,5 @@
+import { parseFailureKey } from '@shipcast/schema/failures';
+
 /*
  * What needs the owner, as the top bar's bell lists it. Pure on purpose: the server function reads
  * a few small things (launches, failure cursors, accounts, the waiting comments, the dismissals) and
@@ -75,12 +77,6 @@ const DAY = 86_400_000;
 
 export function launchName(repo: string, ref: string): string {
   return ref.startsWith('article:') ? 'An article' : `${repo.split('/')[1] ?? repo} ${ref}`;
-}
-
-/** `publish-failed:12:devto` into its launch and channel; anything else is not a failure */
-export function parseFailureKey(key: string): { launchId: number; channel: string } | null {
-  const match = /^publish-failed:(\d+):(.+)$/.exec(key);
-  return match ? { launchId: Number(match[1]), channel: match[2] ?? '' } : null;
 }
 
 export function soonIn(ms: number): string {

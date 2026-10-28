@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ATTENTION_KEY, attentionItems, attentionLabel, buildAttention, parseFailureKey } from '../src/server/attention.ts';
+import { parseFailureKey } from '@shipcast/schema/failures';
+import { ATTENTION_KEY, attentionItems, attentionLabel, buildAttention } from '../src/server/attention.ts';
 
 const now = new Date('2026-10-26T12:00:00Z');
 const launches = [

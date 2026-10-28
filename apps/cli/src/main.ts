@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
 import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
-import { claimManual, draftLaunch, preflight, TelemetryStore, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
+import { claimManual, draftLaunch, preflight, PublishAttempts, retryChannelEverywhere, TelemetryStore, type DraftResult, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
   attachTelemetryStore,
@@ -14,6 +14,7 @@ import {
   ConfigError,
   createApiToken,
   createRuntime,
+  Flags,
   installTelemetry,
   InvalidScopes,
   MIN_INTERVAL_SECONDS,
@@ -234,7 +235,7 @@ async function main(argv: string[]): Promise<number> {
             console.error(`--retry needs a channel, not "${values.retry}"`);
             return 2;
           }
-          for (const l of await registry.retryChannel(channel.data)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
+          for (const l of await retryChannelEverywhere(registry, channel.data, new PublishAttempts(registry.database))) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
         }
         const brand = await loadBrandNow();
         await publishReady({ env: process.env, registry, github, secrets, brand, pipeline: deps });
@@ -352,7 +353,7 @@ async function main(argv: string[]): Promise<number> {
         const automation = await readAutomation(registry);
         const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch', telemetry });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
-        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh }, { firstRoundInSeconds: 0 });
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags: Flags.fromEnv(process.env) }, { firstRoundInSeconds: 0 });
         console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
         if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');
         console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);

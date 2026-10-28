@@ -971,30 +971,6 @@ export class Registry {
       .orderBy(sql`${cursors.key} COLLATE "C"`);
   }
 
-  /**
-   * Gives a channel whose publishing failed for good another chance, once its cause is fixed: the
-   * failure is forgotten and its launch goes back to `drafted`, so the next publish round tries that
-   * channel again. Pieces already out stay out; the registry never records one twice, so a launch
-   * whose channel already has its post is left as it is.
-   */
-  async retryChannel(channel: Channel): Promise<Launch[]> {
-    return this.#transaction(async (tx) => {
-      const keys = await tx.#db
-        .select({ key: cursors.key })
-        .from(cursors)
-        .where(like(cursors.key, `publish-failed:%:${channel}`));
-      const reopened: Launch[] = [];
-      for (const { key } of keys) {
-        const id = Number(key.split(':')[1]);
-        await tx.deleteCursor(key);
-        const launch = await tx.get(id);
-        // The newsletter has no single post: some issues may be out and others not, which the publish round sorts out
-        if (launch && (await tx.posts(id, { channel, kind: 'post' })).length === 0) reopened.push(await tx.setStatus(id, 'drafted', launch.detail));
-      }
-      return reopened;
-    });
-  }
-
   async accounts(filter: { brand?: string; network?: string } = {}): Promise<Account[]> {
     const where: SQL[] = [];
     if (filter.brand !== undefined) where.push(eq(accounts.brand, filter.brand));

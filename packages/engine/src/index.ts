@@ -33,3 +33,5 @@ export * from './telemetry/report.ts';
 export * from './publishing/attempts.ts';
 export * from './publishing/guard.ts';
 export * from './repositories/secret-rows.ts';
+export * from './publishing/retry.ts';
+export * from './publishing/service.ts';

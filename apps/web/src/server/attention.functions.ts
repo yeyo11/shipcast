@@ -1,3 +1,4 @@
+import { failurePrefix } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { ATTENTION_KEY, attentionItems, buildAttention, type AttentionInput } from './attention';
 import { appContext } from './context.server';
@@ -10,7 +11,7 @@ async function readInput(): Promise<AttentionInput> {
   const { registry } = await appContext();
   const [launches, failures, accounts, facets, newest, scheduled] = await Promise.all([
     registry.recent(60),
-    registry.cursorsWithPrefix('publish-failed:'),
+    registry.cursorsWithPrefix(failurePrefix()),
     registry.accounts(),
     registry.commentFacets(false),
     registry.newestWaitingCommentId(false),

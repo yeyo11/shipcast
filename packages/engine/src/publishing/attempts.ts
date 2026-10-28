@@ -39,6 +39,11 @@ export interface ClaimOptions {
    * piece before sending it again (Reddit). False for the rest: a stale claim becomes `unknown`.
    */
   idempotent: boolean;
+  /**
+   * Whether a piece that went out may be claimed again: for a channel's whole run (the newsletter's
+   * languages, Reddit's subreddits), which the caller re-checks after claiming, never for one piece
+   */
+  reclaimLive?: boolean;
   now?: Date;
 }
 
@@ -71,7 +76,7 @@ export class PublishAttempts {
     const lease = new Date(now.getTime() + (options.leaseMs ?? DEFAULT_LEASE_MS)).toISOString();
     const nowText = now.toISOString();
     const takeable = or(
-      inArray(publishAttempts.state, ['retryable', 'failed']),
+      inArray(publishAttempts.state, options.reclaimLive ? ['retryable', 'failed', 'live'] : ['retryable', 'failed']),
       options.idempotent ? and(eq(publishAttempts.state, 'attempting'), lt(publishAttempts.leaseUntil, nowText)) : sql`false`,
     );
     const [claimed] = await this.#db

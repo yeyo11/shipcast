@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { JOB_LOG_LINES, Registry, type NewLaunch } from '../src/index.ts';
+import { JOB_LOG_LINES, Registry, retryChannelEverywhere, type NewLaunch } from '../src/index.ts';
 import { memoryRegistry as memory } from '../src/testing.ts';
 
 const release: NewLaunch = { repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'major', brand: 'personal' };
@@ -147,12 +147,12 @@ test('a channel that failed for good can be retried, without posting the others 
   await registry.setCursor(`publish-failed:${launch.id}:newsletter`, 'Brevo: 405');
   await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
 
-  const reopened = await registry.retryChannel('newsletter');
+  const reopened = await retryChannelEverywhere(registry, 'newsletter');
   assert.deepEqual(reopened.map((l) => l.status), ['drafted']);
   assert.equal(reopened[0]!.detail, 'https://github.com/yeyo11/launches/pull/1', 'the pull request stays recorded');
   assert.equal(await registry.cursor(`publish-failed:${launch.id}:newsletter`), undefined);
   assert.equal(await registry.cursor(`publish-failed:${launch.id}:devto`), 'stale', 'other channels untouched');
-  assert.deepEqual(await registry.retryChannel('newsletter'), [], 'nothing left to retry');
+  assert.deepEqual(await retryChannelEverywhere(registry, 'newsletter'), [], 'nothing left to retry');
 });
 
 test('a retry leaves alone a launch whose channel already has its post', async () => {
@@ -161,7 +161,7 @@ test('a retry leaves alone a launch whose channel already has its post', async (
   await registry.setStatus(launch.id, 'published');
   await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
   await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
-  assert.deepEqual(await registry.retryChannel('devto'), []);
+  assert.deepEqual(await retryChannelEverywhere(registry, 'devto'), []);
   assert.equal((await registry.get(launch.id))?.status, 'published');
 });
 
