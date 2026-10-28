@@ -29,6 +29,10 @@ export const DEFAULT_PREFIX = 'shipcast:';
  * The body of `Lock.withLock` over any `acquire`. Renewal every third of the TTL leaves two chances
  * to renew before expiry; a holder that cannot reach Redis for a whole TTL can no longer claim the
  * lock is still its own, so its signal aborts then rather than at the first failed renewal.
+ * A lease excludes only while its holder keeps renewing: a process paused longer than the TTL (GC,
+ * a stalled event loop) can find another holder beside it when it wakes. So this lock coordinates
+ * maintenance and short critical sections; whatever must happen exactly once is decided in Postgres
+ * (publish_attempts' claims, unique rows), never by this lock alone.
  */
 export async function runWithLock<T>(acquire: Lock['acquire'], key: string, fn: (signal: AbortSignal) => Promise<T>, options: LockOptions): Promise<LockResult<T>> {
   const { ttlMs, waitMs = 0, retryMs = 50 } = options;

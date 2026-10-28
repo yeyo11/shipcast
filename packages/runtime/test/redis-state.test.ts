@@ -155,19 +155,22 @@ function contract(backend: string, make: () => Ports, skip: false | string) {
       let running = 0;
       let most = 0;
       let runs = 0;
-      // Each run outlives the TTL several times: only renewal keeps the others out
+      // Each run outlives the TTL three times: only renewal keeps the others out. The TTL is 500 ms,
+      // not less: a lease cannot exclude across a pause longer than its TTL (a loaded machine stalls
+      // the event loop for 100 ms and more), which is why nothing that must happen once relies on
+      // this lock alone: publishing is guarded by its Postgres claims (publish_attempts)
       const work = async () => {
         running++;
         most = Math.max(most, running);
         runs++;
-        await wait(350);
+        await wait(1500);
         running--;
         return runs;
       };
-      const results = await Promise.all(locks.map((l) => l.withLock('round', work, { ttlMs: 100 })));
+      const results = await Promise.all(locks.map((l) => l.withLock('round', work, { ttlMs: 500 })));
       assert.equal(results.filter((r) => r.acquired).length, 1, 'without a wait, the others give up');
       assert.equal(most, 1);
-      const waited = await Promise.all(locks.map((l) => l.withLock('round', work, { ttlMs: 100, waitMs: 3000, retryMs: 20 })));
+      const waited = await Promise.all(locks.map((l) => l.withLock('round', work, { ttlMs: 500, waitMs: 10_000, retryMs: 20 })));
       assert.ok(waited.every((r) => r.acquired), 'with a wait, each runs in turn');
       assert.equal(most, 1, 'never two at once');
       assert.equal(runs, 4);
