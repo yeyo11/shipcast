@@ -1,4 +1,4 @@
-import { ContentPack, LIMITS, PIECE_LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
+import { ContentPack, languageName, LIMITS, PIECE_LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
@@ -41,8 +41,6 @@ export type AdaptTarget = keyof typeof ADAPT_TARGETS;
 export function isAdaptTarget(value: unknown): value is AdaptTarget {
   return typeof value === 'string' && Object.hasOwn(ADAPT_TARGETS, value);
 }
-
-const LANGUAGE_NAMES: Record<string, string> = { en: 'English', es: 'Spanish' };
 
 /** What the analysis of a launch found in the code: what the assistant's text may claim */
 export type Analysis = Pack['analysis'];
@@ -160,7 +158,7 @@ export const TITLE_COUNT = 5;
  * line), so the page can show it as a diff of the selection without parsing prose around it.
  */
 export function buildActionPrompt(input: ActionInput, context: AssistantContext, brand: Brand, options: { tone?: string } = {}): AssistantPrompt {
-  const lang = context.lang ? LANGUAGE_NAMES[context.lang] ?? context.lang : undefined;
+  const lang = context.lang ? languageName(context.lang) : undefined;
   const other = context.lang === 'es' ? 'English' : context.lang === 'en' ? 'Spanish' : undefined;
   const task = ((): string => {
     switch (input.action) {

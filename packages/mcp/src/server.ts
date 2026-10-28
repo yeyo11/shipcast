@@ -1,4 +1,5 @@
 import { McpServer, ResourceTemplate, type CallToolResult } from '@modelcontextprotocol/server';
+import { LANGUAGE_NAMES } from '@shipcast/schema';
 import { z } from 'zod';
 import type { ShipcastApi } from './client.ts';
 import { describeError, invoke } from './errors.ts';
@@ -102,7 +103,7 @@ export function createShipcastServer(api: ShipcastApi): McpServer {
           role: 'user',
           content: {
             type: 'text',
-            text: `Write an article announcing ${repo}${ref ? ` ${ref}` : ''} in ${lang === 'es' ? 'Spanish' : 'English'}.
+            text: `Write an article announcing ${repo}${ref ? ` ${ref}` : ''} in ${LANGUAGE_NAMES[lang ?? 'en']}.
 - Tell only what the release really ships: read the repo's code and release notes, and keep anything planned or only documented clearly apart from what is implemented.
 - Open with a paragraph that answers what the project is and what changed; use questions as section headings; no top-level heading (the title is separate).
 - Show me the title and the Markdown and wait for my changes.

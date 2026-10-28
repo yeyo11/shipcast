@@ -1,4 +1,4 @@
-import { activeChannels, hasDemo, LIMITS, type Brand, type Channel, type LaunchConfig, type PackKind } from '@shipcast/schema';
+import { activeChannels, hasDemo, languageName, LIMITS, type Brand, type Channel, type LaunchConfig, type PackKind } from '@shipcast/schema';
 import type { Launch } from './registry.ts';
 
 /** Tools the analysis may use: reading the code and its history, never changing or running it. */
@@ -125,7 +125,7 @@ export function promptVariables(brand: Brand, config: LaunchConfig, extra: Recor
     demoNote: hasDemo(config) ? ' (the demo plays as its second slide)' : '',
     otherLanguages: 'the other blog languages',
     // The card shares the article in this language, so the post is written in it too
-    linkedinLanguage: brand.languages.linkedin && brand.languages.blog.includes(brand.languages.linkedin) ? (LANGUAGE_NAMES[brand.languages.linkedin] ?? 'English') : 'English',
+    linkedinLanguage: brand.languages.linkedin && brand.languages.blog.includes(brand.languages.linkedin) ? languageName(brand.languages.linkedin) : 'English',
     ...Object.fromEntries(Object.entries(LIMITS).map(([key, value]) => [`limit.${key}`, String(value)])),
     ...extra,
   };
@@ -220,8 +220,6 @@ export function buildPrompt(launch: Launch, config: LaunchConfig, brand: Brand, 
   return { prompt, system };
 }
 
-const LANGUAGE_NAMES: Record<string, string> = { en: 'English', es: 'Spanish' };
-
 /**
  * The instructions for an article the owner wrote: translate it and write each channel's piece. The
  * owner's text is the truth, under the locked article rules.
@@ -235,11 +233,11 @@ export function buildArticlePrompt(
 ): Prompt {
   const prompts = options.prompts ?? {};
   const other = brand.languages.blog.filter((l) => l !== input.lang);
-  const otherLanguages = other.map((l) => LANGUAGE_NAMES[l] ?? l).join(' and ');
+  const otherLanguages = other.map(languageName).join(' and ');
   const system = [...voice(`You prepare the distribution of an article ${brand.displayName} wrote, published under their name.`, brand, options.tone), ...LOCKED_ARTICLE_RULES].join('\n');
   const channels = (Object.keys(config.publishing) as Channel[]).filter((c) => config.publishing[c] !== 'off');
   const prompt = [
-    `Here is the article, written in ${LANGUAGE_NAMES[input.lang] ?? input.lang}.`,
+    `Here is the article, written in ${languageName(input.lang)}.`,
     '',
     `Title: ${input.title}`,
     '',
