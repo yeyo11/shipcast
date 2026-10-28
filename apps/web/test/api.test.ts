@@ -230,7 +230,7 @@ test('a launch comes with its posts, numbers, index status and drafts summary', 
   const detail = await body(response);
   assert.equal(detail.repo, 'yeyo11/claudio');
   assert.equal((detail.posts as unknown[]).length, 1);
-  assert.deepEqual(detail.metrics, [{ source: 'blog', name: 'views', value: 12, takenAt: '2026-10-25T00:00:00.000Z' }]);
+  assert.deepEqual(detail.metrics, [{ source: 'blog', name: 'views', value: 12, takenAt: '2026-10-25T00:00:00.000Z', checkedAt: '2026-10-25T00:00:00.000Z' }]);
   assert.deepEqual(
     (detail.index as Array<{ engine: string; indexed: unknown }>).map((i) => [i.engine, i.indexed]),
     [['google', null]],

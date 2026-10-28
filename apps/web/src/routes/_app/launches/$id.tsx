@@ -193,7 +193,7 @@ function Details({ data }: { data: Data }) {
                 <header className="dsource-head">
                   <ChannelIcon channel={source} size={18} />
                   <strong>{CHANNEL_NAMES[source] ?? source}</strong>
-                  <span className="muted">read {when(values[0]!.takenAt)}</span>
+                  <span className="muted">read {when(values[0]!.checkedAt)}</span>
                 </header>
                 <dl className="post-numbers dsource-numbers">
                   {values.map((v) => (

@@ -81,7 +81,7 @@ export async function launchDetail(registry: Pick<Repositories, 'posts' | 'metri
   );
   const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
   const [review, latest, view] = await Promise.all([reviewing, registry.metrics.latestMetrics(launch.id), launchView(registry, launch)]);
-  const metrics = latest.map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
+  const metrics = latest.map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt, checkedAt: m.checkedAt }));
   return { launch: view, detail: launch.detail, review: review ?? null, metrics, index };
 }
 
