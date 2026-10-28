@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { savePrompt, writeAiSettings } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { Brand } from '@shipcast/schema';
-import { accountSecretKey, aiSetup, AiNotConnected, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
+import { AiError, Brand } from '@shipcast/schema';
+import { accountSecretKey, aiRunnerFor, aiRunSetup, aiSetup, AiNotConnected, Flags, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
@@ -51,4 +51,27 @@ test('the AI providers are networks of the catalog, their keys checked before th
   assert.equal(calls[1], 'http://localhost:11434/v1/models {}', 'no key, no authorization header');
   const bad = await buildConnector('openaiCompatible', { settings: { baseUrl: 'http://bad.example/v1', model: 'm' }, secrets: {} }, brand, http).check();
   assert.equal(bad.ok, false);
+});
+
+test('the AI task runner reads the same settings and keychain as the old providers', async () => {
+  const d = { ...(await deps()), env: { SHIPCAST_CLAUDIO_TOOL_PRESET: 'explore-read-only' } };
+  const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
+  await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-test' }), 'Anthropic API');
+  await writeAiSettings(d.registry, { tasks: { pack: { provider: 'claudio' }, article: { provider: 'anthropic', model: 'claude-opus-5-5' }, assistant: { provider: 'openaiCompatible' } } });
+
+  const setup = aiRunSetup(d);
+  const pack = await setup('pack');
+  assert.equal(pack.provider.id, 'claudio');
+  assert.deepEqual(pack.settings, { url: 'http://claudio:8798', token: 't', toolPreset: 'explore-read-only' });
+  const article = await setup('article');
+  assert.equal(article.provider.id, 'anthropic');
+  assert.equal(article.model, 'claude-opus-5-5');
+  assert.equal(article.settings.apiKey, 'sk-ant-test');
+  await assert.rejects(setup('assistant'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Channels page/.test(e.message));
+  assert.ok(aiRunnerFor({ ...d, workspace: { hostDir: '/tmp/x', providerDir: '/workspace' } }));
+});
+
+test('the ai-runner flag is off unless it is set', () => {
+  assert.equal(Flags.fromEnv({}).on('ai-runner'), false);
+  assert.equal(Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner' }).on('ai-runner'), true);
 });
