@@ -40,6 +40,9 @@ export const Route = createFileRoute('/_app/launches/$id')({
     ...(typeof search.tab === 'string' && (TABS as readonly string[]).includes(search.tab) && { tab: search.tab as TabId }),
     ...(typeof search.channel === 'string' && search.channel !== '' && { channel: search.channel }),
   }),
+  // A change of tab or channel is a new address but the same data: kept for 30 s instead of read
+  // again from GitHub on every click; an action still reloads it at once (router.invalidate)
+  staleTime: 30_000,
   loader: async ({ params }) => {
     const data = await getLaunch({ data: Number(params.id) });
     if (!data) throw notFound();
@@ -259,7 +262,10 @@ function LaunchPage() {
   const running = jobs.some((j) => j.state === 'running' && !j.queued) || launch.status === 'generating';
   useEffect(() => {
     if (!running) return;
-    const timer = setInterval(() => router.invalidate(), 5000);
+    // Never a second read while one is still on its way: they used to pile up and be cut ("Failed to fetch")
+    const timer = setInterval(() => {
+      if (router.state.status !== 'pending') void router.invalidate();
+    }, 5000);
     return () => clearInterval(timer);
   }, [running, router]);
 

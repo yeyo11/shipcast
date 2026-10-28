@@ -56,14 +56,23 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = await appContext();
     const launch = await registry.get(data);
     if (!launch) return null;
-    const detail = await launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo });
-    const draftPaths = detail.review && !('error' in detail.review) ? detail.review.drafts.map((d) => d.path) : [];
+    // Everything at once: the page waited for each read in turn, the slowest (GitHub's) first
+    const detailing = launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo });
+    // Caught here as well: launchPieces may never wait for it, and a rejection nobody awaits would end the process
+    const draftPaths = detailing.then((d) => (d.review && !('error' in d.review) ? d.review.drafts.map((x) => x.path) : [])).catch(() => []);
+    const [detail, pieces, jobs, numbers, waiting] = await Promise.all([
+      detailing,
+      launchPieces(registry, launch, { github, launchesRepo: deps.launchesRepo, draftPaths }),
+      jobsView(registry, { launchId: launch.id }),
+      launchNumbers(registry, [launch]),
+      waitingComments(registry, launch.id),
+    ]);
     return {
       ...detail,
-      pieces: await launchPieces(registry, launch, { github, launchesRepo: deps.launchesRepo, draftPaths }),
-      jobs: await jobsView(registry, { launchId: launch.id }),
-      numbers: (await launchNumbers(registry, [launch])).get(launch.id)!,
-      waitingComments: await waitingComments(registry, launch.id),
+      pieces,
+      jobs,
+      numbers: numbers.get(launch.id)!,
+      waitingComments: waiting,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
       fakeNetworks: fakeNetworks(),
     };

@@ -73,16 +73,18 @@ export async function readReview(launch: Launch, deps: { github: ReviewGitHub; l
   const pr = await deps.github.pullRequest(deps.launchesRepo, number);
   const ref = pr.state === 'merged' ? 'HEAD' : pr.branch;
   const dir = launchDir(launch);
-  const drafts: Draft[] = [];
-  for (const path of await deps.github.pullRequestFiles(deps.launchesRepo, number)) {
-    const draft: Draft = describe(path, dir);
-    if (draft.kind === 'article' || draft.kind === 'channel') draft.content = (await deps.github.fileAt(deps.launchesRepo, path, ref)) ?? '';
-    // Raw URLs take the branch with its slashes as they are; an encoded one is a 404
-    if (draft.kind === 'image' || draft.kind === 'video') {
-      draft.url = `https://raw.githubusercontent.com/${deps.launchesRepo}/${(ref === 'HEAD' ? 'main' : ref).split('/').map(encodeURIComponent).join('/')}/${path}`;
-    }
-    drafts.push(draft);
-  }
+  // Every text is read at once: one after the other, a launch's dozen drafts took seconds on each load of its page
+  const drafts: Draft[] = await Promise.all(
+    (await deps.github.pullRequestFiles(deps.launchesRepo, number)).map(async (path) => {
+      const draft: Draft = describe(path, dir);
+      if (draft.kind === 'article' || draft.kind === 'channel') draft.content = (await deps.github.fileAt(deps.launchesRepo, path, ref)) ?? '';
+      // Raw URLs take the branch with its slashes as they are; an encoded one is a 404
+      if (draft.kind === 'image' || draft.kind === 'video') {
+        draft.url = `https://raw.githubusercontent.com/${deps.launchesRepo}/${(ref === 'HEAD' ? 'main' : ref).split('/').map(encodeURIComponent).join('/')}/${path}`;
+      }
+      return draft;
+    }),
+  );
   drafts.sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || a.path.localeCompare(b.path, 'en', { numeric: true }));
   return { pullRequest: { number: pr.number, url: pr.url, state: pr.state, branch: pr.branch }, drafts };
 }

@@ -68,6 +68,8 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
  * Google is always listed, as the engine that matters most; Bing once it has been read at all.
  */
 export async function launchDetail(registry: Registry, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
+  // The pull request is read from GitHub, the rest from the registry: all at once
+  const reviewing = readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
   const urls = articleUrls(await registry.posts(launch.id, { channel: 'blog' }));
   const views = await Promise.all(
     urls.flatMap(({ lang, url }) =>
@@ -78,9 +80,9 @@ export async function launchDetail(registry: Registry, launch: Launch, deps: { g
     ),
   );
   const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
-  const review = await readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-  const metrics = (await registry.latestMetrics(launch.id)).map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
-  return { launch: await launchView(registry, launch), detail: launch.detail, review: review ?? null, metrics, index };
+  const [review, latest, view] = await Promise.all([reviewing, registry.latestMetrics(launch.id), launchView(registry, launch)]);
+  const metrics = latest.map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
+  return { launch: view, detail: launch.detail, review: review ?? null, metrics, index };
 }
 
 /**

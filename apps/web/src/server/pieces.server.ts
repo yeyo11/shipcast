@@ -15,7 +15,7 @@ export interface SchedulingChannel {
  * launch can still schedule. Read beside launchDetail, which the REST API shares and which keeps
  * its shape.
  */
-export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] }) {
+export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
   const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts(launch.id),
     registry.accounts(),
@@ -43,13 +43,15 @@ async function schedulingChannels(
   registry: Registry,
   launch: Launch,
   posts: Awaited<ReturnType<Registry['posts']>>,
-  deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] },
+  deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> },
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);
   if (launch.status !== 'drafted' && launch.status !== 'detected' && launch.status !== 'generating') return { timezone, channels: [] };
   const config = await launchConfigOf(deps.github, deps.launchesRepo, launch).catch(() => undefined);
+  // Only needed when launch.yml cannot be read; the caller may still be reading them from GitHub
+  const draftPaths = config ? [] : await deps.draftPaths;
   const drafted = (channel: Channel) =>
-    deps.draftPaths.some((path) => {
+    draftPaths.some((path) => {
       const name = path.split('/').at(-1) ?? '';
       return name === `${channel}.md` || (channel === 'newsletter' && name.startsWith('newsletter-'));
     });
