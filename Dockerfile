@@ -4,11 +4,12 @@
 FROM node:24.22.1-trixie-slim
 
 # git for the repos the engine clones; Chromium (Playwright's, with its system libraries) for the
-# capture of screenshots and carousels. No docker and no tailscale: only the CLI's installer and the
-# app's own TLS mode use them, and neither runs here.
+# capture of screenshots and carousels; ffmpeg and ffprobe for the videos (Instagram's demo, the
+# YouTube Short and video): Playwright's own ffmpeg is a recorder without ffprobe. No docker and no
+# tailscale: only the CLI's installer and the app's own TLS mode use them, and neither runs here.
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH PLAYWRIGHT_BROWSERS_PATH=/ms-playwright CI=1
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git \
+    && apt-get install -y --no-install-recommends ca-certificates git ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable
 
