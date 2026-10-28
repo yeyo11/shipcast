@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ConnectorError } from '@shipcast/connectors';
-import { Refused, splitFrontMatter, type Channel } from '@shipcast/schema';
+import { CAPABILITIES, channelAtStart, isMainPiece, Refused, splitFrontMatter, type Channel, type EditField } from '@shipcast/schema';
 import { isScalar, parseDocument } from 'yaml';
 import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
@@ -12,78 +12,10 @@ import { kindLanguage, type Post, type Registry } from './registry.ts';
  * engine never sends it again ("a launch happens once"). See docs/decisions/edit-delete.md
  */
 
-export type EditSupport = 'yes' | 'no' | 'partial';
-/** `unpublish`: the network takes the piece off the site but keeps it in the author's drafts */
-export type DeleteSupport = 'yes' | 'no' | 'unpublish';
-/** What a change can carry; each network takes some of them */
-export type EditField = 'text' | 'title' | 'tags' | 'link' | 'image';
+export type { Capability, DeleteSupport, EditField, EditSupport } from '@shipcast/schema';
 
-export interface Capability {
-  edit: EditSupport;
-  delete: DeleteSupport;
-  /** What the network allows or refuses, in words the app shows beside the actions */
-  note: string;
-  /** The fields an edit can change there */
-  fields: EditField[];
-}
-
-
-/** What each channel can do with a published piece: the map the app and the API read. */
-export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
-  blog: {
-    edit: 'yes',
-    delete: 'yes',
-    note: 'By a commit to the launches repo, which deploys the site: an edit rewrites the article and sets its updatedDate; a delete removes it, and its media once no other language of the launch is left',
-    fields: ['text', 'title', 'tags'],
-  },
-  devto: {
-    edit: 'yes',
-    delete: 'unpublish',
-    note: 'dev.to has no delete in its API: the article is unpublished and stays in the author’s dashboard',
-    fields: ['text', 'title', 'tags', 'link', 'image'],
-  },
-  hashnode: { edit: 'yes', delete: 'yes', note: 'Through updatePost and removePost; the API answers only publications on the Pro plan', fields: ['text', 'title', 'tags', 'link', 'image'] },
-  mastodon: { edit: 'yes', delete: 'yes', note: 'An edit keeps the post’s replies and boosts, and Mastodon shows it as edited', fields: ['text', 'link', 'image'] },
-  telegram: {
-    edit: 'yes',
-    delete: 'yes',
-    note: 'The text, or the caption of a photo (with its photo); Telegram refuses to delete a message older than 48 hours',
-    fields: ['text', 'link', 'image'],
-  },
-  discord: { edit: 'yes', delete: 'yes', note: 'Through the webhook that sent the message', fields: ['text', 'link'] },
-  bluesky: {
-    edit: 'no',
-    delete: 'yes',
-    note: 'Bluesky has no edit: a post can only be deleted and posted again, which loses its likes and replies, so Shipcast never does that on its own',
-    fields: [],
-  },
-  instagram: {
-    edit: 'no',
-    delete: 'no',
-    note: 'Instagram’s API changes no caption of a published post and deletes no post; that is done in the app',
-    fields: [],
-  },
-  newsletter: { edit: 'no', delete: 'no', note: 'A sent campaign is in the readers’ inboxes already', fields: [] },
-  reddit: {
-    edit: 'no',
-    delete: 'yes',
-    note: 'Each subreddit’s post can be deleted; a Reddit title can never change, and editing the body is not built',
-    fields: [],
-  },
-  githubDiscussions: {
-    edit: 'yes',
-    delete: 'yes',
-    note: 'Through the GitHub App: an edit replaces the title or the Markdown body (GitHub shows it as edited); a delete removes the discussion with its comments',
-    fields: ['text', 'title'],
-  },
-  threads: { edit: 'no', delete: 'yes', note: 'The Threads API has no edit: a post can only be deleted (at most 100 deletes a day)', fields: [] },
-  linkedin: {
-    edit: 'no',
-    delete: 'yes',
-    note: 'Published on the personal profile with Share on LinkedIn, which can delete; LinkedIn’s comments and numbers need its Community Management API, granted only to approved companies, so none are read',
-    fields: [],
-  },
-};
+/** What each channel can do with a published piece: the map the app and the API read, from the channel definitions. */
+export { CAPABILITIES };
 
 /** Why an edit or a delete was not made, so the API can answer 404 or 409 */
 export type RefusalReason = 'not_found' | 'unsupported' | 'deleted' | 'invalid' | 'no_credentials';
@@ -155,21 +87,8 @@ export function contentHash(changes: PostChanges): string {
   return createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 }
 
-const NAMES: Partial<Record<Channel, string>> = {
-  devto: 'dev.to',
-  hashnode: 'Hashnode',
-  mastodon: 'Mastodon',
-  telegram: 'Telegram',
-  discord: 'Discord',
-  bluesky: 'Bluesky',
-  instagram: 'Instagram',
-  newsletter: 'The newsletter',
-  blog: 'The blog',
-  githubDiscussions: 'GitHub Discussions',
-  threads: 'Threads',
-  linkedin: 'LinkedIn',
-};
-const nameOf = (channel: Channel) => NAMES[channel] ?? channel;
+// A piece is described opening a sentence: "The newsletter post 4"
+const nameOf = (channel: Channel) => channelAtStart(channel);
 
 /** The fields a change carries */
 function fieldsOf(changes: PostChanges): EditField[] {
@@ -183,10 +102,7 @@ function fieldsOf(changes: PostChanges): EditField[] {
 }
 
 /** A post's own piece, a blog article or a subreddit's post; a story, a comment or a newsletter issue is not edited from here */
-function isMain(post: Post): boolean {
-  if (post.channel === 'blog') return post.kind.startsWith('article:');
-  return post.channel === 'reddit' ? post.kind.startsWith('post:') : post.kind === 'post';
-}
+const isMain = (post: Post): boolean => isMainPiece(post.channel, post.kind);
 
 function describe(post: Post): string {
   return post.kind === 'post' ? `${nameOf(post.channel)} post ${post.id}` : `${nameOf(post.channel)} ${post.kind} ${post.id}`;

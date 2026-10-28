@@ -1,4 +1,4 @@
-import { ContentPack, languageName, LIMITS, ShipcastError, PIECE_LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
+import { ADAPT_TARGETS, ContentPack, channelInSentence, languageName, ShipcastError, PIECE_LIMITS, type AdaptChannelId, type Brand, type ContentPack as Pack } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
@@ -23,20 +23,9 @@ export function isAssistantAction(value: unknown): value is AssistantAction {
   return typeof value === 'string' && (ASSISTANT_ACTIONS as readonly string[]).includes(value);
 }
 
-/** The networks a text can be adapted to, with what their post may hold */
-export const ADAPT_TARGETS = {
-  bluesky: { name: 'Bluesky', limit: `at most ${LIMITS.blueskyGraphemes} characters, a link at the end` },
-  mastodon: { name: 'Mastodon', limit: `at most ${LIMITS.mastodonCharacters} characters, a few hashtags, a link at the end` },
-  devto: { name: 'dev.to', limit: 'an article in Markdown for developers, plain and practical' },
-  hashnode: { name: 'Hashnode', limit: 'an article in Markdown for developers, plain and practical' },
-  instagram: { name: 'Instagram', limit: `a caption of at most ${LIMITS.instagramCaption} characters: a one-line hook, two or three lines, "link in bio", at most ${LIMITS.instagramHashtags} specific hashtags` },
-  telegram: { name: 'Telegram', limit: `at most ${LIMITS.telegramText} characters, a link at the end` },
-  discord: { name: 'Discord', limit: `at most ${LIMITS.discordText} characters, short paragraphs, Markdown` },
-  reddit: { name: 'Reddit', limit: 'a post for a developer community: what was built and why, plain and honest, never an ad' },
-  linkedin: { name: 'LinkedIn', limit: 'a short professional post, a few short paragraphs, no hashtag walls' },
-  newsletter: { name: 'the newsletter', limit: 'a personal note to subscribers in Markdown, short' },
-} as const;
-export type AdaptTarget = keyof typeof ADAPT_TARGETS;
+/** The networks a text can be adapted to, with what their post may hold: each channel definition's `adapt` */
+export { ADAPT_TARGETS };
+export type AdaptTarget = AdaptChannelId;
 
 export function isAdaptTarget(value: unknown): value is AdaptTarget {
   return typeof value === 'string' && Object.hasOwn(ADAPT_TARGETS, value);
@@ -105,7 +94,7 @@ export function assistantSystem(context: AssistantContext, brand: Brand, options
   const limit = context.channel ? (PIECE_LIMITS as Partial<Record<string, { max: number; counting: string }>>)[context.channel] : undefined;
   const where = context.channel
     ? [
-        `It is the piece for ${ADAPT_TARGETS[context.channel as AdaptTarget]?.name ?? context.channel}.`,
+        `It is the piece for ${channelInSentence(context.channel)}.`,
         // Every action and chat answer must fit it: Improve once proposed a Bluesky post the network refuses
         ...(limit ? [`The post itself (not the draft's heading and approval note above it) must stay within ${limit.max} characters, ${limit.counting}: whatever you propose, count it, and shorten it to fit if it would not.`] : []),
       ]

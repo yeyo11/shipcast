@@ -1,12 +1,8 @@
-import type { Brand, Language } from '@shipcast/schema';
+import type { Brand, Language, NewsletterIssue } from '@shipcast/schema';
 import { Marked } from 'marked';
 
-/** One issue as edited in the drafts pull request: what the subscriber sees in the inbox, and the body. */
-export interface NewsletterIssue {
-  subject: string;
-  previewText: string;
-  markdown: string;
-}
+// The issue's draft format is the newsletter channel's (packages/schema/src/channels/text.ts)
+export { issueDraftBody, parseIssueDraft, type NewsletterIssue } from '@shipcast/schema';
 
 const COPY: Record<Language, { read: string; why: string; unsubscribe: string }> = {
   en: { read: 'Read the article', why: 'You get this because you subscribed at', unsubscribe: 'Unsubscribe' },
@@ -14,19 +10,6 @@ const COPY: Record<Language, { read: string; why: string; unsubscribe: string }>
 };
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-
-/** The draft file of one issue: the subject and preview as labelled lines, then the body. */
-export function issueDraftBody(issue: NewsletterIssue): string {
-  return `Subject: ${issue.subject}\nPreview: ${issue.previewText}\n\n${issue.markdown.trim()}`;
-}
-
-/** Reads an issue back from its draft as edited, falling back to the pack's for what is missing. */
-export function parseIssueDraft(body: string, fallback: NewsletterIssue): NewsletterIssue {
-  const subject = /^Subject: (.+)$/m.exec(body)?.[1]?.trim();
-  const previewText = /^Preview: (.+)$/m.exec(body)?.[1]?.trim();
-  const markdown = body.replace(/^(Subject|Preview): .*\n?/gm, '').trim();
-  return { subject: subject || fallback.subject, previewText: previewText || fallback.previewText, markdown: markdown || fallback.markdown };
-}
 
 /**
  * The issue as an email: the launch image linking to the article, the headline on the project's

@@ -1,5 +1,5 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { ContentPack, graphemeCount, Refused, threadsLength, type Brand, type Channel } from '@shipcast/schema';
+import { channelDefinition, channelName, COMMENT_CHANNELS, ContentPack, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type Channel, type CommentChannelId, type ReplyCapability } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
@@ -14,9 +14,9 @@ import type { Checkout } from './workspace.ts';
  * when the owner approves, or at once on a channel set to auto. See docs/decisions/comment-assistant.md
  */
 
-/** The channels whose comments can be read; Telegram, Discord and LinkedIn cannot read replies here */
-export const COMMENT_CHANNELS = ['mastodon', 'bluesky', 'instagram', 'devto', 'threads', 'githubDiscussions'] as const satisfies readonly Channel[];
-export type CommentChannel = (typeof COMMENT_CHANNELS)[number];
+/** The channels whose comments can be read, from the channel definitions; Telegram, Discord and LinkedIn cannot read replies here */
+export { COMMENT_CHANNELS };
+export type CommentChannel = CommentChannelId;
 
 export function isCommentChannel(channel: string): channel is CommentChannel {
   return (COMMENT_CHANNELS as readonly string[]).includes(channel);
@@ -26,44 +26,10 @@ export function isCommentChannel(channel: string): channel is CommentChannel {
 export type ReplyMode = 'off' | 'approval' | 'auto';
 export const REPLY_MODES: readonly ReplyMode[] = ['off', 'approval', 'auto'];
 
-export interface ReplyCapability {
-  read: boolean;
-  reply: boolean;
-  note: string;
-}
+/** What each channel can do with comments, and how long a reply may be: the maps the app and the API read */
+export { REPLY_CAPABILITIES, REPLY_LIMITS, type ReplyCapability };
 
-/** What each channel can do with comments: the map the app and the API read */
-export const REPLY_CAPABILITIES: Readonly<Record<string, ReplyCapability>> = {
-  mastodon: { read: true, reply: true, note: 'The public and unlisted replies under the status; a reply mentions the author so they are notified' },
-  bluesky: { read: true, reply: true, note: 'The replies in the post’s thread, from the public AppView; a reply is threaded under the comment' },
-  instagram: { read: true, reply: true, note: 'Needs the instagram_business_manage_comments permission on the connected account' },
-  devto: { read: true, reply: false, note: 'Forem’s API reads comments but cannot write one: the draft is copied and posted on dev.to' },
-  telegram: { read: false, reply: false, note: 'A bot cannot read the replies to a channel post' },
-  discord: { read: false, reply: false, note: 'A webhook cannot read the replies to its message' },
-  threads: { read: true, reply: true, note: 'Every reply in the post’s conversation (threads_read_replies); a reply is a post under the comment (threads_manage_replies)' },
-  githubDiscussions: { read: true, reply: true, note: 'The comments and their replies, through the GitHub App; a reply is written by the App’s bot, not by your own GitHub account' },
-  linkedin: { read: false, reply: false, note: 'Reading comments on a member’s post needs LinkedIn’s Community Management API, granted only to approved companies' },
-};
-
-/** How long a reply may be on each network: short on purpose, under what the network itself allows */
-export const REPLY_LIMITS: Readonly<Record<CommentChannel, number>> = {
-  // Mastodon counts the mention added in front of the text, so the draft leaves room for it
-  mastodon: 400,
-  bluesky: 300,
-  instagram: 300,
-  devto: 600,
-  threads: 400,
-  githubDiscussions: 1000,
-};
-
-const NAMES: Record<CommentChannel, string> = {
-  mastodon: 'Mastodon',
-  bluesky: 'Bluesky',
-  instagram: 'Instagram',
-  devto: 'dev.to',
-  threads: 'Threads',
-  githubDiscussions: 'GitHub Discussions',
-};
+const NAMES = (channel: CommentChannel) => channelName(channel);
 
 export const COMMENTS_SETTINGS_KEY = 'comments';
 
@@ -73,7 +39,7 @@ export interface CommentSettings {
 
 /** Approval everywhere: nothing goes out in the owner's name without their click until they choose otherwise */
 export const DEFAULT_COMMENT_SETTINGS: CommentSettings = {
-  replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' },
+  replies: Object.fromEntries(COMMENT_CHANNELS.map((c) => [c, 'approval'])) as Record<CommentChannel, ReplyMode>,
 };
 
 export class InvalidCommentSettings extends Error {}
@@ -166,7 +132,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
 
   for (const post of posts) {
     if (!post.externalId || !isCommentChannel(post.channel)) continue;
-    const name = NAMES[post.channel];
+    const name = NAMES(post.channel);
     let list: Comment[];
     try {
       const { reader } = await deps.connectors(post.channel, post.accountId);
@@ -262,14 +228,14 @@ export function replyJsonSchema(): Record<string, unknown> {
 
 /** A reply's length as the network counts it: graphemes on Bluesky, emoji bytes on Threads, characters elsewhere */
 export function replyLength(channel: CommentChannel, text: string): number {
-  if (channel === 'threads') return threadsLength(text);
-  return channel === 'bluesky' ? graphemeCount(text) : [...text].length;
+  const count = channelDefinition(channel).comments?.replyLength;
+  return count ? count(text) : [...text].length;
 }
 
 function tooLong(channel: CommentChannel, text: string): string | undefined {
   const length = replyLength(channel, text);
   const limit = REPLY_LIMITS[channel];
-  return length > limit ? `the reply has ${length} characters; ${NAMES[channel]} replies here are at most ${limit}` : undefined;
+  return length > limit ? `the reply has ${length} characters; ${NAMES(channel)} replies here are at most ${limit}` : undefined;
 }
 
 /** The comments above one in its thread, oldest first, at most a few levels up */
@@ -312,7 +278,7 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
     const thread = await threadOf(registry, comment);
     const { prompt, system } = buildReplyPrompt(
       {
-        network: NAMES[comment.channel],
+        network: NAMES(comment.channel),
         limit: REPLY_LIMITS[comment.channel],
         comment: { author: comment.author.handle, text: comment.text },
         thread: thread.map((t) => ({ author: t.author.handle, text: t.text, own: t.own })),
@@ -383,7 +349,7 @@ export async function sendReply(id: number, deps: CommentDeps): Promise<CommentR
   const comment = await existing(registry, id);
   if (comment.own) throw new CommentRefused('unsupported', 'this is your own comment');
   const capability = REPLY_CAPABILITIES[comment.channel]!;
-  if (!capability.reply) throw new CommentRefused('unsupported', `${NAMES[comment.channel]} cannot reply through its API: ${capability.note}`);
+  if (!capability.reply) throw new CommentRefused('unsupported', `${NAMES(comment.channel)} cannot reply through its API: ${capability.note}`);
   if (!comment.draft) throw new CommentRefused('invalid', 'there is no reply to send: draft or write one first');
   const long = tooLong(comment.channel, comment.draft);
   if (long) throw new CommentRefused('invalid', long);
@@ -393,7 +359,7 @@ export async function sendReply(id: number, deps: CommentDeps): Promise<CommentR
   const { replier } = await deps.connectors(comment.channel, post.accountId).catch((error: unknown) => {
     throw new CommentRefused('no_credentials', message(error));
   });
-  if (!replier) throw new CommentRefused('no_credentials', `no ${NAMES[comment.channel]} account to reply with: the one the post went out with is not connected`);
+  if (!replier) throw new CommentRefused('no_credentials', `no ${NAMES(comment.channel)} account to reply with: the one the post went out with is not connected`);
   const claimed = await registry.updateComment(id, { status: 'approved', problem: null }, ['draft-ready', 'failed']);
   if (!claimed) throw new CommentRefused('state', `the comment is ${(await registry.comment(id))?.status ?? 'gone'}: it is not waiting to be sent`);
   try {
@@ -402,7 +368,7 @@ export async function sendReply(id: number, deps: CommentDeps): Promise<CommentR
     return (await registry.updateComment(id, { status: 'sent', sentExternalId: sent.externalId, sentUrl: sent.url ?? post.url, sentAt: now }))!;
   } catch (error) {
     await registry.updateComment(id, { status: 'failed', problem: message(error) });
-    throw error instanceof ConnectorError ? error : new ConnectorError(NAMES[comment.channel], message(error));
+    throw error instanceof ConnectorError ? error : new ConnectorError(NAMES(comment.channel), message(error));
   }
 }
 
@@ -425,7 +391,7 @@ export async function runComments(deps: ReplyDeps, options: { days?: number; log
   const log = options.log ?? (() => {});
   const fetched = await fetchComments(deps, options);
   log(`Read ${fetched.posts} posts: ${fetched.found} comments, ${fetched.added.length} new${fetched.answeredByHand ? `, ${fetched.answeredByHand} already answered by you` : ''}`);
-  for (const post of fetched.gone) log(`${isCommentChannel(post.channel) ? NAMES[post.channel] : post.channel} post ${post.id} no longer exists on the network: marked deleted, and not read again`);
+  for (const post of fetched.gone) log(`${isCommentChannel(post.channel) ? NAMES(post.channel) : post.channel} post ${post.id} no longer exists on the network: marked deleted, and not read again`);
   for (const problem of fetched.problems) log(problem);
   const settings = await readCommentSettings(deps.registry);
   const waiting = (await deps.registry.comments({ status: 'new', own: false, limit: 500 })).filter((c) => isCommentChannel(c.channel) && settings.replies[c.channel] !== 'off');
@@ -478,11 +444,16 @@ export function launchReplyContext(deps: {
       // A pack that is not JSON grounds nothing; the reply is drafted from the post and the code
     }
     const postText: ReplyContext['postText'] = {};
-    if (pack?.mastodon) postText.mastodon = pack.mastodon.text;
-    if (pack?.bluesky) postText.bluesky = pack.bluesky.text;
-    if (pack?.instagram) postText.instagram = pack.instagram.caption;
     const english = pack?.article?.en ?? pack?.article?.es;
-    if (english) postText.devto = `${english.title}\n\n${english.description}`;
+    // What each post said, as its channel's definition reads it from its piece (dev.to's is the article)
+    for (const channel of COMMENT_CHANNELS) {
+      const definition = channelDefinition(channel);
+      const piece = pack?.[definition.pack.key as keyof ContentPack];
+      const read = definition.pack.postText as ((piece: unknown, article: ArticleSummary | undefined) => string | undefined) | undefined;
+      // No piece, no post of that channel to have been commented on
+      const text = read && piece !== undefined ? read(piece, english) : undefined;
+      if (text) postText[channel] = text;
+    }
     const base = { ...(pack && { analysis: pack.analysis }), postText };
     if (isArticle(launch)) return { ...base, cwd: deps.aiWorkdir ?? '/workspace' };
     const checkout = await deps.checkout(launch.repo, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);

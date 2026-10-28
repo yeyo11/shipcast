@@ -1,4 +1,4 @@
-import { activeChannels, hasDemo, languageName, LIMITS, type Brand, type Channel, type LaunchConfig, type PackKind } from '@shipcast/schema';
+import { activeChannels, CHANNEL_BRIEFS, CHANNELS, hasDemo, languageName, LIMITS, type Brand, type Channel, type LaunchConfig, type PackKind, type ProfileFieldId, type ProfileLimits } from '@shipcast/schema';
 import type { Launch } from './registry.ts';
 
 /** Tools the analysis may use: reading the code and its history, never changing or running it. */
@@ -12,24 +12,10 @@ export const ANALYSIS_TOOLS = ['Read', 'Grep', 'Glob', 'Bash(ls:*)', 'Bash(git l
  * the settings: whatever an edited prompt says, they are appended after it, unchanged.
  */
 
-/** The channels that get a piece of their own; X has no brief */
-export const BRIEFED_CHANNELS = [
-  'blog',
-  'devto',
-  'bluesky',
-  'mastodon',
-  'instagram',
-  'reddit',
-  'hashnode',
-  'telegram',
-  'discord',
-  'githubDiscussions',
-  'threads',
-  'linkedin',
-  'newsletter',
-] as const satisfies readonly Channel[];
+/** The channels that get a piece of their own: every channel, each with its definition's brief */
+export const BRIEFED_CHANNELS = CHANNELS;
 
-export type PromptId = `channel.${(typeof BRIEFED_CHANNELS)[number]}` | `pack.${PackKind}` | 'article' | 'reply' | 'profile';
+export type PromptId = `channel.${Channel}` | `pack.${PackKind}` | 'article' | 'reply' | 'profile';
 
 /** Every editable prompt, by id, as the code ships it */
 export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
@@ -38,32 +24,8 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
   'pack.major':
     'This is a major version of a project that has launched before. The article explains what is new and what changed for people already using it; it does not reintroduce the whole project.',
   'pack.minor': 'This is a minor version. Prefer improved release notes; social posts stay short and only mention what a user would notice.',
-  'channel.blog':
-    "article: the canonical post, one version per language ({{blogLanguages}}). Each version has its own slug, written in its language's words (the English one in English, the Spanish one in Spanish), and lives at {{site}}/<lang>/<that slug>/. Markdown body without front matter and without a top-level heading. Description at most {{limit.articleDescription}} characters. For search engines and assistants: the body's first paragraph says in one or two plain sentences what the project is and does; headings are phrased as the questions a reader asks where that reads naturally; imageAlt describes the launch image in that language (at most {{limit.imageAlt}} characters).",
-  'channel.devto':
-    'devto: 1 to {{limit.devtoTags}} lowercase tags. dev.to republishes the English article with the blog as canonical URL, so write nothing else for it.',
-  'channel.bluesky':
-    "bluesky: one post in English, at most {{limit.blueskyGraphemes}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=bluesky.",
-  'channel.mastodon':
-    "mastodon: one post in English, at most {{limit.mastodonCharacters}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=mastodon, and a few hashtags (Mastodon search relies on them).",
-  'channel.instagram':
-    'instagram: a carousel in English{{demoNote}}. A summary of one line for the cover (at most {{limit.instagramSummary}} characters); 2 or 3 slides, each one implemented feature with a short title (at most {{limit.instagramSlideTitle}} characters) and one concrete sentence (at most {{limit.instagramSlideText}}); and a short caption: a one-line hook, two or three lines on what it is, "link in bio" (links are not clickable there, so no URL), and at most {{limit.instagramHashtags}} specific hashtags, never generic ones.',
-  'channel.reddit':
-    'reddit: {{redditTarget}}. Each is a text post with a title and a Markdown body, written for that community: what was built and why, plain and honest, never an ad, following what that subreddit allows. The body links the article with ?ref=reddit. Shipcast posts them from the owner\'s account.',
-  'channel.hashnode':
-    'hashnode: 1 to {{limit.hashnodeTags}} lowercase tags (letters and digits only). Hashnode republishes the English article with the blog as the original URL, so write nothing else for it.',
-  'channel.telegram':
-    "telegram: one post in English, at most {{limit.telegramText}} characters (it is the caption of the launch image), ending with the English article's link {{site}}/en/<English slug>/?ref=telegram.",
-  'channel.discord':
-    "discord: one message in English, at most {{limit.discordText}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=discord. Short paragraphs; Discord renders Markdown.",
-  'channel.githubDiscussions':
-    "githubDiscussions: an announcement in the repository's Discussions, in English, for the people who watch the repository. A plain title (at most {{limit.githubDiscussionTitle}} characters, the project's name and what shipped) and a Markdown body (at most {{limit.githubDiscussionBody}} characters): what shipped in two or three short paragraphs, how to install or try it with the repository's real commands, and the English article's link {{site}}/en/<English slug>/?ref=github. It invites feedback in the thread; no hype, no hashtags.",
-  'channel.threads':
-    "threads: one post in English, at most {{limit.threadsText}} characters (an emoji counts as four), conversational, ending with the English article's link {{site}}/en/<English slug>/?ref=threads. It goes with the launch image. At most two hashtags, or none.",
-  'channel.linkedin':
-    "linkedin: one post in {{linkedinLanguage}} on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
-  'channel.newsletter':
-    "newsletter: one issue per language ({{newsletterLanguages}}), each with a subject (at most {{limit.newsletterSubject}} characters), a preview text (at most {{limit.newsletterPreview}}) and a short Markdown body: a personal note to subscribers on what shipped and why it matters, linking the article in that language ({{site}}/<lang>/<that language's slug>/?ref=newsletter). Not the article itself; no images.",
+  // Each channel's brief is its definition's (packages/schema/src/channels/<id>.ts)
+  ...CHANNEL_BRIEFS,
   article:
     "Translate it faithfully into {{otherLanguages}} as the other version(s), each with its own title, description and slug in that language. Keep the author's voice and every link; translate nothing else into it.",
   reply:
@@ -343,15 +305,7 @@ export const LOCKED_PROFILE_RULES: readonly string[] = [
 ];
 
 /** One field of a profile a review can propose: the name, the bio, the links, and the picture as advice */
-export type ProfileFieldId = 'displayName' | 'bio' | 'links' | 'avatar';
-
-/** The most a network takes in each field; `graphemes` where it counts them (Bluesky) */
-export interface ProfileLimits {
-  displayName?: number;
-  bio?: number;
-  links?: { count: number; name: number; value: number };
-  graphemes?: boolean;
-}
+export type { ProfileFieldId, ProfileLimits } from '@shipcast/schema';
 
 /** What a profile review is written from: the profile as it is, how the account grew, and the brand's facts */
 export interface ProfileReviewInput {
@@ -359,7 +313,7 @@ export interface ProfileReviewInput {
   account: string;
   profile: { displayName?: string; bio?: string; links: Array<{ name: string; value: string }>; hasAvatar: boolean; hasBanner?: boolean };
   /** The fields this network's profile has; the review proposes nothing else */
-  fields: ProfileFieldId[];
+  fields: readonly ProfileFieldId[];
   limits: ProfileLimits;
   /** The followers, following and posts over the period, from the daily snapshots */
   growth?: { days: number; followers?: { first: number; last: number }; following?: { first: number; last: number }; posts?: { first: number; last: number } };

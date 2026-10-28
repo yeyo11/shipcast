@@ -1,4 +1,4 @@
-import { draftBody, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
+import { draftBody, draftFile, draftOf, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
 import type { Launch } from './registry.ts';
 
@@ -27,28 +27,14 @@ export interface Review {
   drafts: Draft[];
 }
 
-const CHANNEL_FILES: Record<string, string> = {
-  'devto.md': 'dev.to',
-  'hashnode.md': 'Hashnode',
-  'bluesky.md': 'Bluesky',
-  'mastodon.md': 'Mastodon',
-  'instagram.md': 'Instagram',
-  'telegram.md': 'Telegram',
-  'discord.md': 'Discord',
-  'github-discussion.md': 'GitHub Discussions',
-  'threads.md': 'Threads',
-  'linkedin.md': 'LinkedIn',
-  'newsletter-en.md': 'Newsletter (en)',
-  'newsletter-es.md': 'Newsletter (es)',
-  'release-notes.md': 'Release notes',
-};
-
 function describe(path: string, dir: string): Omit<Draft, 'content' | 'url'> {
   const article = /^src\/content\/posts\/(en|es)\//.exec(path);
   if (article) return { path, label: `Article (${article[1]})`, kind: 'article' };
   const name = path.split('/').at(-1) ?? path;
-  if (path.startsWith(`${dir}/`) && CHANNEL_FILES[name]) return { path, label: CHANNEL_FILES[name], kind: 'channel' };
-  if (/^reddit-.+\.md$/.test(name)) return { path, label: `Reddit, ${name.slice(7, -3)}`, kind: 'channel' };
+  // A channel's draft is named as its definition says, and labelled with the heading it is written with
+  const channel = path.startsWith(`${dir}/`) ? draftOf(name) : undefined;
+  if (channel) return { path, label: draftFile(channel.channel, channel.part).title, kind: 'channel' };
+  if (path === `${dir}/release-notes.md`) return { path, label: 'Release notes', kind: 'channel' };
   if (/\.(jpe?g|png)$/.test(name)) return { path, label: name.replace(/\.(jpe?g|png)$/, '').replace(/-/g, ' '), kind: 'image' };
   if (/\.mp4$/.test(name)) return { path, label: name.replace(/\.mp4$/, '').replace(/-/g, ' '), kind: 'video' };
   return { path, label: name, kind: 'data' };
@@ -92,7 +78,7 @@ export async function editDraft(launch: Launch, path: string, content: string, d
   const draft = review.drafts.find((d) => d.path === path);
   if (!draft || (draft.kind !== 'article' && draft.kind !== 'channel')) throw new ReviewError(`${path} is not a draft of this launch`);
   // The network would refuse it at publishing time, after the merge: refused here, while it can still be fixed
-  const channel = /([a-z]+)\.md$/.exec(path)?.[1];
+  const channel = draftOf(path)?.channel;
   const tooLong = draft.kind === 'channel' && channel ? pieceLimitProblem(channel, draftBody(content)) : undefined;
   if (tooLong) throw new ReviewError(`${draft.label}: ${tooLong}`);
   await deps.github.updateFile(deps.launchesRepo, review.pullRequest.branch, path, content.endsWith('\n') ? content : `${content}\n`, `Edit ${draft.label} in Shipcast`);

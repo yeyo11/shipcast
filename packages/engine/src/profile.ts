@@ -1,5 +1,5 @@
 import type { Profile, ProfileEdit, ProfileLink } from '@shipcast/connectors';
-import { graphemeCount, Refused, type Brand } from '@shipcast/schema';
+import { graphemeCount, PROFILE_CAPABILITIES, Refused, type Brand, type EditableField, type ProfileCapability } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle } from './drafts.ts';
@@ -14,101 +14,14 @@ import { accountGrowth } from './stats.ts';
  * no migration. See docs/decisions/account-analysis.md
  */
 
-/** The fields Shipcast can write; the picture is advice only */
-export type EditableField = Exclude<ProfileFieldId, 'avatar'>;
-
-export interface ProfileCapability {
-  /** Whether Shipcast reads the profile itself; without, the owner pastes it for a review */
-  read: boolean;
-  /** `reconnect`: the network can, but this account's credential was not granted it */
-  edit: 'yes' | 'no' | 'reconnect';
-  /** What the network's profile has, which is what a review may propose */
-  fields: ProfileFieldId[];
-  /** What Shipcast can change there */
-  editable: EditableField[];
-  limits: ProfileLimits;
-  /** What the network allows or refuses, in words the app shows */
-  note: string;
-}
+export type { EditableField, ProfileCapability } from '@shipcast/schema';
 
 /**
- * Each network's profile, as of 2026-10-27. Limits are the networks' defaults; a Mastodon instance
- * may allow more. A network not listed has no profile to review (a webhook, a search console).
+ * Each network's profile, as of 2026-10-27, from its channel's definition. Limits are the networks'
+ * defaults; a Mastodon instance may allow more. A network not listed has no profile to review (a
+ * webhook, a search console).
  */
-export const PROFILE_CAPABILITIES: Readonly<Record<string, ProfileCapability>> = {
-  mastodon: {
-    read: true,
-    edit: 'yes',
-    fields: ['displayName', 'bio', 'links', 'avatar'],
-    editable: ['displayName', 'bio', 'links'],
-    limits: { displayName: 30, bio: 500, links: { count: 4, name: 255, value: 255 } },
-    note: 'Through update_credentials, which needs write:accounts; an instance may allow a longer bio or more fields than these defaults',
-  },
-  bluesky: {
-    read: true,
-    edit: 'yes',
-    fields: ['displayName', 'bio', 'avatar'],
-    editable: ['displayName', 'bio'],
-    limits: { displayName: 64, bio: 256, graphemes: true },
-    note: 'The profile record is written back whole, its picture, banner and the rest kept as they are',
-  },
-  telegram: {
-    read: true,
-    edit: 'yes',
-    fields: ['displayName', 'bio', 'avatar'],
-    editable: ['displayName', 'bio'],
-    limits: { displayName: 128, bio: 255 },
-    note: 'The channel’s title and description; the bot needs the “Change channel info” admin right',
-  },
-  devto: {
-    read: true,
-    edit: 'no',
-    fields: ['displayName', 'bio', 'links', 'avatar'],
-    editable: [],
-    limits: { bio: 200 },
-    note: 'Forem’s API reads the profile but cannot change it: copy a proposal into dev.to’s settings',
-  },
-  hashnode: {
-    read: true,
-    edit: 'no',
-    fields: ['displayName', 'bio', 'links', 'avatar'],
-    editable: [],
-    limits: {},
-    note: 'Hashnode’s API reads the profile but has no mutation for it: copy a proposal into Hashnode’s settings',
-  },
-  instagram: {
-    read: false,
-    edit: 'no',
-    fields: ['displayName', 'bio', 'links', 'avatar'],
-    editable: [],
-    limits: { displayName: 30, bio: 150, links: { count: 5, name: 30, value: 2000 } },
-    note: 'Instagram’s API gives neither the bio nor a way to change it: paste the bio to review it, then copy a proposal into the app',
-  },
-  threads: {
-    read: false,
-    edit: 'no',
-    fields: ['bio', 'links', 'avatar'],
-    editable: [],
-    limits: { bio: 150, links: { count: 5, name: 30, value: 2000 } },
-    note: 'The Threads API cannot change a profile: paste the bio to review it, then copy a proposal into the app',
-  },
-  linkedin: {
-    read: false,
-    edit: 'no',
-    fields: ['bio', 'avatar'],
-    editable: [],
-    limits: { bio: 2600 },
-    note: 'Share on LinkedIn cannot read or change a profile: paste the About section to review it, then copy a proposal',
-  },
-  reddit: {
-    read: false,
-    edit: 'no',
-    fields: ['displayName', 'bio', 'avatar'],
-    editable: [],
-    limits: { displayName: 30, bio: 200 },
-    note: 'Shipcast’s Reddit scopes do not reach the profile: paste it to review it, then copy a proposal into Reddit',
-  },
-};
+export { PROFILE_CAPABILITIES };
 
 /** The scope a Mastodon token needs to edit the profile; the account keeps the scopes it was granted */
 const MASTODON_WRITE_ACCOUNTS = 'write:accounts';

@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleLink, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleLink, ContentPack, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type EngineChannelId, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -56,15 +56,15 @@ export interface Publishers {
   };
 }
 
-/** Channels the engine publishes to itself; the blog is published by the merge. */
-export const PUBLISHED_BY_ENGINE = ['devto', 'hashnode', 'bluesky', 'mastodon', 'instagram', 'newsletter', 'telegram', 'discord', 'githubDiscussions', 'threads', 'linkedin', 'reddit'] as const;
+/** Channels the engine publishes to itself, in the registry's order; the blog is published by the merge. */
+export { PUBLISHED_BY_ENGINE };
 
 /** A subreddit's piece of a launch: Reddit gets one post per subreddit, as the newsletter one issue per language */
 export const redditKind = (subreddit: string): `post:${string}` => `post:${subreddit.toLowerCase()}`;
 
 /** Set before a submit and kept: a retry asks Reddit for the post first instead of submitting it again */
 const redditAttemptKey = (launchId: number, subreddit: string) => `reddit-attempt:${launchId}:${subreddit.toLowerCase()}`;
-type EngineChannel = (typeof PUBLISHED_BY_ENGINE)[number];
+type EngineChannel = EngineChannelId;
 
 /** A cancelled scheduled piece is not published at all: the publish step skips its channel, as it skips a permanent failure */
 export const cancelledKey = (launchId: number, channel: Channel) => `publish-cancelled:${launchId}:${channel}`;
@@ -102,11 +102,11 @@ export interface PublishDeps {
 }
 
 /**
- * The channels whose run may be repeated after a worker died in it: Mastodon takes the idempotency
- * key, and Reddit looks for its submission before submitting again. Any other channel's run cut short
- * is left `unknown` for the owner to check, rather than risking a second post.
+ * The channels whose run may be repeated after a worker died in it, as their definitions say
+ * (`idempotent`: Mastodon takes the idempotency key, Reddit looks for its submission before
+ * submitting again). Any other channel's run cut short is left `unknown` for the owner to check.
  */
-export const IDEMPOTENT_CHANNELS: ReadonlySet<EngineChannel> = new Set(['mastodon', 'reddit']);
+export { IDEMPOTENT_CHANNELS };
 
 export type PublishResult =
   | { state: 'waiting'; launch: Launch; reason: string }
@@ -269,7 +269,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     devto:
       deps.publishers.devto && pack.devto && article
         ? async () => {
-            const draft = await read(`${dir}/devto.md`);
+            const draft = await read(`${dir}/${draftFile('devto').name}`);
             const tags = /Tags: (.+)$/m.exec(draft ?? '')?.[1]?.match(/`([^`]+)`/g)?.map((t) => t.slice(1, -1)) ?? pack.devto!.tags;
             return deps.publishers.devto!.publish({
               title,
@@ -283,7 +283,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     hashnode:
       deps.publishers.hashnode && pack.hashnode && article
         ? async () => {
-            const draft = await read(`${dir}/hashnode.md`);
+            const draft = await read(`${dir}/${draftFile('hashnode').name}`);
             const tags = /Tags: (.+)$/m.exec(draft ?? '')?.[1]?.match(/`([^`]+)`/g)?.map((t) => t.slice(1, -1)) ?? pack.hashnode!.tags;
             return deps.publishers.hashnode!.publish({
               title,
@@ -298,7 +298,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       deps.publishers.telegram && pack.telegram
         ? async () =>
             deps.publishers.telegram!.publish({
-              text: draftBody((await read(`${dir}/telegram.md`)) ?? pack.telegram!.text),
+              text: draftBody((await read(`${dir}/${draftFile('telegram').name}`)) ?? pack.telegram!.text),
               imageUrl: ogJpegUrl,
             })
         : undefined,
@@ -306,7 +306,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       deps.publishers.discord && pack.discord
         ? async () =>
             deps.publishers.discord!.publish({
-              content: draftBody((await read(`${dir}/discord.md`)) ?? pack.discord!.text),
+              content: draftBody((await read(`${dir}/${draftFile('discord').name}`)) ?? pack.discord!.text),
               embed: { title, url: articleUrl, description, imageUrl: `${brand.site}${mediaPath(launch, 'og.png')}` },
             })
         : undefined,
@@ -316,14 +316,14 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         ? async () =>
             deps.publishers.githubDiscussions!.publish({
               repo: launch.repo,
-              ...parseDiscussionDraft(draftBody((await read(`${dir}/github-discussion.md`)) ?? ''), pack.githubDiscussions!),
+              ...parseDiscussionDraft(draftBody((await read(`${dir}/${draftFile('githubDiscussions').name}`)) ?? ''), pack.githubDiscussions!),
             })
         : undefined,
     threads:
       deps.publishers.threads && pack.threads
         ? async () =>
             deps.publishers.threads!.publish({
-              text: draftBody((await read(`${dir}/threads.md`)) ?? pack.threads!.text),
+              text: draftBody((await read(`${dir}/${draftFile('threads').name}`)) ?? pack.threads!.text),
               imageUrl: ogJpegUrl,
             })
         : undefined,
@@ -332,7 +332,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         ? async () => {
             const card = await linkedinCard();
             return deps.publishers.linkedin!.publish({
-              text: draftBody((await read(`${dir}/linkedin.md`)) ?? pack.linkedin!.text),
+              text: draftBody((await read(`${dir}/${draftFile('linkedin').name}`)) ?? pack.linkedin!.text),
               // The thumbnail is uploaded to LinkedIn: it does not read the article's page
               article: { ...card, url: `${card.url}?ref=linkedin`, thumbnail: { bytes: await image(), mimeType: 'image/jpeg' } },
             });
@@ -342,7 +342,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       deps.publishers.bluesky && pack.bluesky
         ? async () =>
             deps.publishers.bluesky!.publish({
-              text: draftBody((await read(`${dir}/bluesky.md`)) ?? pack.bluesky!.text),
+              text: draftBody((await read(`${dir}/${draftFile('bluesky').name}`)) ?? pack.bluesky!.text),
               lang: pack.bluesky!.lang,
               link: { url: articleUrl, title, description, thumb: { bytes: await image(), mimeType: 'image/jpeg' } },
             })
@@ -351,7 +351,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       deps.publishers.mastodon && pack.mastodon
         ? async () =>
             deps.publishers.mastodon!.publish({
-              text: draftBody((await read(`${dir}/mastodon.md`)) ?? pack.mastodon!.text),
+              text: draftBody((await read(`${dir}/${draftFile('mastodon').name}`)) ?? pack.mastodon!.text),
               // The alt text describes the launch image in the lead article's language, as the post is
               lang: pack.mastodon!.lang,
               image: { bytes: await image(), mimeType: 'image/jpeg', filename: 'og.jpg', description: `${projectLabel(pack, launch) ?? title}: ${description}` },
@@ -396,7 +396,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         ? async () => {
             const ig = deps.publishers.instagram!;
             const live = (url: string) => http(url, { method: 'HEAD' }).then((r) => r.ok, () => false);
-            const { caption, comment } = parseInstagramDraft(draftBody((await read(`${dir}/instagram.md`)) ?? pack.instagram!.caption));
+            const { caption, comment } = parseInstagramDraft(draftBody((await read(`${dir}/${draftFile('instagram').name}`)) ?? pack.instagram!.caption));
             const pieces = carouselPieces(pack, config).map((p) => ({ kind: p.kind, url: `${brand.site}${mediaPath(launch, p.file)}` }));
             const ready = [];
             for (const piece of pieces) if (await live(piece.url)) ready.push(piece);
@@ -447,7 +447,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 empty.push(lang);
                 continue;
               }
-              const issue = parseIssueDraft(draftBody((await read(`${dir}/newsletter-${lang}.md`)) ?? ''), fromPack);
+              const issue = parseIssueDraft(draftBody((await read(`${dir}/${draftFile('newsletter', lang).name}`)) ?? ''), fromPack);
               const langSlug = pack.article?.[lang]?.slug;
               const langArticle = langSlug ? await read(`src/content/posts/${lang}/${langSlug}.md`) : undefined;
               const langTitle = langArticle ? parseFrontMatter(langArticle).data.title : undefined;

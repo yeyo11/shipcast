@@ -1,4 +1,4 @@
-import type { Channel } from '@shipcast/schema';
+import { channelInSentence, POSTING_DEFAULTS, type Channel, type PostingWindow, type Weekday } from '@shipcast/schema';
 import { sql } from 'drizzle-orm';
 import type { Registry } from './registry.ts';
 import { readTimezone, SCHEDULABLE_CHANNELS } from './schedule.ts';
@@ -6,140 +6,30 @@ import { METRIC_FAMILIES, statsRanking } from './stats.ts';
 
 /*
  * When to publish: ranked times for the next days, per channel, in the owner's time zone. Each hour
- * of the week starts from a default for a developer audience (below), Instagram's from the hours its
+ * of the week starts from a default for a developer audience (its channel's definition), Instagram's from the hours its
  * followers are online too when the account's insights give them, and moves toward what the owner's
  * own posts did at that hour, by how many there are: a handful of posts barely moves a default, a
  * history of them takes over. See docs/scheduling.md for the sources and the assumptions.
  */
 
-/** Monday is 0, as the defaults are written */
-export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type { Weekday } from '@shipcast/schema';
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-
-/** Hours [from, to) on some days, with how good they are, 0 to 1 */
-interface Window {
-  days: readonly Weekday[];
-  from: number;
-  to: number;
-  weight: number;
-}
-
-const WORKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4];
-const MIDWEEK: readonly Weekday[] = [1, 2, 3];
-const WEEKEND: readonly Weekday[] = [5, 6];
 
 export interface ChannelDefaults {
   /** What the default says, in the slot's reason */
   note: string;
-  windows: readonly Window[];
+  windows: readonly PostingWindow[];
 }
 
 /*
- * The defaults: local hours, for an owner in Europe writing for developers in Europe and the
+ * The defaults, each channel definition's `posting`: local hours, for an owner in Europe writing for developers in Europe and the
  * Americas. They follow the published studies of when posts do best (Sprout Social's and Hootsuite's
  * yearly reports from their customers' posts, Buffer's analysis of millions of posts; for email, the
  * send-time studies of Mailchimp, Brevo and GetResponse) where those exist, and the audience's
  * geography where they do not: none measures Bluesky, Mastodon, dev.to or Hashnode for developers.
  * They are starting points, not measurements; the owner's own numbers replace them as they come.
  */
-export const CHANNEL_DEFAULTS: Partial<Record<Channel, ChannelDefaults>> = {
-  bluesky: {
-    note: 'weekday afternoons, when Europe’s afternoon meets the US east coast’s morning (Bluesky’s developers are mostly American)',
-    windows: [
-      { days: WORKDAYS, from: 15, to: 19, weight: 1 },
-      { days: MIDWEEK, from: 9, to: 12, weight: 0.7 },
-      { days: WORKDAYS, from: 9, to: 12, weight: 0.5 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.3 },
-    ],
-  },
-  mastodon: {
-    note: 'midweek mornings in Europe, where most of the fediverse’s developers are',
-    windows: [
-      { days: MIDWEEK, from: 9, to: 12, weight: 1 },
-      { days: WORKDAYS, from: 9, to: 12, weight: 0.8 },
-      { days: WORKDAYS, from: 13, to: 15, weight: 0.6 },
-      { days: WORKDAYS, from: 18, to: 21, weight: 0.6 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.35 },
-    ],
-  },
-  instagram: {
-    note: 'weekday evenings and lunchtime, the hours the studies find for Instagram',
-    windows: [
-      { days: WORKDAYS, from: 18, to: 21, weight: 1 },
-      { days: WORKDAYS, from: 12, to: 14, weight: 0.8 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.6 },
-      { days: WEEKEND, from: 19, to: 21, weight: 0.6 },
-    ],
-  },
-  devto: {
-    note: 'midweek mornings, read with the first coffee in Europe and in the US feed by its morning',
-    windows: [
-      { days: MIDWEEK, from: 8, to: 11, weight: 1 },
-      { days: WORKDAYS, from: 8, to: 11, weight: 0.7 },
-      { days: [0, 1, 2, 3], from: 15, to: 17, weight: 0.6 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.2 },
-    ],
-  },
-  hashnode: {
-    note: 'midweek mornings, as on dev.to',
-    windows: [
-      { days: MIDWEEK, from: 8, to: 11, weight: 1 },
-      { days: WORKDAYS, from: 8, to: 11, weight: 0.7 },
-      { days: [0, 1, 2, 3], from: 15, to: 17, weight: 0.6 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.2 },
-    ],
-  },
-  newsletter: {
-    note: 'Tuesday and Thursday mornings, where the email send-time studies agree',
-    windows: [
-      { days: [1, 3], from: 9, to: 11, weight: 1 },
-      { days: [2], from: 9, to: 11, weight: 0.8 },
-      { days: WORKDAYS, from: 9, to: 11, weight: 0.6 },
-      { days: MIDWEEK, from: 17, to: 19, weight: 0.5 },
-    ],
-  },
-  telegram: {
-    note: 'weekday late afternoons, after work, and late mornings',
-    windows: [
-      { days: WORKDAYS, from: 17, to: 20, weight: 1 },
-      { days: WORKDAYS, from: 10, to: 13, weight: 0.8 },
-      { days: WEEKEND, from: 11, to: 13, weight: 0.4 },
-    ],
-  },
-  threads: {
-    note: 'weekday lunchtime and early evening, the hours the studies find for Threads, which share Instagram’s audience',
-    windows: [
-      { days: WORKDAYS, from: 12, to: 14, weight: 1 },
-      { days: WORKDAYS, from: 18, to: 21, weight: 0.8 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.4 },
-    ],
-  },
-  linkedin: {
-    note: 'Tuesday to Thursday mornings, where the LinkedIn studies agree',
-    windows: [
-      { days: MIDWEEK, from: 8, to: 11, weight: 1 },
-      { days: WORKDAYS, from: 8, to: 11, weight: 0.7 },
-      { days: MIDWEEK, from: 12, to: 14, weight: 0.6 },
-      { days: WEEKEND, from: 10, to: 12, weight: 0.1 },
-    ],
-  },
-  githubDiscussions: {
-    note: 'weekday working hours in Europe and the US east coast, when maintainers and watchers read GitHub',
-    windows: [
-      { days: WORKDAYS, from: 15, to: 18, weight: 1 },
-      { days: WORKDAYS, from: 9, to: 13, weight: 0.8 },
-      { days: WEEKEND, from: 10, to: 13, weight: 0.3 },
-    ],
-  },
-  discord: {
-    note: 'weekday late afternoons, when the servers are busiest, and late mornings',
-    windows: [
-      { days: WORKDAYS, from: 17, to: 20, weight: 1 },
-      { days: WORKDAYS, from: 10, to: 13, weight: 0.8 },
-      { days: WEEKEND, from: 11, to: 13, weight: 0.4 },
-    ],
-  },
-};
+export const CHANNEL_DEFAULTS: Partial<Record<Channel, ChannelDefaults>> = POSTING_DEFAULTS;
 
 const noteOf = (channel: Channel) => CHANNEL_DEFAULTS[channel]?.note ?? 'weekday working hours';
 
@@ -230,8 +120,7 @@ export interface Recommendation {
   audience: boolean;
 }
 
-const NAMES: Partial<Record<Channel, string>> = { devto: 'dev.to', bluesky: 'Bluesky', mastodon: 'Mastodon', instagram: 'Instagram', hashnode: 'Hashnode', newsletter: 'the newsletter', telegram: 'Telegram', discord: 'Discord', githubDiscussions: 'GitHub Discussions', threads: 'Threads', linkedin: 'LinkedIn' };
-const nameOf = (channel: Channel) => NAMES[channel] ?? channel;
+const nameOf = (channel: Channel) => channelInSentence(channel);
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
