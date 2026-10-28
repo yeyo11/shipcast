@@ -3,8 +3,10 @@ import { aiProvider, type AiProviderSettings } from '../definition.ts';
 import { need, optional } from '../settings.ts';
 import { CLAUDIO_ERRORS } from './errors.ts';
 import { CLAUDIO_DEFAULT_MODEL, createClaudio } from './model.ts';
+import { claudioReady, ClaudioWorkspaces } from './workspaces.ts';
 export * from './errors.ts';
 export * from './model.ts';
+export * from './workspaces.ts';
 
 const fields = [
   { key: 'url', label: 'URL', secret: false },
@@ -17,6 +19,10 @@ const fields = [
 // What `need` names in its errors, apart from the definition so the module does not refer to itself
 const self = { id: 'claudio', name: 'Claudio', settings: fields } as const;
 
+const NAME = 'Claude Code — your subscription (via Claudio)';
+/** Whose failure a workspace's or readiness's error names */
+const named = { id: self.id, name: NAME, errors: CLAUDIO_ERRORS };
+
 /**
  * claudio, through its OpenAI-compatible API at `/api/v1` (claudio 0.10). Behind it is an agent,
  * Claude Code, which reads the job's checkout where claudio mounts the workspace: so it gets no
@@ -27,7 +33,7 @@ const self = { id: 'claudio', name: 'Claudio', settings: fields } as const;
  */
 export const claudioAiProvider = aiProvider({
   ...self,
-  name: 'Claude Code — your subscription (via Claudio)',
+  name: NAME,
   listed: true,
   errors: CLAUDIO_ERRORS,
   capabilities: { streaming: true, tools: false, structuredOutput: 'native-without-tools', repoAccess: 'remote-workspace' },
@@ -36,6 +42,14 @@ export const claudioAiProvider = aiProvider({
   model(settings: AiProviderSettings, modelId: string | undefined, options: { fetch?: typeof fetch } = {}): LanguageModel {
     return createClaudio({ baseURL: need(self, settings, 'url'), token: need(self, settings, 'token'), ...(options.fetch && { fetch: options.fetch }) })(modelId);
   },
+  workspaces(settings, options = {}) {
+    const client = new ClaudioWorkspaces({ baseURL: need(self, settings, 'url'), token: need(self, settings, 'token'), provider: named, ...(options.fetch && { fetch: options.fetch }) });
+    return {
+      prepare: async (source, signal) => ({ id: (await client.create(source, signal)).id }),
+      release: (id) => client.delete(id),
+    };
+  },
+  ready: (settings, options = {}) => claudioReady({ baseURL: need(self, settings, 'url'), provider: named, ...(options.fetch && { fetch: options.fetch }) }),
   requestHeaders(settings, context) {
     const headers: Record<string, string> = {};
     if (context.cwd) headers['X-Claudio-Cwd'] = context.cwd;

@@ -75,6 +75,23 @@ export interface AiRequestContext {
   limits: { maxTurns?: number; maxBudgetUsd?: number };
 }
 
+/** What a remote agent's workspace is made from: a URL the provider downloads itself, or a gzip tarball sent to it */
+export type WorkspaceSource = { url: string } | { archive: Uint8Array<ArrayBuffer> };
+
+/**
+ * Where a `remote-workspace` provider's agent works: a copy of the repository on the provider's
+ * side, prepared for one run and released at its end, whatever the end. Nothing is shared between
+ * the machines but the provider's API.
+ */
+export interface RemoteWorkspace {
+  prepare(source: WorkspaceSource, signal?: AbortSignal): Promise<{ id: string }>;
+  /** Never throws for a workspace already gone */
+  release(id: string): Promise<void>;
+}
+
+/** Whether a provider can answer now, and in the owner's words why not */
+export type AiReadiness = { ready: true } | { ready: false; reason: string; message: string };
+
 /** What every provider's JSON options are, as the AI SDK takes them per call */
 export type AiProviderOptions = Record<string, Record<string, string | number | boolean | null>>;
 
@@ -97,6 +114,10 @@ export interface AiProviderDefinition<Id extends string = string> {
   requestHeaders?(settings: AiProviderSettings, context: AiRequestContext): Record<string, string>;
   /** Passed with every call */
   providerOptions?: AiProviderOptions;
+  /** The workspaces of a `remote-workspace` provider */
+  workspaces?(settings: AiProviderSettings, options?: { fetch?: typeof fetch }): RemoteWorkspace;
+  /** Whether the provider can answer now (signed in, started), for onboarding and the AI settings */
+  ready?(settings: AiProviderSettings, options?: { fetch?: typeof fetch }): Promise<AiReadiness>;
   /** What the provider's own error codes mean; a code not in it is judged by its HTTP status */
   errors?: AiErrorTable;
 }
