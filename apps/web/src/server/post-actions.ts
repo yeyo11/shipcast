@@ -1,4 +1,3 @@
-import { ConnectorError } from '@shipcast/connectors';
 import {
   cancelScheduledPost,
   deleteLaunchPosts,
@@ -19,6 +18,7 @@ import {
   type ReviewGitHub,
 } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
+import { reasonOf } from './errors.ts';
 import { id, InvalidInput, object, text } from './input.ts';
 import type { PieceState } from './pieces.ts';
 import { postChanges } from './post-changes.ts';
@@ -52,10 +52,7 @@ async function answer<T>(work: () => Promise<T>): Promise<Answer<T>> {
   try {
     return { ok: true, value: await work() };
   } catch (error) {
-    if (error instanceof PostRefused || error instanceof ScheduleRefused) return { ok: false, problem: error.message, reason: error.reason };
-    if (error instanceof InvalidInput) return { ok: false, problem: error.message, reason: 'invalid' };
-    if (error instanceof ConnectorError) return { ok: false, problem: error.message, reason: 'upstream' };
-    return { ok: false, problem: error instanceof Error ? error.message : String(error), reason: 'failed' };
+    return { ok: false, problem: error instanceof Error ? error.message : String(error), reason: reasonOf(error) };
   }
 }
 

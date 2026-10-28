@@ -1,5 +1,5 @@
-import { ConnectorError, type Profile, type ProfileEdit } from '@shipcast/connectors';
-import { capabilityWithReview, PROFILE_CAPABILITIES, profileCapability, ProfileRefused, readProfileReview, type Registry } from '@shipcast/engine';
+import type { Profile, ProfileEdit } from '@shipcast/connectors';
+import { capabilityWithReview, PROFILE_CAPABILITIES, profileCapability, readProfileReview, type Registry } from '@shipcast/engine';
 import type { ApiRoute } from './api.ts';
 import { InvalidInput, object } from './input.ts';
 
@@ -93,20 +93,6 @@ export async function profileView(registry: Registry, id: number) {
   return { capability: capability ? capabilityWithReview(capability, review) : null, review: review ?? null };
 }
 
-/** The engine's refusals as the client's problem, the network's as the network's (502) */
-async function onProfiles(work: () => Promise<Response>): Promise<Response> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof ProfileRefused) {
-      if (error.reason === 'not_found') return failure(404, 'not_found', error.message);
-      if (error.reason === 'invalid') throw new InvalidInput(error.message);
-      return failure(409, 'refused', error.message);
-    }
-    if (error instanceof ConnectorError) return failure(502, 'upstream', error.message);
-    throw error;
-  }
-}
 
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const unavailable = () => failure(409, 'refused', 'profile reviews and edits are not available in this process');
@@ -191,7 +177,7 @@ export const PROFILE_ROUTES: ApiRoute[] = [
       const edit = profileEditInput(await readBody(request, false));
       if (!deps.profiles) return unavailable();
       const profiles = deps.profiles;
-      return onProfiles(async () => answer(200, { profile: (await profiles.edit(id, edit)) ?? null }));
+      return answer(200, { profile: (await profiles.edit(id, edit)) ?? null });
     },
   },
 ];

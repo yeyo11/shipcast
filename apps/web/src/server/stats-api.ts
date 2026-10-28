@@ -26,15 +26,6 @@ type Query = URLSearchParams;
 
 const ok = (body: unknown) => Response.json(body, { status: 200, headers: { 'cache-control': 'no-store' } });
 
-/** The engine's RangeError is the client's mistake: a period backwards, too many buckets */
-async function checked<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof RangeError) throw new InvalidInput(error.message);
-    throw error;
-  }
-}
 
 const today = () => new Date().toISOString().slice(0, 10);
 const daysBefore = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
@@ -92,11 +83,8 @@ function comparison(query: Query): StatsWindow | 'previous' | undefined {
   if ((from === null) !== (to === null)) throw new InvalidInput('compareFrom and compareTo go together');
   if (compare !== null && from !== null) throw new InvalidInput('compare=previous or compareFrom and compareTo, not both');
   if (from !== null && to !== null) {
-    try {
-      return statsWindow(from, to);
-    } catch (error) {
-      throw new InvalidInput(error instanceof Error ? error.message : 'the comparison period is not valid');
-    }
+    // The engine's InvalidPeriod is a 400 already, with its own words
+    return statsWindow(from, to);
   }
   return compare === 'previous' ? 'previous' : undefined;
 }
@@ -135,7 +123,7 @@ export const STATS_ROUTES: ApiRoute[] = [
     async handle(deps, { url }) {
       const query = url.searchParams;
       const compareTo = comparison(query);
-      return ok(await checked(() => statsOverview(deps.registry, { ...period(query), ...filters(query), ...(compareTo && { compareTo }) })));
+      return ok(await statsOverview(deps.registry, { ...period(query), ...filters(query), ...(compareTo && { compareTo }) }));
     },
   },
   {
@@ -156,16 +144,14 @@ export const STATS_ROUTES: ApiRoute[] = [
     async handle(deps, { url }) {
       const query = url.searchParams;
       return ok(
-        await checked(() =>
-          statsSeries(deps.registry, {
-            metric: oneOf<StatsMetric>(query, 'metric', STATS_METRICS),
-            groupBy: oneOf(query, 'groupBy', GROUP_BY, 'channel'),
-            bucket: oneOf(query, 'bucket', BUCKETS, 'day'),
-            limit: integer(query, 'limit', 1, 50, 10),
-            ...period(query),
-            ...filters(query),
-          }),
-        ),
+        await statsSeries(deps.registry, {
+          metric: oneOf<StatsMetric>(query, 'metric', STATS_METRICS),
+          groupBy: oneOf(query, 'groupBy', GROUP_BY, 'channel'),
+          bucket: oneOf(query, 'bucket', BUCKETS, 'day'),
+          limit: integer(query, 'limit', 1, 50, 10),
+          ...period(query),
+          ...filters(query),
+        }),
       );
     },
   },
@@ -187,16 +173,14 @@ export const STATS_ROUTES: ApiRoute[] = [
     async handle(deps, { url }) {
       const query = url.searchParams;
       return ok(
-        await checked(() =>
-          statsRanking(deps.registry, {
-            by: oneOf(query, 'by', RANK_BY, 'post'),
-            order: oneOf(query, 'order', ['desc', 'asc'] as const, 'desc'),
-            limit: integer(query, 'limit', 1, 100, 20),
-            offset: integer(query, 'offset', 0, 100_000, 0),
-            ...period(query),
-            ...filters(query),
-          }),
-        ),
+        await statsRanking(deps.registry, {
+          by: oneOf(query, 'by', RANK_BY, 'post'),
+          order: oneOf(query, 'order', ['desc', 'asc'] as const, 'desc'),
+          limit: integer(query, 'limit', 1, 100, 20),
+          offset: integer(query, 'offset', 0, 100_000, 0),
+          ...period(query),
+          ...filters(query),
+        }),
       );
     },
   },
@@ -219,7 +203,7 @@ export const STATS_ROUTES: ApiRoute[] = [
       }
       const to = url.searchParams.get('to') ?? today();
       const from = url.searchParams.get('from') ?? (/^\d{4}-\d{2}-\d{2}$/.test(to) ? daysBefore(to, 89) : to);
-      return ok(await checked(() => accountGrowth(deps.registry, id, { from, to })));
+      return ok(await accountGrowth(deps.registry, id, { from, to }));
     },
   },
 ];

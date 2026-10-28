@@ -1,8 +1,10 @@
+import { InvalidRequest } from '@shipcast/schema';
+
 /**
  * Checks for what server functions receive: a request can carry anything, whatever the page sent,
  * so every input is checked for shape before it is used.
  */
-export class InvalidInput extends Error {}
+export class InvalidInput extends InvalidRequest {}
 
 export function text(value: unknown, name: string, max = 100_000): string {
   if (typeof value !== 'string' || value.length > max) throw new InvalidInput(`${name} must be text`);

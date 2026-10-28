@@ -1,6 +1,7 @@
-import { InvalidSetting, SETTINGS, type SettingName } from '@shipcast/runtime';
+import { SETTINGS, type SettingName } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
+import { forOwner } from './errors';
 import { InvalidInput, object, text } from './input';
 
 const NAMES = Object.keys(SETTINGS) as SettingName[];
@@ -70,11 +71,7 @@ export const saveSettings = createServerFn({ method: 'POST' })
   })
   .handler(async ({ data }) => {
     const ctx = await appContext();
-    try {
-      await ctx.settings.write(data);
-    } catch (error) {
-      throw error instanceof InvalidSetting ? new InvalidInput(error.message) : error;
-    }
+    await forOwner(() => ctx.settings.write(data));
     await ctx.refresh();
     return { missing: ctx.settings.missing().map((n) => SETTINGS[n].label) };
   });

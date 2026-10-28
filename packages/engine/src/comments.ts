@@ -1,5 +1,5 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { ContentPack, graphemeCount, Refused, threadsLength, type Brand, type Channel } from '@shipcast/schema';
+import { ContentPack, graphemeCount, InvalidRequest, Refused, threadsLength, type Brand, type Channel } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
@@ -76,7 +76,7 @@ export const DEFAULT_COMMENT_SETTINGS: CommentSettings = {
   replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' },
 };
 
-export class InvalidCommentSettings extends Error {}
+export class InvalidCommentSettings extends InvalidRequest {}
 
 /** dev.to cannot send, so auto there means approval: the draft waits to be copied */
 function modeFor(channel: CommentChannel, mode: ReplyMode): ReplyMode {

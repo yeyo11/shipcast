@@ -1,5 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { Registry } from './registry.ts';
+import { InvalidRequest } from '@shipcast/schema';
 
 /*
  * The stats section's queries: totals per channel and account with a comparison period, time
@@ -55,17 +56,20 @@ export interface StatsWindow {
 }
 
 const DAY_MS = 86_400_000;
+
+/** A period a client asked for that the stats cannot answer: backwards, unreadable, too many buckets (400) */
+export class InvalidPeriod extends InvalidRequest {}
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * A period from what a client sends: whole UTC days (`2026-10-01` to `2026-10-31`, both days
- * included) or timestamps (`from` included, `to` excluded). Throws a RangeError for anything else.
+ * included) or timestamps (`from` included, `to` excluded). Throws an InvalidPeriod for anything else.
  */
 export function statsWindow(from: string, to: string): StatsWindow {
   const start = DATE.test(from) ? Date.parse(`${from}T00:00:00Z`) : Date.parse(from);
   const end = DATE.test(to) ? Date.parse(`${to}T00:00:00Z`) + DAY_MS : Date.parse(to);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) throw new RangeError('from and to are dates (YYYY-MM-DD) or ISO 8601 timestamps');
-  if (end <= start) throw new RangeError('to comes after from');
+  if (!Number.isFinite(start) || !Number.isFinite(end)) throw new InvalidPeriod('from and to are dates (YYYY-MM-DD) or ISO 8601 timestamps');
+  if (end <= start) throw new InvalidPeriod('to comes after from');
   return { from: new Date(start).toISOString(), to: new Date(end).toISOString() };
 }
 
@@ -384,7 +388,7 @@ export function bucketsOf(window: StatsWindow, bucket: SeriesBucket): string[] {
   const step = bucket === 'day' ? DAY_MS : 7 * DAY_MS;
   const last = new Date(Date.parse(window.to) - 1).toISOString();
   for (let at = Date.parse(`${bucketStart(dayOf(window.from), bucket)}T00:00:00Z`); at <= Date.parse(last); at += step) {
-    if (out.length >= MAX_BUCKETS) throw new RangeError(`a series has at most ${MAX_BUCKETS} buckets; ask for a shorter period or weeks`);
+    if (out.length >= MAX_BUCKETS) throw new InvalidPeriod(`a series has at most ${MAX_BUCKETS} buckets; ask for a shorter period or weeks`);
     out.push(dayOf(new Date(at).toISOString()));
   }
   return out;
@@ -718,8 +722,8 @@ const diff = (a: number | null, b: number | null) => (a === null || b === null ?
  * still has its change.
  */
 export async function accountGrowth(registry: Registry, accountId: number, range: { from: string; to: string }): Promise<AccountGrowth> {
-  if (!DATE.test(range.from) || !DATE.test(range.to)) throw new RangeError('from and to are days, YYYY-MM-DD');
-  if (range.to < range.from) throw new RangeError('to comes after from');
+  if (!DATE.test(range.from) || !DATE.test(range.to)) throw new InvalidPeriod('from and to are days, YYYY-MM-DD');
+  if (range.to < range.from) throw new InvalidPeriod('to comes after from');
   const rows = await registry.selectRows<Record<string, unknown>>(sql`
     SELECT * FROM (
       SELECT day, taken_at, followers, following, posts,
