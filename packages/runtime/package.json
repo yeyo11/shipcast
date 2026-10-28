@@ -6,7 +6,8 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./redis": "./src/redis/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -16,6 +17,8 @@
     "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
     "@shipcast/schema": "workspace:*",
+    "bullmq": "^6.5.0",
+    "ioredis": "^6.0.0",
     "pg-boss": "^12.38.0",
     "pino": "^10.4.0"
   },

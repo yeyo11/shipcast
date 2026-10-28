@@ -19,6 +19,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The throwaway Redis the queue and shared-state tests run on (packages/runtime/test/redis-helper.ts);
+    # without it they skip, so this is what makes CI run them
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6390:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      SHIPCAST_TEST_REDIS_URL: redis://127.0.0.1:6390
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
