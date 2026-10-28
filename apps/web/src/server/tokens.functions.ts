@@ -5,7 +5,7 @@ import { id, InvalidInput, object, text } from './input';
 
 export const listTokens = createServerFn({ method: 'GET' }).handler(async () => {
   const ctx = await appContext();
-  return { tokens: await ctx.registry.apiTokens(), apiUrl: `${ctx.app.publicUrl}/api/v1` };
+  return { tokens: await ctx.registry.apiTokens.apiTokens(), apiUrl: `${ctx.app.publicUrl}/api/v1` };
 });
 
 /** The token comes back once, here; afterwards only its name, scopes and dates are known */
@@ -25,4 +25,4 @@ export const createToken = createServerFn({ method: 'POST' })
 
 export const revokeToken = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
-  .handler(async ({ data }) => ({ ok: Boolean(await (await appContext()).registry.revokeApiToken(data)) }));
+  .handler(async ({ data }) => ({ ok: Boolean(await (await appContext()).registry.apiTokens.revokeApiToken(data)) }));

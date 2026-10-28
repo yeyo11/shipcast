@@ -54,7 +54,7 @@ export async function createApiToken(deps: ApiTokenDeps, name: string, scopes: A
   if (!label || label.length > 100) throw new Error('a token needs a name of up to 100 characters');
   if (scopes.length === 0) throw new InvalidScopes('a token needs at least one scope');
   const secret = randomBytes(32).toString('base64url');
-  const record = await deps.registry.addApiToken({ name: label, hash: digest(await pepper(deps.secrets), secret), scopes });
+  const record = await deps.registry.apiTokens.addApiToken({ name: label, hash: digest(await pepper(deps.secrets), secret), scopes });
   return { token: `shipcast_${record.id}_${secret}`, record };
 }
 
@@ -67,7 +67,7 @@ const NO_HASH = '0'.repeat(64);
 export async function verifyApiToken(deps: ApiTokenDeps, presented: string, now = new Date()): Promise<TokenCheck> {
   const match = TOKEN.exec(presented);
   if (!match) return { ok: false, reason: 'malformed' };
-  const row = await deps.registry.apiToken(Number(match[1]));
+  const row = await deps.registry.apiTokens.apiToken(Number(match[1]));
   const expected = Buffer.from(row?.hash ?? NO_HASH, 'hex');
   const given = Buffer.from(digest(await pepper(deps.secrets), match[2]!), 'hex');
   const same = expected.length === given.length && timingSafeEqual(expected, given);
@@ -75,7 +75,7 @@ export async function verifyApiToken(deps: ApiTokenDeps, presented: string, now 
   if (row.revokedAt) return { ok: false, reason: 'revoked' };
   const { hash: _hash, ...token } = row;
   if (!token.lastUsedAt || now.getTime() - Date.parse(token.lastUsedAt) > 60_000) {
-    await deps.registry.touchApiToken(token.id, now);
+    await deps.registry.apiTokens.touchApiToken(token.id, now);
     token.lastUsedAt = now.toISOString();
   }
   return { ok: true, token };

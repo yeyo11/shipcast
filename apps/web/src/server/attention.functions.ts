@@ -39,8 +39,8 @@ export const getAttention = createServerFn({ method: 'GET' }).handler(async () =
   const { registry } = await appContext();
   const input = await readInput();
   const keys = attentionItems(input).map((i) => i.key);
-  await registry.clearAttentionDismissals(keys);
-  return buildAttention({ ...input, dismissed: await registry.dismissedAttention(keys) });
+  await registry.attention.clearAttentionDismissals(keys);
+  return buildAttention({ ...input, dismissed: await registry.attention.dismissedAttention(keys) });
 });
 
 function keysInput(input: unknown): { keys: string[] } {
@@ -55,7 +55,7 @@ export const dismissAttention = createServerFn({ method: 'POST' })
   .validator(keysInput)
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    await registry.dismissAttention(data.keys);
+    await registry.attention.dismissAttention(data.keys);
     return { dismissed: data.keys.length };
   });
 
@@ -67,6 +67,6 @@ export const clearAttention = createServerFn({ method: 'POST' })
   .validator(keysInput)
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    await registry.dismissAttention(data.keys);
+    await registry.attention.dismissAttention(data.keys);
     return { dismissed: data.keys.length };
   });

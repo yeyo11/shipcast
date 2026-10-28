@@ -2,6 +2,8 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, max, notInArr
 import type { Channel, Language } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
 import { LaunchRepository } from './repositories/launches.ts';
+import { AttentionRepository } from './repositories/attention.ts';
+import { ApiTokenRepository } from './repositories/api-tokens.ts';
 import { CommentRepository } from './repositories/comments.ts';
 import { JobRepository } from './repositories/jobs.ts';
 import { AccountRepository } from './repositories/accounts.ts';
@@ -12,31 +14,6 @@ import { PostRepository } from './repositories/posts.ts';
 import { accounts, accountSnapshots, apiTokens, assistantMessages, assistantSessions, attentionDismissals, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
 export * from './repositories/index.ts';
-
-/** `read` sees launches, posts, numbers, accounts and jobs; `write` starts and approves work. See docs/decisions/api-tokens.md */
-export type ApiScope = 'read' | 'write';
-export const API_SCOPES: readonly ApiScope[] = ['read', 'write'];
-
-/** A REST API token as the app lists it: never its hash */
-export interface ApiToken {
-  id: number;
-  name: string;
-  scopes: ApiScope[];
-  createdAt: string;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-}
-
-function toApiToken(row: typeof apiTokens.$inferSelect): ApiToken {
-  return {
-    id: row.id,
-    name: row.name,
-    scopes: row.scopes.filter((s): s is ApiScope => (API_SCOPES as readonly string[]).includes(s)),
-    createdAt: row.createdAt,
-    lastUsedAt: row.lastUsedAt,
-    revokedAt: row.revokedAt,
-  };
-}
 
 /**
  * The launch registry: the record that makes "a launch happens once" hold. A release is claimed
@@ -132,6 +109,8 @@ export class Registry {
   readonly #db: Database;
   readonly #close: () => Promise<void>;
   readonly launches: LaunchRepository;
+  readonly attention: AttentionRepository;
+  readonly apiTokens: ApiTokenRepository;
   readonly comments: CommentRepository;
   readonly jobs: JobRepository;
   readonly accounts: AccountRepository;
@@ -145,6 +124,8 @@ export class Registry {
     this.#db = db;
     this.#close = close;
     this.launches = new LaunchRepository(db);
+    this.attention = new AttentionRepository(db);
+    this.apiTokens = new ApiTokenRepository(db);
     this.comments = new CommentRepository(db);
     this.jobs = new JobRepository(db);
     this.accounts = new AccountRepository(db);
@@ -186,66 +167,6 @@ export class Registry {
     const result: unknown = await this.#db.execute(query);
     if (Array.isArray(result)) return result as T[];
     return (result as { rows: T[] }).rows;
-  }
-
-  /** A token for the REST API, by its hash; the token itself is shown once and never stored */
-  async addApiToken(token: { name: string; hash: string; scopes: ApiScope[] }): Promise<ApiToken> {
-    const [row] = await this.#db.insert(apiTokens).values(token).returning();
-    return toApiToken(row!);
-  }
-
-  /** One token with its hash, which only the code that verifies a token should read */
-  async apiToken(id: number): Promise<(ApiToken & { hash: string }) | undefined> {
-    const [row] = await this.#db.select().from(apiTokens).where(eq(apiTokens.id, id));
-    return row ? { ...toApiToken(row), hash: row.hash } : undefined;
-  }
-
-  /** Every token, revoked ones too, the newest first; never their hashes */
-  async apiTokens(): Promise<ApiToken[]> {
-    const rows = await this.#db.select().from(apiTokens).orderBy(desc(apiTokens.id));
-    return rows.map(toApiToken);
-  }
-
-  async touchApiToken(id: number, at = new Date()): Promise<void> {
-    await this.#db.update(apiTokens).set({ lastUsedAt: at.toISOString() }).where(eq(apiTokens.id, id));
-  }
-
-  /** Revoking is for good; a token revoked already keeps its first revocation time */
-  async revokeApiToken(id: number, at = new Date()): Promise<ApiToken | undefined> {
-    const [row] = await this.#db
-      .update(apiTokens)
-      .set({ revokedAt: sql`coalesce(${apiTokens.revokedAt}, ${at.toISOString()})` })
-      .where(eq(apiTokens.id, id))
-      .returning();
-    return row ? toApiToken(row) : undefined;
-  }
-
-  /** Hides the bell's lines with these keys; dismissing one twice keeps its first time */
-  async dismissAttention(keys: readonly string[]): Promise<void> {
-    if (keys.length === 0) return;
-    await this.#db
-      .insert(attentionDismissals)
-      .values([...new Set(keys)].map((key) => ({ key })))
-      .onConflictDoNothing();
-  }
-
-  /** Which of these keys were dismissed */
-  async dismissedAttention(keys: readonly string[]): Promise<Set<string>> {
-    if (keys.length === 0) return new Set();
-    const rows = await this.#db.select({ key: attentionDismissals.key }).from(attentionDismissals).where(inArray(attentionDismissals.key, [...keys]));
-    return new Set(rows.map((r) => r.key));
-  }
-
-  /**
-   * Forgets every dismissal but those of `keep`: the bell passes the lines it has now, so the
-   * dismissal of a line whose condition ended goes, and the same condition coming back is shown again
-   */
-  async clearAttentionDismissals(keep: readonly string[] = []): Promise<number> {
-    const rows = await this.#db
-      .delete(attentionDismissals)
-      .where(keep.length > 0 ? notInArray(attentionDismissals.key, [...keep]) : undefined)
-      .returning({ key: attentionDismissals.key });
-    return rows.length;
   }
 
   async createAssistantSession(session: NewAssistantSession): Promise<AssistantSession> {

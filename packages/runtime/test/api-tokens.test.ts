@@ -11,19 +11,19 @@ test('a token is shown once, stored only as a keyed hash, and verifies', async (
   assert.deepEqual(record.scopes, ['read', 'write']);
   assert.ok(await deps.secrets.get(API_TOKEN_PEPPER_KEY), 'the pepper is made on first use, in the keychain');
 
-  const stored = await deps.registry.apiToken(record.id);
+  const stored = await deps.registry.apiTokens.apiToken(record.id);
   assert.ok(stored);
   assert.match(stored.hash, /^[0-9a-f]{64}$/);
   assert.ok(!token.includes(stored.hash), 'the hash is not the secret');
-  assert.ok(!('hash' in (await deps.registry.apiTokens())[0]!), 'the list never carries hashes');
+  assert.ok(!('hash' in (await deps.registry.apiTokens.apiTokens())[0]!), 'the list never carries hashes');
 
   const check = await verifyApiToken(deps, token, new Date('2026-10-25T10:00:00Z'));
   assert.equal(check.ok, true);
   assert.equal(check.ok && check.token.lastUsedAt, '2026-10-25T10:00:00.000Z');
-  assert.equal((await deps.registry.apiToken(record.id))?.lastUsedAt, '2026-10-25T10:00:00.000Z');
+  assert.equal((await deps.registry.apiTokens.apiToken(record.id))?.lastUsedAt, '2026-10-25T10:00:00.000Z');
   // Used again within the minute: no write
   await verifyApiToken(deps, token, new Date('2026-10-25T10:00:30Z'));
-  assert.equal((await deps.registry.apiToken(record.id))?.lastUsedAt, '2026-10-25T10:00:00.000Z');
+  assert.equal((await deps.registry.apiTokens.apiToken(record.id))?.lastUsedAt, '2026-10-25T10:00:00.000Z');
 });
 
 test('a changed, unknown, foreign or revoked token is refused', async () => {
@@ -36,12 +36,12 @@ test('a changed, unknown, foreign or revoked token is refused', async () => {
   assert.deepEqual(await verifyApiToken(deps, ''), { ok: false, reason: 'malformed' });
   assert.deepEqual(await verifyApiToken({ ...deps, secrets: new MemoryStore() }, token), { ok: false, reason: 'unknown' }, 'another pepper, another install');
 
-  const revoked = await deps.registry.revokeApiToken(record.id, new Date('2026-10-25T11:00:00Z'));
+  const revoked = await deps.registry.apiTokens.revokeApiToken(record.id, new Date('2026-10-25T11:00:00Z'));
   assert.equal(revoked?.revokedAt, '2026-10-25T11:00:00.000Z');
   assert.deepEqual(await verifyApiToken(deps, token), { ok: false, reason: 'revoked' });
   // Revoking again keeps the first time
-  assert.equal((await deps.registry.revokeApiToken(record.id, new Date('2026-10-26T00:00:00Z')))?.revokedAt, '2026-10-25T11:00:00.000Z');
-  assert.equal(await deps.registry.revokeApiToken(404), undefined);
+  assert.equal((await deps.registry.apiTokens.revokeApiToken(record.id, new Date('2026-10-26T00:00:00Z')))?.revokedAt, '2026-10-25T11:00:00.000Z');
+  assert.equal(await deps.registry.apiTokens.revokeApiToken(404), undefined);
 });
 
 test('scopes are checked and do not include each other', () => {

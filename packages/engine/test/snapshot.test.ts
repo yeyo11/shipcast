@@ -13,7 +13,7 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   await first.registry.cursors.setCursor('events-last-id:yeyo11', '123');
   await first.registry.cursors.setCursor('instagram-token', 'secret-token');
   await first.registry.settings.setSetting('ai', { tasks: {}, tone: 'plain' });
-  await first.registry.addApiToken({ name: 'cli', hash: 'abc', scopes: ['read'] });
+  await first.registry.apiTokens.addApiToken({ name: 'cli', hash: 'abc', scopes: ['read'] });
   const text = formatSnapshot(await first.dump());
   await first.close();
 

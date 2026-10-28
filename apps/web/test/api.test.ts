@@ -134,8 +134,8 @@ test('no token, a wrong one, a cookie or a revoked one is a 401', async () => {
 
   assert.equal((await call(s.deps, 'GET', '/launches', { token: 'shipcast_1_nope' })).status, 401);
 
-  const [first] = await s.registry.apiTokens();
-  await s.registry.revokeApiToken(first!.id);
+  const [first] = await s.registry.apiTokens.apiTokens();
+  await s.registry.apiTokens.revokeApiToken(first!.id);
   const revoked = await call(s.deps, 'GET', '/launches', { token: s.both });
   assert.equal(revoked.status, 401);
   assert.match(JSON.stringify(await body(revoked)), /revoked/);

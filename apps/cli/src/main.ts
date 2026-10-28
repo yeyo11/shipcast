@@ -375,7 +375,7 @@ async function main(argv: string[]): Promise<number> {
           return 0;
         }
         if (action === 'list') {
-          const tokens = await registry.apiTokens();
+          const tokens = await registry.apiTokens.apiTokens();
           if (tokens.length === 0) console.log('No API tokens yet.');
           for (const t of tokens) {
             const state = t.revokedAt ? `revoked ${t.revokedAt.slice(0, 16)}` : t.lastUsedAt ? `last used ${t.lastUsedAt.slice(0, 16)}` : 'never used';
@@ -384,7 +384,7 @@ async function main(argv: string[]): Promise<number> {
           return 0;
         }
         if (action === 'revoke' && arg && /^\d+$/.test(arg)) {
-          const revoked = await registry.revokeApiToken(Number(arg));
+          const revoked = await registry.apiTokens.revokeApiToken(Number(arg));
           if (!revoked) {
             console.error(`no token #${arg}`);
             return 1;
