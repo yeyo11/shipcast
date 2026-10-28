@@ -1,5 +1,5 @@
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
-import { capabilityWithReview, PROFILE_CAPABILITIES, profileCapability, readProfileReview, type Registry } from '@shipcast/engine';
+import { capabilityWithReview, PROFILE_CAPABILITIES, profileCapability, readProfileReview, type Repositories } from '@shipcast/engine';
 import type { ApiRoute } from './api.ts';
 import { InvalidInput, object } from './input.ts';
 
@@ -85,8 +85,8 @@ async function readBody(request: Request, optional: boolean): Promise<unknown> {
 }
 
 /** An account's capability and its latest review, as the app's page and the API show them */
-export async function profileView(registry: Registry, id: number) {
-  const account = await registry.account(id);
+export async function profileView(registry: Pick<Repositories, 'accounts' | 'cursors'>, id: number) {
+  const account = await registry.accounts.account(id);
   if (!account) return undefined;
   const review = await readProfileReview(registry, id);
   const capability = profileCapability(account);

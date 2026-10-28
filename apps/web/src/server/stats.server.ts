@@ -9,7 +9,7 @@ import {
   statsSeries,
   statsWindow,
   type MetricTotals,
-  type Registry,
+  type Repositories,
   type SeriesGroup,
   type StatsMetric,
 } from '@shipcast/engine';
@@ -89,8 +89,8 @@ const firstPublished = (launches: ReadonlyArray<{ status: string; createdAt: str
 
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
 
-export async function loadStats(registry: Registry, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
-  const [accounts, launches] = await Promise.all([registry.accounts(), registry.recent(LAUNCH_OPTIONS)]);
+export async function loadStats(registry: Pick<Repositories, 'launches' | 'accounts' | 'queries'>, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
+  const [accounts, launches] = await Promise.all([registry.accounts.accounts(), registry.launches.recent(LAUNCH_OPTIONS)]);
   const period = resolvePeriod(search, today, firstPublished(launches));
   const bucket = effectiveBucket(search.bucket, period.days);
   const filters = {
@@ -204,8 +204,8 @@ export interface GrowthView {
  * Accounts on networks that count nothing (a webhook, a search console) have no snapshots and are
  * left out.
  */
-export async function loadGrowth(registry: Registry, range: { from: string; to: string }, now = new Date()): Promise<GrowthView> {
-  const [accounts, latest] = await Promise.all([registry.accounts(), registry.lastSnapshots()]);
+export async function loadGrowth(registry: Pick<Repositories, 'accounts' | 'queries'>, range: { from: string; to: string }, now = new Date()): Promise<GrowthView> {
+  const [accounts, latest] = await Promise.all([registry.accounts.accounts(), registry.accounts.lastSnapshots()]);
   const measured = accounts.filter((a) => latest.has(a.id));
   const growth = await Promise.all(measured.map((a) => accountGrowth(registry, a.id, range)));
   return {
@@ -260,16 +260,16 @@ const SEARCH_LAUNCHES = 100;
  * impressions and clicks each engine counted for the launch in the period. The engines count a
  * launch's pages together, so the numbers are per launch, not per page.
  */
-export async function loadSearch(registry: Registry, range: { from: string; to: string; launches?: readonly number[] }): Promise<SearchView> {
+export async function loadSearch(registry: Pick<Repositories, 'launches' | 'posts' | 'accounts' | 'cursors' | 'queries'>, range: { from: string; to: string; launches?: readonly number[] }): Promise<SearchView> {
   const wanted = range.launches ? new Set(range.launches) : null;
-  const published = (await registry.recent(LAUNCH_OPTIONS)).filter((l) => l.status === 'published' && (!wanted || wanted.has(l.id))).slice(0, SEARCH_LAUNCHES);
+  const published = (await registry.launches.recent(LAUNCH_OPTIONS)).filter((l) => l.status === 'published' && (!wanted || wanted.has(l.id))).slice(0, SEARCH_LAUNCHES);
   const read = async (url: string, engine: 'google' | 'bing'): Promise<IndexView | null> => {
     const status = await indexStatus(registry, url, engine);
     return status ? { indexed: status.indexed, coverage: status.coverage, checkedAt: status.checkedAt } : null;
   };
   const launches = await Promise.all(
     published.map(async (l) => {
-      const urls = articleUrls(await registry.posts(l.id, { channel: 'blog' }));
+      const urls = articleUrls(await registry.posts.posts(l.id, { channel: 'blog' }));
       if (urls.length === 0) return null;
       const [pages, overview] = await Promise.all([
         Promise.all(urls.map(async ({ lang, url }) => ({ lang, url, google: await read(url, 'google'), bing: await read(url, 'bing') }))),

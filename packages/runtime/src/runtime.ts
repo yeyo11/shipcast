@@ -4,8 +4,9 @@ import {
   GitHubApp,
   GitHubRest,
   loadBrand,
+  connectRepositories,
   PostgresLock,
-  Registry,
+  type OpenRepositories,
   type AiProvider,
   type ObjectRequest,
   type PipelineDeps,
@@ -24,7 +25,7 @@ export type GitHubAccess = { kind: 'app'; slug: string | undefined; bot: string 
 /** What the app and the CLI both build at start, from the bootstrap alone */
 export interface Runtime {
   config: Config;
-  registry: Registry;
+  registry: OpenRepositories;
   secrets: SecretStore;
   settings: RuntimeSettings;
   /** The engine's GitHub client: the App's installation token, or the old personal token without an App */
@@ -74,7 +75,7 @@ export interface RuntimeOptions {
   log?: (line: string) => void;
   /** For tests: a keychain and a registry of their own */
   secrets?: SecretStore;
-  registry?: Registry;
+  registry?: OpenRepositories;
   fetch?: typeof fetch;
   /**
    * The fetch of the GitHub REST client alone, over `fetch`: a preview's dry run of the writes to
@@ -89,7 +90,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const env = options.env ?? process.env;
   const log = options.log ?? (() => undefined);
   const config = loadConfig(env, options.root);
-  const registry = options.registry ?? (await Registry.connect(config.databaseUrl));
+  const registry = options.registry ?? (await connectRepositories(config.databaseUrl));
   const secrets = options.secrets ?? secretStoreFor(config);
   const settings = new RuntimeSettings({ registry, secrets, env });
 

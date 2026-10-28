@@ -12,7 +12,7 @@ import {
   launchDir,
   loadBrand,
   readReview,
-  Registry,
+  type Repositories,
   type AiProvider,
   type ObjectRequest,
 } from '../src/index.ts';
@@ -77,12 +77,12 @@ test('published directly, the drafts go onto main in one commit and the launch s
   const github = fakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML });
   const d = await deps(github);
   const brand = await loadBrand(github, 'yeyo11/launches');
-  const { launch } = await d.registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  const { launch } = await d.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
   const result = await draftLaunch(launch, brand, d, { direct: true });
   assert.ok(result.ok);
   assert.equal(github.opened.length, 0, 'no pull request');
   assert.equal(github.commits[0]?.branch, 'main');
-  assert.match((await d.registry.get(launch.id))?.detail ?? '', /^direct:sha1 /);
+  assert.match((await d.registry.launches.get(launch.id))?.detail ?? '', /^direct:sha1 /);
   const bluesky = github.commits[0]?.files.find((f) => f.path.endsWith('/bluesky.md'));
   assert.match(bluesky && 'content' in bluesky ? bluesky.content : '', /^> \*\*Published directly:\*\*/m, 'no merge to speak of');
 });
@@ -138,8 +138,8 @@ test('reviewing reads the drafts from the pull request; edits land on its branch
     'yeyo11/launches/src/content/posts/en/claudio.md@launch/claudio-v0.9.0': '---\ntitle: x\n---\nbody',
   });
   const registry = await memoryRegistry();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
-  const drafted = await registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  const drafted = await registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
   const d = { github, launchesRepo: 'yeyo11/launches' };
 
   const review = await readReview(drafted, d);

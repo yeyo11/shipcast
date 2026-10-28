@@ -22,7 +22,7 @@ import {
 import { playwrightCapture, type SiteCapture } from '@shipcast/capture';
 import { hasDemo, lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
 import { isArticle, launchDir, projectLabel, projectSlug, type DraftFile } from './drafts.ts';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
 /** Where a launch's media live, as paths in the launches repo and as public URLs once deployed. */

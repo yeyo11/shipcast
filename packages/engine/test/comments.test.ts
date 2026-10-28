@@ -16,7 +16,7 @@ import {
   sendReply,
   writeCommentSettings,
   type CommentConnectors,
-  type Registry,
+  type Repositories,
   type ReplyContext,
   type ReplyDeps,
 } from '../src/index.ts';
@@ -45,7 +45,7 @@ const comment = (id: string, text: string, extra: Partial<Comment> = {}): Commen
 });
 
 interface World {
-  registry: Registry;
+  registry: Repositories;
   launchId: number;
   postId: number;
   /** What the network has under the post; tests change it between runs */
@@ -56,8 +56,8 @@ interface World {
 
 async function world(channel: 'mastodon' | 'devto' = 'mastodon'): Promise<World> {
   const registry = await memoryRegistry();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  const { post } = await registry.recordPost({ launchId: launch.id, channel, externalId: '100', url: 'https://mastodon.social/@me/100' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel, externalId: '100', url: 'https://mastodon.social/@me/100' });
   const w: World = {
     registry,
     launchId: launch.id,
@@ -114,13 +114,13 @@ test('reading the comments twice adds nothing the second time, and the owner’s
   const again = await fetchComments(w);
   assert.equal(again.found, 1);
   assert.equal(again.added.length, 0, 'a known comment is not added again');
-  assert.equal((await w.registry.comments()).length, 1);
+  assert.equal((await w.registry.comments.comments()).length, 1);
 
   // The owner answered on Mastodon by hand: their reply is kept for the thread, the comment is done
   w.thread = [...w.thread, comment('102', 'Not yet', { own: true, inReplyTo: '101', url: 'https://mastodon.social/@me/102' })];
   const third = await fetchComments(w);
   assert.equal(third.answeredByHand, 1);
-  const [own, answered] = [await w.registry.commentByExternalId('mastodon', '102'), await w.registry.commentByExternalId('mastodon', '101')];
+  const [own, answered] = [await w.registry.comments.commentByExternalId('mastodon', '102'), await w.registry.comments.commentByExternalId('mastodon', '101')];
   assert.equal(own?.own, true);
   assert.equal(own?.status, 'dismissed');
   assert.equal(answered?.status, 'sent');
@@ -152,7 +152,7 @@ test('a post the network says is gone is marked deleted, not reported, and never
   const first = await fetchComments(gone);
   assert.deepEqual(first.gone.map((p) => [p.id, p.status]), [[w.postId, 'deleted']]);
   assert.deepEqual(first.problems, []);
-  assert.equal((await w.registry.post(w.postId))?.status, 'deleted');
+  assert.equal((await w.registry.posts.post(w.postId))?.status, 'deleted');
   const second = await fetchComments(gone);
   assert.equal(reads, 1, 'a deleted post is not read again');
   assert.deepEqual(second.gone, []);
@@ -163,7 +163,7 @@ test('a reply is drafted through the AI provider with the locked rules last, gro
   w.thread = [comment('101', 'Is there a Windows build?'), comment('1022', 'Same question', { inReplyTo: '101' })];
   await fetchComments(w);
   const model = new MockLanguageModelV4({ doGenerate: async () => reply('Not yet: Windows support is planned, the REST API works today.') });
-  const target = (await w.registry.commentByExternalId('mastodon', '1022'))!;
+  const target = (await w.registry.comments.commentByExternalId('mastodon', '1022'))!;
   const drafted = await draftReply(target.id, replyDeps(w, model));
   assert.equal(drafted.status, 'draft-ready');
   assert.equal(drafted.draft, 'Not yet: Windows support is planned, the REST API works today.');
@@ -190,7 +190,7 @@ test('spam is classified and suggested for dismissal: no draft, and auto mode ne
   assert.equal(result.toDismiss, 1);
   assert.equal(result.sent.length, 0);
   assert.equal(w.sent.length, 0);
-  const stored = (await w.registry.commentByExternalId('mastodon', '101'))!;
+  const stored = (await w.registry.comments.commentByExternalId('mastodon', '101'))!;
   assert.equal(stored.status, 'draft-ready');
   assert.equal(stored.classification, 'spam');
   assert.equal(stored.draft, null, 'whatever the model wrote, spam gets no reply');
@@ -213,8 +213,8 @@ test('approval mode drafts and never sends; auto mode sends the draft at once', 
   assert.equal(auto.drafted.length, 1, 'only the new comment is drafted');
   assert.equal(auto.sent.length, 1);
   assert.deepEqual(w.sent[0]!.target, { postExternalId: '100', commentExternalId: '1033', authorHandle: '@ana@fosstodon.org' });
-  assert.equal((await w.registry.commentByExternalId('mastodon', '1033'))!.status, 'sent');
-  assert.equal((await w.registry.commentByExternalId('mastodon', '101'))!.status, 'draft-ready', 'an earlier draft still waits for approval');
+  assert.equal((await w.registry.comments.commentByExternalId('mastodon', '1033'))!.status, 'sent');
+  assert.equal((await w.registry.comments.commentByExternalId('mastodon', '101'))!.status, 'draft-ready', 'an earlier draft still waits for approval');
   assert.equal(deps.contexts, 2, 'one grounding per launch per run');
 });
 
@@ -222,14 +222,14 @@ test('sending claims the comment first: a second approval sends nothing, and a r
   const w = await world();
   w.thread = [comment('101', 'Hi'), comment('1022', 'Hello')];
   await fetchComments(w);
-  const [a, b] = [(await w.registry.commentByExternalId('mastodon', '101'))!, (await w.registry.commentByExternalId('mastodon', '1022'))!];
+  const [a, b] = [(await w.registry.comments.commentByExternalId('mastodon', '101'))!, (await w.registry.comments.commentByExternalId('mastodon', '1022'))!];
   await assert.rejects(sendReply(a.id, w), (e: unknown) => e instanceof CommentRefused && e.reason === 'invalid', 'no draft, nothing to send');
   await editReplyDraft(a.id, 'Hi there!', w.registry);
   const [first, second] = await Promise.allSettled([sendReply(a.id, w), sendReply(a.id, w)]);
   assert.equal([first, second].filter((r) => r.status === 'fulfilled').length, 1, 'two clicks at once send once');
   assert.equal(w.sent.length, 1);
   assert.equal(w.sent[0]!.key, 'shipcast-reply-mastodon-101');
-  const sent = (await w.registry.comment(a.id))!;
+  const sent = (await w.registry.comments.comment(a.id))!;
   assert.equal(sent.status, 'sent');
   assert.equal(sent.sentUrl, 'https://mastodon.social/@me/r1');
   await assert.rejects(sendReply(a.id, w), (e: unknown) => e instanceof CommentRefused && e.reason === 'state');
@@ -237,7 +237,7 @@ test('sending claims the comment first: a second approval sends nothing, and a r
 
   await editReplyDraft(b.id, 'this will fail', w.registry);
   await assert.rejects(sendReply(b.id, w), ConnectorError);
-  const failed = (await w.registry.comment(b.id))!;
+  const failed = (await w.registry.comments.comment(b.id))!;
   assert.equal(failed.status, 'failed');
   assert.match(failed.problem ?? '', /422/);
 });
@@ -246,7 +246,7 @@ test('a draft over the network’s limit is refused, and dev.to never sends: aut
   const w = await world('devto');
   w.thread = [comment('a1', 'Nice post')];
   await fetchComments(w);
-  const c = (await w.registry.commentByExternalId('devto', 'a1'))!;
+  const c = (await w.registry.comments.commentByExternalId('devto', 'a1'))!;
   await assert.rejects(editReplyDraft(c.id, 'x'.repeat(601), w.registry), (e: unknown) => e instanceof CommentRefused && e.reason === 'invalid');
   await editReplyDraft(c.id, 'Thanks!', w.registry);
   await assert.rejects(sendReply(c.id, w), (e: unknown) => e instanceof CommentRefused && e.reason === 'unsupported');
@@ -261,7 +261,7 @@ test('a draft the AI could not write leaves the comment failed with the reason, 
   const model = new MockLanguageModelV4({ doGenerate: async () => answer({ nope: true }) });
   const result = await runComments(replyDeps(w, model));
   assert.equal(result.drafted.length, 0);
-  const stored = (await w.registry.commentByExternalId('mastodon', '101'))!;
+  const stored = (await w.registry.comments.commentByExternalId('mastodon', '101'))!;
   assert.equal(stored.status, 'failed');
   assert.match(stored.problem ?? '', /not a reply|could not draft/);
 });

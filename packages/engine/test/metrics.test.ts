@@ -2,18 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
 import type { PageVisits } from '@shipcast/connectors';
-import { collectMetrics, indexStatus, type Registry, SITEMAP_SUBMITTED_KEY, type MetricSources } from '../src/index.ts';
+import { collectMetrics, indexStatus, type Repositories, SITEMAP_SUBMITTED_KEY, type MetricSources } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
-async function published(registry: Registry) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
-  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
-  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:es', url: 'https://josegarrido.dev/es/claudio-como-servicio/', externalId: 'claudio-como-servicio' });
-  await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
-  await registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://bsky.app/x', externalId: 'at://x' });
+async function published(registry: Repositories) {
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:es', url: 'https://josegarrido.dev/es/claudio-como-servicio/', externalId: 'claudio-como-servicio' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://bsky.app/x', externalId: 'at://x' });
   return launch;
 }
 
@@ -40,7 +40,7 @@ test('every source of a published launch is read and recorded under its name', a
   assert.deepEqual(result.problems, []);
   assert.ok(asked.includes('blog /en/claudio/') && asked.includes('blog /es/claudio-como-servicio/'), 'both languages of the article');
 
-  const latest = Object.fromEntries((await registry.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
   assert.deepEqual(latest, {
     'blog.views': 48,
     'blog.views_bluesky': 30,
@@ -65,7 +65,7 @@ test('one source failing does not stop the others', async () => {
     posts: { devto: { metrics: async () => Promise.reject(new Error('dev.to: metrics: 503')) }, bluesky: { metrics: async () => ({ likes: 2 }) } },
   });
   assert.deepEqual(result.problems, ['yeyo11/claudio v0.8.2 devto: dev.to: metrics: 503']);
-  assert.deepEqual((await registry.latestMetrics(launch.id)).map((m) => `${m.source}.${m.name}=${m.value}`), ['bluesky.likes=2']);
+  assert.deepEqual((await registry.metrics.latestMetrics(launch.id)).map((m) => `${m.source}.${m.name}=${m.value}`), ['bluesky.likes=2']);
 });
 
 test('every reading is kept, so a metric has a history', async () => {
@@ -75,13 +75,13 @@ test('every reading is kept, so a metric has a history', async () => {
   const sources: MetricSources = { posts: { bluesky: { metrics: async () => ({ likes: likes++ }) } } };
   await collectMetrics(registry, brand, sources, new Date('2026-10-26T00:00:00Z'));
   await collectMetrics(registry, brand, sources, new Date('2026-10-27T00:00:00Z'));
-  assert.deepEqual((await registry.metricHistory(launch.id, 'bluesky', 'likes')).map((m) => m.value), [3, 4]);
-  assert.equal((await registry.latestMetrics(launch.id)).find((m) => m.name === 'likes')?.value, 4);
+  assert.deepEqual((await registry.metrics.metricHistory(launch.id, 'bluesky', 'likes')).map((m) => m.value), [3, 4]);
+  assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.name === 'likes')?.value, 4);
 });
 
 test('launches not yet published are not read', async () => {
   const registry = await memoryRegistry();
-  await registry.claim({ repo: 'yeyo11/x', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.claim({ repo: 'yeyo11/x', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   let reads = 0;
   await collectMetrics(registry, brand, { github: { repoStats: async () => (reads++, { stars: 1, forks: 0, watchers: 0 }) } });
   assert.equal(reads, 0);
@@ -110,14 +110,14 @@ test("Google's view of each language is kept, and an article it lacks has the si
     checkedAt: '2026-10-30T12:00:00.000Z',
   });
   assert.equal((await indexStatus(registry, 'https://josegarrido.dev/es/claudio-como-servicio/'))?.coverage, 'URL is unknown to Google');
-  assert.equal((await registry.latestMetrics(launch.id)).find((m) => m.name === 'indexed')?.value, 1);
+  assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.name === 'indexed')?.value, 1);
   assert.deepEqual(submitted, ['https://josegarrido.dev/sitemap-index.xml']);
 
   await collectMetrics(registry, brand, sources, new Date('2026-10-30T18:00:00Z'));
   assert.equal(submitted.length, 1, 'not again the same day');
   await collectMetrics(registry, brand, sources, new Date('2026-10-31T13:00:00Z'));
   assert.equal(submitted.length, 2, 'again the next day, while Google still lacks it');
-  assert.equal(await registry.cursor(SITEMAP_SUBMITTED_KEY), '2026-10-31T13:00:00.000Z');
+  assert.equal(await registry.cursors.cursor(SITEMAP_SUBMITTED_KEY), '2026-10-31T13:00:00.000Z');
 });
 
 test('with every article indexed the sitemap is left alone', async () => {
@@ -149,7 +149,7 @@ test("Bing's clicks, impressions and crawl state are kept apart from Google's", 
     },
     new Date('2026-10-30T12:00:00Z'),
   );
-  const latest = Object.fromEntries((await registry.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
   assert.equal(latest['bing.clicks'], 2);
   assert.equal(latest['bing.impressions'], 45);
   assert.equal(latest['bing.crawled'], 1);
@@ -161,10 +161,10 @@ test("Bing's clicks, impressions and crawl state are kept apart from Google's", 
 test('each piece is read on its own and its readings point at it; the launch adds them up', async () => {
   const registry = await memoryRegistry();
   const launch = await published(registry);
-  const en = (await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:en', url: 'https://brevo/8', externalId: '8' })).post;
-  const es = (await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:es', url: 'https://brevo/9', externalId: '9' })).post;
-  await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', url: 'https://ig/p/1', externalId: 'p1' });
-  await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' });
+  const en = (await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:en', url: 'https://brevo/8', externalId: '8' })).post;
+  const es = (await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:es', url: 'https://brevo/9', externalId: '9' })).post;
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', url: 'https://ig/p/1', externalId: 'p1' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' });
   const asked: string[] = [];
   await collectMetrics(
     registry,
@@ -178,8 +178,8 @@ test('each piece is read on its own and its readings point at it; the launch add
     new Date('2026-10-30T12:00:00Z'),
   );
   assert.deepEqual(asked.sort(), ['instagram p1', 'newsletter 8', 'newsletter 9'], 'one campaign per issue; a story has no post numbers');
-  assert.deepEqual((await registry.postMetrics(en.id)).map((m) => `${m.name}=${m.value}`), ['clicks=5']);
-  assert.deepEqual((await registry.postMetrics(es.id)).map((m) => `${m.name}=${m.value}`), ['clicks=2']);
-  assert.equal((await registry.latestMetrics(launch.id)).find((m) => m.source === 'newsletter')?.value, 7, 'both issues together');
-  assert.deepEqual((await registry.metricHistory(launch.id, 'newsletter', 'clicks')).map((m) => m.value), [7]);
+  assert.deepEqual((await registry.metrics.postMetrics(en.id)).map((m) => `${m.name}=${m.value}`), ['clicks=5']);
+  assert.deepEqual((await registry.metrics.postMetrics(es.id)).map((m) => `${m.name}=${m.value}`), ['clicks=2']);
+  assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.source === 'newsletter')?.value, 7, 'both issues together');
+  assert.deepEqual((await registry.metrics.metricHistory(launch.id, 'newsletter', 'clicks')).map((m) => m.value), [7]);
 });

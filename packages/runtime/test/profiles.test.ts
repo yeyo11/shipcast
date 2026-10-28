@@ -34,7 +34,7 @@ function fakeMastodon(seen: string[]): typeof fetch {
 test('a review reads the profile with the account’s own token, and applying a proposal edits that account', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const account = await registry.addAccount({
+  const account = await registry.accounts.addAccount({
     network: 'mastodon',
     brand: 'personal',
     label: '@me@mastodon.example',
@@ -58,6 +58,6 @@ test('a review reads the profile with the account’s own token, and applying a 
 
 test('an account whose secrets are gone has no connector', async () => {
   const registry = await memoryRegistry();
-  const account = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: { handle: 'me.bsky.social' } });
+  const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: { handle: 'me.bsky.social' } });
   assert.equal(await profileConnector({ secrets: new MemoryStore(), brand })(account), undefined);
 });

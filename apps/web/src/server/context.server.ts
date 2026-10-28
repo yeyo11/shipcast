@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { TelemetryStore, type GitHubApp, type GitHubRest, type PipelineDeps, type Registry } from '@shipcast/engine';
+import { TelemetryStore, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   attachTelemetryStore,
   buildServices,
@@ -42,7 +42,7 @@ export interface AppContext {
   app: AppConfig;
   /** Everything else: the launches repo, claudio, the AI budget… read when needed */
   settings: RuntimeSettings;
-  registry: Registry;
+  registry: Repositories;
   github: GitHubRest;
   githubApp: GitHubApp | undefined;
   access: GitHubAccess;
@@ -135,7 +135,7 @@ async function createContext(): Promise<AppContext> {
  * On SIGTERM or SIGINT the workers stop taking jobs and the running ones get a while to finish; one
  * still running after that is expired and retried (or failed) by pg-boss, never silently lost.
  */
-function stopOnSignal(queue: WorkQueue, registry: Registry, telemetry: TelemetryRecorder): void {
+function stopOnSignal(queue: WorkQueue, registry: Pick<OpenRepositories, 'close'>, telemetry: TelemetryRecorder): void {
   let stopping = false;
   const stop = (signal: NodeJS.Signals) => {
     if (stopping) return;

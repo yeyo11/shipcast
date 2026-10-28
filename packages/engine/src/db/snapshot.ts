@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { Registry } from '../registry.ts';
+import { repositoriesOn, type Repositories } from '../repositories/index.ts';
 import { connectPglite, migrateDatabase, migrationsFolder, type Database } from './connect.ts';
 
 /*
@@ -160,7 +160,7 @@ export function parseSnapshot(text: string): RegistrySnapshot {
 }
 
 export interface SnapshotRegistry {
-  registry: Registry;
+  registry: Repositories;
   /** The registry's rows now, to save */
   dump(): Promise<RegistrySnapshot>;
   close(): Promise<void>;
@@ -178,7 +178,7 @@ export async function openSnapshot(snapshot: RegistrySnapshot | undefined): Prom
       throw error;
     }
   }
-  return { registry: new Registry(db), dump: () => dumpRegistry(db), close };
+  return { registry: repositoriesOn(db), dump: () => dumpRegistry(db), close };
 }
 
 function firstMigration(): string {

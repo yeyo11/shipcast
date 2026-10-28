@@ -1,4 +1,4 @@
-import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishAttempts, PublishRefused, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -32,12 +32,12 @@ const HEADLINE: Array<[string, string, string]> = [
   ['newsletter', 'clicks', 'newsletter clicks'],
 ];
 
-export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
+export async function launchView(registry: Pick<Repositories, 'posts' | 'metrics' | 'comments' | 'cursors'>, launch: Launch): Promise<LaunchView> {
   const [cursors, metrics, posts, replies] = await Promise.all([
-    registry.cursorsWithPrefix(failurePrefix(launch.id)),
-    registry.latestMetrics(launch.id),
-    registry.posts(launch.id),
-    registry.sentReplies(launch.id),
+    registry.cursors.cursorsWithPrefix(failurePrefix(launch.id)),
+    registry.metrics.latestMetrics(launch.id),
+    registry.posts.posts(launch.id),
+    registry.comments.sentReplies(launch.id),
   ]);
   const failures = cursors.map((c) => ({ channel: c.key.split(':')[2] ?? '', message: c.value }));
   const pullRequest = launch.detail?.match(/https:\/\/github\.com\/\S+\/pull\/\d+/)?.[0];
@@ -67,10 +67,10 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
  * number, each search engine's view of each language's article, and its drafts as they are now.
  * Google is always listed, as the engine that matters most; Bing once it has been read at all.
  */
-export async function launchDetail(registry: Registry, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
+export async function launchDetail(registry: Pick<Repositories, 'posts' | 'metrics' | 'comments' | 'cursors'>, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
   // The pull request is read from GitHub, the rest from the registry: all at once
   const reviewing = readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-  const urls = articleUrls(await registry.posts(launch.id, { channel: 'blog' }));
+  const urls = articleUrls(await registry.posts.posts(launch.id, { channel: 'blog' }));
   const views = await Promise.all(
     urls.flatMap(({ lang, url }) =>
       (['google', 'bing'] as const).map(async (engine) => {
@@ -80,7 +80,7 @@ export async function launchDetail(registry: Registry, launch: Launch, deps: { g
     ),
   );
   const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
-  const [review, latest, view] = await Promise.all([reviewing, registry.latestMetrics(launch.id), launchView(registry, launch)]);
+  const [review, latest, view] = await Promise.all([reviewing, registry.metrics.latestMetrics(launch.id), launchView(registry, launch)]);
   const metrics = latest.map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
   return { launch: view, detail: launch.detail, review: review ?? null, metrics, index };
 }
@@ -90,14 +90,14 @@ export async function launchDetail(registry: Registry, launch: Launch, deps: { g
  * or a merged launch is followed; then its publishing is queued. A refusal is the answer's problem.
  */
 export async function publishAgain(
-  registry: Registry,
+  registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'metrics' | 'comments' | 'cursors'>,
   launchId: number,
   channel: Channel | undefined,
   startPublishing: (launch: Launch, retryChannel?: Channel) => Promise<string>,
 ): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
   let launch: Launch;
   try {
-    launch = await publishAgainIn(registry, launchId, channel, new PublishAttempts(registry.database));
+    launch = await publishAgainIn(registry, launchId, channel, registry.attempts);
   } catch (error) {
     if (error instanceof PublishRefused) return { ok: false, problem: error.message };
     throw error;

@@ -6,7 +6,7 @@ import { memoryRegistry as memory } from '../src/testing.ts';
 
 async function setup() {
   const registry = await memory();
-  const { launch } = await registry.claim({ repo: 'yeyo11/shipcast', ref: 'v0.2.0', trigger: 'release', kind: 'major', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v0.2.0', trigger: 'release', kind: 'major', brand: 'personal' });
   const piece: Piece = { launchId: launch.id, channel: 'bluesky', kind: 'post' };
   return { registry, attempts: new PublishAttempts(registry.database), piece };
 }

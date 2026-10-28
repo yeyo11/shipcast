@@ -1,4 +1,4 @@
-import type { ArticleInput, JobRecord, Registry } from '@shipcast/engine';
+import type { ArticleInput, JobRecord, Repositories } from '@shipcast/engine';
 import { ShipcastError, type Channel } from '@shipcast/schema';
 import { fromPglite, PgBoss, type ConstructorOptions, type PGliteLike, type Queue } from 'pg-boss';
 import { withOrigin } from './telemetry/origin.ts';
@@ -143,7 +143,7 @@ export interface QueueOptions {
  * (test/queue-contract.test.ts) holds both to the same semantics.
  */
 export interface JobQueue {
-  readonly registry: Registry;
+  readonly registry: QueueRepositories;
   start(): Promise<void>;
   send<Q extends QueueName>(queue: Q, data: JobData[Q], options?: SendOptions): Promise<string | null>;
   upsert<Q extends QueueName>(queue: Q, data: JobData[Q], options: SendOptions & { singletonKey: string }): Promise<string | null>;
@@ -172,18 +172,24 @@ export interface RunningJob<Q extends QueueName> {
  * and link, the timing of the attempt and of its wait, and the `job:<queue>` origin the calls made
  * inside it are counted under. It rethrows what the handler threw: the queue decides what follows.
  */
-export async function runJob<Q extends QueueName>(registry: Registry, telemetry: TelemetryRecorder | undefined, job: RunningJob<Q>, handler: Handler<Q>): Promise<void> {
+/**
+ * What a queue keeps in the registry: its jobs' rows, and the launches and scheduled posts it
+ * reconciles them with at start
+ */
+export type QueueRepositories = Pick<Repositories, 'launches' | 'posts' | 'jobs'>;
+
+export async function runJob<Q extends QueueName>(registry: Pick<Repositories, 'jobs'>, telemetry: TelemetryRecorder | undefined, job: RunningJob<Q>, handler: Handler<Q>): Promise<void> {
   const { id, queue, attempt, lastAttempt } = job;
   // From when it could start to now: how long the queue kept it waiting
   telemetry?.timing({ kind: 'job-wait', name: queue, outcome: 'ok', ms: Math.max(0, Date.now() - job.readyAt) });
   const started = performance.now();
   // A job a schedule sent, or one sent before its row existed, is recorded when it starts
-  await registry.recordJob({ id, queue, title: QUEUES[queue].title });
-  await registry.updateJob(id, { state: 'active', attempts: attempt, started: true, ended: false });
+  await registry.jobs.recordJob({ id, queue, title: QUEUES[queue].title });
+  await registry.jobs.updateJob(id, { state: 'active', attempts: attempt, started: true, ended: false });
   // Lines are written in order, and a failed write never fails the work
   let written: Promise<void> = Promise.resolve();
   const log = (line: string) => {
-    written = written.then(() => registry.logJob(id, line)).catch(() => undefined);
+    written = written.then(() => registry.jobs.logJob(id, line)).catch(() => undefined);
   };
   let link: string | undefined;
   try {
@@ -192,19 +198,19 @@ export async function runJob<Q extends QueueName>(registry: Registry, telemetry:
     telemetry?.timing({ kind: 'job', name: queue, outcome: lastAttempt ? 'error' : 'retry', ms: performance.now() - started });
     log(error instanceof RetryLater ? `Waiting: ${message(error)}` : message(error));
     await written;
-    await registry.updateJob(id, { state: lastAttempt ? 'failed' : 'retry', ended: lastAttempt, ...(link !== undefined && { link }) });
+    await registry.jobs.updateJob(id, { state: lastAttempt ? 'failed' : 'retry', ended: lastAttempt, ...(link !== undefined && { link }) });
     throw error;
   }
   telemetry?.timing({ kind: 'job', name: queue, outcome: 'ok', ms: performance.now() - started });
   await written;
-  await registry.updateJob(id, { state: 'completed', ended: true, ...(link !== undefined && { link }) });
+  await registry.jobs.updateJob(id, { state: 'completed', ended: true, ...(link !== undefined && { link }) });
 }
 
 /** Polls the registry's row until the job has ended, in any process; undefined when the time is up first */
-export async function waitForJob(registry: Registry, id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
+export async function waitForJob(registry: Pick<Repositories, 'jobs'>, id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const record = await registry.job(id);
+    const record = await registry.jobs.job(id);
     if (record && (record.state === 'completed' || record.state === 'failed')) return record;
     if (Date.now() > deadline) return undefined;
     await new Promise((r) => setTimeout(r, everyMs));
@@ -221,8 +227,8 @@ export interface HeldJob {
  * Brings the rows of jobs that were waiting or running when a process stopped in line with the
  * queue: a job it expired, failed or lost is not left showing "running". `find` answers for one row.
  */
-export async function reconcileRows(registry: Registry, find: (record: JobRecord) => Promise<HeldJob | undefined>): Promise<void> {
-  for (const record of await registry.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
+export async function reconcileRows(registry: Pick<Repositories, 'launches' | 'jobs'>, find: (record: JobRecord) => Promise<HeldJob | undefined>): Promise<void> {
+  for (const record of await registry.jobs.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
     if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
     const job = await find(record);
     if (!job) {
@@ -230,20 +236,20 @@ export async function reconcileRows(registry: Registry, find: (record: JobRecord
       // after it ended, so in practice a row lands here when pg-boss's tables were edited by hand,
       // as a preview copy that clears the queued work does, or (on BullMQ) when Redis was lost.
       // One that never started did nothing.
-      await registry.updateJob(record.id, { state: 'failed', ended: true });
-      await registry.logJob(record.id, record.state === 'created' ? NEVER_RAN : LOST_RUNNING);
+      await registry.jobs.updateJob(record.id, { state: 'failed', ended: true });
+      await registry.jobs.logJob(record.id, record.state === 'created' ? NEVER_RAN : LOST_RUNNING);
       continue;
     }
     if (job.state === record.state) continue;
-    await registry.updateJob(record.id, { state: job.state, attempts: Math.max(record.attempts, job.retryCount + (job.state === 'created' ? 0 : 1)), ended: job.state === 'completed' || job.state === 'failed' });
+    await registry.jobs.updateJob(record.id, { state: job.state, attempts: Math.max(record.attempts, job.retryCount + (job.state === 'created' ? 0 : 1)), ended: job.state === 'completed' || job.state === 'failed' });
   }
   // A draft cut short by a stop leaves its launch "generating" for good, and a launch in that state
   // cannot be started again; failed, it can, and its page says why
-  const live = await registry.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
+  const live = await registry.jobs.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
   const drafting = new Set(live.map((j) => j.launchId));
-  const { launches } = await registry.launchesPage({ status: 'generating', limit: 100 });
+  const { launches } = await registry.launches.launchesPage({ status: 'generating', limit: 100 });
   for (const launch of launches) {
-    if (!drafting.has(launch.id)) await registry.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
+    if (!drafting.has(launch.id)) await registry.launches.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
   }
 }
 
@@ -265,14 +271,14 @@ function stateOf(state: string): JobRecord['state'] {
 
 export class WorkQueue implements JobQueue {
   readonly #boss: PgBoss;
-  readonly #registry: Registry;
+  readonly #registry: QueueRepositories;
   readonly #polling: number;
   readonly #retryDelay: number | undefined;
   readonly #telemetry: TelemetryRecorder | undefined;
   #started: Promise<void> | undefined;
   #stopped = false;
 
-  constructor(boss: PgBoss, registry: Registry, options: QueueOptions = {}) {
+  constructor(boss: PgBoss, registry: QueueRepositories, options: QueueOptions = {}) {
     this.#boss = boss;
     this.#registry = registry;
     this.#polling = options.pollingIntervalSeconds ?? 2;
@@ -286,17 +292,17 @@ export class WorkQueue implements JobQueue {
   }
 
   /** The queue on a Postgres server: the registry's, pg-boss in its own schema and pool */
-  static postgres(url: string, registry: Registry, options: QueueOptions = {}): WorkQueue {
+  static postgres(url: string, registry: QueueRepositories, options: QueueOptions = {}): WorkQueue {
     // A small pool: the work is a handful of jobs at a time, and the registry has a pool of its own
     return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), connectionString: url, max: 4, application_name: `shipcast-${options.instanceName ?? 'queue'}` }), registry, options);
   }
 
   /** The queue on a PGlite instance, for tests: the same pg-boss and the same SQL, in this process */
-  static pglite(client: PGliteLike, registry: Registry, options: QueueOptions = {}): WorkQueue {
+  static pglite(client: PGliteLike, registry: QueueRepositories, options: QueueOptions = {}): WorkQueue {
     return new WorkQueue(new PgBoss({ ...WorkQueue.#options(options), db: fromPglite(client), backend: 'pglite', registerInstance: false }), registry, options);
   }
 
-  get registry(): Registry {
+  get registry(): QueueRepositories {
     return this.#registry;
   }
 
@@ -354,7 +360,7 @@ export class WorkQueue implements JobQueue {
       ...(options.singletonKey !== undefined && { singletonKey: options.singletonKey }),
       ...(options.startAfter !== undefined && { startAfter: options.startAfter }),
     });
-    if (id) await this.#registry.recordJob({ id, queue, title: options.title ?? QUEUES[queue].title, launchId: options.launchId ?? null });
+    if (id) await this.#registry.jobs.recordJob({ id, queue, title: options.title ?? QUEUES[queue].title, launchId: options.launchId ?? null });
     return id;
   }
 
@@ -368,8 +374,8 @@ export class WorkQueue implements JobQueue {
     const result = await this.#boss.upsert(queue, data, { singletonKey: options.singletonKey, startAfter });
     const id = result.jobs[0] ?? null;
     if (id) {
-      const record = await this.#registry.recordJob({ id, queue, title: options.title ?? QUEUES[queue].title, launchId: options.launchId ?? null });
-      if (options.title && record.title !== options.title) await this.#registry.updateJob(id, { title: options.title });
+      const record = await this.#registry.jobs.recordJob({ id, queue, title: options.title ?? QUEUES[queue].title, launchId: options.launchId ?? null });
+      if (options.title && record.title !== options.title) await this.#registry.jobs.updateJob(id, { title: options.title });
     }
     return id;
   }

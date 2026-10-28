@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
-import { publishLaunch, PublishingService, type Publishers, type Registry } from '../src/index.ts';
+import { publishLaunch, PublishingService, type Publishers, type Repositories } from '../src/index.ts';
 import { aLaunch, FakeConnectors, FakeGitHub, LAUNCHES_REPO, memoryRegistry } from '../src/testing/index.ts';
 
 /*
@@ -56,7 +56,7 @@ function slow(publishers: Publishers): Publishers {
   return out as Publishers;
 }
 
-async function setup(): Promise<{ registry: Registry; fake: FakeConnectors; launchId: number }> {
+async function setup(): Promise<{ registry: Repositories; fake: FakeConnectors; launchId: number }> {
   const registry = await memoryRegistry();
   const launch = await aLaunch(registry);
   return { registry, fake: new FakeConnectors(), launchId: launch.id };
@@ -66,7 +66,7 @@ const sends = (fake: FakeConnectors) => Object.fromEntries(CHANNELS.map((c) => [
 
 test('without the publishing service, two runs of one launch at once post twice (the hazard)', async () => {
   const { registry, fake, launchId } = await setup();
-  const launch = (await registry.get(launchId))!;
+  const launch = (await registry.launches.get(launchId))!;
   const deps = { github: github(), registry, launchesRepo: LAUNCHES_REPO, publishers: slow(fake.publishers([...CHANNELS])), fetch: site };
   await Promise.all([publishLaunch(launch, brand, deps), publishLaunch(launch, brand, deps)]);
   assert.ok(Object.values(sends(fake)).some((n) => n > 1), `some channel went out twice: ${JSON.stringify(sends(fake))}`);
@@ -74,13 +74,13 @@ test('without the publishing service, two runs of one launch at once post twice 
 
 test('the round and a publish job at the same moment: exactly one post per piece', async () => {
   const { registry, fake, launchId } = await setup();
-  const launch = (await registry.get(launchId))!;
+  const launch = (await registry.launches.get(launchId))!;
   const service = new PublishingService({ registry, github: github(), launchesRepo: LAUNCHES_REPO });
   const connectors = { publishers: slow(fake.publishers([...CHANNELS])), fetch: site };
   const [round, job] = await Promise.all([service.publish(launch, brand, connectors, 'round'), service.publish(launch, brand, connectors, 'job-1')]);
 
   assert.deepEqual(sends(fake), { bluesky: 1, mastodon: 1, telegram: 1, discord: 1, threads: 1 });
-  const posts = (await registry.posts(launchId)).filter((p) => p.kind === 'post');
+  const posts = (await registry.posts.posts(launchId)).filter((p) => p.kind === 'post');
   assert.deepEqual(posts.map((p) => p.channel).sort(), [...CHANNELS].sort());
   // Whichever run lost a channel's claim left it to the other and said so, never as a failure
   for (const result of [round, job]) assert.ok(result.state !== 'waiting' && result.state !== 'skipped' && result.failures.length === 0);
@@ -89,7 +89,7 @@ test('the round and a publish job at the same moment: exactly one post per piece
   assert.deepEqual(attempts.map((a) => a.state), CHANNELS.map(() => 'live'));
 
   // The next run, by anyone, sends nothing more and publishes the launch
-  const again = await service.publish((await registry.get(launchId))!, brand, connectors, 'job-2');
+  const again = await service.publish((await registry.launches.get(launchId))!, brand, connectors, 'job-2');
   assert.equal(again.state, 'published');
   assert.deepEqual(sends(fake), { bluesky: 1, mastodon: 1, telegram: 1, discord: 1, threads: 1 });
 });
@@ -101,7 +101,7 @@ test('a run that died while sending: Mastodon (idempotent) is sent again, Telegr
   const long_ago = new Date(Date.now() - 3_600_000);
   for (const channel of ['mastodon', 'telegram']) await service.attempts.claim({ launchId, channel, kind: 'post' }, { holder: 'dead', idempotent: false, leaseMs: 1000, now: long_ago });
 
-  const result = await service.publish((await registry.get(launchId))!, brand, { publishers: fake.publishers([...CHANNELS]), fetch: site }, 'job-2');
+  const result = await service.publish((await registry.launches.get(launchId))!, brand, { publishers: fake.publishers([...CHANNELS]), fetch: site }, 'job-2');
   assert.ok(result.state === 'partial');
   assert.equal(sends(fake).mastodon, 1, 'Mastodon takes the idempotency key: sending again is safe');
   assert.equal(sends(fake).telegram, 0, 'Telegram could post twice: left for the owner');
@@ -110,6 +110,6 @@ test('a run that died while sending: Mastodon (idempotent) is sent again, Telegr
 
   // Try again on Telegram clears it, and the next run sends it
   await service.retry(launchId, 'telegram');
-  await service.publish((await registry.get(launchId))!, brand, { publishers: fake.publishers([...CHANNELS]), fetch: site }, 'job-3');
+  await service.publish((await registry.launches.get(launchId))!, brand, { publishers: fake.publishers([...CHANNELS]), fetch: site }, 'job-3');
   assert.equal(sends(fake).telegram, 1);
 });

@@ -16,5 +16,5 @@ test('the fixtures write a drafted launch, its pieces in every status, scheduled
   const { launch, posts } = await aPublishedLaunch(registry, [{ channel: 'blog', kind: 'article:en', externalId: 'claudio', url: 'https://josegarrido.dev/en/claudio/' }], { ref: 'v2.0.0' });
   assert.equal(launch.status, 'published');
   await withMetrics(registry, launch.id, [{ source: 'blog', values: { views: 4 }, postId: posts[0]!.id }]);
-  assert.deepEqual((await registry.latestMetrics(launch.id)).map((m) => `${m.source}.${m.name}=${m.value}`), ['blog.views=4']);
+  assert.deepEqual((await registry.metrics.latestMetrics(launch.id)).map((m) => `${m.source}.${m.name}=${m.value}`), ['blog.views=4']);
 });

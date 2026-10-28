@@ -16,13 +16,13 @@ export async function channelsView() {
   const ctx = await appContext();
   const { registry, secrets, brand } = ctx;
   const current = await brand();
-  const snapshots = await registry.lastSnapshots();
-  const activity = await registry.postActivity();
+  const snapshots = await registry.accounts.lastSnapshots();
+  const activity = await registry.posts.postActivity();
   const now = new Date();
   const week = { from: new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) };
   // Each account with its latest numbers, its week's change, what Shipcast published with it and how fresh it is
   const accounts = await Promise.all(
-    (await registry.accounts()).map(async (account) => {
+    (await registry.accounts.accounts()).map(async (account) => {
       const snapshot = snapshots.get(account.id) ?? null;
       const syncedAt = lastSynced(account, snapshot?.takenAt);
       const weekChange = snapshot?.followers != null ? (await accountGrowth(registry, account.id, week)).change.followers : null;

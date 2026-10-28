@@ -130,23 +130,23 @@ test('a chat turn is saved as it streams: the question, then the answer with its
   const registry = await memoryRegistry();
   const provider = await mockStreamingProvider(['Try this:\n```proposal\nNew.\n```']);
   const body = { action: 'chat', selection: 'Old.', range: { start: 0, end: 4 }, document: 'Old. Rest.', draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky', messages: [{ role: 'user', content: 'Punchier, please' }] };
-  const { events } = await ask(body, provider, registry);
+  const { events } = await ask(body, provider, registry.assistant);
   const saved = events.find((e) => e.type === 'saved');
   assert.ok(saved && saved.type === 'saved');
   assert.equal(events.at(-1)?.type, 'done');
 
-  const session = await registry.assistantSession(saved.sessionId);
+  const session = await registry.assistant.assistantSession(saved.sessionId);
   assert.deepEqual({ title: session?.title, launchId: session?.launchId, draftPath: session?.draftPath, draftLabel: session?.draftLabel }, { title: 'Punchier, please', launchId: null, draftPath: 'launches/claudio/v1.0.0/bluesky.md', draftLabel: 'Bluesky' });
-  const turns = await registry.assistantMessages(saved.sessionId);
+  const turns = await registry.assistant.assistantMessages(saved.sessionId);
   assert.deepEqual(turns.map((t) => [t.role, t.content]), [['user', 'Punchier, please'], ['assistant', 'Try this:\n```proposal\nNew.\n```']]);
   assert.deepEqual(turns[0]?.selection, { start: 0, end: 4, original: 'Old.' });
   assert.deepEqual(turns[1]?.proposals, [{ text: 'New.', state: 'open' }]);
   assert.equal(turns[1]?.id, saved.messageId);
 
   // A second turn with the session's id continues it instead of starting another
-  await ask({ ...body, sessionId: saved.sessionId, messages: [{ role: 'user', content: 'Again' }] }, await mockStreamingProvider(['Done.']), registry);
-  assert.equal((await registry.assistantSessions()).sessions.length, 1);
-  assert.equal((await registry.assistantMessages(saved.sessionId)).length, 4);
+  await ask({ ...body, sessionId: saved.sessionId, messages: [{ role: 'user', content: 'Again' }] }, await mockStreamingProvider(['Done.']), registry.assistant);
+  assert.equal((await registry.assistant.assistantSessions()).sessions.length, 1);
+  assert.equal((await registry.assistant.assistantMessages(saved.sessionId)).length, 4);
 });
 
 test('a failed answer is saved with why it stopped, and a quick action is not saved at all', async () => {
@@ -159,14 +159,14 @@ test('a failed answer is saved with why it stopped, and a quick action is not sa
       throw new Error('the model is down');
     },
   };
-  await ask({ action: 'chat', selection: '', document: 'x', messages: [{ role: 'user', content: 'Hi' }] }, failing, registry);
-  const [session] = (await registry.assistantSessions()).sessions;
-  const turns = await registry.assistantMessages(session!.id);
+  await ask({ action: 'chat', selection: '', document: 'x', messages: [{ role: 'user', content: 'Hi' }] }, failing, registry.assistant);
+  const [session] = (await registry.assistant.assistantSessions()).sessions;
+  const turns = await registry.assistant.assistantMessages(session!.id);
   assert.equal(turns[1]?.content, 'Half');
   assert.equal(turns[1]?.problem, 'the model is down');
 
-  await ask({ action: 'improve', selection: 'x', document: 'x' }, await mockStreamingProvider(['y']), registry);
-  assert.equal((await registry.assistantSessions()).sessions.length, 1);
+  await ask({ action: 'improve', selection: 'x', document: 'x' }, await mockStreamingProvider(['y']), registry.assistant);
+  assert.equal((await registry.assistant.assistantSessions()).sessions.length, 1);
 });
 
 test('a session is titled by the first question, or by the draft when there are no words', () => {

@@ -13,7 +13,7 @@ async function deps(): Promise<AiDeps> {
 
 test('each task gets the provider, model, prompts and tone its settings choose', async () => {
   const d = await deps();
-  const account = await d.registry.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
+  const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
   await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-test' }), 'Anthropic API');
   await writeAiSettings(d.registry, { tasks: { pack: { provider: 'claudio' }, article: { provider: 'anthropic', model: 'claude-opus-5-5' }, assistant: { provider: 'claudio' } }, tone: 'Plain.' });
   await savePrompt(d.registry, 'channel.devto', 'devto: tags only.');

@@ -1,7 +1,7 @@
 import { after } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
 import { connectPglite } from '../db/connect.ts';
-import { Registry } from '../registry.ts';
+import { repositoriesOn, type OpenRepositories } from '../repositories/index.ts';
 
 /*
  * Registries for tests, on PGlite: a real Postgres in the test process, no server and no docker.
@@ -29,13 +29,14 @@ export async function clonePglite(client: PGlite): Promise<PGlite> {
 }
 
 /** A registry over a PGlite whose registry schema is already migrated */
-export async function registryOn(client: PGlite): Promise<Registry> {
+export async function registryOn(client: PGlite): Promise<OpenRepositories> {
   const { drizzle } = await import('drizzle-orm/pglite');
-  return new Registry(drizzle({ client }));
+  // Closing is the clone's business (the `after` above): a test that closes its registry closes nothing
+  return { ...repositoriesOn(drizzle({ client })), close: async () => {} };
 }
 
 /** A fresh, empty registry, closed when the test file ends */
-export async function memoryRegistry(): Promise<Registry> {
+export async function memoryRegistry(): Promise<OpenRepositories> {
   template ??= connectPglite();
   return registryOn(await clonePglite((await template).client));
 }

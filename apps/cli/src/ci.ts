@@ -13,7 +13,8 @@ import {
   openAiCompatibleProvider,
   openAiProvider,
   readAiSettings,
-  Registry,
+  connectRepositories,
+  type Repositories,
   DEFAULT_ANTHROPIC_MODEL,
   DEFAULT_OPENAI_MODEL,
   type AiProvider,
@@ -207,7 +208,7 @@ export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, opti
   const github = new GitHubRest({ token: auth ?? staticToken! });
 
   let state: CiState;
-  if (config.state.kind === 'postgres') state = new PostgresState(await Registry.connect(config.state.url));
+  if (config.state.kind === 'postgres') state = new PostgresState(await connectRepositories(config.state.url));
   else {
     const store = new GitStateStore({ remote: config.state.remote, branch: config.state.branch, token });
     state = new BranchState(store, { holder: config.holder, leaseMs: config.leaseMs, waitMs: config.waitMs, dryRun: options.dryRun, log: options.log });
@@ -216,7 +217,7 @@ export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, opti
   mkdirSync(config.workDir, { recursive: true });
   const brand = () => loadBrand(github, config.launchesRepo);
   const model = config.ai && 'model' in config.ai ? config.ai.model : undefined;
-  const pipelineFor = (registry: Registry, launch?: { launch: Launch; brand: Brand }): PipelineDeps => {
+  const pipelineFor = (registry: Repositories, launch?: { launch: Launch; brand: Brand }): PipelineDeps => {
     const provider = aiProviderOf(config.ai, launch);
     return {
     github,

@@ -18,7 +18,7 @@ async function deps(): Promise<ProfileDeps> {
 
 export async function startReview(accountId: number, request: Omit<ProfileReviewRequest, 'accountId'>): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
   const { queue, registry } = await appContext();
-  const account = await registry.account(accountId);
+  const account = await registry.accounts.account(accountId);
   if (!account) return { ok: false, problem: 'no such account' };
   const job = await startProfileReview(queue, account, request);
   return job ? { ok: true, job } : { ok: false, problem: 'the review could not be queued' };

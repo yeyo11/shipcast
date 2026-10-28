@@ -52,7 +52,7 @@ test('the post service edits by piece or by channel through the one multi-edit, 
     { channel: 'mastodon', externalId: 'm1' },
     { channel: 'telegram', externalId: '@c:5', status: 'deleted' },
   ]);
-  const service = new PostService({ launches: registry, editing: async () => ({ registry, editors: fake.editors() }) });
+  const service = new PostService({ launches: registry.launches, editing: async () => ({ registry, editors: fake.editors() }) });
   const [mastodon, telegram] = posts;
   const byId = await service.editMany(l.id, { text: 'T' }, { postIds: [telegram!.id, 9999, mastodon!.id] });
   assert.deepEqual(byId.map((o) => `${o.postId === 9999 ? 'missing' : o.channel} ${o.ok ? o.post.status : o.reason}`), ['telegram deleted', 'missing not_found', 'mastodon edited']);
@@ -66,8 +66,8 @@ test('the post service edits by piece or by channel through the one multi-edit, 
 
 test('the schedule service checks launch.yml at best, and arms every piece it sets or moves', async () => {
   const registry = await memoryRegistry();
-  const { launch: l } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(l.id, 'drafted');
+  const { launch: l } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(l.id, 'drafted');
   const armed: string[] = [];
   const at = new Date(Date.now() + 86_400_000);
   const service = new ScheduleService({
@@ -102,13 +102,13 @@ test('the launch service refuses a launch whose pre-flight fails; publishing aga
     updateFile: github.updateFile.bind(github),
     mergePullRequest: github.mergePullRequest.bind(github),
   } satisfies ReviewGitHub & Record<string, unknown>;
-  const service = new LaunchService({ launches: registry, claims: { registry, github, launchesRepo: 'yeyo11/launches' }, github: bare });
+  const service = new LaunchService({ launches: registry.launches, claims: { registry, github, launchesRepo: 'yeyo11/launches' }, github: bare });
   await assert.rejects(// The pre-flight refuses before the brand is read
     service.claimManual('yeyo11/nothing', 'v1.0.0', () => Promise.reject(new Error('the brand is never read'))), (e: unknown) => e instanceof LaunchRefused && e.reason === 'not_ready');
   await assert.rejects(service.approve(999), (e: unknown) => e instanceof LaunchRefused && e.reason === 'not_found');
 
-  const { launch: l } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(l.id, 'published');
+  const { launch: l } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(l.id, 'published');
   await assert.rejects(publishAgain(registry, l.id, undefined), (e: unknown) => e instanceof PublishRefused && e.message === 'the launch is published');
   assert.equal((await publishAgain(registry, l.id, 'devto')).status, 'drafted', 'a channel with nothing out reopens the launch');
   await assert.rejects(publishAgain(registry, 999, 'devto'), /no such launch/);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { indexStatusKey, type Registry } from '@shipcast/engine';
+import { indexStatusKey, type Repositories } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { DEFAULTS, parseStatsInput } from '../src/server/stats-search.ts';
 import { loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../src/server/stats.server.ts';
@@ -8,14 +8,14 @@ import { loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../sr
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
 const TODAY = '2026-10-25';
 
-async function seed(registry: Registry) {
-  const account = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
-  const { post } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'post', accountId: account.id, externalId: 'b1', url: 'https://bsky.example/1' });
-  for (const [day, likes] of [['10', 2], ['15', 10], ['20', 30]] as const) await registry.recordMetrics(launch.id, 'bluesky', { likes, reposts: 1 }, at(day), post.id);
-  await registry.recordSnapshot(account.id, { followers: 100, following: 10, posts: 3 }, at('18', 4));
-  await registry.recordSnapshot(account.id, { followers: 112, following: 10, posts: 4 }, at('24', 4));
+async function seed(registry: Repositories) {
+  const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'post', accountId: account.id, externalId: 'b1', url: 'https://bsky.example/1' });
+  for (const [day, likes] of [['10', 2], ['15', 10], ['20', 30]] as const) await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes, reposts: 1 }, at(day), post.id);
+  await registry.accounts.recordSnapshot(account.id, { followers: 100, following: 10, posts: 3 }, at('18', 4));
+  await registry.accounts.recordSnapshot(account.id, { followers: 112, following: 10, posts: 4 }, at('24', 4));
   return { account, launch };
 }
 
@@ -80,7 +80,7 @@ test('the ranking is sorted over every row, then paged', () => {
 test('growth lists the accounts with snapshots, their change and their freshness', async () => {
   const registry = await memoryRegistry();
   const { account } = await seed(registry);
-  await registry.addAccount({ network: 'brevo', brand: 'personal', label: 'newsletter', settings: {} });
+  await registry.accounts.addAccount({ network: 'brevo', brand: 'personal', label: 'newsletter', settings: {} });
   const growth = await loadGrowth(registry, { from: '2026-10-01', to: '2026-10-25' }, new Date('2026-10-25T12:00:00Z'));
   assert.equal(growth.accounts.length, 1, 'an account with no snapshots has no growth to show');
   const [a] = growth.accounts;
@@ -104,9 +104,9 @@ test('the search tab lists each article page with what each engine said, and the
   const registry = await memoryRegistry();
   const { launch } = await seed(registry);
   const url = 'https://blog.example/en/claudio/';
-  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: 'a1', url });
-  await registry.setCursor(indexStatusKey(url), JSON.stringify({ indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
-  for (const [day, impressions] of [['12', 5], ['22', 40]] as const) await registry.recordMetrics(launch.id, 'search', { impressions, clicks: 1 }, at(day));
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: 'a1', url });
+  await registry.cursors.setCursor(indexStatusKey(url), JSON.stringify({ indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
+  for (const [day, impressions] of [['12', 5], ['22', 40]] as const) await registry.metrics.recordMetrics(launch.id, 'search', { impressions, clicks: 1 }, at(day));
 
   const view = await loadSearch(registry, { from: '2026-09-26', to: TODAY });
   assert.equal(view.launches.length, 1);

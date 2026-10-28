@@ -1,4 +1,4 @@
-import type { Registry } from '@shipcast/engine';
+import type { Repositories } from '@shipcast/engine';
 import { InvalidRequest, ShipcastError } from '@shipcast/schema';
 import { NETWORK_SPECS, networkSpec } from './catalog.ts';
 import type { OAuthApp } from './channels/adapter.ts';
@@ -113,7 +113,7 @@ export class SettingMissing extends ShipcastError {
 export class InvalidSetting extends InvalidRequest {}
 
 export interface SettingsDeps {
-  registry: Registry;
+  registry: Pick<Repositories, 'settings'>;
   secrets: SecretStore;
   /** `.env`, a fallback until the owner removes what was imported from it */
   env: NodeJS.ProcessEnv;
@@ -127,7 +127,7 @@ const envValue = (env: NodeJS.ProcessEnv, name: SettingName) => env[settingDefin
 async function stored(deps: SettingsDeps, name: SettingName): Promise<string | undefined> {
   const store = settingDefinition(name).store;
   if (store.kind === 'secret') return (await deps.secrets.get(store.key))?.trim() || undefined;
-  const value = await deps.registry.setting<string | number>(store.key);
+  const value = await deps.registry.settings.setting<string | number>(store.key);
   return value === undefined || value === null || value === '' ? undefined : String(value);
 }
 
@@ -235,7 +235,7 @@ async function put(deps: SettingsDeps, name: SettingName, value: string | undefi
     else await deps.secrets.set(store.key, value, store.label);
     return;
   }
-  await deps.registry.setSetting(store.key, name === 'maxBudgetUsd' && value !== undefined ? Number(value) : (value ?? ''));
+  await deps.registry.settings.setSetting(store.key, name === 'maxBudgetUsd' && value !== undefined ? Number(value) : (value ?? ''));
 }
 
 /** The `.env` names imported already: a value cleared in the app afterwards is not brought back by the next start */
@@ -249,7 +249,7 @@ export const IMPORTED_KEY = 'settings-imported-from-env';
  * back, never the values, for the log.
  */
 export async function importEnvSettings(deps: SettingsDeps): Promise<{ imported: string[]; skipped: string[] }> {
-  const done = new Set((await deps.registry.setting<string[]>(IMPORTED_KEY)) ?? []);
+  const done = new Set((await deps.registry.settings.setting<string[]>(IMPORTED_KEY)) ?? []);
   const before = done.size;
   const imported: string[] = [];
   const skipped: string[] = [];
@@ -267,6 +267,6 @@ export async function importEnvSettings(deps: SettingsDeps): Promise<{ imported:
     }
     done.add(variable);
   }
-  if (done.size !== before) await deps.registry.setSetting(IMPORTED_KEY, [...done].sort());
+  if (done.size !== before) await deps.registry.settings.setSetting(IMPORTED_KEY, [...done].sort());
   return { imported, skipped };
 }

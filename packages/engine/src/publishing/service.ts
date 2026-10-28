@@ -1,8 +1,8 @@
 import type { Brand, Channel } from '@shipcast/schema';
 import type { GitHubSource } from '../github.ts';
 import { approval, publishLaunch, type PublishDeps, type PublishResult } from '../publish.ts';
-import type { Launch, Registry } from '../registry.ts';
-import { PublishAttempts } from './attempts.ts';
+import type { Launch, Repositories } from '../repositories/index.ts';
+import type { PublishAttempts } from './attempts.ts';
 import { PieceGuard } from './guard.ts';
 import { publishAgain, retryChannel } from './retry.ts';
 
@@ -16,16 +16,16 @@ export type PublishConnectors = Pick<PublishDeps, 'publishers' | 'strategies' | 
  * piece once, and a run cut short is never repeated where the network could post twice.
  */
 export class PublishingService {
-  readonly #registry: Registry;
+  readonly #registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>;
   readonly #github: GitHubSource;
   readonly #launchesRepo: string;
   readonly #attempts: PublishAttempts;
 
-  constructor(deps: { registry: Registry; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts }) {
+  constructor(deps: { registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts }) {
     this.#registry = deps.registry;
     this.#github = deps.github;
     this.#launchesRepo = deps.launchesRepo;
-    this.#attempts = deps.attempts ?? new PublishAttempts(deps.registry.database);
+    this.#attempts = deps.attempts ?? deps.registry.attempts;
   }
 
   get attempts(): PublishAttempts {

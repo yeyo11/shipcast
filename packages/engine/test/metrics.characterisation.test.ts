@@ -61,7 +61,7 @@ test('one run over several launches: each readable piece is asked once, the rest
   assert.deepEqual(result.problems, ['yeyo11/launches article:hello blog visits: Cloudflare: 500']);
   assert.equal(result.readings, 10, 'three pieces, four blog numbers, three of GitHub');
 
-  const latest = Object.fromEntries((await registry.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
   assert.deepEqual(latest, {
     'blog.views': 6,
     'blog.views_direct': 4,
@@ -74,6 +74,6 @@ test('one run over several launches: each readable piece is asked once, the rest
     'instagram.likes': 3,
     'newsletter.opens': 5,
   });
-  assert.deepEqual(await registry.latestMetrics(article.id), []);
-  assert.deepEqual(await registry.latestMetrics(drafted.id), []);
+  assert.deepEqual(await registry.metrics.latestMetrics(article.id), []);
+  assert.deepEqual(await registry.metrics.latestMetrics(drafted.id), []);
 });

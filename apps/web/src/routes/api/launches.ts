@@ -9,10 +9,10 @@ export const Route = createFileRoute('/api/launches')({
     handlers: {
       GET: async () => {
         const { registry } = await appContext();
-        const launches = await registry.recent(100);
+        const launches = await registry.launches.recent(100);
         return Response.json(
           await Promise.all(
-            launches.map(async (l) => ({ ...(await launchView(registry, l)), metrics: await registry.latestMetrics(l.id), jobs: await jobsView(registry, { launchId: l.id }) })),
+            launches.map(async (l) => ({ ...(await launchView(registry, l)), metrics: await registry.metrics.latestMetrics(l.id), jobs: await jobsView(registry, { launchId: l.id }) })),
           ),
         );
       },

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { JobRecord, Registry } from '@shipcast/engine';
+import type { JobRecord } from '@shipcast/engine';
 import { DelayedError, Queue, UnrecoverableError, Worker, type Job, type JobsOptions } from 'bullmq';
 import type { Redis } from 'ioredis';
-import { QUEUE_NAMES, QUEUES, reconcileRows, runJob, waitForJob, type Handler, type Handlers, type HeldCounts, type HeldJob, type JobData, type JobQueue, type QueueName, type SendOptions, type WorkQueue } from './queue.ts';
+import { QUEUE_NAMES, QUEUES, reconcileRows, runJob, waitForJob, type Handler, type Handlers, type HeldCounts, type HeldJob, type JobData, type JobQueue, type QueueName, type QueueRepositories, type SendOptions, type WorkQueue } from './queue.ts';
 import { RedisLock } from './redis/adapters.ts';
 import { Script, type RedisConnections } from './redis/connection.ts';
 import type { Lock } from './redis/ports.ts';
@@ -113,7 +113,7 @@ function heldOf(state: string, job: Job | undefined): HeldJob | undefined {
 export class BullQueue implements JobQueue {
   readonly #redis: Redis;
   readonly #connect: (suffix: string) => Redis;
-  readonly #registry: Registry;
+  readonly #registry: QueueRepositories;
   readonly #prefix: string;
   readonly #lock: Lock;
   readonly #onError: (error: Error) => void;
@@ -132,7 +132,7 @@ export class BullQueue implements JobQueue {
    * `redis` serves the slots and locks; `connect` makes the connections BullMQ needs (each Queue and
    * Worker its own, with maxRetriesPerRequest null), all to redis-queue.
    */
-  constructor(redis: Redis, connect: (suffix: string) => Redis, registry: Registry, options: BullQueueOptions = {}) {
+  constructor(redis: Redis, connect: (suffix: string) => Redis, registry: QueueRepositories, options: BullQueueOptions = {}) {
     this.#redis = redis;
     this.#connect = connect;
     this.#registry = registry;
@@ -146,12 +146,12 @@ export class BullQueue implements JobQueue {
   }
 
   /** The queue on a process's connections to redis-queue */
-  static on(connections: RedisConnections, registry: Registry, options: BullQueueOptions = {}): BullQueue {
+  static on(connections: RedisConnections, registry: QueueRepositories, options: BullQueueOptions = {}): BullQueue {
     const name = options.instanceName ?? 'queue';
     return new BullQueue(connections.queue, (suffix) => connections.bullmq(`${name}-bullmq-${suffix}`), registry, options);
   }
 
-  get registry(): Registry {
+  get registry(): QueueRepositories {
     return this.#registry;
   }
 
@@ -226,7 +226,7 @@ export class BullQueue implements JobQueue {
 
   /** The row first, then the job: a worker may take a BullMQ job the moment it is added */
   async #record(name: QueueName, id: string, options: SendOptions): Promise<JobRecord> {
-    return this.#registry.recordJob({ id, queue: name, title: options.title ?? QUEUES[name].title, launchId: options.launchId ?? null });
+    return this.#registry.jobs.recordJob({ id, queue: name, title: options.title ?? QUEUES[name].title, launchId: options.launchId ?? null });
   }
 
   async send<Q extends QueueName>(name: Q, data: JobData[Q], options: SendOptions = {}): Promise<string | null> {
@@ -262,7 +262,7 @@ export class BullQueue implements JobQueue {
       return fresh;
     });
     const record = await this.#record(name, id, options);
-    if (options.title && record.title !== options.title) await this.#registry.updateJob(id, { title: options.title });
+    if (options.title && record.title !== options.title) await this.#registry.jobs.updateJob(id, { title: options.title });
     return id;
   }
 
@@ -359,12 +359,12 @@ export class BullQueue implements JobQueue {
     try {
       if (attempt - 1 > retryLimit) {
         // It stalled (its process died) on its last attempt: as a pg-boss expiry, that was the attempt
-        await this.#registry.recordJob({ id, queue: name, title: spec.title });
-        await this.#registry.logJob(id, 'The process running it stopped, and it has no attempts left');
-        await this.#registry.updateJob(id, { state: 'failed', ended: true });
+        await this.#registry.jobs.recordJob({ id, queue: name, title: spec.title });
+        await this.#registry.jobs.logJob(id, 'The process running it stopped, and it has no attempts left');
+        await this.#registry.jobs.updateJob(id, { state: 'failed', ended: true });
         throw new UnrecoverableError('stalled with no attempts left');
       }
-      if (job.stalledCounter > 0) await this.#registry.logJob(id, 'Tried again: the process running it stopped');
+      if (job.stalledCounter > 0) await this.#registry.jobs.logJob(id, 'Tried again: the process running it stopped');
       const lastAttempt = attempt - 1 >= retryLimit;
       // A timer of our own, cleared when the handler settles: a job leaves nothing behind for its expiry
       const expiry = new AbortController();
@@ -385,7 +385,7 @@ export class BullQueue implements JobQueue {
       } catch (error) {
         if (lastAttempt) throw new UnrecoverableError(message(error));
         if (stately && !(await this.#takeRetry(name, key, id))) {
-          await this.#registry.updateJob(id, { state: 'failed', ended: true });
+          await this.#registry.jobs.updateJob(id, { state: 'failed', ended: true });
           throw new UnrecoverableError(`${message(error)} (another job of its key is already waiting to retry)`);
         }
         const backoff = (this.#retryDelay ?? spec.retryDelay ?? 0) * 1000;
@@ -456,7 +456,7 @@ export class BullQueue implements JobQueue {
       'reconcile:scheduled',
       async () => {
         let armed = 0;
-        for (const post of await this.#registry.scheduledPosts()) if (await armScheduled(this, post)) armed++;
+        for (const post of await this.#registry.posts.scheduledPosts()) if (await armScheduled(this, post)) armed++;
         return armed;
       },
       { ttlMs: 60_000 },

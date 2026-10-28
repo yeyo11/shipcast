@@ -19,7 +19,7 @@ import {
   type LaunchFilter,
   type LaunchOrder,
   type Post,
-  type Registry,
+  type Repositories,
   type ReviewGitHub,
 } from '@shipcast/engine';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
@@ -62,7 +62,7 @@ export interface JobView {
 
 /** Everything the API touches, so the tests run it on a PGlite registry with the work faked */
 export interface ApiDeps {
-  registry: Registry;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'metrics' | 'accounts' | 'comments' | 'settings' | 'cursors' | 'apiTokens' | 'queries'>;
   secrets: SecretStore;
   github: ReviewGitHub;
   launchesRepo: string;
@@ -251,7 +251,7 @@ function launchId(value: string | undefined): number {
 }
 
 async function existingLaunch(deps: ApiDeps, value: string | undefined): Promise<Launch> {
-  const launch = await deps.registry.get(launchId(value));
+  const launch = await deps.registry.launches.get(launchId(value));
   if (!launch) throw new ApiError(404, 'not_found', 'no such launch');
   return launch;
 }
@@ -337,7 +337,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'A page of launches', schema: { type: 'object', required: ['launches', 'next'], properties: { launches: { type: 'array', items: ref('Launch') }, next: { type: ['string', 'null'] } } } },
     async handle(deps, { url }) {
       const query = readLaunchesQuery(url.searchParams);
-      const page = await deps.registry.launchesPage(query);
+      const page = await deps.registry.launches.launchesPage(query);
       return json(200, { launches: await Promise.all(page.launches.map((l) => launchView(deps.registry, l))), next: page.next ? encodeCursor(page.next, query.order) : null });
     },
   },

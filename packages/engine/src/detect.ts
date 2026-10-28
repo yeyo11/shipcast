@@ -1,6 +1,6 @@
 import { formatIssues, parseLaunchConfig, resolvePack, type Brand } from '@shipcast/schema';
 import type { GitHubEvent, GitHubSource } from './github.ts';
-import type { Launch, Registry } from './registry.ts';
+import type { Launch, Repositories } from './repositories/index.ts';
 
 export const LAUNCH_CONFIG_PATH = '.github/launch.yml';
 
@@ -13,7 +13,7 @@ export type Outcome =
 
 export interface DetectOptions {
   github: GitHubSource;
-  registry: Registry;
+  registry: Pick<Repositories, 'launches' | 'cursors'>;
   /** The brand of the launches repo this engine writes to; launches for any other are refused */
   brand: Brand;
 }
@@ -28,10 +28,10 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
   const etagKey = `events-etag:${owner}`;
   const lastKey = `events-last-id:${owner}`;
 
-  const page = await github.userEvents(owner, await registry.cursor(etagKey));
+  const page = await github.userEvents(owner, await registry.cursors.cursor(etagKey));
   if (page.notModified) return [];
 
-  const lastSeen = BigInt((await registry.cursor(lastKey)) ?? '0');
+  const lastSeen = BigInt((await registry.cursors.cursor(lastKey)) ?? '0');
   // Oldest first, so launches are claimed in the order they happened
   const fresh = page.events.filter((e) => BigInt(e.id) > lastSeen).reverse();
 
@@ -39,9 +39,9 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
   for (const event of fresh) {
     outcomes.push(await claimEvent(event, { github, registry, brand }));
     // Advanced per event, so a crash halfway through resumes where it stopped
-    await registry.setCursor(lastKey, event.id);
+    await registry.cursors.setCursor(lastKey, event.id);
   }
-  if (page.etag) await registry.setCursor(etagKey, page.etag);
+  if (page.etag) await registry.cursors.setCursor(etagKey, page.etag);
   return outcomes;
 }
 
@@ -61,11 +61,11 @@ export async function claimEvent(event: GitHubEvent, { github, registry, brand }
   const parsed = parseLaunchConfig(text);
   if (!parsed.ok) {
     // Recorded as failed so the owner hears about it, and so it is not retried on every poll
-    const claim = await registry.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind: 'minor', brand: brand.id });
+    const claim = await registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind: 'minor', brand: brand.id });
     if (claim.claimed) {
-      await registry.setStatus(claim.launch.id, 'failed', formatIssues(LAUNCH_CONFIG_PATH, parsed.issues));
+      await registry.launches.setStatus(claim.launch.id, 'failed', formatIssues(LAUNCH_CONFIG_PATH, parsed.issues));
     }
-    return { event, result: 'invalid-config', launch: (await registry.get(claim.launch.id))! };
+    return { event, result: 'invalid-config', launch: (await registry.launches.get(claim.launch.id))! };
   }
 
   const config = parsed.value;
@@ -81,8 +81,8 @@ export async function claimEvent(event: GitHubEvent, { github, registry, brand }
   }
 
   const kind =
-    event.type === 'public' ? (config.pack ?? 'launch') : resolvePack(config, event.tag, await registry.lastPublishedRef(event.repo));
-  const claim = await registry.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id });
+    event.type === 'public' ? (config.pack ?? 'launch') : resolvePack(config, event.tag, await registry.launches.lastPublishedRef(event.repo));
+  const claim = await registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id });
   return claim.claimed
     ? { event, result: 'claimed', launch: claim.launch }
     : { event, result: 'already-claimed', launch: claim.launch };

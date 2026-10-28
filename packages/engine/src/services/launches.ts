@@ -3,7 +3,7 @@ import { claimArticle, type ArticleInput } from '../article.ts';
 import { claimManual, type PipelineDeps } from '../pipeline.ts';
 import type { LaunchCatalog } from '../ports.ts';
 import { preflight, type Preflight, type PreflightSource } from '../preflight.ts';
-import type { Launch, LaunchFilter } from '../registry.ts';
+import type { Launch, LaunchFilter } from '../repositories/index.ts';
 import { approveLaunch, type ReviewGitHub } from '../review.ts';
 
 /** Why a launch was not started, approved or published again; `launch` is the one found in the way, when there is one */

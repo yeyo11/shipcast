@@ -75,7 +75,7 @@ test('a token file is imported through the connection path: checked, its secrets
   for (const bad of ['{"client_id": "c", "refresh_token": "very-secret-token"', JSON.stringify({ client_id: 'c', refresh_token: 'very-secret-token' })]) {
     await assert.rejects(importYouTubeAccount(deps, { text: bad, brand: 'personal' }), (error: unknown) => error instanceof YouTubeImportRefused && !error.message.includes('very-secret'));
   }
-  assert.equal((await registry.accounts({ network: 'youtube' })).length, 1);
+  assert.equal((await registry.accounts.accounts({ network: 'youtube' })).length, 1);
 });
 
 test("the day's quota refuses an upload it cannot pay for in full, and counts what every call spent", async () => {
@@ -97,7 +97,7 @@ test("the day's quota refuses an upload it cannot pay for in full, and counts wh
 test('built from a connected account, the publisher spends the shared quota and refuses past it', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const account = await registry.addAccount({ network: 'youtube', brand: 'personal', label: '@me', settings: { clientId: 'client-1' } });
+  const account = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@me', settings: { clientId: 'client-1' } });
   await secrets.set(accountSecretKey(account.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'x');
   const buckets = new MemoryTokenBucket({ [YOUTUBE_PROVIDER]: YOUTUBE_BUCKET });
   const log: string[] = [];

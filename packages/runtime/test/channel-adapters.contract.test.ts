@@ -253,7 +253,7 @@ test('a network added as one definition and one adapter is in the catalog, build
   // The pack carries a piece the schema's registry does not know: the publishing reads it from the parsed pack
   const result = await service.publish(launch, brand, { publishers: services.publishers, strategies: services.strategies, channels, fetch: site }, 'test');
   assert.equal(result.state, 'published', JSON.stringify(result));
-  const posts = await registry.posts(launch.id, { channel: 'pigeon' as never });
+  const posts = await registry.posts.posts(launch.id, { channel: 'pigeon' as never });
   assert.deepEqual(posts.map((p) => [p.kind, p.externalId, p.url]), [['post', 'coo-1', 'https://pigeon.example/1']]);
   assert.deepEqual(lofts.at(-1)?.sent, [{ text: 'as the owner edited it', link: 'https://josegarrido.dev/en/claudio/?ref=pigeon' }], 'the draft as merged, with the article');
 });

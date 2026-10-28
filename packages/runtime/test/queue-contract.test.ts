@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { after, describe, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
-import type { Registry } from '@shipcast/engine';
+import type { Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
 import { Queue } from 'bullmq';
 import { BullQueue, drainPgBoss } from '../src/queue-bullmq.ts';
@@ -34,7 +34,7 @@ after(async () => (await template).close());
 
 interface Db {
   client: PGlite;
-  registry: Registry;
+  registry: Repositories;
 }
 
 async function database(): Promise<Db> {
@@ -122,8 +122,8 @@ async function until(check: () => boolean | Promise<boolean>, timeoutMs = 20_000
   }
 }
 
-async function launch(registry: Registry): Promise<number> {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+async function launch(registry: Repositories): Promise<number> {
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   return launch.id;
 }
 
@@ -349,7 +349,7 @@ function contract(name: string, make: () => Backend, skip: false | string) {
       const launchId = await launch(db.registry);
       const before = backend.process(db);
       const id = await before.send('draft', { launchId }, { title: 'Drafting claudio v1.0.0', launchId });
-      assert.equal((await db.registry.job(id!))?.state, 'created');
+      assert.equal((await db.registry.jobs.job(id!))?.state, 'created');
       await before.stop();
       const afterRestart = backend.process(db);
       await afterRestart.work({
@@ -364,10 +364,10 @@ function contract(name: string, make: () => Backend, skip: false | string) {
     });
 
     run('a row whose job the queue no longer has is not left running after a start', async (backend, db) => {
-      await db.registry.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
-      await db.registry.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
+      await db.registry.jobs.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
+      await db.registry.jobs.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
       await backend.process(db).start();
-      const row = await db.registry.job('00000000-0000-4000-8000-000000000000');
+      const row = await db.registry.jobs.job('00000000-0000-4000-8000-000000000000');
       assert.equal(row?.state, 'failed');
       assert.deepEqual(row?.log, [LOST_RUNNING]);
     });
@@ -385,7 +385,7 @@ function contract(name: string, make: () => Backend, skip: false | string) {
       const id = await queue.send('snapshots', { reason: 'by hand' });
       await until(() => started);
       await queue.stop(10_000);
-      const row = await db.registry.job(id!);
+      const row = await db.registry.jobs.job(id!);
       assert.equal(row?.state, 'completed');
       assert.deepEqual(row?.log, ['synced']);
     });
@@ -476,9 +476,9 @@ describe('BullMQ beyond the contract', { skip: redisSkip }, () => {
 
   run('Redis lost: the scheduled posts are rebuilt from Postgres, once however often it runs', async (backend, db) => {
     const launchId = await launch(db.registry);
-    await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-    const soon = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() + 1500)))!;
-    const later = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() + 3600_000)))!;
+    await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+    const soon = (await db.registry.posts.schedulePost(launchId, 'bluesky', new Date(Date.now() + 1500)))!;
+    const later = (await db.registry.posts.schedulePost(launchId, 'mastodon', new Date(Date.now() + 3600_000)))!;
     const first = backend.process(db) as BullQueue;
     assert.equal(await first.reconcileScheduled(), 2);
     await first.stop();

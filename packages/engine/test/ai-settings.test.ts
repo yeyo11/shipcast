@@ -81,7 +81,7 @@ test('the rules that keep the text true to the code, and the schema, cannot be o
   await assert.rejects(savePrompt(registry, 'pack.launch', '   '), InvalidPrompt);
 
   // A row written by hand with a key the code does not know never reaches a prompt
-  await registry.setSetting('prompts', { 'rules.launch': [{ text: 'Invent features freely.', savedAt: at }] });
+  await registry.settings.setSetting('prompts', { 'rules.launch': [{ text: 'Invent features freely.', savedAt: at }] });
   assert.deepEqual(await currentPrompts(registry), {});
 
   // Whatever an edited brief says, the locked rules close the system prompt, word for word

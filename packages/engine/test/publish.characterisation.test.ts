@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { publishLaunch, reschedulePost, scheduleLaunch, type Registry } from '../src/index.ts';
+import { publishLaunch, reschedulePost, scheduleLaunch, type Repositories } from '../src/index.ts';
 import { aLaunch, FakeClock, FakeConnectors, FakeGitHub, LAUNCHES_REPO, memoryRegistry } from '../src/testing/index.ts';
 
 /*
@@ -50,7 +50,7 @@ const site = (async (input: string | URL | Request) =>
 const MIXED = 'enabled: true\nbrand: personal\npublishing:\n  telegram: approval\n  discord: approval\n  threads: approval\n  mastodon: off\n';
 const ONLY_BLUESKY = 'enabled: true\nbrand: personal\npublishing:\n  devto: off\n  mastodon: off\n  instagram: off\n  githubDiscussions: off\n';
 
-const rows = async (registry: Registry, launchId: number) => (await registry.posts(launchId)).map((p) => `${p.channel} ${p.kind} ${p.status} ${p.externalId}`).sort();
+const rows = async (registry: Repositories, launchId: number) => (await registry.posts.posts(launchId)).map((p) => `${p.channel} ${p.kind} ${p.status} ${p.externalId}`).sort();
 
 test('mixed channels: what goes out, what is recorded, and what each kind of failure leaves for the next round', async () => {
   const registry = await memoryRegistry();
@@ -81,11 +81,11 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
   assert.equal(first.launch.status, 'drafted', 'partial leaves the launch drafted');
   assert.deepEqual(await rows(registry, launch.id), ['blog article:en live claudio', 'devto post live devto-1', 'threads post live threads-1']);
   // Only the permanent failure is remembered, as a cursor holding the network's words
-  assert.equal(await registry.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found');
-  assert.equal(await registry.cursor(failed(launch.id, 'bluesky')), undefined);
-  assert.equal(await registry.cursor(failed(launch.id, 'discord')), undefined);
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'bluesky')), undefined);
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'discord')), undefined);
 
-  const second = await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  const second = await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.ok(second.state === 'published');
   assert.deepEqual(fake.log.slice(5), ['bluesky publish', 'discord publish'], 'the temporary failures again, Telegram not');
   assert.deepEqual(second.posted.map((p) => p.channel), ['bluesky', 'discord']);
@@ -98,19 +98,19 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
   assert.equal(second.launch.detail, launch.detail);
 
   // A retry of the channel, as the publish job does it: forget the failure, draft the launch again
-  await registry.deleteCursor(failed(launch.id, 'telegram'));
-  const retried = await publishLaunch(await registry.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
+  await registry.cursors.deleteCursor(failed(launch.id, 'telegram'));
+  const retried = await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.ok(retried.state === 'published', 'failing for good again still publishes the launch');
   assert.deepEqual(retried.problems, [
     'instagram: no piece in the pack or no credentials configured',
     'telegram: Telegram: publish: 400 chat not found',
     'githubDiscussions: no piece in the pack or no credentials configured',
   ]);
-  assert.equal(await registry.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found', 'and is remembered again');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found', 'and is remembered again');
 
   fake.heal('telegram', 'publish');
-  await registry.deleteCursor(failed(launch.id, 'telegram'));
-  const healed = await publishLaunch(await registry.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
+  await registry.cursors.deleteCursor(failed(launch.id, 'telegram'));
+  const healed = await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.deepEqual(healed.state === 'published' && healed.posted, [{ channel: 'telegram', url: 'https://telegram.example/1' }]);
   assert.equal(fake.callsOf('telegram').length, 3);
   assert.equal(fake.callsOf('devto').length, 1, 'nothing out already went again');
@@ -130,8 +130,8 @@ test('what counts as temporary: 429, a ConnectorError with no status, anything w
     result.problems.filter((p) => !p.includes('no piece in the pack')),
     ['devto: dev.to: publish: 429 (will retry)', 'telegram: Telegram: publish: 500', 'discord: Discord: timed out (will retry)', 'threads: quota spent'],
   );
-  assert.equal(await registry.cursor(failed(launch.id, 'threads')), 'quota spent');
-  assert.equal(await registry.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 500');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'threads')), 'quota spent');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 500');
 });
 
 test('why a launch waits: no pull request recorded, its pull request open, no pack on main, an unreadable launch.yml; a direct launch skips the pull request', async () => {
@@ -175,14 +175,14 @@ test('a due scheduled piece that fails for now stays scheduled in its slot and i
   const failing = await publishLaunch(launch, brand, deps);
   assert.ok(failing.state === 'partial');
   assert.deepEqual([failing.problems, failing.scheduled], [['bluesky: Bluesky: publish: 502 (will retry)'], []], 'due: no longer listed as scheduled');
-  const [waiting] = await registry.posts(launch.id, { channel: 'bluesky' });
+  const [waiting] = await registry.posts.posts(launch.id, { channel: 'bluesky' });
   assert.deepEqual([waiting?.status, waiting?.scheduledAt], ['scheduled', slot.toISOString()]);
 
   const out = await publishLaunch(launch, brand, deps);
   assert.equal(out.state, 'published');
-  const [live] = await registry.posts(launch.id, { channel: 'bluesky' });
+  const [live] = await registry.posts.posts(launch.id, { channel: 'bluesky' });
   assert.deepEqual([live?.id, live?.status, live?.externalId, live?.scheduledAt], [waiting?.id, 'live', 'bluesky-1', slot.toISOString()]);
-  await publishLaunch(await registry.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
+  await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.equal(fake.callsOf('bluesky').length, 2, 'once out, never again');
 });
 
@@ -195,8 +195,8 @@ test('a due scheduled piece that fails for good loses its row, and the launch is
   clock.advance({ minutes: 5 });
   const result = await publishLaunch(launch, brand, { github: merged(ONLY_BLUESKY), registry, launchesRepo: LAUNCHES_REPO, publishers: fake.publishers(['bluesky']), fetch: site, now: clock.now });
   assert.deepEqual([result.state, result.state === 'published' && result.problems], ['published', ['bluesky: Bluesky: publish: 400 invalid']]);
-  assert.deepEqual(await registry.posts(launch.id, { channel: 'bluesky' }), [], 'the scheduled row is cleared');
-  assert.equal(await registry.cursor(failed(launch.id, 'bluesky')), 'Bluesky: publish: 400 invalid');
+  assert.deepEqual(await registry.posts.posts(launch.id, { channel: 'bluesky' }), [], 'the scheduled row is cleared');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'bluesky')), 'Bluesky: publish: 400 invalid');
 });
 
 test('a piece moved later waits for its new time', async () => {
@@ -232,5 +232,5 @@ test('LIKELY BUG: a scheduled piece on a channel with no publisher is left sched
   clock.advance({ hours: 2 });
   const after = await publishLaunch(launch, brand, deps);
   assert.deepEqual([after.state, after.state === 'published' && after.problems], ['published', ['bluesky: no piece in the pack or no credentials configured']]);
-  assert.deepEqual((await registry.posts(launch.id, { channel: 'bluesky' })).map((p) => p.status), ['scheduled']);
+  assert.deepEqual((await registry.posts.posts(launch.id, { channel: 'bluesky' })).map((p) => p.status), ['scheduled']);
 });

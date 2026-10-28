@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
@@ -15,7 +15,7 @@ import { runProfileReview } from './profiles.ts';
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
 export interface WorkDeps {
   env: NodeJS.ProcessEnv;
-  registry: Registry;
+  registry: Repositories;
   github: GitHubRest;
   secrets: SecretStore;
   pipeline: PipelineDeps;
@@ -49,7 +49,7 @@ export async function startPublishing(queue: WorkQueue, launch: Launch, retryCha
   const title = retryChannel ? `Retrying ${retryChannel} for ${nameOf(launch)}` : `Publishing ${nameOf(launch)}`;
   const id = await queue.send('publish', { launchId: launch.id, ...(retryChannel && { retryChannel }) }, { title, launchId: launch.id, singletonKey: publishKey(launch.id) });
   if (id) return id;
-  const [waiting] = await queue.registry.jobs({ launchId: launch.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 });
+  const [waiting] = await queue.registry.jobs.jobs({ launchId: launch.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 });
   return waiting?.id;
 }
 
@@ -81,8 +81,8 @@ export async function scheduleRound(queue: WorkQueue, reason: string, inSeconds 
 }
 
 /** Whether a round is running now, in any process */
-export async function roundRunning(registry: Registry): Promise<boolean> {
-  return (await registry.jobs({ queues: ['round'], states: ['active'], limit: 1 })).length > 0;
+export async function roundRunning(registry: Pick<Repositories, 'jobs'>): Promise<boolean> {
+  return (await registry.jobs.jobs({ queues: ['round'], states: ['active'], limit: 1 })).length > 0;
 }
 
 /** The handlers of every queue; the app and `shipcast watch` run the same ones */
@@ -92,7 +92,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
   const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
   const launch = async (id: number) => {
-    const found = await registry.get(id);
+    const found = await registry.launches.get(id);
     if (!found) throw new Error(`no launch ${id}`);
     return found;
   };
@@ -181,7 +181,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
      */
     async scheduled({ postId, launchId }, job) {
       job.link(pageOf(launchId));
-      const post = await registry.post(postId);
+      const post = await registry.posts.post(postId);
       if (!post || post.status !== 'scheduled') {
         job.log('Nothing to do: the post is no longer scheduled');
         return;
@@ -271,7 +271,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
               },
             }),
             // A launch with its own publish job waiting for the deploy is left to that job
-            busy: async (drafted) => (await registry.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
+            busy: async (drafted) => (await registry.jobs.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
           },
         );
       } finally {
@@ -286,7 +286,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
           await queue.send('round', { reason: next.mode === 'poll' ? 'polling' : 'maintenance' }, { singletonKey: ROUND_KEY, startAfter: next.intervalSeconds, title: 'Automation round' });
         }
         // The rows of finished jobs are kept a fortnight; the round is what keeps them from growing
-        await registry.pruneJobs(new Date(Date.now() - 14 * 86_400_000).toISOString());
+        await registry.jobs.pruneJobs(new Date(Date.now() - 14 * 86_400_000).toISOString());
       }
     },
 
@@ -362,7 +362,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
 
     /** An account's profile reviewed by the AI, sent by hand only; it changes nothing on the network */
     async 'profile-review'(request, job) {
-      const account = await registry.account(request.accountId);
+      const account = await registry.accounts.account(request.accountId);
       if (account) job.link(`/channels/${account.network}?review=${account.id}`);
       const brand = await d.brand();
       await runProfileReview({ registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) }, request, (line) => job.log(line));
@@ -415,5 +415,5 @@ export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { fir
   await queue.schedule('round', ROUND_WATCHDOG_CRON, { reason: 'watchdog' }, { singletonKey: ROUND_KEY });
   if ((await readAutomation(d.registry)).mode !== 'off') await scheduleRound(queue, 'after a start', options.firstRoundInSeconds ?? 15);
   // Every scheduled piece has its wake-up queued; one missing (or one whose time passed while the machine was off) is armed now
-  for (const post of await d.registry.scheduledPosts()) await armScheduled(queue, post);
+  for (const post of await d.registry.posts.scheduledPosts()) await armScheduled(queue, post);
 }

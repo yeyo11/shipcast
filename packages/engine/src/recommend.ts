@@ -1,6 +1,6 @@
 import { channelInSentence, POSTING_DEFAULTS, type Channel, type PostingWindow, type Weekday } from '@shipcast/schema';
 import { sql } from 'drizzle-orm';
-import type { Registry } from './registry.ts';
+import type { Repositories } from './repositories/index.ts';
 import { readTimezone, SCHEDULABLE_CHANNELS } from './schedule.ts';
 import { METRIC_FAMILIES, statsRanking } from './stats.ts';
 
@@ -285,12 +285,12 @@ const HISTORY_LIMIT = 100_000;
  * network's numbers are read the one way. Channels that read no numbers (Telegram, Discord) have no
  * history and keep their defaults.
  */
-export async function channelHistory(registry: Registry, channel: Channel, now: Date = new Date()): Promise<HistoryPost[]> {
+export async function channelHistory(registry: Pick<Repositories, 'accounts' | 'queries'>, channel: Channel, now: Date = new Date()): Promise<HistoryPost[]> {
   if (!METRIC_FAMILIES[channel]) return [];
   const ranking = await statsRanking(registry, { by: 'post', channels: [channel], from: HISTORY_START, to: new Date(now.getTime() + 1).toISOString(), limit: HISTORY_LIMIT });
   const scores = new Map(ranking.entries.flatMap((e) => (e.postId === null ? [] : [[e.postId, e.score] as const])));
   if (scores.size === 0) return [];
-  const rows = await registry.selectRows<{ id: number; published_at: string }>(
+  const rows = await registry.queries.selectRows<{ id: number; published_at: string }>(
     sql`SELECT id, published_at FROM posts WHERE id IN (${sql.join([...scores.keys()].map((id) => sql`${id}`), sql`, `)}) AND status IN ('live', 'edited') ORDER BY published_at, id`,
   );
   return rows.flatMap((row) => {
@@ -300,15 +300,15 @@ export async function channelHistory(registry: Registry, channel: Channel, now: 
 }
 
 /** The recommendation for a channel from the registry: its history, the owner's zone, and Instagram's audience */
-export async function recommendFor(registry: Registry, channel: Channel, options: { now?: Date; tz?: string; days?: number; count?: number } = {}): Promise<Recommendation> {
+export async function recommendFor(registry: Pick<Repositories, 'accounts' | 'settings' | 'cursors' | 'queries'>, channel: Channel, options: { now?: Date; tz?: string; days?: number; count?: number } = {}): Promise<Recommendation> {
   if (!SCHEDULABLE_CHANNELS.includes(channel)) throw new Error(`${channel} is not published by Shipcast, so it has no times`);
   const tz = options.tz ?? (await readTimezone(registry));
   let audience: StoredAudience | undefined;
   if (channel === 'instagram') {
     // The primary account first, as it is the one launches publish with
-    const accounts = (await registry.accounts({ network: 'instagram' })).sort((a, b) => Number(b.primary) - Number(a.primary));
+    const accounts = (await registry.accounts.accounts({ network: 'instagram' })).sort((a, b) => Number(b.primary) - Number(a.primary));
     for (const account of accounts) {
-      audience = parseAudience(await registry.cursor(audienceKey(account.id)));
+      audience = parseAudience(await registry.cursors.cursor(audienceKey(account.id)));
       if (audience) break;
     }
   }

@@ -34,8 +34,8 @@ test('a published release of an enabled repo is claimed, with the pack inferred 
 
 test('the next major after a published launch is a major pack', async () => {
   const registry = await memoryRegistry();
-  const first = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(first.launch.id, 'published');
+  const first = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(first.launch.id, 'published');
   const github = fakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': VALID },
@@ -66,7 +66,7 @@ test('repos without launch.yml, disabled ones and pre-releases are ignored witho
     outcomes.map((o) => (o.result === 'ignored' ? o.reason : o.result)),
     ['no .github/launch.yml', 'launch.yml has enabled: false', 'a pre-release'],
   );
-  assert.equal(await registry.find('yeyo11/plain', 'v1.0.0'), undefined);
+  assert.equal(await registry.launches.find('yeyo11/plain', 'v1.0.0'), undefined);
 });
 
 test('a launch.yml for another brand is refused: brands never mix', async () => {
@@ -88,7 +88,7 @@ test('an invalid launch.yml is recorded as failed with its line, and not retried
   );
   const [outcome] = await detect({ github, registry, brand });
   assert.equal(outcome?.result, 'invalid-config');
-  const launch = await registry.find('yeyo11/claudio', 'v0.9.0');
+  const launch = await registry.launches.find('yeyo11/claudio', 'v0.9.0');
   assert.equal(launch?.status, 'failed');
   assert.match(launch?.detail ?? '', /^\.github\/launch\.yml:4:\d+ publishing\.reddit: /);
 });

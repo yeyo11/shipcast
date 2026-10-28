@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, test } from 'node:test';
-import { Registry } from '../src/index.ts';
+import { repositoriesOn } from '../src/index.ts';
 import { connectPglite } from '../src/db/connect.ts';
 import { copyFromSqlite, countSqlite, NotEmpty } from '../src/db/from-sqlite.ts';
 
@@ -60,8 +60,8 @@ test('every row of a SQLite registry is copied as it was, ids included, and new 
     assert.deepEqual(counts, countSqlite(path));
     assert.deepEqual(counts, { launches: 2, posts: 2, metrics: 2, cursors: 2, accounts: 1 });
 
-    const registry = new Registry(db);
-    const launch = await registry.get(3);
+    const registry = repositoriesOn(db);
+    const launch = await registry.launches.get(3);
     assert.deepEqual(launch, {
       id: 3,
       repo: 'yeyo11/claudio',
@@ -74,16 +74,16 @@ test('every row of a SQLite registry is copied as it was, ids included, and new 
       createdAt: '2026-10-01T10:00:00.000Z',
       updatedAt: '2026-10-02T10:00:00.000Z',
     });
-    assert.deepEqual((await registry.posts(3)).map((p) => p.channel), ['blog', 'devto']);
-    assert.deepEqual((await registry.metricHistory(3, 'devto', 'views')).map((m) => m.value), [10, 12.5]);
-    assert.equal(await registry.lastPublishedRef('yeyo11/claudio'), 'v0.8.0');
-    assert.equal((await registry.primaryAccount('personal', 'mastodon'))?.settings.instance, 'https://fosstodon.org');
-    assert.equal((await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'minor', brand: 'personal' })).claimed, false, 'a launch moved is still claimed');
+    assert.deepEqual((await registry.posts.posts(3)).map((p) => p.channel), ['blog', 'devto']);
+    assert.deepEqual((await registry.metrics.metricHistory(3, 'devto', 'views')).map((m) => m.value), [10, 12.5]);
+    assert.equal(await registry.launches.lastPublishedRef('yeyo11/claudio'), 'v0.8.0');
+    assert.equal((await registry.accounts.primaryAccount('personal', 'mastodon'))?.settings.instance, 'https://fosstodon.org');
+    assert.equal((await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'minor', brand: 'personal' })).claimed, false, 'a launch moved is still claimed');
 
-    const fresh = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'major', brand: 'personal' });
+    const fresh = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'major', brand: 'personal' });
     // Above the copied ids; not 8, since the refused claim above took a number from the sequence
     assert.ok(fresh.launch.id > 7, 'the sequence starts after the copied ids');
-    assert.equal((await registry.addAccount({ network: 'devto', brand: 'personal', label: 'x', settings: {} })).id, 6);
+    assert.equal((await registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: 'x', settings: {} })).id, 6);
   } finally {
     await close();
   }

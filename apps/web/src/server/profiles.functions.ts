@@ -23,7 +23,7 @@ export const reviewProfileNow = createServerFn({ method: 'POST' })
 export const profileReviewJob = createServerFn({ method: 'GET' })
   .validator((input: unknown) => text(input, 'job', 200))
   .handler(async ({ data }) => {
-    const job = await (await appContext()).registry.job(data);
+    const job = await (await appContext()).registry.jobs.job(data);
     return job ? { state: job.state, log: job.log } : null;
   });
 

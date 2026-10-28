@@ -5,8 +5,8 @@ import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { ANALYSIS_TOOLS, buildReplyPrompt, type ReplyPromptInput } from './prompt.ts';
-import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Registry } from './registry.ts';
-import type { CommentStore, SettingStore } from './ports.ts';
+import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Repositories } from './repositories/index.ts';
+import type { CommentStore, SettingReader, SettingStore } from './ports.ts';
 import type { Checkout } from './workspace.ts';
 
 /*
@@ -50,8 +50,8 @@ function modeFor(channel: CommentChannel, mode: ReplyMode): ReplyMode {
   return mode === 'auto' && !REPLY_CAPABILITIES[channel]?.reply ? 'approval' : mode;
 }
 
-export async function readCommentSettings(registry: Pick<SettingStore, 'setting'>): Promise<CommentSettings> {
-  const stored = await registry.setting<{ replies?: Record<string, unknown> }>(COMMENTS_SETTINGS_KEY);
+export async function readCommentSettings(registry: SettingReader): Promise<CommentSettings> {
+  const stored = await registry.settings.setting<{ replies?: Record<string, unknown> }>(COMMENTS_SETTINGS_KEY);
   const replies = { ...DEFAULT_COMMENT_SETTINGS.replies };
   for (const channel of COMMENT_CHANNELS) {
     const value = stored?.replies?.[channel];
@@ -70,7 +70,7 @@ export async function writeCommentSettings(registry: SettingStore, input: unknow
     if (typeof mode !== 'string' || !(REPLY_MODES as readonly string[]).includes(mode)) throw new InvalidCommentSettings(`${channel}: the mode is one of ${REPLY_MODES.join(', ')}`);
     current.replies[channel] = modeFor(channel, mode as ReplyMode);
   }
-  await registry.setSetting(COMMENTS_SETTINGS_KEY, current);
+  await registry.settings.setSetting(COMMENTS_SETTINGS_KEY, current);
   return current;
 }
 
@@ -86,7 +86,7 @@ export interface CommentConnectors {
 }
 
 export interface CommentDeps {
-  registry: Registry;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'comments' | 'settings'>;
   /** The connectors of a channel for the account a post went out with (null: the `.env` credentials) */
   connectors(channel: Channel, accountId: number | null): Promise<CommentConnectors>;
   now?: () => Date;
@@ -123,7 +123,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
   const settings = await readCommentSettings(registry);
   const channels = COMMENT_CHANNELS.filter((c) => settings.replies[c] !== 'off');
   const since = new Date(now.getTime() - (options.days ?? 30) * 86_400_000).toISOString();
-  const posts = await registry.postsSince(since, channels);
+  const posts = await registry.posts.postsSince(since, channels);
   const problems = new Set<string>();
   const added: CommentRecord[] = [];
   let found = 0;
@@ -144,7 +144,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
       list = await reader.comments(post.externalId);
     } catch (error) {
       if (error instanceof PostGone) {
-        gone.push(await registry.updatePost(post.id, { status: 'deleted' }));
+        gone.push(await registry.posts.updatePost(post.id, { status: 'deleted' }));
         continue;
       }
       problems.add(`${name} post ${post.id}: ${message(error)}`);
@@ -153,7 +153,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
     read++;
     found += list.length;
     for (const c of list) {
-      const { recorded, comment } = await registry.recordComment({
+      const { recorded, comment } = await registry.comments.recordComment({
         postId: post.id,
         channel: post.channel,
         externalId: c.externalId,
@@ -170,9 +170,9 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
     }
     for (const c of list) {
       if (!c.own || !c.inReplyTo) continue;
-      const parent = await registry.commentByExternalId(post.channel, c.inReplyTo);
+      const parent = await registry.comments.commentByExternalId(post.channel, c.inReplyTo);
       if (!parent || parent.own || parent.sentExternalId === c.externalId) continue;
-      const marked = await registry.updateComment(
+      const marked = await registry.comments.updateComment(
         parent.id,
         { status: 'sent', sentExternalId: c.externalId, sentUrl: c.url ?? null, sentAt: c.createdAt, note: 'Answered on the network', problem: null },
         ['new', 'draft-ready', 'failed'],
@@ -244,7 +244,7 @@ async function threadOf(registry: CommentStore, comment: CommentRecord): Promise
   const chain: CommentRecord[] = [];
   let parentId = comment.inReplyTo;
   while (parentId && chain.length < 6) {
-    const parent = await registry.commentByExternalId(comment.channel, parentId);
+    const parent = await registry.comments.commentByExternalId(comment.channel, parentId);
     if (!parent) break;
     chain.unshift(parent);
     parentId = parent.inReplyTo;
@@ -253,7 +253,7 @@ async function threadOf(registry: CommentStore, comment: CommentRecord): Promise
 }
 
 async function existing(registry: CommentStore, id: number): Promise<CommentRecord & { channel: CommentChannel }> {
-  const comment = await registry.comment(id);
+  const comment = await registry.comments.comment(id);
   if (!comment) throw new CommentRefused('not_found', 'no such comment');
   if (!isCommentChannel(comment.channel)) throw new CommentRefused('unsupported', `${comment.channel} has no comment assistant`);
   return comment as CommentRecord & { channel: CommentChannel };
@@ -269,10 +269,10 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
   const comment = await existing(registry, id);
   if (comment.own) throw new CommentRefused('unsupported', 'this is your own comment');
   if (!OPEN.includes(comment.status)) throw new CommentRefused('state', `the comment is ${comment.status}: nothing to draft`);
-  const fail = async (problem: string) => (await registry.updateComment(id, { status: 'failed', problem }, OPEN)) ?? comment;
+  const fail = async (problem: string) => (await registry.comments.updateComment(id, { status: 'failed', problem }, OPEN)) ?? comment;
   try {
-    const post = (await registry.post(comment.postId))!;
-    const launch = (await registry.get(comment.launchId))!;
+    const post = (await registry.posts.post(comment.postId))!;
+    const launch = (await registry.launches.get(comment.launchId))!;
     if (!contexts.has(launch.id)) contexts.set(launch.id, deps.context(launch));
     const context = await contexts.get(launch.id)!;
     const setup = await deps.setup();
@@ -308,9 +308,9 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
     const reply = answer.reply.trim();
     // Spam and abuse are never answered, whatever else the model wrote
     if (answer.dismiss || classification === 'spam' || classification === 'abuse' || !reply) {
-      return (await registry.updateComment(id, { status: 'draft-ready', classification, draft: null, note: answer.reason || 'Suggested: dismiss', problem: null }, OPEN)) ?? comment;
+      return (await registry.comments.updateComment(id, { status: 'draft-ready', classification, draft: null, note: answer.reason || 'Suggested: dismiss', problem: null }, OPEN)) ?? comment;
     }
-    return (await registry.updateComment(id, { status: 'draft-ready', classification, draft: reply, note: answer.reason || null, problem: tooLong(comment.channel, reply) ?? null }, OPEN)) ?? comment;
+    return (await registry.comments.updateComment(id, { status: 'draft-ready', classification, draft: reply, note: answer.reason || null, problem: tooLong(comment.channel, reply) ?? null }, OPEN)) ?? comment;
   } catch (error) {
     if (error instanceof CommentRefused) throw error;
     return fail(`could not draft: ${message(error)}`);
@@ -325,15 +325,15 @@ export async function editReplyDraft(id: number, text: string, registry: Comment
   if (!draft) throw new CommentRefused('invalid', 'a reply cannot be empty; dismiss the comment instead');
   const long = tooLong(comment.channel, draft);
   if (long) throw new CommentRefused('invalid', long);
-  const updated = await registry.updateComment(id, { status: 'draft-ready', draft, problem: null }, OPEN);
-  if (!updated) throw new CommentRefused('state', `the comment is ${(await registry.comment(id))?.status ?? 'gone'}: its reply cannot change`);
+  const updated = await registry.comments.updateComment(id, { status: 'draft-ready', draft, problem: null }, OPEN);
+  if (!updated) throw new CommentRefused('state', `the comment is ${(await registry.comments.comment(id))?.status ?? 'gone'}: its reply cannot change`);
   return updated;
 }
 
 export async function dismissComment(id: number, registry: CommentStore): Promise<CommentRecord> {
   await existing(registry, id);
-  const updated = await registry.updateComment(id, { status: 'dismissed' }, ['new', 'draft-ready', 'failed']);
-  if (!updated) throw new CommentRefused('state', `the comment is ${(await registry.comment(id))?.status ?? 'gone'}: it cannot be dismissed`);
+  const updated = await registry.comments.updateComment(id, { status: 'dismissed' }, ['new', 'draft-ready', 'failed']);
+  if (!updated) throw new CommentRefused('state', `the comment is ${(await registry.comments.comment(id))?.status ?? 'gone'}: it cannot be dismissed`);
   return updated;
 }
 
@@ -354,21 +354,21 @@ export async function sendReply(id: number, deps: CommentDeps): Promise<CommentR
   if (!comment.draft) throw new CommentRefused('invalid', 'there is no reply to send: draft or write one first');
   const long = tooLong(comment.channel, comment.draft);
   if (long) throw new CommentRefused('invalid', long);
-  const post = (await registry.post(comment.postId)) as Post;
+  const post = (await registry.posts.post(comment.postId)) as Post;
   if (!post.externalId) throw new CommentRefused('unsupported', 'the post has no id on the network to reply under');
 
   const { replier } = await deps.connectors(comment.channel, post.accountId).catch((error: unknown) => {
     throw new CommentRefused('no_credentials', message(error));
   });
   if (!replier) throw new CommentRefused('no_credentials', `no ${NAMES(comment.channel)} account to reply with: the one the post went out with is not connected`);
-  const claimed = await registry.updateComment(id, { status: 'approved', problem: null }, ['draft-ready', 'failed']);
-  if (!claimed) throw new CommentRefused('state', `the comment is ${(await registry.comment(id))?.status ?? 'gone'}: it is not waiting to be sent`);
+  const claimed = await registry.comments.updateComment(id, { status: 'approved', problem: null }, ['draft-ready', 'failed']);
+  if (!claimed) throw new CommentRefused('state', `the comment is ${(await registry.comments.comment(id))?.status ?? 'gone'}: it is not waiting to be sent`);
   try {
     const sent = await replier.reply({ postExternalId: post.externalId, commentExternalId: comment.externalId, authorHandle: comment.author.handle }, comment.draft, { key: replyKey(comment) });
     const now = (deps.now?.() ?? new Date()).toISOString();
-    return (await registry.updateComment(id, { status: 'sent', sentExternalId: sent.externalId, sentUrl: sent.url ?? post.url, sentAt: now }))!;
+    return (await registry.comments.updateComment(id, { status: 'sent', sentExternalId: sent.externalId, sentUrl: sent.url ?? post.url, sentAt: now }))!;
   } catch (error) {
-    await registry.updateComment(id, { status: 'failed', problem: message(error) });
+    await registry.comments.updateComment(id, { status: 'failed', problem: message(error) });
     throw error instanceof ConnectorError ? error : new ConnectorError(NAMES(comment.channel), message(error));
   }
 }
@@ -395,7 +395,7 @@ export async function runComments(deps: ReplyDeps, options: { days?: number; log
   for (const post of fetched.gone) log(`${isCommentChannel(post.channel) ? NAMES(post.channel) : post.channel} post ${post.id} no longer exists on the network: marked deleted, and not read again`);
   for (const problem of fetched.problems) log(problem);
   const settings = await readCommentSettings(deps.registry);
-  const waiting = (await deps.registry.comments({ status: 'new', own: false, limit: 500 })).filter((c) => isCommentChannel(c.channel) && settings.replies[c.channel] !== 'off');
+  const waiting = (await deps.registry.comments.comments({ status: 'new', own: false, limit: 500 })).filter((c) => isCommentChannel(c.channel) && settings.replies[c.channel] !== 'off');
   const drafted: CommentRecord[] = [];
   const sent: CommentRecord[] = [];
   let toDismiss = 0;

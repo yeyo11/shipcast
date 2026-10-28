@@ -14,10 +14,10 @@ export class SettingsService {
   }
 
   read<T>(key: string): Promise<T | undefined> {
-    return this.#store.setting<T>(key);
+    return this.#store.settings.setting<T>(key);
   }
 
   save(key: string, value: unknown): Promise<void> {
-    return this.#store.setSetting(key, value);
+    return this.#store.settings.setSetting(key, value);
   }
 }

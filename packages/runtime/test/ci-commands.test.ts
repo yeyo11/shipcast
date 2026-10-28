@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { parseSnapshot, type DraftResult, type Launch, type PublishResult, type Registry } from '@shipcast/engine';
+import { parseSnapshot, type DraftResult, type Launch, type PublishResult, type Repositories } from '@shipcast/engine';
 import { FakeGitHub } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import { BranchState, ciLaunch, ciPublish, GitStateStore, launchTarget, type CiDeps } from '../src/index.ts';
@@ -98,11 +98,11 @@ test('ci publish: a merged pull request is published once its article is live, p
   await ciLaunch(run(remote, 'launch', drafted).deps, launchTarget({ eventName: 'release', payload: RELEASE }));
 
   let tries = 0;
-  const publish = async (launch: Launch, _brand: Brand, registry: Registry): Promise<PublishResult> => {
+  const publish = async (launch: Launch, _brand: Brand, registry: Repositories): Promise<PublishResult> => {
     tries++;
     if (tries < 3) return { state: 'waiting', launch, reason: 'https://example.dev/en/blog/app/ is not live yet' };
-    await registry.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
-    const done = await registry.setStatus(launch.id, 'published');
+    await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
+    const done = await registry.launches.setStatus(launch.id, 'published');
     return { state: 'published', launch: done, posted: [{ channel: 'bluesky', url: 'https://bsky.app/1' }], problems: [], scheduled: [], failures: [], heldElsewhere: [] };
   };
   const { deps, lines } = run(remote, 'publish', drafted, { publish });

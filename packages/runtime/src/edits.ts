@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { GitHubTokenSource } from '@shipcast/connectors';
-import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Registry } from '@shipcast/engine';
+import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Repositories } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, network } from './catalog.ts';
 import { MissingField, networkOf, type AnyChannelAdapter, type Credentials } from './channels/adapter.ts';
@@ -12,7 +12,7 @@ import { accountSecretKey, envBrand, withRefreshedEnvToken } from './services.ts
 export interface EditorDeps {
   env: NodeJS.ProcessEnv;
   brand: Brand;
-  registry: Registry;
+  registry: Pick<Repositories, 'accounts' | 'cursors'>;
   secrets: SecretStore;
   readFile?: (path: string) => string;
   fetch?: typeof fetch;
@@ -39,7 +39,7 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
   const name = network(spec.id)?.name ?? adapter.definition.name;
   let credentials: Credentials | undefined;
   if (accountId !== null) {
-    const account = await deps.registry.account(accountId);
+    const account = await deps.registry.accounts.account(accountId);
     const secrets = account ? await getJson(deps.secrets, accountSecretKey(account.id)) : undefined;
     if (!account || !secrets) throw new PostRefused('no_credentials', `the ${name} account the post went out with is not connected any more`);
     credentials = { settings: account.settings, secrets };

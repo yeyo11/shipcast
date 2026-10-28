@@ -1,5 +1,5 @@
 import { activeChannels, CHANNEL_BRIEFS, CHANNELS, hasDemo, languageName, LIMITS, type Brand, type Channel, type LaunchConfig, type PackKind, type ProfileFieldId, type ProfileLimits } from '@shipcast/schema';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 
 /** Tools the analysis may use: reading the code and its history, never changing or running it. */
 export const ANALYSIS_TOOLS = ['Read', 'Grep', 'Glob', 'Bash(ls:*)', 'Bash(git log:*)', 'Bash(git tag:*)', 'Bash(git show:*)'];

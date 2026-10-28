@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Registry } from '../src/index.ts';
+import { repositoriesOn, type Repositories } from '../src/index.ts';
 import { connectPglite, FIRST_MIGRATION, migrateDatabase } from '../src/db/connect.ts';
 
 // An install as the first schema left it: one row per launch and channel, the newsletter's ids
@@ -43,15 +43,15 @@ const LEGACY = `
     (1, 'github', 'stars', 120, '2026-10-25T06:00:00.000Z');
 `;
 
-const pieces = async (registry: Registry, launchId: number) =>
-  (await registry.posts(launchId)).map((p) => [p.channel, p.kind, p.accountId, p.externalId, p.url, p.status, p.publishedAt].join(' | ')).sort();
+const pieces = async (registry: Repositories, launchId: number) =>
+  (await registry.posts.posts(launchId)).map((p) => [p.channel, p.kind, p.accountId, p.externalId, p.url, p.status, p.publishedAt].join(' | ')).sort();
 
 test('the post model migration converts an install in place, losing nothing', async () => {
   const { db, client, close } = await connectPglite(undefined, { upTo: FIRST_MIGRATION });
   try {
     await client.exec(LEGACY);
     await migrateDatabase(db);
-    const registry = new Registry(db);
+    const registry = repositoriesOn(db);
 
     assert.deepEqual(await pieces(registry, 1), [
       'blog | article:en |  | a | https://example.dev/en/a/ | live | 2026-10-24T23:10:55.000Z',
@@ -72,34 +72,34 @@ test('the post model migration converts an install in place, losing nothing', as
       'newsletter | issue:es |  | 21 | https://app.brevo.com/marketing-campaign/report/21 | live | 2026-10-01T01:00:02.000Z',
     ]);
     // An issue that went out while its sibling was still being retried has no post row: it gets its own
-    const [spanish] = await registry.posts(3);
+    const [spanish] = await registry.posts.posts(3);
     assert.deepEqual([spanish?.kind, spanish?.externalId, spanish?.accountId], ['issue:es', '30', 4]);
 
-    assert.equal(await registry.setting('automation:mode'), 'webhook');
-    assert.equal(await registry.setting('automation:interval'), 120);
+    assert.equal(await registry.settings.setting('automation:mode'), 'webhook');
+    assert.equal(await registry.settings.setting('automation:interval'), 120);
 
-    const left = (await registry.cursorsWithPrefix('')).map((c) => c.key);
+    const left = (await registry.cursors.cursorsWithPrefix('')).map((c) => c.key);
     assert.deepEqual(left, ['automation:last-round', 'events-etag:yeyo11', 'newsletter-sent:99:en', 'publish-failed:3:devto'], 'only state, and what had nothing to become');
 
     // The channels' readings point at their posts; the old newsletter sums and the site's stay the launch's
-    const [devto] = await registry.posts(1, { channel: 'devto' });
-    const [instagram] = await registry.posts(1, { channel: 'instagram', kind: 'post' });
-    assert.deepEqual((await registry.postMetrics(devto!.id)).map((m) => `${m.name}=${m.value}`), ['views=310']);
-    assert.deepEqual((await registry.postMetrics(instagram!.id)).map((m) => `${m.name}=${m.value}`), ['likes=9']);
+    const [devto] = await registry.posts.posts(1, { channel: 'devto' });
+    const [instagram] = await registry.posts.posts(1, { channel: 'instagram', kind: 'post' });
+    assert.deepEqual((await registry.metrics.postMetrics(devto!.id)).map((m) => `${m.name}=${m.value}`), ['views=310']);
+    assert.deepEqual((await registry.metrics.postMetrics(instagram!.id)).map((m) => `${m.name}=${m.value}`), ['likes=9']);
     assert.deepEqual(
-      (await registry.latestMetrics(1)).map((m) => `${m.source}.${m.name}=${m.value}`),
+      (await registry.metrics.latestMetrics(1)).map((m) => `${m.source}.${m.name}=${m.value}`),
       ['blog.views=48', 'devto.views=310', 'github.stars=120', 'instagram.likes=9', 'newsletter.clicks=7'],
     );
 
     // A launch still happens once: the converted pieces refuse a second copy
-    assert.equal((await registry.recordPost({ launchId: 1, channel: 'blog', kind: 'article:es', url: 'x', externalId: 'x' })).recorded, false);
-    assert.equal((await registry.recordPost({ launchId: 1, channel: 'instagram', kind: 'story', accountId: 3, url: null, externalId: 'x' })).recorded, false);
-    const fresh = await registry.recordPost({ launchId: 3, channel: 'devto', accountId: 1, url: 'https://dev.to/me/b', externalId: '1' });
+    assert.equal((await registry.posts.recordPost({ launchId: 1, channel: 'blog', kind: 'article:es', url: 'x', externalId: 'x' })).recorded, false);
+    assert.equal((await registry.posts.recordPost({ launchId: 1, channel: 'instagram', kind: 'story', accountId: 3, url: null, externalId: 'x' })).recorded, false);
+    const fresh = await registry.posts.recordPost({ launchId: 3, channel: 'devto', accountId: 1, url: 'https://dev.to/me/b', externalId: '1' });
     assert.ok(fresh.recorded && fresh.post.id > 0, 'new pieces take ids after the converted ones');
 
     // Applied once: starting again converts nothing twice
     await migrateDatabase(db);
-    assert.equal((await registry.posts(1)).length, 8);
+    assert.equal((await registry.posts.posts(1)).length, 8);
   } finally {
     await close();
   }

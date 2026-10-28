@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { bindStrategy, GitHubRest, type ChannelPublishing, type MetricSources, type Notifier, type PublishConnectors, type Publishers, type Registry } from '@shipcast/engine';
+import { bindStrategy, GitHubRest, type ChannelPublishing, type MetricSources, type Notifier, type PublishConnectors, type Publishers, type Repositories } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, networkSpec, SOURCES, type Built } from './catalog.ts';
 import { networkOf, type AnyChannelAdapter, type Credentials } from './channels/adapter.ts';
@@ -17,7 +17,7 @@ export type Origin = { kind: 'account'; id: number } | { kind: 'env' };
 export interface ServiceDeps {
   env: NodeJS.ProcessEnv;
   brand: Brand;
-  registry: Registry;
+  registry: Pick<Repositories, 'accounts' | 'cursors'>;
   /** The engine's GitHub client, also the metrics source while no GitHub account is connected */
   github: GitHubRest;
   secrets: SecretStore;
@@ -63,7 +63,7 @@ export async function credentialsFor(
   id: string,
   deps: Pick<ServiceDeps, 'env' | 'brand' | 'registry' | 'secrets' | 'readFile' | 'adapters'>,
 ): Promise<{ credentials: Credentials; origin: Origin } | undefined> {
-  const account = await deps.registry.primaryAccount(deps.brand.id, id);
+  const account = await deps.registry.accounts.primaryAccount(deps.brand.id, id);
   if (account) {
     const secrets = await getJson(deps.secrets, accountSecretKey(account.id));
     if (secrets) return { credentials: { settings: account.settings, secrets }, origin: { kind: 'account', id: account.id } };
@@ -77,9 +77,9 @@ export async function credentialsFor(
  * A token Shipcast refreshed while it still came from `.env` lives in the registry, and wins over
  * the one in `.env` (the network's `refresh.envToken`): publishing and editing read it the same way.
  */
-export async function withRefreshedEnvToken(network: string, credentials: Credentials, registry: Pick<Registry, 'cursor'>, adapters?: readonly AnyChannelAdapter[]): Promise<Credentials> {
+export async function withRefreshedEnvToken(network: string, credentials: Credentials, registry: Pick<Repositories, 'cursors'>, adapters?: readonly AnyChannelAdapter[]): Promise<Credentials> {
   const key = networkSpec(network, adapters)?.refresh?.envToken?.tokenKey;
-  const fresh = key ? await registry.cursor(key) : undefined;
+  const fresh = key ? await registry.cursors.cursor(key) : undefined;
   return fresh ? { ...credentials, secrets: { ...credentials.secrets, accessToken: fresh } } : credentials;
 }
 
@@ -165,17 +165,17 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
  */
 export async function refreshInstagramToken(
   services: Services,
-  deps: { registry: Registry; secrets: SecretStore },
+  deps: { registry: Pick<Repositories, 'accounts' | 'cursors'>; secrets: SecretStore },
   now = new Date(),
 ): Promise<string | undefined> {
   if (!services.instagram) return undefined;
   const { connector, origin } = services.instagram;
   const { registry } = deps;
-  const account = origin.kind === 'account' ? await registry.account(origin.id) : undefined;
-  const last = account ? account.settings.refreshedAt : await registry.cursor(INSTAGRAM_REFRESHED_KEY);
+  const account = origin.kind === 'account' ? await registry.accounts.account(origin.id) : undefined;
+  const last = account ? account.settings.refreshedAt : await registry.cursors.cursor(INSTAGRAM_REFRESHED_KEY);
   const remember = async (at: Date): Promise<void> => {
-    if (account) await registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } });
-    else await registry.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
+    if (account) await registry.accounts.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } });
+    else await registry.cursors.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
   };
   if (!last) {
     await remember(now);
@@ -187,7 +187,7 @@ export async function refreshInstagramToken(
     const secrets = (await getJson(deps.secrets, accountSecretKey(account.id))) ?? {};
     await deps.secrets.set(accountSecretKey(account.id), JSON.stringify({ ...secrets, accessToken: fresh.accessToken }), `${account.network} ${account.label}`);
   } else {
-    await registry.setCursor(INSTAGRAM_TOKEN_KEY, fresh.accessToken);
+    await registry.cursors.setCursor(INSTAGRAM_TOKEN_KEY, fresh.accessToken);
   }
   await remember(now);
   return `Instagram token refreshed; valid for ${Math.round(fresh.expiresIn / 86400)} more days`;

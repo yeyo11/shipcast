@@ -21,7 +21,7 @@ export async function checkComments(): Promise<Started> {
 
 export async function redraftComment(commentId: number): Promise<Started> {
   const { queue, registry } = await appContext();
-  if (!(await registry.comment(commentId))) return { ok: false, problem: 'no such comment' };
+  if (!(await registry.comments.comment(commentId))) return { ok: false, problem: 'no such comment' };
   const job = await queueRedraft(queue, commentId, BY_HAND);
   return job ? { ok: true, job } : { ok: false, problem: 'the draft could not be queued' };
 }

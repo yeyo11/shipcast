@@ -9,7 +9,7 @@ const text = (file: DraftFile | undefined): string => (file && 'content' in file
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 // Reddit is off by default; turned on here so its drafts are still checked
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
-const launch = (await (await memoryRegistry()).claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
+const launch = (await (await memoryRegistry()).launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
 
 const pack = ContentPack.parse({
   schemaVersion: 1,
@@ -248,7 +248,7 @@ test('the article carries its launch image alt text and the project screenshot a
 
 test('an article never puts its own name, the title as written, into the other language', async () => {
   // An article's project name is its title in the language the owner wrote it in, Spanish here
-  const article = (await (await memoryRegistry()).claim({ repo: 'yeyo11/launches', ref: 'article:monto-rea', trigger: 'article', kind: 'launch', brand: 'personal' })).launch;
+  const article = (await (await memoryRegistry()).launches.claim({ repo: 'yeyo11/launches', ref: 'article:monto-rea', trigger: 'article', kind: 'launch', brand: 'personal' })).launch;
   const written = ContentPack.parse({ ...pack, project: { ...pack.project, name: 'Monto REA y lo pruebo' } });
   assert.equal(projectLabel(written, article), undefined);
   assert.equal(projectLabel(written, launch), 'Monto REA y lo pruebo', "a release's name is the repo's own, in every language");

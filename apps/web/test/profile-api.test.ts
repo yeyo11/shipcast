@@ -37,7 +37,7 @@ async function setup(options: { networkFails?: boolean } = {}) {
     redraftComment: unused,
     profiles: {
       review: async (id, input) => {
-        if (!(await registry.account(id))) return { ok: false, problem: 'no such account' };
+        if (!(await registry.accounts.account(id))) return { ok: false, problem: 'no such account' };
         reviews.push([id, input]);
         return { ok: true, job: 'job-1' };
       },
@@ -76,7 +76,7 @@ async function call(deps: ApiDeps, method: string, path: string, token: string, 
 
 test('the capabilities and an account’s review are read with the read scope', async () => {
   const s = await setup();
-  const old = await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@m.example', settings: { instance: 'https://m.example' } });
+  const old = await s.registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@m.example', settings: { instance: 'https://m.example' } });
   const caps = await call(s.deps, 'GET', '/profile-capabilities', s.read);
   assert.equal(caps.status, 200);
   assert.equal((caps.body.capabilities as Record<string, { edit: string }>).bluesky?.edit, 'yes');
@@ -91,7 +91,7 @@ test('the capabilities and an account’s review are read with the read scope', 
 
 test('a review is a job, started with the write scope, with what the owner pasted', async () => {
   const s = await setup();
-  const ig = await s.registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const ig = await s.registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
   assert.equal((await call(s.deps, 'POST', `/accounts/${ig.id}/profile-review`, s.read, {})).status, 403);
   const started = await call(s.deps, 'POST', `/accounts/${ig.id}/profile-review`, s.write, { pasted: { bio: 'I make things' }, language: 'es' });
   assert.equal(started.status, 202);
@@ -103,8 +103,8 @@ test('a review is a job, started with the write scope, with what the owner paste
 
 test('an edit goes through the engine’s checks before the network, and the network’s refusal is a 502', async () => {
   const s = await setup();
-  const bsky = await s.registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
-  const ig = await s.registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const bsky = await s.registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
+  const ig = await s.registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.read, { bio: 'x' })).status, 403);
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, {})).status, 400);
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, { avatar: 'x' })).status, 400);
@@ -117,7 +117,7 @@ test('an edit goes through the engine’s checks before the network, and the net
   assert.deepEqual(s.edits, [{ bio: 'Builder' }]);
 
   const failing = await setup({ networkFails: true });
-  const other = await failing.registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
+  const other = await failing.registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
   const refused = await call(failing.deps, 'PATCH', `/accounts/${other.id}/profile`, failing.write, { bio: 'x' });
   assert.equal(refused.status, 502);
   assert.equal(refused.body.error?.code, 'upstream');

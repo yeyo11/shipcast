@@ -1,4 +1,4 @@
-import { detect, draftLaunch, MetricsService, NotificationService, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
+import { detect, draftLaunch, MetricsService, NotificationService, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { network, NETWORK_SPECS, networkSpec } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
@@ -10,7 +10,7 @@ export { METRICS_AT_KEY } from '@shipcast/engine';
 /** What a round needs: the engine's pieces and the brand it speaks for */
 export interface RoundDeps {
   env: NodeJS.ProcessEnv;
-  registry: Registry;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'metrics' | 'accounts' | 'cursors'>;
   github: GitHubRest;
   secrets: SecretStore;
   brand: Brand;
@@ -66,8 +66,8 @@ export async function refreshMetaAccounts(networkId: string, d: Pick<RoundDeps, 
   if (!refresh) return [];
   const name = network(networkId)?.name ?? networkId;
   const lines: string[] = [];
-  for (const account of await d.registry.accounts({ network: networkId })) {
-    const remember = () => d.registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: now.toISOString() } });
+  for (const account of await d.registry.accounts.accounts({ network: networkId })) {
+    const remember = () => d.registry.accounts.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: now.toISOString() } });
     const last = account.settings.refreshedAt;
     if (!last) {
       await remember();
@@ -136,7 +136,7 @@ export async function runRound(d: RoundDeps, options: RoundOptions): Promise<voi
     });
   }
   await step('publish', log, async () => {
-    for (const launch of (await d.registry.recent(100)).filter((l) => l.status === 'drafted')) {
+    for (const launch of (await d.registry.launches.recent(100)).filter((l) => l.status === 'drafted')) {
       if (options.enqueue) {
         await options.enqueue(launch);
         continue;

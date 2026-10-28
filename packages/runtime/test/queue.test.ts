@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
-import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
+import type { GitHubRest, PipelineDeps, Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, FakeGitHub, registryOn } from '@shipcast/engine/testing';
 import { armScheduled, currentOrigin, LOST_RUNNING, TelemetryRecorder, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
 
@@ -28,13 +28,13 @@ after(async () => {
 });
 
 /** A database with the registry and pg-boss in it, as a server holds them */
-async function database(): Promise<{ client: PGlite; registry: Registry }> {
+async function database(): Promise<{ client: PGlite; registry: Repositories }> {
   const client = await clonePglite((await template).client);
   return { client, registry: await registryOn(client) };
 }
 
 /** A queue over a database: one per "process" */
-function queueOn(db: { client: PGlite; registry: Registry }, options: QueueOptions = {}): WorkQueue {
+function queueOn(db: { client: PGlite; registry: Repositories }, options: QueueOptions = {}): WorkQueue {
   const queue = WorkQueue.pglite(db.client, db.registry, { ...quiet, ...options });
   queues.push(queue);
   return queue;
@@ -49,7 +49,7 @@ async function until(check: () => Promise<boolean>, timeoutMs = 20_000): Promise
 }
 
 // No handler under test reaches GitHub, the AI or the keychain
-const deps = (registry: Registry): WorkDeps => ({
+const deps = (registry: Repositories): WorkDeps => ({
   env: {},
   registry,
   github: {} as unknown as GitHubRest,
@@ -58,8 +58,8 @@ const deps = (registry: Registry): WorkDeps => ({
   brand: () => Promise.reject(new Error('no brand in these tests')),
 });
 
-async function launch(registry: Registry): Promise<number> {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+async function launch(registry: Repositories): Promise<number> {
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   return launch.id;
 }
 
@@ -175,7 +175,7 @@ test('with automation off a round does nothing and sends no next one; a start se
   assert.equal(done?.state, 'completed');
   assert.deepEqual(done?.log, ['Automation is off: no round']);
   assert.deepEqual(await queue.queued('round', ROUND_KEY), [], 'the chain stops');
-  assert.equal(await db.registry.cursor('automation:last-round'), undefined, 'no round was run');
+  assert.equal(await db.registry.cursors.cursor('automation:last-round'), undefined, 'no round was run');
 
   const metrics = await queue.send('metrics', { reason: 'every 6 hours' });
   assert.deepEqual((await queue.wait(metrics!, 20_000, 100))?.log, ['Automation is off: the numbers are read by hand']);
@@ -186,7 +186,7 @@ test('a job sent before a restart runs after it, in the next process', async () 
   const launchId = await launch(db.registry);
   const before = queueOn(db);
   const id = await before.send('draft', { launchId }, { title: 'Drafting claudio v1.0.0', launchId });
-  assert.equal((await db.registry.job(id!))?.state, 'created');
+  assert.equal((await db.registry.jobs.job(id!))?.state, 'created');
   await before.stop();
 
   const afterRestart = queueOn(db);
@@ -203,10 +203,10 @@ test('a job sent before a restart runs after it, in the next process', async () 
 
 test('a row whose job the queue no longer has is not left running after a start', async () => {
   const db = await database();
-  await db.registry.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
-  await db.registry.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
+  await db.registry.jobs.recordJob({ id: '00000000-0000-4000-8000-000000000000', queue: 'draft', title: 'Lost' });
+  await db.registry.jobs.updateJob('00000000-0000-4000-8000-000000000000', { state: 'active', attempts: 1, started: true });
   await queueOn(db).start();
-  const row = await db.registry.job('00000000-0000-4000-8000-000000000000');
+  const row = await db.registry.jobs.job('00000000-0000-4000-8000-000000000000');
   assert.equal(row?.state, 'failed');
   assert.deepEqual(row?.log, [LOST_RUNNING]);
 });
@@ -217,12 +217,12 @@ test('a round queued in a copy whose pg-boss jobs were cleared by hand says it n
   const db = await database();
   const first = queueOn(db);
   const id = await scheduleRound(first, 'polling', 300);
-  assert.equal((await db.registry.job(id!))?.state, 'created');
+  assert.equal((await db.registry.jobs.job(id!))?.state, 'created');
   await first.stop(1000);
   await db.client.exec("DELETE FROM pgboss.job WHERE state IN ('created', 'retry')");
 
   await queueOn(db).start();
-  const row = await db.registry.job(id!);
+  const row = await db.registry.jobs.job(id!);
   assert.equal(row?.state, 'failed');
   assert.deepEqual(row?.log, [NEVER_RAN]);
   assert.match(NEVER_RAN, /^The queue no longer has this job/, 'the line the owner saw still starts the same way');
@@ -235,38 +235,38 @@ test('a launch left generating by a draft that was cut short is failed at a star
   const first = queueOn(db);
   await first.start();
   const cut = await launch(db.registry);
-  await db.registry.setStatus(cut, 'generating');
-  const { launch: queued } = await db.registry.claim({ repo: 'yeyo11/shipcast', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await db.registry.launches.setStatus(cut, 'generating');
+  const { launch: queued } = await db.registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await first.send('draft', { launchId: queued.id }, { launchId: queued.id });
-  await db.registry.setStatus(queued.id, 'generating');
+  await db.registry.launches.setStatus(queued.id, 'generating');
   await first.stop(1000);
 
   await queueOn(db).start();
-  const failed = await db.registry.get(cut);
+  const failed = await db.registry.launches.get(cut);
   assert.equal(failed?.status, 'failed');
   assert.match(failed?.detail ?? '', /interrupted/);
-  assert.equal((await db.registry.get(queued.id))?.status, 'generating');
+  assert.equal((await db.registry.launches.get(queued.id))?.status, 'generating');
 });
 
 test('the handlers of a publish job retry a channel only once and leave a launch that is not drafted', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
   const queue = queueOn(db);
-  await db.registry.setCursor(`publish-failed:${launchId}:devto`, 'HTTP 500');
+  await db.registry.cursors.setCursor(`publish-failed:${launchId}:devto`, 'HTTP 500');
   await queue.work({ publish: workHandlers(queue, deps(db.registry)).publish });
   const id = await queue.send('publish', { launchId, retryChannel: 'devto' }, { launchId, singletonKey: `launch:${launchId}` });
   const done = await queue.wait(id!, 20_000, 100);
   assert.equal(done?.state, 'completed');
   assert.deepEqual(done?.log, ['Nothing to publish: the launch is detected']);
-  assert.equal(await db.registry.cursor(`publish-failed:${launchId}:devto`), undefined, 'the failure is forgotten');
+  assert.equal(await db.registry.cursors.cursor(`publish-failed:${launchId}:devto`), undefined, 'the failure is forgotten');
 });
 
 test('a scheduled piece wakes its launch’s publishing when due, also after a restart, and not when cancelled', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
-  await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-  const due = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 60_000)))!;
-  const cancelled = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() - 60_000)))!;
+  await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  const due = (await db.registry.posts.schedulePost(launchId, 'bluesky', new Date(Date.now() - 60_000)))!;
+  const cancelled = (await db.registry.posts.schedulePost(launchId, 'mastodon', new Date(Date.now() - 60_000)))!;
 
   // Armed by a process that stops before the time comes; arming twice leaves one job
   const before = queueOn(db);
@@ -274,7 +274,7 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
   assert.equal(await armScheduled(before, due), first);
   assert.equal((await before.queued('scheduled', `post:${due.id}`)).length, 1);
   const lost = await armScheduled(before, cancelled);
-  await db.registry.unschedulePost(cancelled.id);
+  await db.registry.posts.unschedulePost(cancelled.id);
   await before.stop();
 
   const merged = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'merged' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
@@ -298,8 +298,8 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
 test('a due piece of a launch whose drafts still wait for approval waits for the merge', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
-  await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-  const post = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
+  await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  const post = (await db.registry.posts.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
   const open = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'open' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
   const queue = queueOn(db);
   let publishes = 0;

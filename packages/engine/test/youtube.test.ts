@@ -104,7 +104,7 @@ test('a launch with youtube on uploads both videos once, records them, and says 
     },
   });
   assert.equal(result.state, 'published', JSON.stringify(result));
-  const posts = await registry.posts(launch.id, { channel: 'youtube' });
+  const posts = await registry.posts.posts(launch.id, { channel: 'youtube' });
   assert.deepEqual(posts.map((p) => [p.kind, p.externalId, p.url]), [
     [youtubeKind('short'), 'yt-1', 'https://www.youtube.com/shorts/yt-1'],
     [youtubeKind('video'), 'yt-2', 'https://www.youtube.com/watch?v=yt-2'],
@@ -119,14 +119,14 @@ test('a launch with youtube on uploads both videos once, records them, and says 
   assert.equal(video?.privacy, 'public', 'public is asked for');
   assert.deepEqual([...(video?.bytes ?? [])], [1, 2, 3]);
   assert.ok(video?.thumbnail, 'the cover is the thumbnail');
-  for (const post of posts) assert.equal(await registry.cursor(youtubePrivacyKey(post.id)), PRIVATE_UNTIL_AUDIT);
+  for (const post of posts) assert.equal(await registry.cursors.cursor(youtubePrivacyKey(post.id)), PRIVATE_UNTIL_AUDIT);
   assert.ok(result.state === 'published' && result.failures.length === 0, 'private is not a failure');
   assert.ok(result.state === 'published' && result.problems.some((p) => p.includes(PRIVATE_UNTIL_AUDIT)));
   assert.ok(result.state === 'published' && result.problems.some((p) => p.includes('verified channel')), "an extra that did not go up is said, the video stays");
   assert.equal(files.length, 2);
 
   // Published once: the launch is done, and running it again sends nothing
-  const again = await new PublishingService({ registry, github: github(), launchesRepo: LAUNCHES_REPO }).publish((await registry.get(launch.id))!, brand, { publishers: {}, strategies: { youtube: bindStrategy(youtubeStrategy(fakeRender), yt) }, fetch: site() }, 'again');
+  const again = await new PublishingService({ registry, github: github(), launchesRepo: LAUNCHES_REPO }).publish((await registry.launches.get(launch.id))!, brand, { publishers: {}, strategies: { youtube: bindStrategy(youtubeStrategy(fakeRender), yt) }, fetch: site() }, 'again');
   assert.equal(again.state, 'published');
   assert.equal(yt.uploads.length, 2);
 });
@@ -142,7 +142,7 @@ test('a script the renderer refuses fails the channel for good, and the other vi
     },
   });
   assert.equal(yt.uploads.length, 1);
-  assert.equal((await registry.posts(launch.id, { channel: 'youtube' })).length, 1);
+  assert.equal((await registry.posts.posts(launch.id, { channel: 'youtube' })).length, 1);
   assert.ok(result.state === 'published' || result.state === 'partial');
   assert.deepEqual(result.failures.map((f) => [f.channel, f.retryable]), [['youtube', false]]);
 });
@@ -190,7 +190,7 @@ test("a video's drafts are written from its piece and read back as edited", () =
 test('a video is edited through the change editor its adapter gives, and deleted', async () => {
   const registry = await memoryRegistry();
   const launch = await aLaunch(registry, { status: 'published' });
-  const { post } = await registry.recordPost({ launchId: launch.id, channel: 'youtube', kind: youtubeKind('video'), externalId: 'yt-9', url: 'https://www.youtube.com/watch?v=yt-9' });
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'youtube', kind: youtubeKind('video'), externalId: 'yt-9', url: 'https://www.youtube.com/watch?v=yt-9' });
   const calls: string[] = [];
   const editor: ChangeEditor = { edit: async (id, changes) => void calls.push(`edit ${id} ${JSON.stringify(changes)}`), delete: async (id) => void calls.push(`delete ${id}`) };
   const deps = { registry, editors: async () => ({ youtube: editor }) as unknown as Editors };
@@ -206,7 +206,7 @@ test('a video is edited through the change editor its adapter gives, and deleted
 test("YouTube's numbers are read in one batch for every video, and a video the answer lacks is left alone", async () => {
   const registry = await memoryRegistry();
   const launch = await aLaunch(registry, { status: 'published' });
-  for (const part of YOUTUBE_VIDEOS) await registry.recordPost({ launchId: launch.id, channel: 'youtube', kind: youtubeKind(part), externalId: `yt-${part}`, url: null });
+  for (const part of YOUTUBE_VIDEOS) await registry.posts.recordPost({ launchId: launch.id, channel: 'youtube', kind: youtubeKind(part), externalId: `yt-${part}`, url: null });
   const batches: string[][] = [];
   const reader = {
     metrics: async () => assert.fail('read one by one'),

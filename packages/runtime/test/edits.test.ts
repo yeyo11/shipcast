@@ -19,9 +19,9 @@ function recording(seen: string[]): typeof fetch {
 test('a piece is edited with the account it went out with, not the primary of today', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const old = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@old', settings: { instance: 'https://old.example' } });
-  const now = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@new', settings: { instance: 'https://new.example' } });
-  await registry.makePrimary(now.id);
+  const old = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@old', settings: { instance: 'https://old.example' } });
+  const now = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@new', settings: { instance: 'https://new.example' } });
+  await registry.accounts.makePrimary(now.id);
   await secrets.set(accountSecretKey(old.id), JSON.stringify({ accessToken: 'old-token' }), 'mastodon @old');
   await secrets.set(accountSecretKey(now.id), JSON.stringify({ accessToken: 'new-token' }), 'mastodon @new');
   const seen: string[] = [];
@@ -35,7 +35,7 @@ test('a piece is edited with the account it went out with, not the primary of to
 test('an account removed or without secrets is refused; .env never speaks for another brand', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const account = await registry.addAccount({ network: 'telegram', brand: 'personal', label: '@bot', settings: { chatId: '@c' } });
+  const account = await registry.accounts.addAccount({ network: 'telegram', brand: 'personal', label: '@bot', settings: { chatId: '@c' } });
   const env = { TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '@c' };
   await assert.rejects(postEditors({ env, brand, registry, secrets })('telegram', account.id), (e) => e instanceof PostRefused && e.reason === 'no_credentials');
   assert.deepEqual(await postEditors({ env, brand: company, registry, secrets })('telegram', null), {});

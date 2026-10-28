@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import type { ArticleInput, Editors, Launch, Registry, ReviewGitHub } from '@shipcast/engine';
+import type { ArticleInput, Editors, Launch, Repositories, ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { COMMENT_CHANNELS } from '@shipcast/schema';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
@@ -20,7 +20,7 @@ const github: ReviewGitHub = {
 
 interface Setup {
   deps: ApiDeps;
-  registry: Registry;
+  registry: Repositories;
   calls: string[];
   /** What the fake connectors were asked to edit or delete */
   sent: string[];
@@ -95,7 +95,7 @@ async function setup(): Promise<Setup> {
     },
     redraftComment: async (id) => {
       calls.push(`redraft ${id}`);
-      return (await registry.comment(id)) ? { ok: true, job: 'j7' } : { ok: false, problem: 'no such comment' };
+      return (await registry.comments.comment(id)) ? { ok: true, job: 'j7' } : { ok: false, problem: 'no such comment' };
     },
   };
   const tokens = { registry, secrets };
@@ -135,8 +135,8 @@ test('no token, a wrong one, a cookie or a revoked one is a 401', async () => {
 
   assert.equal((await call(s.deps, 'GET', '/launches', { token: 'shipcast_1_nope' })).status, 401);
 
-  const [first] = await s.registry.apiTokens();
-  await s.registry.revokeApiToken(first!.id);
+  const [first] = await s.registry.apiTokens.apiTokens();
+  await s.registry.apiTokens.revokeApiToken(first!.id);
   const revoked = await call(s.deps, 'GET', '/launches', { token: s.both });
   assert.equal(revoked.status, 401);
   assert.match(JSON.stringify(await body(revoked)), /revoked/);
@@ -166,8 +166,8 @@ test('each route needs its scope', async () => {
 test('launches are paged by cursor and filtered by status', async () => {
   const s = await setup();
   for (let i = 1; i <= 5; i++) {
-    const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: `v0.${i}.0`, trigger: 'release', kind: 'launch', brand: 'personal' });
-    if (i % 2 === 0) await s.registry.setStatus(launch.id, 'published');
+    const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: `v0.${i}.0`, trigger: 'release', kind: 'launch', brand: 'personal' });
+    if (i % 2 === 0) await s.registry.launches.setStatus(launch.id, 'published');
   }
   const first = await body(await call(s.deps, 'GET', '/launches?limit=2', { token: s.read }));
   const refs = (page: Record<string, unknown>) => (page.launches as Array<{ ref: string }>).map((l) => l.ref);
@@ -192,7 +192,7 @@ test('launches are paged by cursor and filtered by status', async () => {
 test('launches are searched, filtered and sorted, and a cursor keeps its sort', async () => {
   const s = await setup();
   const claim = (repo: string, ref: string, trigger: 'release' | 'manual' | 'article' = 'release', kind: 'launch' | 'minor' = 'minor') =>
-    s.registry.claim({ repo, ref, trigger, kind, brand: 'personal' });
+    s.registry.launches.claim({ repo, ref, trigger, kind, brand: 'personal' });
   await claim('yeyo11/claudio', 'v1.0.0', 'release', 'launch');
   await claim('yeyo11/claudio', 'v1.1.0', 'manual');
   await claim('yeyo11/shipcast', 'v0.1.0');
@@ -220,10 +220,10 @@ test('launches are searched, filtered and sorted, and a cursor keeps its sort', 
 
 test('a launch comes with its posts, numbers, index status and drafts summary', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'drafted', 'Drafts: https://github.com/yeyo11/launches/pull/7');
-  await s.registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: null, url: 'https://josegarrido.dev/en/blog/claudio' });
-  await s.registry.recordMetrics(launch.id, 'blog', { views: 12 }, new Date('2026-10-25T00:00:00Z'));
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'drafted', 'Drafts: https://github.com/yeyo11/launches/pull/7');
+  await s.registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: null, url: 'https://josegarrido.dev/en/blog/claudio' });
+  await s.registry.metrics.recordMetrics(launch.id, 'blog', { views: 12 }, new Date('2026-10-25T00:00:00Z'));
 
   const response = await call(s.deps, 'GET', `/launches/${launch.id}`, { token: s.read });
   assert.equal(response.status, 200);
@@ -246,24 +246,24 @@ test('a launch comes with its posts, numbers, index status and drafts summary', 
 
 test('accounts come without secrets, and jobs as the app lists them', async () => {
   const s = await setup();
-  await s.registry.addAccount({ network: 'devto', brand: 'personal', label: 'me', settings: { handle: 'me' } });
+  await s.registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: 'me', settings: { handle: 'me' } });
   await s.deps.secrets.set('account:1', '{"apiKey":"secret"}', 'x');
   const accounts = await call(s.deps, 'GET', '/accounts', { token: s.read });
   const text = await accounts.text();
   assert.equal(accounts.status, 200);
   assert.match(text, /"network":"devto"/);
   assert.doesNotMatch(text, /secret/);
-  await s.registry.recordJob({ id: 'j1', queue: 'draft', title: 'Drafting' });
+  await s.registry.jobs.recordJob({ id: 'j1', queue: 'draft', title: 'Drafting' });
   assert.deepEqual(((await body(await call(s.deps, 'GET', '/jobs', { token: s.read }))).jobs as Array<{ id: string }>).map((j) => j.id), ['j1']);
 });
 
 test('jobs come a page at a time, and the cursor walks the whole day', async () => {
   const s = await setup();
   // Recorded in order, so newest first is j5..j1 whether or not two share a millisecond
-  for (let i = 1; i <= 5; i++) await s.registry.recordJob({ id: `j${i}`, queue: 'draft', title: `Drafting ${i}` });
+  for (let i = 1; i <= 5; i++) await s.registry.jobs.recordJob({ id: `j${i}`, queue: 'draft', title: `Drafting ${i}` });
   // A round that ended well is not listed: Automation shows the last one
-  await s.registry.recordJob({ id: 'r1', queue: 'round', title: 'Round' });
-  await s.registry.updateJob('r1', { state: 'completed', ended: true });
+  await s.registry.jobs.recordJob({ id: 'r1', queue: 'round', title: 'Round' });
+  await s.registry.jobs.updateJob('r1', { state: 'completed', ended: true });
   const seen: string[] = [];
   let cursor: string | null = null;
   for (let pages = 0; pages < 5; pages++) {
@@ -282,9 +282,9 @@ test('jobs come a page at a time, and the cursor walks the whole day', async () 
 
 test('the writes start the same work the pages do, with their checks', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'published');
-  await s.registry.setCursor(`publish-failed:${launch.id}:devto`, 'rejected');
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'published');
+  await s.registry.cursors.setCursor(`publish-failed:${launch.id}:devto`, 'rejected');
 
   const accepted = await call(s.deps, 'POST', '/launches', { token: s.write, body: { repo: 'yeyo11/claudio', ref: 'v2.0.0', direct: true } });
   assert.equal(accepted.status, 202);
@@ -305,8 +305,8 @@ test('the writes start the same work the pages do, with their checks', async () 
   assert.equal((await call(s.deps, 'POST', `/launches/${launch.id}/retry/nowhere`, { token: s.write })).status, 400);
   const retry = await call(s.deps, 'POST', `/launches/${launch.id}/retry/devto`, { token: s.write });
   assert.equal(retry.status, 202);
-  assert.equal(await s.registry.cursor(`publish-failed:${launch.id}:devto`), undefined, 'the failure is forgotten');
-  assert.equal((await s.registry.get(launch.id))?.status, 'drafted');
+  assert.equal(await s.registry.cursors.cursor(`publish-failed:${launch.id}:devto`), undefined, 'the failure is forgotten');
+  assert.equal((await s.registry.launches.get(launch.id))?.status, 'drafted');
 
   const article = await call(s.deps, 'POST', '/articles', { token: s.write, body: { title: ' Hello ', markdown: 'Body', lang: 'en', channels: ['devto', 'nowhere'] } });
   assert.equal(article.status, 202);
@@ -338,11 +338,11 @@ test('the OpenAPI document is public and lists every route with its scope', asyn
   assert.equal(new Set(ROUTES.map((r) => r.operationId)).size, ROUTES.length);
 });
 
-async function publishedLaunch(registry: Registry) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
+async function publishedLaunch(registry: Repositories) {
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram', externalId: string) =>
-    (await registry.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
+    (await registry.posts.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
   return { launch, mastodon: await record('mastodon', '111'), bluesky: await record('bluesky', 'at://did:plc:a/app.bsky.feed.post/1'), telegram: await record('telegram', '@c:5') };
 }
 
@@ -373,11 +373,11 @@ test('what a network cannot do is a 409, a bad change a 400, a missing post a 40
   assert.equal((await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: { link: 'javascript:alert(1)' } })).status, 400);
   assert.equal((await call(s.deps, 'DELETE', '/posts/9999', { token: s.write })).status, 404);
   assert.equal((await call(s.deps, 'DELETE', '/posts/abc', { token: s.write })).status, 400);
-  const refused = (await s.registry.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
+  const refused = (await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
   const upstream = await call(s.deps, 'PATCH', `/posts/${refused.id}`, { token: s.write, body: { text: 'x'.repeat(600) } });
   assert.equal(upstream.status, 502);
   assert.match(((await body(upstream)).error as { message: string }).message, /Text is too long/);
-  assert.equal((await s.registry.post(refused.id))!.status, 'live');
+  assert.equal((await s.registry.posts.post(refused.id))!.status, 'live');
 });
 
 test('a launch’s posts are edited and deleted at once, per channel, with what each one did', async () => {
@@ -393,7 +393,7 @@ test('a launch’s posts are edited and deleted at once, per channel, with what 
 
   const deleted = await call(s.deps, 'DELETE', `/launches/${launch.id}/posts?channels=bluesky,mastodon`, { token: s.write });
   assert.deepEqual(((await body(deleted)).outcomes as Array<{ ok: boolean }>).map((o) => o.ok), [true, true]);
-  assert.equal((await s.registry.post(telegram.id))!.status, 'live', 'a channel not named is left alone');
+  assert.equal((await s.registry.posts.post(telegram.id))!.status, 'live', 'a channel not named is left alone');
   assert.equal((await call(s.deps, 'DELETE', '/launches/999/posts', { token: s.write })).status, 404);
 });
 
@@ -407,8 +407,8 @@ test('the capability map is readable with the read scope', async () => {
 
 test('a launch’s channels are scheduled, moved and cancelled through the API', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
 
   const refusedScope = await call(s.deps, 'POST', `/launches/${launch.id}/schedule`, { token: s.read, body: { times: { bluesky: '2030-01-01T10:00:00Z' } } });
   assert.equal(refusedScope.status, 403);
@@ -437,7 +437,7 @@ test('a launch’s channels are scheduled, moved and cancelled through the API',
   const cancelled = await call(s.deps, 'DELETE', `/posts/${posts[1]!.id}/schedule`, { token: s.write });
   assert.equal(cancelled.status, 200);
   assert.equal((await call(s.deps, 'DELETE', `/posts/${posts[1]!.id}/schedule`, { token: s.write })).status, 404, 'gone');
-  assert.deepEqual((await s.registry.posts(launch.id)).map((p) => p.channel), ['bluesky']);
+  assert.deepEqual((await s.registry.posts.posts(launch.id)).map((p) => p.channel), ['bluesky']);
 });
 
 test('recommendations and the time zone are read with the read scope, the zone set with write', async () => {
@@ -492,12 +492,12 @@ test('the MCP endpoint’s bearer check: the API’s refusals, and the same limi
   assert.equal((await call(s.deps, 'GET', '/jobs', { token: s.both, headers: { [PEER_HEADER]: '10.0.0.9' } })).status, 429, 'one limit for both doors');
 });
 
-async function commented(registry: Registry) {
+async function commented(registry: Repositories) {
   const { launch, mastodon } = await publishedLaunch(registry);
-  const { post: devto } = await registry.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
+  const { post: devto } = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
   const add = async (postId: number, channel: 'mastodon' | 'devto', externalId: string, own = false) =>
     (
-      await registry.recordComment({
+      await registry.comments.recordComment({
         postId,
         channel,
         externalId,
@@ -544,7 +544,7 @@ test('a reply is edited, approved and sent with the write scope; what cannot be 
 
   await call(s.deps, 'PATCH', `/comments/${other.id}`, { token: s.write, body: { draft: 'refused' } });
   assert.equal((await call(s.deps, 'POST', `/comments/${other.id}/approve`, { token: s.write })).status, 502);
-  assert.equal((await s.registry.comment(other.id))!.status, 'failed');
+  assert.equal((await s.registry.comments.comment(other.id))!.status, 'failed');
 
   await call(s.deps, 'PATCH', `/comments/${devto.id}`, { token: s.write, body: { draft: 'Thanks!' } });
   assert.equal((await call(s.deps, 'POST', `/comments/${devto.id}/approve`, { token: s.write })).status, 409, 'dev.to cannot reply');

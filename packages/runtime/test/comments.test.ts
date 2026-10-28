@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import type { CommentRecord, CommentRunResult, GitHubRest, PipelineDeps } from '@shipcast/engine';
+import type { CommentRecord, CommentRunResult, GitHubRest, PipelineDeps, Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
 import { checkComments, commentsNotice, MemoryStore, redraftComment, WorkQueue, workHandlers, writeAutomation, type QueueOptions } from '../src/index.ts';
 
@@ -20,11 +20,13 @@ after(async () => {
   await (await template).close();
 });
 
-async function queue(): Promise<WorkQueue> {
+async function queue(): Promise<WorkQueue & { repositories: Repositories }> {
   const client = await clonePglite((await template).client);
-  const q = WorkQueue.pglite(client, await registryOn(client), quiet);
+  const repositories = await registryOn(client);
+  const q = WorkQueue.pglite(client, repositories, quiet);
   queues.push(q);
-  return q;
+  // The queue keeps only its own repositories; the handlers under test take the whole set
+  return Object.assign(q, { repositories });
 }
 
 test('“Check comments now” twice is one queued run; drafting one comment again has a key of its own', async () => {
@@ -39,11 +41,11 @@ test('“Check comments now” twice is one queued run; drafting one comment aga
 
 test('the scheduled run waits while automation is off; the brand is never read', async () => {
   const q = await queue();
-  await writeAutomation(q.registry, { mode: 'off', intervalSeconds: 600 });
+  await writeAutomation(q.repositories, { mode: 'off', intervalSeconds: 600 });
   let brandRead = false;
   const handlers = workHandlers(q, {
     env: {},
-    registry: q.registry,
+    registry: q.repositories,
     github: {} as unknown as GitHubRest,
     secrets: new MemoryStore(),
     pipeline: {} as unknown as PipelineDeps,

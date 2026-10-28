@@ -1,12 +1,11 @@
-import type { Registry } from '@shipcast/engine';
 import type { Flags } from './flags.ts';
 import { BullQueue } from './queue-bullmq.ts';
-import { WorkQueue, type JobQueue, type QueueOptions } from './queue.ts';
+import { WorkQueue, type JobQueue, type QueueOptions, type QueueRepositories } from './queue.ts';
 import type { RedisConnections } from './redis/connection.ts';
 
 export interface JobQueueDeps {
   flags: Flags;
-  registry: Registry;
+  registry: QueueRepositories;
   /** The registry's Postgres, where pg-boss keeps its schema */
   databaseUrl: string;
   /** This process's Redis connections; needed only with `bullmq` on */

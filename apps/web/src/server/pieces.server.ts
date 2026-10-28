@@ -1,4 +1,4 @@
-import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
 import { draftOf, type Channel } from '@shipcast/schema';
 import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
 import { accountAvatar } from './pieces.ts';
@@ -15,13 +15,13 @@ export interface SchedulingChannel {
  * launch can still schedule. Read beside launchDetail, which the REST API shares and which keeps
  * its shape.
  */
-export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
+export async function launchPieces(registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
   const [posts, accounts, readings, replies] = await Promise.all([
-    registry.posts(launch.id),
-    registry.accounts(),
-    registry.postMetricHistory(launch.id),
+    registry.posts.posts(launch.id),
+    registry.accounts.accounts(),
+    registry.metrics.postMetricHistory(launch.id),
     // What the assistant answered, counted per channel: the page never lists them
-    registry.sentReplies(launch.id),
+    registry.comments.sentReplies(launch.id),
   ]);
   const out = posts.filter((p) => p.status !== 'scheduled');
   const shaped = accounts.map((a) => ({ id: a.id, network: a.network, label: a.label, identity: a.identity, avatarUrl: accountAvatar(a) }));
@@ -29,7 +29,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
   // A week before the launch's day, so the line shows where the followers stood before it
   const since = new Date(Date.parse(launch.createdAt) - 7 * 86_400_000).toISOString().slice(0, 10);
   const usedIds = [...new Set(out.flatMap((p) => (p.accountId === null ? [] : [p.accountId])))];
-  const snapshots: SnapshotInput[] = (await Promise.all(usedIds.map((id) => registry.accountSnapshots(id, { since })))).flat();
+  const snapshots: SnapshotInput[] = (await Promise.all(usedIds.map((id) => registry.accounts.accountSnapshots(id, { since })))).flat();
   const accountNumbers = accountRows({ posts: out, accounts: shaped, snapshots, launchedAt: launch.createdAt });
   return { rows, replies, accounts: accountNumbers, capabilities: CAPABILITIES, scheduling: await schedulingChannels(registry, launch, posts, deps) };
 }
@@ -40,9 +40,9 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
  * draft in the pull request), and nothing of which is out yet.
  */
 async function schedulingChannels(
-  registry: Registry,
+  registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>,
   launch: Launch,
-  posts: Awaited<ReturnType<Registry['posts']>>,
+  posts: Awaited<ReturnType<Repositories['posts']['posts']>>,
   deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> },
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);

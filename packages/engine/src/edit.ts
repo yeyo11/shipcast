@@ -6,7 +6,7 @@ import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
 import { composedText } from './edit-rules.ts';
 import type { PostStore } from './ports.ts';
-import { kindLanguage, type Post } from './registry.ts';
+import { kindLanguage, type Post } from './repositories/posts.ts';
 
 /*
  * Editing and deleting what a launch published, per piece or for a whole launch at once. A piece's
@@ -127,7 +127,7 @@ function describe(post: Post): string {
 }
 
 async function existing(registry: PostStore, postId: number): Promise<Post> {
-  const post = await registry.post(postId);
+  const post = await registry.posts.post(postId);
   if (!post) throw new PostRefused('not_found', 'no such post');
   return post;
 }
@@ -203,12 +203,12 @@ async function editArticle(post: Post, changes: PostChanges, deps: EditDeps): Pr
  */
 async function deleteArticle(post: Post, deps: EditDeps): Promise<void> {
   const { github, launchesRepo } = blogOf(deps);
-  const launch = await deps.registry.get(post.launchId);
+  const launch = await deps.registry.launches.get(post.launchId);
   if (!launch) throw new PostRefused('not_found', 'the post’s launch is gone');
   const path = articlePath(post);
   const files: CommitFile[] = [];
   if ((await github.fileAt(launchesRepo, path, 'HEAD')) !== undefined) files.push({ path, delete: true });
-  const others = (await deps.registry.posts(post.launchId, { channel: 'blog' })).filter((p) => p.id !== post.id && p.status !== 'deleted' && isMain(p));
+  const others = (await deps.registry.posts.posts(post.launchId, { channel: 'blog' })).filter((p) => p.id !== post.id && p.status !== 'deleted' && isMain(p));
   if (others.length === 0) for (const media of await github.filesUnder(launchesRepo, 'HEAD', `public/${launchDir(launch)}`)) files.push({ path: media, delete: true });
   // Nothing left to remove: the article went another way, and the row only has to say so
   if (files.length > 0) await github.commitToBranch(launchesRepo, 'main', `Delete the article ${post.externalId} (${kindLanguage(post.kind)})`, files);
@@ -295,7 +295,7 @@ export async function editPost(postId: number, changes: PostChanges, deps: EditD
   assertCan(post, 'edit');
   const sent = applicable(post, changes, options.strict ?? true);
   await send(post, sent, deps);
-  return deps.registry.updatePost(post.id, { status: 'edited', contentHash: contentHash(sent) });
+  return deps.registry.posts.updatePost(post.id, { status: 'edited', contentHash: contentHash(sent) });
 }
 
 /**
@@ -345,7 +345,7 @@ export async function deletePost(postId: number, deps: EditDeps): Promise<Post> 
       }
     }
   }
-  return deps.registry.updatePost(post.id, { status: 'deleted' });
+  return deps.registry.posts.updatePost(post.id, { status: 'deleted' });
 }
 
 /**
@@ -377,12 +377,12 @@ const outcomeOf = async (post: Pick<Post, 'id' | 'channel' | 'kind'>, run: () =>
 };
 
 async function eachPost(launchId: number, selection: PostSelection, deps: EditDeps, run: (post: Post) => Promise<Post>): Promise<PostOutcome[]> {
-  if (!(await deps.registry.get(launchId))) throw new PostRefused('not_found', 'no such launch');
+  if (!(await deps.registry.launches.get(launchId))) throw new PostRefused('not_found', 'no such launch');
   const outcomes: PostOutcome[] = [];
   // One at a time: a network that rate-limits sees one request of ours, and the order is the launch's (or the owner's)
   if (selection && 'postIds' in selection) {
     for (const postId of selection.postIds) {
-      const post = await deps.registry.post(postId);
+      const post = await deps.registry.posts.post(postId);
       if (!post || post.launchId !== launchId) {
         outcomes.push({ postId, channel: post?.channel ?? '', kind: post?.kind ?? '', ok: false, reason: 'not_found', problem: `post ${postId} is not a piece of this launch` });
         continue;
@@ -392,7 +392,7 @@ async function eachPost(launchId: number, selection: PostSelection, deps: EditDe
     return outcomes;
   }
   const channels = selection;
-  const pieces = (await deps.registry.posts(launchId)).filter((p) => p.status !== 'deleted' && p.status !== 'scheduled' && (!channels || channels.includes(p.channel)));
+  const pieces = (await deps.registry.posts.posts(launchId)).filter((p) => p.status !== 'deleted' && p.status !== 'scheduled' && (!channels || channels.includes(p.channel)));
   for (const post of pieces) outcomes.push(await outcomeOf(post, () => run(post)));
   return outcomes;
 }

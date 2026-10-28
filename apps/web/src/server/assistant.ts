@@ -10,7 +10,7 @@ import {
   type AssistantContext,
   type Checkout,
   type Launch,
-  type Registry,
+  type AssistantRepository,
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
@@ -36,7 +36,7 @@ export interface AssistantDeps {
   aiWorkdir?: string;
   maxBudgetUsd?: number;
   /** Where chat turns are kept; without it the chat is not saved */
-  sessions?: Pick<Registry, 'createAssistantSession' | 'assistantSession' | 'addAssistantMessage'>;
+  sessions?: Pick<AssistantRepository, 'createAssistantSession' | 'assistantSession' | 'addAssistantMessage'>;
 }
 
 /** A session's title: the first question in a line, or the draft's name when it has no words */

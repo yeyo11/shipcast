@@ -8,7 +8,7 @@ import { draftBody, draftFile, lookOf, parseYouTubeDraft, YOUTUBE_VIDEOS, type Y
 import { isArticle, projectLabel, projectSlug } from '../drafts.ts';
 import { loadProjects } from '../pipeline.ts';
 import type { PublishContext, PublishStrategy } from '../publish.ts';
-import type { Post } from '../registry.ts';
+import type { Post } from '../repositories/index.ts';
 
 /*
  * How a launch goes out on YouTube: its two videos rendered here, on the worker that publishes, from
@@ -180,7 +180,7 @@ export function youtubeStrategy(options: YouTubeStrategyOptions = {}): PublishSt
               // Recorded at once: the other video failing must not get this one uploaded twice
               const post = await context.record({ kind: youtubeKind(part), externalId: published.externalId, url: published.url });
               if (published.privacy === 'private') {
-                await context.registry.setCursor(youtubePrivacyKey(post.id), PRIVATE_UNTIL_AUDIT);
+                await context.registry.cursors.setCursor(youtubePrivacyKey(post.id), PRIVATE_UNTIL_AUDIT);
                 context.note(`the ${part} is ${PRIVATE_UNTIL_AUDIT}`);
               }
               for (const extra of published.extras) context.note(`the ${part}'s ${extra}`);

@@ -1,6 +1,6 @@
 import { draftBody, draftFile, draftOf, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 
 /** The GitHub calls reviewing a launch's drafts makes; `GitHubRest` has them all */
 export interface ReviewGitHub {

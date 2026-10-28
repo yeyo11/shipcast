@@ -17,7 +17,7 @@ export const Route = createFileRoute('/avatars/$accountId')({
         const id = Number(params.accountId);
         if (!Number.isInteger(id) || id <= 0) return new Response('Not found', { status: 404 });
         const { registry } = await appContext();
-        const source = (await registry.account(id))?.avatarUrl;
+        const source = (await registry.accounts.account(id))?.avatarUrl;
         if (!source || !/^https:\/\//.test(source)) return new Response('Not found', { status: 404 });
         let upstream: Response;
         try {

@@ -2,7 +2,8 @@ import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
 import { channelDefinition, isMainPiece, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
-import { kindLanguage, type Post, type Registry } from './registry.ts';
+import type { CursorRepository } from './repositories/cursors.ts';
+import { kindLanguage, type Post } from './repositories/posts.ts';
 
 /**
  * A channel's reader of its pieces' numbers: one piece a call, or many at once where the network
@@ -54,8 +55,8 @@ const SITEMAP_EVERY_MS = 24 * 3600 * 1000;
 export const sitemapUrl = (site: string) => `${site}/sitemap-index.xml`;
 
 /** A search engine's view of an article URL, as of the last reading; undefined until it is first read */
-export async function indexStatus(registry: Pick<Registry, 'cursor'>, url: string, engine: SearchEngine = 'google'): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
-  const raw = await registry.cursor(indexStatusKey(url, engine));
+export async function indexStatus(registry: { cursors: Pick<CursorRepository, 'cursor'> }, url: string, engine: SearchEngine = 'google'): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
+  const raw = await registry.cursors.cursor(indexStatusKey(url, engine));
   return raw ? (JSON.parse(raw) as IndexStatus & { checkedAt: string }) : undefined;
 }
 
@@ -63,12 +64,12 @@ export async function indexStatus(registry: Pick<Registry, 'cursor'>, url: strin
  * Resubmits the sitemap, unless that was done in the last day. Google ignores frequent resubmits of
  * an unchanged sitemap, and a new article is what changes it.
  */
-export async function resubmitSitemap(registry: Pick<Registry, 'cursor' | 'setCursor'>, site: string, search: NonNullable<MetricSources['search']>, now = new Date(), force = false): Promise<boolean> {
+export async function resubmitSitemap(registry: { cursors: Pick<CursorRepository, 'cursor' | 'setCursor'> }, site: string, search: NonNullable<MetricSources['search']>, now = new Date(), force = false): Promise<boolean> {
   if (!search.submitSitemap) return false;
-  const last = Date.parse((await registry.cursor(SITEMAP_SUBMITTED_KEY)) ?? '') || 0;
+  const last = Date.parse((await registry.cursors.cursor(SITEMAP_SUBMITTED_KEY)) ?? '') || 0;
   if (!force && now.getTime() - last < SITEMAP_EVERY_MS) return false;
   await search.submitSitemap(sitemapUrl(site));
-  await registry.setCursor(SITEMAP_SUBMITTED_KEY, now.toISOString());
+  await registry.cursors.setCursor(SITEMAP_SUBMITTED_KEY, now.toISOString());
   return true;
 }
 
@@ -90,7 +91,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   const problems: string[] = [];
   const record = async (launchId: number, source: string, values: Record<string, number | undefined>, postId: number | null = null) => {
     const clean = Object.fromEntries(Object.entries(values).filter((e): e is [string, number] => typeof e[1] === 'number'));
-    await registry.recordMetrics(launchId, source, clean, now, postId);
+    await registry.metrics.recordMetrics(launchId, source, clean, now, postId);
     readings += Object.keys(clean).length;
   };
   const attempt = async (what: string, fn: () => Promise<void>) => {
@@ -102,9 +103,9 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   };
 
   let unindexed = false;
-  const launches = (await registry.recent(500)).filter((l) => l.status === 'published');
+  const launches = (await registry.launches.recent(500)).filter((l) => l.status === 'published');
   const piecesOf = new Map<number, Post[]>();
-  for (const launch of launches) piecesOf.set(launch.id, await registry.posts(launch.id));
+  for (const launch of launches) piecesOf.set(launch.id, await registry.posts.posts(launch.id));
   // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its
   // own, and a post's own pieces are read like its post where the channel has numbers (each of
   // YouTube's videos; a subreddit's post has none).
@@ -167,7 +168,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
         if (inspect) {
           await attempt(`${launch.repo} ${launch.ref} index status`, async () => {
             const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await inspect(url) })));
-            for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+            for (const { url, status } of statuses) await registry.cursors.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
             await record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
             unindexed ||= statuses.some((s) => !s.status.indexed);
           });
@@ -183,7 +184,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
           };
           if (bing.inspect) {
             const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await bing.inspect!(url) })));
-            for (const { url, status } of statuses) await registry.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+            for (const { url, status } of statuses) await registry.cursors.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
             values.crawled = statuses.filter((s) => s.status.indexed).length;
           }
           await record(launch.id, 'bing', values);

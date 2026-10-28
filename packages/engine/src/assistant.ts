@@ -5,7 +5,7 @@ import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { ANALYSIS_TOOLS } from './prompt.ts';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
 /*

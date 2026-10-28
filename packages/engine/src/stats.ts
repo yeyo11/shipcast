@@ -1,6 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { CHANNEL_METRIC_FAMILIES, STATS_METRICS, type StatsMetric } from '@shipcast/schema';
-import type { Registry } from './registry.ts';
+import type { Repositories } from './repositories/index.ts';
 import { InvalidRequest } from '@shipcast/schema';
 
 /*
@@ -162,7 +162,7 @@ const numOrNull = (value: unknown): number | null => (value === null || value ==
  * increase is the highest reading in the window above that, never below zero: a dip (an unlike, a
  * network recounting) takes nothing away, and a reading missed is caught up by the next one.
  */
-async function counters(registry: Registry, windows: readonly StatsWindow[], filter: StatsFilter): Promise<CounterRow[]> {
+async function counters(registry: Pick<Repositories, 'queries'>, windows: readonly StatsWindow[], filter: StatsFilter): Promise<CounterRow[]> {
   const joins = windows.map((w, i) => {
     const [b, x, f] = [`b${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL];
     return sql`
@@ -184,7 +184,7 @@ async function counters(registry: Registry, windows: readonly StatsWindow[], fil
       (array_agg(f#.value ORDER BY f#.taken_at NULLS LAST))[1]::float8 AS first#`.replaceAll('#', String(i)),
     ),
   );
-  const rows = await registry.selectRows<Record<string, unknown>>(sql`
+  const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`
     WITH ${counterSet(filter)}
     SELECT c.unit, c.source, c.name, max(c.launch_id)::int AS launch_id, max(c.post_id)::int AS post_id, max(c.account_id)::int AS account_id
       ${sql.join(columns, sql``)}
@@ -278,7 +278,7 @@ export interface OverviewOptions extends StatsFilter {
 }
 
 /** Totals per channel and per account in a period, and against another period when asked */
-export async function statsOverview(registry: Registry, options: OverviewOptions): Promise<StatsOverview> {
+export async function statsOverview(registry: Pick<Repositories, 'accounts' | 'queries'>, options: OverviewOptions): Promise<StatsOverview> {
   const window = statsWindow(options.from, options.to);
   const compareTo = options.compareTo === 'previous' ? previousWindow(window) : options.compareTo;
   const windows = compareTo ? [window, compareTo] : [window];
@@ -307,7 +307,7 @@ export async function statsOverview(registry: Registry, options: OverviewOptions
     const previous = { ...emptyFor(acc.sources), ...acc.previous };
     return { metrics, previous, delta: deltas(metrics, previous) };
   };
-  const accounts = new Map((await registry.accounts()).map((a) => [a.id, a]));
+  const accounts = new Map((await registry.accounts.accounts()).map((a) => [a.id, a]));
   return {
     window,
     ...(compareTo && { compareTo }),
@@ -396,7 +396,7 @@ export function bucketsOf(window: StatsWindow, bucket: SeriesBucket): string[] {
  * never goes below zero, a day with no reading shows no growth and the next reading carries what
  * happened in between. Only the period's readings are read, plus one per counter before it.
  */
-export async function statsSeries(registry: Registry, options: SeriesOptions): Promise<StatsSeries> {
+export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'queries'>, options: SeriesOptions): Promise<StatsSeries> {
   const window = statsWindow(options.from, options.to);
   const buckets = bucketsOf(window, options.bucket);
   const limit = options.limit ?? 10;
@@ -410,7 +410,7 @@ export async function statsSeries(registry: Registry, options: SeriesOptions): P
         : options.groupBy === 'launchChannel'
           ? sql`u.launch_id::text || ':' || u.source`
           : sql`u.launch_id::text`;
-  const rows = await registry.selectRows<{ key: string; bucket: string | null; increase: number }>(sql`
+  const rows = await registry.queries.selectRows<{ key: string; bucket: string | null; increase: number }>(sql`
     WITH ${counterSet(options, options.metric)},
     w AS (
       SELECT c.unit, c.name, m.taken_at, m.value FROM c
@@ -474,11 +474,11 @@ export async function statsSeries(registry: Registry, options: SeriesOptions): P
 }
 
 /** What a group is called on a chart, read in one query per kind rather than one per group */
-async function groupLabels(registry: Registry, groupBy: SeriesGroupBy, keys: string[]): Promise<Map<string, string>> {
+async function groupLabels(registry: Pick<Repositories, 'accounts' | 'queries'>, groupBy: SeriesGroupBy, keys: string[]): Promise<Map<string, string>> {
   const labels = new Map<string, string>();
   if (groupBy === 'channel' || groupBy === 'launchChannel') for (const key of keys) labels.set(key, key);
   if (groupBy === 'account') {
-    const accounts = new Map((await registry.accounts()).map((a) => [String(a.id), a]));
+    const accounts = new Map((await registry.accounts.accounts()).map((a) => [String(a.id), a]));
     for (const key of keys) {
       const account = accounts.get(key);
       labels.set(key, key === 'none' ? 'No account' : account ? `${account.network} ${account.label}` : `Account ${key}`);
@@ -491,9 +491,9 @@ async function groupLabels(registry: Registry, groupBy: SeriesGroupBy, keys: str
   return labels;
 }
 
-async function launchNames(registry: Registry, ids: number[]): Promise<Map<number, string>> {
+async function launchNames(registry: Pick<Repositories, 'queries'>, ids: number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
-  const rows = await registry.selectRows<{ id: number; repo: string; ref: string }>(sql`SELECT id, repo, ref FROM launches WHERE ${inList(sql`id`, ids)}`);
+  const rows = await registry.queries.selectRows<{ id: number; repo: string; ref: string }>(sql`SELECT id, repo, ref FROM launches WHERE ${inList(sql`id`, ids)}`);
   return new Map(rows.map((r) => [Number(r.id), `${r.repo} ${r.ref}`]));
 }
 
@@ -573,7 +573,7 @@ function median(values: number[]): number {
  * dividing by zero; a family nobody grew in says nothing and would only pull every score to 1, and a
  * network with no active family has no yardstick, so its pieces are not ranked.
  */
-export async function statsRanking(registry: Registry, options: RankingOptions): Promise<StatsRanking> {
+export async function statsRanking(registry: Pick<Repositories, 'accounts' | 'queries'>, options: RankingOptions): Promise<StatsRanking> {
   const window = statsWindow(options.from, options.to);
   const rows = await counters(registry, [window], options);
 
@@ -663,10 +663,10 @@ export async function statsRanking(registry: Registry, options: RankingOptions):
   const posts = new Map(
     postIds.length === 0
       ? []
-      : (await registry.selectRows<{ id: number; kind: string; url: string | null }>(sql`SELECT id, kind, url FROM posts WHERE ${inList(sql`id`, postIds)}`)).map((p) => [Number(p.id), p]),
+      : (await registry.queries.selectRows<{ id: number; kind: string; url: string | null }>(sql`SELECT id, kind, url FROM posts WHERE ${inList(sql`id`, postIds)}`)).map((p) => [Number(p.id), p]),
   );
   const launches = await launchNames(registry, [...new Set(page.flatMap((d) => (d.launchId === null ? [] : [d.launchId])))]);
-  const accounts = options.by === 'account' ? new Map((await registry.accounts()).map((a) => [a.id, a])) : new Map();
+  const accounts = options.by === 'account' ? new Map((await registry.accounts.accounts()).map((a) => [a.id, a])) : new Map();
 
   const entries = page.map(({ key, engagement, ...d }, i): RankingEntry => {
     const post = d.postId === null ? undefined : posts.get(d.postId);
@@ -716,10 +716,10 @@ const diff = (a: number | null, b: number | null) => (a === null || b === null ?
  * included), with the change since the snapshot before each one, so the first day of the period
  * still has its change.
  */
-export async function accountGrowth(registry: Registry, accountId: number, range: { from: string; to: string }): Promise<AccountGrowth> {
+export async function accountGrowth(registry: Pick<Repositories, 'queries'>, accountId: number, range: { from: string; to: string }): Promise<AccountGrowth> {
   if (!DATE.test(range.from) || !DATE.test(range.to)) throw new InvalidPeriod('from and to are days, YYYY-MM-DD');
   if (range.to < range.from) throw new InvalidPeriod('to comes after from');
-  const rows = await registry.selectRows<Record<string, unknown>>(sql`
+  const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`
     SELECT * FROM (
       SELECT day, taken_at, followers, following, posts,
         lag(day) OVER w AS prev_day, lag(followers) OVER w AS prev_followers, lag(following) OVER w AS prev_following, lag(posts) OVER w AS prev_posts

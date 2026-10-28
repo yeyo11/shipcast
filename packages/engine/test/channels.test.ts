@@ -28,7 +28,7 @@ import { memoryRegistry } from '../src/testing.ts';
  */
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
-const launch = (await (await memoryRegistry()).claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
+const launch = (await (await memoryRegistry()).launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
 const article = { title: 'claudio', description: 'Claude Code as a service.', markdown: 'Body.' };
 const pack = ContentPack.parse({
   schemaVersion: 1,

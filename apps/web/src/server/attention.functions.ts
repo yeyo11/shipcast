@@ -10,12 +10,12 @@ const MAX_KEYS = 100;
 async function readInput(): Promise<AttentionInput> {
   const { registry } = await appContext();
   const [launches, failures, accounts, facets, newest, scheduled] = await Promise.all([
-    registry.recent(60),
-    registry.cursorsWithPrefix(failurePrefix()),
-    registry.accounts(),
-    registry.commentFacets(false),
-    registry.newestWaitingCommentId(false),
-    registry.scheduledPosts(),
+    registry.launches.recent(60),
+    registry.cursors.cursorsWithPrefix(failurePrefix()),
+    registry.accounts.accounts(),
+    registry.comments.commentFacets(false),
+    registry.comments.newestWaitingCommentId(false),
+    registry.posts.scheduledPosts(),
   ]);
   return {
     launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt })),
@@ -39,8 +39,8 @@ export const getAttention = createServerFn({ method: 'GET' }).handler(async () =
   const { registry } = await appContext();
   const input = await readInput();
   const keys = attentionItems(input).map((i) => i.key);
-  await registry.clearAttentionDismissals(keys);
-  return buildAttention({ ...input, dismissed: await registry.dismissedAttention(keys) });
+  await registry.attention.clearAttentionDismissals(keys);
+  return buildAttention({ ...input, dismissed: await registry.attention.dismissedAttention(keys) });
 });
 
 function keysInput(input: unknown): { keys: string[] } {
@@ -55,7 +55,7 @@ export const dismissAttention = createServerFn({ method: 'POST' })
   .validator(keysInput)
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    await registry.dismissAttention(data.keys);
+    await registry.attention.dismissAttention(data.keys);
     return { dismissed: data.keys.length };
   });
 
@@ -67,6 +67,6 @@ export const clearAttention = createServerFn({ method: 'POST' })
   .validator(keysInput)
   .handler(async ({ data }) => {
     const { registry } = await appContext();
-    await registry.dismissAttention(data.keys);
+    await registry.attention.dismissAttention(data.keys);
     return { dismissed: data.keys.length };
   });

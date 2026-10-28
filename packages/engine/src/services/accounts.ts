@@ -1,5 +1,5 @@
 import type { AccountStore } from '../ports.ts';
-import type { Account } from '../registry.ts';
+import type { Account } from '../repositories/index.ts';
 
 /**
  * The connected accounts as the owner manages them on the channels page: renaming one, and

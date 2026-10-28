@@ -1,4 +1,4 @@
-import type { Registry } from '@shipcast/engine';
+import type { Repositories } from '@shipcast/engine';
 
 /**
  * How the work nobody starts by hand gets done: `poll` runs full rounds on a timer, `webhook` lets
@@ -20,18 +20,18 @@ const INTERVAL_KEY = 'automation:interval';
 export const LAST_ROUND_KEY = 'automation:last-round';
 export const LAST_DELIVERY_KEY = 'automation:last-delivery';
 
-export async function readAutomation(registry: Registry): Promise<Automation> {
-  const mode = await registry.setting<AutomationMode>(MODE_KEY);
-  const interval = Number(await registry.setting<number>(INTERVAL_KEY));
+export async function readAutomation(registry: Pick<Repositories, 'settings'>): Promise<Automation> {
+  const mode = await registry.settings.setting<AutomationMode>(MODE_KEY);
+  const interval = Number(await registry.settings.setting<number>(INTERVAL_KEY));
   return {
     mode: mode === 'webhook' || mode === 'off' ? mode : 'poll',
     intervalSeconds: Number.isFinite(interval) && interval >= MIN_INTERVAL_SECONDS ? interval : 300,
   };
 }
 
-export async function writeAutomation(registry: Registry, automation: Automation): Promise<Automation> {
-  await registry.setSetting<AutomationMode>(MODE_KEY, automation.mode);
-  await registry.setSetting<number>(INTERVAL_KEY, Math.max(MIN_INTERVAL_SECONDS, Math.round(automation.intervalSeconds)));
+export async function writeAutomation(registry: Pick<Repositories, 'settings'>, automation: Automation): Promise<Automation> {
+  await registry.settings.setSetting<AutomationMode>(MODE_KEY, automation.mode);
+  await registry.settings.setSetting<number>(INTERVAL_KEY, Math.max(MIN_INTERVAL_SECONDS, Math.round(automation.intervalSeconds)));
   return readAutomation(registry);
 }
 
@@ -42,12 +42,12 @@ export interface Happened {
   lines: string[];
 }
 
-export async function record(registry: Registry, key: string, happened: Happened): Promise<void> {
-  await registry.setCursor(key, JSON.stringify({ ...happened, lines: happened.lines.slice(-20) }));
+export async function record(registry: Pick<Repositories, 'cursors'>, key: string, happened: Happened): Promise<void> {
+  await registry.cursors.setCursor(key, JSON.stringify({ ...happened, lines: happened.lines.slice(-20) }));
 }
 
-export async function lastHappened(registry: Registry, key: string): Promise<Happened | null> {
-  const raw = await registry.cursor(key);
+export async function lastHappened(registry: Pick<Repositories, 'cursors'>, key: string): Promise<Happened | null> {
+  const raw = await registry.cursors.cursor(key);
   try {
     return JSON.parse(raw ?? 'null') as Happened | null;
   } catch {
