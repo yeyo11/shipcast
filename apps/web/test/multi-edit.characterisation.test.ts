@@ -5,13 +5,14 @@ import { aPublishedLaunch, FakeConnectors, FakeGitHub, memoryRegistry, withSched
 import { editMany, type PostActionDeps } from '../src/server/post-actions.ts';
 
 /*
- * Characterisation: the launch page's multi-edit (post-actions.ts `editMany`) re-implements the
- * engine's `editPosts` instead of calling it (docs/plans/performance-refactor.md, "Code structure").
- * Both are pinned here on the same launch, so PostService can make them one knowing where they
- * differ today:
- * - editPosts takes channels and skips deleted and scheduled pieces without a word; editMany takes
- *   post ids, in the order given, and reports those pieces as refused;
- * - editPosts sends a title or tags where a network has them; editMany refuses the whole request;
+ * Characterisation of the multi-edit, first pinned while the launch page's `editMany`
+ * (post-actions.ts) re-implemented the engine's `editPosts` (docs/plans/performance-refactor.md,
+ * "Code structure"). Both now run the one `editPosts`, through PostService; what still differs is
+ * on purpose, and pinned here:
+ * - the API selects by channels and skips deleted and scheduled pieces without a word; the page
+ *   selects by post ids, in the order given, and reports those pieces as refused (PostSelection);
+ * - a title or tags go to the networks that have one through the API, while the page's request
+ *   offers the shared fields only and refuses the request whole (editManyRequest);
  * - both edit non-strictly, one piece at a time, and hash only the fields each network took.
  */
 
@@ -33,7 +34,7 @@ async function world() {
 
 const statusOf = async (registry: Registry, id: number) => (await registry.post(id))?.status;
 
-test('the engine’s editPosts skips deleted and scheduled pieces silently; the page’s editMany reports them, in the order asked', async () => {
+test('by channels editPosts skips deleted and scheduled pieces silently; by the page’s ids it reports them, in the order asked', async () => {
   const w = await world();
   const changes = { text: 'New text', link: 'https://josegarrido.dev/en/claudio/' };
 

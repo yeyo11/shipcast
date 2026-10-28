@@ -1,11 +1,12 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { ContentPack, graphemeCount, Refused, threadsLength, type Brand, type Channel } from '@shipcast/schema';
+import { ContentPack, graphemeCount, InvalidRequest, Refused, threadsLength, type Brand, type Channel } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { ANALYSIS_TOOLS, buildReplyPrompt, type ReplyPromptInput } from './prompt.ts';
 import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Registry } from './registry.ts';
+import type { CommentStore, SettingStore } from './ports.ts';
 import type { Checkout } from './workspace.ts';
 
 /*
@@ -76,14 +77,14 @@ export const DEFAULT_COMMENT_SETTINGS: CommentSettings = {
   replies: { mastodon: 'approval', bluesky: 'approval', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' },
 };
 
-export class InvalidCommentSettings extends Error {}
+export class InvalidCommentSettings extends InvalidRequest {}
 
 /** dev.to cannot send, so auto there means approval: the draft waits to be copied */
 function modeFor(channel: CommentChannel, mode: ReplyMode): ReplyMode {
   return mode === 'auto' && !REPLY_CAPABILITIES[channel]?.reply ? 'approval' : mode;
 }
 
-export async function readCommentSettings(registry: Registry): Promise<CommentSettings> {
+export async function readCommentSettings(registry: Pick<SettingStore, 'setting'>): Promise<CommentSettings> {
   const stored = await registry.setting<{ replies?: Record<string, unknown> }>(COMMENTS_SETTINGS_KEY);
   const replies = { ...DEFAULT_COMMENT_SETTINGS.replies };
   for (const channel of COMMENT_CHANNELS) {
@@ -94,7 +95,7 @@ export async function readCommentSettings(registry: Registry): Promise<CommentSe
 }
 
 /** Saves the modes given; a channel left out keeps its mode */
-export async function writeCommentSettings(registry: Registry, input: unknown): Promise<CommentSettings> {
+export async function writeCommentSettings(registry: SettingStore, input: unknown): Promise<CommentSettings> {
   const replies = (input && typeof input === 'object' ? (input as { replies?: unknown }).replies : undefined) as Record<string, unknown> | undefined;
   if (!replies || typeof replies !== 'object') throw new InvalidCommentSettings('send { replies: { <channel>: off | approval | auto } }');
   const current = await readCommentSettings(registry);
@@ -273,7 +274,7 @@ function tooLong(channel: CommentChannel, text: string): string | undefined {
 }
 
 /** The comments above one in its thread, oldest first, at most a few levels up */
-async function threadOf(registry: Registry, comment: CommentRecord): Promise<CommentRecord[]> {
+async function threadOf(registry: CommentStore, comment: CommentRecord): Promise<CommentRecord[]> {
   const chain: CommentRecord[] = [];
   let parentId = comment.inReplyTo;
   while (parentId && chain.length < 6) {
@@ -285,7 +286,7 @@ async function threadOf(registry: Registry, comment: CommentRecord): Promise<Com
   return chain;
 }
 
-async function existing(registry: Registry, id: number): Promise<CommentRecord & { channel: CommentChannel }> {
+async function existing(registry: CommentStore, id: number): Promise<CommentRecord & { channel: CommentChannel }> {
   const comment = await registry.comment(id);
   if (!comment) throw new CommentRefused('not_found', 'no such comment');
   if (!isCommentChannel(comment.channel)) throw new CommentRefused('unsupported', `${comment.channel} has no comment assistant`);
@@ -351,7 +352,7 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
 }
 
 /** The owner's own words for a reply, replacing the draft */
-export async function editReplyDraft(id: number, text: string, registry: Registry): Promise<CommentRecord> {
+export async function editReplyDraft(id: number, text: string, registry: CommentStore): Promise<CommentRecord> {
   const comment = await existing(registry, id);
   if (comment.own) throw new CommentRefused('unsupported', 'this is your own comment');
   const draft = text.trim();
@@ -363,7 +364,7 @@ export async function editReplyDraft(id: number, text: string, registry: Registr
   return updated;
 }
 
-export async function dismissComment(id: number, registry: Registry): Promise<CommentRecord> {
+export async function dismissComment(id: number, registry: CommentStore): Promise<CommentRecord> {
   await existing(registry, id);
   const updated = await registry.updateComment(id, { status: 'dismissed' }, ['new', 'draft-ready', 'failed']);
   if (!updated) throw new CommentRefused('state', `the comment is ${(await registry.comment(id))?.status ?? 'gone'}: it cannot be dismissed`);

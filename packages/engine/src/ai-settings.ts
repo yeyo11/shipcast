@@ -1,4 +1,4 @@
-import { contentPackJsonSchema, formatIssues, parseLaunchConfig, type Brand, type LaunchConfig } from '@shipcast/schema';
+import { contentPackJsonSchema, formatIssues, InvalidRequest, parseLaunchConfig, ShipcastError, type Brand, type LaunchConfig } from '@shipcast/schema';
 import { z } from 'zod';
 import { AI_PROVIDERS, AI_TASKS, type AiTask } from './ai.ts';
 import { articleConfig } from './article.ts';
@@ -58,7 +58,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   tasks: { pack: { provider: 'claudio' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' }, replies: { provider: 'claudio' }, profile: { provider: 'claudio' } },
 };
 
-export class InvalidAiSettings extends Error {}
+export class InvalidAiSettings extends InvalidRequest {}
 
 function clean(settings: AiSettings): AiSettings {
   const tasks = Object.fromEntries(
@@ -126,8 +126,13 @@ export function lockedPrompts(): {
   };
 }
 
-export class LockedPrompt extends Error {}
-export class InvalidPrompt extends Error {}
+/** A prompt the owner may not change here: a state, not a bad request (409) */
+export class LockedPrompt extends ShipcastError {
+  constructor(message: string) {
+    super(message, { code: 'refused', httpStatus: 409 });
+  }
+}
+export class InvalidPrompt extends InvalidRequest {}
 
 export async function promptHistory(registry: Registry): Promise<PromptHistory> {
   const stored = (await registry.setting<Record<string, PromptVersion[]>>(PROMPTS_KEY)) ?? {};

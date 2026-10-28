@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { accountGrowth, statsOverview, statsRanking, statsSeries, statsWindow, type Registry } from '../src/index.ts';
+import { accountGrowth, InvalidPeriod, statsOverview, statsRanking, statsSeries, statsWindow, type Registry } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
@@ -18,8 +18,8 @@ async function piece(registry: Registry, launchId: number, channel: 'devto' | 'b
 test('a period is whole UTC days or timestamps, and nonsense is refused', () => {
   assert.deepEqual(statsWindow('2026-10-01', '2026-10-31'), { from: '2026-10-01T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' });
   assert.deepEqual(statsWindow('2026-10-01T12:00:00Z', '2026-10-02T00:00:00Z'), { from: '2026-10-01T12:00:00.000Z', to: '2026-10-02T00:00:00.000Z' });
-  assert.throws(() => statsWindow('yesterday', '2026-10-02'), RangeError);
-  assert.throws(() => statsWindow('2026-10-05', '2026-10-01'), RangeError);
+  assert.throws(() => statsWindow('yesterday', '2026-10-02'), InvalidPeriod);
+  assert.throws(() => statsWindow('2026-10-05', '2026-10-01'), InvalidPeriod);
 });
 
 test('cumulative readings become increases per bucket, carried over a missing day and never negative', async () => {
@@ -202,7 +202,7 @@ test('a series groups by account and launch with labels, and folds what passes t
   assert.match(byLaunchChannel.groups[0]?.key ?? '', /^\d+:mastodon$/, 'each launch and channel apart, keyed launch:channel');
   assert.equal(byLaunchChannel.groups[0]?.total, 30);
 
-  await assert.rejects(statsSeries(registry, { metric: 'reactions', groupBy: 'launch', from: '2020-01-01', to: '2026-10-20', bucket: 'day' }), RangeError);
+  await assert.rejects(statsSeries(registry, { metric: 'reactions', groupBy: 'launch', from: '2020-01-01', to: '2026-10-20', bucket: 'day' }), InvalidPeriod);
 });
 
 test('an account’s growth comes from its snapshots, with the change since the one before, across a missed day', async () => {
@@ -220,5 +220,5 @@ test('an account’s growth comes from its snapshots, with the change since the 
   );
   assert.deepEqual(growth.change, { followers: 10, following: null, posts: 1 });
   assert.deepEqual((await accountGrowth(registry, a.id, { from: '2026-11-01', to: '2026-11-30' })).points, []);
-  await assert.rejects(accountGrowth(registry, a.id, { from: '2026-10-20', to: 'later' }), RangeError);
+  await assert.rejects(accountGrowth(registry, a.id, { from: '2026-10-20', to: 'later' }), InvalidPeriod);
 });

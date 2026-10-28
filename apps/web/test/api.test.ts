@@ -570,3 +570,60 @@ test('checking and drafting again are jobs; the reply modes are read and set', a
   assert.deepEqual(((await body(set)).replies as Record<string, string>), { mastodon: 'approval', bluesky: 'auto', instagram: 'approval', devto: 'approval', threads: 'approval', githubDiscussions: 'approval' });
   assert.equal((await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { mastodon: 'sometimes' } } })).status, 400);
 });
+
+/*
+ * Characterisation of the error answers, before the four wrappers (onPosts, onSchedule, onComments,
+ * onProfiles) and the API's own catch became one mapping: every refusal's status, code and message,
+ * whichever engine area threw it, and the 500 that keeps an unforeseen error's words in the log.
+ */
+test('each kind of refusal answers its status with the same body, whichever area refused', async () => {
+  const s = await setup();
+  const { launch, bluesky, mastodon } = await publishedLaunch(s.registry);
+  const { question, devto } = await commented(s.registry);
+  const errorOf = async (response: Response) => ({ status: response.status, ...((await body(response)).error as object) });
+
+  assert.deepEqual(await errorOf(await call(s.deps, 'DELETE', '/posts/9999', { token: s.write })), { status: 404, code: 'not_found', message: 'no such post' });
+  assert.deepEqual(await errorOf(await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: { text: 'x' } })), {
+    status: 409,
+    code: 'refused',
+    message: 'Bluesky cannot edit a published post: Bluesky has no edit: a post can only be deleted and posted again, which loses its likes and replies, so Shipcast never does that on its own',
+  });
+  assert.deepEqual(await errorOf(await call(s.deps, 'PATCH', `/posts/${mastodon.id}`, { token: s.write, body: { title: 'x' } })), {
+    status: 400,
+    code: 'invalid_input',
+    message: 'Mastodon cannot change title; it takes text, link, image',
+  });
+  assert.deepEqual(await errorOf(await call(s.deps, 'DELETE', `/launches/999/posts`, { token: s.write })), { status: 404, code: 'not_found', message: 'no such launch' });
+
+  assert.deepEqual(await errorOf(await call(s.deps, 'DELETE', '/posts/9999/schedule', { token: s.write })), { status: 404, code: 'not_found', message: 'no such post' });
+  assert.deepEqual(await errorOf(await call(s.deps, 'DELETE', `/posts/${mastodon.id}/schedule`, { token: s.write })), {
+    status: 409,
+    code: 'refused',
+    message: `post ${mastodon.id} is live, not scheduled`,
+  });
+  assert.deepEqual(await errorOf(await call(s.deps, 'PATCH', '/settings/timezone', { token: s.write, body: { timezone: 'Mars/Olympus' } })), {
+    status: 400,
+    code: 'invalid_input',
+    message: 'timezone is an IANA zone such as Europe/Madrid',
+  });
+
+  assert.deepEqual(await errorOf(await call(s.deps, 'POST', '/comments/999/dismiss', { token: s.write })), { status: 404, code: 'not_found', message: 'no such comment' });
+  const noDraft = await errorOf(await call(s.deps, 'POST', `/comments/${question.id}/approve`, { token: s.write }));
+  assert.deepEqual({ ...noDraft, message: '' }, { status: 400, code: 'invalid_input', message: '' });
+  await call(s.deps, 'PATCH', `/comments/${devto.id}`, { token: s.write, body: { draft: 'Thanks!' } });
+  const cannot = await errorOf(await call(s.deps, 'POST', `/comments/${devto.id}/approve`, { token: s.write }));
+  assert.deepEqual({ ...cannot, message: '' }, { status: 409, code: 'refused', message: '' });
+  assert.deepEqual(await errorOf(await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { telegram: 'auto' } } })), {
+    status: 400,
+    code: 'invalid_input',
+    message: 'telegram has no comments to read (mastodon, bluesky, instagram, devto, threads, githubDiscussions)',
+  });
+
+  const broken: ApiDeps = { ...s.deps, editing: async () => { throw new Error('the keychain is locked'); } };
+  assert.deepEqual(await errorOf(await call(broken, 'PATCH', `/posts/${mastodon.id}`, { token: s.write, body: { text: 'x' } })), {
+    status: 500,
+    code: 'internal',
+    message: 'something went wrong; the details are in the app’s log',
+  });
+  assert.ok(launch.id > 0);
+});

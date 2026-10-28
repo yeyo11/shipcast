@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { checkAccount, connectAccount, disconnectAccount, importFromEnv, MissingField, splitFields, syncNow } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
+import { accountService } from './app-services';
 import { appContext } from './context.server';
 import { id, object, text, texts } from './input';
 import { accountDeps, channelsView } from './channels.server';
@@ -38,7 +39,7 @@ export const syncAccountNow = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
     const { queue, registry } = await appContext();
-    const account = await registry.account(data);
+    const account = await accountService({ registry }).get(data);
     if (!account) return { state: 'failed' as const, lines: ['That account is no longer connected'] };
     const job = await syncNow(queue, account);
     if (!job) return { state: 'failed' as const, lines: ['The sync could not be queued'] };
@@ -52,16 +53,13 @@ export const renameAccount =createServerFn({ method: 'POST' })
     return { id: id(o.id), label: text(o.label, 'label', 200) };
   })
   .handler(async ({ data }) => {
-    const label = data.label.trim();
-    if (!label) return { ok: false };
-    await (await appContext()).registry.updateAccount(data.id, { label });
-    return { ok: true };
+    return { ok: await accountService(await appContext()).rename(data.id, data.label) };
   });
 
 export const makePrimary = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    await (await appContext()).registry.makePrimary(data);
+    await accountService(await appContext()).makePrimary(data);
     return { ok: true };
   });
 

@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
-import { imageUrl } from '@shipcast/connectors';
+import { imageUrl } from '@shipcast/schema';
 import { appContext } from './context.server';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
 

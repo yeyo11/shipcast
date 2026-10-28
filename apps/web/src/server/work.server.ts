@@ -1,6 +1,7 @@
-import { approveLaunch, claimArticle, claimManual, preflight, type ArticleInput, type Launch, type Post } from '@shipcast/engine';
+import { LaunchRefused, type ArticleInput, type Launch, type Post } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import { armScheduled, startDrafting, startPublishing as queuePublishing } from '@shipcast/runtime';
+import { launchService } from './app-services';
 import { appContext } from './context.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 
@@ -10,6 +11,19 @@ import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
  */
 
 type Started = { ok: true; job: string } | { ok: false; problem: string };
+
+/** The engine's LaunchService over the app's registry, GitHub and pipeline */
+const launches = async () => launchService(await appContext());
+
+/** A refusal of the LaunchService as the answer's problem; anything else is a bug and is thrown */
+async function started(run: () => Promise<Started>): Promise<Started> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof LaunchRefused) return { ok: false, problem: error.message };
+    throw error;
+  }
+}
 
 /**
  * Queues the publishing of a launch once its drafts are on main; retries wait for the site to
@@ -24,36 +38,34 @@ export async function startPublishing(launch: Launch, retryChannel?: Channel): P
 /** Drafts a repo's launch after its pre-flight passes; publishing directly goes on to publish */
 export async function startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<Started> {
   if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
-  const { queue, deps, github, brand } = await appContext();
-  const check = await preflight(repo, ref, { github });
-  if (!check.ok) return { ok: false, problem: check.checks.filter((c) => !c.ok && c.required).map((c) => c.detail).join(' ') };
-  const claim = await claimManual(repo, ref, await brand(), deps);
-  if ('error' in claim) return { ok: false, problem: claim.error };
-  if (!claim.claimed) return { ok: false, problem: `${repo} ${claim.launch.ref} was launched already (${claim.launch.status}).` };
-  const job = await startDrafting(queue, claim.launch, direct);
-  return job ? { ok: true, job } : { ok: false, problem: 'the drafting could not be queued' };
+  const { queue, brand } = await appContext();
+  return started(async () => {
+    const { launch } = await (await launches()).claimManual(repo, ref, brand);
+    const job = await startDrafting(queue, launch, direct);
+    return job ? { ok: true, job } : { ok: false, problem: 'the drafting could not be queued' };
+  });
 }
 
 /** Drafts an article written in the app; publishing directly goes on to publish */
 export async function startArticle(input: ArticleInput, direct: boolean): Promise<Started> {
   if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
-  const { queue, deps, brand } = await appContext();
-  const claim = await claimArticle(input, await brand(), deps);
-  if (!claim.claimed && claim.launch.status !== 'failed') return { ok: false, problem: `An article titled like this exists already (${claim.launch.status}). Change the title.` };
-  const job = await queue.send('article', { launchId: claim.launch.id, input, direct }, { title: `Writing the pieces for “${input.title}”`, launchId: claim.launch.id });
-  return job ? { ok: true, job } : { ok: false, problem: 'the article could not be queued' };
+  const { queue, brand } = await appContext();
+  return started(async () => {
+    const launch = await (await launches()).claimArticle(input, await brand());
+    const job = await queue.send('article', { launchId: launch.id, input, direct }, { title: `Writing the pieces for “${input.title}”`, launchId: launch.id });
+    return job ? { ok: true, job } : { ok: false, problem: 'the article could not be queued' };
+  });
 }
 
 /** Approving merges the pull request; publishing follows as a job */
 export async function approve(launchId: number): Promise<Started> {
   // Approving merges a real pull request on the launches repo
   if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
-  const { registry, deps, github } = await appContext();
-  const launch = await registry.get(launchId);
-  if (!launch) return { ok: false, problem: 'no such launch' };
+  let launch: Launch;
   try {
-    await approveLaunch(launch, { github, launchesRepo: deps.launchesRepo });
+    launch = await (await launches()).approve(launchId);
   } catch (error) {
+    // GitHub refusing the merge is the owner's to read, as a refusal is
     return { ok: false, problem: error instanceof Error ? error.message : String(error) };
   }
   return { ok: true, job: await startPublishing(launch) };

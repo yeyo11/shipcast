@@ -1,7 +1,7 @@
-import { ConnectorError } from '@shipcast/connectors';
-import { ProfileRefused, proposalEdit } from '@shipcast/engine';
+import { proposalEdit } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
+import { apiErrorOf } from './errors';
 import { id, InvalidInput, object, text } from './input';
 import { profileView, reviewInput } from './profile-api';
 import { applyEdit, startReview } from './profiles.server';
@@ -46,7 +46,9 @@ export const applyProfileProposal = createServerFn({ method: 'POST' })
       const profile = await applyEdit(data.id, proposalEdit({ field: data.field, proposed: data.value }));
       return { ok: true as const, profile: profile ?? null };
     } catch (error) {
-      if (error instanceof ProfileRefused || error instanceof ConnectorError) return { ok: false as const, problem: error.message };
+      // A refusal or the network's answer is the page's to show; a bug is the log's
+      const answer = apiErrorOf(error);
+      if (!answer.internal) return { ok: false as const, problem: answer.message };
       throw error;
     }
   });

@@ -1,5 +1,5 @@
 import type { Registry } from '@shipcast/engine';
-import { ShipcastError } from '@shipcast/schema';
+import { InvalidRequest, ShipcastError } from '@shipcast/schema';
 import type { SecretStore } from './secrets.ts';
 
 /**
@@ -99,7 +99,7 @@ export class SettingMissing extends ShipcastError {
   }
 }
 
-export class InvalidSetting extends Error {}
+export class InvalidSetting extends InvalidRequest {}
 
 export interface SettingsDeps {
   registry: Registry;

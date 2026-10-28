@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { API_SCOPES, type ApiScope, type ApiToken, type Registry } from '@shipcast/engine';
+import { InvalidRequest } from '@shipcast/schema';
 import type { SecretStore } from './secrets.ts';
 
 /*
@@ -30,7 +31,7 @@ async function pepper(secrets: SecretStore): Promise<Buffer> {
 
 const digest = (key: Buffer, secret: string) => createHmac('sha256', key).update(secret).digest('hex');
 
-export class InvalidScopes extends Error {}
+export class InvalidScopes extends InvalidRequest {}
 
 /** The scopes a person or a client asked for, checked: at least one, each known, no repeats */
 export function parseScopes(value: unknown): ApiScope[] {

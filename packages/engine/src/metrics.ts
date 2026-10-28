@@ -1,3 +1,4 @@
+import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
 import type { Brand, Channel, Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
@@ -43,7 +44,7 @@ const SITEMAP_EVERY_MS = 24 * 3600 * 1000;
 export const sitemapUrl = (site: string) => `${site}/sitemap-index.xml`;
 
 /** A search engine's view of an article URL, as of the last reading; undefined until it is first read */
-export async function indexStatus(registry: Registry, url: string, engine: SearchEngine = 'google'): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
+export async function indexStatus(registry: Pick<Registry, 'cursor'>, url: string, engine: SearchEngine = 'google'): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
   const raw = await registry.cursor(indexStatusKey(url, engine));
   return raw ? (JSON.parse(raw) as IndexStatus & { checkedAt: string }) : undefined;
 }
@@ -52,7 +53,7 @@ export async function indexStatus(registry: Registry, url: string, engine: Searc
  * Resubmits the sitemap, unless that was done in the last day. Google ignores frequent resubmits of
  * an unchanged sitemap, and a new article is what changes it.
  */
-export async function resubmitSitemap(registry: Registry, site: string, search: NonNullable<MetricSources['search']>, now = new Date(), force = false): Promise<boolean> {
+export async function resubmitSitemap(registry: Pick<Registry, 'cursor' | 'setCursor'>, site: string, search: NonNullable<MetricSources['search']>, now = new Date(), force = false): Promise<boolean> {
   if (!search.submitSitemap) return false;
   const last = Date.parse((await registry.cursor(SITEMAP_SUBMITTED_KEY)) ?? '') || 0;
   if (!force && now.getTime() - last < SITEMAP_EVERY_MS) return false;
@@ -74,7 +75,7 @@ export function articleUrls(pieces: Post[]): Array<{ lang: Language; url: string
  * Reads every source for every published launch and records the numbers, as of `now`. One source
  * failing never stops the others: its problem is reported and the rest are still recorded.
  */
-export async function collectMetrics(registry: Registry, brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
+export async function collectMetrics(registry: MetricStore, brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
   let readings = 0;
   const problems: string[] = [];
   const record = async (launchId: number, source: string, values: Record<string, number | undefined>, postId: number | null = null) => {

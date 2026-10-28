@@ -1,4 +1,4 @@
-import { articleUrls, failurePrefix, indexStatus, PublishAttempts, readReview, retryChannel, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishAttempts, PublishRefused, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -86,20 +86,22 @@ export async function launchDetail(registry: Registry, launch: Launch, deps: { g
 }
 
 /**
- * Publishing again: a channel that failed for good gets another chance, or a merged launch is
- * followed. Only this launch's failure is forgotten; the channel stays failed for any other launch.
+ * Publishing again (the engine's publishAgain): a channel that failed for good gets another chance,
+ * or a merged launch is followed; then its publishing is queued. A refusal is the answer's problem.
  */
 export async function publishAgain(
   registry: Registry,
-  launch: Launch,
+  launchId: number,
   channel: Channel | undefined,
   startPublishing: (launch: Launch, retryChannel?: Channel) => Promise<string>,
 ): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
-  if (channel) {
-    await retryChannel(registry, launch.id, channel, new PublishAttempts(registry.database));
-  } else if (launch.status !== 'drafted') {
-    return { ok: false, problem: `the launch is ${launch.status}` };
+  let launch: Launch;
+  try {
+    launch = await publishAgainIn(registry, launchId, channel, new PublishAttempts(registry.database));
+  } catch (error) {
+    if (error instanceof PublishRefused) return { ok: false, problem: error.message };
+    throw error;
   }
   // The channel names the job ("Retrying devto for …"); the job forgets the failure again, harmlessly
-  return { ok: true, job: await startPublishing((await registry.get(launch.id))!, channel) };
+  return { ok: true, job: await startPublishing(launch, channel) };
 }

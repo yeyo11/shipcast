@@ -1,13 +1,14 @@
 import type { Capability, EditField, PostChanges } from '@shipcast/engine';
+import { ARTICLE_CHANNELS, composedText, isMainPiece, TEXT_ONLY_POSTS, TEXT_REPLACED_WHOLE } from '@shipcast/engine/edit-rules';
 import { draftBody, splitFrontMatter } from '@shipcast/schema/markdown';
 import { markOf, type Mark } from './launch-summary.ts';
 
 /*
  * The launch page's published pieces, as plain data the page and the tests share: a row per piece
  * with what it can do and, when it cannot, why; what an edit of several pieces at once changes on
- * each; the recommended times as chips. Only types come from the engine, so this module is safe in
- * the browser bundle. The rules mirror the engine's (packages/engine/src/edit.ts), which refuses
- * again on the server: the page only says it first. See docs/web-app.md
+ * each; the recommended times as chips. Of the engine only types come, and its edit rules from
+ * `@shipcast/engine/edit-rules`, free of Node, so this module is safe in the browser bundle: the
+ * page says first what edit.ts refuses again on the server, by the same rules. See docs/web-app.md
  */
 
 export type PieceStatus = 'live' | 'edited' | 'deleted' | 'scheduled' | 'failed';
@@ -104,11 +105,8 @@ export const PRIMARY_METRIC: Readonly<Record<string, readonly string[]>> = {
 const NAMES: Record<string, string> = { devto: 'dev.to', hashnode: 'Hashnode', mastodon: 'Mastodon', telegram: 'Telegram', discord: 'Discord', bluesky: 'Bluesky', instagram: 'Instagram', newsletter: 'The newsletter', brevo: 'The newsletter', blog: 'The blog', reddit: 'Reddit', threads: 'Threads', linkedin: 'LinkedIn', githubDiscussions: 'GitHub Discussions' };
 export const networkName = (channel: string) => NAMES[channel] ?? channel;
 
-/** A post's own piece, a blog article or a subreddit's post: what the engine edits and deletes (a story, a comment or an issue is not) */
-export const isMainPiece = (channel: string, kind: string) => {
-  if (channel === 'blog') return kind.startsWith('article:');
-  return channel === 'reddit' ? kind.startsWith('post:') : kind === 'post';
-};
+// The page's components read them from here, beside the rows they apply to
+export { composedText, isMainPiece };
 
 function pieceLabel(kind: string): string {
   if (kind === 'post') return '';
@@ -343,7 +341,7 @@ export interface SharedChanges {
 
 /** What a field becomes on a network, in the owner's words */
 function fieldOn(channel: string, field: EditField): string {
-  const article = channel === 'devto' || channel === 'hashnode' || channel === 'blog';
+  const article = ARTICLE_CHANNELS.includes(channel);
   switch (field) {
     case 'text':
       return article ? 'the whole article body' : channel === 'discord' ? 'the message' : 'the text';
@@ -355,11 +353,6 @@ function fieldOn(channel: string, field: EditField): string {
       return field;
   }
 }
-
-/** Networks whose post is text alone: a link goes after the text, so the text must come with it */
-const TEXT_POSTS = ['mastodon', 'telegram', 'discord'];
-/** Networks that replace the text whole and cannot keep it: a change there needs the text */
-const TEXT_REQUIRED = ['telegram', 'discord'];
 
 const sharedFields = (changes: SharedChanges): EditField[] => [
   ...(changes.text !== undefined ? (['text'] as const) : []),
@@ -385,13 +378,13 @@ export function multiEditPlan(rows: readonly PieceRow[], changes: SharedChanges)
     const dropped = asked.filter((f) => !row.edit.fields.includes(f));
     if (asked.length === 0) return { ...base, ok: false, reason: 'Nothing to change yet' };
     if (kept.length === 0) return { ...base, ok: false, reason: `${networkName(row.channel)} takes none of these: it changes ${row.edit.fields.join(', ')}` };
-    if (TEXT_POSTS.includes(row.channel) && kept.includes('link') && !kept.includes('text')) {
+    if (TEXT_ONLY_POSTS.includes(row.channel) && kept.includes('link') && !kept.includes('text')) {
       return { ...base, ok: false, reason: `${networkName(row.channel)} replaces the whole text: write the text to go with the link` };
     }
-    if (TEXT_REQUIRED.includes(row.channel) && !kept.includes('text')) {
+    if (TEXT_REPLACED_WHOLE.includes(row.channel) && !kept.includes('text')) {
       return { ...base, ok: false, reason: `${networkName(row.channel)} replaces the text whole: write the text` };
     }
-    const article = row.channel === 'devto' || row.channel === 'hashnode' || row.channel === 'blog';
+    const article = ARTICLE_CHANNELS.includes(row.channel);
     return {
       ...base,
       ok: true,
@@ -400,12 +393,6 @@ export function multiEditPlan(rows: readonly PieceRow[], changes: SharedChanges)
       ...(article && kept.includes('text') && { warning: 'The text replaces the article’s whole body' }),
     };
   });
-}
-
-/** The text a text-only network shows after an edit: the text, then the link, as the engine composes it */
-export function composedText(channel: string, changes: Pick<PostChanges, 'text' | 'link'>): string | undefined {
-  if (changes.text === undefined) return undefined;
-  return TEXT_POSTS.includes(channel) && changes.link ? `${changes.text.trimEnd()}\n\n${changes.link}` : changes.text;
 }
 
 /** The form of one piece's edit, as typed */
@@ -428,7 +415,7 @@ export function singleEditChanges(channel: string, fields: readonly EditField[],
   const has = (f: EditField) => fields.includes(f);
   const link = has('link') && changed('link') && form.link.trim() !== '' ? form.link.trim() : undefined;
   const imageUrl = has('image') && changed('imageUrl') && form.imageUrl.trim() !== '' ? form.imageUrl.trim() : undefined;
-  const needsText = (TEXT_POSTS.includes(channel) && link !== undefined) || (channel === 'telegram' && imageUrl !== undefined);
+  const needsText = (TEXT_ONLY_POSTS.includes(channel) && link !== undefined) || (channel === 'telegram' && imageUrl !== undefined);
   const text = has('text') && (changed('text') || needsText) && form.text.trim() !== '' ? form.text : undefined;
   const tags = form.tags
     .split(',')

@@ -1,4 +1,4 @@
-import type { Channel } from '@shipcast/schema';
+import { Refused, type Channel } from '@shipcast/schema';
 import { failureKey, failurePrefix, parseFailureKey } from '@shipcast/schema/failures';
 import type { Launch, Registry } from '../registry.ts';
 import type { PublishAttempts } from './attempts.ts';
@@ -33,4 +33,21 @@ export async function retryChannelEverywhere(registry: Registry, channel: Channe
     if (before?.status !== 'drafted' && after?.status === 'drafted') reopened.push(after);
   }
   return reopened;
+}
+
+/** Why a launch cannot be published again */
+export class PublishRefused extends Refused<'not_found' | 'state'> {}
+
+/**
+ * Publishing again, the owner's button on a launch and the API's retry: a channel that failed for
+ * good gets another chance (retryChannel: only this launch's failure is forgotten), or, with no
+ * channel, a drafted launch whose merge was missed is followed. Answers the launch as it is now, for
+ * the caller to queue its publishing; refused when there is no such launch, or nothing to follow.
+ */
+export async function publishAgain(registry: Registry, launchId: number, channel: Channel | undefined, attempts?: PublishAttempts): Promise<Launch> {
+  const launch = await registry.get(launchId);
+  if (!launch) throw new PublishRefused('not_found', 'no such launch');
+  if (channel) return (await retryChannel(registry, launchId, channel, attempts)) ?? launch;
+  if (launch.status !== 'drafted') throw new PublishRefused('state', `the launch is ${launch.status}`);
+  return launch;
 }

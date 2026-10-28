@@ -1,10 +1,11 @@
 import { Instagram, Threads } from '@shipcast/connectors';
-import { collectMetrics, detect, draftLaunch, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
+import { detect, draftLaunch, MetricsService, NotificationService, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey, buildServices, refreshInstagramToken, type Services } from './services.ts';
 
-export const METRICS_AT_KEY = 'metrics-collected-at';
+// Where the engine's MetricsService writes; re-exported for the pages that show it
+export { METRICS_AT_KEY } from '@shipcast/engine';
 const TOKEN_REFRESH_EVERY_MS = 30 * 24 * 3600 * 1000;
 
 /** What a round needs: the engine's pieces and the brand it speaks for */
@@ -21,9 +22,12 @@ export interface RoundDeps {
   publishing?: { service: PublishingService; holder: string };
 }
 
+/** The owner's notices through the brand's Telegram, when it is connected (the engine's NotificationService) */
+export const notifications = (services: Pick<Services, 'notifier'>) => new NotificationService(services.notifier);
+
 /** A line to the owner's Telegram, when it is connected; a failed notice never stops the round */
 export async function notify(services: Services, text: string): Promise<void> {
-  await services.notifier?.notify(text).catch(() => undefined);
+  await notifications(services).say(text);
 }
 
 const name = (launch: Launch) => `${launch.repo} ${launch.ref.replace(/^article:/, '')}`;
@@ -32,13 +36,9 @@ const name = (launch: Launch) => `${launch.repo} ${launch.ref.replace(/^article:
 export async function draftClaimed(launch: Launch, d: RoundDeps, services: Services): Promise<void> {
   const log = d.log ?? (() => {});
   const result = await draftLaunch(launch, d.brand, d.pipeline);
-  if (result.ok) {
-    log(`Drafted ${name(launch)}: ${result.pullRequest}`);
-    await notify(services, `Shipcast drafted ${name(launch)}: ${result.pullRequest}`);
-  } else {
-    log(`Could not draft ${name(launch)}: ${result.problems.join('; ')}`);
-    await notify(services, `Shipcast could not draft ${name(launch)}: ${result.problems[0] ?? ''}`);
-  }
+  if (result.ok) log(`Drafted ${name(launch)}: ${result.pullRequest}`);
+  else log(`Could not draft ${name(launch)}: ${result.problems.join('; ')}`);
+  await notifications(services).drafted(launch, result);
 }
 
 /** Publishes one drafted launch if it is ready, and tells the owner what went out */
@@ -48,16 +48,12 @@ export async function publishOne(launch: Launch, d: RoundDeps, services: Service
   const result = d.publishing
     ? await d.publishing.service.publish(launch, d.brand, connectors, d.publishing.holder)
     : await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });
-  if ((result.state === 'published' || result.state === 'partial') && (result.posted.length > 0 || result.problems.length > 0)) {
+  if (result.state === 'published' || result.state === 'partial') {
     for (const p of result.posted) log(`${name(launch)} on ${p.channel}: ${p.url}`);
     for (const p of result.problems) log(`${name(launch)}: ${p}`);
-    await notify(
-      services,
-      result.problems.length > 0
-        ? `Shipcast published ${name(launch)} in part: ${result.problems.join('; ')}`
-        : `Shipcast published ${name(launch)}: ${result.posted.map((p) => p.url).join(' ')}`,
-    );
   }
+  // A round is final for its run: the next round is a new run, not this one's retry
+  await notifications(services).published(launch, result, { final: true });
   return result;
 }
 
@@ -169,7 +165,6 @@ export async function refreshInstagramTokens(d: Pick<RoundDeps, 'registry' | 'se
 
 /** Reads every published launch's numbers now, and remembers when */
 export async function readMetrics(d: Pick<RoundDeps, 'registry' | 'brand'>, services: Services, now = new Date()): Promise<string[]> {
-  const result = await collectMetrics(d.registry, d.brand, services.sources);
-  await d.registry.setCursor(METRICS_AT_KEY, now.toISOString());
+  const result = await new MetricsService(d.registry).readNow(d.brand, services.sources, now);
   return [`Metrics: ${result.readings} readings`, ...result.problems.map((p) => `  ${p}`)];
 }

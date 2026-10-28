@@ -1,4 +1,4 @@
-import { createApiToken, InvalidScopes, parseScopes } from '@shipcast/runtime';
+import { createApiToken, parseScopes } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, InvalidInput, object, text } from './input';
@@ -14,11 +14,8 @@ export const createToken = createServerFn({ method: 'POST' })
     const o = object(input, 'input');
     const name = text(o.name, 'name', 100).trim();
     if (!name) throw new InvalidInput('a token needs a name');
-    try {
-      return { name, scopes: parseScopes(o.scopes) };
-    } catch (error) {
-      throw error instanceof InvalidScopes ? new InvalidInput(error.message) : error;
-    }
+    // InvalidScopes is a bad request already: the page shows its words
+    return { name, scopes: parseScopes(o.scopes) };
   })
   .handler(async ({ data }) => {
     const { registry, secrets } = await appContext();

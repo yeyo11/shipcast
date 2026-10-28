@@ -1,6 +1,7 @@
-import { imageUrl } from '@shipcast/connectors';
+import { imageUrl } from '@shipcast/schema';
 import { editDraft, preflight } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
+import { launchService } from './app-services';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
 import { jobsView } from './jobs.server';
@@ -20,20 +21,18 @@ const LAUNCHES_PAGE = 24;
 export const listLaunches = createServerFn({ method: 'GET' })
   .validator((input: unknown) => readLaunchesSearch(object(input ?? {}, 'input')))
   .handler(async ({ data }) => {
-    const { registry } = await appContext();
-    const [page, facets] = await Promise.all([
-      registry.launchList({
-        pageSize: LAUNCHES_PAGE,
-        ...(data.q && { search: data.q }),
-        ...(data.status && { status: data.status }),
-        ...(data.trigger && { trigger: data.trigger }),
-        ...(data.kind && { kind: data.kind }),
-        ...(data.repo && { repo: data.repo }),
-        ...(data.sort && { order: data.sort }),
-        ...(data.page && { page: data.page }),
-      }),
-      registry.launchFacets(),
-    ]);
+    const ctx = await appContext();
+    const { registry } = ctx;
+    const { page, facets } = await launchService(ctx).page({
+      pageSize: LAUNCHES_PAGE,
+      ...(data.q && { search: data.q }),
+      ...(data.status && { status: data.status }),
+      ...(data.trigger && { trigger: data.trigger }),
+      ...(data.kind && { kind: data.kind }),
+      ...(data.repo && { repo: data.repo }),
+      ...(data.sort && { order: data.sort }),
+      ...(data.page && { page: data.page }),
+    });
     const launches = page.launches;
     const [views, numbers, accounts, timezone] = await Promise.all([
       Promise.all(launches.map((l) => launchView(registry, l))),
@@ -53,8 +52,9 @@ export const listLaunches = createServerFn({ method: 'GET' })
 export const getLaunch = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    const { registry, github, deps } = await appContext();
-    const launch = await registry.get(data);
+    const ctx = await appContext();
+    const { registry, github, deps } = ctx;
+    const launch = await launchService(ctx).get(data);
     if (!launch) return null;
     // Everything at once: the page waited for each read in turn, the slowest (GitHub's) first
     const detailing = launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo });
@@ -84,8 +84,9 @@ export const saveDraft = createServerFn({ method: 'POST' })
     return { id: id(o.id), path: text(o.path, 'path', 300), content: text(o.content, 'content', 200_000) };
   })
   .handler(async ({ data }) => {
-    const { registry, github, deps } = await appContext();
-    const launch = await registry.get(data.id);
+    const ctx = await appContext();
+    const { github, deps } = ctx;
+    const launch = await launchService(ctx).get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
     // A draft edit is a commit on the real pull request
     if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
@@ -107,12 +108,7 @@ export const publishAgain = createServerFn({ method: 'POST' })
     const o = object(input, 'input');
     return { id: id(o.id), channel: o.channel === undefined ? undefined : channelName(o.channel) };
   })
-  .handler(async ({ data }) => {
-    const { registry } = await appContext();
-    const launch = await registry.get(data.id);
-    if (!launch) return { ok: false as const, problem: 'no such launch' };
-    return publishAgainFor(registry, launch, data.channel, startPublishing);
-  });
+  .handler(async ({ data }) => publishAgainFor((await appContext()).registry, data.id, data.channel, startPublishing));
 
 export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
   const { github, brand } = await appContext();

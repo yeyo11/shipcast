@@ -1,33 +1,12 @@
-import { ConnectorError } from '@shipcast/connectors';
 import {
   CAPABILITIES,
-  cancelScheduledPost,
   COMMENT_CHANNELS,
   COMMENT_STATUSES,
-  CommentRefused,
-  dismissComment,
-  editReplyDraft,
-  InvalidCommentSettings,
-  readCommentSettings,
   REPLY_CAPABILITIES,
   REPLY_MODES,
-  sendReply,
-  writeCommentSettings,
   type CommentDeps,
   type CommentStatus,
-  deleteLaunchPosts,
-  deletePost,
-  editPost,
-  editPosts,
-  launchConfigOf,
-  PostRefused,
-  readTimezone,
-  recommendFor,
-  reschedulePost,
-  saveTimezone,
   SCHEDULABLE_CHANNELS,
-  scheduleLaunch,
-  ScheduleRefused,
   type ApiScope,
   type ArticleInput,
   type EditDeps,
@@ -47,14 +26,17 @@ import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { hasScope, readWebMcp, verifyApiToken, type SecretStore } from '@shipcast/runtime';
 import { PackKind, type Channel } from '@shipcast/schema';
 import { id, InvalidInput, object } from './input.ts';
+import { ApiError, apiErrorOf, errorBody } from './errors.ts';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { isRepo } from './launches-search.ts';
 import { channelList, postChanges } from './post-changes.ts';
 import { articleRequest, channelName, launchRequest, moment } from './requests.ts';
+export { ApiError } from './errors.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 import { PROFILE_ROUTES, PROFILE_SCHEMAS, type ProfileApi } from './profile-api.ts';
-import { commentView, commentViews } from './comment-view.ts';
+import { commentView } from './comment-view.ts';
+import { accountService, commentService, postService, scheduleService } from './app-services.ts';
 
 /*
  * The REST API under /api/v1: stable routes for the MCP server and any other client, beside the
@@ -142,25 +124,10 @@ export class FailureLimiter {
 /** The header server.ts sets from the socket, replacing any a client sent; absent under Vite's dev server */
 export const PEER_HEADER = 'x-shipcast-peer';
 
-type ErrorCode = 'unauthorized' | 'insufficient_scope' | 'rate_limited' | 'not_found' | 'method_not_allowed' | 'invalid_input' | 'unsupported_media_type' | 'refused' | 'upstream' | 'internal';
-
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: ErrorCode;
-  readonly headers: Record<string, string>;
-
-  constructor(status: number, code: ErrorCode, message: string, headers: Record<string, string> = {}) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.headers = headers;
-  }
-}
-
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   Response.json(body, { status, headers: { 'cache-control': 'no-store', ...headers } });
 
-const errorResponse = (error: ApiError) => json(error.status, { error: { code: error.code, message: error.message } }, error.headers);
+const errorResponse = (error: ApiError) => json(error.status, errorBody(error), error.headers);
 
 const refused = (answer: WorkAnswer): Response => {
   if (answer.ok) return json(202, { job: answer.job });
@@ -182,6 +149,9 @@ async function launchResource(deps: ApiDeps, launch: Launch) {
 }
 
 const STATUSES = LAUNCH_STATUSES;
+
+/** The comment service over the API's ports: replies go out with the connectors deps.comments builds */
+const commentsOf = (deps: ApiDeps) => commentService({ registry: deps.registry, sending: deps.comments });
 
 /**
  * An opaque position in the launches' order: the last launch's creation time and id, and the order
@@ -323,21 +293,6 @@ function commentId(value: string | undefined): number {
   return id(/^\d{1,10}$/.test(value ?? '') ? Number(value) : NaN, 'the comment id');
 }
 
-/** The comment assistant's refusals as the client's problem, a network's refusal as the network's (502) */
-async function onComments<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof CommentRefused) {
-      if (error.reason === 'not_found') throw new ApiError(404, 'not_found', error.message);
-      if (error.reason === 'invalid') throw new InvalidInput(error.message);
-      throw new ApiError(409, 'refused', error.message);
-    }
-    if (error instanceof InvalidCommentSettings) throw new InvalidInput(error.message);
-    if (error instanceof ConnectorError) throw new ApiError(502, 'upstream', error.message);
-    throw error;
-  }
-}
 
 const commentAnswer = { type: 'object', required: ['comment'], properties: { comment: { $ref: '#/components/schemas/Comment' } } };
 
@@ -345,37 +300,7 @@ function postId(value: string | undefined): number {
   return id(/^\d{1,10}$/.test(value ?? '') ? Number(value) : NaN, 'the post id');
 }
 
-/**
- * Runs an edit or a delete, answering what the engine refused as the client's problem (404, 409 or
- * 400) and what the network refused as the network's (502), with the network's own words.
- */
-async function onPosts<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof PostRefused) {
-      if (error.reason === 'not_found') throw new ApiError(404, 'not_found', error.message);
-      if (error.reason === 'invalid') throw new InvalidInput(error.message);
-      throw new ApiError(409, 'refused', error.message);
-    }
-    if (error instanceof ConnectorError) throw new ApiError(502, 'upstream', error.message);
-    throw error;
-  }
-}
 
-/** What the engine refused of a schedule, as the client's problem */
-async function onSchedule<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof ScheduleRefused) {
-      if (error.reason === 'not_found') throw new ApiError(404, 'not_found', error.message);
-      if (error.reason === 'invalid') throw new InvalidInput(error.message);
-      throw new ApiError(409, 'refused', error.message);
-    }
-    throw error;
-  }
-}
 
 const dateTime = { type: 'string', format: 'date-time', description: 'ISO 8601 with its offset; a time already past sends it on the next run' };
 
@@ -436,7 +361,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'The accounts', schema: { type: 'object', required: ['accounts'], properties: { accounts: { type: 'array', items: ref('Account') } } } },
     async handle(deps) {
       // The registry holds only public settings; secrets live in the keychain and never come here
-      return json(200, { accounts: await deps.registry.accounts() });
+      return json(200, { accounts: await accountService(deps).list() });
     },
   },
   {
@@ -499,7 +424,7 @@ export const ROUTES: ApiRoute[] = [
     async handle(deps, { params }) {
       const launch = await existingLaunch(deps, params.id);
       const channel: Channel = channelName(params.channel);
-      return refused(await publishAgain(deps.registry, launch, channel, deps.startPublishing));
+      return refused(await publishAgain(deps.registry, launch.id, channel, deps.startPublishing));
     },
   },
   {
@@ -550,7 +475,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'The post, now edited', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
     async handle(deps, { params, request }) {
       const changes = postChanges(await readJson(request));
-      return json(200, { post: await onPosts(async () => editPost(postId(params.postId), changes, await deps.editing())) });
+      return json(200, { post: await postService(deps).edit(postId(params.postId), changes) });
     },
   },
   {
@@ -561,7 +486,7 @@ export const ROUTES: ApiRoute[] = [
     summary: 'Delete one published post on its network (dev.to unpublishes); the launch never publishes it again',
     response: { status: 200, description: 'The post, now deleted', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
     async handle(deps, { params }) {
-      return json(200, { post: await onPosts(async () => deletePost(postId(params.postId), await deps.editing())) });
+      return json(200, { post: await postService(deps).delete(postId(params.postId)) });
     },
   },
   {
@@ -578,7 +503,7 @@ export const ROUTES: ApiRoute[] = [
       const channels = channelList(named);
       const changes = postChanges(rest);
       const launch = await existingLaunch(deps, params.id);
-      return json(200, { outcomes: await onPosts(async () => editPosts(launch.id, changes, channels, await deps.editing())) });
+      return json(200, { outcomes: await postService(deps).editMany(launch.id, changes, channels) });
     },
   },
   {
@@ -592,7 +517,7 @@ export const ROUTES: ApiRoute[] = [
     async handle(deps, { params, url }) {
       const channels = channelList(url.searchParams.get('channels'));
       const launch = await existingLaunch(deps, params.id);
-      return json(200, { outcomes: await onPosts(async () => deleteLaunchPosts(launch.id, channels, await deps.editing())) });
+      return json(200, { outcomes: await postService(deps).deleteMany(launch.id, channels) });
     },
   },
   ...STATS_ROUTES,
@@ -617,11 +542,7 @@ export const ROUTES: ApiRoute[] = [
         if (!(SCHEDULABLE_CHANNELS as readonly string[]).includes(name)) throw new InvalidInput(`${name} has no time: the channels are ${SCHEDULABLE_CHANNELS.join(', ')}`);
         times[name as Channel] = moment(value, `times.${name}`);
       }
-      // Best effort: a launch.yml that cannot be read yet (an article's, before its merge) leaves the check to the publish step
-      const config = await launchConfigOf(deps.github, deps.launchesRepo, launch).catch(() => undefined);
-      const posts = await onSchedule(() => scheduleLaunch(deps.registry, launch.id, times, config ? { config } : {}));
-      await deps.armSchedule(posts);
-      return json(200, { posts });
+      return json(200, { posts: await scheduleService(deps).schedule(launch.id, times) });
     },
   },
   {
@@ -634,9 +555,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'The piece, at its new time', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
     async handle(deps, { params, request }) {
       const at = moment(object(await readJson(request), 'the body').at, 'at');
-      const post = await onSchedule(() => reschedulePost(deps.registry, postId(params.postId), at));
-      await deps.armSchedule([post]);
-      return json(200, { post });
+      return json(200, { post: await scheduleService(deps).move(postId(params.postId), at) });
     },
   },
   {
@@ -647,7 +566,7 @@ export const ROUTES: ApiRoute[] = [
     summary: 'Cancel a scheduled piece: its channel is not published for that launch until it is scheduled again',
     response: { status: 200, description: 'The piece that was scheduled, now removed', schema: { type: 'object', required: ['post'], properties: { post: ref('Post') } } },
     async handle(deps, { params }) {
-      return json(200, { post: await onSchedule(() => cancelScheduledPost(deps.registry, postId(params.postId))) });
+      return json(200, { post: await scheduleService(deps).cancel(postId(params.postId)) });
     },
   },
   {
@@ -671,7 +590,7 @@ export const ROUTES: ApiRoute[] = [
         if (!Number.isInteger(value) || value < 1 || value > 30) throw new InvalidInput(`${name} is an integer from 1 to 30`);
         return value;
       };
-      return json(200, await recommendFor(deps.registry, channel as Channel, { days: bounded('days', 7), count: bounded('count', 5) }));
+      return json(200, await scheduleService(deps).recommend(channel as Channel, { days: bounded('days', 7), count: bounded('count', 5) }));
     },
   },
   {
@@ -682,7 +601,7 @@ export const ROUTES: ApiRoute[] = [
     summary: 'The owner’s time zone, which recommendations are told in (Europe/Madrid until set)',
     response: { status: 200, description: 'The zone', schema: ref('Timezone') },
     async handle(deps) {
-      return json(200, { timezone: await readTimezone(deps.registry) });
+      return json(200, { timezone: await scheduleService(deps).timezone() });
     },
   },
   {
@@ -695,7 +614,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'The zone, saved', schema: ref('Timezone') },
     async handle(deps, { request }) {
       const body = object(await readJson(request), 'the body');
-      return json(200, { timezone: await onSchedule(() => saveTimezone(deps.registry, body.timezone)) });
+      return json(200, { timezone: await scheduleService(deps).setTimezone(body.timezone) });
     },
   },
   {
@@ -724,12 +643,12 @@ export const ROUTES: ApiRoute[] = [
       const channel = url.searchParams.get('channel');
       if (channel !== null && !(COMMENT_CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput(`channel is one of ${COMMENT_CHANNELS.join(', ')}`);
       const launch = url.searchParams.get('launch');
-      const comments = await commentViews(deps.registry, {
+      const comments = (await commentsOf(deps).list({
         own: false,
         ...(status !== null && { status: status as CommentStatus }),
         ...(channel !== null && { channel: channel as Channel }),
         ...(launch !== null && { launchId: launchId(launch) }),
-      });
+      })).map(commentView);
       return json(200, { comments, capabilities: REPLY_CAPABILITIES });
     },
   },
@@ -769,7 +688,7 @@ export const ROUTES: ApiRoute[] = [
       const body = object(await readJson(request), 'the body');
       if (typeof body.draft !== 'string' || body.draft.length > 5000) throw new InvalidInput('draft is the reply’s text');
       const draft = body.draft;
-      return json(200, { comment: commentView(await onComments(() => editReplyDraft(commentId(params.commentId), draft, deps.registry))) });
+      return json(200, { comment: commentView(await commentsOf(deps).editDraft(commentId(params.commentId), draft)) });
     },
   },
   {
@@ -781,7 +700,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'The comment, its reply sent', schema: commentAnswer },
     async handle(deps, { params }) {
       const id = commentId(params.commentId);
-      return json(200, { comment: commentView(await onComments(async () => sendReply(id, await deps.comments()))) });
+      return json(200, { comment: commentView(await commentsOf(deps).send(id)) });
     },
   },
   {
@@ -792,7 +711,7 @@ export const ROUTES: ApiRoute[] = [
     summary: 'Dismiss a comment: no reply is sent',
     response: { status: 200, description: 'The comment, dismissed', schema: commentAnswer },
     async handle(deps, { params }) {
-      return json(200, { comment: commentView(await onComments(() => dismissComment(commentId(params.commentId), deps.registry))) });
+      return json(200, { comment: commentView(await commentsOf(deps).dismiss(commentId(params.commentId))) });
     },
   },
   {
@@ -803,7 +722,7 @@ export const ROUTES: ApiRoute[] = [
     summary: 'Each channel’s reply mode: off, approval or auto',
     response: { status: 200, description: 'The modes', schema: ref('CommentSettings') },
     async handle(deps) {
-      return json(200, await readCommentSettings(deps.registry));
+      return json(200, await commentsOf(deps).settings());
     },
   },
   {
@@ -816,7 +735,7 @@ export const ROUTES: ApiRoute[] = [
     response: { status: 200, description: 'The modes, saved', schema: ref('CommentSettings') },
     async handle(deps, { request }) {
       const body = await readJson(request);
-      return json(200, await onComments(() => writeCommentSettings(deps.registry, body)));
+      return json(200, await commentsOf(deps).saveSettings(body));
     },
   },
 ];
@@ -917,10 +836,9 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
     const params = Object.fromEntries(found.names.map((name, i) => [name, decodeURIComponent(found.values[i] ?? '')]));
     return await found.route.handle(deps, { request, url, params, scopes });
   } catch (error) {
-    if (error instanceof ApiError) return errorResponse(error);
-    if (error instanceof InvalidInput) return errorResponse(new ApiError(400, 'invalid_input', error.message));
-    console.error(error);
-    return errorResponse(new ApiError(500, 'internal', 'something went wrong; the details are in the app’s log'));
+    const answer = apiErrorOf(error);
+    if (answer.internal) console.error(error);
+    return errorResponse(answer);
   }
 }
 

@@ -53,6 +53,16 @@ export class Refused<R extends string = string> extends ShipcastError {
   }
 }
 
+/**
+ * A request that is wrong as it was sent: a field out of its range, a setting with a bad value, a
+ * period backwards. Nothing about the state of things; the same request is refused every time (400).
+ */
+export class InvalidRequest extends ShipcastError {
+  constructor(message: string) {
+    super(message, { code: 'invalid', httpStatus: 400 });
+  }
+}
+
 /** The HTTP status an error answers with: its own for a Shipcast error, 500 for anything else */
 export function httpStatusOf(error: unknown): number {
   return error instanceof ShipcastError ? error.httpStatus : 500;

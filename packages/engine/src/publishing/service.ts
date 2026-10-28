@@ -4,7 +4,7 @@ import { approval, publishLaunch, type PublishDeps, type PublishResult } from '.
 import type { Launch, Registry } from '../registry.ts';
 import { PublishAttempts } from './attempts.ts';
 import { PieceGuard } from './guard.ts';
-import { retryChannel } from './retry.ts';
+import { publishAgain, retryChannel } from './retry.ts';
 
 /** What the networks are reached with for one run: the brand's connectors, built by the caller */
 export type PublishConnectors = Pick<PublishDeps, 'publishers' | 'search' | 'accounts' | 'fetch' | 'now'>;
@@ -52,5 +52,10 @@ export class PublishingService {
   /** The owner's Try again on a channel of a launch */
   retry(launchId: number, channel: Channel): Promise<Launch | undefined> {
     return retryChannel(this.#registry, launchId, channel, this.#attempts);
+  }
+
+  /** Publishing again from the app or the API: a channel's Try again, or following a drafted launch (publishAgain) */
+  again(launchId: number, channel: Channel | undefined): Promise<Launch> {
+    return publishAgain(this.#registry, launchId, channel, this.#attempts);
   }
 }

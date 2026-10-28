@@ -3,7 +3,7 @@ import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
-import { notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
+import { notifications, notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
 import { buildServices, type Services } from './services.ts';
@@ -112,12 +112,13 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       job.log('Reading the code and writing the pack; this takes a few minutes…');
       const result = await draftLaunch(current, brand, d.pipeline, { direct: direct ?? false });
       if (!result.ok) {
-        await notify(services, `Shipcast could not draft ${nameOf(current)}: ${result.problems[0] ?? ''}`);
+        await notifications(services).drafted(current, result);
         throw new Error(result.problems.join('\n'));
       }
       job.log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
+      // Straight to publishing: the publish run tells the owner what went out
       if (direct) await startPublishing(queue, result.launch);
-      else await notify(services, `Shipcast drafted ${nameOf(current)}: review the drafts at ${result.pullRequest}`);
+      else await notifications(services).drafted(current, result);
     },
 
     async article({ launchId, input, direct }, job) {
@@ -130,7 +131,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       if (!result.ok) throw new Error(result.problems.join('\n'));
       job.log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
       if (direct) await startPublishing(queue, result.launch);
-      else await notify(services, `Shipcast drafted the article “${input.title}”: review it at ${result.pullRequest}`);
+      else await notifications(services).drafted(current, result, { article: input.title });
     },
 
     /*
@@ -166,20 +167,9 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       for (const p of result.posted) job.log(`${p.channel}: ${p.url}`);
       for (const p of result.problems) job.log(p);
       for (const p of result.scheduled) job.log(`${p.channel}: scheduled for ${p.at}`);
+      // One rule for what the owner is told, the round's too: quiet while only retryable failures wait for the next attempt
+      await notifications(services).published(current, result, { final: job.lastAttempt });
       const willRetry = result.state === 'partial' && result.failures.some((f) => f.retryable);
-      // An attempt that only finds the same channels still failing tells the owner nothing new
-      // Nor does one that only finds channels still waiting for their time
-      const news = result.posted.length > 0 || result.problems.length > 0 || result.state === 'published';
-      if (news && (result.posted.length > 0 || !willRetry || job.lastAttempt)) {
-        await notify(
-          services,
-          result.state === 'published'
-            ? `Shipcast published ${nameOf(current)}: ${result.posted.map((p) => p.channel).join(', ') || 'nothing new'}`
-            : result.problems.length > 0
-              ? `Shipcast published ${nameOf(current)} in part. Problems: ${result.problems.join('; ')}`
-              : `Shipcast published ${nameOf(current)}: ${result.posted.map((p) => p.channel).join(', ') || 'nothing yet'}; scheduled: ${result.scheduled.map((p) => `${p.channel} at ${p.at}`).join(', ')}`,
-        );
-      }
       if (willRetry && !job.lastAttempt) throw new RetryLater('some channels will try again');
     },
 
