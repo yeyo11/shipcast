@@ -1,0 +1,41 @@
+{
+  "brand": {
+    "repo": "yeyo11/launches",
+    "ref": "HEAD",
+    "path": "brand.yml"
+  },
+  "cases": [
+    {
+      "id": "shipcast-v0.1.0-pack",
+      "task": "pack",
+      "repo": "yeyo11/shipcast",
+      "ref": "v0.1.0",
+      "note": "Shipcast's first launch. Its launch.yml at the tag no longer parses, so it is given here with the same channels.",
+      "launchYml": "# launch.yml at v0.1.0, in today's schema: its channels then (hackerNews and productHunt were `manual`, a mode that no longer exists)\nenabled: true\nbrand: personal\nlanguage: en\npublishing:\n  blog: approval\n  devto: approval\n  bluesky: approval\n  mastodon: approval\n  instagram: approval\n  newsletter: approval\n  githubDiscussions: off\nassets:\n  demo: docs/media/tour.gif\n"
+    },
+    {
+      "id": "claudio-v0.9.0-pack",
+      "task": "pack",
+      "repo": "yeyo11/claudio",
+      "ref": "v0.9.0",
+      "previous": "v0.8.1",
+      "note": "claudio v0.9.0 after v0.8.1: a major pack under 1.0. launch.yml is the checkout's own."
+    },
+    {
+      "id": "claudio-v0.9.0-reply-conflict",
+      "task": "reply",
+      "repo": "yeyo11/claudio",
+      "ref": "v0.9.0",
+      "note": "A reply grounded in the code, about conflicts. The comment stands for the real one: replace its text with the comment as posted to compare against the reply drafted then.",
+      "channel": "bluesky",
+      "comment": {
+        "author": "a-reader.bsky.social",
+        "text": "Nice! What happens when two sessions edit the same file at once? Does claudio detect the conflict or does the last write win?"
+      },
+      "post": {
+        "text": "claudio v0.9.0 is out."
+      },
+      "analysisFrom": "claudio-v0.9.0-pack"
+    }
+  ]
+}
