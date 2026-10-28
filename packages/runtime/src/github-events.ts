@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { LruEtagCache, type EtagCache, type EtagEntry } from '@shipcast/connectors';
-import type { FileCache } from '@shipcast/engine';
+import type { DraftSnapshotService, FileCache, Repositories } from '@shipcast/engine';
 import { PROJECTS_PATH } from '@shipcast/schema';
 import type { Cache, Json } from './redis/ports.ts';
 import { MemoryCache } from './redis/memory.ts';
@@ -152,4 +152,32 @@ export function githubEventEffects(event: string | null, payload: EventPayload, 
   if (payload.forced || commits.length >= PUSH_COMMITS_LISTED) return { forget: { repo } };
   const paths = [...new Set(commits.flatMap((c) => [...(c.added ?? []), ...(c.modified ?? []), ...(c.removed ?? [])]))];
   return paths.length > 0 ? { forget: { repo, paths } } : {};
+}
+
+/** The cursor of the last hourly GitHub poll: shared through the registry, so every process agrees */
+export const GITHUB_POLL_KEY = 'github-poll-at';
+export const GITHUB_POLL_MS = 3600_000;
+
+/**
+ * Whether the hourly poll is due, and if so marks it taken: with `github-events` GitHub is read on
+ * deliveries, and the poll (detection, the open pull requests) is only the safety net for missed
+ * ones, at most once an hour however often the rounds run. Rounds are one at a time, so the read
+ * and the mark need no lock.
+ */
+export async function takeGitHubPoll(registry: Pick<Repositories, 'cursors'>, now: Date = new Date()): Promise<boolean> {
+  const last = Date.parse((await registry.cursors.cursor(GITHUB_POLL_KEY)) ?? '');
+  if (Number.isFinite(last) && now.getTime() - last < GITHUB_POLL_MS) return false;
+  await registry.cursors.setCursor(GITHUB_POLL_KEY, now.toISOString());
+  return true;
+}
+
+/**
+ * The poll's own reads, after the round's detection: every open pull request's snapshot read again
+ * (304s when nothing changed), and the launches repo's kept files forgotten, so each is proven
+ * current by its next read's ETag rather than trusted on for ever when a push was missed.
+ */
+export async function pollGitHub(d: { drafts: Pick<DraftSnapshotService, 'refreshOpen'>; files: Pick<FileCache, 'forget'> | undefined; launchesRepo: string }): Promise<string[]> {
+  if (d.launchesRepo) await d.files?.forget(d.launchesRepo);
+  const { refreshed, problems } = await d.drafts.refreshOpen();
+  return [`GitHub poll: ${refreshed} drafts pull requests read`, ...problems.map((p) => `  ${p}`)];
 }

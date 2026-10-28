@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LruEtagCache } from '@shipcast/connectors';
-import { CacheEtagStore, githubCaches, githubEventEffects, GitHubFileCache } from '../src/index.ts';
+import { memoryRegistry } from '@shipcast/engine/testing';
+import { CacheEtagStore, githubCaches, githubEventEffects, GitHubFileCache, pollGitHub, takeGitHubPoll } from '../src/index.ts';
 import { MemoryCache } from '../src/redis/index.ts';
 
 test('the file cache keeps the launches repo’s settings files at HEAD and a tag’s launch.yml, nothing else', () => {
@@ -58,4 +59,24 @@ test('a push to the default branch forgets the files it touched; a tag, a force-
   assert.deepEqual(push({ ref: 'refs/heads/main', forced: true, commits: [] }), { forget: { repo: 'yeyo11/launches' } });
   assert.deepEqual(push({ ref: 'refs/heads/main', commits: Array.from({ length: 20 }, () => ({ modified: ['x'] })) }), { forget: { repo: 'yeyo11/launches' } });
   assert.deepEqual(githubEventEffects('release', { repository }, 'yeyo11/launches'), {});
+});
+
+test('the GitHub poll is taken at most once an hour, whatever the rounds’ interval', async () => {
+  const registry = await memoryRegistry();
+  const at = (minutes: number) => new Date(Date.parse('2026-10-28T10:00:00Z') + minutes * 60_000);
+  assert.equal(await takeGitHubPoll(registry, at(0)), true);
+  assert.equal(await takeGitHubPoll(registry, at(5)), false);
+  assert.equal(await takeGitHubPoll(registry, at(59)), false);
+  assert.equal(await takeGitHubPoll(registry, at(60)), true);
+});
+
+test('the poll forgets the launches repo’s kept files and reads the open pull requests again', async () => {
+  const forgotten: Array<[string, readonly string[] | undefined]> = [];
+  const lines = await pollGitHub({
+    drafts: { refreshOpen: async () => ({ refreshed: 2, problems: ['x: 500'] }) },
+    files: { forget: async (repo, paths) => void forgotten.push([repo, paths]) },
+    launchesRepo: 'yeyo11/launches',
+  });
+  assert.deepEqual(forgotten, [['yeyo11/launches', undefined]]);
+  assert.deepEqual(lines, ['GitHub poll: 2 drafts pull requests read', '  x: 500']);
 });

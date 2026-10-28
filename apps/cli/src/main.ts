@@ -354,7 +354,7 @@ async function main(argv: string[]): Promise<number> {
         const automation = await readAutomation(registry);
         const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch', telemetry });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
-        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags: Flags.fromEnv(process.env) }, { firstRoundInSeconds: 0 });
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags: Flags.fromEnv(process.env), ...(runtime.drafts && { drafts: runtime.drafts }) }, { firstRoundInSeconds: 0 });
         console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
         if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');
         console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);

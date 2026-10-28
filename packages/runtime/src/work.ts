@@ -2,6 +2,7 @@ import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, publi
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
+import { pollGitHub, takeGitHubPoll } from './github-events.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type JobQueue, type WorkQueue } from './queue.ts';
 import { notifications, notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
@@ -274,10 +275,12 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
           log(error.message);
           return;
         }
+        // With github-events releases come by webhook; the round's own detection is the hourly safety net, in either mode
+        const polling = flags.on('github-events') && (reason === BY_HAND || (await takeGitHubPoll(registry)));
         await runRound(
           { env: d.env, registry, github: d.github, secrets: d.secrets, brand, pipeline: d.pipeline, log },
           {
-            detect: automation.mode === 'poll' || reason === BY_HAND,
+            detect: flags.on('github-events') ? polling : automation.mode === 'poll' || reason === BY_HAND,
             draft: async (claimed) => {
               log(`Claimed ${claimed.repo} ${claimed.ref}: drafting`);
               await startDrafting(queue, claimed);
@@ -292,6 +295,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
             busy: async (drafted) => (await registry.jobs.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
           },
         );
+        if (polling && d.drafts) for (const line of await pollGitHub({ drafts: d.drafts, files: d.github.files, launchesRepo: d.pipeline.launchesRepo })) log(line);
       } finally {
         await record(registry, LAST_ROUND_KEY, {
           at: new Date().toISOString(),
