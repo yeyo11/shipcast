@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./markdown": "./src/markdown.ts",
-    "./failures": "./src/failures.ts"
+    "./failures": "./src/failures.ts",
+    "./channels": "./src/channels/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

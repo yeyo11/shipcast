@@ -1,4 +1,5 @@
 export * from './channels.ts';
+export * from './channels/index.ts';
 export * from './launch-config.ts';
 export * from './brand.ts';
 export * from './content-pack.ts';
