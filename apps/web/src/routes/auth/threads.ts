@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { startThreads } from '../../server/channels.server';
+import { startOAuth } from '../../server/channels.server';
 
 export const Route = createFileRoute('/auth/threads')({
-  server: { handlers: { GET: ({ request }) => startThreads(request) } },
+  server: { handlers: { GET: ({ request }) => startOAuth('threads', request) } },
 });

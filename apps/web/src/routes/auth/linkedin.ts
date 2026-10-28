@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { startLinkedIn } from '../../server/channels.server';
+import { startOAuth } from '../../server/channels.server';
 
 export const Route = createFileRoute('/auth/linkedin')({
-  server: { handlers: { GET: ({ request }) => startLinkedIn(request) } },
+  server: { handlers: { GET: ({ request }) => startOAuth('linkedin', request) } },
 });

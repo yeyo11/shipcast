@@ -139,7 +139,7 @@ export function previewGitHubFetch(real: typeof fetch = fetch): typeof fetch {
   };
 }
 
-/** The real services with their writing parts replaced: fake publishers, no notifier, no Search Console ping */
+/** The real services with their writing parts replaced: fake publishers, no strategy's real one, no notifier, no Search Console ping */
 export function previewServices(real: Services): Services {
-  return { ...real, publishers: fakePublishers(), notifier: undefined, sources: { ...real.sources, search: undefined } };
+  return { ...real, publishers: fakePublishers(), strategies: {}, notifier: undefined, sources: { ...real.sources, search: undefined } };
 }

@@ -1,5 +1,6 @@
 import { audienceKey, type Account } from '@shipcast/engine';
-import { MissingField, network } from './catalog.ts';
+import { network } from './catalog.ts';
+import { MissingField } from './channels/adapter.ts';
 import { checkAccountWith, type AccountDeps } from './accounts.ts';
 
 /** How long an account may go without a sync before the Channels page warns: a missed night and a bit */
@@ -41,7 +42,8 @@ export async function syncAccount(deps: AccountDeps, account: Account, now = new
       snapshot.following !== null ? `${snapshot.following} following` : null,
       snapshot.posts !== null ? `${snapshot.posts} posts` : null,
     ].filter(Boolean);
-    const audience = checked.built?.instagram ? await readAudience(deps, account, checked.built.instagram, snapshot.followers, now) : undefined;
+    const hours = checked.built?.audienceHours;
+    const audience = hours ? await readAudience(deps, account, { audienceHours: hours }, snapshot.followers, now) : undefined;
     return { account: checked.account, outcome: 'recorded', line: `${name}: ${[parts.join(', ') || 'no counts given', audience].filter(Boolean).join('; ')}` };
   } catch (error) {
     return { account: checked.account, outcome: 'failed', line: `${name}: could not read its numbers: ${message(error)}` };

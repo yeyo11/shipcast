@@ -1,12 +1,11 @@
-import { Instagram, Threads } from '@shipcast/connectors';
 import { detect, draftLaunch, MetricsService, NotificationService, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
+import { network, NETWORK_SPECS, networkSpec } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
-import { accountSecretKey, buildServices, refreshInstagramToken, type Services } from './services.ts';
+import { accountSecretKey, buildServices, publishConnectors, refreshInstagramToken, type Services } from './services.ts';
 
 // Where the engine's MetricsService writes; re-exported for the pages that show it
 export { METRICS_AT_KEY } from '@shipcast/engine';
-const TOKEN_REFRESH_EVERY_MS = 30 * 24 * 3600 * 1000;
 
 /** What a round needs: the engine's pieces and the brand it speaks for */
 export interface RoundDeps {
@@ -44,7 +43,7 @@ export async function draftClaimed(launch: Launch, d: RoundDeps, services: Servi
 /** Publishes one drafted launch if it is ready, and tells the owner what went out */
 export async function publishOne(launch: Launch, d: RoundDeps, services: Services): Promise<PublishResult> {
   const log = d.log ?? (() => {});
-  const connectors = { publishers: services.publishers, search: services.sources.search, accounts: services.accounts };
+  const connectors = publishConnectors(services);
   const result = d.publishing
     ? await d.publishing.service.publish(launch, d.brand, connectors, d.publishing.holder)
     : await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });
@@ -57,34 +56,30 @@ export async function publishOne(launch: Launch, d: RoundDeps, services: Service
   return result;
 }
 
-/** The networks whose long-lived tokens last 60 days and are refreshed every 30: Meta's two */
-type Refreshable = 'instagram' | 'threads';
-
-function refresher(network: Refreshable, settings: Record<string, string>, accessToken: string, http?: typeof fetch): { refreshToken(): Promise<{ accessToken: string; expiresIn: number }> } {
-  return network === 'instagram' ? new Instagram({ userId: settings.userId!, accessToken, fetch: http }) : new Threads({ userId: settings.userId!, accessToken, fetch: http });
-}
-
 /**
- * Refreshes every connected account's token of the network that is 30 days old (they last 60),
- * keeping the fresh one in its keychain entry. Meta refuses to refresh a token younger than a day,
- * so an account seen for the first time only records the date.
+ * Refreshes every connected account's token of the network that is due (its spec's `refresh`: Meta's
+ * last 60 days and are refreshed at 30), keeping the fresh one in its keychain entry. Meta refuses
+ * to refresh a token younger than a day, so an account seen for the first time only records the date.
  */
-export async function refreshMetaAccounts(network: Refreshable, d: Pick<RoundDeps, 'registry' | 'secrets'>, now = new Date(), http?: typeof fetch): Promise<string[]> {
-  const name = network === 'instagram' ? 'Instagram' : 'Threads';
+export async function refreshMetaAccounts(networkId: string, d: Pick<RoundDeps, 'registry' | 'secrets'>, now = new Date(), http?: typeof fetch): Promise<string[]> {
+  const refresh = networkSpec(networkId)?.refresh;
+  if (!refresh) return [];
+  const name = network(networkId)?.name ?? networkId;
   const lines: string[] = [];
-  for (const account of await d.registry.accounts({ network })) {
+  for (const account of await d.registry.accounts({ network: networkId })) {
     const remember = () => d.registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: now.toISOString() } });
     const last = account.settings.refreshedAt;
     if (!last) {
       await remember();
       continue;
     }
-    if (now.getTime() - Date.parse(last) < TOKEN_REFRESH_EVERY_MS) continue;
+    if (now.getTime() - Date.parse(last) < refresh.everyMs) continue;
     const secrets = await getJson(d.secrets, accountSecretKey(account.id));
-    if (!secrets?.accessToken || !account.settings.userId) continue;
+    const refresher = secrets?.accessToken ? refresh.refresher(account.settings, secrets.accessToken, http) : undefined;
+    if (!secrets || !refresher) continue;
     try {
-      const fresh = await refresher(network, account.settings, secrets.accessToken, http).refreshToken();
-      await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ ...secrets, accessToken: fresh.accessToken }), `${network} ${account.label}`);
+      const fresh = await refresher.refreshToken();
+      await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ ...secrets, accessToken: fresh.accessToken }), `${networkId} ${account.label}`);
       await remember();
       lines.push(`${name} token of ${account.label} refreshed; valid for ${Math.round(fresh.expiresIn / 86400)} more days`);
     } catch (error) {
@@ -154,7 +149,9 @@ export async function runRound(d: RoundDeps, options: RoundOptions): Promise<voi
 
 /** Every Instagram and Threads token that is due: the connected accounts', and an Instagram one still read from `.env` */
 export async function refreshInstagramTokens(d: Pick<RoundDeps, 'registry' | 'secrets'>, services: Services, now = new Date()): Promise<string[]> {
-  const lines = [...(await refreshInstagramAccounts(d, now)), ...(await refreshMetaAccounts('threads', d, now))];
+  // Every network whose tokens are refreshed, as their specs say (Instagram's and Threads')
+  const lines: string[] = [];
+  for (const spec of NETWORK_SPECS) if (spec.refresh) lines.push(...(await refreshMetaAccounts(spec.id, d, now)));
   // A token still read from .env is refreshed where it lives, in the registry
   if (services.instagram?.origin.kind === 'env') {
     const line = await refreshInstagramToken(services, d, now);

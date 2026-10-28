@@ -22,7 +22,7 @@ import {
   publishOne,
   readAutomation,
   SettingMissing,
-  SETTINGS,
+  settingDefinition,
   startWorking,
   WorkQueue,
   workHandlers,
@@ -219,7 +219,7 @@ async function main(argv: string[]): Promise<number> {
         }
         const missing = settings.missing();
         if (missing.length > 0) {
-          console.log(`Settings still to set in the app's Settings page: ${missing.map((n) => SETTINGS[n].label).join(', ')}`);
+          console.log(`Settings still to set in the app's Settings page: ${missing.map((n) => settingDefinition(n).label).join(', ')}`);
           return 0;
         }
         const brand = await loadBrandNow();

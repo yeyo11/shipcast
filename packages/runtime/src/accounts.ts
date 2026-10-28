@@ -1,7 +1,8 @@
 import type { Check } from '@shipcast/connectors';
 import type { Account, Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
-import { buildConnector, credentialsFromEnv, MissingField, network, NETWORKS, type Built, type Credentials } from './catalog.ts';
+import { buildConnector, credentialsFromEnv, network, NETWORKS, type Built } from './catalog.ts';
+import { MissingField, type Credentials } from './channels/adapter.ts';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey, envBrand } from './services.ts';
 

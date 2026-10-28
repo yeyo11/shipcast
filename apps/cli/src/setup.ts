@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { ACTION_VARIABLES } from '@shipcast/runtime';
+import { ACTION_VARIABLES, VARIABLE_HOW } from '@shipcast/runtime';
 import { Brand, CHANNELS, parseBrand, parseLaunchConfig, type Channel, type Language } from '@shipcast/schema';
 
 /*
@@ -231,18 +231,6 @@ jobs:
 const TOKEN_HOW =
   'a fine-grained token at https://github.com/settings/personal-access-tokens/new: only this project and the launches repo; Contents, Pull requests and Discussions read and write';
 
-const CHANNEL_HOW: Record<string, string> = {
-  DEVTO_API_KEY: 'https://dev.to/settings/extensions (DEV Community API Keys)',
-  BLUESKY_HANDLE: 'your handle, like you.bsky.social',
-  BLUESKY_APP_PASSWORD: 'https://bsky.app/settings/app-passwords',
-  MASTODON_INSTANCE: 'your server, like mastodon.social',
-  MASTODON_ACCESS_TOKEN: 'https://<your server>/settings/applications (New application; scopes read, write:statuses, write:media)',
-  HASHNODE_TOKEN: 'https://hashnode.com/settings/developer',
-  HASHNODE_PUBLICATION_HOST: 'your publication, like you.hashnode.dev',
-  TELEGRAM_BOT_TOKEN: 'https://t.me/BotFather (/newbot), then add the bot to your channel as an admin',
-  TELEGRAM_CHAT_ID: 'your channel, like @yourchannel',
-  DISCORD_WEBHOOK_URL: 'Server Settings > Integrations > Webhooks (https://support.discord.com/hc/en-us/articles/228383668)',
-};
 
 /** Every secret and variable the setup needs, in the order to set them */
 export function secretsToSet(options: SetupOptions): SecretToSet[] {
@@ -258,7 +246,7 @@ export function secretsToSet(options: SetupOptions): SecretToSet[] {
   }
   for (const channel of options.channels) {
     for (const name of CHANNEL_SECRETS(channel)) {
-      out.push({ name, repo: options.launchesRepo, kind: 'secret', why: `publishes to ${channel}`, how: CHANNEL_HOW[name] ?? '' });
+      out.push({ name, repo: options.launchesRepo, kind: 'secret', why: `publishes to ${channel}`, how: VARIABLE_HOW[name] ?? '' });
     }
   }
   return out;

@@ -6,7 +6,7 @@ import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type
 import { notifications, notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
-import { buildServices, type Services } from './services.ts';
+import { buildServices, publishConnectors, type Services } from './services.ts';
 import { takeSnapshots } from './snapshots.ts';
 import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
 import { COMMENTS_CRON, COMMENTS_KEY, commentsNotice, replyDeps } from './comments.ts';
@@ -151,7 +151,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       }
       const brand = await d.brand();
       const services = await servicesFor(brand);
-      const connectors = { publishers: services.publishers, search: services.sources.search, accounts: services.accounts };
+      const connectors = publishConnectors(services);
       const result = flags.on('publishing-service')
         ? await publishing.publish(current, brand, connectors, job.id)
         : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });

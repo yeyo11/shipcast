@@ -1,5 +1,7 @@
 import type { Registry } from '@shipcast/engine';
 import { InvalidRequest, ShipcastError } from '@shipcast/schema';
+import { NETWORK_SPECS, networkSpec } from './catalog.ts';
+import type { OAuthApp } from './channels/adapter.ts';
 import type { SecretStore } from './secrets.ts';
 
 /**
@@ -7,28 +9,25 @@ import type { SecretStore } from './secrets.ts';
  * registry's `settings` table, secrets are keychain entries; both are read when needed, so the app
  * starts and signs in without any of them, and a change in the Settings page applies to what runs next.
  */
-export interface SettingsValues {
+interface BaseValues {
   /** The repo whose blog and drafts the engine writes to, `owner/name` */
   launchesRepo: string | undefined;
   claudioUrl: string | undefined;
   claudioToken: string | undefined;
   /** Spend ceiling for one generation, in dollars */
   maxBudgetUsd: number | undefined;
-  /** The Instagram app, for Instagram Login from the Channels page */
-  instagramAppId: string | undefined;
-  instagramAppSecret: string | undefined;
-  /** The Threads use case of the owner's Meta app, for Threads' sign-in from the Channels page */
-  threadsAppId: string | undefined;
-  threadsAppSecret: string | undefined;
-  /** The owner's LinkedIn app (Sign In with LinkedIn using OpenID Connect and Share on LinkedIn) */
-  linkedinClientId: string | undefined;
-  linkedinClientSecret: string | undefined;
-  /** The owner's Reddit app, a "web app" whose API access Reddit has approved */
-  redditClientId: string | undefined;
-  redditClientSecret: string | undefined;
 }
 
-export type SettingName = keyof SettingsValues;
+/**
+ * The owner's app on each network that signs in through one (its `oauth` spec in
+ * packages/runtime/src/channels): `instagramAppId` and `instagramAppSecret`, `redditClientId` and
+ * `redditClientSecret`, named by how the network names the app.
+ */
+export type OAuthSettingName = `${string}${'App' | 'Client'}${'Id' | 'Secret'}`;
+
+export type SettingsValues = BaseValues & Partial<Record<OAuthSettingName, string>>;
+
+export type SettingName = keyof BaseValues | OAuthSettingName;
 
 interface Definition {
   /** The `.env` variable it came from before, read as a fallback and imported once */
@@ -38,6 +37,31 @@ interface Definition {
   label: string;
   /** Says what is wrong with a value, or nothing when it is fine */
   check?: (value: string) => string | undefined;
+}
+
+const TERMS = { app: 'App', client: 'Client' } as const;
+
+/** The two settings of each network's app, its id public and its secret in the keychain, from the networks' specs */
+function oauthAppSettings(): Record<OAuthSettingName, Definition> {
+  const out: Record<string, Definition> = {};
+  for (const spec of NETWORK_SPECS) {
+    if (!spec.oauth) continue;
+    const { term, name } = spec.oauth.app;
+    const env = `${spec.id.toUpperCase()}_${term.toUpperCase()}`;
+    out[oauthSettingName(spec.id, 'Id')] = { env: `${env}_ID`, store: { kind: 'setting', key: `${spec.id}-${term}-id` }, label: `The ${name} ${term} id` };
+    out[oauthSettingName(spec.id, 'Secret')] = {
+      env: `${env}_SECRET`,
+      store: { kind: 'secret', key: `app:${spec.id}-${term}-secret`, label: `${name} ${term} secret` },
+      label: `The ${name} ${term} secret`,
+    };
+  }
+  return out;
+}
+
+/** The setting of a network's app id or secret: `instagramAppId`, `redditClientSecret` */
+export function oauthSettingName(networkId: string, part: 'Id' | 'Secret'): OAuthSettingName {
+  const term = networkSpec(networkId)?.oauth?.app.term ?? 'client';
+  return `${networkId}${TERMS[term]}${part}`;
 }
 
 export const SETTINGS: Record<SettingName, Definition> = {
@@ -60,39 +84,26 @@ export const SETTINGS: Record<SettingName, Definition> = {
     label: 'The AI budget per generation',
     check: (v) => (Number(v) > 0 ? undefined : 'the AI budget must be a positive number of dollars'),
   },
-  instagramAppId: { env: 'INSTAGRAM_APP_ID', store: { kind: 'setting', key: 'instagram-app-id' }, label: 'The Instagram app id' },
-  instagramAppSecret: {
-    env: 'INSTAGRAM_APP_SECRET',
-    store: { kind: 'secret', key: 'app:instagram-app-secret', label: 'Instagram app secret' },
-    label: 'The Instagram app secret',
-  },
-  threadsAppId: { env: 'THREADS_APP_ID', store: { kind: 'setting', key: 'threads-app-id' }, label: 'The Threads app id' },
-  threadsAppSecret: {
-    env: 'THREADS_APP_SECRET',
-    store: { kind: 'secret', key: 'app:threads-app-secret', label: 'Threads app secret' },
-    label: 'The Threads app secret',
-  },
-  linkedinClientId: { env: 'LINKEDIN_CLIENT_ID', store: { kind: 'setting', key: 'linkedin-client-id' }, label: 'The LinkedIn client id' },
-  linkedinClientSecret: {
-    env: 'LINKEDIN_CLIENT_SECRET',
-    store: { kind: 'secret', key: 'app:linkedin-client-secret', label: 'LinkedIn client secret' },
-    label: 'The LinkedIn client secret',
-  },
-  redditClientId: { env: 'REDDIT_CLIENT_ID', store: { kind: 'setting', key: 'reddit-client-id' }, label: 'The Reddit client id' },
-  redditClientSecret: {
-    env: 'REDDIT_CLIENT_SECRET',
-    store: { kind: 'secret', key: 'app:reddit-client-secret', label: 'Reddit client secret' },
-    label: 'The Reddit client secret',
-  },
+  ...oauthAppSettings(),
 };
 
 const NAMES = Object.keys(SETTINGS) as SettingName[];
+
+/**
+ * A setting's definition. The networks' app settings are named by a pattern, which the type system
+ * reads as an index (so possibly missing); every name the code uses comes from SETTINGS itself.
+ */
+export function settingDefinition(name: SettingName): Definition {
+  const definition = SETTINGS[name];
+  if (!definition) throw new InvalidSetting(`${name} is not a setting`);
+  return definition;
+}
 
 /** A setting a page or a job needs and nobody set: the message says which one and where to set it */
 export class SettingMissing extends ShipcastError {
   readonly setting: SettingName;
 
-  constructor(setting: SettingName, what = SETTINGS[setting].label) {
+  constructor(setting: SettingName, what = settingDefinition(setting).label) {
     // Nothing wrong with the request: the app is not set up for it yet, until the owner sets it
     super(`${what} is not set: set it in Settings (/settings)`, { code: 'setting_missing', httpStatus: 409 });
     this.setting = setting;
@@ -111,14 +122,17 @@ export interface SettingsDeps {
 /** Where a value comes from, for the Settings page */
 export type Source = 'settings' | 'keychain' | '.env' | 'unset';
 
-const envValue = (env: NodeJS.ProcessEnv, name: SettingName) => env[SETTINGS[name].env]?.trim() || undefined;
+const envValue = (env: NodeJS.ProcessEnv, name: SettingName) => env[settingDefinition(name).env]?.trim() || undefined;
 
 async function stored(deps: SettingsDeps, name: SettingName): Promise<string | undefined> {
-  const store = SETTINGS[name].store;
+  const store = settingDefinition(name).store;
   if (store.kind === 'secret') return (await deps.secrets.get(store.key))?.trim() || undefined;
   const value = await deps.registry.setting<string | number>(store.key);
   return value === undefined || value === null || value === '' ? undefined : String(value);
 }
+
+/** The settings that are not a network's app */
+const BASE: Record<keyof BaseValues, true> = { launchesRepo: true, claudioUrl: true, claudioToken: true, maxBudgetUsd: true };
 
 function parse(values: Partial<Record<SettingName, string>>): SettingsValues {
   const budget = values.maxBudgetUsd === undefined ? undefined : Number(values.maxBudgetUsd);
@@ -127,14 +141,7 @@ function parse(values: Partial<Record<SettingName, string>>): SettingsValues {
     claudioUrl: values.claudioUrl?.replace(/\/+$/, ''),
     claudioToken: values.claudioToken,
     maxBudgetUsd: budget !== undefined && budget > 0 ? budget : undefined,
-    instagramAppId: values.instagramAppId,
-    instagramAppSecret: values.instagramAppSecret,
-    threadsAppId: values.threadsAppId,
-    threadsAppSecret: values.threadsAppSecret,
-    linkedinClientId: values.linkedinClientId,
-    linkedinClientSecret: values.linkedinClientSecret,
-    redditClientId: values.redditClientId,
-    redditClientSecret: values.redditClientSecret,
+    ...Object.fromEntries(NAMES.filter((n) => !(n in BASE)).map((n) => [n, values[n]])),
   };
 }
 
@@ -160,7 +167,7 @@ export class RuntimeSettings {
       const own = await stored(this.#deps, name);
       const fallback = envValue(this.#deps.env, name);
       raw[name] = own ?? fallback;
-      sources[name] = own !== undefined ? (SETTINGS[name].store.kind === 'secret' ? 'keychain' : 'settings') : fallback !== undefined ? '.env' : 'unset';
+      sources[name] = own !== undefined ? (settingDefinition(name).store.kind === 'secret' ? 'keychain' : 'settings') : fallback !== undefined ? '.env' : 'unset';
     }
     this.#current = parse(raw);
     this.#sources = sources;
@@ -187,6 +194,13 @@ export class RuntimeSettings {
     return repo;
   }
 
+  /** The owner's app on a network that signs in through one; undefined until both its id and secret are set */
+  oauthApp(networkId: string): OAuthApp | undefined {
+    const clientId = this.#current[oauthSettingName(networkId, 'Id')];
+    const clientSecret = this.#current[oauthSettingName(networkId, 'Secret')];
+    return clientId && clientSecret ? { clientId, clientSecret } : undefined;
+  }
+
   claudio(): { url: string; token: string } {
     const { claudioUrl, claudioToken } = this.#current;
     if (!claudioUrl) throw new SettingMissing('claudioUrl');
@@ -202,7 +216,7 @@ export class RuntimeSettings {
     for (const name of NAMES) {
       const value = change[name];
       if (typeof value !== 'string') continue;
-      const problem = value.trim() ? SETTINGS[name].check?.(value.trim()) : undefined;
+      const problem = value.trim() ? settingDefinition(name).check?.(value.trim()) : undefined;
       if (problem) throw new InvalidSetting(problem);
     }
     for (const name of NAMES) {
@@ -215,7 +229,7 @@ export class RuntimeSettings {
 }
 
 async function put(deps: SettingsDeps, name: SettingName, value: string | undefined): Promise<void> {
-  const store = SETTINGS[name].store;
+  const store = settingDefinition(name).store;
   if (store.kind === 'secret') {
     if (value === undefined) await deps.secrets.delete(store.key);
     else await deps.secrets.set(store.key, value, store.label);
@@ -240,10 +254,10 @@ export async function importEnvSettings(deps: SettingsDeps): Promise<{ imported:
   const imported: string[] = [];
   const skipped: string[] = [];
   for (const name of NAMES) {
-    const variable = SETTINGS[name].env;
+    const variable = settingDefinition(name).env;
     const value = envValue(deps.env, name);
     if (value === undefined || done.has(variable)) continue;
-    if (SETTINGS[name].check?.(value)) {
+    if (settingDefinition(name).check?.(value)) {
       skipped.push(variable);
       continue;
     }

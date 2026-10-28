@@ -1,6 +1,7 @@
 import { reviewProfile, setupFor, type Account, type PipelineDeps, type ProfileConnector, type ProfileDeps, type Registry } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
-import { buildConnector, MissingField } from './catalog.ts';
+import { buildConnector } from './catalog.ts';
+import { MissingField } from './channels/adapter.ts';
 import type { WorkQueue } from './queue.ts';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey } from './services.ts';

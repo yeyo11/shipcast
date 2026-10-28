@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { activeChannels, type Channel, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { activeChannels, CHANNEL_DEFINITIONS, type Channel, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { NETWORK_SPECS } from '../catalog.ts';
+import { networkOf } from '../channels/adapter.ts';
+import { adapterOf } from '../channels/registry.ts';
 import { ConfigError } from '../config.ts';
 import { STATE_BRANCH } from './state.ts';
 
@@ -148,47 +151,32 @@ export function networkEnv(env: NodeJS.ProcessEnv, brandId: string, workDir: str
   return out;
 }
 
-/** The networks' variables, in the order the action documents them; their secrets are named the same */
-export const NETWORK_VARIABLES = [
-  'DEVTO_API_KEY',
-  'BLUESKY_HANDLE',
-  'BLUESKY_APP_PASSWORD',
-  'MASTODON_INSTANCE',
-  'MASTODON_ACCESS_TOKEN',
-  'INSTAGRAM_USER_ID',
-  'INSTAGRAM_ACCESS_TOKEN',
-  'BREVO_API_KEY',
-  'HASHNODE_TOKEN',
-  'HASHNODE_PUBLICATION_HOST',
-  'TELEGRAM_BOT_TOKEN',
-  'TELEGRAM_CHAT_ID',
-  'TELEGRAM_NOTIFY_CHAT_ID',
-  'DISCORD_WEBHOOK_URL',
-  'CLOUDFLARE_API_TOKEN',
-  'CLOUDFLARE_ACCOUNT_ID',
-  'CLOUDFLARE_WEB_ANALYTICS_SITE_TAG',
-  'GOOGLE_SERVICE_ACCOUNT_JSON',
-  'BING_WEBMASTER_API_KEY',
-] as const;
+/** The networks' variables, in the catalog's order, as their specs list them; their secrets are named the same */
+export const NETWORK_VARIABLES: readonly string[] = NETWORK_SPECS.flatMap((spec) => (spec.env ?? []).map((v) => v.actionName ?? v.name));
 
 /**
- * The variables each channel publishes with in Action mode, the first set preferred: the channels
- * Action mode can publish, which `shipcast init` offers from (apps/cli/src/setup.ts). The blog and
- * GitHub Discussions need none of their own. Reddit, LinkedIn and Threads sign in through the app.
+ * The variables each channel publishes with in Action mode, the first set preferred, from the
+ * channels' `.env` variables (packages/runtime/src/channels): every one the Action takes, then, where
+ * some can come from brand.yml's profile links, the set without them. The channels Action mode can
+ * publish, which `shipcast init` offers from (apps/cli/src/setup.ts). The blog and GitHub Discussions
+ * need none of their own; a channel that signs in through the app (Reddit, LinkedIn, Threads) has none.
  */
-export const ACTION_VARIABLES: Readonly<Partial<Record<Channel, readonly (readonly string[])[]>>> = {
-  blog: [[]],
-  githubDiscussions: [[]],
-  devto: [['DEVTO_API_KEY']],
-  // The handle and the instance can also come from brand.yml's profile links
-  bluesky: [['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'], ['BLUESKY_APP_PASSWORD']],
-  mastodon: [['MASTODON_INSTANCE', 'MASTODON_ACCESS_TOKEN'], ['MASTODON_ACCESS_TOKEN']],
-  instagram: [['INSTAGRAM_USER_ID', 'INSTAGRAM_ACCESS_TOKEN']],
-  hashnode: [['HASHNODE_TOKEN', 'HASHNODE_PUBLICATION_HOST']],
-  telegram: [['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID']],
-  discord: [['DISCORD_WEBHOOK_URL']],
-  newsletter: [['BREVO_API_KEY']],
-};
+export const ACTION_VARIABLES: Readonly<Partial<Record<Channel, readonly (readonly string[])[]>>> = Object.fromEntries(
+  CHANNEL_DEFINITIONS.flatMap((definition): Array<[string, string[][]]> => {
+    if (definition.publishedBy === 'merge') return [[definition.id, [[]]]];
+    const adapter = adapterOf(definition.id);
+    if (adapter?.connect.kind === 'engine') return [[definition.id, [[]]]];
+    const variables = adapter && networkOf(adapter)?.env;
+    if (!variables) return [];
+    const wanted = variables.filter((v) => !v.notInAction);
+    const sets = [wanted.map((v) => v.actionName ?? v.name)];
+    if (wanted.some((v) => v.fallback)) sets.push(wanted.filter((v) => !v.fallback).map((v) => v.actionName ?? v.name));
+    return [[definition.id, sets]];
+  }),
+);
+
+/** Where to get each of the networks' variables, for `shipcast init`'s list of secrets to set */
+export const VARIABLE_HOW: Readonly<Record<string, string>> = Object.fromEntries(NETWORK_SPECS.flatMap((spec) => (spec.env ?? []).flatMap((v) => (v.how ? [[v.actionName ?? v.name, v.how]] : []))));
 
 /** Each channel a launch turns on, its mode, and whether Action mode can publish it with this environment */
 export interface ChannelPlan {

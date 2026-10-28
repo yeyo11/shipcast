@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { GitHubDiscussions, type GitHubTokenSource } from '@shipcast/connectors';
+import type { GitHubTokenSource } from '@shipcast/connectors';
 import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Registry } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
-import { buildConnector, credentialsFromEnv, MissingField, NETWORKS, type Built, type Credentials } from './catalog.ts';
+import { buildConnector, credentialsFromEnv, network } from './catalog.ts';
+import { MissingField, networkOf, type AnyChannelAdapter, type Credentials } from './channels/adapter.ts';
+import { adapterOf } from './channels/registry.ts';
+import type { TokenBucket } from './redis/ports.ts';
 import { getJson, type SecretStore } from './secrets.ts';
-import { accountSecretKey, envBrand, INSTAGRAM_TOKEN_KEY } from './services.ts';
+import { accountSecretKey, envBrand, withRefreshedEnvToken } from './services.ts';
 
 export interface EditorDeps {
   env: NodeJS.ProcessEnv;
@@ -15,38 +18,42 @@ export interface EditorDeps {
   fetch?: typeof fetch;
   /** The engine's GitHub access, for GitHub Discussions, which has no account of its own */
   github?: { auth: GitHubTokenSource };
-}
-
-/** GitHub Discussions with the engine's GitHub access; undefined without it */
-function discussions(deps: EditorDeps): GitHubDiscussions | undefined {
-  return deps.github ? new GitHubDiscussions({ auth: deps.github.auth, ...(deps.fetch && { fetch: deps.fetch }) }) : undefined;
+  /** The channels' adapters; the registry's by default */
+  adapters?: readonly AnyChannelAdapter[];
+  buckets?: TokenBucket;
 }
 
 /**
  * A channel's connector built with the account a piece went out with, or the `.env` credentials for
- * a piece with none (undefined when `.env` has none, or speaks for another brand). An account that
- * is gone, or has lost its secrets, is refused with that reason.
+ * a piece with none (undefined when `.env` has none, or speaks for another brand); the engine's own
+ * GitHub access for a channel that has no account. An account that is gone, or has lost its
+ * secrets, is refused with that reason.
  */
-export async function postConnector(deps: EditorDeps, channel: Channel, accountId: number | null): Promise<Built | undefined> {
-  const network = NETWORKS.find((n) => n.channel === channel);
-  if (!network) return undefined;
+export async function postConnector(deps: EditorDeps, channel: Channel, accountId: number | null): Promise<{ adapter: AnyChannelAdapter; connector: unknown } | undefined> {
+  const adapter = adapterOf(channel, deps.adapters);
+  if (!adapter) return undefined;
+  if (adapter.connect.kind === 'engine') {
+    return deps.github ? { adapter, connector: adapter.connect.build({ auth: deps.github.auth, fetch: deps.fetch }) } : undefined;
+  }
+  const spec = networkOf(adapter)!;
+  const name = network(spec.id)?.name ?? adapter.definition.name;
   let credentials: Credentials | undefined;
   if (accountId !== null) {
     const account = await deps.registry.account(accountId);
     const secrets = account ? await getJson(deps.secrets, accountSecretKey(account.id)) : undefined;
-    if (!account || !secrets) throw new PostRefused('no_credentials', `the ${network.name} account the post went out with is not connected any more`);
+    if (!account || !secrets) throw new PostRefused('no_credentials', `the ${name} account the post went out with is not connected any more`);
     credentials = { settings: account.settings, secrets };
   } else if (deps.brand.id === envBrand(deps.env)) {
-    credentials = credentialsFromEnv(network.id, deps.env, deps.brand, deps.readFile ?? ((path) => readFileSync(path, 'utf8')));
+    credentials = credentialsFromEnv(spec.id, deps.env, deps.brand, deps.readFile ?? ((path) => readFileSync(path, 'utf8')), deps.adapters);
     // A token Shipcast refreshed while it still came from .env lives in the registry, as publishing reads it
-    const fresh = network.id === 'instagram' && credentials ? await deps.registry.cursor(INSTAGRAM_TOKEN_KEY) : undefined;
-    if (credentials && fresh) credentials = { ...credentials, secrets: { ...credentials.secrets, accessToken: fresh } };
+    if (credentials) credentials = await withRefreshedEnvToken(spec.id, credentials, deps.registry, deps.adapters);
   }
   if (!credentials) return undefined;
   try {
-    return buildConnector(network.id, credentials, deps.brand, deps.fetch);
+    const built = buildConnector(spec.id, credentials, deps.brand, deps.fetch, { ...(deps.adapters && { adapters: deps.adapters }), ...(deps.buckets && { buckets: deps.buckets }) });
+    return { adapter, connector: built.connector };
   } catch (error) {
-    if (error instanceof MissingField) throw new PostRefused('no_credentials', `${network.name}: ${error.message}`);
+    if (error instanceof MissingField) throw new PostRefused('no_credentials', `${name}: ${error.message}`);
     throw error;
   }
 }
@@ -57,15 +64,8 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
  */
 export function commentConnectors(deps: EditorDeps): CommentDeps['connectors'] {
   return async (channel, accountId) => {
-    if (channel === 'githubDiscussions') {
-      const connector = discussions(deps);
-      return connector ? { reader: connector, replier: connector } : {};
-    }
-    const built = await postConnector(deps, channel, accountId);
-    const connector = built?.mastodon ?? built?.bluesky ?? built?.instagram ?? built?.threads ?? built?.devto;
-    if (!connector) return {};
-    // dev.to reads only: Forem has no endpoint to write a comment
-    return 'reply' in connector ? { reader: connector, replier: connector } : { reader: connector };
+    const found = await postConnector(deps, channel, accountId);
+    return found?.adapter.comments?.(found.connector) ?? {};
   };
 }
 
@@ -77,23 +77,8 @@ export function commentConnectors(deps: EditorDeps): CommentDeps['connectors'] {
  */
 export function postEditors(deps: EditorDeps): EditDeps['editors'] {
   return async (channel, accountId) => {
-    if (channel === 'githubDiscussions') {
-      const connector = discussions(deps);
-      return connector ? { githubDiscussions: connector } : {};
-    }
-    const built = await postConnector(deps, channel, accountId);
-    if (!built) return {};
-    const editors: Editors = {
-      ...(built.mastodon && { mastodon: built.mastodon }),
-      ...(built.telegram && { telegram: built.telegram }),
-      ...(built.discord && { discord: built.discord }),
-      ...(built.devto && { devto: built.devto }),
-      ...(built.hashnode && { hashnode: built.hashnode }),
-      ...(built.bluesky && { bluesky: built.bluesky }),
-      ...(built.threads && { threads: built.threads }),
-      ...(built.linkedin && { linkedin: built.linkedin }),
-      ...(built.reddit && { reddit: built.reddit }),
-    };
-    return editors;
+    const found = await postConnector(deps, channel, accountId);
+    const editor = found?.adapter.editor?.(found.connector);
+    return editor ? ({ [channel]: editor } as Editors) : {};
   };
 }

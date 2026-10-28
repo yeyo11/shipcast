@@ -1,4 +1,4 @@
-import { SETTINGS, type SettingName } from '@shipcast/runtime';
+import { settingDefinition, SETTINGS, type SettingName } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { forOwner } from './errors';
@@ -6,7 +6,7 @@ import { InvalidInput, object, text } from './input';
 
 const NAMES = Object.keys(SETTINGS) as SettingName[];
 /** Shown as set or not, never sent to the page */
-const SECRET: SettingName[] = NAMES.filter((n) => SETTINGS[n].store.kind === 'secret');
+const SECRET: SettingName[] = NAMES.filter((n) => settingDefinition(n).store.kind === 'secret');
 
 /** What the Settings page shows: each setting and where it comes from, the GitHub App and the owner's token */
 export const getSettings = createServerFn({ method: 'GET' }).handler(async () => {
@@ -17,12 +17,12 @@ export const getSettings = createServerFn({ method: 'GET' }).handler(async () =>
     const value = values[name];
     return {
       name,
-      label: SETTINGS[name].label,
-      env: SETTINGS[name].env,
+      label: settingDefinition(name).label,
+      env: settingDefinition(name).env,
       secret: SECRET.includes(name),
       value: SECRET.includes(name) || value === undefined ? null : String(value),
       set: value !== undefined,
-      source: sources[name],
+      source: sources[name] ?? 'unset',
     };
   });
 
@@ -46,7 +46,7 @@ export const getSettings = createServerFn({ method: 'GET' }).handler(async () =>
   const userToken = ctx.userTokens ? ((await ctx.userTokens.token()) ? await ctx.userTokens.stored() : undefined) : undefined;
   return {
     settings,
-    missing: ctx.settings.missing().map((n) => SETTINGS[n].label),
+    missing: ctx.settings.missing().map((n) => settingDefinition(n).label),
     secretsKind: ctx.secrets.kind,
     github: {
       access: ctx.access,
@@ -73,5 +73,5 @@ export const saveSettings = createServerFn({ method: 'POST' })
     const ctx = await appContext();
     await forOwner(() => ctx.settings.write(data));
     await ctx.refresh();
-    return { missing: ctx.settings.missing().map((n) => SETTINGS[n].label) };
+    return { missing: ctx.settings.missing().map((n) => settingDefinition(n).label) };
   });
