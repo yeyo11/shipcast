@@ -83,7 +83,7 @@ test('the migration copies a file store into the table, reads each back, names k
     await file.set('account:4', '{"token":"t0ken-value"}');
     const before = await readFile(join(dir, 'secrets.enc'), 'utf8');
     const { store } = await table(key);
-    await store.set('account:9', 'different');
+    await store.set('account:9', 'tab1e-value');
     await file.set('account:9', 'the-file-one');
     const before2 = await readFile(join(dir, 'secrets.enc'), 'utf8');
     assert.notEqual(before, before2);
@@ -92,11 +92,11 @@ test('the migration copies a file store into the table, reads each back, names k
     assert.deepEqual(result.copied.sort(), ['account:4', 'app:session-key']);
     assert.deepEqual(result.conflicts, ['account:9']);
     assert.equal(await store.get('app:session-key'), 'session-value-1');
-    assert.equal(await store.get('account:9'), 'different', 'a different value already there is never overwritten');
+    assert.equal(await store.get('account:9'), 'tab1e-value', 'a different value already there is never overwritten');
     assert.equal(await readFile(join(dir, 'secrets.enc'), 'utf8'), before2, 'the source was only read');
     const text = migrationLines(result).join('\n');
     assert.match(text, /copied and read back: 2: account:4, app:session-key/);
-    assert.doesNotMatch(text, /session-value|t0ken|the-file-one|different/, 'no value is ever printed');
+    assert.doesNotMatch(text, /session-value|t0ken|the-file-one|tab1e-value/, 'no value is ever printed');
 
     const again = await migrateSecrets(file, store);
     assert.deepEqual([again.copied, again.same.sort()], [[], ['account:4', 'app:session-key']], 'running it again copies nothing');

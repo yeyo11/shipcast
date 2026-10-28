@@ -15,8 +15,8 @@ const API = /^\/api\/v1\//;
 /** The MCP endpoint is the API's other door: the same bearer tokens, checked there (routes/mcp.ts), never the cookie */
 const MCP = /^\/mcp$/;
 
-/** Paths anyone may open: signing in, the static files the sign-in page needs, the health check and GitHub's webhook */
-const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/api\/github\/webhook$/, API, MCP];
+/** Paths anyone may open: signing in, the static files the sign-in page needs, the health and readiness checks and GitHub's webhook */
+const PUBLIC = [/^\/login$/, /^\/auth\/(github|github\/callback|link)$/, /^\/(assets|fonts|logo)\//, /^\/favicon\.svg$/, /^\/api\/health$/, /^\/(livez|readyz)$/, /^\/api\/github\/webhook$/, API, MCP];
 
 /**
  * Every other request needs a session. A page without one goes to the sign-in page, which brings the

@@ -73,6 +73,10 @@ export interface ShipcastEvents {
   'launch.changed': { launchId: number };
   'post.changed': { postId: number; launchId: number };
   'job.changed': { id: string; queue: string; state: JobRecord['state']; launchId: number | null };
+  /** The GitHub App's installation changed: every replica looks it up again */
+  'github.installation.changed': { reason: string };
+  /** The launches repo changed (a push): every replica reads the brand again */
+  'brand.changed': { repo: string };
 }
 
 export type EventName = keyof ShipcastEvents;

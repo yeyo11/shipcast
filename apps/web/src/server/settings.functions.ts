@@ -72,6 +72,6 @@ export const saveSettings = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await appContext();
     await forOwner(() => ctx.settings.write(data));
-    await ctx.refresh();
+    await ctx.settingsSaved(Object.keys(data).join(','));
     return { missing: ctx.settings.missing().map((n) => settingDefinition(n).label) };
   });

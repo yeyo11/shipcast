@@ -7,6 +7,8 @@ import { resolve } from 'node:path';
 import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
 import { connectRepositories, draftLaunch, LaunchRefused, SecretRows, LaunchService, preflight, retryChannelEverywhere, TelemetryStore, type DraftResult, type Launch, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
+import { jobQueue } from '@shipcast/runtime/queue-factory';
+import { processState, RedisLock } from '@shipcast/runtime/redis';
 import {
   attachTelemetryStore,
   buildServices,
@@ -23,8 +25,12 @@ import {
   readAutomation,
   SettingMissing,
   settingDefinition,
+  queuePoolMax,
+  roleFromEnv,
+  runsTheClock,
+  split,
+  startMaintenance,
   startWorking,
-  WorkQueue,
   workHandlers,
   writeAutomation,
   importYouTubeAccount,
@@ -247,6 +253,15 @@ async function main(argv: string[]): Promise<number> {
   const { config, registry, github, secrets, settings, pipeline: deps } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
   const loadBrandNow = () => runtime.brand();
+  // A queue sent to and worked here, on whichever backend the app's processes use (the bullmq flag)
+  const cliQueue = () =>
+    jobQueue({
+      flags: Flags.fromEnv(process.env),
+      registry,
+      databaseUrl: config.databaseUrl,
+      redis: processState(process.env, 'cli').redis,
+      options: { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5, telemetry, reconcileAtStart: !split(roleFromEnv(process.env)) },
+    });
 
   try {
     switch (command) {
@@ -296,7 +311,7 @@ async function main(argv: string[]): Promise<number> {
       case 'metrics': {
         // A job of the queue, sent and worked here, so the app lists it like any other reading
         const brand = await loadBrandNow();
-        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5, telemetry });
+        const queue = cliQueue();
         try {
           const id = await queue.send('metrics', { reason: BY_HAND }, { title: 'Reading the numbers, by hand', singletonKey: BY_HAND });
           if (!id) {
@@ -322,7 +337,7 @@ async function main(argv: string[]): Promise<number> {
           return 2;
         }
         const brand = await loadBrandNow();
-        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'cli', schedule: false, supervise: false, pollingIntervalSeconds: 0.5, telemetry });
+        const queue = cliQueue();
         try {
           const id = await queue.send(
             'snapshots',
@@ -398,9 +413,18 @@ async function main(argv: string[]): Promise<number> {
           await writeAutomation(registry, { ...(await readAutomation(registry)), intervalSeconds: Math.max(MIN_INTERVAL_SECONDS, seconds) });
         }
         const automation = await readAutomation(registry);
-        const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'watch', telemetry });
+        const flags = Flags.fromEnv(process.env);
+        // SHIPCAST_ROLE: a worker or a heavy worker works its own queues only; `all` (unset) every one but the web app's probe
+        const role = roleFromEnv(process.env);
+        if (role === 'web') {
+          console.error('watch works queues: SHIPCAST_ROLE=web never does (worker, heavy or all)');
+          return 2;
+        }
+        const proc = processState(process.env, `watch-${role}`);
+        const queue = jobQueue({ flags, registry, databaseUrl: config.databaseUrl, redis: proc.redis, options: { instanceName: 'watch', telemetry, schedule: runsTheClock(role), supervise: runsTheClock(role), reconcileAtStart: !split(role), poolMax: queuePoolMax(process.env) } });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
-        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags: Flags.fromEnv(process.env) }, { firstRoundInSeconds: 0 });
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags }, { firstRoundInSeconds: 0, role });
+        const stopMaintenance = runsTheClock(role) && (split(role) || flags.on('bullmq')) ? startMaintenance({ queue, lock: proc.redis ? new RedisLock(proc.redis.queue) : proc.shared.lock, reconcileRows: split(role) }) : undefined;
         console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
         if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');
         console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);
@@ -412,7 +436,9 @@ async function main(argv: string[]): Promise<number> {
           process.once('SIGINT', stop);
           process.once('SIGTERM', stop);
         });
+        stopMaintenance?.();
         await queue.stop();
+        await proc.close();
         return 0;
       }
 
@@ -486,6 +512,7 @@ async function main(argv: string[]): Promise<number> {
     }
   } finally {
     await telemetry.stop();
+    await processState().close();
     await registry.close();
   }
 }

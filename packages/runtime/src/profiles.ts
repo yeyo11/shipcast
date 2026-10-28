@@ -2,7 +2,7 @@ import { reviewProfile, setupFor, type Account, type PipelineDeps, type ProfileC
 import type { Brand } from '@shipcast/schema';
 import { buildConnector } from './catalog.ts';
 import { MissingField } from './channels/adapter.ts';
-import type { WorkQueue } from './queue.ts';
+import type { JobQueue } from './queue.ts';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey } from './services.ts';
 
@@ -59,7 +59,7 @@ const reviewKey = (accountId: number) => `profile:${accountId}`;
  * Queues a review of one account's profile. The review already queued for that account, if any, is
  * the one that answers, so clicking twice never asks the AI twice.
  */
-export async function startProfileReview(queue: WorkQueue, account: Pick<Account, 'id' | 'label'>, request: Omit<ProfileReviewRequest, 'accountId'> = {}): Promise<string | undefined> {
+export async function startProfileReview(queue: JobQueue, account: Pick<Account, 'id' | 'label'>, request: Omit<ProfileReviewRequest, 'accountId'> = {}): Promise<string | undefined> {
   const id = await queue.send('profile-review', { accountId: account.id, ...request }, { title: `Reviewing the profile of ${account.label}`, singletonKey: reviewKey(account.id) });
   if (id) return id;
   const [waiting] = await queue.queued('profile-review', reviewKey(account.id));

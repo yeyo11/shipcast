@@ -178,8 +178,8 @@ export const chooseLaunchesRepo = createServerFn({ method: 'POST' })
       if (error instanceof InvalidSetting) return { ok: false as const, problem: error.message };
       throw error;
     }
-    await ctx.refresh();
-    ctx.githubApp?.refresh();
+    await ctx.settingsSaved('launches-repo');
+    await ctx.announce('github.installation.changed', { reason: 'the launches repo changed' });
     try {
       return { ok: true as const, brand: await readBrandFile(ctx, data) };
     } catch (error) {
@@ -233,7 +233,7 @@ export const createBrand = createServerFn({ method: 'POST' })
       if ((await ctx.github.fileAt(data.repo, 'brand.yml', 'HEAD')) !== undefined) return { ok: false as const, problem: `${data.repo} has a brand.yml already: edit it on GitHub` };
       const branch = await ctx.github.defaultBranch(data.repo);
       await ctx.github.updateFile(data.repo, branch, 'brand.yml', yaml, 'chore: add brand.yml for Shipcast');
-      await ctx.refresh();
+      await ctx.announce('brand.changed', { repo: data.repo });
       return { ok: true as const };
     } catch (error) {
       return { ok: false as const, problem: message(error) };
@@ -250,7 +250,7 @@ export const saveClaudio = createServerFn({ method: 'POST' })
     const ctx = await appContext();
     try {
       await ctx.settings.write({ claudioUrl: data.url, ...(data.token && { claudioToken: data.token }) });
-      await ctx.refresh();
+      await ctx.settingsSaved('claudio');
       return { ok: true as const };
     } catch (error) {
       if (error instanceof InvalidSetting) return { ok: false as const, problem: error.message };

@@ -36,7 +36,9 @@ const printSignInLink = (): Plugin => ({
   configureServer(server) {
     server.httpServer?.once('listening', () => {
       const address = server.resolvedUrls?.local[0] ?? 'http://localhost:3000/';
-      console.log(`\n  Sign in: ${address.replace(/\/$/, '')}${signInPath(consoleLinks().create())}\n`);
+      void consoleLinks()
+        .create()
+        .then((token) => console.log(`\n  Sign in: ${address.replace(/\/$/, '')}${signInPath(token)}\n`));
     });
   },
 });

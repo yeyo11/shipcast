@@ -29,4 +29,8 @@ export * from './telemetry/recorder.ts';
 export * from './telemetry/fetch.ts';
 export * from './secrets-table.ts';
 export * from './app-keys.ts';
+export * from './roles.ts';
+export * from './lifecycle.ts';
+export * from './health.ts';
+export * from './replicas.ts';
 export * from './logger.ts';

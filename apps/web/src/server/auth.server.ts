@@ -79,7 +79,7 @@ export async function finishGitHubSignIn(request: Request): Promise<Response> {
 export async function redeemConsoleLink(request: Request): Promise<Response> {
   const { app, secrets } = await appContext();
   const token = new URL(request.url).searchParams.get('token') ?? '';
-  if (!consoleLinks().redeem(token)) return page(403, 'This sign-in link was used already or has expired. The app prints a new one when it starts.');
+  if (!(await consoleLinks().redeem(token))) return page(403, 'This sign-in link was used already or has expired. The app prints a new one when it starts.');
   const session = await createSession(secrets, app.allowedLogins[0]!);
   return redirect(safeNext(new URL(request.url).searchParams.get('next')) ?? '/', [setCookie(SESSION_COOKIE, session.value, session.maxAge)]);
 }

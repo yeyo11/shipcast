@@ -24,6 +24,7 @@ import {
 } from '@shipcast/engine';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { hasScope, readWebMcp, verifyApiToken, type SecretStore } from '@shipcast/runtime';
+import type { WindowLimiter } from '@shipcast/runtime/redis';
 import { PackKind, type Channel } from '@shipcast/schema';
 import { id, InvalidInput, object } from './input.ts';
 import { ApiError, apiErrorOf, errorBody } from './errors.ts';
@@ -68,7 +69,7 @@ export interface ApiDeps {
   launchesRepo: string;
   /** The public origin the OpenAPI document names as its server */
   publicUrl: string;
-  limiter: FailureLimiter;
+  limiter: SignInLimiter;
   /** A page of the last day's work list, the newest first; `next` starts the following page */
   jobs(page: { limit: number; before?: JobCursor }): Promise<{ jobs: JobView[]; next: JobCursor | null }>;
   startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<WorkAnswer>;
@@ -89,13 +90,36 @@ export interface ApiDeps {
   profiles?: ProfileApi;
 }
 
+/** Failed sign-ins per client: in this process (FailureLimiter) or across replicas (sharedLimiter) */
+export interface SignInLimiter {
+  /** Seconds the client must wait, or undefined when it may try */
+  blocked(client: string): number | undefined | Promise<number | undefined>;
+  fail(client: string): void | Promise<void>;
+}
+
+/**
+ * The limiter over the shared window counters (Redis with `redis-state` on): every replica counts a
+ * client's wrong tokens together, so spreading the guesses over replicas buys nothing.
+ */
+export function sharedLimiter(window: WindowLimiter): SignInLimiter {
+  return {
+    async blocked(client) {
+      const state = await window.peek(client);
+      return state.limited ? Math.max(1, state.resetInSeconds) : undefined;
+    },
+    async fail(client) {
+      await window.hit(client);
+    },
+  };
+}
+
 /**
  * Failed sign-ins per client, in memory: ten wrong tokens in ten minutes and that client is refused
  * until the window ends, before its token is even checked. A restart forgets, which is fine for
  * slowing a guesser down; 32 random bytes are not guessed anyway, this keeps the log and the keychain
  * calls quiet.
  */
-export class FailureLimiter {
+export class FailureLimiter implements SignInLimiter {
   readonly #max: number;
   readonly #windowMs: number;
   readonly #failures = new Map<string, { count: number; resetAt: number }>();
@@ -762,11 +786,11 @@ function authenticate(request: Request): string {
 /** Checks the bearer token, counting a wrong one against the client; answers the token's scopes */
 async function bearer(request: Request, deps: Pick<ApiDeps, 'registry' | 'secrets' | 'limiter'>): Promise<readonly ApiScope[]> {
   const client = request.headers.get(PEER_HEADER) || 'unknown';
-  const wait = deps.limiter.blocked(client);
+  const wait = await deps.limiter.blocked(client);
   if (wait !== undefined) throw new ApiError(429, 'rate_limited', 'too many wrong tokens; wait and try again', { 'retry-after': String(wait) });
   const check = await verifyApiToken(deps, authenticate(request));
   if (!check.ok) {
-    deps.limiter.fail(client);
+    await deps.limiter.fail(client);
     throw new ApiError(401, 'unauthorized', check.reason === 'revoked' ? 'this token was revoked' : 'this token is not valid', {
       'www-authenticate': 'Bearer realm="shipcast", error="invalid_token"',
     });

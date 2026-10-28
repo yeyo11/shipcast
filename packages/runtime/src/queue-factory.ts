@@ -16,8 +16,7 @@ export interface JobQueueDeps {
 /**
  * The queue a process works, by the `bullmq` flag: off, pg-boss in the registry's Postgres (what runs
  * today); on, BullMQ on redis-queue, which needs SHIPCAST_REDIS_QUEUE_URL. One switch for every
- * process type (web, worker, heavy worker, CLI), so they never disagree on where a job waits. Not
- * called by the app yet: the composition roots adopt it when the flag is wired.
+ * process type (web, worker, heavy worker, CLI), so they never disagree on where a job waits: what every composition root builds its queue with.
  */
 export function jobQueue(deps: JobQueueDeps): JobQueue {
   const options = deps.options ?? {};
@@ -29,5 +28,6 @@ export function jobQueue(deps: JobQueueDeps): JobQueue {
     ...(options.retryDelaySeconds !== undefined && { retryDelaySeconds: options.retryDelaySeconds }),
     ...(options.lockSeconds !== undefined && { lockSeconds: options.lockSeconds }),
     ...(options.telemetry && { telemetry: options.telemetry }),
+    ...(options.reconcileAtStart !== undefined && { reconcileAtStart: options.reconcileAtStart }),
   });
 }

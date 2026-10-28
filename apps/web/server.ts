@@ -4,6 +4,9 @@ import { createServer as createHttps } from 'node:https';
 import { extname, join, normalize, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import type { BlockList } from 'node:net';
+import { onStop } from '@shipcast/runtime';
+import { clientAddress } from './src/server/client-address.ts';
 
 /**
  * The app in production: the built TanStack Start handler behind Node's own server, with the
@@ -38,14 +41,16 @@ function serveStatic(pathname: string, response: ServerResponse): boolean {
   return true;
 }
 
-function toRequest(request: IncomingMessage, origin: string): Request {
+function toRequest(request: IncomingMessage, origin: string, proxies: BlockList | undefined): Request {
   const headers = new Headers();
   for (const [name, value] of Object.entries(request.headers)) {
     if (Array.isArray(value)) for (const v of value) headers.append(name, v);
     else if (value !== undefined) headers.set(name, value);
   }
-  // Who is calling, for the API's limit on wrong tokens: from the socket, never from what the client sent
-  headers.set('x-shipcast-peer', request.socket.remoteAddress ?? 'unknown');
+  // Who is calling, for the API's limit on wrong tokens: the socket, or behind a trusted proxy the
+  // client it names; never what the client itself sent
+  const forwarded = request.headers['x-forwarded-for'];
+  headers.set('x-shipcast-peer', clientAddress(request.socket.remoteAddress, Array.isArray(forwarded) ? forwarded.join(',') : forwarded, proxies));
   const method = request.method ?? 'GET';
   const body = method === 'GET' || method === 'HEAD' ? undefined : (Readable.toWeb(request) as ReadableStream<Uint8Array>);
   return new Request(new URL(request.url ?? '/', origin), { method, headers, body, duplex: 'half' } as RequestInit);
@@ -76,15 +81,31 @@ export interface ServeOptions {
   tls?: { key: string; cert: string };
   /** A preview copy over plain HTTP (`SHIPCAST_APP_TLS=off` in main.ts): cookies lose their Secure flag, which a browser refuses over HTTP on a tailnet address */
   plainHttp?: boolean;
+  /** The proxies whose X-Forwarded-For names the client (SHIPCAST_TRUSTED_PROXIES); none, the socket is the client */
+  trustedProxies?: BlockList;
+  /**
+   * A worker or heavy worker (SHIPCAST_ROLE): it answers /livez and /readyz for its orchestrator and
+   * nothing else, so no page or API is ever served from a process that is not the web
+   */
+  healthOnly?: boolean;
+  /** How long a stop waits for requests in flight (an SSE stream never ends on its own) before closing them */
+  closeTimeoutMs?: number;
 }
+
+const HEALTH = new Set(['/livez', '/readyz']);
 
 export async function serve(options: ServeOptions): Promise<{ close(): Promise<void>; setCertificate(tls: { key: string; cert: string }): void }> {
   const entry = (await import(join(here, 'dist/server/server.js'))) as { default: { fetch(request: Request): Promise<Response> } };
   const handler = async (request: IncomingMessage, response: ServerResponse) => {
     try {
       const pathname = new URL(request.url ?? '/', 'http://x').pathname;
+      if (options.healthOnly && !HEALTH.has(pathname)) {
+        response.writeHead(404, { 'content-type': 'text/plain' });
+        response.end('This process is a worker: only /livez and /readyz answer here.');
+        return;
+      }
       if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && serveStatic(pathname, response)) return;
-      await send(response, await entry.default.fetch(toRequest(request, options.origin)), options.plainHttp === true && !options.tls);
+      await send(response, await entry.default.fetch(toRequest(request, options.origin, options.trustedProxies)), options.plainHttp === true && !options.tls);
     } catch (error) {
       console.error(error);
       if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' });
@@ -95,8 +116,23 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
   await new Promise<void>((done) => server.listen(options.port, options.host, done));
   // The app's context, and with it the rounds nobody starts by hand, begins now rather than at the first visit
   void entry.default.fetch(new Request(`${options.origin}/api/health`)).catch(() => undefined);
+  /*
+   * A stop's HTTP step (lifecycle.ts): no new connection is taken, idle keep-alive ones close now, and
+   * the requests in flight get closeTimeoutMs to finish before their connections are cut
+   */
+  const close = () =>
+    new Promise<void>((done) => {
+      const cut = setTimeout(() => server.closeAllConnections(), options.closeTimeoutMs ?? 10_000);
+      cut.unref();
+      server.close(() => {
+        clearTimeout(cut);
+        done();
+      });
+      server.closeIdleConnections();
+    });
+  onStop('http', 'the HTTP server', close);
   return {
-    close: () => new Promise((done) => server.close(() => done())),
+    close,
     // A renewed certificate is swapped in without dropping connections
     setCertificate: (tls) => {
       if ('setSecureContext' in server) server.setSecureContext({ key: tls.key, cert: tls.cert });

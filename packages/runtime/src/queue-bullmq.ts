@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { JobRecord } from '@shipcast/engine';
 import { DelayedError, Queue, UnrecoverableError, Worker, type Job, type JobsOptions } from 'bullmq';
 import type { Redis } from 'ioredis';
-import { QUEUE_NAMES, QUEUES, reconcileRows, runJob, waitForJob, type Handler, type Handlers, type HeldCounts, type HeldJob, type JobData, type JobQueue, type QueueName, type QueueRepositories, type SendOptions, type WorkQueue } from './queue.ts';
+import { QUEUE_NAMES, QUEUES, reconcileRows, runJob, waitForJob, type Handler, type Handlers, type HeldCounts, type HeldJob, type JobData, type JobQueue, type QueueName, type QueueRepositories, type ReconcileOptions, type SendOptions, type WorkQueue } from './queue.ts';
 import { RedisLock } from './redis/adapters.ts';
 import { Script, type RedisConnections } from './redis/connection.ts';
 import type { Lock } from './redis/ports.ts';
@@ -78,6 +78,8 @@ export interface BullQueueOptions {
   /** How long a job waits before trying again when another job of its key is running */
   deferMs?: number;
   telemetry?: TelemetryRecorder;
+  /** Whether start() reconciles the `jobs` rows, as a lone process does (the default); see QueueOptions */
+  reconcileAtStart?: boolean;
 }
 
 /** Waiting, in BullMQ's words: what a `created` or `retry` slot may name */
@@ -121,6 +123,7 @@ export class BullQueue implements JobQueue {
   readonly #lockMs: number;
   readonly #deferMs: number;
   readonly #telemetry: TelemetryRecorder | undefined;
+  readonly #reconcileAtStart: boolean;
   readonly #queues = new Map<QueueName, Queue>();
   readonly #workers: Worker[] = [];
   readonly #renewals = new Set<ReturnType<typeof setInterval>>();
@@ -143,6 +146,7 @@ export class BullQueue implements JobQueue {
     this.#lockMs = (options.lockSeconds ?? 30) * 1000;
     this.#deferMs = options.deferMs ?? 1000;
     this.#telemetry = options.telemetry;
+    this.#reconcileAtStart = options.reconcileAtStart ?? true;
   }
 
   /** The queue on a process's connections to redis-queue */
@@ -186,9 +190,14 @@ export class BullQueue implements JobQueue {
         queue.on('error', (error) => this.#onError(error));
         this.#queues.set(name, queue);
       }
-      await reconcileRows(this.#registry, (record) => this.#held(record.queue as QueueName, record.id));
+      if (this.#reconcileAtStart) await reconcileRows(this.#registry, (record) => this.#held(record.queue as QueueName, record.id));
     })();
     return this.#started;
+  }
+
+  async reconcile(options: ReconcileOptions = {}): Promise<void> {
+    await this.start();
+    await reconcileRows(this.#registry, (record) => this.#held(record.queue as QueueName, record.id), options);
   }
 
   async #held(name: QueueName, id: string): Promise<HeldJob | undefined> {

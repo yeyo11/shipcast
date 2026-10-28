@@ -30,11 +30,14 @@ export async function receiveWebhook(request: Request): Promise<Response> {
   } catch {
     return done(400, 'the body is not JSON: set the content type to application/json');
   }
-  const action = webhookAction(event, payload, ctx.settings.current().launchesRepo ?? '');
+  const launchesRepo = ctx.settings.current().launchesRepo ?? '';
+  // A push to the launches repo may change brand.yml: every replica reads the brand again
+  if (event === 'push' && launchesRepo && payload.repository?.full_name?.toLowerCase() === launchesRepo.toLowerCase()) await ctx.announce('brand.changed', { repo: launchesRepo });
+  const action = webhookAction(event, payload, launchesRepo);
   if (action.kind === 'ping') return done(200, 'pong: the webhook reaches Shipcast');
   if (action.kind === 'installation') {
-    // The next token is minted for the installation as it is now
-    ctx.githubApp?.refresh();
+    // The next token is minted for the installation as it is now, on every replica
+    await ctx.announce('github.installation.changed', { reason: action.summary });
     return done(200, `${action.summary}: Shipcast will look it up again`);
   }
   if ((await readAutomation(ctx.registry)).mode !== 'webhook') return done(200, 'received, but webhooks are turned off in Automation');
@@ -43,6 +46,17 @@ export async function receiveWebhook(request: Request): Promise<Response> {
   // The claim reads launch.yml from GitHub and the draft takes minutes: both are a job of the
   // queue, so the answer is immediate and a restart in between loses nothing
   const what = action.kind === 'claim' ? `${action.event.repo} ${action.event.type === 'release' ? action.event.tag : 'made public'}` : action.pullRequestUrl;
-  const job = await ctx.queue.send('delivery', { action, delivery }, { title: action.kind === 'claim' ? `Claiming ${what}` : `Publishing the merge of ${what}` });
+  // A redelivery of one already queued (GitHub's own retry, or one sent again by hand) is dropped:
+  // with redis-state on the ids are seen by every replica; without it, as before, it is queued again
+  const dedupe = ctx.process.shared.backend === 'redis' && delivery !== 'unknown' ? ctx.process.shared.deliveries : undefined;
+  if (dedupe && !(await dedupe.claim(delivery))) return done(200, 'a redelivery of one already received: nothing queued');
+  let job: string | null;
+  try {
+    job = await ctx.queue.send('delivery', { action, delivery }, { title: action.kind === 'claim' ? `Claiming ${what}` : `Publishing the merge of ${what}` });
+  } catch (error) {
+    // Not queued: GitHub's redelivery must be taken
+    await dedupe?.release(delivery);
+    throw error;
+  }
   return done(202, `queued: ${action.kind === 'claim' ? `claiming ${what}` : `publishing ${what}`}${job ? '' : ' (already queued)'}`);
 }
