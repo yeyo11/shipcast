@@ -2,7 +2,7 @@ import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
-import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type WorkQueue } from './queue.ts';
+import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, type Handlers, type JobQueue, type WorkQueue } from './queue.ts';
 import { notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
@@ -61,7 +61,7 @@ const scheduledKey = (postId: number) => `post:${postId}`;
  * (a slot missed while the machine was off) wakes it at once. Idempotent: arming a piece twice
  * leaves one job, and the job does nothing if the piece went out or moved meanwhile.
  */
-export async function armScheduled(queue: WorkQueue, post: Post, launch?: Launch): Promise<string | null> {
+export async function armScheduled(queue: JobQueue, post: Post, launch?: Launch): Promise<string | null> {
   if (post.status !== 'scheduled' || !post.scheduledAt) return null;
   const at = new Date(Math.max(Date.parse(post.scheduledAt), Date.now()));
   const of = launch ? ` of ${nameOf(launch)}` : '';

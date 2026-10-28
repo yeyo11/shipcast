@@ -46,7 +46,7 @@ export const PUBLISH_RETRY_SECONDS = 30;
 /** Attempts after the first: 40 of 30 seconds wait the 20 minutes the old loop did */
 export const PUBLISH_RETRIES = 40;
 
-interface QueueSpec extends Omit<Queue, 'name'> {
+export interface QueueSpec extends Omit<Queue, 'name'> {
   /** The title of a job nobody named, such as one a schedule sent */
   title: string;
   /** How many of its jobs one process runs at once */
@@ -60,7 +60,7 @@ interface QueueSpec extends Omit<Queue, 'name'> {
  * `stately`: one queued and one running at most, whichever process sent them (per account, for a
  * Sync now, which has its own key).
  */
-const QUEUES: Record<QueueName, QueueSpec> = {
+export const QUEUES: Record<QueueName, QueueSpec> = {
   draft: { title: 'Drafting a launch', policy: 'standard', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
   article: { title: 'Writing an article’s pieces', policy: 'standard', retryLimit: 0, expireInSeconds: 2 * 3600, concurrency: 2 },
   publish: { title: 'Publishing a launch', policy: 'stately', retryLimit: PUBLISH_RETRIES, retryDelay: PUBLISH_RETRY_SECONDS, expireInSeconds: 30 * 60, concurrency: 2 },
@@ -136,6 +136,120 @@ export interface QueueOptions {
   telemetry?: TelemetryRecorder;
 }
 
+/**
+ * What the app and `shipcast watch` need of the durable work, whichever queue holds it: pg-boss
+ * (`WorkQueue`) or BullMQ (`BullQueue`, behind the `bullmq` flag). Both keep the registry's `jobs`
+ * rows through the same wrapper (`runJob`), and one contract suite
+ * (test/queue-contract.test.ts) holds both to the same semantics.
+ */
+export interface JobQueue {
+  readonly registry: Registry;
+  start(): Promise<void>;
+  send<Q extends QueueName>(queue: Q, data: JobData[Q], options?: SendOptions): Promise<string | null>;
+  upsert<Q extends QueueName>(queue: Q, data: JobData[Q], options: SendOptions & { singletonKey: string }): Promise<string | null>;
+  schedule<Q extends QueueName>(queue: Q, cron: string, data: JobData[Q], options?: { singletonKey?: string }): Promise<void>;
+  queued(queue: QueueName, singletonKey?: string): Promise<string[]>;
+  work(handlers: Handlers): Promise<void>;
+  wait(id: string, timeoutMs: number, everyMs?: number): Promise<JobRecord | undefined>;
+  stop(timeoutMs?: number): Promise<void>;
+}
+
+/** One attempt of a job, as either queue hands it over */
+export interface RunningJob<Q extends QueueName> {
+  id: string;
+  queue: Q;
+  data: JobData[Q];
+  /** 1 for the first */
+  attempt: number;
+  lastAttempt: boolean;
+  /** When it could first start (its time, for a delayed job), for the job-wait timing */
+  readyAt: number;
+  signal: AbortSignal;
+}
+
+/**
+ * The wrapper around every handler, for both queues: the registry's row at each transition, the log
+ * and link, the timing of the attempt and of its wait, and the `job:<queue>` origin the calls made
+ * inside it are counted under. It rethrows what the handler threw: the queue decides what follows.
+ */
+export async function runJob<Q extends QueueName>(registry: Registry, telemetry: TelemetryRecorder | undefined, job: RunningJob<Q>, handler: Handler<Q>): Promise<void> {
+  const { id, queue, attempt, lastAttempt } = job;
+  // From when it could start to now: how long the queue kept it waiting
+  telemetry?.timing({ kind: 'job-wait', name: queue, outcome: 'ok', ms: Math.max(0, Date.now() - job.readyAt) });
+  const started = performance.now();
+  // A job a schedule sent, or one sent before its row existed, is recorded when it starts
+  await registry.recordJob({ id, queue, title: QUEUES[queue].title });
+  await registry.updateJob(id, { state: 'active', attempts: attempt, started: true, ended: false });
+  // Lines are written in order, and a failed write never fails the work
+  let written: Promise<void> = Promise.resolve();
+  const log = (line: string) => {
+    written = written.then(() => registry.logJob(id, line)).catch(() => undefined);
+  };
+  let link: string | undefined;
+  try {
+    await withOrigin(`job:${queue}`, () => handler(job.data, { id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal }));
+  } catch (error) {
+    telemetry?.timing({ kind: 'job', name: queue, outcome: lastAttempt ? 'error' : 'retry', ms: performance.now() - started });
+    log(error instanceof RetryLater ? `Waiting: ${message(error)}` : message(error));
+    await written;
+    await registry.updateJob(id, { state: lastAttempt ? 'failed' : 'retry', ended: lastAttempt, ...(link !== undefined && { link }) });
+    throw error;
+  }
+  telemetry?.timing({ kind: 'job', name: queue, outcome: 'ok', ms: performance.now() - started });
+  await written;
+  await registry.updateJob(id, { state: 'completed', ended: true, ...(link !== undefined && { link }) });
+}
+
+/** Polls the registry's row until the job has ended, in any process; undefined when the time is up first */
+export async function waitForJob(registry: Registry, id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const record = await registry.job(id);
+    if (record && (record.state === 'completed' || record.state === 'failed')) return record;
+    if (Date.now() > deadline) return undefined;
+    await new Promise((r) => setTimeout(r, everyMs));
+  }
+}
+
+/** What a queue says of one of its jobs, for reconcileRows: its state and the retries it made */
+export interface HeldJob {
+  state: JobRecord['state'];
+  retryCount: number;
+}
+
+/**
+ * Brings the rows of jobs that were waiting or running when a process stopped in line with the
+ * queue: a job it expired, failed or lost is not left showing "running". `find` answers for one row.
+ */
+export async function reconcileRows(registry: Registry, find: (record: JobRecord) => Promise<HeldJob | undefined>): Promise<void> {
+  for (const record of await registry.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
+    if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
+    const job = await find(record);
+    if (!job) {
+      // pg-boss only deletes a waiting job after its retention (14 days) and an ended one a week
+      // after it ended, so in practice a row lands here when pg-boss's tables were edited by hand,
+      // as a preview copy that clears the queued work does, or (on BullMQ) when Redis was lost.
+      // One that never started did nothing.
+      await registry.updateJob(record.id, { state: 'failed', ended: true });
+      await registry.logJob(record.id, record.state === 'created' ? NEVER_RAN : LOST_RUNNING);
+      continue;
+    }
+    if (job.state === record.state) continue;
+    await registry.updateJob(record.id, { state: job.state, attempts: Math.max(record.attempts, job.retryCount + (job.state === 'created' ? 0 : 1)), ended: job.state === 'completed' || job.state === 'failed' });
+  }
+  // A draft cut short by a stop leaves its launch "generating" for good, and a launch in that state
+  // cannot be started again; failed, it can, and its page says why
+  const live = await registry.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
+  const drafting = new Set(live.map((j) => j.launchId));
+  const { launches } = await registry.launchesPage({ status: 'generating', limit: 100 });
+  for (const launch of launches) {
+    if (!drafting.has(launch.id)) await registry.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
+  }
+}
+
+/** What a queue still holds per queue: what a cutover waits on */
+export type HeldCounts = Record<QueueName, { queued: number; active: number }>;
+
 /** The last line of a row whose pg-boss job is gone: waiting, it never ran, so nothing was done */
 export const NEVER_RAN = 'The queue no longer has this job: it was removed before it ran, so nothing was done';
 /** …and one that had started, whose end nobody recorded */
@@ -149,7 +263,7 @@ function stateOf(state: string): JobRecord['state'] {
   return 'failed';
 }
 
-export class WorkQueue {
+export class WorkQueue implements JobQueue {
   readonly #boss: PgBoss;
   readonly #registry: Registry;
   readonly #polling: number;
@@ -210,29 +324,24 @@ export class WorkQueue {
    * pg-boss: a job it expired, failed or deleted (by retention) is not left showing "running".
    */
   async #reconcile(): Promise<void> {
-    for (const record of await this.#registry.jobs({ states: ['created', 'active', 'retry'], limit: 500 })) {
-      if (!(QUEUE_NAMES as string[]).includes(record.queue)) continue;
+    await reconcileRows(this.#registry, async (record) => {
       const [job] = await this.#boss.findJobs(record.queue, { id: record.id });
-      if (!job) {
-        // pg-boss only deletes a waiting job after its retention (14 days) and an ended one a week
-        // after it ended, so in practice a row lands here when pg-boss's tables were edited by hand,
-        // as a preview copy that clears the queued work does. One that never started did nothing.
-        await this.#registry.updateJob(record.id, { state: 'failed', ended: true });
-        await this.#registry.logJob(record.id, record.state === 'created' ? NEVER_RAN : LOST_RUNNING);
-        continue;
-      }
-      const state = stateOf(job.state);
-      if (state === record.state) continue;
-      await this.#registry.updateJob(record.id, { state, attempts: Math.max(record.attempts, job.retryCount + (state === 'created' ? 0 : 1)), ended: state === 'completed' || state === 'failed' });
+      return job && { state: stateOf(job.state), retryCount: job.retryCount };
+    });
+  }
+
+  /** How many jobs pg-boss holds queued and running per queue, from its own table: what drainPgBoss reads */
+  async held(): Promise<HeldCounts> {
+    await this.start();
+    const { rows } = await this.#boss.getDb().executeSql(`SELECT name, state, count(*)::int AS n FROM ${QUEUE_SCHEMA}.job WHERE state IN ('created', 'retry', 'active') GROUP BY name, state`);
+    const counts = Object.fromEntries(QUEUE_NAMES.map((q) => [q, { queued: 0, active: 0 }])) as HeldCounts;
+    for (const row of rows as Array<{ name: string; state: string; n: number }>) {
+      const entry = counts[row.name as QueueName];
+      if (!entry) continue;
+      if (row.state === 'active') entry.active += row.n;
+      else entry.queued += row.n;
     }
-    // A draft cut short by a stop leaves its launch "generating" for good, and a launch in that state
-    // cannot be started again; failed, it can, and its page says why
-    const live = await this.#registry.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
-    const drafting = new Set(live.map((j) => j.launchId));
-    const { launches } = await this.#registry.launchesPage({ status: 'generating', limit: 100 });
-    for (const launch of launches) {
-      if (!drafting.has(launch.id)) await this.#registry.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
-    }
+    return counts;
   }
 
   /**
@@ -299,33 +408,8 @@ export class WorkQueue {
     const options = { pollingIntervalSeconds: this.#polling, localConcurrency: spec.concurrency, includeMetadata: true } as const;
     await this.#boss.work<JobData[Q], void, typeof options>(queue, options, async ([job]) => {
       if (!job) return;
-      // From when it could start (its time, for a delayed job) to now: how long the queue kept it waiting
-      telemetry?.timing({ kind: 'job-wait', name: queue, outcome: 'ok', ms: Math.max(0, Date.now() - Math.max(job.startAfter.getTime(), job.createdOn.getTime())) });
-      const started = performance.now();
-      const attempt = job.retryCount + 1;
-      const lastAttempt = job.retryCount >= (spec.retryLimit ?? 0);
-      // A job a schedule sent, or one sent before its row existed, is recorded when it starts
-      await registry.recordJob({ id: job.id, queue, title: spec.title });
-      await registry.updateJob(job.id, { state: 'active', attempts: attempt, started: true, ended: false });
-      // Lines are written in order, and a failed write never fails the work
-      let written: Promise<void> = Promise.resolve();
-      const log = (line: string) => {
-        written = written.then(() => registry.logJob(job.id, line)).catch(() => undefined);
-      };
-      let link: string | undefined;
-      try {
-        await withOrigin(`job:${queue}`, () => handler(job.data, { id: job.id, attempt, lastAttempt, log, link: (url) => void (link = url), signal: job.signal }));
-      } catch (error) {
-        telemetry?.timing({ kind: 'job', name: queue, outcome: lastAttempt ? 'error' : 'retry', ms: performance.now() - started });
-        log(error instanceof RetryLater ? `Waiting: ${message(error)}` : message(error));
-        await written;
-        await registry.updateJob(job.id, { state: lastAttempt ? 'failed' : 'retry', ended: lastAttempt, ...(link !== undefined && { link }) });
-        // pg-boss decides what follows: another attempt after the queue's delay, or failed for good
-        throw error;
-      }
-      telemetry?.timing({ kind: 'job', name: queue, outcome: 'ok', ms: performance.now() - started });
-      await written;
-      await registry.updateJob(job.id, { state: 'completed', ended: true, ...(link !== undefined && { link }) });
+      // pg-boss decides what follows a throw: another attempt after the queue's delay, or failed for good
+      await runJob(registry, telemetry, { id: job.id, queue, data: job.data, attempt: job.retryCount + 1, lastAttempt: job.retryCount >= (spec.retryLimit ?? 0), readyAt: Math.max(job.startAfter.getTime(), job.createdOn.getTime()), signal: job.signal }, handler);
     });
   }
 
@@ -333,14 +417,8 @@ export class WorkQueue {
    * Waits until a job has ended, in this process or any other that works its queue; undefined when
    * the time is up first.
    */
-  async wait(id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const record = await this.#registry.job(id);
-      if (record && (record.state === 'completed' || record.state === 'failed')) return record;
-      if (Date.now() > deadline) return undefined;
-      await new Promise((r) => setTimeout(r, everyMs));
-    }
+  wait(id: string, timeoutMs: number, everyMs = 1000): Promise<JobRecord | undefined> {
+    return waitForJob(this.#registry, id, timeoutMs, everyMs);
   }
 
   /**
