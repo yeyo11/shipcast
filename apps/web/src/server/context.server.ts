@@ -84,7 +84,7 @@ async function createContext(): Promise<AppContext> {
   const flags = Flags.fromEnv(process.env);
   const app = loadAppConfig(process.env);
   // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
-  const runtime = await createRuntime({ root: ROOT, log: console.log, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
+  const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
   const queue = WorkQueue.postgres(config.databaseUrl, registry, { instanceName: 'app', telemetry });

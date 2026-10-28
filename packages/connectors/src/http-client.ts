@@ -50,6 +50,54 @@ export class MemoryEtagCache implements EtagCache {
   }
 }
 
+/**
+ * An ETag cache for a long-lived process without Redis: least recently used first out, bounded by
+ * entries and by the bytes of the bodies it holds, so reading many large files cannot grow it for
+ * ever. A Map keeps insertion order, so re-inserting on every read is what makes it an LRU.
+ */
+export class LruEtagCache implements EtagCache {
+  readonly #entries = new Map<string, EtagEntry>();
+  readonly #maxEntries: number;
+  readonly #maxBytes: number;
+  #bytes = 0;
+
+  constructor(options: { maxEntries?: number; maxBytes?: number } = {}) {
+    this.#maxEntries = options.maxEntries ?? 1_000;
+    this.#maxBytes = options.maxBytes ?? 32 * 1024 * 1024;
+  }
+
+  get size(): number {
+    return this.#entries.size;
+  }
+
+  get(key: string): EtagEntry | undefined {
+    const entry = this.#entries.get(key);
+    if (!entry) return undefined;
+    this.#entries.delete(key);
+    this.#entries.set(key, entry);
+    return entry;
+  }
+
+  set(key: string, entry: EtagEntry): void {
+    // An answer larger than a quarter of the cache would only push everything else out
+    if (entry.body.length > this.#maxBytes / 4) return;
+    this.#drop(key);
+    this.#entries.set(key, entry);
+    this.#bytes += entry.body.length;
+    for (const oldest of this.#entries.keys()) {
+      if (this.#entries.size <= this.#maxEntries && this.#bytes <= this.#maxBytes) break;
+      this.#drop(oldest);
+    }
+  }
+
+  #drop(key: string): void {
+    const there = this.#entries.get(key);
+    if (!there) return;
+    this.#bytes -= there.body.length;
+    this.#entries.delete(key);
+  }
+}
+
 export interface RetryPolicy {
   /** Tries in all, the first included */
   attempts: number;

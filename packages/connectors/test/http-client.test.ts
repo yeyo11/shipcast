@@ -278,3 +278,23 @@ test('without an injected fetch, the global one is read at call time', async () 
     globalThis.fetch = original;
   }
 });
+
+test('the LRU ETag cache drops the least recently read entry, by count and by bytes', async () => {
+  const { LruEtagCache } = await import('../src/index.ts');
+  const entry = (body: string) => ({ etag: '"x"', body, status: 200, headers: {} });
+  const lru = new LruEtagCache({ maxEntries: 2, maxBytes: 100 });
+  lru.set('a', entry('1'));
+  lru.set('b', entry('2'));
+  lru.get('a');
+  lru.set('c', entry('3'));
+  assert.equal(lru.get('b'), undefined, 'b was the least recently read');
+  assert.ok(lru.get('a') && lru.get('c'));
+  lru.set('big', entry('x'.repeat(26)));
+  assert.equal(lru.get('big'), undefined, 'a body past a quarter of the bytes is not kept');
+  const bytes = new LruEtagCache({ maxEntries: 10, maxBytes: 40 });
+  for (const k of ['a', 'b', 'c']) bytes.set(k, entry('x'.repeat(10)));
+  bytes.set('d', entry('x'.repeat(10)));
+  bytes.set('e', entry('x'.repeat(10)));
+  assert.equal(bytes.get('a'), undefined);
+  assert.equal(bytes.size, 4);
+});

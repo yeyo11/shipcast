@@ -29,3 +29,4 @@ export * from './telemetry/recorder.ts';
 export * from './telemetry/fetch.ts';
 export * from './secrets-table.ts';
 export * from './logger.ts';
+export * from './github-events.ts';

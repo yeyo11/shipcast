@@ -15,6 +15,9 @@ import {
 import type { Brand } from '@shipcast/schema';
 import { aiSetup } from './ai.ts';
 import { loadConfig, type Config } from './config.ts';
+import { Flags } from './flags.ts';
+import { githubCaches, type GitHubCaches } from './github-events.ts';
+import type { Cache } from './redis/ports.ts';
 import { GitHubUserTokens } from './github-user.ts';
 import { secretStoreFor, type SecretStore } from './secrets.ts';
 import { importEnvSettings, RuntimeSettings } from './settings.ts';
@@ -39,6 +42,8 @@ export interface Runtime {
   brand(): Promise<Brand>;
   /** Reads the settings again: after a save in the app, and before each round */
   refresh(): Promise<void>;
+  /** With `github-events`: the GitHub client's ETag and file caches, which webhooks and the poll invalidate */
+  githubCaches: GitHubCaches | undefined;
 }
 
 /**
@@ -82,6 +87,13 @@ export interface RuntimeOptions {
    * repos. Not the App's token minting or the sign-in, whose POSTs must stay real to read at all.
    */
   githubFetch?: typeof fetch;
+  /** The refactor's switches; read from `env` when not given */
+  flags?: Flags;
+  /**
+   * The shared Cache (Redis, with `redis-state`) the GitHub caches live in, so every replica's 304
+   * serves the others; this process's memory when not given
+   */
+  cache?: Cache;
 }
 
 const BRAND_TTL_MS = 5 * 60_000;
@@ -99,6 +111,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   if (skipped.length > 0) log(`Settings: not imported from .env, the value does not pass the Settings page's check: ${skipped.join(', ')}`);
   await settings.read();
 
+  const flags = options.flags ?? Flags.fromEnv(env);
+  const caches = flags.on('github-events') ? githubCaches(options.cache, () => settings.current().launchesRepo) : undefined;
   const app = config.githubApp;
   const githubApp = app
     ? new GitHubApp({
@@ -108,10 +122,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         // The launches repo's installation; before one is set, the owner's own account
         account: () => settings.current().launchesRepo ?? config.allowedLogins[0],
         ...(options.fetch && { fetch: options.fetch }),
+        ...(caches && { etags: caches.etags }),
       })
     : undefined;
   const githubFetch = options.githubFetch ?? options.fetch;
-  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }) });
+  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }), ...(caches && { etags: caches.etags, files: caches.files }) });
   const access: GitHubAccess = app ? { kind: 'app', slug: app.slug, bot: app.slug ? `${app.slug}[bot]` : undefined } : { kind: 'token' };
   // The refresh is locked across every process on the registry: two replicas never spend one refresh token
   const userTokens = app ? new GitHubUserTokens({ secrets, lock: new PostgresLock(registry.database), client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
@@ -119,6 +134,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let cached: { repo: string; brand: Brand; at: number } | undefined;
   const brand = async (): Promise<Brand> => {
     const repo = settings.launchesRepo();
+    // With the file cache brand.yml is read from GitHub once, then again only after a push to it
+    if (caches) return loadBrand(github, repo);
     if (!cached || cached.repo !== repo || Date.now() - cached.at > BRAND_TTL_MS) cached = { repo, brand: await loadBrand(github, repo), at: Date.now() };
     return cached.brand;
   };
@@ -160,5 +177,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     refresh: async () => {
       await settings.read();
     },
+    githubCaches: caches,
   };
 }
