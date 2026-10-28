@@ -8,6 +8,8 @@ export interface JobView {
   id: string;
   title: string;
   state: 'running' | 'done' | 'failed';
+  /** Queued for a time still to come (a scheduled piece), not started: not work in progress */
+  queued?: boolean;
   log: string[];
   link: string | null;
   startedAt: string;

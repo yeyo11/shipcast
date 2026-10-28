@@ -292,7 +292,8 @@ function LaunchPage() {
       </Link>,
     );
   }
-  for (const j of jobs.filter((x) => x.state === 'running')) {
+  // A scheduled piece's job waits in the queue until its time: the line above already says when
+  for (const j of jobs.filter((x) => x.state === 'running' && !x.queued)) {
     quiet.push(
       <Link key={j.id} to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'details' }} replace resetScroll={false}>
         {j.title}…

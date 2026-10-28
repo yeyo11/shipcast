@@ -13,6 +13,7 @@ export function jobView(job: JobRecord): JobView {
     title: job.title,
     // Waiting for its next attempt is still running, to the owner; the last line says what it waits for
     state: job.state === 'completed' ? 'done' : job.state === 'failed' ? 'failed' : 'running',
+    queued: job.state === 'created' && !job.startedAt,
     log: job.log.slice(-8),
     link: job.link,
     startedAt: job.startedAt ?? job.createdAt,

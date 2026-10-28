@@ -2,13 +2,19 @@ import { articleUrls, indexStatus, readReview, type Launch, type Registry, type 
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
-function stateOf(launch: Launch, failures: number): { label: string; tone: Tone } {
+/**
+ * A launch stays `drafted` in the registry until its last piece is out, so its posts tell an approved
+ * one (the blog live, or pieces scheduled) from one whose drafts still wait for the owner.
+ */
+export function stateOf(launch: Pick<Launch, 'status'>, failures: number, posts: ReadonlyArray<{ status: string }> = []): { label: string; tone: Tone } {
   switch (launch.status) {
     case 'detected':
     case 'generating':
       return { label: 'Drafting', tone: 'draft' };
     case 'drafted':
-      return failures > 0 ? { label: 'Partly published', tone: 'failed' } : { label: 'Waiting for you', tone: 'waiting' };
+      if (failures > 0) return { label: 'Partly published', tone: 'failed' };
+      if (posts.length === 0) return { label: 'Waiting for you', tone: 'waiting' };
+      return posts.some((p) => p.status === 'live' || p.status === 'edited') ? { label: 'Going out', tone: 'published' } : { label: 'Scheduled', tone: 'published' };
     case 'published':
       return { label: 'Published', tone: 'published' };
     case 'skipped':
@@ -42,7 +48,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
     kind: launch.kind,
     trigger: launch.trigger,
     status: launch.status,
-    state: stateOf(launch, failures.length),
+    state: stateOf(launch, failures.length, posts),
     pullRequest,
     problem: launch.status === 'failed' ? (launch.detail ?? undefined) : undefined,
     createdAt: launch.createdAt,
