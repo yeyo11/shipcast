@@ -38,7 +38,8 @@ export function profileDeps(d: ProfileWorkDeps): ProfileDeps {
   return {
     registry: d.registry,
     brand: d.brand,
-    setup: () => setupFor(d.pipeline, 'profile'),
+    // With `ai-runner` the review runs on the runner, with the owner's prompts and tone; else on the old provider
+    ...(d.pipeline.aiRunner ? { aiRunner: d.pipeline.aiRunner, texts: d.pipeline.aiTexts ?? (async () => ({})) } : { setup: () => setupFor(d.pipeline, 'profile') }),
     // A review reads no repo: the provider works in its workspace root, as for an article's reply
     cwd: d.pipeline.aiWorkdir ?? '/workspace',
     connector: profileConnector(d),

@@ -1,9 +1,10 @@
 import type { Profile, ProfileEdit, ProfileLink } from '@shipcast/connectors';
-import { graphemeCount, PROFILE_CAPABILITIES, Refused, type Brand, type EditableField, type ProfileCapability, ProfileReviewAnswer, profileReviewJsonSchema } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, graphemeCount, PROFILE_CAPABILITIES, Refused, type Brand, type EditableField, type ProfileCapability, ProfileReviewAnswer, profileReviewJsonSchema } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
+import type { AiTaskRunner } from './ai/runner.ts';
 import { isArticle } from './drafts.ts';
-import { buildProfileReviewPrompt, type ProfileFieldId, type ProfileLimits, type ProfileReviewInput } from './prompt.ts';
+import { buildProfileReviewPrompt, type PromptOptions, type ProfileFieldId, type ProfileLimits, type ProfileReviewInput } from './prompt.ts';
 import type { Account, Repositories } from './repositories/index.ts';
 import { accountGrowth } from './stats.ts';
 
@@ -128,8 +129,12 @@ export interface ProfileConnector {
 export interface ProfileDeps {
   registry: Pick<Repositories, 'launches' | 'accounts' | 'cursors' | 'queries'>;
   brand: Brand;
-  /** The `profile` task's provider, model, prompts and tone, from the AI settings */
-  setup(): Promise<AiSetup>;
+  /** The `profile` task's provider, model, prompts and tone, from the AI settings; unused with `aiRunner` */
+  setup?(): Promise<AiSetup>;
+  /** With `ai-runner`: the AI task runner the review runs on */
+  aiRunner?: AiTaskRunner;
+  /** The owner's prompts and tone, read before a review on the runner; the defaults in code without */
+  texts?(): Promise<PromptOptions>;
   /** Where the AI works: a folder with no repo in it (claudio's workspace root) */
   cwd: string;
   /** The account's connector, built with its own credential; undefined when it cannot be built */
@@ -202,7 +207,9 @@ export async function reviewProfile(
   }
   const languages = brand.languages.blog;
   const language = options.language && languages.includes(options.language as (typeof languages)[number]) ? options.language : (languages[0] ?? 'en');
-  const setup = await deps.setup();
+  if (!deps.aiRunner && !deps.setup) throw new Error('the profile task has neither the AI task runner nor a provider');
+  const setup = deps.aiRunner ? undefined : await deps.setup!();
+  const texts: PromptOptions = setup ? { prompts: setup.prompts, tone: setup.tone } : ((await deps.texts?.()) ?? {});
   const { prompt, system } = buildProfileReviewPrompt(
     {
       network: account.network,
@@ -215,18 +222,13 @@ export async function reviewProfile(
       language,
     },
     brand,
-    { prompts: setup.prompts, tone: setup.tone },
+    texts,
   );
-  const result = await setup.provider.generateObject({
-    prompt,
-    appendSystemPrompt: system,
-    jsonSchema: profileReviewJsonSchema(),
-    cwd: deps.cwd,
-    allowedTools: [],
-    model: setup.model,
-    maxTurns: 5,
-  });
-  const parsed = ProfileReviewAnswer.safeParse(result.output);
+  // On the runner an AiError (and an answer still invalid after its repair) fails the review's job as it is
+  const output = deps.aiRunner
+    ? (await deps.aiRunner.run(AI_TASK_DEFINITIONS.profile, { system, prompt })).output
+    : (await setup!.provider.generateObject({ prompt, appendSystemPrompt: system, jsonSchema: profileReviewJsonSchema(), cwd: deps.cwd, allowedTools: [], model: setup!.model, maxTurns: 5 })).output;
+  const parsed = ProfileReviewAnswer.safeParse(output);
   if (!parsed.success) throw new Error(`the AI's answer is not a review: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
   const proposals: ProfileProposal[] = [];
   for (const p of parsed.data.proposals) {
