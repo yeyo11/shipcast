@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
+import type { GitHubRest, PipelineDeps, Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, memoryRegistry, registryOn } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import {
@@ -34,7 +34,7 @@ const networks = (async (input: string | URL | Request) => {
 }) as typeof fetch;
 
 /** Three connected accounts, each with its secrets in the keychain; a Discord webhook counts nothing */
-async function connected(registry: Registry, secrets: MemoryStore): Promise<Record<string, number>> {
+async function connected(registry: Repositories, secrets: MemoryStore): Promise<Record<string, number>> {
   const ids: Record<string, number> = {};
   const add = async (network: string, label: string, settings: Record<string, string>, secret: Record<string, string>) => {
     const account = await registry.accounts.addAccount({ network, brand: 'personal', label, settings });
@@ -47,7 +47,7 @@ async function connected(registry: Registry, secrets: MemoryStore): Promise<Reco
   return ids;
 }
 
-const workDeps = (registry: Registry, secrets: MemoryStore): WorkDeps => ({
+const workDeps = (registry: Repositories, secrets: MemoryStore): WorkDeps => ({
   env: {},
   registry,
   github: {} as unknown as GitHubRest,

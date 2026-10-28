@@ -1,6 +1,6 @@
 import type { DraftResult } from '../pipeline.ts';
 import type { PublishResult } from '../publish.ts';
-import type { Launch } from '../registry.ts';
+import type { Launch } from '../repositories/index.ts';
 
 /** Where a line to the owner goes (their Telegram chat today); `@shipcast/connectors`' Telegram fits */
 export interface Notifier {

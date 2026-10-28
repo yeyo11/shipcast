@@ -8,7 +8,7 @@ import {
   type AiProviderId,
   type AiSetup,
   type AiTask,
-  type Registry,
+  type Repositories,
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { credentialsFor } from './services.ts';
@@ -17,7 +17,7 @@ import type { SecretStore } from './secrets.ts';
 /** What choosing a task's provider needs: the settings, the keychain, and claudio's address and token from the settings */
 export interface AiDeps {
   env: NodeJS.ProcessEnv;
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   /** Read when claudio is chosen; throws SettingMissing when its URL or token is not set */
   claudio: () => { url: string; token: string };

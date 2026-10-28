@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
-import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
+import type { GitHubRest, PipelineDeps, Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, FakeGitHub, registryOn } from '@shipcast/engine/testing';
 import { armScheduled, currentOrigin, LOST_RUNNING, TelemetryRecorder, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
 
@@ -28,13 +28,13 @@ after(async () => {
 });
 
 /** A database with the registry and pg-boss in it, as a server holds them */
-async function database(): Promise<{ client: PGlite; registry: Registry }> {
+async function database(): Promise<{ client: PGlite; registry: Repositories }> {
   const client = await clonePglite((await template).client);
   return { client, registry: await registryOn(client) };
 }
 
 /** A queue over a database: one per "process" */
-function queueOn(db: { client: PGlite; registry: Registry }, options: QueueOptions = {}): WorkQueue {
+function queueOn(db: { client: PGlite; registry: Repositories }, options: QueueOptions = {}): WorkQueue {
   const queue = WorkQueue.pglite(db.client, db.registry, { ...quiet, ...options });
   queues.push(queue);
   return queue;
@@ -49,7 +49,7 @@ async function until(check: () => Promise<boolean>, timeoutMs = 20_000): Promise
 }
 
 // No handler under test reaches GitHub, the AI or the keychain
-const deps = (registry: Registry): WorkDeps => ({
+const deps = (registry: Repositories): WorkDeps => ({
   env: {},
   registry,
   github: {} as unknown as GitHubRest,
@@ -58,7 +58,7 @@ const deps = (registry: Registry): WorkDeps => ({
   brand: () => Promise.reject(new Error('no brand in these tests')),
 });
 
-async function launch(registry: Registry): Promise<number> {
+async function launch(registry: Repositories): Promise<number> {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   return launch.id;
 }

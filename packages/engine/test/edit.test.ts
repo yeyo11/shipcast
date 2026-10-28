@@ -10,7 +10,7 @@ import {
   editPosts,
   PostRefused,
   type EditDeps,
-  type Registry,
+  type Repositories,
 } from '../src/index.ts';
 import type { Channel } from '@shipcast/schema';
 import { FakeConnectors, FakeGitHub, memoryRegistry, type ConnectorCall } from '../src/testing/index.ts';
@@ -26,7 +26,7 @@ function fakeEditors(sent: Sent[], fail: Partial<Record<Channel, Error>> = {}): 
 
 const image = (async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } })) as unknown as typeof fetch;
 
-async function launchWith(registry: Registry, channels: Array<{ channel: Parameters<Registry['posts']['recordPost']>[0]['channel']; kind?: Parameters<Registry['posts']['recordPost']>[0]['kind']; externalId: string; accountId?: number | null }>) {
+async function launchWith(registry: Repositories, channels: Array<{ channel: Parameters<Repositories['posts']['recordPost']>[0]['channel']; kind?: Parameters<Repositories['posts']['recordPost']>[0]['kind']; externalId: string; accountId?: number | null }>) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const posts = [];

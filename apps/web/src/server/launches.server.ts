@@ -1,4 +1,4 @@
-import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -32,7 +32,7 @@ const HEADLINE: Array<[string, string, string]> = [
   ['newsletter', 'clicks', 'newsletter clicks'],
 ];
 
-export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
+export async function launchView(registry: Repositories, launch: Launch): Promise<LaunchView> {
   const [cursors, metrics, posts, replies] = await Promise.all([
     registry.cursors.cursorsWithPrefix(failurePrefix(launch.id)),
     registry.metrics.latestMetrics(launch.id),
@@ -67,7 +67,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
  * number, each search engine's view of each language's article, and its drafts as they are now.
  * Google is always listed, as the engine that matters most; Bing once it has been read at all.
  */
-export async function launchDetail(registry: Registry, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
+export async function launchDetail(registry: Repositories, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
   // The pull request is read from GitHub, the rest from the registry: all at once
   const reviewing = readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
   const urls = articleUrls(await registry.posts.posts(launch.id, { channel: 'blog' }));
@@ -90,7 +90,7 @@ export async function launchDetail(registry: Registry, launch: Launch, deps: { g
  * or a merged launch is followed; then its publishing is queued. A refusal is the answer's problem.
  */
 export async function publishAgain(
-  registry: Registry,
+  registry: Repositories,
   launchId: number,
   channel: Channel | undefined,
   startPublishing: (launch: Launch, retryChannel?: Channel) => Promise<string>,

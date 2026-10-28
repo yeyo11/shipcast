@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { GitHubDiscussions, Telegram, type Instagram } from '@shipcast/connectors';
-import { GitHubRest, type MetricSources, type Publishers, type Registry } from '@shipcast/engine';
+import { GitHubRest, type MetricSources, type Publishers, type Repositories } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, NETWORKS, type Built, type Credentials } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
@@ -18,7 +18,7 @@ export type Origin = { kind: 'account'; id: number } | { kind: 'env' };
 export interface ServiceDeps {
   env: NodeJS.ProcessEnv;
   brand: Brand;
-  registry: Registry;
+  registry: Repositories;
   /** The engine's GitHub client, also the metrics source while no GitHub account is connected */
   github: GitHubRest;
   secrets: SecretStore;
@@ -193,7 +193,7 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
  */
 export async function refreshInstagramToken(
   services: Services,
-  deps: { registry: Registry; secrets: SecretStore },
+  deps: { registry: Repositories; secrets: SecretStore },
   now = new Date(),
 ): Promise<string | undefined> {
   if (!services.instagram) return undefined;

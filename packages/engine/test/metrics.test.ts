@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
 import type { PageVisits } from '@shipcast/connectors';
-import { collectMetrics, indexStatus, type Registry, SITEMAP_SUBMITTED_KEY, type MetricSources } from '../src/index.ts';
+import { collectMetrics, indexStatus, type Repositories, SITEMAP_SUBMITTED_KEY, type MetricSources } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
-async function published(registry: Registry) {
+async function published(registry: Repositories) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
   await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });

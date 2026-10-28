@@ -1,4 +1,4 @@
-import { UNFINISHED_JOB_STATES, type JobCursor, type JobRecord, type JobState, type Registry } from '@shipcast/engine';
+import { UNFINISHED_JOB_STATES, type JobCursor, type JobRecord, type JobState, type Repositories } from '@shipcast/engine';
 import type { JobView } from '../components/Jobs';
 
 /**
@@ -23,14 +23,14 @@ export function jobView(job: JobRecord): JobView {
 const lastDay = () => new Date(Date.now() - 86_400_000).toISOString();
 
 /** A launch's jobs, whenever they ran: a handful */
-export async function jobsView(registry: Registry, filter: { launchId: number }): Promise<JobView[]> {
+export async function jobsView(registry: Repositories, filter: { launchId: number }): Promise<JobView[]> {
   return (await registry.jobs.jobs({ launchId: filter.launchId, listed: true, limit: 20 })).map(jobView);
 }
 
 export const JOBS_FEED_LIMIT = 30;
 
 /** One page of the last day's jobs for the API, the newest first; `next` is where the following page starts */
-export async function jobsFeed(registry: Registry, page: { limit?: number; before?: JobCursor } = {}): Promise<{ jobs: JobView[]; next: JobCursor | null }> {
+export async function jobsFeed(registry: Repositories, page: { limit?: number; before?: JobCursor } = {}): Promise<{ jobs: JobView[]; next: JobCursor | null }> {
   const limit = page.limit ?? JOBS_FEED_LIMIT;
   // One more than asked tells whether a next page exists, without a count
   const rows = await registry.jobs.jobs({ since: lastDay(), listed: true, limit: limit + 1, ...(page.before && { before: page.before }) });
@@ -59,7 +59,7 @@ const STATES: Record<Exclude<JobStateFilter, 'all'>, readonly JobState[]> = { ru
  * an offset rather than a cursor (a cursor cannot jump to "page 3 of 5"); the list covers one day
  * and ended jobs are pruned, so the offset stays small, and the counts come from one grouped query.
  */
-export async function jobsPage(registry: Registry, { page, state }: { page: number; state: JobStateFilter }): Promise<JobsPageView> {
+export async function jobsPage(registry: Repositories, { page, state }: { page: number; state: JobStateFilter }): Promise<JobsPageView> {
   const since = lastDay();
   const byState = await registry.jobs.jobCounts({ since, listed: true });
   const running = byState.created + byState.active + byState.retry;

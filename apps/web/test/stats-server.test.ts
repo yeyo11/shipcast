@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { indexStatusKey, type Registry } from '@shipcast/engine';
+import { indexStatusKey, type Repositories } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { DEFAULTS, parseStatsInput } from '../src/server/stats-search.ts';
 import { loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../src/server/stats.server.ts';
@@ -8,7 +8,7 @@ import { loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../sr
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
 const TODAY = '2026-10-25';
 
-async function seed(registry: Registry) {
+async function seed(registry: Repositories) {
   const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');

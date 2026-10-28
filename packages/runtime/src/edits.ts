@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { GitHubDiscussions, type GitHubTokenSource } from '@shipcast/connectors';
-import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Registry } from '@shipcast/engine';
+import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Repositories } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, MissingField, NETWORKS, type Built, type Credentials } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
@@ -9,7 +9,7 @@ import { accountSecretKey, envBrand, INSTAGRAM_TOKEN_KEY } from './services.ts';
 export interface EditorDeps {
   env: NodeJS.ProcessEnv;
   brand: Brand;
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   readFile?: (path: string) => string;
   fetch?: typeof fetch;

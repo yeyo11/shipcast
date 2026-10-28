@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { contentHash, editPosts, type Registry } from '@shipcast/engine';
+import { contentHash, editPosts, type Repositories } from '@shipcast/engine';
 import { aPublishedLaunch, FakeConnectors, FakeGitHub, memoryRegistry, withScheduled } from '@shipcast/engine/testing';
 import { editMany, type PostActionDeps } from '../src/server/post-actions.ts';
 
@@ -32,7 +32,7 @@ async function world() {
   return { registry, fake, launch, editing, deps, mastodon: mastodon!, devto: devto!, bluesky: bluesky!, telegram: telegram!, discord: discord! };
 }
 
-const statusOf = async (registry: Registry, id: number) => (await registry.posts.post(id))?.status;
+const statusOf = async (registry: Repositories, id: number) => (await registry.posts.post(id))?.status;
 
 test('by channels editPosts skips deleted and scheduled pieces silently; by the page’s ids it reports them, in the order asked', async () => {
   const w = await world();

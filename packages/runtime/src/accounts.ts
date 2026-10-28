@@ -1,5 +1,5 @@
 import type { Check } from '@shipcast/connectors';
-import type { Account, Registry } from '@shipcast/engine';
+import type { Account, Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, MissingField, network, NETWORKS, type Built, type Credentials } from './catalog.ts';
 import { getJson, type SecretStore } from './secrets.ts';
@@ -7,7 +7,7 @@ import { accountSecretKey, envBrand } from './services.ts';
 
 /** What connecting, checking and editing accounts needs */
 export interface AccountDeps {
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   /** Every brand Shipcast speaks for, by id: an account belongs to one of them */
   brands: Map<string, Brand>;

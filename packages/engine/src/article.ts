@@ -13,7 +13,7 @@ import { keepPubDates, launchDir, renderDrafts, screenshotPaths } from './drafts
 import { buildAssets } from './launch-assets.ts';
 import { deliverDrafts, readProjects, setupFor, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
 import { buildArticlePrompt } from './prompt.ts';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 
 /** An article written in the app: the owner's own words, in one language, and where it should go. */
 export interface ArticleInput {

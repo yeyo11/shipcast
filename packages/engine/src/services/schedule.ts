@@ -1,7 +1,7 @@
 import type { Channel, LaunchConfig } from '@shipcast/schema';
 import type { ScheduleStore } from '../ports.ts';
 import { recommendFor, type Recommendation } from '../recommend.ts';
-import type { Launch, Post } from '../registry.ts';
+import type { Launch, Post } from '../repositories/index.ts';
 import { cancelScheduledPost, readTimezone, reschedulePost, saveTimezone, scheduleLaunch, ScheduleRefused } from '../schedule.ts';
 
 /** The best times' history and audience: the stats queries recommendFor runs */

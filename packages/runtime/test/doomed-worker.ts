@@ -1,4 +1,4 @@
-import type { Registry } from '@shipcast/engine';
+import type { Repositories } from '@shipcast/engine';
 import { BullQueue } from '../src/queue-bullmq.ts';
 import type { Handlers, QueueName } from '../src/queue.ts';
 import { redisClient } from '../src/redis/index.ts';
@@ -23,7 +23,7 @@ const registry = {
     logJob: async () => undefined,
     job: async () => undefined,
   },
-} as unknown as Registry;
+} as unknown as Repositories;
 
 const bull = new BullQueue(redisClient(url, 'queue', { name: 'doomed' }), () => redisClient(url, 'bullmq', { name: 'doomed' }), registry, { prefix, lockSeconds: 1, onError: () => {} });
 const hang = (_data: unknown, job: { id: string }) => {

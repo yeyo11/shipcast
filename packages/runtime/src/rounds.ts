@@ -1,5 +1,5 @@
 import { Instagram, Threads } from '@shipcast/connectors';
-import { detect, draftLaunch, MetricsService, NotificationService, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Registry } from '@shipcast/engine';
+import { detect, draftLaunch, MetricsService, NotificationService, publishLaunch, type GitHubRest, type PublishingService, type Launch, type PipelineDeps, type PublishResult, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { getJson, type SecretStore } from './secrets.ts';
 import { accountSecretKey, buildServices, refreshInstagramToken, type Services } from './services.ts';
@@ -11,7 +11,7 @@ const TOKEN_REFRESH_EVERY_MS = 30 * 24 * 3600 * 1000;
 /** What a round needs: the engine's pieces and the brand it speaks for */
 export interface RoundDeps {
   env: NodeJS.ProcessEnv;
-  registry: Registry;
+  registry: Repositories;
   github: GitHubRest;
   secrets: SecretStore;
   brand: Brand;

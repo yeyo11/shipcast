@@ -1,4 +1,4 @@
-import type { Registry } from '../registry.ts';
+import type { Repositories } from '../repositories/index.ts';
 
 /*
  * A queue that runs nothing and records what was sent: what a handler or an entry point queues is
@@ -20,15 +20,15 @@ export interface RecordedJob {
 export class RecordingQueue {
   readonly jobs: RecordedJob[] = [];
   readonly schedules: Array<{ queue: string; cron: string; data: unknown; singletonKey?: string }> = [];
-  readonly #registry: Registry | undefined;
+  readonly #registry: Repositories | undefined;
   #ids = 0;
 
-  constructor(registry?: Registry) {
+  constructor(registry?: Repositories) {
     this.#registry = registry;
   }
 
   /** The registry the runtime's helpers read jobs back from; only there when the test gave one */
-  get registry(): Registry {
+  get registry(): Repositories {
     if (!this.#registry) throw new Error('this RecordingQueue was built without a registry');
     return this.#registry;
   }

@@ -1,4 +1,4 @@
-import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
 import { draftOf, type Channel } from '@shipcast/schema';
 import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
 import { accountAvatar } from './pieces.ts';
@@ -15,7 +15,7 @@ export interface SchedulingChannel {
  * launch can still schedule. Read beside launchDetail, which the REST API shares and which keeps
  * its shape.
  */
-export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
+export async function launchPieces(registry: Repositories, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
   const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts.posts(launch.id),
     registry.accounts.accounts(),
@@ -40,9 +40,9 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
  * draft in the pull request), and nothing of which is out yet.
  */
 async function schedulingChannels(
-  registry: Registry,
+  registry: Repositories,
   launch: Launch,
-  posts: Awaited<ReturnType<Registry['posts']['posts']>>,
+  posts: Awaited<ReturnType<Repositories['posts']['posts']>>,
   deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> },
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);

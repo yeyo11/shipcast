@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Registry } from '@shipcast/engine';
+import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
@@ -15,7 +15,7 @@ import { runProfileReview } from './profiles.ts';
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
 export interface WorkDeps {
   env: NodeJS.ProcessEnv;
-  registry: Registry;
+  registry: Repositories;
   github: GitHubRest;
   secrets: SecretStore;
   pipeline: PipelineDeps;
@@ -81,7 +81,7 @@ export async function scheduleRound(queue: WorkQueue, reason: string, inSeconds 
 }
 
 /** Whether a round is running now, in any process */
-export async function roundRunning(registry: Registry): Promise<boolean> {
+export async function roundRunning(registry: Repositories): Promise<boolean> {
   return (await registry.jobs.jobs({ queues: ['round'], states: ['active'], limit: 1 })).length > 0;
 }
 

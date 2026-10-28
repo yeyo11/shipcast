@@ -1,11 +1,11 @@
-import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Registry } from '@shipcast/engine';
+import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Repositories } from '@shipcast/engine';
 import { channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /**
  * A launch's counters at their latest reading: each piece's latest number, read per piece so pieces
  * read at different times all count, plus the latest reading of each launch-wide source.
  */
-async function readingsOf(registry: Registry, launch: Launch): Promise<CounterReading[]> {
+async function readingsOf(registry: Repositories, launch: Launch): Promise<CounterReading[]> {
   const [site, history, posts] = await Promise.all([registry.metrics.latestMetrics(launch.id), registry.metrics.postMetricHistory(launch.id), registry.posts.posts(launch.id)]);
   const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
   const pieces = latestByPiece(history).flatMap((r) => {
@@ -22,7 +22,7 @@ const today = () => new Date().toISOString().slice(0, 10);
  * daily series keyed by launch and channel, from the oldest launch's day (at most 399 days back, the
  * series' limit) to today. A failure to read it leaves the charts empty rather than the page broken.
  */
-async function seriesOf(registry: Registry, launches: readonly Launch[]): Promise<ReturnType<typeof splitSeries>> {
+async function seriesOf(registry: Repositories, launches: readonly Launch[]): Promise<ReturnType<typeof splitSeries>> {
   const empty: ReturnType<typeof splitSeries> = { launches: new Map(), channels: new Map() };
   if (launches.length === 0) return empty;
   const floor = new Date(Date.now() - 399 * 86_400_000).toISOString().slice(0, 10);
@@ -46,7 +46,7 @@ async function seriesOf(registry: Registry, launches: readonly Launch[]): Promis
 }
 
 /** The totals and the views per day of each launch and of each of its channels, for the list's cards and a launch's page */
-export async function launchNumbers(registry: Registry, launches: readonly Launch[]): Promise<Map<number, LaunchNumbers>> {
+export async function launchNumbers(registry: Repositories, launches: readonly Launch[]): Promise<Map<number, LaunchNumbers>> {
   const [readings, series] = await Promise.all([Promise.all(launches.map((l) => readingsOf(registry, l))), seriesOf(registry, launches)]);
   return new Map(
     launches.map((l, i) => {
@@ -67,14 +67,14 @@ export async function launchNumbers(registry: Registry, launches: readonly Launc
  * published on more than one account and tells its posts apart by it. One read of the accounts for
  * every launch.
  */
-export async function postAccounts(registry: Registry, launches: readonly Launch[]): Promise<Map<number, Record<number, string>>> {
+export async function postAccounts(registry: Repositories, launches: readonly Launch[]): Promise<Map<number, Record<number, string>>> {
   const accounts = new Map((await registry.accounts.accounts()).map((a) => [a.id, a.identity ?? a.label]));
   const posts = await Promise.all(launches.map((l) => registry.posts.posts(l.id)));
   return new Map(launches.map((l, i) => [l.id, postAccountNames(posts[i] ?? [], accounts)]));
 }
 
 /** What a launch's page says in its quiet line, besides what is scheduled: the comments still to answer */
-export async function waitingComments(registry: Registry, launchId: number): Promise<number> {
+export async function waitingComments(registry: Repositories, launchId: number): Promise<number> {
   const comments = await registry.comments.comments({ launchId, own: false, limit: 200 });
   return comments.filter((c) => c.status === 'new' || c.status === 'draft-ready' || c.status === 'failed').length;
 }

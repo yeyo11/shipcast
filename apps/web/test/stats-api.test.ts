@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Registry, ReviewGitHub } from '@shipcast/engine';
+import type { Repositories, ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { createApiToken, MemoryStore } from '@shipcast/runtime';
 import { FailureLimiter, handleApi, openApiDocument, type ApiDeps } from '../src/server/api.ts';
@@ -39,7 +39,7 @@ async function get(deps: ApiDeps, path: string, token: string) {
   return { status: response.status, body: (await response.json()) as Record<string, unknown> & { error?: { code: string; message: string } } };
 }
 
-async function seed(registry: Registry) {
+async function seed(registry: Repositories) {
   const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', accountId: account.id, externalId: 'at://1', url: 'https://bsky.app/1' });

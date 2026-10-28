@@ -1,6 +1,6 @@
 import { formatIssues, parseLaunchConfig, resolvePack, type Brand } from '@shipcast/schema';
 import type { GitHubEvent, GitHubSource } from './github.ts';
-import type { Launch, Registry } from './registry.ts';
+import type { Launch, Repositories } from './repositories/index.ts';
 
 export const LAUNCH_CONFIG_PATH = '.github/launch.yml';
 
@@ -13,7 +13,7 @@ export type Outcome =
 
 export interface DetectOptions {
   github: GitHubSource;
-  registry: Registry;
+  registry: Repositories;
   /** The brand of the launches repo this engine writes to; launches for any other are refused */
   brand: Brand;
 }

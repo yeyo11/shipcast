@@ -1,5 +1,5 @@
 import type { Channel } from '@shipcast/schema';
-import type { Launch, LaunchStatus, NewLaunch, Post, PostKind, PostStatus, Registry } from '../registry.ts';
+import type { Launch, LaunchStatus, NewLaunch, Post, PostKind, PostStatus, Repositories } from '../repositories/index.ts';
 
 /*
  * Registry fixtures: the rows most tests start from, written through the registry's own methods so
@@ -21,7 +21,7 @@ export interface LaunchFixture {
 }
 
 /** A claimed launch moved to `status` (drafted unless said) */
-export async function aLaunch(registry: Registry, fixture: LaunchFixture = {}): Promise<Launch> {
+export async function aLaunch(registry: Repositories, fixture: LaunchFixture = {}): Promise<Launch> {
   const { launch } = await registry.launches.claim({
     repo: fixture.repo ?? 'yeyo11/claudio',
     ref: fixture.ref ?? 'v1.0.0',
@@ -45,7 +45,7 @@ export interface PostFixture {
 }
 
 /** Records each piece on the launch, in order; a status other than live is set after it is recorded */
-export async function withPosts(registry: Registry, launchId: number, pieces: readonly PostFixture[]): Promise<Post[]> {
+export async function withPosts(registry: Repositories, launchId: number, pieces: readonly PostFixture[]): Promise<Post[]> {
   const out: Post[] = [];
   for (const [i, p] of pieces.entries()) {
     const externalId = p.externalId === undefined ? `${p.channel}-${i + 1}` : p.externalId;
@@ -63,13 +63,13 @@ export async function withPosts(registry: Registry, launchId: number, pieces: re
 }
 
 /** A published launch with its pieces out */
-export async function aPublishedLaunch(registry: Registry, pieces: readonly PostFixture[], fixture: LaunchFixture = {}): Promise<{ launch: Launch; posts: Post[] }> {
+export async function aPublishedLaunch(registry: Repositories, pieces: readonly PostFixture[], fixture: LaunchFixture = {}): Promise<{ launch: Launch; posts: Post[] }> {
   const launch = await aLaunch(registry, { ...fixture, status: 'published' });
   return { launch, posts: await withPosts(registry, launch.id, pieces) };
 }
 
 /** Scheduled rows, one per channel, as the scheduling writes them */
-export async function withScheduled(registry: Registry, launchId: number, times: Partial<Record<Channel, Date>>): Promise<Post[]> {
+export async function withScheduled(registry: Repositories, launchId: number, times: Partial<Record<Channel, Date>>): Promise<Post[]> {
   const out: Post[] = [];
   for (const [channel, at] of Object.entries(times) as Array<[Channel, Date]>) {
     const post = await registry.posts.schedulePost(launchId, channel, at);
@@ -81,7 +81,7 @@ export async function withScheduled(registry: Registry, launchId: number, times:
 
 /** One reading per source, at `takenAt`, each optionally on a piece */
 export async function withMetrics(
-  registry: Registry,
+  registry: Repositories,
   launchId: number,
   readings: ReadonlyArray<{ source: string; values: Record<string, number>; postId?: number | null }>,
   takenAt: Date = new Date('2026-11-03T09:00:00.000Z'),

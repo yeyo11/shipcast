@@ -5,7 +5,7 @@ import type { AiSetup } from './ai.ts';
 import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { ANALYSIS_TOOLS, buildReplyPrompt, type ReplyPromptInput } from './prompt.ts';
-import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Registry } from './registry.ts';
+import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Repositories } from './repositories/index.ts';
 import type { CommentStore, SettingReader, SettingStore } from './ports.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -86,7 +86,7 @@ export interface CommentConnectors {
 }
 
 export interface CommentDeps {
-  registry: Registry;
+  registry: Repositories;
   /** The connectors of a channel for the account a post went out with (null: the `.env` credentials) */
   connectors(channel: Channel, accountId: number | null): Promise<CommentConnectors>;
   now?: () => Date;

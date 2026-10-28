@@ -18,7 +18,7 @@ import {
   SdkProvider,
   type Account,
   type ProfileDeps,
-  type Registry,
+  type Repositories,
 } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
@@ -45,7 +45,7 @@ interface FakeNetwork {
   edits: ProfileEdit[];
 }
 
-function deps(registry: Registry, network: FakeNetwork, output: unknown, prompts: string[] = []): ProfileDeps {
+function deps(registry: Repositories, network: FakeNetwork, output: unknown, prompts: string[] = []): ProfileDeps {
   const model = new MockLanguageModelV4({
     doGenerate: async (options) => {
       prompts.push(JSON.stringify(options.prompt));
@@ -69,7 +69,7 @@ function deps(registry: Registry, network: FakeNetwork, output: unknown, prompts
   };
 }
 
-async function mastodonAccount(registry: Registry, scopes = 'read:accounts write:accounts'): Promise<Account> {
+async function mastodonAccount(registry: Repositories, scopes = 'read:accounts write:accounts'): Promise<Account> {
   return registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@mastodon.social', settings: { instance: 'https://mastodon.social', scopes } });
 }
 

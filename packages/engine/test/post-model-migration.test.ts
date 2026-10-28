@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Registry } from '../src/index.ts';
+import { repositoriesOn, type Repositories } from '../src/index.ts';
 import { connectPglite, FIRST_MIGRATION, migrateDatabase } from '../src/db/connect.ts';
 
 // An install as the first schema left it: one row per launch and channel, the newsletter's ids
@@ -43,7 +43,7 @@ const LEGACY = `
     (1, 'github', 'stars', 120, '2026-10-25T06:00:00.000Z');
 `;
 
-const pieces = async (registry: Registry, launchId: number) =>
+const pieces = async (registry: Repositories, launchId: number) =>
   (await registry.posts.posts(launchId)).map((p) => [p.channel, p.kind, p.accountId, p.externalId, p.url, p.status, p.publishedAt].join(' | ')).sort();
 
 test('the post model migration converts an install in place, losing nothing', async () => {
@@ -51,7 +51,7 @@ test('the post model migration converts an install in place, losing nothing', as
   try {
     await client.exec(LEGACY);
     await migrateDatabase(db);
-    const registry = new Registry(db);
+    const registry = repositoriesOn(db);
 
     assert.deepEqual(await pieces(registry, 1), [
       'blog | article:en |  | a | https://example.dev/en/a/ | live | 2026-10-24T23:10:55.000Z',

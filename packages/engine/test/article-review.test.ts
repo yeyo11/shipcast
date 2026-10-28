@@ -12,7 +12,7 @@ import {
   launchDir,
   loadBrand,
   readReview,
-  Registry,
+  type Repositories,
   type AiProvider,
   type ObjectRequest,
 } from '../src/index.ts';

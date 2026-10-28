@@ -1,4 +1,4 @@
-import type { Database } from '../db/connect.ts';
+import { connectPglite, connectPostgres, type Database } from '../db/connect.ts';
 import { PublishAttempts } from '../publishing/attempts.ts';
 import { LaunchRepository } from './launches.ts';
 import { AssistantRepository } from './assistant.ts';
@@ -15,9 +15,15 @@ import { RawQueries } from './sql.ts';
 import { transaction } from './transaction.ts';
 
 /*
- * The registry split by aggregate (docs/plans/performance-refactor.md, phase 4): one repository per
- * aggregate, each a class over a Database on the same Drizzle schema. A consumer takes the ones it
- * uses (a Pick of Repositories, or one of the ports in ports.ts), never the whole set.
+ * The launch registry, split by aggregate (docs/plans/performance-refactor.md, phase 4): one
+ * repository per aggregate, each a class over a Database on the same Drizzle schema. A consumer
+ * takes the ones it uses (a Pick of Repositories, or one of the ports in ports.ts), never the whole
+ * set; only a composition root (the app's context, the CLI, the runtime, the CI mode) holds them all.
+ *
+ * The registry is what makes "a launch happens once" hold: a release is claimed before anything is
+ * generated, and the claim is a unique row, so a second poll, a re-run or a crash halfway through
+ * never starts the same campaign twice. It lives in Postgres, which the app, the CLI and the
+ * scheduler write to at once: what SQLite's single writer made atomic for free is a transaction here.
  */
 
 export * from './launches.ts';
@@ -81,4 +87,24 @@ export function repositoriesOn(db: Database): Repositories {
  */
 export function inTransaction<T>(repositories: Pick<Repositories, 'database'>, work: (tx: Repositories) => Promise<T>): Promise<T> {
   return transaction(repositories.database, (db) => work(repositoriesOn(db)));
+}
+
+/** The repositories over a connection this process opened, and the way to close it */
+export interface OpenRepositories extends Repositories {
+  close(): Promise<void>;
+}
+
+/** The registry on a Postgres server (`SHIPCAST_DATABASE_URL`), its migrations applied */
+export async function connectRepositories(url: string): Promise<OpenRepositories> {
+  const { db, close } = await connectPostgres(url);
+  return { ...repositoriesOn(db), close };
+}
+
+/**
+ * The registry on PGlite, a real Postgres in this process: in memory and fresh on every call, or
+ * kept in `dataDir`. What the tests run on, with no server to start.
+ */
+export async function memoryRepositories(dataDir?: string): Promise<OpenRepositories> {
+  const { db, close } = await connectPglite(dataDir);
+  return { ...repositoriesOn(db), close };
 }

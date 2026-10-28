@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import type { Editors, Registry } from '@shipcast/engine';
+import type { Editors, Repositories } from '@shipcast/engine';
 import { FakeGitHub, memoryRegistry } from '@shipcast/engine/testing';
 import { cancel, deleteAll, deleteOne, editMany, editOne, move, recommend, schedule, type PostActionDeps } from '../src/server/post-actions.ts';
 
@@ -39,7 +39,7 @@ async function setup() {
   return { registry, deps, sent, armed };
 }
 
-async function published(registry: Registry) {
+async function published(registry: Repositories) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram' | 'devto' | 'instagram', externalId: string) =>

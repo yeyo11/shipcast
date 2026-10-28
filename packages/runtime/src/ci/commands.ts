@@ -1,4 +1,4 @@
-import { claimEvent, claimManual, detect, type DraftResult, type GitHubEvent, type GitHubSource, type GitHubWriter, type Launch, type PublishResult, type Registry } from '@shipcast/engine';
+import { claimEvent, claimManual, detect, type DraftResult, type GitHubEvent, type GitHubSource, type GitHubWriter, type Launch, type PublishResult, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { launchOfPullRequest, webhookAction } from '../webhooks.ts';
 import type { CiState } from './state.ts';
@@ -14,9 +14,9 @@ export interface CiDeps {
   state: CiState;
   brand(): Promise<Brand>;
   /** Drafts a claimed launch on the registry it is given (a scratch copy, outside the lease) */
-  draft(launch: Launch, brand: Brand, registry: Registry): Promise<DraftResult>;
+  draft(launch: Launch, brand: Brand, registry: Repositories): Promise<DraftResult>;
   /** One try at publishing a drafted launch, on the leased registry */
-  publish(launch: Launch, brand: Brand, registry: Registry): Promise<PublishResult>;
+  publish(launch: Launch, brand: Brand, registry: Repositories): Promise<PublishResult>;
   /** For a dry run: what publishing a launch would do, one line per channel */
   plan?(launch: Launch): Promise<string[]>;
   /** The AI a draft would use, in words, for a dry run */
@@ -214,7 +214,7 @@ export async function ciPublish(deps: CiDeps, options: PublishOptions): Promise<
  */
 export async function ciRound(deps: CiDeps, options: { detect: boolean }): Promise<CiResult> {
   const brand = await deps.brand();
-  const run = <T>(work: (registry: Registry) => Promise<T>) => (deps.dryRun ? deps.state.scratch(work) : deps.state.use(work, 'round'));
+  const run = <T>(work: (registry: Repositories) => Promise<T>) => (deps.dryRun ? deps.state.scratch(work) : deps.state.use(work, 'round'));
   const claimed = await run(async (registry) => {
     const fresh: Launch[] = [];
     if (options.detect) {

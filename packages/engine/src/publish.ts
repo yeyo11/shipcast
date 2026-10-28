@@ -11,7 +11,7 @@ import { isRetryable, notSentBecause, type PieceGuard } from './publishing/guard
 import { failureKey as failureKeyOf } from './publishing/retry.ts';
 
 const failureKey = (launch: Launch, channel: Channel) => failureKeyOf(launch.id, channel);
-import type { Launch, Post, Registry } from './registry.ts';
+import type { Launch, Post, Repositories } from './repositories/index.ts';
 
 /**
  * What the engine needs from each network's connector: the connectors in `@shipcast/connectors`
@@ -76,7 +76,7 @@ export function waitsUntil(post: Post, now: Date): string | undefined {
 
 export interface PublishDeps {
   github: GitHubSource;
-  registry: Registry;
+  registry: Repositories;
   launchesRepo: string;
   publishers: Publishers;
   /** For the deployed site: whether the article is live, and the launch image's bytes */

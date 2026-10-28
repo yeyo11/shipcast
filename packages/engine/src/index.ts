@@ -1,4 +1,4 @@
-export * from './registry.ts';
+export * from './repositories/index.ts';
 export * from './github.ts';
 export * from './github-app.ts';
 export * from './detect.ts';

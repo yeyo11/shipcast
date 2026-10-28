@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { publishLaunch, reschedulePost, scheduleLaunch, type Registry } from '../src/index.ts';
+import { publishLaunch, reschedulePost, scheduleLaunch, type Repositories } from '../src/index.ts';
 import { aLaunch, FakeClock, FakeConnectors, FakeGitHub, LAUNCHES_REPO, memoryRegistry } from '../src/testing/index.ts';
 
 /*
@@ -50,7 +50,7 @@ const site = (async (input: string | URL | Request) =>
 const MIXED = 'enabled: true\nbrand: personal\npublishing:\n  telegram: approval\n  discord: approval\n  threads: approval\n  mastodon: off\n';
 const ONLY_BLUESKY = 'enabled: true\nbrand: personal\npublishing:\n  devto: off\n  mastodon: off\n  instagram: off\n  githubDiscussions: off\n';
 
-const rows = async (registry: Registry, launchId: number) => (await registry.posts.posts(launchId)).map((p) => `${p.channel} ${p.kind} ${p.status} ${p.externalId}`).sort();
+const rows = async (registry: Repositories, launchId: number) => (await registry.posts.posts(launchId)).map((p) => `${p.channel} ${p.kind} ${p.status} ${p.externalId}`).sort();
 
 test('mixed channels: what goes out, what is recorded, and what each kind of failure leaves for the next round', async () => {
   const registry = await memoryRegistry();

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { LaunchStatus, NewLaunch, Registry } from '../src/index.ts';
+import type { LaunchStatus, NewLaunch, Repositories } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 /** Claims a launch and sets its status; launches claimed one after another are ordered by creation */
-async function add(registry: Registry, launch: Partial<NewLaunch> & { ref: string }, status: LaunchStatus = 'published') {
+async function add(registry: Repositories, launch: Partial<NewLaunch> & { ref: string }, status: LaunchStatus = 'published') {
   const { launch: claimed } = await registry.launches.claim({ repo: 'yeyo11/claudio', trigger: 'release', kind: 'minor', brand: 'personal', ...launch });
   return registry.launches.setStatus(claimed.id, status);
 }
@@ -38,7 +38,7 @@ test('the list is cut into numbered pages by the database, the total counting ev
 
 test('the filters narrow by status, trigger, kind, repo and words, together', async () => {
   const registry = await seeded();
-  const refs = async (f: Parameters<Registry['launches']['launchList']>[0]) => (await registry.launches.launchList(f)).launches.map((l) => l.ref);
+  const refs = async (f: Parameters<Repositories['launches']['launchList']>[0]) => (await registry.launches.launchList(f)).launches.map((l) => l.ref);
   assert.deepEqual(await refs({ status: 'published' }), ['article:hello-world-from-shipcast', 'v1.0.0']);
   assert.deepEqual(await refs({ trigger: 'manual' }), ['v0.2.0']);
   assert.deepEqual(await refs({ kind: 'launch' }), ['article:hello-world-from-shipcast', 'v0.1.0', 'v1.0.0']);

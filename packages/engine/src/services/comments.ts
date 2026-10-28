@@ -8,7 +8,7 @@ import {
   type CommentSettings,
 } from '../comments.ts';
 import type { CommentListing, CommentStore, SettingStore } from '../ports.ts';
-import type { CommentFilter, CommentPageFilter, CommentRecord } from '../registry.ts';
+import type { CommentFilter, CommentPageFilter, CommentRecord } from '../repositories/index.ts';
 
 /**
  * The comment assistant as the owner drives it (docs/comments.md): the list, a reply's draft

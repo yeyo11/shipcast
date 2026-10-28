@@ -4,7 +4,7 @@ import { activeChannels, parseLaunchConfig, type Brand, type ContentPack, type L
 import type { AiProvider, ObjectRequest, ObjectResult } from './ai.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { projectSlug } from './drafts.ts';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 
 /*
  * A deterministic stand-in for the AI, for tests and for trying the GitHub Action without an API key

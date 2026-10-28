@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand, parseLaunchConfig, draftBody, type Channel } from '@shipcast/schema';
-import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type Publishers } from '../src/index.ts';
+import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Repositories, type Publishers } from '../src/index.ts';
 import { FakeConnectors, FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -52,7 +52,7 @@ function recorder() {
   return { calls: fake.calls, publishers };
 }
 
-async function drafted(registry: Registry) {
+async function drafted(registry: Repositories) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
   return registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/3');
 }

@@ -2,7 +2,7 @@ import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
 import type { Brand, Channel, Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
-import { kindLanguage, type CursorRepository, type Post } from './registry.ts';
+import { kindLanguage, type CursorRepository, type Post } from './repositories/index.ts';
 
 /** Each source the engine can read numbers from; a source left out is not read. */
 export interface MetricSources {

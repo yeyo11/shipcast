@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { after, test } from 'node:test';
-import { Registry } from '../src/index.ts';
+import { repositoriesOn } from '../src/index.ts';
 import { connectPglite } from '../src/db/connect.ts';
 import { copyFromSqlite, countSqlite, NotEmpty } from '../src/db/from-sqlite.ts';
 
@@ -60,7 +60,7 @@ test('every row of a SQLite registry is copied as it was, ids included, and new 
     assert.deepEqual(counts, countSqlite(path));
     assert.deepEqual(counts, { launches: 2, posts: 2, metrics: 2, cursors: 2, accounts: 1 });
 
-    const registry = new Registry(db);
+    const registry = repositoriesOn(db);
     const launch = await registry.launches.get(3);
     assert.deepEqual(launch, {
       id: 3,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Channel } from '@shipcast/schema';
-import type { CommentStatus, Registry } from '../src/index.ts';
+import type { CommentStatus, Repositories } from '../src/index.ts';
 import { connectPglite } from '../src/db/connect.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
@@ -19,7 +19,7 @@ async function seeded() {
   return { registry, a, b };
 }
 
-async function add(registry: Registry, postId: number, channel: Channel, n: number, status: CommentStatus, text: string, handle = '@someone') {
+async function add(registry: Repositories, postId: number, channel: Channel, n: number, status: CommentStatus, text: string, handle = '@someone') {
   const { comment } = await registry.comments.recordComment({
     postId,
     channel,
@@ -57,7 +57,7 @@ test('the filters narrow by state, channel, launch, post and text, together', as
   await add(registry, bs1, 'bluesky', 4, 'dismissed', 'spam spam');
   await add(registry, b.posts[0]!.id, 'mastodon', 5, 'failed', '100% broken_link');
 
-  const total = async (f: Parameters<Registry['comments']['commentsPage']>[0]) => (await registry.comments.commentsPage(f)).total;
+  const total = async (f: Parameters<Repositories['comments']['commentsPage']>[0]) => (await registry.comments.commentsPage(f)).total;
   assert.equal(await total({}), 5);
   assert.equal(await total({ bucket: 'waiting' }), 3, 'new, drafted and failed wait for a reply');
   assert.equal(await total({ bucket: 'replied' }), 1);

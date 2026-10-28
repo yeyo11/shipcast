@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { JOB_LOG_LINES, Registry, retryChannelEverywhere, type NewLaunch } from '../src/index.ts';
+import { JOB_LOG_LINES, memoryRepositories, retryChannelEverywhere, type NewLaunch } from '../src/index.ts';
 import { memoryRegistry as memory } from '../src/testing.ts';
 
 const release: NewLaunch = { repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'major', brand: 'personal' };
@@ -122,13 +122,13 @@ test('setStatus on an unknown launch throws instead of silently doing nothing', 
 test('cursors keep polling state across restarts, and the schema survives reopening', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'shipcast-registry-'));
   try {
-    const first = await Registry.memory(dir);
+    const first = await memoryRepositories(dir);
     await first.cursors.setCursor('events:yeyo11', 'W/"etag-1"');
     await first.launches.claim(release);
     await first.close();
 
     // Reopening runs the migrations again: already applied, they change nothing
-    const reopened = await Registry.memory(dir);
+    const reopened = await memoryRepositories(dir);
     assert.equal(await reopened.cursors.cursor('events:yeyo11'), 'W/"etag-1"');
     assert.equal((await reopened.launches.find('yeyo11/claudio', 'v0.9.0'))?.status, 'detected');
     await reopened.cursors.setCursor('events:yeyo11', 'W/"etag-2"');

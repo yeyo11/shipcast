@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { after, describe, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
-import type { Registry } from '@shipcast/engine';
+import type { Repositories } from '@shipcast/engine';
 import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
 import { Queue } from 'bullmq';
 import { BullQueue, drainPgBoss } from '../src/queue-bullmq.ts';
@@ -34,7 +34,7 @@ after(async () => (await template).close());
 
 interface Db {
   client: PGlite;
-  registry: Registry;
+  registry: Repositories;
 }
 
 async function database(): Promise<Db> {
@@ -122,7 +122,7 @@ async function until(check: () => boolean | Promise<boolean>, timeoutMs = 20_000
   }
 }
 
-async function launch(registry: Registry): Promise<number> {
+async function launch(registry: Repositories): Promise<number> {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   return launch.id;
 }

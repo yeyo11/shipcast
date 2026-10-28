@@ -21,7 +21,7 @@ import {
   type PromptId,
   type PromptTexts,
 } from './prompt.ts';
-import type { Launch, Registry } from './registry.ts';
+import type { Launch, Repositories } from './repositories/index.ts';
 
 /*
  * The AI settings live in the registry's `settings` table, as JSON under two keys: which provider and
@@ -71,7 +71,7 @@ function clean(settings: AiSettings): AiSettings {
 }
 
 /** The settings as stored, each task falling back on claudio; a stored value that no longer parses is ignored */
-export async function readAiSettings(registry: Registry): Promise<AiSettings> {
+export async function readAiSettings(registry: Repositories): Promise<AiSettings> {
   const stored = await registry.settings.setting<unknown>(AI_SETTINGS_KEY);
   const tasks = { ...DEFAULT_AI_SETTINGS.tasks };
   let tone: string | undefined;
@@ -86,7 +86,7 @@ export async function readAiSettings(registry: Registry): Promise<AiSettings> {
   return clean({ tasks, tone });
 }
 
-export async function writeAiSettings(registry: Registry, input: unknown): Promise<AiSettings> {
+export async function writeAiSettings(registry: Repositories, input: unknown): Promise<AiSettings> {
   const parsed = AiSettingsInput.safeParse(input);
   if (!parsed.success) throw new InvalidAiSettings(parsed.error.issues.map((i) => `${i.path.join('.') || 'settings'}: ${i.message}`).join('; '));
   const stored = await readAiSettings(registry);
@@ -134,7 +134,7 @@ export class LockedPrompt extends ShipcastError {
 }
 export class InvalidPrompt extends InvalidRequest {}
 
-export async function promptHistory(registry: Registry): Promise<PromptHistory> {
+export async function promptHistory(registry: Repositories): Promise<PromptHistory> {
   const stored = (await registry.settings.setting<Record<string, PromptVersion[]>>(PROMPTS_KEY)) ?? {};
   const history: PromptHistory = {};
   // Only known ids are read back: a prompt the code dropped, or anything else in the row, never reaches a prompt
@@ -146,7 +146,7 @@ export async function promptHistory(registry: Registry): Promise<PromptHistory> 
 }
 
 /** The prompts in use: the latest version of each edited one; the rest are their defaults */
-export async function currentPrompts(registry: Registry): Promise<PromptTexts> {
+export async function currentPrompts(registry: Repositories): Promise<PromptTexts> {
   const texts: PromptTexts = {};
   for (const [id, versions] of Object.entries(await promptHistory(registry)) as Array<[PromptId, PromptVersion[]]>) {
     const last = versions.at(-1);
@@ -165,7 +165,7 @@ function checkId(id: string): PromptId {
  * Saves a new version of an editable prompt; the previous ones are kept. The same text as the one in
  * use saves nothing. Locked parts have no id here, so they cannot be overwritten through this.
  */
-export async function savePrompt(registry: Registry, id: string, text: string, now = new Date()): Promise<PromptVersion[]> {
+export async function savePrompt(registry: Repositories, id: string, text: string, now = new Date()): Promise<PromptVersion[]> {
   const promptId = checkId(id);
   const problems = templateProblems(text);
   if (problems.length > 0) throw new InvalidPrompt(problems.join('; '));
@@ -182,7 +182,7 @@ export async function savePrompt(registry: Registry, id: string, text: string, n
 }
 
 /** Puts an earlier version (or the default) back in use, as a new version: the history only grows */
-export async function restorePrompt(registry: Registry, id: string, savedAt: string, now = new Date()): Promise<PromptVersion[]> {
+export async function restorePrompt(registry: Repositories, id: string, savedAt: string, now = new Date()): Promise<PromptVersion[]> {
   const promptId = checkId(id);
   if (savedAt === 'default') return savePrompt(registry, promptId, DEFAULT_PROMPTS[promptId], now);
   const versions = (await promptHistory(registry))[promptId] ?? [];

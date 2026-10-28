@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import type { ArticleInput, Editors, Launch, Registry, ReviewGitHub } from '@shipcast/engine';
+import type { ArticleInput, Editors, Launch, Repositories, ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
@@ -19,7 +19,7 @@ const github: ReviewGitHub = {
 
 interface Setup {
   deps: ApiDeps;
-  registry: Registry;
+  registry: Repositories;
   calls: string[];
   /** What the fake connectors were asked to edit or delete */
   sent: string[];
@@ -337,7 +337,7 @@ test('the OpenAPI document is public and lists every route with its scope', asyn
   assert.equal(new Set(ROUTES.map((r) => r.operationId)).size, ROUTES.length);
 });
 
-async function publishedLaunch(registry: Registry) {
+async function publishedLaunch(registry: Repositories) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram', externalId: string) =>
@@ -491,7 +491,7 @@ test('the MCP endpoint’s bearer check: the API’s refusals, and the same limi
   assert.equal((await call(s.deps, 'GET', '/jobs', { token: s.both, headers: { [PEER_HEADER]: '10.0.0.9' } })).status, 429, 'one limit for both doors');
 });
 
-async function commented(registry: Registry) {
+async function commented(registry: Repositories) {
   const { launch, mastodon } = await publishedLaunch(registry);
   const { post: devto } = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
   const add = async (postId: number, channel: 'mastodon' | 'devto', externalId: string, own = false) =>

@@ -1,7 +1,7 @@
 import { ContentPack, contentPackJsonSchema, missingPieces, type Brand, type LaunchConfig } from '@shipcast/schema';
 import type { AiProvider } from './ai.ts';
 import { ANALYSIS_TOOLS, buildPrompt, type PromptOptions } from './prompt.ts';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
 export type Generated =

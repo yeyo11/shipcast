@@ -1,6 +1,6 @@
 import { deleteLaunchPosts, deletePost, editPost, editPosts, PostRefused, type EditDeps, type PostChanges, type PostOutcome, type PostSelection } from '../edit.ts';
 import type { LaunchLookup } from '../ports.ts';
-import type { Post } from '../registry.ts';
+import type { Post } from '../repositories/index.ts';
 
 /**
  * Editing and deleting what a launch published, the one way the launch page, the REST API and the

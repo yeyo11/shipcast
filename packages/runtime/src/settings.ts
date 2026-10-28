@@ -1,4 +1,4 @@
-import type { Registry } from '@shipcast/engine';
+import type { Repositories } from '@shipcast/engine';
 import { InvalidRequest, ShipcastError } from '@shipcast/schema';
 import type { SecretStore } from './secrets.ts';
 
@@ -102,7 +102,7 @@ export class SettingMissing extends ShipcastError {
 export class InvalidSetting extends InvalidRequest {}
 
 export interface SettingsDeps {
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   /** `.env`, a fallback until the owner removes what was imported from it */
   env: NodeJS.ProcessEnv;

@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { API_SCOPES, type ApiScope, type ApiToken, type Registry } from '@shipcast/engine';
+import { API_SCOPES, type ApiScope, type ApiToken, type Repositories } from '@shipcast/engine';
 import { InvalidRequest } from '@shipcast/schema';
 import type { SecretStore } from './secrets.ts';
 
@@ -16,7 +16,7 @@ export const API_TOKEN_PEPPER_KEY = 'app:api-token-pepper';
 const TOKEN = /^shipcast_(\d{1,10})_([A-Za-z0-9_-]{43})$/;
 
 export interface ApiTokenDeps {
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
 }
 

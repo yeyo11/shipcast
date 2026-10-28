@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Registry } from '@shipcast/engine';
+import { connectRepositories } from '@shipcast/engine';
 import { WorkQueue } from '../src/index.ts';
 
 /*
@@ -14,7 +14,7 @@ import { WorkQueue } from '../src/index.ts';
 const url = process.env.SHIPCAST_TEST_DATABASE_URL;
 
 test('on Postgres, pg-boss installs its schema and a job sent before a restart runs after it', { skip: !url && 'SHIPCAST_TEST_DATABASE_URL is not set' }, async () => {
-  const registry = await Registry.connect(url!);
+  const registry = await connectRepositories(url!);
   try {
     const before = WorkQueue.postgres(url!, registry, { instanceName: 'test-before', schedule: false, pollingIntervalSeconds: 0.5 });
     const id = await before.send('metrics', { reason: 'by hand' }, { title: 'A reading for the test', singletonKey: `test-${Date.now()}` });

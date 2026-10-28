@@ -1,4 +1,4 @@
-import type { JobState, Registry } from '@shipcast/engine';
+import type { JobState, Repositories } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -7,7 +7,7 @@ import { jobsPage, jobsView } from '../src/server/jobs.server.ts';
 const ids = (view: { jobs: Array<{ id: string }> }) => view.jobs.map((j) => j.id);
 
 /** Jobs recorded one after another, so newest first is the reverse of `states`; ids sort the same way on a tie */
-async function seeded(states: readonly JobState[], launchId?: number): Promise<Registry> {
+async function seeded(states: readonly JobState[], launchId?: number): Promise<Repositories> {
   const registry = await memoryRegistry();
   for (const [i, state] of states.entries()) {
     const id = `job-${String(i).padStart(4, '0')}`;

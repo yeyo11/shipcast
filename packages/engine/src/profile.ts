@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
 import { isArticle } from './drafts.ts';
 import { buildProfileReviewPrompt, type ProfileFieldId, type ProfileLimits, type ProfileReviewInput } from './prompt.ts';
-import type { Account, Registry } from './registry.ts';
+import type { Account, Repositories } from './repositories/index.ts';
 import { accountGrowth } from './stats.ts';
 
 /*
@@ -110,7 +110,7 @@ export interface ProfileReview {
 const reviewKey = (accountId: number) => `profile-review:${accountId}`;
 
 /** The account's latest review; undefined when it has none, or the one stored no longer parses */
-export async function readProfileReview(registry: Registry, accountId: number): Promise<ProfileReview | undefined> {
+export async function readProfileReview(registry: Repositories, accountId: number): Promise<ProfileReview | undefined> {
   const text = await registry.cursors.cursor(reviewKey(accountId));
   if (!text) return undefined;
   try {
@@ -165,7 +165,7 @@ export interface ProfileConnector {
 }
 
 export interface ProfileDeps {
-  registry: Registry;
+  registry: Repositories;
   brand: Brand;
   /** The `profile` task's provider, model, prompts and tone, from the AI settings */
   setup(): Promise<AiSetup>;
@@ -176,7 +176,7 @@ export interface ProfileDeps {
   now?: () => Date;
 }
 
-async function existing(registry: Registry, accountId: number): Promise<{ account: Account; capability: ProfileCapability }> {
+async function existing(registry: Repositories, accountId: number): Promise<{ account: Account; capability: ProfileCapability }> {
   const account = await registry.accounts.account(accountId);
   if (!account) throw new ProfileRefused('not_found', 'no such account');
   const capability = profileCapability(account);
@@ -185,7 +185,7 @@ async function existing(registry: Registry, accountId: number): Promise<{ accoun
 }
 
 /** The first and last count of each measure over the period, from the daily snapshots */
-async function growthOf(registry: Registry, accountId: number, now: Date, days = 90): Promise<ProfileReviewInput['growth']> {
+async function growthOf(registry: Repositories, accountId: number, now: Date, days = 90): Promise<ProfileReviewInput['growth']> {
   const to = now.toISOString().slice(0, 10);
   const from = new Date(now.getTime() - days * 86_400_000).toISOString().slice(0, 10);
   const { points } = await accountGrowth(registry, accountId, { from, to });
@@ -201,7 +201,7 @@ async function growthOf(registry: Registry, accountId: number, now: Date, days =
 }
 
 /** The repos the brand launched, the newest first, each once */
-async function projectsOf(registry: Registry): Promise<string[]> {
+async function projectsOf(registry: Repositories): Promise<string[]> {
   const repos = (await registry.launches.recent(100)).filter((l) => l.status === 'published' && !isArticle(l)).map((l) => l.repo);
   return [...new Set(repos)].slice(0, 10);
 }

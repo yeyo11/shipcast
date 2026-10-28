@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
-import { publishLaunch, PublishingService, type Publishers, type Registry } from '../src/index.ts';
+import { publishLaunch, PublishingService, type Publishers, type Repositories } from '../src/index.ts';
 import { aLaunch, FakeConnectors, FakeGitHub, LAUNCHES_REPO, memoryRegistry } from '../src/testing/index.ts';
 
 /*
@@ -56,7 +56,7 @@ function slow(publishers: Publishers): Publishers {
   return out as Publishers;
 }
 
-async function setup(): Promise<{ registry: Registry; fake: FakeConnectors; launchId: number }> {
+async function setup(): Promise<{ registry: Repositories; fake: FakeConnectors; launchId: number }> {
   const registry = await memoryRegistry();
   const launch = await aLaunch(registry);
   return { registry, fake: new FakeConnectors(), launchId: launch.id };

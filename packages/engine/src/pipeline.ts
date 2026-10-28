@@ -6,7 +6,7 @@ import { generatePack } from './generate.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
-import type { Launch, Registry } from './registry.ts';
+import type { Launch, Repositories } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
 export interface PipelineDeps {
@@ -15,7 +15,7 @@ export interface PipelineDeps {
   ai: AiProvider;
   /** What a task runs with, read from the AI settings each time, so an edit applies to the next draft */
   aiSetup?: (task: AiTask) => Promise<AiSetup>;
-  registry: Registry;
+  registry: Repositories;
   /** The repo whose blog and drafts this engine writes to, e.g. `yeyo11/launches` */
   launchesRepo: string;
   /** Clones a repo at a ref into the workspace shared with the AI */

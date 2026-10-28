@@ -1,7 +1,7 @@
 import { Refused, SCHEDULABLE_CHANNELS as SCHEDULABLE, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { cancelledKey } from './publish.ts';
 import type { ScheduleStore, SettingReader, SettingStore } from './ports.ts';
-import type { Post } from './registry.ts';
+import type { Post } from './repositories/index.ts';
 
 /*
  * Scheduled publishing: a channel's piece of a launch can wait for a time instead of going out as

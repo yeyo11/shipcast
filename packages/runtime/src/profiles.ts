@@ -1,4 +1,4 @@
-import { reviewProfile, setupFor, type Account, type PipelineDeps, type ProfileConnector, type ProfileDeps, type Registry } from '@shipcast/engine';
+import { reviewProfile, setupFor, type Account, type PipelineDeps, type ProfileConnector, type ProfileDeps, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { buildConnector, MissingField } from './catalog.ts';
 import type { WorkQueue } from './queue.ts';
@@ -12,7 +12,7 @@ import { accountSecretKey } from './services.ts';
  */
 
 export interface ProfileWorkDeps {
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   pipeline: PipelineDeps;
   brand: Brand;

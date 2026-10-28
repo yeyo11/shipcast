@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Registry } from '../registry.ts';
+import type { Repositories } from '../repositories/index.ts';
 import type { CheckResult, TelemetryStore } from './store.ts';
 
 /** A scheduled piece this late and still waiting has missed its time */
@@ -19,14 +19,14 @@ const HOUR = 3_600_000;
  * - `freshness`: the age of each live piece's newest reading, per channel, against the cadence the
  *   numbers are read at (`cadenceHours`).
  */
-export async function runChecks(registry: Registry, store: TelemetryStore, options: { now?: Date; cadenceHours: number }): Promise<CheckResult[]> {
+export async function runChecks(registry: Repositories, store: TelemetryStore, options: { now?: Date; cadenceHours: number }): Promise<CheckResult[]> {
   const now = options.now ?? new Date();
   const results = [await missedSchedules(registry, now), await latePosts(registry, now), await duplicatePieces(registry), await freshness(registry, now, options.cadenceHours)];
   for (const result of results) await store.recordCheck(result);
   return results;
 }
 
-async function missedSchedules(registry: Registry, now: Date): Promise<CheckResult> {
+async function missedSchedules(registry: Repositories, now: Date): Promise<CheckResult> {
   const before = new Date(now.getTime() - MISSED_AFTER_MINUTES * 60_000).toISOString();
   const rows = await registry.queries.selectRows<{ id: number; launch_id: number; channel: string; scheduled_at: string }>(
     sql`SELECT id, launch_id, channel, scheduled_at FROM posts WHERE status = 'scheduled' AND scheduled_at < ${before} ORDER BY scheduled_at`,
@@ -34,7 +34,7 @@ async function missedSchedules(registry: Registry, now: Date): Promise<CheckResu
   return { name: 'missed-schedules', ok: rows.length === 0, value: rows.length, detail: { posts: rows.map((r) => ({ id: r.id, launchId: r.launch_id, channel: r.channel, scheduledAt: r.scheduled_at })) } };
 }
 
-async function latePosts(registry: Registry, now: Date): Promise<CheckResult> {
+async function latePosts(registry: Repositories, now: Date): Promise<CheckResult> {
   const since = new Date(now.getTime() - 24 * HOUR).toISOString();
   const rows = await registry.queries.selectRows<{ id: number; channel: string; scheduled_at: string; published_at: string }>(
     sql`SELECT id, channel, scheduled_at, published_at FROM posts
@@ -52,7 +52,7 @@ async function latePosts(registry: Registry, now: Date): Promise<CheckResult> {
   };
 }
 
-async function duplicatePieces(registry: Registry): Promise<CheckResult> {
+async function duplicatePieces(registry: Repositories): Promise<CheckResult> {
   const pieces = await registry.queries.selectRows<{ launch_id: number; channel: string; kind: string; n: number }>(
     sql`SELECT launch_id, channel, kind, count(*)::int AS n FROM posts WHERE status IN ('live', 'edited') GROUP BY launch_id, channel, kind HAVING count(*) > 1`,
   );
@@ -76,7 +76,7 @@ interface ChannelFreshness {
   maxAgeHours: number | null;
 }
 
-async function freshness(registry: Registry, now: Date, cadenceHours: number): Promise<CheckResult> {
+async function freshness(registry: Repositories, now: Date, cadenceHours: number): Promise<CheckResult> {
   // Only the channels that have ever been read: a channel Shipcast reads no numbers for is not stale
   const rows = await registry.queries.selectRows<{ channel: string; newest: string | null }>(
     sql`SELECT p.channel, max(m.taken_at) AS newest FROM posts p LEFT JOIN metrics m ON m.post_id = p.id

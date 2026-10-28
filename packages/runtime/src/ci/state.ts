@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatSnapshot, openSnapshot, parseSnapshot, type Registry } from '@shipcast/engine';
+import { formatSnapshot, openSnapshot, parseSnapshot, type OpenRepositories, type Repositories } from '@shipcast/engine';
 
 /*
  * Action mode's registry between runs (docs/decisions/action-mode.md): a JSON snapshot on an orphan
@@ -239,9 +239,9 @@ export async function saveState(store: StateStore, held: Held, registry: string 
 /** Where a `shipcast ci` run keeps the registry: one lease per `use`, or a Postgres of the owner's */
 export interface CiState {
   /** Runs `work` on the registry and saves what it changed, even when it throws; `command` names the run in the lease */
-  use<T>(work: (registry: Registry) => Promise<T>, command?: string): Promise<T>;
+  use<T>(work: (registry: Repositories) => Promise<T>, command?: string): Promise<T>;
   /** Runs `work` on a copy that is never saved, outside the lease: for the minutes an AI draft takes */
-  scratch<T>(work: (registry: Registry) => Promise<T>): Promise<T>;
+  scratch<T>(work: (registry: Repositories) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -264,7 +264,7 @@ export class BranchState implements CiState {
     return openSnapshot(text === undefined ? undefined : parseSnapshot(text));
   }
 
-  async scratch<T>(work: (registry: Registry) => Promise<T>): Promise<T> {
+  async scratch<T>(work: (registry: Repositories) => Promise<T>): Promise<T> {
     const tip = await this.#store.read();
     const open = await this.#open(tip.registry);
     try {
@@ -274,7 +274,7 @@ export class BranchState implements CiState {
     }
   }
 
-  async use<T>(work: (registry: Registry) => Promise<T>, command = 'shipcast ci'): Promise<T> {
+  async use<T>(work: (registry: Repositories) => Promise<T>, command = 'shipcast ci'): Promise<T> {
     if (this.#options.dryRun) return this.scratch(work);
     const lease = { ...this.#options, command };
     const held = await acquireLease(this.#store, lease);
@@ -309,17 +309,17 @@ export class BranchState implements CiState {
 
 /** The owner's own Postgres: the claim's `ON CONFLICT` is the guarantee, as in the local install */
 export class PostgresState implements CiState {
-  readonly #registry: Registry;
+  readonly #registry: OpenRepositories;
 
-  constructor(registry: Registry) {
+  constructor(registry: OpenRepositories) {
     this.#registry = registry;
   }
 
-  use<T>(work: (registry: Registry) => Promise<T>): Promise<T> {
+  use<T>(work: (registry: Repositories) => Promise<T>): Promise<T> {
     return work(this.#registry);
   }
 
-  scratch<T>(work: (registry: Registry) => Promise<T>): Promise<T> {
+  scratch<T>(work: (registry: Repositories) => Promise<T>): Promise<T> {
     return work(this.#registry);
   }
 

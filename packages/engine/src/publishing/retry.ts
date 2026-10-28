@@ -1,6 +1,6 @@
 import { Refused, type Channel } from '@shipcast/schema';
 import { failureKey, failurePrefix, parseFailureKey } from '@shipcast/schema/failures';
-import type { Launch, Registry } from '../registry.ts';
+import type { Launch, Repositories } from '../repositories/index.ts';
 import type { PublishAttempts } from './attempts.ts';
 
 // The failure keys live in the schema, where the app's pages read them too; the engine's entry points take them from here
@@ -12,7 +12,7 @@ export { failureKey, failurePrefix, parseFailureKey };
  * that channel has nothing out yet, so the next publish tries it. Pieces already out stay out. The
  * channel stays failed for every other launch. Returns the launch as it is now.
  */
-export async function retryChannel(registry: Registry, launchId: number, channel: Channel, attempts?: PublishAttempts): Promise<Launch | undefined> {
+export async function retryChannel(registry: Repositories, launchId: number, channel: Channel, attempts?: PublishAttempts): Promise<Launch | undefined> {
   await registry.cursors.deleteCursor(failureKey(launchId, channel));
   await attempts?.reset(launchId, channel);
   const launch = await registry.launches.get(launchId);
@@ -23,7 +23,7 @@ export async function retryChannel(registry: Registry, launchId: number, channel
 }
 
 /** Try again on a channel for every launch it failed on (`shipcast publish --retry`); the launches reopened */
-export async function retryChannelEverywhere(registry: Registry, channel: Channel, attempts?: PublishAttempts): Promise<Launch[]> {
+export async function retryChannelEverywhere(registry: Repositories, channel: Channel, attempts?: PublishAttempts): Promise<Launch[]> {
   const reopened: Launch[] = [];
   for (const { key } of await registry.cursors.cursorsWithPrefix(failurePrefix())) {
     const parsed = parseFailureKey(key);
@@ -44,7 +44,7 @@ export class PublishRefused extends Refused<'not_found' | 'state'> {}
  * channel, a drafted launch whose merge was missed is followed. Answers the launch as it is now, for
  * the caller to queue its publishing; refused when there is no such launch, or nothing to follow.
  */
-export async function publishAgain(registry: Registry, launchId: number, channel: Channel | undefined, attempts?: PublishAttempts): Promise<Launch> {
+export async function publishAgain(registry: Repositories, launchId: number, channel: Channel | undefined, attempts?: PublishAttempts): Promise<Launch> {
   const launch = await registry.launches.get(launchId);
   if (!launch) throw new PublishRefused('not_found', 'no such launch');
   if (channel) return (await retryChannel(registry, launchId, channel, attempts)) ?? launch;

@@ -19,7 +19,7 @@ import {
   type LaunchFilter,
   type LaunchOrder,
   type Post,
-  type Registry,
+  type Repositories,
   type ReviewGitHub,
 } from '@shipcast/engine';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
@@ -62,7 +62,7 @@ export interface JobView {
 
 /** Everything the API touches, so the tests run it on a PGlite registry with the work faked */
 export interface ApiDeps {
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   github: ReviewGitHub;
   launchesRepo: string;

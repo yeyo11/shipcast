@@ -16,7 +16,7 @@ import {
   sendReply,
   writeCommentSettings,
   type CommentConnectors,
-  type Registry,
+  type Repositories,
   type ReplyContext,
   type ReplyDeps,
 } from '../src/index.ts';
@@ -45,7 +45,7 @@ const comment = (id: string, text: string, extra: Partial<Comment> = {}): Commen
 });
 
 interface World {
-  registry: Registry;
+  registry: Repositories;
   launchId: number;
   postId: number;
   /** What the network has under the post; tests change it between runs */

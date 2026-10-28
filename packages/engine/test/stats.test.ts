@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { accountGrowth, InvalidPeriod, statsOverview, statsRanking, statsSeries, statsWindow, type Registry } from '../src/index.ts';
+import { accountGrowth, InvalidPeriod, statsOverview, statsRanking, statsSeries, statsWindow, type Repositories } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
 
-async function launch(registry: Registry, repo = 'yeyo11/claudio', ref = 'v1.0.0') {
+async function launch(registry: Repositories, repo = 'yeyo11/claudio', ref = 'v1.0.0') {
   const { launch } = await registry.launches.claim({ repo, ref, trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   return launch;
 }
 
-async function piece(registry: Registry, launchId: number, channel: 'devto' | 'bluesky' | 'mastodon' | 'newsletter', accountId: number | null, kind: 'post' | 'issue:en' = 'post') {
+async function piece(registry: Repositories, launchId: number, channel: 'devto' | 'bluesky' | 'mastodon' | 'newsletter', accountId: number | null, kind: 'post' | 'issue:en' = 'post') {
   return (await registry.posts.recordPost({ launchId, channel, kind, accountId, externalId: `${channel}-${launchId}-${kind}`, url: `https://${channel}.example/${launchId}` })).post;
 }
 

@@ -1,4 +1,4 @@
-import { launchReplyContext, setupFor, type CommentRunResult, type PipelineDeps, type Registry, type ReplyDeps } from '@shipcast/engine';
+import { launchReplyContext, setupFor, type CommentRunResult, type PipelineDeps, type Repositories, type ReplyDeps } from '@shipcast/engine';
 import type { GitHubTokenSource } from '@shipcast/connectors';
 import type { Brand } from '@shipcast/schema';
 import { commentConnectors } from './edits.ts';
@@ -19,7 +19,7 @@ export const COMMENTS_CRON = '*/30 * * * *';
 
 export interface CommentWorkDeps {
   env: NodeJS.ProcessEnv;
-  registry: Registry;
+  registry: Repositories;
   secrets: SecretStore;
   pipeline: PipelineDeps;
   brand: Brand;

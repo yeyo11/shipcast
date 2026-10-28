@@ -1,4 +1,3 @@
-import type { Registry } from './registry.ts';
 import type { AccountRepository } from './repositories/accounts.ts';
 import type { CommentRepository } from './repositories/comments.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
@@ -10,9 +9,9 @@ import type { SettingRepository } from './repositories/settings.ts';
 /*
  * The narrow views of the registry each use case reads and writes (interface segregation,
  * docs/plans/performance-refactor.md, "Target architecture"). A service or an engine operation takes
- * the one it needs, never the whole Registry: a test fakes four methods instead of seventy-seven,
- * and when the Registry splits into repositories by aggregate each of these is what one of them
- * implements. They are Picks of Registry so the Registry itself fits every one meanwhile.
+ * the one it needs, never every repository: a test fakes the four methods it touches. A port over
+ * one aggregate is a Pick of its repository; one over several is shaped as a Pick of Repositories
+ * (`{ launches, posts }`), so the bundle a composition root holds fits every one of them as it is.
  */
 
 /** Finding a launch by id */

@@ -5,7 +5,7 @@ import {
   draftLaunch,
   loadBrand,
   loadProjects,
-  Registry,
+  type Repositories,
   type AiProvider,
   type ObjectRequest,
 } from '../src/index.ts';

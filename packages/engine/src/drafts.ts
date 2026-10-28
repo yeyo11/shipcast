@@ -4,7 +4,7 @@ import { issueDraftBody } from './newsletter.ts';
 
 // The draft formats are the channels' (packages/schema/src/channels/text.ts); kept importable from here
 export { discussionDraft, parseDiscussionDraft, parseInstagramDraft } from '@shipcast/schema';
-import type { Launch } from './registry.ts';
+import type { Launch } from './repositories/index.ts';
 
 /** A file of the drafts pull request, as a path in the launches repo and its text. */
 export type DraftFile = { path: string; content: string } | { path: string; bytes: Uint8Array };
