@@ -27,7 +27,7 @@ test('a network failing mid-edit throws its own error, not a refusal, and the ro
   const { posts } = await aPublishedLaunch(registry, [{ channel: 'mastodon', externalId: 'm1' }]);
   const fake = new FakeConnectors().fail('mastodon', 'edit', new ConnectorError('Mastodon', 'edit: 500', 500));
   await assert.rejects(editPost(posts[0]!.id, { text: 'x' }, { registry, editors: fake.editors() }), (e) => e instanceof ConnectorError && !(e instanceof PostRefused) && e.message === 'Mastodon: edit: 500');
-  const row = await registry.post(posts[0]!.id);
+  const row = await registry.posts.post(posts[0]!.id);
   assert.deepEqual([row?.status, row?.contentHash], ['live', null]);
 });
 
@@ -63,5 +63,5 @@ test('a launch-wide edit and delete over pieces in every state: what is tried, w
     ['devto deleted', 'discord deleted', 'instagram unsupported', 'mastodon no_credentials', 'newsletter unsupported', 'telegram unsupported'],
   );
   assert.deepEqual(fake.log.filter((l) => l.includes(' delete ')).sort(), ['devto delete 42', 'discord delete d1']);
-  assert.equal(posts[0] && (await registry.post(posts[0].id))?.status, 'live', 'a piece with no credentials is left live');
+  assert.equal(posts[0] && (await registry.posts.post(posts[0].id))?.status, 'live', 'a piece with no credentials is left live');
 });

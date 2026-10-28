@@ -74,7 +74,7 @@ test('every row of a SQLite registry is copied as it was, ids included, and new 
       createdAt: '2026-10-01T10:00:00.000Z',
       updatedAt: '2026-10-02T10:00:00.000Z',
     });
-    assert.deepEqual((await registry.posts(3)).map((p) => p.channel), ['blog', 'devto']);
+    assert.deepEqual((await registry.posts.posts(3)).map((p) => p.channel), ['blog', 'devto']);
     assert.deepEqual((await registry.metricHistory(3, 'devto', 'views')).map((m) => m.value), [10, 12.5]);
     assert.equal(await registry.launches.lastPublishedRef('yeyo11/claudio'), 'v0.8.0');
     assert.equal((await registry.primaryAccount('personal', 'mastodon'))?.settings.instance, 'https://fosstodon.org');

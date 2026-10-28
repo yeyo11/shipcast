@@ -477,8 +477,8 @@ describe('BullMQ beyond the contract', { skip: redisSkip }, () => {
   run('Redis lost: the scheduled posts are rebuilt from Postgres, once however often it runs', async (backend, db) => {
     const launchId = await launch(db.registry);
     await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-    const soon = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() + 1500)))!;
-    const later = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() + 3600_000)))!;
+    const soon = (await db.registry.posts.schedulePost(launchId, 'bluesky', new Date(Date.now() + 1500)))!;
+    const later = (await db.registry.posts.schedulePost(launchId, 'mastodon', new Date(Date.now() + 3600_000)))!;
     const first = backend.process(db) as BullQueue;
     assert.equal(await first.reconcileScheduled(), 2);
     await first.stop();

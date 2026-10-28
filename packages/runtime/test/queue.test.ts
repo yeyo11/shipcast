@@ -265,8 +265,8 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
   const db = await database();
   const launchId = await launch(db.registry);
   await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-  const due = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 60_000)))!;
-  const cancelled = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() - 60_000)))!;
+  const due = (await db.registry.posts.schedulePost(launchId, 'bluesky', new Date(Date.now() - 60_000)))!;
+  const cancelled = (await db.registry.posts.schedulePost(launchId, 'mastodon', new Date(Date.now() - 60_000)))!;
 
   // Armed by a process that stops before the time comes; arming twice leaves one job
   const before = queueOn(db);
@@ -274,7 +274,7 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
   assert.equal(await armScheduled(before, due), first);
   assert.equal((await before.queued('scheduled', `post:${due.id}`)).length, 1);
   const lost = await armScheduled(before, cancelled);
-  await db.registry.unschedulePost(cancelled.id);
+  await db.registry.posts.unschedulePost(cancelled.id);
   await before.stop();
 
   const merged = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'merged' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
@@ -299,7 +299,7 @@ test('a due piece of a launch whose drafts still wait for approval waits for the
   const db = await database();
   const launchId = await launch(db.registry);
   await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-  const post = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
+  const post = (await db.registry.posts.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
   const open = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'open' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
   const queue = queueOn(db);
   let publishes = 0;

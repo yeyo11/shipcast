@@ -221,7 +221,7 @@ test('a launch comes with its posts, numbers, index status and drafts summary', 
   const s = await setup();
   const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await s.registry.launches.setStatus(launch.id, 'drafted', 'Drafts: https://github.com/yeyo11/launches/pull/7');
-  await s.registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: null, url: 'https://josegarrido.dev/en/blog/claudio' });
+  await s.registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: null, url: 'https://josegarrido.dev/en/blog/claudio' });
   await s.registry.recordMetrics(launch.id, 'blog', { views: 12 }, new Date('2026-10-25T00:00:00Z'));
 
   const response = await call(s.deps, 'GET', `/launches/${launch.id}`, { token: s.read });
@@ -341,7 +341,7 @@ async function publishedLaunch(registry: Registry) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram', externalId: string) =>
-    (await registry.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
+    (await registry.posts.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
   return { launch, mastodon: await record('mastodon', '111'), bluesky: await record('bluesky', 'at://did:plc:a/app.bsky.feed.post/1'), telegram: await record('telegram', '@c:5') };
 }
 
@@ -372,11 +372,11 @@ test('what a network cannot do is a 409, a bad change a 400, a missing post a 40
   assert.equal((await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: { link: 'javascript:alert(1)' } })).status, 400);
   assert.equal((await call(s.deps, 'DELETE', '/posts/9999', { token: s.write })).status, 404);
   assert.equal((await call(s.deps, 'DELETE', '/posts/abc', { token: s.write })).status, 400);
-  const refused = (await s.registry.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
+  const refused = (await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
   const upstream = await call(s.deps, 'PATCH', `/posts/${refused.id}`, { token: s.write, body: { text: 'x'.repeat(600) } });
   assert.equal(upstream.status, 502);
   assert.match(((await body(upstream)).error as { message: string }).message, /Text is too long/);
-  assert.equal((await s.registry.post(refused.id))!.status, 'live');
+  assert.equal((await s.registry.posts.post(refused.id))!.status, 'live');
 });
 
 test('a launch’s posts are edited and deleted at once, per channel, with what each one did', async () => {
@@ -392,7 +392,7 @@ test('a launch’s posts are edited and deleted at once, per channel, with what 
 
   const deleted = await call(s.deps, 'DELETE', `/launches/${launch.id}/posts?channels=bluesky,mastodon`, { token: s.write });
   assert.deepEqual(((await body(deleted)).outcomes as Array<{ ok: boolean }>).map((o) => o.ok), [true, true]);
-  assert.equal((await s.registry.post(telegram.id))!.status, 'live', 'a channel not named is left alone');
+  assert.equal((await s.registry.posts.post(telegram.id))!.status, 'live', 'a channel not named is left alone');
   assert.equal((await call(s.deps, 'DELETE', '/launches/999/posts', { token: s.write })).status, 404);
 });
 
@@ -436,7 +436,7 @@ test('a launch’s channels are scheduled, moved and cancelled through the API',
   const cancelled = await call(s.deps, 'DELETE', `/posts/${posts[1]!.id}/schedule`, { token: s.write });
   assert.equal(cancelled.status, 200);
   assert.equal((await call(s.deps, 'DELETE', `/posts/${posts[1]!.id}/schedule`, { token: s.write })).status, 404, 'gone');
-  assert.deepEqual((await s.registry.posts(launch.id)).map((p) => p.channel), ['bluesky']);
+  assert.deepEqual((await s.registry.posts.posts(launch.id)).map((p) => p.channel), ['bluesky']);
 });
 
 test('recommendations and the time zone are read with the read scope, the zone set with write', async () => {
@@ -493,7 +493,7 @@ test('the MCP endpoint’s bearer check: the API’s refusals, and the same limi
 
 async function commented(registry: Registry) {
   const { launch, mastodon } = await publishedLaunch(registry);
-  const { post: devto } = await registry.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
+  const { post: devto } = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
   const add = async (postId: number, channel: 'mastodon' | 'devto', externalId: string, own = false) =>
     (
       await registry.recordComment({

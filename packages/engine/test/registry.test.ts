@@ -61,45 +61,45 @@ test('a piece is published once per launch, channel, account and kind', async ()
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
   const account = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
-  const first = await registry.recordPost({ launchId: launch.id, channel: 'devto', accountId: account.id, url: 'https://dev.to/x', externalId: '1' });
+  const first = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', accountId: account.id, url: 'https://dev.to/x', externalId: '1' });
   assert.equal(first.recorded, true);
   assert.equal(first.post.kind, 'post');
   assert.equal(first.post.status, 'live');
   assert.equal(first.post.accountId, account.id);
-  const again = await registry.recordPost({ launchId: launch.id, channel: 'devto', accountId: account.id, url: 'https://dev.to/y', externalId: '2' });
+  const again = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', accountId: account.id, url: 'https://dev.to/y', externalId: '2' });
   assert.equal(again.recorded, false);
   assert.equal(again.post.id, first.post.id, 'the piece already there comes back');
   assert.equal(again.post.url, 'https://dev.to/x');
-  assert.deepEqual(await registry.post(first.post.id), first.post);
-  assert.equal((await registry.posts(launch.id)).length, 1);
+  assert.deepEqual(await registry.posts.post(first.post.id), first.post);
+  assert.equal((await registry.posts.posts(launch.id)).length, 1);
 });
 
 test('with no account, nulls are not distinct: a blog article is still recorded once', async () => {
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
   const piece = { launchId: launch.id, channel: 'blog' as const, kind: 'article:en' as const, url: 'https://example.dev/en/a/', externalId: 'a' };
-  assert.equal((await registry.recordPost(piece)).recorded, true);
-  const again = await registry.recordPost({ ...piece, url: 'https://example.dev/en/b/' });
+  assert.equal((await registry.posts.recordPost(piece)).recorded, true);
+  const again = await registry.posts.recordPost({ ...piece, url: 'https://example.dev/en/b/' });
   assert.equal(again.recorded, false);
   assert.equal(again.post.url, 'https://example.dev/en/a/');
-  assert.equal((await registry.recordPost({ ...piece, kind: 'article:es', url: 'https://example.dev/es/a/' })).recorded, true, 'another language is another piece');
+  assert.equal((await registry.posts.recordPost({ ...piece, kind: 'article:es', url: 'https://example.dev/es/a/' })).recorded, true, 'another language is another piece');
   assert.deepEqual(
-    (await registry.posts(launch.id, { channel: 'blog' })).map((p) => [p.kind, p.accountId]),
+    (await registry.posts.posts(launch.id, { channel: 'blog' })).map((p) => [p.kind, p.accountId]),
     [
       ['article:en', null],
       ['article:es', null],
     ],
   );
-  assert.deepEqual((await registry.posts(launch.id, { kind: 'article:es' })).map((p) => p.url), ['https://example.dev/es/a/']);
+  assert.deepEqual((await registry.posts.posts(launch.id, { kind: 'article:es' })).map((p) => p.url), ['https://example.dev/es/a/']);
 });
 
 test('removing an account keeps its pieces, no longer attributed', async () => {
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
   const account = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: {} });
-  const { post } = await registry.recordPost({ launchId: launch.id, channel: 'mastodon', accountId: account.id, url: 'https://m/1', externalId: '1' });
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', accountId: account.id, url: 'https://m/1', externalId: '1' });
   await registry.deleteAccount(account.id);
-  assert.equal((await registry.post(post.id))?.accountId, null);
+  assert.equal((await registry.posts.post(post.id))?.accountId, null);
 });
 
 test('settings hold what the owner chose, typed as it was stored', async () => {
@@ -143,7 +143,7 @@ test('a channel that failed for good can be retried, without posting the others 
   const registry = await memory();
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/1');
-  await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
   await registry.setCursor(`publish-failed:${launch.id}:newsletter`, 'Brevo: 405');
   await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
 
@@ -159,7 +159,7 @@ test('a retry leaves alone a launch whose channel already has its post', async (
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
   await registry.launches.setStatus(launch.id, 'published');
-  await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
   await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
   assert.deepEqual(await retryChannelEverywhere(registry, 'devto'), []);
   assert.equal((await registry.launches.get(launch.id))?.status, 'published');
@@ -247,9 +247,9 @@ test('a launch’s sent replies are counted per channel: only others’ comments
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
   const { launch: other } = await registry.launches.claim({ ...release, ref: 'v1.0.0' });
-  const { post: mastodon } = await registry.recordPost({ launchId: launch.id, channel: 'mastodon', url: 'https://m/1', externalId: '1' });
-  const { post: bluesky } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://b/1', externalId: 'b1' });
-  const { post: elsewhere } = await registry.recordPost({ launchId: other.id, channel: 'mastodon', url: 'https://m/2', externalId: '2' });
+  const { post: mastodon } = await registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', url: 'https://m/1', externalId: '1' });
+  const { post: bluesky } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://b/1', externalId: 'b1' });
+  const { post: elsewhere } = await registry.posts.recordPost({ launchId: other.id, channel: 'mastodon', url: 'https://m/2', externalId: '2' });
   const comment = (postId: number, channel: 'mastodon' | 'bluesky', externalId: string, status: 'sent' | 'new', own = false) =>
     registry.recordComment({ postId, channel, externalId, author: { handle: '@ana' }, text: 'hi', createdAt: '2026-10-25T10:00:00.000Z', own, status });
   await comment(mastodon.id, 'mastodon', 'c1', 'sent');

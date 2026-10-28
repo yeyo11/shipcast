@@ -269,7 +269,7 @@ export async function loadSearch(registry: Registry, range: { from: string; to: 
   };
   const launches = await Promise.all(
     published.map(async (l) => {
-      const urls = articleUrls(await registry.posts(l.id, { channel: 'blog' }));
+      const urls = articleUrls(await registry.posts.posts(l.id, { channel: 'blog' }));
       if (urls.length === 0) return null;
       const [pages, overview] = await Promise.all([
         Promise.all(urls.map(async ({ lang, url }) => ({ lang, url, google: await read(url, 'google'), bing: await read(url, 'bing') }))),

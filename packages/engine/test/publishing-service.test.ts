@@ -80,7 +80,7 @@ test('the round and a publish job at the same moment: exactly one post per piece
   const [round, job] = await Promise.all([service.publish(launch, brand, connectors, 'round'), service.publish(launch, brand, connectors, 'job-1')]);
 
   assert.deepEqual(sends(fake), { bluesky: 1, mastodon: 1, telegram: 1, discord: 1, threads: 1 });
-  const posts = (await registry.posts(launchId)).filter((p) => p.kind === 'post');
+  const posts = (await registry.posts.posts(launchId)).filter((p) => p.kind === 'post');
   assert.deepEqual(posts.map((p) => p.channel).sort(), [...CHANNELS].sort());
   // Whichever run lost a channel's claim left it to the other and said so, never as a failure
   for (const result of [round, job]) assert.ok(result.state !== 'waiting' && result.state !== 'skipped' && result.failures.length === 0);

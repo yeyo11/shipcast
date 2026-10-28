@@ -49,7 +49,7 @@ export async function withPosts(registry: Registry, launchId: number, pieces: re
   const out: Post[] = [];
   for (const [i, p] of pieces.entries()) {
     const externalId = p.externalId === undefined ? `${p.channel}-${i + 1}` : p.externalId;
-    const { post } = await registry.recordPost({
+    const { post } = await registry.posts.recordPost({
       launchId,
       channel: p.channel,
       kind: p.kind ?? 'post',
@@ -57,7 +57,7 @@ export async function withPosts(registry: Registry, launchId: number, pieces: re
       url: p.url === undefined ? `https://${p.channel}.example/${externalId ?? i + 1}` : p.url,
       accountId: p.accountId ?? null,
     });
-    out.push(p.status && p.status !== 'live' ? await registry.updatePost(post.id, { status: p.status }) : post);
+    out.push(p.status && p.status !== 'live' ? await registry.posts.updatePost(post.id, { status: p.status }) : post);
   }
   return out;
 }
@@ -72,7 +72,7 @@ export async function aPublishedLaunch(registry: Registry, pieces: readonly Post
 export async function withScheduled(registry: Registry, launchId: number, times: Partial<Record<Channel, Date>>): Promise<Post[]> {
   const out: Post[] = [];
   for (const [channel, at] of Object.entries(times) as Array<[Channel, Date]>) {
-    const post = await registry.schedulePost(launchId, channel, at);
+    const post = await registry.posts.schedulePost(launchId, channel, at);
     if (!post) throw new Error(`${channel} of launch ${launchId} is out already: it cannot be scheduled`);
     out.push(post);
   }

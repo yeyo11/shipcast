@@ -32,7 +32,7 @@ async function world() {
   return { registry, fake, launch, editing, deps, mastodon: mastodon!, devto: devto!, bluesky: bluesky!, telegram: telegram!, discord: discord! };
 }
 
-const statusOf = async (registry: Registry, id: number) => (await registry.post(id))?.status;
+const statusOf = async (registry: Registry, id: number) => (await registry.posts.post(id))?.status;
 
 test('by channels editPosts skips deleted and scheduled pieces silently; by the page’s ids it reports them, in the order asked', async () => {
   const w = await world();
@@ -68,7 +68,7 @@ test('each piece’s hash is of the fields its network took, on both paths', asy
   const w = await world();
   const changes = { text: 'T', imageUrl: 'https://josegarrido.dev/og.png', imageAlt: 'alt' };
   await editPosts(w.launch.id, changes, ['devto'], w.editing);
-  assert.equal((await w.registry.post(w.devto.id))?.contentHash, contentHash({ text: 'T', imageUrl: 'https://josegarrido.dev/og.png', imageAlt: 'alt' }));
+  assert.equal((await w.registry.posts.post(w.devto.id))?.contentHash, contentHash({ text: 'T', imageUrl: 'https://josegarrido.dev/og.png', imageAlt: 'alt' }));
   await editMany(w.deps, { launchId: w.launch.id, postIds: [w.devto.id], changes: { text: 'T' } });
-  assert.equal((await w.registry.post(w.devto.id))?.contentHash, contentHash({ text: 'T' }));
+  assert.equal((await w.registry.posts.post(w.devto.id))?.contentHash, contentHash({ text: 'T' }));
 });

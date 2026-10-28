@@ -58,11 +58,11 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
   const now = new Date();
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v0.2.0', trigger: 'release', kind: 'major', brand: 'personal' });
   // Still waiting an hour after its time: missed
-  await registry.schedulePost(launch.id, 'mastodon', new Date(now.getTime() - 3_600_000));
+  await registry.posts.schedulePost(launch.id, 'mastodon', new Date(now.getTime() - 3_600_000));
   // A live piece read two hours ago, and one never read
-  const { post: read } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
+  const { post: read } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
   await registry.recordMetrics(launch.id, 'bluesky', { likes: 3 }, new Date(now.getTime() - 2 * 3_600_000), read.id);
-  await registry.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'comment', externalId: 'at://2', url: 'https://bsky.app/2' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'comment', externalId: 'at://2', url: 'https://bsky.app/2' });
 
   const results = await runChecks(registry, store, { now, cadenceHours: 6 });
   const byName = Object.fromEntries(results.map((r) => [r.name, r]));
@@ -83,8 +83,8 @@ test('two rows with one network id are a duplicate', async () => {
   const store = new TelemetryStore(registry.database);
   const a = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v1', trigger: 'release', kind: 'major', brand: 'personal' });
   const b = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v2', trigger: 'release', kind: 'major', brand: 'personal' });
-  await registry.recordPost({ launchId: a.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
-  await registry.recordPost({ launchId: b.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
+  await registry.posts.recordPost({ launchId: a.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
+  await registry.posts.recordPost({ launchId: b.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
   const results = await runChecks(registry, store, { cadenceHours: 6 });
   const duplicate = results.find((r) => r.name === 'duplicate-pieces')!;
   assert.equal(duplicate.ok, false);

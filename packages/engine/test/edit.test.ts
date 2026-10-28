@@ -26,11 +26,11 @@ function fakeEditors(sent: Sent[], fail: Partial<Record<Channel, Error>> = {}): 
 
 const image = (async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } })) as unknown as typeof fetch;
 
-async function launchWith(registry: Registry, channels: Array<{ channel: Parameters<Registry['recordPost']>[0]['channel']; kind?: Parameters<Registry['recordPost']>[0]['kind']; externalId: string; accountId?: number | null }>) {
+async function launchWith(registry: Registry, channels: Array<{ channel: Parameters<Registry['posts']['recordPost']>[0]['channel']; kind?: Parameters<Registry['posts']['recordPost']>[0]['kind']; externalId: string; accountId?: number | null }>) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const posts = [];
-  for (const c of channels) posts.push((await registry.recordPost({ launchId: launch.id, channel: c.channel, kind: c.kind ?? 'post', externalId: c.externalId, url: `https://${c.channel}.example/${c.externalId}`, accountId: c.accountId ?? null })).post);
+  for (const c of channels) posts.push((await registry.posts.recordPost({ launchId: launch.id, channel: c.channel, kind: c.kind ?? 'post', externalId: c.externalId, url: `https://${c.channel}.example/${c.externalId}`, accountId: c.accountId ?? null })).post);
   return { launch, posts };
 }
 
@@ -49,7 +49,7 @@ test('an edit goes out with the account the post was published with, and the row
   assert.equal(edited.status, 'edited');
   assert.equal(edited.contentHash, contentHash(changes));
   assert.ok(edited.updatedAt >= before.updatedAt);
-  assert.equal((await registry.post(before.id))!.status, 'edited');
+  assert.equal((await registry.posts.post(before.id))!.status, 'edited');
 });
 
 test('what a network cannot do is refused before any request, and the row is left as it was', async () => {
@@ -75,7 +75,7 @@ test('what a network cannot do is refused before any request, and the row is lef
   await assert.rejects(editPost(discord!.id, { link: 'https://x.dev' }, deps), refused('invalid', /send the text with the link/));
   await assert.rejects(editPost(9999, { text: 'x' }, deps), refused('not_found', /no such post/));
   assert.equal(sent.length, 0);
-  for (const post of posts) assert.equal((await registry.post(post.id))!.status, 'live');
+  for (const post of posts) assert.equal((await registry.posts.post(post.id))!.status, 'live');
 });
 
 test('a post with no credentials for its account is refused, naming them', async () => {
@@ -97,7 +97,7 @@ test('a deleted post stays a row, is not deleted or edited again, and its piece 
   assert.deepEqual(sent.map((s) => `${s.channel} ${s.action} ${s.id}`), ['devto delete 42']);
   await assert.rejects(deletePost(posts[0]!.id, deps), (e) => e instanceof PostRefused && e.reason === 'deleted');
   await assert.rejects(editPost(posts[0]!.id, { text: 'x' }, deps), (e) => e instanceof PostRefused && e.reason === 'deleted');
-  const again = await registry.recordPost({ launchId: launch.id, channel: 'devto', externalId: '43', url: 'https://devto.example/43' });
+  const again = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', externalId: '43', url: 'https://devto.example/43' });
   assert.equal(again.recorded, false, 'a launch happens once, deleted or not');
 });
 
@@ -113,7 +113,7 @@ test('a network that says the post is gone already counts as deleted; another fa
   };
   assert.equal((await deletePost(posts[0]!.id, deps)).status, 'deleted');
   await assert.rejects(deletePost(posts[1]!.id, deps), /500/);
-  assert.equal((await registry.post(posts[1]!.id))!.status, 'live');
+  assert.equal((await registry.posts.post(posts[1]!.id))!.status, 'live');
 });
 
 test('one change to several channels maps the shared fields to each network and reports what cannot take it', async () => {
@@ -159,7 +159,7 @@ test('a launch-wide edit or delete can be limited to some channels', async () =>
   const deps = { registry, editors: fakeEditors(sent) };
   const deleted = await deleteLaunchPosts(launch.id, ['mastodon', 'bluesky'], deps);
   assert.deepEqual(deleted.map((o) => `${o.channel} ${o.ok}`), ['mastodon true', 'bluesky true']);
-  assert.equal((await registry.post(posts[2]!.id))!.status, 'live');
+  assert.equal((await registry.posts.post(posts[2]!.id))!.status, 'live');
   // Deleted pieces are left out of the next operation on the launch
   const edited = await editPosts(launch.id, { text: 'x' }, undefined, deps);
   assert.deepEqual(edited.map((o) => o.channel), ['telegram']);

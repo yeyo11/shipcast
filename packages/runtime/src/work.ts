@@ -181,7 +181,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
      */
     async scheduled({ postId, launchId }, job) {
       job.link(pageOf(launchId));
-      const post = await registry.post(postId);
+      const post = await registry.posts.post(postId);
       if (!post || post.status !== 'scheduled') {
         job.log('Nothing to do: the post is no longer scheduled');
         return;
@@ -415,5 +415,5 @@ export async function startWorking(queue: WorkQueue, d: WorkDeps, options: { fir
   await queue.schedule('round', ROUND_WATCHDOG_CRON, { reason: 'watchdog' }, { singletonKey: ROUND_KEY });
   if ((await readAutomation(d.registry)).mode !== 'off') await scheduleRound(queue, 'after a start', options.firstRoundInSeconds ?? 15);
   // Every scheduled piece has its wake-up queued; one missing (or one whose time passed while the machine was off) is armed now
-  for (const post of await d.registry.scheduledPosts()) await armScheduled(queue, post);
+  for (const post of await d.registry.posts.scheduledPosts()) await armScheduled(queue, post);
 }

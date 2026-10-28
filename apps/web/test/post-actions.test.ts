@@ -43,7 +43,7 @@ async function published(registry: Registry) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram' | 'devto' | 'instagram', externalId: string) =>
-    (await registry.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
+    (await registry.posts.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
   return { launch, mastodon: await record('mastodon', 'm1'), bluesky: await record('bluesky', 'at://did:plc:me/app.bsky.feed.post/b1'), telegram: await record('telegram', '11'), devto: await record('devto', '42'), instagram: await record('instagram', 'ig1') };
 }
 
@@ -57,7 +57,7 @@ test('one piece is edited and then deleted through its connector, and its row sa
   const gone = await deleteOne(s.deps, { postId: mastodon.id });
   assert.equal(gone.ok && gone.value.status, 'deleted');
   assert.equal(s.sent[1], 'delete mastodon m1');
-  assert.equal((await s.registry.post(mastodon.id))?.status, 'deleted');
+  assert.equal((await s.registry.posts.post(mastodon.id))?.status, 'deleted');
   const again = await editOne(s.deps, { postId: mastodon.id, changes: { text: 'x' } });
   assert.deepEqual(again.ok ? null : again.reason, 'deleted', 'a deleted piece is never edited');
 });
@@ -72,7 +72,7 @@ test('what a network cannot do, a bad request and a network’s refusal all come
   assert.equal(!noDelete.ok && noDelete.reason, 'unsupported');
   assert.equal(((await editOne(s.deps, { postId: 'one', changes: {} })) as { reason?: string }).reason, 'invalid');
   assert.equal(((await editOne(s.deps, { postId: 99999, changes: { text: 'x' } })) as { reason?: string }).reason, 'not_found');
-  const { post: refused } = await s.registry.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null });
+  const { post: refused } = await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null });
   const upstream = await editOne(s.deps, { postId: refused.id, changes: { text: 'x'.repeat(10) } });
   assert.equal(!upstream.ok && upstream.reason, 'upstream');
   assert.match(!upstream.ok ? upstream.problem : '', /Text is too long/);
@@ -83,7 +83,7 @@ test('several pieces take the same shared fields, each network what it has; one 
   const s = await setup();
   const { launch, mastodon, bluesky, telegram, devto } = await published(s.registry);
   const { launch: other } = await s.registry.launches.claim({ repo: 'yeyo11/other', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  const { post: foreign } = await s.registry.recordPost({ launchId: other.id, channel: 'mastodon', externalId: 'f1', url: 'https://m/f1' });
+  const { post: foreign } = await s.registry.posts.recordPost({ launchId: other.id, channel: 'mastodon', externalId: 'f1', url: 'https://m/f1' });
   const answer = await editMany(s.deps, { launchId: launch.id, postIds: [mastodon.id, bluesky.id, telegram.id, devto.id, foreign.id, mastodon.id], changes: { text: 'Shared text', link: 'https://josegarrido.dev/en/blog/claudio' } });
   assert.equal(answer.ok, true);
   const outcomes = answer.ok ? answer.value : [];
@@ -122,7 +122,7 @@ test('deleting everything asks for the repo’s name, then deletes what each net
     outcomes.filter((o) => !o.ok).map((o) => o.channel),
     ['instagram'],
   );
-  assert.equal((await s.registry.post(instagram.id))?.status, 'live');
+  assert.equal((await s.registry.posts.post(instagram.id))?.status, 'live');
   assert.deepEqual(s.sent.sort(), ['delete bluesky at://did:plc:me/app.bsky.feed.post/b1', 'delete devto 42', 'delete mastodon m1', 'delete telegram 11']);
 });
 
@@ -142,7 +142,7 @@ test('a drafted launch’s channel is scheduled, moved and cancelled, armed each
   assert.deepEqual(s.armed, [`mastodon ${when.toISOString()}`, `mastodon ${later.toISOString()}`]);
   const cancelled = await cancel(s.deps, { postId: piece?.id });
   assert.equal(cancelled.ok, true);
-  assert.deepEqual(await s.registry.posts(launch.id), []);
+  assert.deepEqual(await s.registry.posts.posts(launch.id), []);
 
   const reddit = await schedule(s.deps, { launchId: launch.id, channel: 'reddit', at: when.toISOString() });
   assert.equal(!reddit.ok && reddit.reason, 'invalid', 'Reddit is always a draft: it has no time');

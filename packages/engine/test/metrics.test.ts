@@ -10,10 +10,10 @@ const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://jo
 async function published(registry: Registry) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
-  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
-  await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:es', url: 'https://josegarrido.dev/es/claudio-como-servicio/', externalId: 'claudio-como-servicio' });
-  await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
-  await registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://bsky.app/x', externalId: 'at://x' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:es', url: 'https://josegarrido.dev/es/claudio-como-servicio/', externalId: 'claudio-como-servicio' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://bsky.app/x', externalId: 'at://x' });
   return launch;
 }
 
@@ -161,10 +161,10 @@ test("Bing's clicks, impressions and crawl state are kept apart from Google's", 
 test('each piece is read on its own and its readings point at it; the launch adds them up', async () => {
   const registry = await memoryRegistry();
   const launch = await published(registry);
-  const en = (await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:en', url: 'https://brevo/8', externalId: '8' })).post;
-  const es = (await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:es', url: 'https://brevo/9', externalId: '9' })).post;
-  await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', url: 'https://ig/p/1', externalId: 'p1' });
-  await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' });
+  const en = (await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:en', url: 'https://brevo/8', externalId: '8' })).post;
+  const es = (await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:es', url: 'https://brevo/9', externalId: '9' })).post;
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', url: 'https://ig/p/1', externalId: 'p1' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' });
   const asked: string[] = [];
   await collectMetrics(
     registry,

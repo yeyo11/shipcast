@@ -199,7 +199,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   if (slug && config.publishing.blog !== 'off') {
     const live = await http(articleUrl, { method: 'HEAD' }).then((r) => r.ok, () => false);
     if (!live) return { state: 'waiting', launch, reason: `${articleUrl} is not live yet` };
-    if ((await registry.posts(launch.id, { channel: 'blog' })).length === 0 && deps.search) {
+    if ((await registry.posts.posts(launch.id, { channel: 'blog' })).length === 0 && deps.search) {
       // Not a channel: Google not hearing of the article yet never holds the launch back
       await resubmitSitemap(registry, brand.site, deps.search, new Date(), true).catch(() => false);
     }
@@ -207,7 +207,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     for (const lang of ['en', 'es'] as const) {
       const piece = pack.article?.[lang];
       if (!piece) continue;
-      await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: articleLink(pack, brand.site, lang, lead), externalId: piece.slug });
+      await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: articleLink(pack, brand.site, lang, lead), externalId: piece.slug });
     }
   }
 
@@ -255,7 +255,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         : pieces.some((p) => p.channel === channel && p.kind === 'post' && p.status !== 'scheduled');
   // A channel whose piece waits for a time still to come is neither done nor pending: it never holds the others back
   const later = (pieces: Post[], channel: EngineChannel) => pieces.map((p) => (p.channel === channel ? waitsUntil(p, now) : undefined)).find((at) => at !== undefined);
-  const pieces = await registry.posts(launch.id);
+  const pieces = await registry.posts.posts(launch.id);
   const posted: Array<{ channel: Channel; url: string }> = [];
   const problems: string[] = [];
   const scheduled: Array<{ channel: Channel; at: string }> = [];
@@ -378,7 +378,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                   await registry.setCursor(redditAttemptKey(launch.id, piece.subreddit), new Date().toISOString());
                   result = await reddit.publish({ subreddit: piece.subreddit, title, text });
                 }
-                await registry.recordPost({ launchId: launch.id, channel: 'reddit', kind, accountId: accountOf('reddit'), externalId: result.externalId, url: result.url });
+                await registry.posts.recordPost({ launchId: launch.id, channel: 'reddit', kind, accountId: accountOf('reddit'), externalId: result.externalId, url: result.url });
                 posted.push({ channel: 'reddit', url: result.url });
               } catch (error) {
                 failures.push(error instanceof ConnectorError ? error : new ConnectorError('Reddit', error instanceof Error ? error.message : String(error)));
@@ -404,22 +404,22 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             const media = ready.length > 0 ? ready : [{ kind: 'image' as const, url: ogJpegUrl }];
             const published = await ig.publish({ caption, media });
             // Recorded before the extras, so nothing that happens to them can get the post out twice
-            await registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', accountId: accountOf('instagram'), externalId: published.externalId, url: published.url });
+            await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', accountId: accountOf('instagram'), externalId: published.externalId, url: published.url });
             posted.push({ channel: 'instagram', url: published.url });
 
             // The post is out: the story and the comment are extras, reported but never worth posting it twice
-            const extra = async (kind: 'story' | 'comment') => (await registry.posts(launch.id, { channel: 'instagram', kind })).length > 0;
+            const extra = async (kind: 'story' | 'comment') => (await registry.posts.posts(launch.id, { channel: 'instagram', kind })).length > 0;
             const storyUrl = `${brand.site}${mediaPath(launch, STORY_FILE)}`;
             if (ig.publishStory && !(await extra('story')) && (await live(storyUrl))) {
               await ig.publishStory({ kind: 'image', url: storyUrl }).then(
-                (story) => registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', accountId: accountOf('instagram'), externalId: story.externalId, url: story.url }),
+                (story) => registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', accountId: accountOf('instagram'), externalId: story.externalId, url: story.url }),
                 (error: unknown) => problems.push(`instagram story: ${error instanceof Error ? error.message : String(error)}`),
               );
             }
             if (ig.comment && comment && !(await extra('comment'))) {
               await ig.comment(published.externalId, comment).then(
                 // A comment has no page of its own
-                (made) => registry.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'comment', accountId: accountOf('instagram'), externalId: made.id, url: null }),
+                (made) => registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'comment', accountId: accountOf('instagram'), externalId: made.id, url: null }),
                 (error: unknown) => problems.push(`instagram comment: ${error instanceof Error ? error.message : String(error)}`),
               );
             }
@@ -439,7 +439,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               const fromPack = pack.newsletter![lang];
               if (!listId || !fromPack) continue;
               // One campaign per language: an issue already out is never sent again, even if the other one failed
-              if ((await registry.posts(launch.id, { channel: 'newsletter', kind: `issue:${lang}` })).length > 0) {
+              if ((await registry.posts.posts(launch.id, { channel: 'newsletter', kind: `issue:${lang}` })).length > 0) {
                 sent += 1;
                 continue;
               }
@@ -469,7 +469,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 // No tag: Brevo's free plan refuses a campaign that carries one
               });
               // Recorded at once: the next language failing must not get this one sent twice
-              await registry.recordPost({ launchId: launch.id, channel: 'newsletter', kind: `issue:${lang}`, accountId: accountOf('newsletter'), externalId: result.externalId, url: result.url });
+              await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: `issue:${lang}`, accountId: accountOf('newsletter'), externalId: result.externalId, url: result.url });
               posted.push({ channel: 'newsletter', url: result.url });
               sent += 1;
             }
@@ -499,7 +499,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     try {
       // Claimed for this run, then checked again: a worker that read the pieces before another's went out sends nothing
       const guarded = deps.guard
-        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !done(await registry.posts(launch.id), channel) && !(await registry.cursor(failureKey(launch, channel))) }, run)
+        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !done(await registry.posts.posts(launch.id), channel) && !(await registry.cursor(failureKey(launch, channel))) }, run)
         : { ran: true as const, value: await run() };
       if (!guarded.ran) {
         if (guarded.attempt.state !== 'live') heldElsewhere.push({ channel, why: notSentBecause(guarded.attempt) });
@@ -507,12 +507,12 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       }
       const result = guarded.value;
       if (result) {
-        await registry.recordPost({ launchId: launch.id, channel, kind: 'post', accountId: accountOf(channel), url: result.url, externalId: result.externalId });
+        await registry.posts.recordPost({ launchId: launch.id, channel, kind: 'post', accountId: accountOf(channel), url: result.url, externalId: result.externalId });
         posted.push({ channel, url: result.url });
       }
       finished.add(channel);
       // What is left waiting of a finished channel (the newsletter's row, whose issues are rows of their own) goes
-      await registry.clearSchedule(launch.id, channel);
+      await registry.posts.clearSchedule(launch.id, channel);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retryable = isRetryable(error);
@@ -520,13 +520,13 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       if (!retryable) {
         await registry.setCursor(failureKey(launch, channel), message);
         // A retry of the channel is sent at once: its time has come already
-        await registry.clearSchedule(launch.id, channel);
+        await registry.posts.clearSchedule(launch.id, channel);
       }
       problems.push(`${channel}: ${message}${retryable ? ' (will retry)' : ''}`);
     }
   }
 
-  const piecesNow = await registry.posts(launch.id);
+  const piecesNow = await registry.posts.posts(launch.id);
   const pending: EngineChannel[] = [];
   for (const c of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[c];

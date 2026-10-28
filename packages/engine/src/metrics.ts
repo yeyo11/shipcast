@@ -97,7 +97,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
     const since = launch.createdAt.slice(0, 10);
     const until = day(now);
 
-    const pieces = await registry.posts(launch.id);
+    const pieces = await registry.posts.posts(launch.id);
     for (const post of pieces) {
       const reader = sources.posts?.[post.channel];
       // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its own

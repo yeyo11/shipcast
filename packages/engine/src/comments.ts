@@ -123,7 +123,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
   const settings = await readCommentSettings(registry);
   const channels = COMMENT_CHANNELS.filter((c) => settings.replies[c] !== 'off');
   const since = new Date(now.getTime() - (options.days ?? 30) * 86_400_000).toISOString();
-  const posts = await registry.postsSince(since, channels);
+  const posts = await registry.posts.postsSince(since, channels);
   const problems = new Set<string>();
   const added: CommentRecord[] = [];
   let found = 0;
@@ -144,7 +144,7 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
       list = await reader.comments(post.externalId);
     } catch (error) {
       if (error instanceof PostGone) {
-        gone.push(await registry.updatePost(post.id, { status: 'deleted' }));
+        gone.push(await registry.posts.updatePost(post.id, { status: 'deleted' }));
         continue;
       }
       problems.add(`${name} post ${post.id}: ${message(error)}`);
@@ -271,7 +271,7 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
   if (!OPEN.includes(comment.status)) throw new CommentRefused('state', `the comment is ${comment.status}: nothing to draft`);
   const fail = async (problem: string) => (await registry.updateComment(id, { status: 'failed', problem }, OPEN)) ?? comment;
   try {
-    const post = (await registry.post(comment.postId))!;
+    const post = (await registry.posts.post(comment.postId))!;
     const launch = (await registry.launches.get(comment.launchId))!;
     if (!contexts.has(launch.id)) contexts.set(launch.id, deps.context(launch));
     const context = await contexts.get(launch.id)!;
@@ -354,7 +354,7 @@ export async function sendReply(id: number, deps: CommentDeps): Promise<CommentR
   if (!comment.draft) throw new CommentRefused('invalid', 'there is no reply to send: draft or write one first');
   const long = tooLong(comment.channel, comment.draft);
   if (long) throw new CommentRefused('invalid', long);
-  const post = (await registry.post(comment.postId)) as Post;
+  const post = (await registry.posts.post(comment.postId)) as Post;
   if (!post.externalId) throw new CommentRefused('unsupported', 'the post has no id on the network to reply under');
 
   const { replier } = await deps.connectors(comment.channel, post.accountId).catch((error: unknown) => {

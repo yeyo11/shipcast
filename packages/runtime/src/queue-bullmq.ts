@@ -456,7 +456,7 @@ export class BullQueue implements JobQueue {
       'reconcile:scheduled',
       async () => {
         let armed = 0;
-        for (const post of await this.#registry.scheduledPosts()) if (await armScheduled(this, post)) armed++;
+        for (const post of await this.#registry.posts.scheduledPosts()) if (await armScheduled(this, post)) armed++;
         return armed;
       },
       { ttlMs: 60_000 },

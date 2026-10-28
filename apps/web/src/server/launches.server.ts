@@ -36,7 +36,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
   const [cursors, metrics, posts, replies] = await Promise.all([
     registry.cursorsWithPrefix(failurePrefix(launch.id)),
     registry.latestMetrics(launch.id),
-    registry.posts(launch.id),
+    registry.posts.posts(launch.id),
     registry.sentReplies(launch.id),
   ]);
   const failures = cursors.map((c) => ({ channel: c.key.split(':')[2] ?? '', message: c.value }));
@@ -70,7 +70,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
 export async function launchDetail(registry: Registry, launch: Launch, deps: { github: ReviewGitHub; launchesRepo: string }) {
   // The pull request is read from GitHub, the rest from the registry: all at once
   const reviewing = readReview(launch, deps).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-  const urls = articleUrls(await registry.posts(launch.id, { channel: 'blog' }));
+  const urls = articleUrls(await registry.posts.posts(launch.id, { channel: 'blog' }));
   const views = await Promise.all(
     urls.flatMap(({ lang, url }) =>
       (['google', 'bing'] as const).map(async (engine) => {

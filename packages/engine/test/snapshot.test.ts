@@ -8,7 +8,7 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   const first = await openSnapshot(undefined);
   const { launch } = await first.registry.launches.claim(release);
   await first.registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-  await first.registry.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://x', url: 'https://bsky.app/x' });
+  await first.registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://x', url: 'https://bsky.app/x' });
   const account = await first.registry.addAccount({ network: 'devto', brand: 'personal', label: '@yeyo', settings: { a: 'b' } });
   await first.registry.setCursor('events-last-id:yeyo11', '123');
   await first.registry.setCursor('instagram-token', 'secret-token');
@@ -30,7 +30,7 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   const restored = await second.registry.launches.get(launch.id);
   assert.equal(restored?.status, 'drafted');
   assert.equal(restored?.detail, 'https://github.com/yeyo11/launches/pull/7');
-  assert.equal((await second.registry.posts(launch.id)).length, 1);
+  assert.equal((await second.registry.posts.posts(launch.id)).length, 1);
   assert.equal((await second.registry.account(account.id))?.label, '@yeyo');
   assert.equal(await second.registry.cursor('events-last-id:yeyo11'), '123');
   assert.equal(await second.registry.cursor('instagram-token'), undefined);

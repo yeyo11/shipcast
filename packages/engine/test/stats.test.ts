@@ -12,7 +12,7 @@ async function launch(registry: Registry, repo = 'yeyo11/claudio', ref = 'v1.0.0
 }
 
 async function piece(registry: Registry, launchId: number, channel: 'devto' | 'bluesky' | 'mastodon' | 'newsletter', accountId: number | null, kind: 'post' | 'issue:en' = 'post') {
-  return (await registry.recordPost({ launchId, channel, kind, accountId, externalId: `${channel}-${launchId}-${kind}`, url: `https://${channel}.example/${launchId}` })).post;
+  return (await registry.posts.recordPost({ launchId, channel, kind, accountId, externalId: `${channel}-${launchId}-${kind}`, url: `https://${channel}.example/${launchId}` })).post;
 }
 
 test('a period is whole UTC days or timestamps, and nonsense is refused', () => {

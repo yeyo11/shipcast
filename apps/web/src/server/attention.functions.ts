@@ -15,7 +15,7 @@ async function readInput(): Promise<AttentionInput> {
     registry.accounts(),
     registry.commentFacets(false),
     registry.newestWaitingCommentId(false),
-    registry.scheduledPosts(),
+    registry.posts.scheduledPosts(),
   ]);
   return {
     launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt })),

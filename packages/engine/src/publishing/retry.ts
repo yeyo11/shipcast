@@ -18,7 +18,7 @@ export async function retryChannel(registry: Registry, launchId: number, channel
   const launch = await registry.launches.get(launchId);
   if (!launch || launch.status !== 'published') return launch;
   // The newsletter has no single post: some issues may be out and others not, which the publish sorts out
-  if ((await registry.posts(launchId, { channel, kind: 'post' })).length > 0) return launch;
+  if ((await registry.posts.posts(launchId, { channel, kind: 'post' })).length > 0) return launch;
   return registry.launches.setStatus(launchId, 'drafted', launch.detail);
 }
 

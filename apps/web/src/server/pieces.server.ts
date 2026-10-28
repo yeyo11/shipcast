@@ -17,7 +17,7 @@ export interface SchedulingChannel {
  */
 export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
   const [posts, accounts, readings, replies] = await Promise.all([
-    registry.posts(launch.id),
+    registry.posts.posts(launch.id),
     registry.accounts(),
     registry.postMetricHistory(launch.id),
     // What the assistant answered, counted per channel: the page never lists them
@@ -42,7 +42,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
 async function schedulingChannels(
   registry: Registry,
   launch: Launch,
-  posts: Awaited<ReturnType<Registry['posts']>>,
+  posts: Awaited<ReturnType<Registry['posts']['posts']>>,
   deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> },
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);

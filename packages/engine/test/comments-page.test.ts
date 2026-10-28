@@ -11,7 +11,7 @@ async function seeded() {
   const make = async (ref: string, channels: Channel[]) => {
     const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref, trigger: 'release', kind: 'major', brand: 'personal' });
     const made = [];
-    for (const channel of channels) made.push((await registry.recordPost({ launchId: launch.id, channel, externalId: `${ref}-${channel}`, url: `https://example.com/${ref}/${channel}` })).post);
+    for (const channel of channels) made.push((await registry.posts.recordPost({ launchId: launch.id, channel, externalId: `${ref}-${channel}`, url: `https://example.com/${ref}/${channel}` })).post);
     return { launch, posts: made };
   };
   const a = await make('v1.0.0', ['mastodon', 'bluesky']);

@@ -57,7 +57,7 @@ interface World {
 async function world(channel: 'mastodon' | 'devto' = 'mastodon'): Promise<World> {
   const registry = await memoryRegistry();
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  const { post } = await registry.recordPost({ launchId: launch.id, channel, externalId: '100', url: 'https://mastodon.social/@me/100' });
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel, externalId: '100', url: 'https://mastodon.social/@me/100' });
   const w: World = {
     registry,
     launchId: launch.id,
@@ -152,7 +152,7 @@ test('a post the network says is gone is marked deleted, not reported, and never
   const first = await fetchComments(gone);
   assert.deepEqual(first.gone.map((p) => [p.id, p.status]), [[w.postId, 'deleted']]);
   assert.deepEqual(first.problems, []);
-  assert.equal((await w.registry.post(w.postId))?.status, 'deleted');
+  assert.equal((await w.registry.posts.post(w.postId))?.status, 'deleted');
   const second = await fetchComments(gone);
   assert.equal(reads, 1, 'a deleted post is not read again');
   assert.deepEqual(second.gone, []);
