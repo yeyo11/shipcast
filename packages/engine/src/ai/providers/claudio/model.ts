@@ -93,12 +93,16 @@ function withCallMetadata(metadata: ProviderMetadata | undefined, headers: Reado
   return { ...metadata, claudio: { ...metadata?.claudio, chatId } };
 }
 
-/** The cost Claudio reports in a response's or the last chunk's usage (Claude Code's `total_cost_usd`) */
+/**
+ * The turn's own cost Claudio reports in `usage.cost_usd` (Claudio's headless contract): on a whole
+ * response, and on a streamed answer's final usage chunk, which is only sent with `include_usage`.
+ * Not Claude Code's `total_cost_usd`, which is the process's running total.
+ */
 function costOf(body: unknown): number | undefined {
   if (typeof body !== 'object' || body === null || !('usage' in body)) return undefined;
   const usage = body.usage;
-  if (typeof usage !== 'object' || usage === null || !('total_cost_usd' in usage)) return undefined;
-  return typeof usage.total_cost_usd === 'number' ? usage.total_cost_usd : undefined;
+  if (typeof usage !== 'object' || usage === null || !('cost_usd' in usage)) return undefined;
+  return typeof usage.cost_usd === 'number' ? usage.cost_usd : undefined;
 }
 
 const costMetadata = (cost: number | undefined) => (cost === undefined ? undefined : { claudio: { costUsd: cost } });
@@ -176,6 +180,8 @@ export function createClaudio(settings: ClaudioProviderSettings): ClaudioProvide
     baseURL: `${settings.baseURL.replace(/\/+$/, '')}/api/v1`,
     apiKey: settings.token,
     supportsStructuredOutputs: true,
+    // stream_options.include_usage: the final chunk carries the tokens and the turn's cost
+    includeUsage: true,
     metadataExtractor: costExtractor,
     ...(settings.fetch && { fetch: settings.fetch }),
   });

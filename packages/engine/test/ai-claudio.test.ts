@@ -62,7 +62,7 @@ function sse(res: ServerResponse, content: string, headers: Record<string, strin
   res.writeHead(200, { 'content-type': 'text/event-stream', ...headers });
   res.end(
     chunk({ choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }] }) +
-      chunk({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, total_cost_usd: 0.12 } }) +
+      chunk({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, cost_usd: 0.12 } }) +
       'data: [DONE]\n\n',
   );
 }
@@ -156,6 +156,7 @@ test('createClaudio: a streamed chat completion with Claudio’s headers from pr
     assert.equal(chat.headers['x-claudio-tool-preset'], undefined);
     const body = JSON.parse(chat.body) as Record<string, unknown>;
     assert.equal(body.stream, true);
+    assert.deepEqual(body.stream_options, { include_usage: true }, 'the final chunk carries the tokens and the turn’s cost');
     assert.equal(body.model, 'default');
     assert.equal((body.response_format as { type: string }).type, 'json_schema');
     assert.equal(body.tools, undefined, 'Claude Code uses its own tools: no client tools');
