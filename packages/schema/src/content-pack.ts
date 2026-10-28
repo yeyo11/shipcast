@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Brand } from './brand.ts';
 import { Language } from './channels.ts';
 import { channelTables, CHANNEL_DEFINITIONS, PACK_KEYS, type PieceLimit } from './channels/registry.ts';
-import type { PieceKit } from './channels/definition.ts';
+import type { ChannelDefinition, PieceKit } from './channels/definition.ts';
 import { activeChannels, PackKind, type LaunchConfig } from './launch-config.ts';
 
 /** Limits each network enforces, checked here so a pack that would be rejected never reaches review: every channel's own */
@@ -62,6 +62,16 @@ export const ContentPack = z
   .describe('Everything one launch publishes, written from the code of the project');
 
 export type ContentPack = z.infer<typeof ContentPack>;
+
+/**
+ * The pack's schema for a list of definitions: the registry's pack with the pieces of the channels it
+ * lacks, so a test's registry with a channel added parses a pack that carries its piece.
+ */
+export function contentPackFor(definitions: readonly ChannelDefinition[]): z.ZodType<ContentPack> {
+  const known = new Set<string>(CHANNEL_DEFINITIONS.map((d) => d.pack.key));
+  const extra = definitions.filter((d) => !known.has(d.pack.key));
+  return extra.length === 0 ? ContentPack : (ContentPack.extend(Object.fromEntries(extra.map((d) => [d.pack.key, d.pack.piece(KIT)]))) as unknown as z.ZodType<ContentPack>);
+}
 
 /** The URL of the article in one language, or undefined when the pack has no version in it */
 export function articleUrl(pack: ContentPack, site: string, lang: 'en' | 'es'): string | undefined {

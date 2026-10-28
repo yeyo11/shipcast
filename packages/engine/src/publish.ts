@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleLink, ContentPack, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type EngineChannelId, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleLink, CHANNEL_DEFINITIONS, ContentPack, contentPackFor, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type ChannelDefinition, type EngineChannelId, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -59,6 +59,68 @@ export interface Publishers {
 /** Channels the engine publishes to itself, in the registry's order; the blog is published by the merge. */
 export { PUBLISHED_BY_ENGINE };
 
+/** One channel's run: it returns the post for the loop to record, or nothing when it recorded its pieces itself */
+export type PublishRun = () => Promise<Published | undefined>;
+
+/**
+ * What a channel's strategy is given to publish a launch: the launch as merged (its pack, its
+ * launch.yml, the lead article's address, title and description), its media, and a way to record the
+ * pieces it sends itself. The same values the built-in channels publish from.
+ */
+export interface PublishContext {
+  launch: Launch;
+  brand: Brand;
+  pack: ContentPack;
+  config: LaunchConfig;
+  /** The launch's folder in the launches repo: its drafts and its pack */
+  dir: string;
+  /** A file of the launches repo's default branch, as merged */
+  read(path: string): Promise<string | undefined>;
+  /** The lead article's address, every channel's link */
+  articleUrl: string;
+  title: string;
+  description: string;
+  /** The public address of one of the launch's media files (`og.png`, `screenshots/home-desktop.png`) */
+  mediaUrl(file: string): string;
+  /** The launch image, as JPEG bytes, fetched once for every channel that uploads it */
+  image(): Promise<Uint8Array>;
+  /** The pieces of the launch recorded before this run */
+  pieces: readonly Post[];
+  github: GitHubSource;
+  launchesRepo: string;
+  registry: Registry;
+  fetch: typeof fetch;
+  /** The connected account the channel publishes with; null for `.env` credentials */
+  account: number | null;
+  /** Records a piece the run sent, as it goes out: a later failure of the run must not send it twice */
+  record(piece: { kind: Post['kind']; externalId: string; url: string | null }): Promise<Post>;
+  /** Something worth saying that is not a failure of the channel */
+  note(text: string): void;
+}
+
+/**
+ * How one channel publishes a launch, for a channel the engine has no built-in run for: a new network
+ * brings its strategy with its adapter (packages/runtime/src/channels), and the publishing loop runs it
+ * as it runs the others, claimed, recorded and retried the same way.
+ */
+export interface PublishStrategy<P = unknown> {
+  /** The run for this launch, or undefined when there is nothing of it to publish (no piece in the pack) */
+  run(context: PublishContext, publisher: P): PublishRun | undefined;
+  /** Whether every piece of the channel is out; by default, whether its `post` is */
+  done?(pieces: readonly Post[], context: Pick<PublishContext, 'pack' | 'brand' | 'config'>): boolean;
+}
+
+/** A strategy with its channel's publisher in hand, as one run is given it */
+export interface ChannelPublishing {
+  run(context: PublishContext): PublishRun | undefined;
+  done?(pieces: readonly Post[], context: Pick<PublishContext, 'pack' | 'brand' | 'config'>): boolean;
+}
+
+/** Binds a strategy to the publisher built for this run (the brand's account, or `.env`'s) */
+export function bindStrategy<P>(strategy: PublishStrategy<P>, publisher: P): ChannelPublishing {
+  return { run: (context) => strategy.run(context, publisher), ...(strategy.done && { done: strategy.done }) };
+}
+
 /** A subreddit's piece of a launch: Reddit gets one post per subreddit, as the newsletter one issue per language */
 export const redditKind = (subreddit: string): `post:${string}` => `post:${subreddit.toLowerCase()}`;
 
@@ -79,6 +141,16 @@ export interface PublishDeps {
   registry: Registry;
   launchesRepo: string;
   publishers: Publishers;
+  /**
+   * The runs of the channels the engine has none built in for, by channel: their adapters' strategies
+   * bound to the publishers of this run; a channel without credentials is not here
+   */
+  strategies?: Readonly<Record<string, ChannelPublishing>>;
+  /**
+   * The channels the engine publishes, in order; the registry's by default. A test hands in the
+   * registry with a channel added, to show a new channel publishes from its own modules.
+   */
+  channels?: readonly ChannelDefinition[];
   /** For the deployed site: whether the article is live, and the launch image's bytes */
   fetch?: typeof fetch;
   /** Search Console, to have Google read the sitemap as soon as the article is live */
@@ -177,6 +249,25 @@ export async function approval(launch: Launch, deps: Pick<PublishDeps, 'github' 
   return state === 'closed' ? { state: 'closed' } : { state: 'approved' };
 }
 
+/**
+ * The channels whose run is built into publishLaunch below; any other engine channel publishes through
+ * the `PublishStrategy` its adapter brings. Typed against Publishers, so the two lists cannot drift.
+ */
+export const BUILT_IN_PUBLISHING: Readonly<Record<keyof Publishers, true>> = {
+  devto: true,
+  hashnode: true,
+  telegram: true,
+  discord: true,
+  githubDiscussions: true,
+  threads: true,
+  linkedin: true,
+  bluesky: true,
+  mastodon: true,
+  reddit: true,
+  instagram: true,
+  newsletter: true,
+};
+
 export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {
   const { github, registry } = deps;
   const http = deps.fetch ?? globalThis.fetch;
@@ -187,7 +278,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const dir = launchDir(launch);
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
   if (!packText) return { state: 'waiting', launch, reason: `${dir}/pack.json is not on the default branch yet` };
-  const pack = ContentPack.parse(JSON.parse(packText));
+  const pack = (deps.channels ? contentPackFor(deps.channels) : ContentPack).parse(JSON.parse(packText));
   const config = await launchConfigOf(github, deps.launchesRepo, launch);
   if (!config) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
 
@@ -247,14 +338,14 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const issueLanguages = (['en', 'es'] as const).filter((lang) => brand.newsletter?.lists[lang] && pack.newsletter?.[lang]);
   // Whatever account a piece went out with: a launch whose account changed since is not posted again
   const subreddits = (pack.reddit ?? []).map((r) => r.subreddit);
-  const done = (pieces: Post[], channel: EngineChannel) =>
+  const builtInDone = (pieces: readonly Post[], channel: string) =>
     channel === 'newsletter'
       ? issueLanguages.length > 0 && issueLanguages.every((lang) => pieces.some((p) => p.channel === channel && p.kind === `issue:${lang}`))
       : channel === 'reddit'
         ? subreddits.length > 0 && subreddits.every((sub) => pieces.some((p) => p.channel === 'reddit' && p.kind === redditKind(sub)))
         : pieces.some((p) => p.channel === channel && p.kind === 'post' && p.status !== 'scheduled');
   // A channel whose piece waits for a time still to come is neither done nor pending: it never holds the others back
-  const later = (pieces: Post[], channel: EngineChannel) => pieces.map((p) => (p.channel === channel ? waitsUntil(p, now) : undefined)).find((at) => at !== undefined);
+  const later = (pieces: readonly Post[], channel: string) => pieces.map((p) => (p.channel === channel ? waitsUntil(p, now) : undefined)).find((at) => at !== undefined);
   const pieces = await registry.posts(launch.id);
   const posted: Array<{ channel: Channel; url: string }> = [];
   const problems: string[] = [];
@@ -262,10 +353,40 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const failures: Array<{ channel: Channel; message: string; retryable: boolean }> = [];
   const heldElsewhere: Array<{ channel: Channel; why: string }> = [];
   /** Channels whose run finished this round, though a piece may be left out (a list nobody is on yet) */
-  const finished = new Set<EngineChannel>();
+  const finished = new Set<string>();
+
+  /** What a channel's strategy publishes from: the same values the built-in runs below use */
+  const contextFor = (channel: Channel): PublishContext => ({
+    launch,
+    brand,
+    pack,
+    config,
+    dir,
+    read,
+    articleUrl,
+    title,
+    description,
+    mediaUrl: (file) => `${brand.site}${mediaPath(launch, file)}`,
+    image,
+    pieces,
+    github,
+    launchesRepo: deps.launchesRepo,
+    registry,
+    fetch: http,
+    account: accountOf(channel),
+    record: async (piece) => {
+      const { post } = await registry.recordPost({ launchId: launch.id, channel, kind: piece.kind, accountId: accountOf(channel), externalId: piece.externalId, url: piece.url });
+      if (piece.url) posted.push({ channel, url: piece.url });
+      return post;
+    },
+    note: (text) => problems.push(`${channel}: ${text}`),
+  });
+  const strategies = deps.strategies ?? {};
+  const strategyOf = (channel: string): ChannelPublishing | undefined => (channel in BUILT_IN_PUBLISHING ? undefined : strategies[channel]);
+  const done = (pieces: readonly Post[], channel: string) => strategyOf(channel)?.done?.(pieces, { pack, brand, config }) ?? builtInDone(pieces, channel);
 
   // A run returns the post for the loop to record, or nothing when it recorded its pieces itself
-  const publishers: Record<EngineChannel, (() => Promise<Published | undefined>) | undefined> = {
+  const builtIn: Record<keyof typeof BUILT_IN_PUBLISHING, PublishRun | undefined> = {
     devto:
       deps.publishers.devto && pack.devto && article
         ? async () => {
@@ -482,8 +603,18 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         : undefined,
   };
 
-  for (const channel of PUBLISHED_BY_ENGINE) {
-    const mode = config.publishing[channel];
+  const channels = (deps.channels ?? CHANNEL_DEFINITIONS).filter((d) => d.publishedBy === 'engine');
+  // A channel the registry of this run adds (a test's) and launch.yml cannot name yet runs in its default mode
+  const modeOf = (d: ChannelDefinition) => config.publishing[d.id as Channel] ?? d.defaultMode;
+  const runs = new Map<string, PublishRun | undefined>();
+  for (const d of channels) {
+    const own = strategyOf(d.id);
+    runs.set(d.id, own ? own.run(contextFor(d.id as Channel)) : builtIn[d.id as keyof typeof BUILT_IN_PUBLISHING]);
+  }
+
+  for (const definition of channels) {
+    const channel = definition.id as EngineChannel;
+    const mode = modeOf(definition);
     if (mode === 'off' || done(pieces, channel)) continue;
     if ((await registry.cursor(failureKey(launch, channel))) || (await registry.cursor(cancelledKey(launch.id, channel)))) continue;
     const at = later(pieces, channel);
@@ -491,7 +622,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       scheduled.push({ channel, at });
       continue;
     }
-    const run = publishers[channel];
+    const run = runs.get(channel);
     if (!run) {
       problems.push(`${channel}: no piece in the pack or no credentials configured`);
       continue;
@@ -527,12 +658,13 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   }
 
   const piecesNow = await registry.posts(launch.id);
-  const pending: EngineChannel[] = [];
-  for (const c of PUBLISHED_BY_ENGINE) {
-    const mode = config.publishing[c];
+  const pending: string[] = [];
+  for (const definition of channels) {
+    const c = definition.id as EngineChannel;
+    const mode = modeOf(definition);
     // A channel with nothing to publish it is not pending, unless the publishing service keeps it: a
     // piece of it is scheduled, and publishing the launch would leave that piece waiting for ever
-    const unpublishable = !publishers[c] && !(deps.keepUnpublishable && piecesNow.some((p) => p.channel === c && p.status === 'scheduled'));
+    const unpublishable = !runs.get(c) && !(deps.keepUnpublishable && piecesNow.some((p) => p.channel === c && p.status === 'scheduled'));
     if (mode === 'off' || unpublishable || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
     if (!(await registry.cursor(failureKey(launch, c))) && !(await registry.cursor(cancelledKey(launch.id, c)))) pending.push(c);
   }

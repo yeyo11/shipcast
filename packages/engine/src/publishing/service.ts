@@ -7,7 +7,7 @@ import { PieceGuard } from './guard.ts';
 import { publishAgain, retryChannel } from './retry.ts';
 
 /** What the networks are reached with for one run: the brand's connectors, built by the caller */
-export type PublishConnectors = Pick<PublishDeps, 'publishers' | 'search' | 'accounts' | 'fetch' | 'now'>;
+export type PublishConnectors = Pick<PublishDeps, 'publishers' | 'strategies' | 'channels' | 'search' | 'accounts' | 'fetch' | 'now'>;
 
 /**
  * Publishing a launch, the one way every entry point does it (docs/plans/performance-refactor.md,

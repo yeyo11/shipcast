@@ -35,6 +35,7 @@ export * from './publishing/guard.ts';
 export * from './repositories/secret-rows.ts';
 export * from './publishing/retry.ts';
 export * from './publishing/service.ts';
+export * from './publishing/strategies.ts';
 export * from './repositories/advisory-lock.ts';
 export * from './ports.ts';
 export * from './edit-rules.ts';
