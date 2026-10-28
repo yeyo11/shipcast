@@ -197,7 +197,7 @@ export class LiveHub {
   /** What a reconnect from `last` missed, or a resync when that cannot be told */
   #catchUp(last: string | null, topics: Topics): string {
     if (!last) return '';
-    const match = /^([0-9a-f]+)\.(\d+)$/.exec(last);
+    const match = /^([\w-]+)\.(\d+)$/.exec(last);
     const seq = match ? Number(match[2]) : NaN;
     if (!match || match[1] !== this.boot || !Number.isSafeInteger(seq) || seq > this.#seq) return this.#resync();
     this.#trim();
