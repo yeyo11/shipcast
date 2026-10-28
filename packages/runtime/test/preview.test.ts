@@ -241,10 +241,11 @@ test("the round publishes with the process's own services when it has them (a pr
   const github = new FakeGitHub({
     files: {
       [FakeGitHub.key(LAUNCHES_REPO, 'launches/claudio/v1.0.0/pack.json')]: JSON.stringify(pack),
-      [FakeGitHub.key('yeyo11/claudio', '.github/launch.yml', 'v1.0.0')]: 'enabled: true\nbrand: personal\npublishing:\n  blog: off\n',
+      [FakeGitHub.key('yeyo11/claudio', '.github/launch.yml', 'v1.0.0')]: 'enabled: true\nbrand: personal\npublishing:\n  blog: off\n  telegram: auto\n',
     },
   });
   const world = previewWorld({ ledger });
+  const lines: string[] = [];
   await runRound(
     {
       // Telegram's credentials in .env: the brand's own services would post for real
@@ -255,8 +256,9 @@ test("the round publishes with the process's own services when it has them (a pr
       brand,
       pipeline: { launchesRepo: LAUNCHES_REPO } as PipelineDeps,
       services: async () => world.services(realServices()),
+      log: (line) => lines.push(line),
     },
     { detect: false },
   );
-  assert.deepEqual(ledger.entries.filter((e) => e.action === 'publish').map((e) => e.channel), ['telegram']);
+  assert.deepEqual(ledger.entries.filter((e) => e.action === 'publish').map((e) => e.channel), ['telegram'], lines.join('\n'));
 });
