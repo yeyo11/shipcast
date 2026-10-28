@@ -31,7 +31,7 @@ test('every channel has one name and an icon that exists, Threads included', () 
 
 test('every channel draft is found, including Threads, LinkedIn, GitHub Discussions and the newsletter', () => {
   for (const channel of CHANNELS.filter((c) => c !== 'blog')) {
-    const part = channel === 'newsletter' ? 'es' : channel === 'reddit' ? 'rust' : '';
+    const part = channel === 'newsletter' ? 'es' : channel === 'reddit' ? 'rust' : channel === 'youtube' ? 'video' : '';
     assert.equal(channelOfDraft(`${D}/${draftFile(channel, part).name}`), channel);
   }
   assert.equal(channelOfDraft(`${D}/release-notes.md`), undefined);

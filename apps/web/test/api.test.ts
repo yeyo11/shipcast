@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import type { ArticleInput, Editors, Launch, Registry, ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
+import { COMMENT_CHANNELS } from '@shipcast/schema';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
 import { checkBearer, FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
@@ -616,7 +617,7 @@ test('each kind of refusal answers its status with the same body, whichever area
   assert.deepEqual(await errorOf(await call(s.deps, 'PUT', '/comment-settings', { token: s.write, body: { replies: { telegram: 'auto' } } })), {
     status: 400,
     code: 'invalid_input',
-    message: 'telegram has no comments to read (devto, bluesky, mastodon, instagram, githubDiscussions, threads)',
+    message: `telegram has no comments to read (${COMMENT_CHANNELS.join(', ')})`,
   });
 
   const broken: ApiDeps = { ...s.deps, editing: async () => { throw new Error('the keychain is locked'); } };

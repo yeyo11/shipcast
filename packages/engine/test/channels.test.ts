@@ -48,6 +48,10 @@ const pack = ContentPack.parse({
   discord: { text: 'Discord post' },
   githubDiscussions: { title: 'claudio 0.9', body: 'What shipped.' },
   threads: { text: 'Threads post' },
+  youtube: {
+    short: { title: 'claudio in a minute', description: 'What it shows.', tags: [], lang: 'en', scenes: [{ kind: 'card', subtitle: 'a', seconds: 5 }, { kind: 'cover', subtitle: 'b', seconds: 5 }] },
+    video: { title: 'claudio, a walk-through', description: 'What it shows.', tags: [], lang: 'en', scenes: [{ kind: 'card', subtitle: 'a', seconds: 30 }, { kind: 'cover', subtitle: 'b', seconds: 30 }] },
+  },
 });
 const everything = LaunchConfig.parse({
   enabled: true,
@@ -129,5 +133,6 @@ test('Threads and GitHub Discussions are measured, adapted to and answered like 
     instagram: 'Caption.',
     githubDiscussions: 'claudio 0.9\n\nWhat shipped.',
     threads: 'Threads post',
+    youtube: 'claudio, a walk-through\n\nWhat it shows.',
   });
 });

@@ -1,6 +1,6 @@
 import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
-import { isMainPiece, type Brand, type Channel, type Language } from '@shipcast/schema';
+import { channelDefinition, isMainPiece, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import { kindLanguage, type Post, type Registry } from './registry.ts';
 
@@ -106,10 +106,11 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   const piecesOf = new Map<number, Post[]>();
   for (const launch of launches) piecesOf.set(launch.id, await registry.posts(launch.id));
   // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its
-  // own, and a post's own pieces (a subreddit's, each of YouTube's videos) are read like its post.
+  // own, and a post's own pieces are read like its post where the channel has numbers (each of
+  // YouTube's videos; a subreddit's post has none).
   // A deleted piece answers nothing but not found; its last numbers stay as they were
   const readable = (post: Post) =>
-    (post.kind === 'post' || post.kind.startsWith('issue:') || isMainPiece(post.channel, post.kind)) && post.externalId !== null && post.channel !== 'blog' && post.status !== 'deleted';
+    (post.kind === 'post' || post.kind.startsWith('issue:') || (isMainPiece(post.channel, post.kind) && channelDefinition(post.channel)?.metrics !== undefined)) && post.externalId !== null && post.channel !== 'blog' && post.status !== 'deleted';
 
   // The channels that read in batches are read first, all their pieces at once
   const batched = new Map<string, Map<string, Metrics>>();
