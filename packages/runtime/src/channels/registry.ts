@@ -11,6 +11,7 @@ import { newsletterAdapter } from './newsletter.ts';
 import { redditAdapter } from './reddit.ts';
 import { telegramAdapter } from './telegram.ts';
 import { threadsAdapter } from './threads.ts';
+import { youtubeAdapter } from './youtube.ts';
 
 /**
  * The adapter half of every channel the engine publishes, by the definitions' ids (the blog is
@@ -30,6 +31,7 @@ export const CHANNEL_ADAPTERS: readonly AnyChannelAdapter[] = [
   hashnodeAdapter,
   telegramAdapter,
   discordAdapter,
+  youtubeAdapter,
   githubDiscussionsAdapter,
 ];
 

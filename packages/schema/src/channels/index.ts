@@ -19,3 +19,4 @@ export { newsletter } from './newsletter.ts';
 export { reddit } from './reddit.ts';
 export { telegram } from './telegram.ts';
 export { threads } from './threads.ts';
+export * from './youtube.ts';

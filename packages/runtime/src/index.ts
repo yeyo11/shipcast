@@ -4,6 +4,7 @@ export * from './catalog.ts';
 export * from './channels/index.ts';
 export * from './services.ts';
 export * from './accounts.ts';
+export * from './youtube-import.ts';
 export * from './rounds.ts';
 export * from './webhooks.ts';
 export * from './automation.ts';

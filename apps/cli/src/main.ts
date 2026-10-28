@@ -27,6 +27,8 @@ import {
   WorkQueue,
   workHandlers,
   writeAutomation,
+  importYouTubeAccount,
+  YouTubeImportRefused,
   type RoundDeps,
 } from '@shipcast/runtime';
 
@@ -79,6 +81,9 @@ const USAGE = `Usage: shipcast <command>
   status                              The latest launches and where they stand, and what is configured
   token create <name> --scopes <list> A token for the REST API (/api/v1), scopes read, write or both
                                       (read,write); printed once, only its hash is kept
+  youtube import <file>               Connect YouTube once from a JSON file with your OAuth client and a
+                                      refresh token (client_id, client_secret, refresh_token), through
+                                      the same path as the sign-in; then delete the file
   token list                          The API tokens, revoked ones too
   token revoke <id>                   Revoke an API token at once
   init [--public-url <https://host>] [--login <login>]
@@ -363,6 +368,39 @@ async function main(argv: string[]): Promise<number> {
         });
         await queue.stop();
         return 0;
+      }
+
+      case 'youtube': {
+        const [action, file] = rest;
+        if (action !== 'import' || !file) {
+          console.error('youtube import <file>');
+          return 2;
+        }
+        const brand = await loadBrandNow();
+        let text: string;
+        try {
+          text = readFileSync(resolve(file), 'utf8');
+        } catch {
+          console.error(`Cannot read ${file}`);
+          return 1;
+        }
+        try {
+          // Only the outcome is printed, never a value of the file
+          const result = await importYouTubeAccount({ registry, secrets, brands: new Map([[brand.id, brand]]) }, { text, brand: brand.id });
+          if (!result.ok) {
+            console.error(`YouTube refused the credentials: ${result.problem}`);
+            return 1;
+          }
+          console.log(`Connected YouTube ${result.account.identity ?? result.account.label} (account ${result.account.id}); its secrets are in the ${secrets.kind}.`);
+          console.log(`Delete ${file} now: Shipcast no longer needs it.`);
+          return 0;
+        } catch (error) {
+          if (error instanceof YouTubeImportRefused) {
+            console.error(`Not imported: ${error.message}`);
+            return 1;
+          }
+          throw error;
+        }
       }
 
       case 'token': {

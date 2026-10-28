@@ -12,6 +12,7 @@ import { newsletter } from './newsletter.ts';
 import { reddit } from './reddit.ts';
 import { telegram } from './telegram.ts';
 import { threads } from './threads.ts';
+import { youtube } from './youtube.ts';
 
 /**
  * Every channel Shipcast publishes on, each through its own connector, in the order a launch lists
@@ -32,6 +33,7 @@ export const CHANNEL_DEFINITIONS = [
   discord,
   githubDiscussions,
   threads,
+  youtube,
 ] as const;
 
 type Definitions = (typeof CHANNEL_DEFINITIONS)[number];

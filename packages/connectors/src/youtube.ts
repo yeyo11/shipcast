@@ -369,3 +369,38 @@ function toComment(id: string, s: CommentSnippet, ownChannel: string, videoId: s
     own: s.authorChannelId?.value === ownChannel,
   };
 }
+
+/**
+ * Google's consent page for the owner's OAuth client: offline access, so the code is worth a refresh
+ * token, and `prompt=consent`, since Google gives one only on a consent the account has just seen.
+ * The redirect URI must be one of the client's, exactly.
+ */
+export function youtubeAuthorizeUrl(clientId: string, redirectUri: string, state: string): string {
+  const query = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: YOUTUBE_SCOPES.join(' '),
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+    state,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${query}`;
+}
+
+/** The code becomes the refresh token, which is all that is kept: each connector trades it for an hour's access */
+export async function exchangeYouTubeCode(app: { clientId: string; clientSecret: string }, redirectUri: string, code: string, http: typeof fetch = globalThis.fetch): Promise<{ refreshToken: string }> {
+  const client = new HttpClient({ network: 'YouTube', fetch: http });
+  const response = await client.request(TOKEN, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: app.clientId, client_secret: app.clientSecret, redirect_uri: redirectUri }),
+    what: 'exchange the code',
+  });
+  const body = (await response.json().catch(() => ({}))) as { refresh_token?: string; error?: string; error_description?: string };
+  if (!response.ok) throw new ConnectorError('YouTube', `exchange the code: ${response.status} ${body.error ?? ''} ${body.error_description ?? ''}`.trim(), response.status, false);
+  // No refresh token: the account had consented before without offline access; revoking Shipcast's access and connecting again gives one
+  if (!body.refresh_token) throw new ConnectorError('YouTube', 'Google gave no refresh token: remove Shipcast from the Google account’s third-party access, then connect again', 400, false);
+  return { refreshToken: body.refresh_token };
+}

@@ -38,7 +38,7 @@ for (const d of definitions) {
       assert.equal(d.text.length('abc'), 3);
     }
     if (d.draft) {
-      for (const part of d.id === 'newsletter' ? ['en', 'es'] : d.id === 'reddit' ? ['rust', 'node'] : ['']) {
+      for (const part of d.id === 'newsletter' ? ['en', 'es'] : d.id === 'reddit' ? ['rust', 'node'] : d.id === 'youtube' ? ['short', 'video'] : ['']) {
         const file = d.draft.file(part);
         assert.match(file.name, /^[a-z0-9-]+\.md$/);
         assert.ok(file.title.trim());

@@ -53,8 +53,9 @@ function connectorOf(adapter: AnyChannelAdapter): unknown {
 const has = (value: unknown, method: string) => typeof (value as Record<string, unknown> | undefined)?.[method] === 'function';
 
 test('the catalog lists the networks it did before the adapters, in the same order, named by the definitions', () => {
+  const before = new Set(['devto', 'bluesky', 'mastodon', 'instagram', 'threads', 'linkedin', 'reddit', 'brevo', 'hashnode', 'telegram', 'discord', 'cloudflare', 'searchConsole', 'bingWebmaster', 'anthropic', 'openaiCompatible']);
   assert.deepEqual(
-    NETWORKS.map((n) => [n.id, n.name, n.channel ?? null, n.metrics, n.auth]),
+    NETWORKS.filter((n) => before.has(n.id)).map((n) => [n.id, n.name, n.channel ?? null, n.metrics, n.auth]),
     [
       ['devto', 'dev.to', 'devto', true, 'form'],
       ['bluesky', 'Bluesky', 'bluesky', true, 'form'],
@@ -72,7 +73,7 @@ test('the catalog lists the networks it did before the adapters, in the same ord
       ['bingWebmaster', 'Bing Webmaster Tools', null, true, 'form'],
       ['anthropic', 'Anthropic API', null, false, 'form'],
       ['openaiCompatible', 'OpenAI-compatible server', null, false, 'form'],
-    ].filter(([id]) => NETWORKS.some((n) => n.id === id)),
+    ],
   );
 });
 
@@ -95,7 +96,7 @@ test("the Action's variables and how to get them are what the hand-written table
     'DEVTO_API_KEY', 'BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD', 'MASTODON_INSTANCE', 'MASTODON_ACCESS_TOKEN', 'INSTAGRAM_USER_ID', 'INSTAGRAM_ACCESS_TOKEN',
     'BREVO_API_KEY', 'HASHNODE_TOKEN', 'HASHNODE_PUBLICATION_HOST', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'TELEGRAM_NOTIFY_CHAT_ID', 'DISCORD_WEBHOOK_URL',
     'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_WEB_ANALYTICS_SITE_TAG', 'GOOGLE_SERVICE_ACCOUNT_JSON', 'BING_WEBMASTER_API_KEY',
-  ].filter((v) => NETWORK_VARIABLES.includes(v)));
+  ]);
   assert.equal(VARIABLE_HOW.DEVTO_API_KEY, 'https://dev.to/settings/extensions (DEV Community API Keys)');
   assert.equal(VARIABLE_HOW.TELEGRAM_CHAT_ID, 'your channel, like @yourchannel');
   assert.equal(Object.keys(VARIABLE_HOW).length >= 10, true);
