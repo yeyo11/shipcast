@@ -48,11 +48,13 @@ export interface Services {
   origins: Record<string, Origin>;
   /** The connected account each channel publishes with, so its pieces record it; a channel on `.env` has none */
   accounts: Partial<Record<Channel, number>>;
+  /** What publishing reads the brand's site with (the article live, the launch image); the global fetch unless a preview sets its own */
+  fetch?: typeof fetch;
 }
 
 /** What publishing a launch is handed of the services: the engine's PublishConnectors */
 export function publishConnectors(services: Services): PublishConnectors {
-  return { publishers: services.publishers, strategies: services.strategies, search: services.sources.search, accounts: services.accounts };
+  return { publishers: services.publishers, strategies: services.strategies, search: services.sources.search, accounts: services.accounts, ...(services.fetch && { fetch: services.fetch }) };
 }
 
 /**

@@ -5,8 +5,9 @@ import { appContext } from './context.server';
 import { channelsViewOf } from './channels-view.server.ts';
 
 export async function accountDeps(): Promise<AccountDeps> {
-  const { registry, secrets, brands } = await appContext();
-  return { registry, secrets, brands: await brands() };
+  const { registry, secrets, brands, preview } = await appContext();
+  // A preview checks a credential itself and reads through its own fetch: connecting reaches no network
+  return { registry, secrets, brands: await brands(), ...(preview && { fetch: preview.fetch, check: preview.oauth.check }) };
 }
 
 /** Everything the Channels page shows: the catalog, each network's accounts, and what still comes from .env */
@@ -55,7 +56,7 @@ const connected = (account: { id: number; identity: string | null; label: string
 
 /** Mastodon: register Shipcast on the instance once (its client is kept in the keychain), then authorise */
 export async function startMastodon(request: Request): Promise<Response> {
-  const { app, secrets } = await appContext();
+  const { app, secrets, preview } = await appContext();
   const url = new URL(request.url);
   const brand = url.searchParams.get('brand') ?? 'personal';
   let instance: string;
@@ -63,6 +64,11 @@ export async function startMastodon(request: Request): Promise<Response> {
     instance = new URL(url.searchParams.get('instance') || 'https://mastodon.social').origin;
   } catch {
     return back('mastodon', 'That instance is not an address: write it as https://mastodon.social');
+  }
+  // A preview registers nothing on the instance: its own consent sends the browser straight back
+  if (preview) {
+    const state = await remember({ network: 'mastodon', brand, instance, label: url.searchParams.get('label') ?? undefined });
+    return redirect(preview.oauth.authorizeUrl(app.publicUrl, 'mastodon', state));
   }
   const redirectUri = `${app.publicUrl}/auth/mastodon/callback`;
   const key = `app:mastodon-client:${new URL(instance).host}`;
@@ -82,12 +88,13 @@ export async function startMastodon(request: Request): Promise<Response> {
 }
 
 export async function finishMastodon(request: Request): Promise<Response> {
-  const { app, secrets } = await appContext();
+  const { app, secrets, preview } = await appContext();
   const url = new URL(request.url);
   const flow = await takeFlow(url, 'mastodon');
   if (!flow?.instance) return back('mastodon', 'This authorisation is stale or was not started here: try again.');
   const code = url.searchParams.get('code');
   if (!code) return back('mastodon', `Mastodon did not authorise Shipcast: ${url.searchParams.get('error_description') ?? 'cancelled'}.`);
+  if (preview) return finishPreview('mastodon', flow, code, { instance: flow.instance, scopes: MASTODON_SCOPES });
   const client = await getJson(secrets, `app:mastodon-client:${new URL(flow.instance).host}`);
   if (!client?.clientId || !client.clientSecret) return back('mastodon', 'Shipcast’s registration on the instance was lost: try again.');
   try {
@@ -115,9 +122,12 @@ export async function startOAuth(networkId: string, request: Request): Promise<R
   const spec = networkSpec(networkId)?.oauth;
   if (!spec) return back(networkId, `${networkId} has no sign-in.`);
   const app = ctx.settings.oauthApp(networkId);
-  if (!app) return back(networkId, `Set the ${spec.app.name} ${spec.app.term} id and secret in Settings (/settings) first.`);
   const url = new URL(request.url);
-  const state = await remember({ network: networkId, brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined });
+  const flow = { network: networkId, brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined };
+  // A preview's consent is its own, with no app of the owner's: the browser comes straight back to the callback, which may be another replica's
+  if (ctx.preview) return redirect(ctx.preview.oauth.authorizeUrl(ctx.app.publicUrl, networkId, await remember(flow)));
+  if (!app) return back(networkId, `Set the ${spec.app.name} ${spec.app.term} id and secret in Settings (/settings) first.`);
+  const state = await remember(flow);
   return redirect(spec.authorizeUrl(app, `${ctx.app.publicUrl}/auth/${networkId}/callback`, state));
 }
 
@@ -130,10 +140,22 @@ export async function finishOAuth(networkId: string, request: Request): Promise<
   if (!flow || !spec) return back(networkId, 'This authorisation is stale or was not started here: try again.');
   const code = url.searchParams.get('code');
   const name = network(networkId)?.name ?? networkId;
+  if (code && ctx.preview) return finishPreview(networkId, flow, code);
   if (!code || !app) return back(networkId, `${name} did not authorise Shipcast: ${spec.errorParams.map((p) => url.searchParams.get(p)).find(Boolean) ?? 'cancelled'}.`);
   try {
     const token = await spec.exchange(app, `${ctx.app.publicUrl}/auth/${networkId}/callback`, code);
     return await connectWith(networkId, flow, token);
+  } catch (error) {
+    return back(networkId, error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** A preview's callback: the made-up token its consent stands for, kept as a real sign-in keeps one */
+async function finishPreview(networkId: string, flow: Flow, code: string, settings: Record<string, string> = {}): Promise<Response> {
+  const { preview } = await appContext();
+  try {
+    const token = await preview!.oauth.exchange(networkId, code, flow.label);
+    return await connectWith(networkId, flow, { label: token.label, credentials: { ...token.credentials, settings: { ...token.credentials.settings, ...settings } } });
   } catch (error) {
     return back(networkId, error instanceof Error ? error.message : String(error));
   }

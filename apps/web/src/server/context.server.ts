@@ -1,8 +1,14 @@
 import { existsSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
-import { TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { PostgresFakeNetworkLedger, TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
+  assertPreviewSafe,
   attachTelemetryStore,
+  fakeLatencyMs,
+  previewFixtures,
+  previewWorld,
+  type PreviewWorld,
   buildServices,
   ConfigError,
   Flags,
@@ -34,7 +40,7 @@ import {
 import { jobQueue } from '@shipcast/runtime/queue-factory';
 import { processState, RedisLock, type EventName, type ProcessState, type ShipcastEvents } from '@shipcast/runtime/redis';
 import type { Brand } from '@shipcast/schema';
-import { fakeNetworks, previewFetch, previewGitHubFetch, previewServices } from './preview.server';
+import { fakeNetworks, previewGitHubFetch } from './preview.server';
 
 /**
  * The repository's root, where `.env`, `data/` and `workspace/` live: the nearest folder up from where
@@ -91,6 +97,8 @@ export interface AppContext {
   githubCaches: GitHubCaches | undefined;
   /** With `realtime-ui`, in a process that serves pages: the tabs' event streams (GET /api/events) */
   live: LiveHub | undefined;
+  /** On a preview with fake networks: the fakes, their ledger and the fixtures (packages/runtime/src/preview) */
+  preview: PreviewWorld | undefined;
 }
 
 let context: Promise<AppContext> | undefined;
@@ -109,6 +117,8 @@ export function appContext(): Promise<AppContext> {
 }
 
 async function createContext(): Promise<AppContext> {
+  // A preview's database never runs against the real networks: checked before anything connects
+  assertPreviewSafe(process.env);
   // First, so the clients built below take the counting fetch
   const telemetry = installTelemetry('web');
   const flags = Flags.fromEnv(process.env);
@@ -117,11 +127,14 @@ async function createContext(): Promise<AppContext> {
   const proc = processState(process.env, role === 'all' ? 'app' : role);
   // A job's events must reach the pages from another process: only Redis's bus carries them there
   if (flags.on('realtime-ui') && split(role) && proc.shared.backend !== 'redis') throw new ConfigError('the realtime-ui flag on split processes (SHIPCAST_ROLE) needs redis-state, whose bus carries the events between them');
-  // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
+  // A preview's GitHub client reads for real (its fixtures first) and only pretends to write: no pull request, commit or merge
+  const fixtures = fakeNetworks() ? previewFixtures(process.env) : undefined;
   // With redis-state the GitHub ETag and file caches are every replica's (redis-cache); otherwise a bounded one of this process
-  const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }), events: proc.shared.events, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
+  const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }), events: proc.shared.events, ...(fakeNetworks() && { githubFetch: previewGitHubFetch(fetch, fixtures) }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
+  // The fake networks write what they were sent to the preview's own database, where every replica's lands
+  const preview = fakeNetworks() ? previewWorld({ ledger: new PostgresFakeNetworkLedger(registry.database, `${role}@${hostname()}`), fixtures, latencyMs: fakeLatencyMs() }) : undefined;
   const clock = runsTheClock(role);
   /*
    * One process (`all`) does what it always did: pg-boss's cron and maintenance, and the rows
@@ -148,9 +161,9 @@ async function createContext(): Promise<AppContext> {
     // The hourly reads' identities and sessions, every replica's with redis-state
     ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }),
     // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
-    ...(fakeNetworks() && {
-      services: async (b: Brand) => previewServices(await buildServices({ env: process.env, brand: b, registry, github, secrets, fetch: previewFetch })),
-      fetch: previewFetch,
+    ...(preview && {
+      services: async (b: Brand) => preview.services(await buildServices({ env: process.env, brand: b, registry, github, secrets, fetch: preview.fetch })),
+      fetch: preview.fetch,
     }),
   };
   // Another replica's save, the App's installation and the brand reach this process's caches
@@ -182,6 +195,7 @@ async function createContext(): Promise<AppContext> {
     drafts: runtime.drafts,
     githubCaches: runtime.githubCaches,
     live: undefined,
+    preview,
   };
   // Subscribed before the first page asks, so a change made meanwhile is already in the ring
   if (flags.on('realtime-ui') && (role === 'web' || role === 'all')) {
