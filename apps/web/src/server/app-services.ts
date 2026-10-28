@@ -51,7 +51,7 @@ export const commentService = (deps: { registry: Registry; sending?: () => Promi
     sending: deps.sending ?? (() => Promise.reject(new Error('this caller sends no replies'))),
   });
 
-export const accountService = (deps: { registry: Registry }) => new AccountService(deps.registry);
+export const accountService = (deps: { registry: Registry }) => new AccountService(deps.registry.accounts);
 
 export const settingsService = (deps: { registry: Registry }) => new SettingsService(deps.registry);
 

@@ -89,22 +89,22 @@ test('automation settings default to polling every five minutes and never under 
 test('every Instagram account refreshes its own token when it is 30 days old', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const fresh = await registry.addAccount({ network: 'instagram', brand: 'personal', label: 'new', settings: { userId: '1' } });
-  const old = await registry.addAccount({ network: 'instagram', brand: 'personal', label: 'old', settings: { userId: '2', refreshedAt: '2026-09-01T00:00:00.000Z' } });
+  const fresh = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: 'new', settings: { userId: '1' } });
+  const old = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: 'old', settings: { userId: '2', refreshedAt: '2026-09-01T00:00:00.000Z' } });
   await secrets.set(accountSecretKey(old.id), JSON.stringify({ accessToken: 'old-token' }), 'x');
   const http = (async () => Response.json({ access_token: 'new-token', expires_in: 5_184_000 })) as typeof fetch;
 
   const lines = await refreshInstagramAccounts({ registry, secrets }, new Date('2026-10-25T00:00:00Z'), http);
   assert.deepEqual(lines, ['Instagram token of old refreshed; valid for 60 more days']);
   assert.equal(JSON.parse((await secrets.get(accountSecretKey(old.id)))!).accessToken, 'new-token');
-  assert.equal((await registry.account(old.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z');
-  assert.equal((await registry.account(fresh.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z', 'a first sight only records the date');
+  assert.equal((await registry.accounts.account(old.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z');
+  assert.equal((await registry.accounts.account(fresh.id))?.settings.refreshedAt, '2026-10-25T00:00:00.000Z', 'a first sight only records the date');
 });
 
 test('a Threads account refreshes its token at Threads, when it is 30 days old', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const old = await registry.addAccount({ network: 'threads', brand: 'personal', label: '@me', settings: { userId: '9', refreshedAt: '2026-09-01T00:00:00.000Z' } });
+  const old = await registry.accounts.addAccount({ network: 'threads', brand: 'personal', label: '@me', settings: { userId: '9', refreshedAt: '2026-09-01T00:00:00.000Z' } });
   await secrets.set(accountSecretKey(old.id), JSON.stringify({ accessToken: 'old-token' }), 'x');
   const urls: string[] = [];
   const http = (async (input: string | URL | Request) => {

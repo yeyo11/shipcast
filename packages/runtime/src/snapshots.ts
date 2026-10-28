@@ -35,7 +35,7 @@ export async function syncAccount(deps: AccountDeps, account: Account, now = new
   const stats = checked.built?.profileStats;
   if (!stats) return { account: checked.account, outcome: 'checked', line: `${name}: checked; its network gives no follower counts` };
   try {
-    const snapshot = await deps.registry.recordSnapshot(account.id, await stats(), now);
+    const snapshot = await deps.registry.accounts.recordSnapshot(account.id, await stats(), now);
     const parts = [
       snapshot.followers !== null ? `${snapshot.followers} followers` : null,
       snapshot.following !== null ? `${snapshot.following} following` : null,
@@ -80,11 +80,11 @@ async function readAudience(
 export async function takeSnapshots(deps: AccountDeps, options: { accountId?: number } = {}, now = new Date()): Promise<SyncResult[]> {
   let targets: Account[];
   if (options.accountId !== undefined) {
-    const one = await deps.registry.account(options.accountId);
+    const one = await deps.registry.accounts.account(options.accountId);
     if (!one) throw new MissingField(`no account ${options.accountId}`);
     targets = [one];
   } else {
-    targets = (await deps.registry.accounts()).filter((a) => deps.brands.has(a.brand));
+    targets = (await deps.registry.accounts.accounts()).filter((a) => deps.brands.has(a.brand));
   }
   const results: SyncResult[] = [];
   for (const account of targets) results.push(await syncAccount(deps, account, now));

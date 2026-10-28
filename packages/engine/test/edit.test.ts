@@ -36,9 +36,9 @@ async function launchWith(registry: Registry, channels: Array<{ channel: Paramet
 
 test('an edit goes out with the account the post was published with, and the row says edited with its hash', async () => {
   const registry = await memoryRegistry();
-  const account = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@old', settings: { instance: 'https://m.example' } });
+  const account = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@old', settings: { instance: 'https://m.example' } });
   // A newer primary account must not be the one used
-  await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@new', settings: { instance: 'https://m.example' } });
+  await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@new', settings: { instance: 'https://m.example' } });
   const { posts } = await launchWith(registry, [{ channel: 'mastodon', externalId: '111', accountId: account.id }]);
   const sent: Sent[] = [];
   const before = posts[0]!;

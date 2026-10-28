@@ -177,7 +177,7 @@ export interface ProfileDeps {
 }
 
 async function existing(registry: Registry, accountId: number): Promise<{ account: Account; capability: ProfileCapability }> {
-  const account = await registry.account(accountId);
+  const account = await registry.accounts.account(accountId);
   if (!account) throw new ProfileRefused('not_found', 'no such account');
   const capability = profileCapability(account);
   if (!capability) throw new ProfileRefused('unsupported', `${account.network} has no profile to review`);

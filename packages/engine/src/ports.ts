@@ -1,4 +1,5 @@
 import type { Registry } from './registry.ts';
+import type { AccountRepository } from './repositories/accounts.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import type { LaunchRepository } from './repositories/launches.ts';
 import type { MetricRepository } from './repositories/metrics.ts';
@@ -44,4 +45,4 @@ export type CursorWriter = { cursors: Pick<CursorRepository, 'setCursor'> };
 export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'>; metrics: Pick<MetricRepository, 'recordMetrics'>; cursors: Pick<CursorRepository, 'cursor' | 'setCursor'> };
 
 /** The connected accounts, read, renamed and made the primary of their network */
-export type AccountStore = Pick<Registry, 'account' | 'accounts' | 'primaryAccount' | 'updateAccount' | 'makePrimary'>;
+export type AccountStore = Pick<AccountRepository, 'account' | 'accounts' | 'primaryAccount' | 'updateAccount' | 'makePrimary'>;

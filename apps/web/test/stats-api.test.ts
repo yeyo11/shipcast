@@ -40,13 +40,13 @@ async function get(deps: ApiDeps, path: string, token: string) {
 }
 
 async function seed(registry: Registry) {
-  const account = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', accountId: account.id, externalId: 'at://1', url: 'https://bsky.app/1' });
   await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 2 }, new Date('2026-10-12T06:00:00Z'), post.id);
   await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 9 }, new Date('2026-10-17T06:00:00Z'), post.id);
-  await registry.recordSnapshot(account.id, { followers: 3 }, new Date('2026-10-16T04:00:00Z'));
-  await registry.recordSnapshot(account.id, { followers: 5 }, new Date('2026-10-17T04:00:00Z'));
+  await registry.accounts.recordSnapshot(account.id, { followers: 3 }, new Date('2026-10-16T04:00:00Z'));
+  await registry.accounts.recordSnapshot(account.id, { followers: 5 }, new Date('2026-10-17T04:00:00Z'));
   return { account, launch, post };
 }
 
@@ -112,7 +112,7 @@ test('parameters that are not valid are a 400 that says why', async () => {
     ['/stats/overview?channels=', /comma-separated/],
     ['/accounts/1/growth?from=2026-10-01&to=yesterday', /days/],
   ];
-  await s.registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
+  await s.registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
   for (const [path, message] of cases) {
     const answer = await get(s.deps, path, s.read);
     assert.equal(answer.status, 400, path);

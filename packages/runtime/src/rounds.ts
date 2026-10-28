@@ -72,8 +72,8 @@ function refresher(network: Refreshable, settings: Record<string, string>, acces
 export async function refreshMetaAccounts(network: Refreshable, d: Pick<RoundDeps, 'registry' | 'secrets'>, now = new Date(), http?: typeof fetch): Promise<string[]> {
   const name = network === 'instagram' ? 'Instagram' : 'Threads';
   const lines: string[] = [];
-  for (const account of await d.registry.accounts({ network })) {
-    const remember = () => d.registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: now.toISOString() } });
+  for (const account of await d.registry.accounts.accounts({ network })) {
+    const remember = () => d.registry.accounts.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: now.toISOString() } });
     const last = account.settings.refreshedAt;
     if (!last) {
       await remember();

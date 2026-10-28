@@ -18,7 +18,7 @@ export interface SchedulingChannel {
 export async function launchPieces(registry: Registry, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
   const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts.posts(launch.id),
-    registry.accounts(),
+    registry.accounts.accounts(),
     registry.metrics.postMetricHistory(launch.id),
     // What the assistant answered, counted per channel: the page never lists them
     registry.sentReplies(launch.id),
@@ -29,7 +29,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
   // A week before the launch's day, so the line shows where the followers stood before it
   const since = new Date(Date.parse(launch.createdAt) - 7 * 86_400_000).toISOString().slice(0, 10);
   const usedIds = [...new Set(out.flatMap((p) => (p.accountId === null ? [] : [p.accountId])))];
-  const snapshots: SnapshotInput[] = (await Promise.all(usedIds.map((id) => registry.accountSnapshots(id, { since })))).flat();
+  const snapshots: SnapshotInput[] = (await Promise.all(usedIds.map((id) => registry.accounts.accountSnapshots(id, { since })))).flat();
   const accountNumbers = accountRows({ posts: out, accounts: shaped, snapshots, launchedAt: launch.createdAt });
   return { rows, replies, accounts: accountNumbers, capabilities: CAPABILITIES, scheduling: await schedulingChannels(registry, launch, posts, deps) };
 }

@@ -44,28 +44,28 @@ test('an account is kept only when its credential works; its secret goes to the 
   const refused = await connectAccount(d, { network: 'devto', brand: 'personal', credentials: { settings: {}, secrets: { apiKey: 'bad' } } });
   assert.equal(refused.ok, false);
   assert.match((refused as { problem: string }).problem, /rejected the credential/);
-  assert.equal((await d.registry.accounts()).length, 0);
+  assert.equal((await d.registry.accounts.accounts()).length, 0);
 
   const connected = await connectAccount(d, { network: 'devto', brand: 'personal', credentials: { settings: {}, secrets: { apiKey: 'good' } } });
   assert.ok(connected.ok);
   const account = (connected as { account: { id: number; label: string; status: string; primary: boolean } }).account;
   assert.deepEqual([account.label, account.status, account.primary], ['@yeyo11', 'ok', true]);
   assert.equal(await d.secrets.get(accountSecretKey(account.id)), JSON.stringify({ apiKey: 'good' }));
-  assert.equal(JSON.stringify((await d.registry.account(account.id))?.settings), '{}', 'no secret in the registry');
+  assert.equal(JSON.stringify((await d.registry.accounts.account(account.id))?.settings), '{}', 'no secret in the registry');
 
   const again = await connectAccount(d, { network: 'devto', brand: 'personal', credentials: { settings: {}, secrets: { apiKey: 'newer' } } });
   assert.ok(again.ok);
-  assert.equal((await d.registry.accounts()).length, 1, 'connecting the same account again updates it');
+  assert.equal((await d.registry.accounts.accounts()).length, 1, 'connecting the same account again updates it');
 
   assert.equal((await checkAccount(d, account.id)).status, 'ok');
   await disconnectAccount(d, account.id);
-  assert.equal((await d.registry.accounts()).length, 0);
+  assert.equal((await d.registry.accounts.accounts()).length, 0);
   assert.equal(await d.secrets.get(accountSecretKey(account.id)), undefined);
 });
 
 test('an account whose secrets left the keychain fails its check with what to do', async () => {
   const d = await deps();
-  const account = await d.registry.addAccount({ network: 'devto', brand: 'personal', label: 'x', settings: {} });
+  const account = await d.registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: 'x', settings: {} });
   const checked = await checkAccount(d, account.id);
   assert.equal(checked.status, 'failed');
   assert.match(checked.problem ?? '', /connect it again/);

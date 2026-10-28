@@ -245,7 +245,7 @@ test('a launch comes with its posts, numbers, index status and drafts summary', 
 
 test('accounts come without secrets, and jobs as the app lists them', async () => {
   const s = await setup();
-  await s.registry.addAccount({ network: 'devto', brand: 'personal', label: 'me', settings: { handle: 'me' } });
+  await s.registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: 'me', settings: { handle: 'me' } });
   await s.deps.secrets.set('account:1', '{"apiKey":"secret"}', 'x');
   const accounts = await call(s.deps, 'GET', '/accounts', { token: s.read });
   const text = await accounts.text();
@@ -372,7 +372,7 @@ test('what a network cannot do is a 409, a bad change a 400, a missing post a 40
   assert.equal((await call(s.deps, 'PATCH', `/posts/${bluesky.id}`, { token: s.write, body: { link: 'javascript:alert(1)' } })).status, 400);
   assert.equal((await call(s.deps, 'DELETE', '/posts/9999', { token: s.write })).status, 404);
   assert.equal((await call(s.deps, 'DELETE', '/posts/abc', { token: s.write })).status, 400);
-  const refused = (await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
+  const refused = (await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null })).post;
   const upstream = await call(s.deps, 'PATCH', `/posts/${refused.id}`, { token: s.write, body: { text: 'x'.repeat(600) } });
   assert.equal(upstream.status, 502);
   assert.match(((await body(upstream)).error as { message: string }).message, /Text is too long/);

@@ -52,7 +52,7 @@ export async function credentialsFor(
   id: string,
   deps: Pick<ServiceDeps, 'env' | 'brand' | 'registry' | 'secrets' | 'readFile'>,
 ): Promise<{ credentials: Credentials; origin: Origin } | undefined> {
-  const account = await deps.registry.primaryAccount(deps.brand.id, id);
+  const account = await deps.registry.accounts.primaryAccount(deps.brand.id, id);
   if (account) {
     const secrets = await getJson(deps.secrets, accountSecretKey(account.id));
     if (secrets) return { credentials: { settings: account.settings, secrets }, origin: { kind: 'account', id: account.id } };
@@ -199,10 +199,10 @@ export async function refreshInstagramToken(
   if (!services.instagram) return undefined;
   const { connector, origin } = services.instagram;
   const { registry } = deps;
-  const account = origin.kind === 'account' ? await registry.account(origin.id) : undefined;
+  const account = origin.kind === 'account' ? await registry.accounts.account(origin.id) : undefined;
   const last = account ? account.settings.refreshedAt : await registry.cursors.cursor(INSTAGRAM_REFRESHED_KEY);
   const remember = async (at: Date): Promise<void> => {
-    if (account) await registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } });
+    if (account) await registry.accounts.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } });
     else await registry.cursors.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
   };
   if (!last) {

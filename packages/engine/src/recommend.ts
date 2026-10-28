@@ -306,7 +306,7 @@ export async function recommendFor(registry: Registry, channel: Channel, options
   let audience: StoredAudience | undefined;
   if (channel === 'instagram') {
     // The primary account first, as it is the one launches publish with
-    const accounts = (await registry.accounts({ network: 'instagram' })).sort((a, b) => Number(b.primary) - Number(a.primary));
+    const accounts = (await registry.accounts.accounts({ network: 'instagram' })).sort((a, b) => Number(b.primary) - Number(a.primary));
     for (const account of accounts) {
       audience = parseAudience(await registry.cursors.cursor(audienceKey(account.id)));
       if (audience) break;

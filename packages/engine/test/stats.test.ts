@@ -122,8 +122,8 @@ test('a network nobody engaged with has no yardstick and is not ranked', async (
 
 test('the overview compares with the previous period, per channel and per account, and filters', async () => {
   const registry = await memoryRegistry();
-  const devto = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
-  const bluesky = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
+  const devto = await registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
+  const bluesky = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
   const l1 = await launch(registry);
   const l2 = await launch(registry, 'yeyo11/shipcast', 'v0.1.0');
   const dev = await piece(registry, l1.id, 'devto', devto.id);
@@ -184,7 +184,7 @@ test('GitHub counts once per repo and starts at its first reading; old launch-wi
 
 test('a series groups by account and launch with labels, and folds what passes the limit into other', async () => {
   const registry = await memoryRegistry();
-  const account = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@mastodon.social', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@mastodon.social', settings: {} });
   const launches = [await launch(registry, 'yeyo11/a', 'v1'), await launch(registry, 'yeyo11/b', 'v1'), await launch(registry, 'yeyo11/c', 'v1')];
   for (const [i, l] of launches.entries()) {
     const post = await piece(registry, l.id, 'mastodon', i === 0 ? account.id : null);
@@ -207,10 +207,10 @@ test('a series groups by account and launch with labels, and folds what passes t
 
 test('an account’s growth comes from its snapshots, with the change since the one before, across a missed day', async () => {
   const registry = await memoryRegistry();
-  const a = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
-  await registry.recordSnapshot(a.id, { followers: 10, following: 5, posts: 1 }, at('19', 4));
-  await registry.recordSnapshot(a.id, { followers: 12, following: 5, posts: 2 }, at('20', 4));
-  await registry.recordSnapshot(a.id, { followers: 20, posts: 2 }, at('23', 4));
+  const a = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
+  await registry.accounts.recordSnapshot(a.id, { followers: 10, following: 5, posts: 1 }, at('19', 4));
+  await registry.accounts.recordSnapshot(a.id, { followers: 12, following: 5, posts: 2 }, at('20', 4));
+  await registry.accounts.recordSnapshot(a.id, { followers: 20, posts: 2 }, at('23', 4));
 
   const growth = await accountGrowth(registry, a.id, { from: '2026-10-20', to: '2026-10-31' });
   assert.deepEqual(

@@ -72,7 +72,7 @@ test('what a network cannot do, a bad request and a network’s refusal all come
   assert.equal(!noDelete.ok && noDelete.reason, 'unsupported');
   assert.equal(((await editOne(s.deps, { postId: 'one', changes: {} })) as { reason?: string }).reason, 'invalid');
   assert.equal(((await editOne(s.deps, { postId: 99999, changes: { text: 'x' } })) as { reason?: string }).reason, 'not_found');
-  const { post: refused } = await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null });
+  const { post: refused } = await s.registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', kind: 'post', accountId: (await s.registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@b', settings: {} })).id, externalId: 'refused', url: null });
   const upstream = await editOne(s.deps, { postId: refused.id, changes: { text: 'x'.repeat(10) } });
   assert.equal(!upstream.ok && upstream.reason, 'upstream');
   assert.match(!upstream.ok ? upstream.problem : '', /Text is too long/);

@@ -48,7 +48,7 @@ test('only the networks with credentials are configured', async () => {
 test('a connected account wins over .env, and .env never speaks for another brand', async () => {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
-  const account = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: { instance: 'https://fosstodon.org' } });
+  const account = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: { instance: 'https://fosstodon.org' } });
   await secrets.set(accountSecretKey(account.id), JSON.stringify({ accessToken: 'from-keychain' }), 'x');
   const env = { MASTODON_ACCESS_TOKEN: 'from-env', DEVTO_API_KEY: 'd' };
 
@@ -89,14 +89,14 @@ test('the Instagram token from .env is refreshed every 30 days, never on the fir
 
 test('a connected Instagram account keeps its refreshed token in the keychain', async () => {
   const d = await deps({});
-  const account = await d.registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: { userId: '1', refreshedAt: '2026-09-01T00:00:00.000Z' } });
+  const account = await d.registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: { userId: '1', refreshedAt: '2026-09-01T00:00:00.000Z' } });
   await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ accessToken: 'old' }), 'x');
   const counter = { n: 0 };
   const services = withFakeInstagram(await buildServices(d), { kind: 'account', id: account.id }, counter);
 
   assert.match((await refreshInstagramToken(services, d, new Date('2026-10-05T00:00:00Z'))) ?? '', /refreshed/);
   assert.equal(JSON.parse((await d.secrets.get(accountSecretKey(account.id)))!).accessToken, 'new');
-  assert.equal((await d.registry.account(account.id))?.settings.refreshedAt, '2026-10-05T00:00:00.000Z');
+  assert.equal((await d.registry.accounts.account(account.id))?.settings.refreshedAt, '2026-10-05T00:00:00.000Z');
   assert.equal(await d.registry.cursors.cursor(INSTAGRAM_TOKEN_KEY), undefined, 'nothing in the registry');
 });
 

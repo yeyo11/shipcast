@@ -1,5 +1,6 @@
 import type { Database } from '../db/connect.ts';
 import { LaunchRepository } from './launches.ts';
+import { AccountRepository } from './accounts.ts';
 import { CursorRepository } from './cursors.ts';
 import { SettingRepository } from './settings.ts';
 import { MetricRepository } from './metrics.ts';
@@ -13,6 +14,7 @@ import { transaction } from './transaction.ts';
  */
 
 export * from './launches.ts';
+export * from './accounts.ts';
 export * from './cursors.ts';
 export * from './settings.ts';
 export * from './metrics.ts';
@@ -25,6 +27,7 @@ export interface Repositories {
   /** The connection, for the stores that sit beside the repositories on the same schema and pool */
   readonly database: Database;
   readonly launches: LaunchRepository;
+  readonly accounts: AccountRepository;
   readonly cursors: CursorRepository;
   readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
@@ -36,6 +39,7 @@ export function repositoriesOn(db: Database): Repositories {
   return {
     database: db,
     launches: new LaunchRepository(db),
+    accounts: new AccountRepository(db),
     cursors: new CursorRepository(db),
     settings: new SettingRepository(db),
     metrics: new MetricRepository(db),

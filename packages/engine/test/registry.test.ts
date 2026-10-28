@@ -60,7 +60,7 @@ test('the last published ref feeds the pack inference; drafts and failures do no
 test('a piece is published once per launch, channel, account and kind', async () => {
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
-  const account = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
   const first = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', accountId: account.id, url: 'https://dev.to/x', externalId: '1' });
   assert.equal(first.recorded, true);
   assert.equal(first.post.kind, 'post');
@@ -96,9 +96,9 @@ test('with no account, nulls are not distinct: a blog article is still recorded 
 test('removing an account keeps its pieces, no longer attributed', async () => {
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
-  const account = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: {} });
   const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'mastodon', accountId: account.id, url: 'https://m/1', externalId: '1' });
-  await registry.deleteAccount(account.id);
+  await registry.accounts.deleteAccount(account.id);
   assert.equal((await registry.posts.post(post.id))?.accountId, null);
 });
 
@@ -167,31 +167,31 @@ test('a retry leaves alone a launch whose channel already has its post', async (
 
 test('accounts: the first per network and brand is the primary, and another can take over', async () => {
   const registry = await memory();
-  const a = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: 'main', settings: { instance: 'https://mastodon.social' } });
-  const b = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: 'second', settings: {} });
-  const c = await registry.addAccount({ network: 'mastodon', brand: 'company', label: 'main', settings: {} });
+  const a = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: 'main', settings: { instance: 'https://mastodon.social' } });
+  const b = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: 'second', settings: {} });
+  const c = await registry.accounts.addAccount({ network: 'mastodon', brand: 'company', label: 'main', settings: {} });
   assert.equal(a.primary, true);
   assert.equal(b.primary, false);
   assert.equal(c.primary, true, 'brands never share a primary');
-  assert.equal((await registry.primaryAccount('personal', 'mastodon'))?.id, a.id);
+  assert.equal((await registry.accounts.primaryAccount('personal', 'mastodon'))?.id, a.id);
 
-  await registry.makePrimary(b.id);
-  assert.equal((await registry.primaryAccount('personal', 'mastodon'))?.id, b.id);
-  assert.equal((await registry.account(a.id))?.primary, false);
+  await registry.accounts.makePrimary(b.id);
+  assert.equal((await registry.accounts.primaryAccount('personal', 'mastodon'))?.id, b.id);
+  assert.equal((await registry.accounts.account(a.id))?.primary, false);
 
-  await registry.deleteAccount(b.id);
-  assert.equal((await registry.primaryAccount('personal', 'mastodon'))?.id, a.id, 'the next one takes over');
-  assert.deepEqual((await registry.accounts({ brand: 'company' })).map((x) => x.id), [c.id]);
+  await registry.accounts.deleteAccount(b.id);
+  assert.equal((await registry.accounts.primaryAccount('personal', 'mastodon'))?.id, a.id, 'the next one takes over');
+  assert.deepEqual((await registry.accounts.accounts({ brand: 'company' })).map((x) => x.id), [c.id]);
 
-  const checked = await registry.recordCheck(a.id, { ok: false, problem: 'rejected' }, new Date('2026-10-25T00:00:00Z'));
+  const checked = await registry.accounts.recordCheck(a.id, { ok: false, problem: 'rejected' }, new Date('2026-10-25T00:00:00Z'));
   assert.deepEqual([checked.status, checked.problem, checked.checkedAt], ['failed', 'rejected', '2026-10-25T00:00:00.000Z']);
-  assert.equal((await registry.updateAccount(a.id, { label: 'renamed' })).label, 'renamed');
-  assert.deepEqual((await registry.account(a.id))?.settings, { instance: 'https://mastodon.social' });
+  assert.equal((await registry.accounts.updateAccount(a.id, { label: 'renamed' })).label, 'renamed');
+  assert.deepEqual((await registry.accounts.account(a.id))?.settings, { instance: 'https://mastodon.social' });
 });
 
 test('accounts added at once for a new network and brand get one primary between them', async () => {
   const registry = await memory();
-  const added = await Promise.all(['a', 'b', 'c'].map((label) => registry.addAccount({ network: 'bluesky', brand: 'personal', label, settings: {} })));
+  const added = await Promise.all(['a', 'b', 'c'].map((label) => registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label, settings: {} })));
   assert.equal(added.filter((a) => a.primary).length, 1);
 });
 

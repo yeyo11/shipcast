@@ -362,7 +362,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
 
     /** An account's profile reviewed by the AI, sent by hand only; it changes nothing on the network */
     async 'profile-review'(request, job) {
-      const account = await registry.account(request.accountId);
+      const account = await registry.accounts.account(request.accountId);
       if (account) job.link(`/channels/${account.network}?review=${account.id}`);
       const brand = await d.brand();
       await runProfileReview({ registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) }, request, (line) => job.log(line));

@@ -83,7 +83,7 @@ test('after the merge every approval channel is published with the edited texts,
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
-  const devto = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
+  const devto = await registry.accounts.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
   const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { devto: devto.id } };
 
   const result = await publishLaunch(launch, brand, deps);
@@ -252,7 +252,7 @@ test('after the Instagram carousel, its story and the edited comment go out once
 test('the Instagram comment is its own row, and a second round neither reposts nor comments again', async () => {
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
-  const account = await registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
   const done: string[] = [];
   const publishers: Publishers = {
     instagram: {

@@ -68,7 +68,7 @@ export async function launchNumbers(registry: Registry, launches: readonly Launc
  * every launch.
  */
 export async function postAccounts(registry: Registry, launches: readonly Launch[]): Promise<Map<number, Record<number, string>>> {
-  const accounts = new Map((await registry.accounts()).map((a) => [a.id, a.identity ?? a.label]));
+  const accounts = new Map((await registry.accounts.accounts()).map((a) => [a.id, a.identity ?? a.label]));
   const posts = await Promise.all(launches.map((l) => registry.posts.posts(l.id)));
   return new Map(launches.map((l, i) => [l.id, postAccountNames(posts[i] ?? [], accounts)]));
 }

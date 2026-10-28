@@ -70,7 +70,7 @@ function deps(registry: Registry, network: FakeNetwork, output: unknown, prompts
 }
 
 async function mastodonAccount(registry: Registry, scopes = 'read:accounts write:accounts'): Promise<Account> {
-  return registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@mastodon.social', settings: { instance: 'https://mastodon.social', scopes } });
+  return registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@mastodon.social', settings: { instance: 'https://mastodon.social', scopes } });
 }
 
 test('a Mastodon account connected before write:accounts was asked for must reconnect to edit', () => {
@@ -127,8 +127,8 @@ test('the review prompt quotes the profile, names the limits and the facts, and 
 test('a review keeps the useful proposals, states the current value from the profile and marks one over the limit', async () => {
   const registry = await memoryRegistry();
   const account = await mastodonAccount(registry);
-  await registry.recordSnapshot(account.id, { followers: 10 }, new Date('2026-10-01T04:00:00Z'));
-  await registry.recordSnapshot(account.id, { followers: 14 }, new Date('2026-10-26T04:00:00Z'));
+  await registry.accounts.recordSnapshot(account.id, { followers: 10 }, new Date('2026-10-01T04:00:00Z'));
+  await registry.accounts.recordSnapshot(account.id, { followers: 14 }, new Date('2026-10-26T04:00:00Z'));
   const network: FakeNetwork = { profile: { displayName: 'Me', bio: 'Old bio', links: [], hasAvatar: true, hasBanner: false }, edits: [] };
   const prompts: string[] = [];
   const review = await reviewProfile(
@@ -178,9 +178,9 @@ test('an edit is refused without the capability, over a limit, or for a field th
   const network: FakeNetwork = { profile: { bio: 'Old', links: [], hasAvatar: true }, edits: [] };
   const old = await mastodonAccount(registry, 'read:accounts write:statuses');
   await assert.rejects(editProfile(deps(registry, network, {}), old.id, { bio: 'x' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'reconnect');
-  const ig = await registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const ig = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
   await assert.rejects(editProfile(deps(registry, network, {}), ig.id, { bio: 'x' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'unsupported');
-  const bsky = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
+  const bsky = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
   await assert.rejects(editProfile(deps(registry, network, {}), bsky.id, { links: [] }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');
   await assert.rejects(editProfile(deps(registry, network, {}), bsky.id, { bio: 'x'.repeat(300) }), /at most 256/);
   await assert.rejects(editProfile(deps(registry, network, {}), 999, { bio: 'x' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'not_found');
@@ -202,7 +202,7 @@ test('applying a proposal edits through the connector and marks it applied', asy
 
 test('a network that cannot read the profile reviews what the owner pasted, and asks for it otherwise', async () => {
   const registry = await memoryRegistry();
-  const account = await registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
   const network: FakeNetwork = { profile: { links: [], hasAvatar: false }, edits: [] };
   const d = deps(registry, network, { summary: 's', proposals: [{ field: 'bio', current: '', proposed: 'Builder of tools', why: 'w' }] });
   await assert.rejects(reviewProfile(d, account.id), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');

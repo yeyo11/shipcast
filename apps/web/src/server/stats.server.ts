@@ -90,7 +90,7 @@ const firstPublished = (launches: ReadonlyArray<{ status: string; createdAt: str
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
 
 export async function loadStats(registry: Registry, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
-  const [accounts, launches] = await Promise.all([registry.accounts(), registry.launches.recent(LAUNCH_OPTIONS)]);
+  const [accounts, launches] = await Promise.all([registry.accounts.accounts(), registry.launches.recent(LAUNCH_OPTIONS)]);
   const period = resolvePeriod(search, today, firstPublished(launches));
   const bucket = effectiveBucket(search.bucket, period.days);
   const filters = {
@@ -205,7 +205,7 @@ export interface GrowthView {
  * left out.
  */
 export async function loadGrowth(registry: Registry, range: { from: string; to: string }, now = new Date()): Promise<GrowthView> {
-  const [accounts, latest] = await Promise.all([registry.accounts(), registry.lastSnapshots()]);
+  const [accounts, latest] = await Promise.all([registry.accounts.accounts(), registry.accounts.lastSnapshots()]);
   const measured = accounts.filter((a) => latest.has(a.id));
   const growth = await Promise.all(measured.map((a) => accountGrowth(registry, a.id, range)));
   return {

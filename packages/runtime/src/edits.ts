@@ -32,7 +32,7 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
   if (!network) return undefined;
   let credentials: Credentials | undefined;
   if (accountId !== null) {
-    const account = await deps.registry.account(accountId);
+    const account = await deps.registry.accounts.account(accountId);
     const secrets = account ? await getJson(deps.secrets, accountSecretKey(account.id)) : undefined;
     if (!account || !secrets) throw new PostRefused('no_credentials', `the ${network.name} account the post went out with is not connected any more`);
     credentials = { settings: account.settings, secrets };

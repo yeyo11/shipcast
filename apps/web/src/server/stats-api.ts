@@ -198,7 +198,7 @@ export const STATS_ROUTES: ApiRoute[] = [
     async handle(deps, { params, url }) {
       const id = positive(params.accountId ?? '');
       if (id === undefined) throw new InvalidInput('the account id must be a positive integer');
-      if (!(await deps.registry.account(id))) {
+      if (!(await deps.registry.accounts.account(id))) {
         return Response.json({ error: { code: 'not_found', message: 'no such account' } }, { status: 404, headers: { 'cache-control': 'no-store' } });
       }
       const to = url.searchParams.get('to') ?? today();

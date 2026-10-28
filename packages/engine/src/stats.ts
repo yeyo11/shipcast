@@ -307,7 +307,7 @@ export async function statsOverview(registry: Registry, options: OverviewOptions
     const previous = { ...emptyFor(acc.sources), ...acc.previous };
     return { metrics, previous, delta: deltas(metrics, previous) };
   };
-  const accounts = new Map((await registry.accounts()).map((a) => [a.id, a]));
+  const accounts = new Map((await registry.accounts.accounts()).map((a) => [a.id, a]));
   return {
     window,
     ...(compareTo && { compareTo }),
@@ -478,7 +478,7 @@ async function groupLabels(registry: Registry, groupBy: SeriesGroupBy, keys: str
   const labels = new Map<string, string>();
   if (groupBy === 'channel' || groupBy === 'launchChannel') for (const key of keys) labels.set(key, key);
   if (groupBy === 'account') {
-    const accounts = new Map((await registry.accounts()).map((a) => [String(a.id), a]));
+    const accounts = new Map((await registry.accounts.accounts()).map((a) => [String(a.id), a]));
     for (const key of keys) {
       const account = accounts.get(key);
       labels.set(key, key === 'none' ? 'No account' : account ? `${account.network} ${account.label}` : `Account ${key}`);
@@ -666,7 +666,7 @@ export async function statsRanking(registry: Registry, options: RankingOptions):
       : (await registry.selectRows<{ id: number; kind: string; url: string | null }>(sql`SELECT id, kind, url FROM posts WHERE ${inList(sql`id`, postIds)}`)).map((p) => [Number(p.id), p]),
   );
   const launches = await launchNames(registry, [...new Set(page.flatMap((d) => (d.launchId === null ? [] : [d.launchId])))]);
-  const accounts = options.by === 'account' ? new Map((await registry.accounts()).map((a) => [a.id, a])) : new Map();
+  const accounts = options.by === 'account' ? new Map((await registry.accounts.accounts()).map((a) => [a.id, a])) : new Map();
 
   const entries = page.map(({ key, engagement, ...d }, i): RankingEntry => {
     const post = d.postId === null ? undefined : posts.get(d.postId);
