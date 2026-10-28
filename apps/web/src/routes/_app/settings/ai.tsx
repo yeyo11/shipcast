@@ -1,4 +1,5 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { channelName } from '@shipcast/schema/channels';
 import { useEffect, useState } from 'react';
 import { PageToolbar } from '../../../components/PageToolbar';
 import { SaveBar } from '../../../components/SaveBar';
@@ -34,29 +35,13 @@ const TASKS: Record<Task, { label: string; text: string }> = {
   profile: { label: 'Profile review', text: 'Reviews an account’s profile against its numbers and the brand, and proposes each field’s new text; nothing changes until you apply a proposal.' },
 };
 
-const CHANNEL_NAMES: Record<string, string> = {
-  blog: 'Blog article',
-  devto: 'dev.to',
-  bluesky: 'Bluesky',
-  mastodon: 'Mastodon',
-  instagram: 'Instagram',
-  reddit: 'Reddit',
-  hashnode: 'Hashnode',
-  telegram: 'Telegram',
-  discord: 'Discord',
-  githubDiscussions: 'GitHub Discussions',
-  threads: 'Threads',
-  linkedin: 'LinkedIn',
-  newsletter: 'Newsletter',
-};
-
 function promptLabel(id: string): string {
   if (id === 'article') return 'Article: the translation';
   if (id === 'reply') return 'Comment reply';
   if (id === 'profile') return 'Profile review';
   const [group, name = ''] = id.split('.');
   if (group === 'pack') return `Pack brief: ${name === 'launch' ? 'first launch' : `${name} version`}`;
-  return `Channel brief: ${CHANNEL_NAMES[name] ?? name}`;
+  return `Channel brief: ${channelName(name)}`;
 }
 
 /** A long read-only text on black, bounded in height and scrolled with Cartel's scrollbar */

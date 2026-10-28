@@ -1,4 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
+import { CHANNEL_METRIC_FAMILIES, STATS_METRICS, type StatsMetric } from '@shipcast/schema';
 import type { Registry } from './registry.ts';
 import { InvalidRequest } from '@shipcast/schema';
 
@@ -14,8 +15,7 @@ import { InvalidRequest } from '@shipcast/schema';
  */
 
 /** The families every network's numbers are folded into, so a chart can put networks side by side */
-export const STATS_METRICS = ['views', 'reactions', 'comments', 'shares', 'clicks', 'impressions'] as const;
-export type StatsMetric = (typeof STATS_METRICS)[number];
+export { STATS_METRICS, type StatsMetric };
 export type MetricTotals = Partial<Record<StatsMetric, number>>;
 
 /**
@@ -24,13 +24,8 @@ export type MetricTotals = Partial<Record<StatsMetric, number>>;
  * purpose: they are a rolling 14-day count, not a counter, and the high-water mark would misread them.
  */
 export const METRIC_FAMILIES: Readonly<Record<string, Partial<Record<StatsMetric, readonly string[]>>>> = {
-  devto: { views: ['views'], reactions: ['reactions'], comments: ['comments'] },
-  hashnode: { views: ['views'], reactions: ['reactions'], comments: ['comments'] },
-  bluesky: { reactions: ['likes'], comments: ['replies'], shares: ['reposts', 'quotes'] },
-  mastodon: { reactions: ['favourites'], comments: ['replies'], shares: ['boosts'] },
-  instagram: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'], impressions: ['reach'] },
-  newsletter: { views: ['opens'], clicks: ['clicks'], impressions: ['delivered'] },
-  blog: { views: ['views'] },
+  // Each channel's, from its definition
+  ...CHANNEL_METRIC_FAMILIES,
   search: { clicks: ['clicks'], impressions: ['impressions'] },
   bing: { clicks: ['clicks'], impressions: ['impressions'] },
   github: { reactions: ['stars'], shares: ['forks'] },
@@ -40,7 +35,7 @@ export const METRIC_FAMILIES: Readonly<Record<string, Partial<Record<StatsMetric
 export const POPULARITY_METRICS: readonly StatsMetric[] = ['views', 'reactions', 'comments', 'shares', 'clicks'];
 
 /** Sources read for a launch as a whole rather than for one of its pieces */
-const SITE_SOURCES = ['blog', 'search', 'bing', 'github'] as const;
+export const SITE_SOURCES = ['blog', 'search', 'bing', 'github'] as const;
 
 /** What a query is narrowed to; a filter left out is everything */
 export interface StatsFilter {

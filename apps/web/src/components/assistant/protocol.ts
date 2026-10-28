@@ -3,22 +3,13 @@
  * can use it in the browser. See docs/decisions/writing-assistant.md
  */
 
+import { CHANNEL_DEFINITIONS, draftOf } from '@shipcast/schema/channels';
+
 export const ACTIONS = ['improve', 'shorten', 'translate', 'titles', 'adapt', 'check'] as const;
 export type Action = (typeof ACTIONS)[number];
 
-/** The networks "Adapt to a network" offers, by channel id, as a person names them */
-export const ADAPT_NETWORKS: ReadonlyArray<{ id: string; name: string }> = [
-  { id: 'bluesky', name: 'Bluesky' },
-  { id: 'mastodon', name: 'Mastodon' },
-  { id: 'linkedin', name: 'LinkedIn' },
-  { id: 'devto', name: 'dev.to' },
-  { id: 'hashnode', name: 'Hashnode' },
-  { id: 'instagram', name: 'Instagram' },
-  { id: 'telegram', name: 'Telegram' },
-  { id: 'discord', name: 'Discord' },
-  { id: 'reddit', name: 'Reddit' },
-  { id: 'newsletter', name: 'Newsletter' },
-];
+/** The networks "Adapt to a network" offers, by channel id, as a person names them: every channel with an `adapt` in its definition */
+export const ADAPT_NETWORKS: ReadonlyArray<{ id: string; name: string }> = CHANNEL_DEFINITIONS.filter((d) => 'adapt' in d).map((d) => ({ id: d.id, name: d.name }));
 
 export interface ChatTurn {
   role: 'user' | 'assistant';
@@ -62,22 +53,9 @@ export type AssistantEvent =
   | { type: 'saved'; sessionId: number; messageId: number }
   | { type: 'done' };
 
-const DRAFT_CHANNELS: Record<string, string> = {
-  'devto.md': 'devto',
-  'hashnode.md': 'hashnode',
-  'bluesky.md': 'bluesky',
-  'mastodon.md': 'mastodon',
-  'instagram.md': 'instagram',
-  'telegram.md': 'telegram',
-  'discord.md': 'discord',
-  'newsletter-en.md': 'newsletter',
-  'newsletter-es.md': 'newsletter',
-};
-
-/** A draft's channel, from its file in the launches repo (`launches/<project>/<ref>/bluesky.md`) */
+/** A draft's channel, from its file in the launches repo (`launches/<project>/<ref>/bluesky.md`), by the channels' own matchers */
 export function channelOfDraft(path: string): string | undefined {
-  const file = path.split('/').at(-1) ?? '';
-  return DRAFT_CHANNELS[file] ?? (file.startsWith('reddit') ? 'reddit' : undefined);
+  return draftOf(path)?.channel;
 }
 
 /** A draft's language, when its path says it (`src/content/posts/es/…`, `newsletter-es.md`) */

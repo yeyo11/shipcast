@@ -1,8 +1,5 @@
-import { METRIC_FAMILIES, readTimezone, statsSeries, type Launch, type Registry } from '@shipcast/engine';
+import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Registry } from '@shipcast/engine';
 import { channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
-
-/** Sources read for the launch as a whole rather than for one of its pieces (as in the engine's stats) */
-const SITE_SOURCES = ['blog', 'search', 'bing', 'github'];
 
 /**
  * A launch's counters at their latest reading: each piece's latest number, read per piece so pieces
@@ -15,7 +12,7 @@ async function readingsOf(registry: Registry, launch: Launch): Promise<CounterRe
     const source = channel.get(r.postId);
     return source ? [{ source, name: r.name, value: r.value }] : [];
   });
-  return [...site.filter((m) => SITE_SOURCES.includes(m.source)), ...pieces];
+  return [...site.filter((m) => (SITE_SOURCES as readonly string[]).includes(m.source)), ...pieces];
 }
 
 const today = () => new Date().toISOString().slice(0, 10);

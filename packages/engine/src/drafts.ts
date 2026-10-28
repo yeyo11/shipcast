@@ -1,6 +1,9 @@
-import { articleLink, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { articleLink, discussionDraft, draftFile, hasDemo, type Brand, type Channel, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import type { GitHubSource } from './github.ts';
 import { issueDraftBody } from './newsletter.ts';
+
+// The draft formats are the channels' (packages/schema/src/channels/text.ts); kept importable from here
+export { discussionDraft, parseDiscussionDraft, parseInstagramDraft } from '@shipcast/schema';
 import type { Launch } from './registry.ts';
 
 /** A file of the drafts pull request, as a path in the launches repo and its text. */
@@ -18,30 +21,8 @@ export function instagramComment(pack: ContentPack, brand: Brand): string {
   return `Full write-up: ${url} (link in bio). What would you use it for?`;
 }
 
-/** Splits an Instagram draft as edited: the caption after the `---` line, the comment on its line. */
-export function parseInstagramDraft(body: string): { caption: string; comment: string | undefined } {
-  const [head, ...rest] = body.split(/^---$/m);
-  const caption = rest.length > 0 ? rest.join('---').trim() : body.trim();
-  return { caption, comment: /^Comment: (.+)$/m.exec(head ?? '')?.[1]?.trim() };
-}
-
-/** The draft of a discussion: its title on a line of its own, then the body after a `---` line */
-export function discussionDraft(piece: { title: string; body: string }): string {
-  return `Title: ${piece.title}\n\n---\n\n${piece.body.trim()}`;
-}
-
-/** Splits a discussion draft as edited; a draft whose title line is gone keeps the pack's title */
-export function parseDiscussionDraft(body: string, fallback: { title: string; body: string }): { title: string; body: string } {
-  const [head, ...rest] = body.split(/^---$/m);
-  const title = /^Title: (.+)$/m.exec(head ?? '')?.[1]?.trim() || fallback.title;
-  const text = rest.length > 0 ? rest.join('---').trim() : body.trim();
-  return { title, body: text || fallback.body };
-}
-
 /** Each subreddit's post is a draft of its own, edited like a discussion: a title line, then the body */
-export function redditDraftFile(subreddit: string): string {
-  return `reddit-${subreddit.toLowerCase()}.md`;
-}
+export const redditDraftFile = (subreddit: string): string => draftFile('reddit', subreddit).name;
 
 /** `yeyo11/claudio` → `claudio` */
 export function projectSlug(repo: string): string {
@@ -76,6 +57,12 @@ function modeLine(mode: PublishMode): string {
 
 function draft(title: string, mode: PublishMode, body: string): string {
   return `# ${title}\n\n${modeLine(mode)}\n\n${body.trim()}\n`;
+}
+
+/** A channel's draft file in the launch's folder, named and headed as its definition says */
+function channelDraft(dir: string, channel: Channel, mode: PublishMode, body: string, part = ''): DraftFile {
+  const file = draftFile(channel, part);
+  return { path: `${dir}/${file.name}`, content: draft(file.title, mode, body) };
 }
 
 /**
@@ -156,45 +143,35 @@ export function renderDrafts(
   }
 
   if (pack.devto && mode('devto') !== 'off') {
-    files.push({
-      path: `${dir}/devto.md`,
-      content: draft(
-        'dev.to',
-        mode('devto'),
-        `Republishes the English article with its canonical URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`,
-      ),
-    });
+    files.push(
+      channelDraft(dir, 'devto', mode('devto'), `Republishes the English article with its canonical URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`),
+    );
   }
   if (pack.hashnode && mode('hashnode') !== 'off') {
-    files.push({
-      path: `${dir}/hashnode.md`,
-      content: draft(
-        'Hashnode',
-        mode('hashnode'),
-        `Republishes the English article with its original URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`,
-      ),
-    });
+    files.push(
+      channelDraft(dir, 'hashnode', mode('hashnode'), `Republishes the English article with its original URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`),
+    );
   }
   if (pack.telegram && mode('telegram') !== 'off') {
-    files.push({ path: `${dir}/telegram.md`, content: draft('Telegram', mode('telegram'), pack.telegram.text) });
+    files.push(channelDraft(dir, 'telegram', mode('telegram'), pack.telegram.text));
   }
   if (pack.discord && mode('discord') !== 'off') {
-    files.push({ path: `${dir}/discord.md`, content: draft('Discord', mode('discord'), pack.discord.text) });
+    files.push(channelDraft(dir, 'discord', mode('discord'), pack.discord.text));
   }
   if (pack.githubDiscussions && mode('githubDiscussions') !== 'off') {
-    files.push({ path: `${dir}/github-discussion.md`, content: draft('GitHub Discussions', mode('githubDiscussions'), discussionDraft(pack.githubDiscussions)) });
+    files.push(channelDraft(dir, 'githubDiscussions', mode('githubDiscussions'), discussionDraft(pack.githubDiscussions)));
   }
   if (pack.threads && mode('threads') !== 'off') {
-    files.push({ path: `${dir}/threads.md`, content: draft('Threads', mode('threads'), pack.threads.text) });
+    files.push(channelDraft(dir, 'threads', mode('threads'), pack.threads.text));
   }
   if (pack.linkedin && mode('linkedin') !== 'off') {
-    files.push({ path: `${dir}/linkedin.md`, content: draft('LinkedIn', mode('linkedin'), pack.linkedin.text) });
+    files.push(channelDraft(dir, 'linkedin', mode('linkedin'), pack.linkedin.text));
   }
   if (pack.bluesky && mode('bluesky') !== 'off') {
-    files.push({ path: `${dir}/bluesky.md`, content: draft('Bluesky', mode('bluesky'), pack.bluesky.text) });
+    files.push(channelDraft(dir, 'bluesky', mode('bluesky'), pack.bluesky.text));
   }
   if (pack.mastodon && mode('mastodon') !== 'off') {
-    files.push({ path: `${dir}/mastodon.md`, content: draft('Mastodon', mode('mastodon'), pack.mastodon.text) });
+    files.push(channelDraft(dir, 'mastodon', mode('mastodon'), pack.mastodon.text));
   }
   if (pack.instagram && mode('instagram') !== 'off') {
     const ig = pack.instagram;
@@ -204,10 +181,10 @@ export function renderDrafts(
       ...ig.slides.map((s) => `${s.title}: ${s.text}`),
       'Closing: the full write-up is in my bio',
     ];
-    files.push({
-      path: `${dir}/instagram.md`,
-      content: draft(
-        'Instagram',
+    files.push(
+      channelDraft(
+        dir,
+        'instagram',
         mode('instagram'),
         [
           `Carousel, from the images in \`public/${dir}/\` (their texts are drawn into them; only the caption and the comment below can be edited here):`,
@@ -223,18 +200,18 @@ export function renderDrafts(
           ig.caption,
         ].join('\n'),
       ),
-    });
+    );
   }
   if (pack.reddit && mode('reddit') !== 'off') {
     for (const post of pack.reddit) {
-      files.push({ path: `${dir}/${redditDraftFile(post.subreddit)}`, content: draft(`Reddit, r/${post.subreddit}`, mode('reddit'), discussionDraft(post)) });
+      files.push(channelDraft(dir, 'reddit', mode('reddit'), discussionDraft(post), post.subreddit));
     }
   }
   if (pack.newsletter && mode('newsletter') !== 'off') {
     for (const lang of ['en', 'es'] as const) {
       const issue = pack.newsletter[lang];
       if (issue) {
-        files.push({ path: `${dir}/newsletter-${lang}.md`, content: draft(`Newsletter (${lang})`, mode('newsletter'), issueDraftBody(issue)) });
+        files.push(channelDraft(dir, 'newsletter', mode('newsletter'), issueDraftBody(issue), lang));
       }
     }
   }

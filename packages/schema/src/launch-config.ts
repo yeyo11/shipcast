@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { CHANNELS, DEFAULT_MODES, Language, PublishMode, type Channel } from './channels.ts';
+import { Language, PublishMode, type Channel } from './channels.ts';
+import { CHANNELS, DEFAULT_MODES } from './channels/registry.ts';
 import { parseYaml, type ParseResult } from './yaml.ts';
 
 /** The content packs of the plan: a new project, a major version, everything else. */

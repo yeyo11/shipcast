@@ -1,5 +1,5 @@
-import { Refused, type Channel, type LaunchConfig } from '@shipcast/schema';
-import { cancelledKey, PUBLISHED_BY_ENGINE } from './publish.ts';
+import { Refused, SCHEDULABLE_CHANNELS as SCHEDULABLE, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { cancelledKey } from './publish.ts';
 import type { ScheduleStore, SettingStore } from './ports.ts';
 import type { Post } from './registry.ts';
 
@@ -50,10 +50,11 @@ export async function saveTimezone(registry: SettingStore, name: unknown): Promi
 }
 
 /**
- * The channels a time can be set for: those the engine publishes itself, but not the blog, published
- * by the merge, nor Reddit, whose launch is one post per subreddit and a schedule is one row per channel
+ * The channels a time can be set for, as their definitions say: those the engine publishes itself,
+ * but not the blog, published by the merge, nor Reddit, whose launch is one post per subreddit and a
+ * schedule is one row per channel
  */
-export const SCHEDULABLE_CHANNELS: readonly Channel[] = PUBLISHED_BY_ENGINE.filter((c) => c !== 'reddit');
+export const SCHEDULABLE_CHANNELS: readonly Channel[] = SCHEDULABLE;
 
 /** How far ahead a time may be: a launch's pieces belong to its week, and pg-boss keeps a queued job a fortnight past its start */
 export const MAX_SCHEDULE_DAYS = 60;

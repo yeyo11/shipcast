@@ -133,7 +133,7 @@ function CommentRow({ comment, limit }: { comment: CommentView; limit: number })
               ) : (
                 comment.replyOn && (
                   <a className="btn btn-small" href={comment.replyOn} target="_blank" rel="noreferrer">
-                    Reply on {comment.channel === 'devto' ? 'dev.to' : comment.channel}
+                    Reply on {CHANNEL_NAMES[comment.channel] ?? comment.channel}
                   </a>
                 )
               )}

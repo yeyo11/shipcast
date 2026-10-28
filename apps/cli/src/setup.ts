@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
+import { ACTION_VARIABLES } from '@shipcast/runtime';
 import { Brand, CHANNELS, parseBrand, parseLaunchConfig, type Channel, type Language } from '@shipcast/schema';
 
 /*
@@ -14,9 +15,14 @@ import { Brand, CHANNELS, parseBrand, parseLaunchConfig, type Channel, type Lang
 /** The Action every workflow uses; its major tag moves with compatible releases */
 export const ACTION = 'yeyo11/shipcast-action@v1';
 
-/** The channels Action mode can publish without the app: each needs only repository secrets */
-export const ACTION_CHANNELS = ['blog', 'devto', 'bluesky', 'mastodon', 'hashnode', 'telegram', 'discord', 'githubDiscussions'] as const satisfies readonly Channel[];
-export type ActionChannel = (typeof ACTION_CHANNELS)[number];
+/**
+ * The channels Action mode publishes (the runtime's ACTION_VARIABLES) that `init` sets up: Instagram
+ * and the newsletter read secrets too but need more setup than it asks for (docs/getting-started.md),
+ * so they are turned on by hand.
+ */
+const SET_UP_BY_HAND: readonly Channel[] = ['instagram', 'newsletter'];
+export const ACTION_CHANNELS = CHANNELS.filter((c) => ACTION_VARIABLES[c] !== undefined && !SET_UP_BY_HAND.includes(c));
+export type ActionChannel = Channel;
 export const DEFAULT_CHANNELS: ActionChannel[] = ['blog', 'devto', 'bluesky', 'mastodon', 'githubDiscussions'];
 
 export const SETUP_USAGE =`Usage: npx @yeyo11/shipcast init [flags]
@@ -169,20 +175,11 @@ jobs:
 `;
 }
 
-/** The variables each channel's secrets are, in the publish workflow's env */
-const CHANNEL_SECRETS: Record<ActionChannel, string[]> = {
-  blog: [],
-  githubDiscussions: [],
-  devto: ['DEVTO_API_KEY'],
-  bluesky: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
-  mastodon: ['MASTODON_INSTANCE', 'MASTODON_ACCESS_TOKEN'],
-  hashnode: ['HASHNODE_TOKEN', 'HASHNODE_PUBLICATION_HOST'],
-  telegram: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'],
-  discord: ['DISCORD_WEBHOOK_URL'],
-};
+/** The variables each channel's secrets are, in the publish workflow's env: the set Action mode prefers */
+const CHANNEL_SECRETS = (channel: ActionChannel): readonly string[] => ACTION_VARIABLES[channel]?.[0] ?? [];
 
 export function renderPublishWorkflow(options: Pick<SetupOptions, 'channels'>): string {
-  const names = options.channels.flatMap((c) => CHANNEL_SECRETS[c]);
+  const names = options.channels.flatMap((c) => CHANNEL_SECRETS(c));
   const env = names.length > 0 ? `\n        env:\n${names.map((n) => `          ${n}: \${{ secrets.${n} }}`).join('\n')}` : '';
   return `# Shipcast, in the launches repo (written by \`npx @yeyo11/shipcast init\`).
 #
@@ -260,7 +257,7 @@ export function secretsToSet(options: SetupOptions): SecretToSet[] {
     out.push({ name: 'SHIPCAST_GITHUB_TOKEN', repo: options.launchesRepo, kind: 'secret', why: 'reads the project and posts its GitHub Discussion (optional: the workflow token is the fallback)', how: 'the same token' });
   }
   for (const channel of options.channels) {
-    for (const name of CHANNEL_SECRETS[channel]) {
+    for (const name of CHANNEL_SECRETS(channel)) {
       out.push({ name, repo: options.launchesRepo, kind: 'secret', why: `publishes to ${channel}`, how: CHANNEL_HOW[name] ?? '' });
     }
   }
