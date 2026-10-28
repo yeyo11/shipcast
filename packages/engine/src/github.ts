@@ -29,6 +29,16 @@ export interface GitHubSource {
   pullRequestState(repo: string, number: number): Promise<'open' | 'merged' | 'closed'>;
 }
 
+/**
+ * Where a repo's code at a ref can be downloaded without a GitHub token: what an AI provider that
+ * fetches the repository itself (Claudio's workspaces) is given, so no token of GitHub's ever leaves
+ * Shipcast. A fake stands in for it in tests.
+ */
+export interface RepoArchiveSource {
+  /** A short-lived download URL of the gzip tarball (GitHub's codeload) */
+  tarballUrl(repo: string, ref: string): Promise<string>;
+}
+
 /** A repo's public numbers, and its traffic when the token may read it. */
 export interface RepoStats {
   stars: number;
@@ -106,7 +116,7 @@ export class GitHubError extends Error {
  * here: polling the events every few minutes costs nothing while nothing happens, because a `304`
  * does not count against the rate limit.
  */
-export class GitHubRest implements GitHubSource, GitHubWriter {
+export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource {
   readonly #auth: GitHubAuth;
   readonly #fetch: typeof fetch;
   readonly #base: string;
@@ -144,7 +154,7 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
    * early (an App's installation can be suspended); a minted token is then forgotten and the request
    * tried once more with a fresh one.
    */
-  async #request(url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
+  async #request(url: string, init: { method?: string; headers?: Record<string, string>; body?: string; redirect?: RequestInit['redirect'] } = {}): Promise<Response> {
     const key = await this.#etagKey(url, init);
     const cached = key === undefined ? undefined : await this.#etags?.get(key);
     const send = async () =>
@@ -187,8 +197,8 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
    * itself, which would empty the cache every hour), what representation (raw or JSON) and the URL.
    * None for a write, without a cache, or when the caller sends its own validator (the events poll).
    */
-  async #etagKey(url: string, init: { method?: string; headers?: Record<string, string> }): Promise<string | undefined> {
-    if (!this.#etags || (init.method ?? 'GET').toUpperCase() !== 'GET' || init.headers?.['if-none-match'] !== undefined) return undefined;
+  async #etagKey(url: string, init: { method?: string; headers?: Record<string, string>; redirect?: RequestInit['redirect'] }): Promise<string | undefined> {
+    if (!this.#etags || init.redirect === 'manual' || (init.method ?? 'GET').toUpperCase() !== 'GET' || init.headers?.['if-none-match'] !== undefined) return undefined;
     let scope: string;
     try {
       scope = this.#auth.scope ? await this.#auth.scope() : `token:${sha(await this.#auth.token())}`;
@@ -222,6 +232,24 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     const text = await response.text();
     await files?.set(repo, path, ref, text);
     return text;
+  }
+
+  /**
+   * The tarball's download URL: GitHub answers the API's tarball request, made with the token, with a
+   * redirect to codeload, whose URL carries a download grant of its own (for a private repo, a
+   * short-lived one in its query). The redirect is read, never followed, so the archive is not
+   * downloaded here and the token is only ever sent to GitHub's API.
+   */
+  async tarballUrl(repo: string, ref: string): Promise<string> {
+    // HEAD means the default branch, which is what the API reads when no ref is given
+    const path = `/repos/${repo}/tarball${ref === 'HEAD' ? '' : `/${encodeURIComponent(ref)}`}`;
+    const response = await this.#request(`${this.#base}${path}`, { redirect: 'manual' });
+    response.body?.cancel().catch(() => undefined);
+    const location = response.headers.get('location');
+    if (response.status < 300 || response.status >= 400 || !location) throw new GitHubError(`GitHub tarball of ${repo}@${ref}: ${response.status}`, response.status);
+    const url = new URL(location, this.#base);
+    if (url.protocol !== 'https:') throw new GitHubError(`GitHub tarball of ${repo}@${ref}: not an https download (${url.protocol})`, response.status);
+    return url.href;
   }
 
   async latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined> {
