@@ -1,4 +1,5 @@
 import { createPrivateKey, createSign, type KeyObject } from 'node:crypto';
+import type { EtagCache } from '@shipcast/connectors';
 import { GitHubError } from './github.ts';
 
 /**
@@ -9,6 +10,11 @@ export interface GitHubAuth {
   token(): Promise<string>;
   /** Forgets a token GitHub refused, so the next request mints a fresh one */
   invalidate?(): void;
+  /**
+   * Who the token reads as, for keying cached answers: stable across the tokens it mints (an App's
+   * installation outlives its hourly tokens), different between two installations or two tokens
+   */
+  scope?(): Promise<string>;
 }
 
 /** The installation of the App on one account, as GitHub describes it */
@@ -35,6 +41,8 @@ export interface GitHubAppOptions {
   fetch?: typeof fetch;
   baseUrl?: string;
   now?: () => number;
+  /** Makes the App's own GETs (`/app`, the installation's lookup) conditional */
+  etags?: EtagCache;
 }
 
 const b64url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
@@ -84,6 +92,9 @@ export class GitHubApp implements GitHubAuth {
   }
 
   async #app(method: string, path: string): Promise<{ status: number; data: unknown }> {
+    // Keyed by the App, not by the JWT, which is new on every call
+    const key = method === 'GET' && this.#options.etags ? `github app:${this.#options.appId} ${this.#base}${path}` : undefined;
+    const cached = key === undefined ? undefined : await this.#options.etags?.get(key);
     const response = await this.#fetch(`${this.#base}${path}`, {
       method,
       headers: {
@@ -91,9 +102,23 @@ export class GitHubApp implements GitHubAuth {
         authorization: `Bearer ${this.jwt()}`,
         'x-github-api-version': '2022-11-28',
         'user-agent': 'shipcast',
+        ...(cached && { 'if-none-match': cached.etag }),
       },
     });
-    return { status: response.status, data: await response.json().catch(() => null) };
+    if (response.status === 304 && cached) {
+      response.body?.cancel().catch(() => undefined);
+      return { status: cached.status, data: JSON.parse(cached.body) as unknown };
+    }
+    const text = await response.text().catch(() => '');
+    const etag = response.headers.get('etag');
+    if (key !== undefined && response.status === 200 && etag) await this.#options.etags?.set(key, { etag, body: text, status: 200, headers: {} });
+    let data: unknown = null;
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      // As before: an answer that is not JSON reads as no data
+    }
+    return { status: response.status, data };
   }
 
   /** The App's own description: its slug and the bot that commits as it */
@@ -134,6 +159,10 @@ export class GitHubApp implements GitHubAuth {
 
   invalidate(): void {
     this.#token = undefined;
+  }
+
+  async scope(): Promise<string> {
+    return `installation:${(await this.installation()).id}`;
   }
 
   async token(): Promise<string> {

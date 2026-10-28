@@ -1,7 +1,15 @@
 import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
-import { draftOf, type Channel } from '@shipcast/schema';
+import { draftOf, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
 import { accountAvatar } from './pieces.ts';
+
+interface PiecesDeps {
+  github: Pick<ReviewGitHub, 'fileAt'>;
+  launchesRepo: string;
+  draftPaths: readonly string[] | Promise<readonly string[]>;
+  /** With `github-events`: launch.yml as the drafts snapshot kept it, instead of a read from GitHub */
+  launchConfig?: Promise<LaunchConfig | undefined>;
+}
 
 /** A channel a drafted launch can still put on a time, and its scheduled piece when it has one */
 export interface SchedulingChannel {
@@ -15,7 +23,7 @@ export interface SchedulingChannel {
  * launch can still schedule. Read beside launchDetail, which the REST API shares and which keeps
  * its shape.
  */
-export async function launchPieces(registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>, launch: Launch, deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> }) {
+export async function launchPieces(registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>, launch: Launch, deps: PiecesDeps) {
   const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts.posts(launch.id),
     registry.accounts.accounts(),
@@ -43,11 +51,11 @@ async function schedulingChannels(
   registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>,
   launch: Launch,
   posts: Awaited<ReturnType<Repositories['posts']['posts']>>,
-  deps: { github: Pick<ReviewGitHub, 'fileAt'>; launchesRepo: string; draftPaths: readonly string[] | Promise<readonly string[]> },
+  deps: PiecesDeps,
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);
   if (launch.status !== 'drafted' && launch.status !== 'detected' && launch.status !== 'generating') return { timezone, channels: [] };
-  const config = await launchConfigOf(deps.github, deps.launchesRepo, launch).catch(() => undefined);
+  const config = await (deps.launchConfig ?? launchConfigOf(deps.github, deps.launchesRepo, launch)).catch(() => undefined);
   // Only needed when launch.yml cannot be read; the caller may still be reading them from GitHub
   const draftPaths = config ? [] : await deps.draftPaths;
   // Each channel's drafts found by its own matcher: `github-discussion.md`, `newsletter-<lang>.md`

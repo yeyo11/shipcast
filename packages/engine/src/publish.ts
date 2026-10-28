@@ -218,11 +218,19 @@ export function absoluteLinks(markdown: string, site: string): string {
  * drafts carry (on the launches repo's main branch once merged). Undefined when it cannot be read.
  */
 export async function launchConfigOf(github: Pick<GitHubSource, 'fileAt'>, launchesRepo: string, launch: Launch): Promise<LaunchConfig | undefined> {
+  return launchConfigFrom(await launchConfigText(github, launchesRepo, launch));
+}
+
+/** The text launchConfigOf parses, which the drafts snapshot keeps so the page parses it without GitHub */
+export function launchConfigText(github: Pick<GitHubSource, 'fileAt'>, launchesRepo: string, launch: Launch): Promise<string | undefined> {
   // An article's channels were chosen in the app and travel with its drafts
-  const configText = isArticle(launch)
-    ? await github.fileAt(launchesRepo, `${launchDir(launch)}/launch.yml`, 'HEAD')
-    : await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);
-  const parsed = configText === undefined ? undefined : parseLaunchConfig(configText);
+  return isArticle(launch)
+    ? github.fileAt(launchesRepo, `${launchDir(launch)}/launch.yml`, 'HEAD')
+    : github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, launch.ref.startsWith('public:') ? 'HEAD' : launch.ref);
+}
+
+export function launchConfigFrom(configText: string | null | undefined): LaunchConfig | undefined {
+  const parsed = configText === undefined || configText === null ? undefined : parseLaunchConfig(configText);
   return parsed?.ok ? parsed.value : undefined;
 }
 

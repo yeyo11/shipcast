@@ -34,3 +34,4 @@ export * from './lifecycle.ts';
 export * from './health.ts';
 export * from './replicas.ts';
 export * from './logger.ts';
+export * from './github-events.ts';

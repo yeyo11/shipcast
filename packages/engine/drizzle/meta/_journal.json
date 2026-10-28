@@ -99,6 +99,13 @@
       "when": 1793189325914,
       "tag": "0014_secrets",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793208309143,
+      "tag": "0015_draft_snapshots",
+      "breakpoints": true
     }
   ]
 }

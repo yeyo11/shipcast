@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { TelemetryStore, type GitHubApp, type GitHubRest, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   attachTelemetryStore,
   buildServices,
@@ -21,6 +21,7 @@ import {
   type AppConfig,
   type Config,
   type GitHubAccess,
+  type GitHubCaches,
   type GitHubUserTokens,
   type JobQueue,
   type Role,
@@ -83,6 +84,9 @@ export interface AppContext {
   brand(): Promise<Brand>;
   /** Every brand, by id; one per launches repo, so one today */
   brands(): Promise<Map<string, Brand>>;
+  /** With `github-events`: the drafts snapshots the launch page reads, and the caches deliveries invalidate */
+  drafts: DraftSnapshotService | undefined;
+  githubCaches: GitHubCaches | undefined;
 }
 
 let context: Promise<AppContext> | undefined;
@@ -108,7 +112,8 @@ async function createContext(): Promise<AppContext> {
   const app = loadAppConfig(process.env);
   const proc = processState(process.env, role === 'all' ? 'app' : role);
   // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
-  const runtime = await createRuntime({ root: ROOT, log: console.log, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
+  // With redis-state the GitHub ETag and file caches are every replica's (redis-cache); otherwise a bounded one of this process
+  const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }), ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
   const clock = runsTheClock(role);
@@ -133,6 +138,7 @@ async function createContext(): Promise<AppContext> {
     brand,
     refresh: runtime.refresh,
     flags,
+    ...(runtime.drafts && { drafts: runtime.drafts }),
     // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
     ...(fakeNetworks() && {
       services: async (b: Brand) => previewServices(await buildServices({ env: process.env, brand: b, registry, github, secrets, fetch: previewFetch })),
@@ -165,6 +171,8 @@ async function createContext(): Promise<AppContext> {
       const b = await brand();
       return new Map([[b.id, b]]);
     },
+    drafts: runtime.drafts,
+    githubCaches: runtime.githubCaches,
   };
   // The steps of a stop, in their phases (lifecycle.ts): the HTTP server's own is main.ts's
   onStop('queue', 'the job queue', () => queue.stop());

@@ -28,6 +28,8 @@ export interface PipelineDeps {
   capture?: SiteCapture;
   /** A folder the AI provider can work in when there is no repo to clone (an article); its workspace root */
   aiWorkdir?: string;
+  /** With `github-events`: the drafts snapshot written as the pull request is opened, so the page never reads GitHub */
+  drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
 }
 
 /** A task's provider, model and prompts: the settings', or the default provider with the prompts in code */
@@ -61,7 +63,10 @@ export async function deliverDrafts(
       return { ok: true, launch: await deps.registry.launches.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`), where };
     }
     const pr = await deps.github.openPullRequest({ repo: deps.launchesRepo, base: 'main', ...drafts });
-    return { ok: true, launch: await deps.registry.launches.setStatus(launch.id, 'drafted', pr.url), where: pr.url };
+    const drafted = await deps.registry.launches.setStatus(launch.id, 'drafted', pr.url);
+    // A snapshot that fails to write is not a failed draft: the next delivery or poll writes it
+    await deps.drafts?.opened(drafted, pr, drafts.branch, drafts.files).catch(() => undefined);
+    return { ok: true, launch: drafted, where: pr.url };
   } catch (error) {
     const what = options.direct ? 'commit the drafts to main' : 'open the drafts pull request';
     return { ok: false, problem: `could not ${what}: ${error instanceof Error ? error.message : String(error)}` };

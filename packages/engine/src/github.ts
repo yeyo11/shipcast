@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import type { EtagCache } from '@shipcast/connectors';
 import type { GitHubAuth } from './github-app.ts';
 
 /** An event of a user's public timeline, reduced to what triggers a launch. */
@@ -71,6 +73,25 @@ export interface GitHubWriter {
   commitToBranch?(repo: string, branch: string, message: string, files: PullRequestDraft['files']): Promise<{ sha: string }>;
 }
 
+/**
+ * Files read from GitHub that change only by a push Shipcast hears of (a `push` webhook, its own
+ * commits and merges, the hourly poll): `brand.yml`, `projects.yml`, a launch's `launch.yml` and
+ * `pack.json`. `keeps` is the policy, so the client never caches a draft on a branch the owner edits.
+ * An absent file is never kept: one that appears (a merge's pack.json) must be seen at once.
+ */
+export interface FileCache {
+  keeps(repo: string, path: string, ref: string): boolean;
+  get(repo: string, path: string, ref: string): Promise<string | undefined>;
+  set(repo: string, path: string, ref: string, text: string): Promise<void>;
+  /** Forgets these paths of the repo, or every file of it when none are named */
+  forget(repo: string, paths?: readonly string[]): Promise<void>;
+}
+
+/** Bodies past this are not kept for a 304: GitHub's answers Shipcast reads are a few KB */
+const MAX_CACHED_BODY = 1024 * 1024;
+
+const sha = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 16);
+
 export class GitHubError extends Error {
   readonly status: number;
 
@@ -89,13 +110,28 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   readonly #auth: GitHubAuth;
   readonly #fetch: typeof fetch;
   readonly #base: string;
+  readonly #etags: EtagCache | undefined;
+  readonly #files: FileCache | undefined;
 
-  /** A personal token, or something that mints one per request (the GitHub App's installation) */
-  constructor(options: { token: string | GitHubAuth; fetch?: typeof fetch; baseUrl?: string }) {
+  /**
+   * A personal token, or something that mints one per request (the GitHub App's installation).
+   * With `etags` every GET is conditional (phase 7 of docs/plans/performance-refactor.md): a 304
+   * costs no rate limit and is answered from the cache; with `files`, the files of the FileCache
+   * policy are not read again until a push says they changed.
+   */
+  constructor(options: { token: string | GitHubAuth; fetch?: typeof fetch; baseUrl?: string; etags?: EtagCache; files?: FileCache }) {
     const token = options.token;
-    this.#auth = typeof token === 'string' ? { token: async () => token } : token;
+    // A personal token is its own scope: two tokens never share a cached answer
+    this.#auth = typeof token === 'string' ? { token: async () => token, scope: async () => `token:${sha(token)}` } : token;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = options.baseUrl ?? 'https://api.github.com';
+    this.#etags = options.etags;
+    this.#files = options.files;
+  }
+
+  /** The file cache this client keeps, for the webhook's and the poll's invalidation */
+  get files(): FileCache | undefined {
+    return this.#files;
   }
 
   /** What hands out the token: the GitHub Discussions connector asks it for one per GraphQL query */
@@ -109,6 +145,8 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
    * tried once more with a fresh one.
    */
   async #request(url: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
+    const key = await this.#etagKey(url, init);
+    const cached = key === undefined ? undefined : await this.#etags?.get(key);
     const send = async () =>
       this.#fetch(url, {
         ...init,
@@ -117,13 +155,48 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
           authorization: `Bearer ${await this.#auth.token()}`,
           'x-github-api-version': '2022-11-28',
           'user-agent': 'shipcast',
+          ...(cached && { 'if-none-match': cached.etag }),
           ...init.headers,
         },
       });
-    const response = await send();
-    if (response.status !== 401 || !this.#auth.invalidate) return response;
-    this.#auth.invalidate();
-    return send();
+    let response = await send();
+    if (response.status === 401 && this.#auth.invalidate) {
+      this.#auth.invalidate();
+      response = await send();
+    }
+    if (key === undefined || !this.#etags) return response;
+    // The 304 is what telemetry counts; the caller gets the body it proved is still current
+    if (response.status === 304 && cached) {
+      response.body?.cancel().catch(() => undefined);
+      return new Response(cached.body, { status: cached.status, headers: cached.headers });
+    }
+    const etag = response.headers.get('etag');
+    if (response.status === 200 && etag) {
+      const body = await response.clone().text();
+      if (body.length <= MAX_CACHED_BODY) {
+        // The body is stored decoded: the encoding and length GitHub sent no longer describe it
+        const headers = Object.fromEntries([...response.headers].filter(([name]) => name !== 'content-encoding' && name !== 'content-length'));
+        await this.#etags.set(key, { etag, body, status: 200, headers });
+      }
+    }
+    return response;
+  }
+
+  /**
+   * The cache key of a GET: who reads (the installation or the token, never the hourly token
+   * itself, which would empty the cache every hour), what representation (raw or JSON) and the URL.
+   * None for a write, without a cache, or when the caller sends its own validator (the events poll).
+   */
+  async #etagKey(url: string, init: { method?: string; headers?: Record<string, string> }): Promise<string | undefined> {
+    if (!this.#etags || (init.method ?? 'GET').toUpperCase() !== 'GET' || init.headers?.['if-none-match'] !== undefined) return undefined;
+    let scope: string;
+    try {
+      scope = this.#auth.scope ? await this.#auth.scope() : `token:${sha(await this.#auth.token())}`;
+    } catch {
+      // The request itself fails the same way, with its own message
+      return undefined;
+    }
+    return `github ${scope} ${init.headers?.accept ?? 'json'} ${url}`;
   }
 
   async userEvents(owner: string, etag?: string): Promise<EventsPage> {
@@ -137,13 +210,18 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   }
 
   async fileAt(repo: string, path: string, ref: string): Promise<string | undefined> {
+    const files = this.#files?.keeps(repo, path, ref) ? this.#files : undefined;
+    const kept = await files?.get(repo, path, ref);
+    if (kept !== undefined) return kept;
     // HEAD means the default branch, which is what the API reads when no ref is given
     const query = ref === 'HEAD' ? '' : `?ref=${encodeURIComponent(ref)}`;
     const url = `${this.#base}/repos/${repo}/contents/${path}${query}`;
     const response = await this.#request(url, { headers: { accept: 'application/vnd.github.raw+json' } });
     if (response.status === 404) return undefined;
     if (!response.ok) throw new GitHubError(`GitHub ${repo}/${path}@${ref}: ${response.status}`, response.status);
-    return response.text();
+    const text = await response.text();
+    await files?.set(repo, path, ref, text);
+    return text;
   }
 
   async latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined> {
@@ -256,6 +334,8 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
     const head = (await this.#ok('GET', `/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`)) as { object: { sha: string } };
     const commit = await this.#commit(repo, head.object.sha, message, files);
     await this.#ok('PATCH', `/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, { sha: commit.sha, force: false });
+    // Shipcast's own commit is a push it may never hear of: what it kept of those paths goes now
+    await this.#files?.forget(repo, files.map((f) => f.path));
     return commit;
   }
 
@@ -269,27 +349,32 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   }
 
   /** A pull request's branch and state, for reviewing its drafts */
-  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string }> {
+  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string; headSha: string }> {
     const pr = (await this.#ok('GET', `/repos/${repo}/pulls/${number}`)) as {
       number: number;
       html_url: string;
       state: 'open' | 'closed';
       merged: boolean;
       title: string;
-      head: { ref: string };
+      head: { ref: string; sha: string };
     };
-    return { number: pr.number, url: pr.html_url, state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed', branch: pr.head.ref, title: pr.title };
+    return { number: pr.number, url: pr.html_url, state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed', branch: pr.head.ref, title: pr.title, headSha: pr.head.sha };
   }
 
   /** The paths a pull request adds or changes (up to 300, GitHub's page limit times three) */
   async pullRequestFiles(repo: string, number: number): Promise<string[]> {
-    const paths: string[] = [];
+    return (await this.pullRequestFileEntries(repo, number)).map((f) => f.path);
+  }
+
+  /** The same, with each file's blob sha, which the drafts snapshot keeps */
+  async pullRequestFileEntries(repo: string, number: number): Promise<Array<{ path: string; sha: string | null }>> {
+    const entries: Array<{ path: string; sha: string | null }> = [];
     for (let page = 1; page <= 3; page++) {
-      const files = (await this.#ok('GET', `/repos/${repo}/pulls/${number}/files?per_page=100&page=${page}`)) as Array<{ filename: string; status: string }>;
-      paths.push(...files.filter((f) => f.status !== 'removed').map((f) => f.filename));
+      const files = (await this.#ok('GET', `/repos/${repo}/pulls/${number}/files?per_page=100&page=${page}`)) as Array<{ filename: string; status: string; sha?: string | null }>;
+      entries.push(...files.filter((f) => f.status !== 'removed').map((f) => ({ path: f.filename, sha: f.sha ?? null })));
       if (files.length < 100) break;
     }
-    return paths;
+    return entries;
   }
 
   /** Replaces one text file on a branch, as one commit: an edit made in the app */
@@ -302,11 +387,14 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
       branch,
       ...(sha ? { sha } : {}),
     });
+    await this.#files?.forget(repo, [path]);
   }
 
   /** Merges a pull request with a squash, so the launches repo keeps one commit per launch */
   async mergePullRequest(repo: string, number: number, title: string): Promise<{ sha: string }> {
     const merged = (await this.#ok('PUT', `/repos/${repo}/pulls/${number}/merge`, { merge_method: 'squash', commit_title: title })) as { sha: string };
+    // A merge lands every file of the pull request on main at once
+    await this.#files?.forget(repo);
     return { sha: merged.sha };
   }
 

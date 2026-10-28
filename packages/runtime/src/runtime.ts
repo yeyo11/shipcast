@@ -5,6 +5,7 @@ import {
   GitHubRest,
   loadBrand,
   connectRepositories,
+  DraftSnapshotService,
   PostgresLock,
   SecretRows,
   type OpenRepositories,
@@ -19,6 +20,8 @@ import { provisionAppKeys } from './app-keys.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
 import { poolOptions, roleFromEnv, split } from './roles.ts';
+import { githubCaches, type GitHubCaches } from './github-events.ts';
+import type { Cache } from './redis/ports.ts';
 import { GitHubUserTokens } from './github-user.ts';
 import { secretStoreFor, type SecretStore } from './secrets.ts';
 import { importEnvSettings, RuntimeSettings } from './settings.ts';
@@ -45,6 +48,10 @@ export interface Runtime {
   refresh(): Promise<void>;
   /** Forgets the cached brand, so the next call reads it from the launches repo again */
   invalidateBrand(): void;
+  /** With `github-events`: the GitHub client's ETag and file caches, which webhooks and the poll invalidate */
+  githubCaches: GitHubCaches | undefined;
+  /** With `github-events`: the drafts snapshots the launch page reads instead of GitHub */
+  drafts: DraftSnapshotService | undefined;
 }
 
 /**
@@ -88,6 +95,13 @@ export interface RuntimeOptions {
    * repos. Not the App's token minting or the sign-in, whose POSTs must stay real to read at all.
    */
   githubFetch?: typeof fetch;
+  /** The refactor's switches; read from `env` when not given */
+  flags?: Flags;
+  /**
+   * The shared Cache (Redis, with `redis-state`) the GitHub caches live in, so every replica's 304
+   * serves the others; this process's memory when not given
+   */
+  cache?: Cache;
 }
 
 const BRAND_TTL_MS = 5 * 60_000;
@@ -97,7 +111,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const log = options.log ?? (() => undefined);
   const config = loadConfig(env, options.root);
   const registry = options.registry ?? (await connectRepositories(config.databaseUrl, poolOptions(env)));
-  const flags = Flags.fromEnv(env);
+  const flags = options.flags ?? Flags.fromEnv(env);
   const secrets = options.secrets ?? secretStoreFor(config, env, { flags, rows: new SecretRows(registry.database) });
   // One session key and API pepper across replicas, read once per process (app-keys.ts)
   provisionAppKeys(secrets, { env, lock: new PostgresLock(registry.database) });
@@ -108,6 +122,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   if (skipped.length > 0) log(`Settings: not imported from .env, the value does not pass the Settings page's check: ${skipped.join(', ')}`);
   await settings.read();
 
+  const caches = flags.on('github-events') ? githubCaches(options.cache, () => settings.current().launchesRepo) : undefined;
   const app = config.githubApp;
   const githubApp = app
     ? new GitHubApp({
@@ -117,10 +132,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         // The launches repo's installation; before one is set, the owner's own account
         account: () => settings.current().launchesRepo ?? config.allowedLogins[0],
         ...(options.fetch && { fetch: options.fetch }),
+        ...(caches && { etags: caches.etags }),
       })
     : undefined;
   const githubFetch = options.githubFetch ?? options.fetch;
-  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }) });
+  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }), ...(caches && { etags: caches.etags, files: caches.files }) });
   const access: GitHubAccess = app ? { kind: 'app', slug: app.slug, bot: app.slug ? `${app.slug}[bot]` : undefined } : { kind: 'token' };
   // The refresh is locked across every process on the registry: two replicas never spend one refresh token
   const userTokens = app ? new GitHubUserTokens({ secrets, lock: new PostgresLock(registry.database), client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
@@ -128,9 +144,21 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   let cached: { repo: string; brand: Brand; at: number } | undefined;
   const brand = async (): Promise<Brand> => {
     const repo = settings.launchesRepo();
+    // With the file cache brand.yml is read from GitHub once, then again only after a push to it
+    if (caches) return loadBrand(github, repo);
     if (!cached || cached.repo !== repo || Date.now() - cached.at > BRAND_TTL_MS) cached = { repo, brand: await loadBrand(github, repo), at: Date.now() };
     return cached.brand;
   };
+
+  const drafts = caches
+    ? new DraftSnapshotService({
+        github,
+        registry,
+        get launchesRepo() {
+          return settings.current().launchesRepo ?? '';
+        },
+      })
+    : undefined;
 
   const pipeline: PipelineDeps = {
     github,
@@ -154,6 +182,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir, perJob: split(roleFromEnv(env)) }, repo, ref),
+    ...(drafts && { drafts }),
   };
 
   return {
@@ -173,5 +202,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     invalidateBrand: () => {
       cached = undefined;
     },
+    githubCaches: caches,
+    drafts,
   };
 }

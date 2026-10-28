@@ -38,6 +38,8 @@ export const QUEUE_ROLES: Readonly<Record<QueueName, 'worker' | 'heavy'>> = {
   'instagram-tokens': 'worker',
   snapshots: 'worker',
   checks: 'worker',
+  // A pull request's drafts read again after a webhook: GitHub reads, no AI
+  'drafts-snapshot': 'worker',
 };
 
 /** SHIPCAST_ROLE, `all` when unset */
