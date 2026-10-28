@@ -6,7 +6,7 @@ import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
 import { composedText } from './edit-rules.ts';
 import type { PostStore } from './ports.ts';
-import { kindLanguage, type Post } from './repositories/index.ts';
+import { kindLanguage, type Post } from './repositories/posts.ts';
 
 /*
  * Editing and deleting what a launch published, per piece or for a whole launch at once. A piece's

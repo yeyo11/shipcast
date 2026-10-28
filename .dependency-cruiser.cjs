@@ -68,11 +68,30 @@ module.exports = {
       comment:
         'routes, components and server functions (*.functions.ts) are entry points: they reach the networks and the registry ' +
         'through the engine services (apps/web/src/server/app-services.ts) and the *.server.ts modules, never a connector or ' +
-        'the Registry module. The engine re-exports Registry from its index, which a module rule cannot tell from the rest of ' +
-        'the index: this catches a deep import, and the type itself is kept out by review',
+        'the repositories. The engine re-exports them from its index, which a module rule cannot tell from the rest of ' +
+        'the index: this catches a deep import, and the types themselves are kept out by review',
       severity: 'error',
       from: { path: '^apps/web/src/((routes|components)/|server/[^/]+[.]functions[.]tsx?$)' },
-      to: { path: `${ws('packages/connectors')}|^packages/engine/src/(registry|repositories/)` },
+      to: { path: `${ws('packages/connectors')}|^packages/engine/src/repositories/` },
+    },
+    {
+      name: 'no-registry-facade',
+      comment:
+        'the Registry god-class became one repository per aggregate (docs/plans/performance-refactor.md, phase 4) and its ' +
+        'facade was removed once no consumer needed it: nothing imports packages/engine/src/registry.ts again. Remaining users: none',
+      severity: 'error',
+      from: {},
+      to: { path: '^packages/engine/src/registry[.]ts$' },
+    },
+    {
+      name: 'repositories-composed-in-one-place',
+      comment:
+        'the whole set of repositories is built (repositoriesOn, connectRepositories, memoryRepositories) only where the engine ' +
+        'composes it: its index, the snapshot opener and the test kit. Every other engine module takes the Pick of Repositories ' +
+        'it is handed, so it imports the bundle for its types only, and a repository\'s values from that repository itself',
+      severity: 'error',
+      from: { path: '^packages/engine/src/', pathNot: '^packages/engine/src/(index[.]ts$|repositories/|testing/|db/snapshot[.]ts$)' },
+      to: { path: '^packages/engine/src/repositories/index[.]ts$', dependencyTypesNot: ['type-only'] },
     },
     {
       name: 'no-cycles-between-packages',
