@@ -1,6 +1,7 @@
 import { deflateSync, crc32 } from 'node:zlib';
 import { launchDir, LAUNCH_CONFIG_PATH, mediaPath, redditKind, type FakeNetworkRecord, type Launch } from '@shipcast/engine';
 import { SCHEDULABLE_CHANNELS, type Channel } from '@shipcast/schema';
+import { fakeNetworks, previewDatabase } from './guard.ts';
 
 /*
  * The scale test of docs/plans/goal-refactor.md (phase 10), against a preview with fake networks:
@@ -177,6 +178,66 @@ export function scaleFiles(planned: PlannedLaunch, launch: Launch, options: { la
   };
 }
 
+// ---- What the driver checks before it touches anything ----
+
+/** The compose project a scale run, a chaos script and their checks may act on, and no other */
+export const PREVIEW_PROJECT = 'shipcast-preview';
+
+/**
+ * Why the scale driver must not run here, if anything: it seeds launches and schedules pieces, so it
+ * only ever acts on a preview with fake networks, its own `…_preview` database (as the URL says and
+ * as Postgres itself answers) and the preview's compose project.
+ */
+export function scaleTargetProblems(env: NodeJS.ProcessEnv, currentDatabase: string | undefined): string[] {
+  const problems: string[] = [];
+  if (!fakeNetworks(env)) problems.push('this is not a preview with fake networks (SHIPCAST_PREVIEW_FAKE_NETWORKS=1 with SHIPCAST_APP_TLS=proxy on a …_preview database, or off)');
+  if (!previewDatabase(env.SHIPCAST_DATABASE_URL)) problems.push('SHIPCAST_DATABASE_URL does not name a …_preview database');
+  if (currentDatabase !== undefined && !/_preview$/.test(currentDatabase)) problems.push(`Postgres says this is the database "${currentDatabase}", not a …_preview one`);
+  if (env.COMPOSE_PROJECT_NAME !== undefined && env.COMPOSE_PROJECT_NAME !== PREVIEW_PROJECT) problems.push(`the compose project is "${env.COMPOSE_PROJECT_NAME}", not ${PREVIEW_PROJECT}`);
+  if (env.SCALE_URL !== undefined) {
+    try {
+      const host = new URL(env.SCALE_URL).hostname;
+      if (host === 'shipcast.josegarrido.dev') problems.push('SCALE_URL is production');
+    } catch {
+      problems.push(`SCALE_URL is not a URL: ${env.SCALE_URL}`);
+    }
+  }
+  return problems;
+}
+
+/** A job of the API's work list (GET /api/v1/jobs), as much as the chaos scripts read of it */
+export interface ApiJob {
+  id: string;
+  title: string;
+  state: string;
+  queued?: boolean;
+  startedAt?: string;
+}
+
+/** The publish job running now, if any: the moment chaos (a) kills a worker */
+export function activePublishJob(jobs: readonly ApiJob[]): ApiJob | undefined {
+  return jobs.find((j) => j.state === 'running' && !j.queued && /^(Publishing|A scheduled post)/i.test(j.title));
+}
+
+/** The exercise's log (one JSON object a line); a line cut short by a killed driver is skipped */
+export function parseExercise(text: string): ExerciseEvent[] {
+  const events: ExerciseEvent[] = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      events.push(JSON.parse(line) as ExerciseEvent);
+    } catch {
+      // the last line of a driver that was stopped mid-write
+    }
+  }
+  return events;
+}
+
+/** The secret writes the exercise checked right after each sign-in: `secret` events, labelled in their detail */
+export function secretWrites(events: readonly ExerciseEvent[]): SecretWrite[] {
+  return events.filter((e) => e.kind === 'secret').map((e) => ({ label: e.detail ?? '?', accountId: null, secretFound: e.ok }));
+}
+
 // ---- The check ----
 
 /** A registry row of a piece, as the check reads it */
@@ -326,7 +387,7 @@ export function checkScale(input: CheckInput): ScaleSummary {
 
   const counts = { ok: 0, duplicate: 0, mismatch: 0, missed: 0, unknown: 0, pending: 0, pieces: pieces.length, late: delays.filter((d) => d * 1000 > lateMs).length };
   for (const p of pieces) counts[p.state] += 1;
-  const failedRequests = input.exercise.filter((e) => !e.ok && e.kind !== 'settings-read').length;
+  const failedRequests = input.exercise.filter((e) => !e.ok && e.kind !== 'settings-read' && e.kind !== 'secret' && e.kind !== 'oauth-callback').length;
   const staleReads = reads.filter((e) => !e.ok).length;
 
   const problems: string[] = [];
