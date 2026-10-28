@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Launch } from '@shipcast/engine';
+import { mockRunner, scriptedModel, textParts } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import { followJob } from '../src/components/assistant/follow.ts';
 import { readEvents, type AssistantEvent } from '../src/components/assistant/protocol.ts';
@@ -18,8 +19,10 @@ const release: Launch = { id: 7, repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger:
 
 test('the check is queued as a job and its id answered: nothing is cloned nor asked of the AI in the request', async () => {
   const started: Array<{ launch: number; text: string; channel?: string }> = [];
+  const model = scriptedModel(textParts('never'));
   const deps: AssistantDeps = {
-    setup: async () => assert.fail('no provider is set up for a queued check'),
+    // The flag on: the runner is there, and is not asked within the request
+    aiRunner: mockRunner(model),
     brand: async () => brand,
     launch: async (id) => (id === release.id ? release : undefined),
     grounding: async (launch) => ({ kind: 'launch', launch: { repo: launch.repo, ref: launch.ref } }),
@@ -35,6 +38,7 @@ test('the check is queued as a job and its id answered: nothing is cloned nor as
   for await (const event of readEvents(response.body!)) events.push(event);
   assert.deepEqual(events, [{ type: 'whole' }, { type: 'job', id: 'job-42' }]);
   assert.deepEqual(started, [{ launch: 7, text: 'It runs on Windows.', channel: 'bluesky' }]);
+  assert.equal(model.doStreamCalls.length, 0);
 });
 
 /** A live client that hands the test the interest registered */

@@ -31,10 +31,17 @@ import { MemoryEventBus } from '../src/redis/index.ts';
  * reads the result under the job's id once the job has ended.
  */
 
-const quiet: QueueOptions = { schedule: false, supervise: false, pollingIntervalSeconds: 0.2, onError: () => {} };
+const quiet: QueueOptions = { schedule: false, supervise: false, pollingIntervalSeconds: 0.5, onError: () => {} };
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const answer = { revised: 'claudio has a REST API.', findings: [{ claim: 'claudio runs on Windows', verdict: 'planned', evidence: 'docs/status.md lists it as planned' }] };
-const pack = { analysis: { summary: 's', implemented: ['REST API'], planned: ['Windows support'], documentedOnly: [], limitations: [] } };
+// The pack the launch's drafts committed: its analysis is what the check is grounded in
+const pack = {
+  schemaVersion: 1,
+  kind: 'launch',
+  project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v1.0.0' },
+  analysis: { summary: 's', implemented: ['REST API'], planned: ['Windows support'], documentedOnly: [], limitations: [] },
+  bluesky: { lang: 'en', text: 'b' },
+};
 
 const template = (async () => {
   const { client, close } = await connectPglite();
