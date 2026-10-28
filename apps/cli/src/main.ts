@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
 import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
-import { draftLaunch, LaunchRefused, LaunchService, preflight, retryChannelEverywhere, TelemetryStore, type DraftResult, type Launch, type Preflight, type PublishResult } from '@shipcast/engine';
+import { connectRepositories, draftLaunch, LaunchRefused, SecretRows, LaunchService, preflight, retryChannelEverywhere, TelemetryStore, type DraftResult, type Launch, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
   attachTelemetryStore,
@@ -28,6 +28,11 @@ import {
   workHandlers,
   writeAutomation,
   importYouTubeAccount,
+  loadConfig,
+  migrateSecrets,
+  migrationLines,
+  secretStoreFor,
+  TableStore,
   YouTubeImportRefused,
   type RoundDeps,
 } from '@shipcast/runtime';
@@ -85,6 +90,10 @@ const USAGE = `Usage: shipcast <command>
                                       refresh token (client_id, client_secret, refresh_token), through
                                       the same path as the sign-in; then delete the file
   token list                          The API tokens, revoked ones too
+  secrets migrate [--from keychain|file]
+                                      Copy every secret of the current store into the registry's
+                                      encrypted table (SHIPCAST_SECRETS_KEY), each read back; prints
+                                      key names and counts only, and leaves the source as it was
   token revoke <id>                   Revoke an API token at once
   init [--public-url <https://host>] [--login <login>]
                                       Set up a local install in this checkout: the bootstrap .env,
@@ -159,6 +168,39 @@ async function mcp(url: string | undefined, token: string | undefined): Promise<
   return 0;
 }
 
+/**
+ * `shipcast secrets migrate [--from keychain|file]`: copies the install's secrets into the registry's
+ * encrypted table, each read back. The source is the store SHIPCAST_SECRET_STORE names (or --from,
+ * once that already says `table`), opened read-only in effect: nothing here writes to it. Only key
+ * names and counts are printed.
+ */
+async function migrateCommand(args: string[], from: string | undefined): Promise<number> {
+  if (args[0] !== 'migrate') {
+    console.error('secrets migrate [--from keychain|file]');
+    return 2;
+  }
+  const config = loadConfig(process.env, ROOT);
+  const current = process.env.SHIPCAST_SECRET_STORE?.trim() || 'keychain';
+  const source = from ?? (current === 'table' ? undefined : current);
+  if (source !== 'keychain' && source !== 'file') {
+    console.error(source === undefined ? 'SHIPCAST_SECRET_STORE is table already: name the store to copy from with --from keychain or --from file' : `--from is keychain or file, not "${source}"`);
+    return 2;
+  }
+  const key = process.env.SHIPCAST_SECRETS_KEY?.trim();
+  if (!key) {
+    console.error('the table is sealed with SHIPCAST_SECRETS_KEY: set it first (openssl rand -base64 32)');
+    return 2;
+  }
+  const registry = await connectRepositories(config.databaseUrl);
+  try {
+    const result = await migrateSecrets(secretStoreFor(config, { ...process.env, SHIPCAST_SECRET_STORE: source }), new TableStore(new SecretRows(registry.database), Buffer.from(key, 'base64')));
+    for (const line of migrationLines(result)) console.log(line);
+    return result.conflicts.length > 0 ? 1 : 0;
+  } finally {
+    await registry.close();
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
   // Action mode: its own flags and configuration (the environment only, no .env, no keychain), so it
   // is routed before the local install's arguments and runtime (docs/decisions/action-mode.md)
@@ -179,7 +221,7 @@ async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { ref: { type: 'string' }, interval: { type: 'string' }, url: { type: 'string' }, token: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, scopes: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+    options: { from: { type: 'string' }, ref: { type: 'string' }, interval: { type: 'string' }, url: { type: 'string' }, token: { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, retry: { type: 'string' }, scopes: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
   });
   const [command, ...rest] = positionals;
   if (values.help || !command) {
@@ -194,6 +236,10 @@ async function main(argv: string[]): Promise<number> {
 
   // Before the runtime: the MCP server needs no database or keychain, only the app's URL and a token
   if (command === 'mcp') return mcp(values.url, values.token);
+
+  // Before the runtime, which imports .env settings into the current store at start: the migration's
+  // source must be only read
+  if (command === 'secrets') return migrateCommand(rest, values.from);
 
   // Before the runtime, whose clients take the global fetch when they are built: every call is counted
   const telemetry = installTelemetry(command === 'watch' ? 'watch' : 'cli');

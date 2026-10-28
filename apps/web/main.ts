@@ -22,13 +22,18 @@ const DAY = 24 * 3600 * 1000;
 async function main(): Promise<void> {
   const config = loadConfig(process.env, ROOT);
   const app = loadAppConfig(process.env);
+  const proxied = process.env.SHIPCAST_APP_TLS === 'proxy';
+  // The registry's table opens with the registry, inside the app's context: certificates are the proxy's job there
+  const inTable = process.env.SHIPCAST_SECRET_STORE?.trim() === 'table';
+  if (inTable && !proxied) throw new ConfigError('SHIPCAST_SECRET_STORE=table runs behind a proxy that does TLS: set SHIPCAST_APP_TLS=proxy');
   // The bootstrap's keychain service: the TLS key lives there, so a second install or a test copy never touches another's
-  const secrets = secretStoreFor(config);
+  const secrets = inTable ? undefined : secretStoreFor(config);
+  const secretsKind = secrets?.kind ?? 'the registry’s encrypted secrets table';
   const domain = new URL(app.publicUrl).hostname;
   // A preview copy (SHIPCAST_APP_TLS=off) never reads, issues or writes certificate material
   const tls = process.env.SHIPCAST_APP_TLS !== 'off';
   const token = tls ? app.tlsCloudflareToken : undefined;
-  const options = { domain, secrets, dataDir: config.dataDir, log: console.log };
+
 
   /*
    * Behind a reverse proxy that terminates TLS (Traefik on a server, SHIPCAST_APP_TLS=proxy): plain
@@ -36,13 +41,15 @@ async function main(): Promise<void> {
    * and the public https origin outside, so the URLs the app builds point where the browser is and
    * its cookies keep the Secure flag. No certificate code and no Tailscale Serve.
    */
-  if (process.env.SHIPCAST_APP_TLS === 'proxy') {
+  if (proxied) {
     await serve({ host: app.host, port: app.port, origin: app.publicUrl });
-    console.log(`Shipcast on ${app.publicUrl}, behind a proxy (plain HTTP on ${app.host}:${app.port}); secrets in ${secrets.kind}`);
+    console.log(`Shipcast on ${app.publicUrl}, behind a proxy (plain HTTP on ${app.host}:${app.port}); secrets in ${secretsKind}`);
     console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(consoleLinks().create())}`);
     return;
   }
 
+  // Not proxied, so never the table: the store is the keychain or the file
+  const options = { domain, secrets: secrets!, dataDir: config.dataDir, log: console.log };
   const certificate = !tls ? undefined : token ? await ensureCertificate({ ...options, dns: cloudflareDns(token, domain) }) : await current(options);
   if (!certificate || certificate.expires.getTime() < Date.now()) {
     const port = app.port;

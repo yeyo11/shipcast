@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { SecretRows } from '@shipcast/engine';
+import type { Flags } from './flags.ts';
 import { seal, unseal } from './seal.ts';
+import { TableStore } from './secrets-table.ts';
 
 /**
  * Where secrets live: the operating system's keychain on a desktop, so a token never sits in a file
@@ -70,6 +73,27 @@ export class KeychainStore implements SecretStore {
         ? await run('secret-tool', ['store', `--label=Shipcast: ${label}`, 'service', this.#service, 'key', key], value)
         : await run('security', ['add-generic-password', '-U', '-s', this.#service, '-a', key, '-l', `Shipcast: ${label}`, '-w', value]);
     if (result.code !== 0) throw new SecretStoreError(`could not save ${key} in ${this.kind}: ${result.stderr.trim() || `exit ${result.code}`}`);
+  }
+
+  /**
+   * The keys this service holds, never the values: what a copy into the table walks. Both tools print
+   * the secrets too while listing; only the key attribute is read from their output, and nothing of
+   * it is kept or shown.
+   */
+  async keys(): Promise<string[]> {
+    const result =
+      this.#platform === 'linux' ? await run('secret-tool', ['search', '--all', '--unlock', 'service', this.#service]) : await run('security', ['dump-keychain']);
+    if (result.code !== 0 && this.#platform === 'darwin') throw new SecretStoreError(`could not list ${this.kind}: ${result.stderr.trim() || `exit ${result.code}`}`);
+    const text = `${result.stdout}\n${result.stderr}`;
+    if (this.#platform === 'linux') return [...new Set([...text.matchAll(/^attribute\.key = (.*)$/gm)].map((m) => m[1]!.trim()))];
+    // `security dump-keychain` prints one block per item; the service is `svce` and the key is `acct`
+    const keys = new Set<string>();
+    for (const block of text.split(/^keychain: /m)) {
+      const service = /"svce"<blob>="([^"]*)"/.exec(block)?.[1];
+      const account = /"acct"<blob>="([^"]*)"/.exec(block)?.[1];
+      if (service === this.#service && account) keys.add(account);
+    }
+    return [...keys];
   }
 
   async delete(key: string): Promise<void> {
@@ -176,17 +200,37 @@ export class FileStore implements SecretStore {
   }
 }
 
+/** What the table store needs, which only a process with the registry open can give */
+export interface TableStoreDeps {
+  /** The refactor's switches: `table` is refused unless `secrets-table` is on */
+  flags: Pick<Flags, 'on'>;
+  /** The registry's `secrets` rows */
+  rows: SecretRows;
+}
+
+/** The master key of the file and the table stores: 32 bytes in base64, only ever in the environment */
+function masterKey(env: NodeJS.ProcessEnv, kind: string): Buffer {
+  const key = env.SHIPCAST_SECRETS_KEY?.trim();
+  if (!key) throw new SecretStoreError(`SHIPCAST_SECRET_STORE=${kind} needs SHIPCAST_SECRETS_KEY (openssl rand -base64 32)`);
+  return Buffer.from(key, 'base64');
+}
+
 /**
  * The store an install uses: the desktop keychain by default, the encrypted file on a server
- * (SHIPCAST_SECRET_STORE=file, with SHIPCAST_SECRETS_KEY; the file is <data dir>/secrets.enc).
+ * (SHIPCAST_SECRET_STORE=file, with SHIPCAST_SECRETS_KEY; the file is <data dir>/secrets.enc), or the
+ * registry's encrypted `secrets` table (SHIPCAST_SECRET_STORE=table, with the same key and the
+ * `secrets-table` flag), the one every replica and worker can share. `table` needs `table`: the rows,
+ * from a process that has the registry open.
  */
-export function secretStoreFor(config: { keychainService: string; dataDir: string }, env: NodeJS.ProcessEnv = process.env): SecretStore {
+export function secretStoreFor(config: { keychainService: string; dataDir: string }, env: NodeJS.ProcessEnv = process.env, table?: TableStoreDeps): SecretStore {
   const kind = env.SHIPCAST_SECRET_STORE?.trim() || 'keychain';
   if (kind === 'keychain') return new KeychainStore(config.keychainService);
-  if (kind !== 'file') throw new SecretStoreError(`SHIPCAST_SECRET_STORE is "keychain" or "file", not "${kind}"`);
-  const key = env.SHIPCAST_SECRETS_KEY?.trim();
-  if (!key) throw new SecretStoreError('SHIPCAST_SECRET_STORE=file needs SHIPCAST_SECRETS_KEY (openssl rand -base64 32)');
-  return new FileStore(join(config.dataDir, 'secrets.enc'), Buffer.from(key, 'base64'));
+  if (kind === 'file') return new FileStore(join(config.dataDir, 'secrets.enc'), masterKey(env, kind));
+  if (kind !== 'table') throw new SecretStoreError(`SHIPCAST_SECRET_STORE is "keychain", "file" or "table", not "${kind}"`);
+  // Off, the table is not selectable at all: turning the flag off goes back to the old store, never to a half-wired one
+  if (table && !table.flags.on('secrets-table')) throw new SecretStoreError('SHIPCAST_SECRET_STORE=table needs the secrets-table flag (SHIPCAST_FLAGS=secrets-table)');
+  if (!table) throw new SecretStoreError('SHIPCAST_SECRET_STORE=table is the registry’s table: this command does not open the registry');
+  return new TableStore(table.rows, masterKey(env, kind));
 }
 
 /** Reads a JSON object kept under one key; a value that is not one is treated as absent */

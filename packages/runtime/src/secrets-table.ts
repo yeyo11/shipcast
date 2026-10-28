@@ -111,3 +111,34 @@ export async function copySecrets(from: ListableStore, to: TableStore): Promise<
   }
   return { copied, same, conflicts };
 }
+
+/** What `shipcast secrets migrate` says: key names and counts, never a value */
+export interface SecretsMigration {
+  from: string;
+  copied: string[];
+  same: string[];
+  conflicts: string[];
+}
+
+/**
+ * The migration of an install's secrets into the table: every key of `from` copied and read back
+ * (copySecrets). `from` is only read, so it stays as it was; once the app runs on the table nothing
+ * writes to it again, and it is the fallback until the table is verified in use.
+ */
+export async function migrateSecrets(from: SecretStore, to: TableStore): Promise<SecretsMigration> {
+  if (!('keys' in from) || typeof from.keys !== 'function') throw new SecretStoreError(`${from.kind} cannot list its keys, so it cannot be copied`);
+  const result = await copySecrets(from as ListableStore, to);
+  return { from: from.kind, ...result };
+}
+
+/** The lines of a migration's report: counts first, then the names of each group */
+export function migrationLines(m: SecretsMigration): string[] {
+  const names = (keys: string[]) => (keys.length > 0 ? `: ${[...keys].sort().join(', ')}` : '');
+  return [
+    `From ${m.from} into the registry’s secrets table: ${m.copied.length + m.same.length + m.conflicts.length} keys`,
+    `  copied and read back: ${m.copied.length}${names(m.copied)}`,
+    `  already there with the same value: ${m.same.length}${names(m.same)}`,
+    `  already there with a different value, left as they are: ${m.conflicts.length}${names(m.conflicts)}`,
+    `${m.from} was only read: it stays as it was. Set SHIPCAST_SECRET_STORE=table (with SHIPCAST_FLAGS=secrets-table) to use the table; nothing writes to the old store from then on.`,
+  ];
+}

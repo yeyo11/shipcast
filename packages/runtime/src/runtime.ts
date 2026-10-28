@@ -6,6 +6,7 @@ import {
   loadBrand,
   connectRepositories,
   PostgresLock,
+  SecretRows,
   type OpenRepositories,
   type AiProvider,
   type ObjectRequest,
@@ -15,6 +16,7 @@ import {
 import type { Brand } from '@shipcast/schema';
 import { aiSetup } from './ai.ts';
 import { loadConfig, type Config } from './config.ts';
+import { Flags } from './flags.ts';
 import { GitHubUserTokens } from './github-user.ts';
 import { secretStoreFor, type SecretStore } from './secrets.ts';
 import { importEnvSettings, RuntimeSettings } from './settings.ts';
@@ -91,7 +93,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const log = options.log ?? (() => undefined);
   const config = loadConfig(env, options.root);
   const registry = options.registry ?? (await connectRepositories(config.databaseUrl));
-  const secrets = options.secrets ?? secretStoreFor(config);
+  const flags = Flags.fromEnv(env);
+  const secrets = options.secrets ?? secretStoreFor(config, env, { flags, rows: new SecretRows(registry.database) });
   const settings = new RuntimeSettings({ registry, secrets, env });
 
   const { imported, skipped } = await importEnvSettings({ registry, secrets, env });
