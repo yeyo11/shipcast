@@ -2,7 +2,7 @@ import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/co
 import { articleUrl as urlOf, ContentPack, lookOf, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { parse as parseYaml } from 'yaml';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectSlug, redditDraftFile } from './drafts.ts';
+import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
@@ -334,8 +334,9 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         ? async () =>
             deps.publishers.mastodon!.publish({
               text: draftBody((await read(`${dir}/mastodon.md`)) ?? pack.mastodon!.text),
+              // The alt text describes the launch image in the lead article's language, as the post is
               lang: pack.mastodon!.lang,
-              image: { bytes: await image(), mimeType: 'image/jpeg', filename: 'og.jpg', description: `${pack.project.name}: ${description}` },
+              image: { bytes: await image(), mimeType: 'image/jpeg', filename: 'og.jpg', description: `${projectLabel(pack, launch) ?? title}: ${description}` },
               idempotencyKey: `shipcast-${launch.id}-mastodon`,
             })
         : undefined,

@@ -53,6 +53,15 @@ export function isArticle(launch: Pick<Launch, 'ref'>): boolean {
   return launch.ref.startsWith('article:');
 }
 
+/**
+ * The name a piece may show as its project's, or nothing for an article: an article's "project name"
+ * is its title in the language the owner wrote it in, which put Spanish into English pieces (the REA
+ * article's Mastodon alt text and its Instagram cover, 2026-10-28). A release's name is the repo's own.
+ */
+export function projectLabel(pack: Pick<ContentPack, 'project'>, launch: Pick<Launch, 'ref'>): string | undefined {
+  return isArticle(launch) ? undefined : pack.project.name;
+}
+
 /** Where a launch's pieces live in the launches repo: `launches/<project>/<ref>/`, or `articles/<slug>/` for an article. */
 export function launchDir(launch: Launch): string {
   if (isArticle(launch)) return `articles/${launch.ref.slice('article:'.length).replace(/[^a-z0-9-]/g, '-')}`;
@@ -140,10 +149,10 @@ export function renderDrafts(
         ...(isArticle(launch) ? [] : [`repo: ${q(pack.project.repo)}`]),
         ...(pack.project.version ? [`version: ${q(pack.project.version)}`] : []),
         `tags: [${pack.article.tags.map(q).join(', ')}]`,
-        ...(image ? [`image: ${q(image)}`, `imageAlt: ${q(version.imageAlt ?? `${pack.project.name}: ${version.title}`)}`] : []),
+        ...(image ? [`image: ${q(image)}`, `imageAlt: ${q(version.imageAlt ?? [projectLabel(pack, launch), version.title].filter(Boolean).join(': '))}`] : []),
         '---',
       ].join('\n');
-      files.push({ path: `src/content/posts/${lang}/${version.slug}.md`, content: `${frontMatter}\n\n${withScreenshot(version.markdown.trim(), screenshots[0], pack.project.name, lang)}\n` });
+      files.push({ path: `src/content/posts/${lang}/${version.slug}.md`, content: `${frontMatter}\n\n${withScreenshot(version.markdown.trim(), screenshots[0], projectLabel(pack, launch) ?? version.title, lang)}\n` });
     }
   }
 

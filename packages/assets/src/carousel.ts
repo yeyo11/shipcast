@@ -24,8 +24,14 @@ const shortName = (author: string) => author.split(/\s+/).filter((_, i, all) => 
 const frame = (background: string, children: OgNode[], height = SLIDE_HEIGHT) =>
   box({ width: SLIDE_WIDTH, height, background, color: TEXT, fontFamily: 'Instrument Sans', position: 'relative', flexDirection: 'column' }, children);
 
+/** The project's name and version above a headline; nothing for an article, whose headline is its name */
+function eyebrow(o: { project?: string; version?: string }, fontSize: number): OgNode[] {
+  const parts = [o.project, o.version].filter((p): p is string => Boolean(p));
+  return parts.length === 0 ? [] : [box({ fontSize, fontWeight: 600, color: INK, gap: 14 }, parts.map((p) => el('span', {}, p)))];
+}
+
 /** The first piece, the one that stops the scroll: the article's cover with its headline on the project's colour. */
-export function coverSlide(o: { project: string; look: Look; title: string; summary: string; version?: string; author: string; site: string; cover: SlideImage }): OgNode {
+export function coverSlide(o: { project?: string; look: Look; title: string; summary: string; version?: string; author: string; site: string; cover: SlideImage }): OgNode {
   const { colour } = o.look;
   return frame(INK, [
     box({ position: 'absolute', left: 0, top: 0, width: SLIDE_WIDTH, height: 900, background: colour }, [
@@ -33,7 +39,7 @@ export function coverSlide(o: { project: string; look: Look; title: string; summ
     ]),
     box({ position: 'absolute', left: 64, top: 56 }, [headline(shortName(o.author), { fontSize: 40, color: INK })]),
     box({ position: 'absolute', left: 64, right: 64, top: 620, background: colour, padding: '36px 44px 44px', flexDirection: 'column', gap: 18, border: `4px solid ${INK}` }, [
-      box({ fontSize: 26, fontWeight: 600, color: INK, gap: 14 }, [el('span', {}, o.project), ...(o.version ? [el('span', {}, o.version)] : [])]),
+      ...eyebrow(o, 26),
       headline(o.title, { fontSize: o.title.length > 40 ? 68 : 80, lineHeight: 1.05, color: INK, width: '100%' }),
     ]),
     el('div', { position: 'absolute', left: 64, right: 64, top: 1010, display: 'block', fontSize: 34, lineHeight: 1.4, color: MUTED, lineClamp: 3 }, o.summary),
@@ -55,7 +61,7 @@ export function coverSlide(o: { project: string; look: Look; title: string; summ
  */
 // Even sides: H.264 in yuv420p wants them
 export const DEMO_WINDOW = { x: 64, y: 360, width: 952, height: 596 };
-export function demoSlide(o: { project: string; look: Look; title: string; version?: string; still?: SlideImage }): OgNode {
+export function demoSlide(o: { project?: string; look: Look; title: string; version?: string; still?: SlideImage }): OgNode {
   const { colour } = o.look;
   const w = DEMO_WINDOW;
   return frame(colour, [
@@ -67,14 +73,14 @@ export function demoSlide(o: { project: string; look: Look; title: string; versi
       ...(o.still ? [el('img', { width: w.width, height: w.height, objectFit: 'cover' }, undefined)] : []),
     ]),
     box({ position: 'absolute', left: 64, right: 64, bottom: 64, justifyContent: 'space-between', fontSize: 30, fontWeight: 600, color: INK }, [
-      el('span', {}, o.project),
+      ...(o.project ? [el('span', {}, o.project)] : []),
       ...(o.version ? [el('span', {}, o.version)] : []),
     ]),
   ]);
 }
 
 /** One thing the project does: a number on its colour, a headline and one sentence. */
-export function featureSlide(o: { project: string; look: Look; index: number; title: string; text: string }): OgNode {
+export function featureSlide(o: { project?: string; look: Look; index: number; title: string; text: string }): OgNode {
   const { colour } = o.look;
   return frame(INK, [
     box({ position: 'absolute', left: 64, right: 64, top: 0, bottom: 120, flexDirection: 'column', justifyContent: 'center', gap: 56 }, [
@@ -89,7 +95,7 @@ export function featureSlide(o: { project: string; look: Look; index: number; ti
 }
 
 /** The last piece: where to read the rest, with the author's face. */
-export function closingSlide(o: { project: string; look: Look; text: string; author: string; site: string; photo?: SlideImage }): OgNode {
+export function closingSlide(o: { project?: string; look: Look; text: string; author: string; site: string; photo?: SlideImage }): OgNode {
   const { colour } = o.look;
   return frame(colour, [
     box({ position: 'absolute', inset: 0, ...dots(INK, 11, 1.8), opacity: 0.18 }),
@@ -111,7 +117,7 @@ export function closingSlide(o: { project: string; look: Look; text: string; aut
  * The story that goes out with the carousel: the cover and headline, and where to read the rest.
  * The API cannot add a link sticker, so the link lives in the bio and the story says so.
  */
-export function storySlide(o: { project: string; look: Look; title: string; version?: string; author: string; site: string; cover: SlideImage }): OgNode {
+export function storySlide(o: { project?: string; look: Look; title: string; version?: string; author: string; site: string; cover: SlideImage }): OgNode {
   const { colour } = o.look;
   return frame(
     INK,
@@ -121,7 +127,7 @@ export function storySlide(o: { project: string; look: Look; title: string; vers
       ]),
       box({ position: 'absolute', left: 64, top: 120 }, [headline(shortName(o.author), { fontSize: 44, color: INK })]),
       box({ position: 'absolute', left: 64, right: 64, top: 900, background: colour, padding: '40px 48px 48px', flexDirection: 'column', gap: 20, border: `4px solid ${INK}` }, [
-        box({ fontSize: 30, fontWeight: 600, color: INK, gap: 14 }, [el('span', {}, o.project), ...(o.version ? [el('span', {}, o.version)] : [])]),
+        ...eyebrow(o, 30),
         headline(o.title, { fontSize: o.title.length > 40 ? 76 : 90, lineHeight: 1.05, color: INK, width: '100%' }),
       ]),
       box({ position: 'absolute', left: 64, right: 64, bottom: 260, flexDirection: 'column', alignItems: 'center', gap: 22 }, [

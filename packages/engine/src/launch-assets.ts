@@ -21,7 +21,7 @@ import {
 } from '@shipcast/assets';
 import { playwrightCapture, type SiteCapture } from '@shipcast/capture';
 import { hasDemo, lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
-import { isArticle, launchDir, projectSlug, type DraftFile } from './drafts.ts';
+import { isArticle, launchDir, projectLabel, projectSlug, type DraftFile } from './drafts.ts';
 import type { Launch } from './registry.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -171,9 +171,10 @@ async function buildCarousel(options: AssetOptions, dir: string, look: ProjectLo
   const { pack, launch, config, brand, checkout } = options;
   const instagram = pack.instagram!;
   const http = options.fetch ?? globalThis.fetch;
-  const project = pack.project.name;
+  // Every slide is in English: an article's own name (its title as written) would mix in another language
+  const project = projectLabel(pack, launch);
   const site = new URL(brand.site).host;
-  const title = pack.article?.en?.title ?? project;
+  const title = pack.article?.en?.title ?? pack.project.name;
   const cover = listed ?? (await image(http, `${brand.site}${look.cover ?? coverPath(launch)}`)) ?? {
     bytes: await renderIllustration(look),
     mimeType: 'image/png' as const,

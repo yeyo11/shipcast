@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, ContentPack, LaunchConfig } from '@shipcast/schema';
-import { buildPrompt, GitHubRest, keepPubDates, launchDir, parseDiscussionDraft, pullRequestBody, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
+import { buildPrompt, GitHubRest, keepPubDates, launchDir, parseDiscussionDraft, pullRequestBody, projectLabel, renderDrafts, screenshotPaths, withScreenshot, type DraftFile } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const text = (file: DraftFile | undefined): string => (file && 'content' in file ? file.content : '');
@@ -244,6 +244,20 @@ test('the article carries its launch image alt text and the project screenshot a
   const es = text(files.find((f) => f.path === 'src/content/posts/es/claudio-como-servicio.md'));
   assert.match(es, /^imageAlt: "claudio: claudio: Claude Code como servicio"$/m, 'without one from the AI, the project and the title');
   assert.match(es, /!\[claudio, captura de pantalla\]/);
+});
+
+test('an article never puts its own name, the title as written, into the other language', async () => {
+  // An article's project name is its title in the language the owner wrote it in, Spanish here
+  const article = (await (await memoryRegistry()).claim({ repo: 'yeyo11/launches', ref: 'article:monto-rea', trigger: 'article', kind: 'launch', brand: 'personal' })).launch;
+  const written = ContentPack.parse({ ...pack, project: { ...pack.project, name: 'Monto REA y lo pruebo' } });
+  assert.equal(projectLabel(written, article), undefined);
+  assert.equal(projectLabel(written, launch), 'Monto REA y lo pruebo', "a release's name is the repo's own, in every language");
+  const files = renderDrafts(written, article, config, brand, new Date('2026-10-28'), '/articles/monto-rea/og.png');
+  const en = text(files.find((f) => f.path === 'src/content/posts/en/claudio.md'));
+  assert.ok(en.includes(`imageAlt: ${JSON.stringify('claudio: "Claude Code" as a service')}`), 'the English alt text is the English title alone');
+  const es = text(files.find((f) => f.path === 'src/content/posts/es/claudio-como-servicio.md'));
+  assert.match(es, /^imageAlt: "claudio: Claude Code como servicio"$/m);
+  assert.doesNotMatch(en + es, /Monto REA/);
 });
 
 test('the desktop screenshots are found among the media, the home page first, and placed once', () => {
