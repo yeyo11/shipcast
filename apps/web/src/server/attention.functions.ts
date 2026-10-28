@@ -10,7 +10,7 @@ const MAX_KEYS = 100;
 async function readInput(): Promise<AttentionInput> {
   const { registry } = await appContext();
   const [launches, failures, accounts, facets, newest, scheduled] = await Promise.all([
-    registry.recent(60),
+    registry.launches.recent(60),
     registry.cursorsWithPrefix(failurePrefix()),
     registry.accounts(),
     registry.commentFacets(false),

@@ -59,7 +59,7 @@ const deps = (registry: Registry): WorkDeps => ({
 });
 
 async function launch(registry: Registry): Promise<number> {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   return launch.id;
 }
 
@@ -235,17 +235,17 @@ test('a launch left generating by a draft that was cut short is failed at a star
   const first = queueOn(db);
   await first.start();
   const cut = await launch(db.registry);
-  await db.registry.setStatus(cut, 'generating');
-  const { launch: queued } = await db.registry.claim({ repo: 'yeyo11/shipcast', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await db.registry.launches.setStatus(cut, 'generating');
+  const { launch: queued } = await db.registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await first.send('draft', { launchId: queued.id }, { launchId: queued.id });
-  await db.registry.setStatus(queued.id, 'generating');
+  await db.registry.launches.setStatus(queued.id, 'generating');
   await first.stop(1000);
 
   await queueOn(db).start();
-  const failed = await db.registry.get(cut);
+  const failed = await db.registry.launches.get(cut);
   assert.equal(failed?.status, 'failed');
   assert.match(failed?.detail ?? '', /interrupted/);
-  assert.equal((await db.registry.get(queued.id))?.status, 'generating');
+  assert.equal((await db.registry.launches.get(queued.id))?.status, 'generating');
 });
 
 test('the handlers of a publish job retry a channel only once and leave a launch that is not drafted', async () => {
@@ -264,7 +264,7 @@ test('the handlers of a publish job retry a channel only once and leave a launch
 test('a scheduled piece wakes its launch’s publishing when due, also after a restart, and not when cancelled', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
-  await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
   const due = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 60_000)))!;
   const cancelled = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() - 60_000)))!;
 
@@ -298,7 +298,7 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
 test('a due piece of a launch whose drafts still wait for approval waits for the merge', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
-  await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+  await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
   const post = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
   const open = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'open' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
   const queue = queueOn(db);

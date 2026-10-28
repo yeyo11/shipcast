@@ -85,7 +85,7 @@ test('the known projects come from the launches repo; without projects.yml there
 test('a claimed launch becomes a drafts pull request and is recorded as drafted', async () => {
   const { github, registry, deps, clones } = await setup();
   const brand = await loadBrand(github, 'yeyo11/launches');
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
 
   const result = await draftLaunch(launch, brand, deps);
   assert.equal(result.ok, true);
@@ -101,7 +101,7 @@ test('a claimed launch becomes a drafts pull request and is recorded as drafted'
   assert.ok(!pr.files.some((f) => f.path.includes('instagram')), 'channels off in launch.yml get nothing');
   assert.ok(pr.files.some((f) => f.path === 'public/covers/claudio.jpg'), 'a project without a cover gets one');
   assert.ok(pr.files.some((f) => f.path === 'projects.yml' && 'content' in f && f.content.includes('/covers/claudio.jpg')));
-  const after = (await registry.get(launch.id))!;
+  const after = (await registry.launches.get(launch.id))!;
   assert.equal(after.status, 'drafted');
   assert.equal(after.detail, 'https://github.com/yeyo11/launches/pull/1');
 });
@@ -109,12 +109,12 @@ test('a claimed launch becomes a drafts pull request and is recorded as drafted'
 test('a pack that falls short fails the launch with the problems and the chat to read', async () => {
   const { github, registry, deps } = await setup({ ...pack, bluesky: undefined });
   const brand = await loadBrand(github, 'yeyo11/launches');
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const result = await draftLaunch(launch, brand, deps);
   assert.equal(result.ok, false);
   assert.equal(github.opened.length, 0, 'no pull request for a pack that fails');
-  assert.equal((await registry.get(launch.id))!.status, 'failed');
-  assert.match((await registry.get(launch.id))!.detail ?? '', /bluesky: the pack has no bluesky\nclaudio chat: chat-1/);
+  assert.equal((await registry.launches.get(launch.id))!.status, 'failed');
+  assert.match((await registry.launches.get(launch.id))!.detail ?? '', /bluesky: the pack has no bluesky\nclaudio chat: chat-1/);
 });
 
 test('a manual launch takes the latest release and is claimed like any other', async () => {
@@ -127,13 +127,13 @@ test('a manual launch takes the latest release and is claimed like any other', a
   const again = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in again && !again.claimed, 'never twice, by hand or by the watcher');
 
-  await registry.setStatus(first.launch.id, 'failed', 'could not clone');
+  await registry.launches.setStatus(first.launch.id, 'failed', 'could not clone');
   const retry = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in retry && retry.claimed, 'a failed launch published nothing: by hand, it is retried');
   assert.equal(retry.launch.id, first.launch.id);
   assert.equal(retry.launch.status, 'detected');
 
-  await registry.setStatus(first.launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/1');
+  await registry.launches.setStatus(first.launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/1');
   const drafted = await claimManual('yeyo11/claudio', 'v0.9.0', brand, { github, registry });
   assert.ok('claimed' in drafted && !drafted.claimed, 'a drafted launch is never drafted again');
 });

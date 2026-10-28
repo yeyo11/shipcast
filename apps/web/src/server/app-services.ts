@@ -34,7 +34,7 @@ export interface PieceServiceDeps {
   launchesRepo: string;
 }
 
-export const postService = (deps: Pick<PieceServiceDeps, 'registry' | 'editing'>) => new PostService({ launches: deps.registry, editing: deps.editing });
+export const postService = (deps: Pick<PieceServiceDeps, 'registry' | 'editing'>) => new PostService({ launches: deps.registry.launches, editing: deps.editing });
 
 export const scheduleService = (deps: Pick<PieceServiceDeps, 'registry' | 'armSchedule' | 'github' | 'launchesRepo'>) =>
   new ScheduleService({
@@ -57,4 +57,4 @@ export const settingsService = (deps: { registry: Registry }) => new SettingsSer
 
 /** Over the app's pipeline (the claim's registry and launches repo) and its GitHub (the pre-flight, the merge) */
 export const launchService = (deps: { registry: Registry; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest }) =>
-  new LaunchService({ launches: deps.registry, claims: deps.deps, github: deps.github });
+  new LaunchService({ launches: deps.registry.launches, claims: deps.deps, github: deps.github });

@@ -8,8 +8,8 @@ import { memoryRegistry } from '../src/testing.ts';
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
 async function published(registry: Registry) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/3');
   await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', url: 'https://josegarrido.dev/en/claudio/', externalId: 'claudio' });
   await registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:es', url: 'https://josegarrido.dev/es/claudio-como-servicio/', externalId: 'claudio-como-servicio' });
   await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '42' });
@@ -81,7 +81,7 @@ test('every reading is kept, so a metric has a history', async () => {
 
 test('launches not yet published are not read', async () => {
   const registry = await memoryRegistry();
-  await registry.claim({ repo: 'yeyo11/x', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.claim({ repo: 'yeyo11/x', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   let reads = 0;
   await collectMetrics(registry, brand, { github: { repoStats: async () => (reads++, { stars: 1, forks: 0, watchers: 0 }) } });
   assert.equal(reads, 0);

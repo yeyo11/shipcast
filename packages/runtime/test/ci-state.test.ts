@@ -137,14 +137,14 @@ test('the branch state: a run saves its registry and frees the lease; a dry run 
   const state = new BranchState(new GitStateStore({ remote }), options);
   const release = { repo: 'o/app', ref: 'v1.0.0', trigger: 'release' as const, kind: 'launch' as const, brand: 'personal' };
   try {
-    const first = await state.use((registry) => registry.claim(release));
+    const first = await state.use((registry) => registry.launches.claim(release));
     assert.equal(first.claimed, true);
     const tip = await new GitStateStore({ remote }).read();
     assert.equal(tip.lock, undefined, 'the lease is released');
     assert.match(tip.registry ?? '', /"o\/app"/);
 
     const dry = new BranchState(new GitStateStore({ remote }), { ...options, dryRun: true });
-    const again = await dry.use((registry) => registry.claim({ ...release, ref: 'v2.0.0' }));
+    const again = await dry.use((registry) => registry.launches.claim({ ...release, ref: 'v2.0.0' }));
     assert.equal(again.claimed, true, 'claimed in the dry run’s copy');
     assert.equal((await new GitStateStore({ remote }).read()).sha, tip.sha, 'and nothing pushed');
 

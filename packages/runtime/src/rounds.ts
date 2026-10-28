@@ -141,7 +141,7 @@ export async function runRound(d: RoundDeps, options: RoundOptions): Promise<voi
     });
   }
   await step('publish', log, async () => {
-    for (const launch of (await d.registry.recent(100)).filter((l) => l.status === 'drafted')) {
+    for (const launch of (await d.registry.launches.recent(100)).filter((l) => l.status === 'drafted')) {
       if (options.enqueue) {
         await options.enqueue(launch);
         continue;

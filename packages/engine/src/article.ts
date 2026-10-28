@@ -48,7 +48,7 @@ export function articleConfig(brand: Brand, channels: Channel[]): LaunchConfig {
 
 /** Claims an article like any launch, so the same article is never published twice */
 export function claimArticle(input: ArticleInput, brand: Brand, deps: Pick<PipelineDeps, 'registry' | 'launchesRepo'>): Promise<{ claimed: boolean; launch: Launch }> {
-  return deps.registry.claim({ repo: deps.launchesRepo, ref: `article:${articleSlug(input.title)}`, trigger: 'article', kind: 'launch', brand: brand.id });
+  return deps.registry.launches.claim({ repo: deps.launchesRepo, ref: `article:${articleSlug(input.title)}`, trigger: 'article', kind: 'launch', brand: brand.id });
 }
 
 /**
@@ -98,8 +98,8 @@ export async function generateArticlePack(
  */
 export async function draftArticle(launch: Launch, input: ArticleInput, brand: Brand, deps: PipelineDeps, options: DraftOptions = {}): Promise<DraftResult> {
   const { registry } = deps;
-  const fail = async (problems: string[]): Promise<DraftResult> => ({ ok: false, launch: await registry.setStatus(launch.id, 'failed', problems.join('\n')), problems });
-  await registry.setStatus(launch.id, 'generating');
+  const fail = async (problems: string[]): Promise<DraftResult> => ({ ok: false, launch: await registry.launches.setStatus(launch.id, 'failed', problems.join('\n')), problems });
+  await registry.launches.setStatus(launch.id, 'generating');
 
   const generated = await generateArticlePack(input, brand, deps);
   if (!generated.ok) return fail(generated.problems);

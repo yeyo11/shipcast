@@ -6,8 +6,8 @@ import { memoryRegistry } from '../src/testing.ts';
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
 
 async function launch(registry: Registry, repo = 'yeyo11/claudio', ref = 'v1.0.0') {
-  const { launch } = await registry.claim({ repo, ref, trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
+  const { launch } = await registry.launches.claim({ repo, ref, trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
   return launch;
 }
 

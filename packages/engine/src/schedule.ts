@@ -79,7 +79,7 @@ export interface ScheduleOptions {
  */
 export async function scheduleLaunch(registry: ScheduleStore, launchId: number, times: Partial<Record<Channel, Date>>, options: ScheduleOptions = {}): Promise<Post[]> {
   const now = options.now ?? new Date();
-  const launch = await registry.get(launchId);
+  const launch = await registry.launches.get(launchId);
   if (!launch) throw new ScheduleRefused('not_found', 'no such launch');
   if (launch.status === 'published' || launch.status === 'skipped' || launch.status === 'failed') {
     throw new ScheduleRefused('refused', `the launch is ${launch.status}: nothing of it is waiting to go out`);

@@ -53,8 +53,8 @@ function recorder() {
 }
 
 async function drafted(registry: Registry) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
-  return registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/3');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
+  return registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/3');
 }
 
 test('a draft body is what follows its mode line', () => {
@@ -107,7 +107,7 @@ test('after the merge every approval channel is published with the edited texts,
     media: ['01', '02', '03', '04'].map((n) => ({ kind: 'image', url: `https://josegarrido.dev/launches/claudio/v0.8.2/instagram-${n}.jpg` })),
   });
 
-  assert.equal((await registry.get(launch.id))!.status, 'published');
+  assert.equal((await registry.launches.get(launch.id))!.status, 'published');
   assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'instagram', 'mastodon']);
   const [article] = await registry.posts(launch.id, { channel: 'blog' });
   assert.deepEqual([article?.kind, article?.url, article?.externalId, article?.accountId], ['article:en', 'https://josegarrido.dev/en/claudio/', 'claudio', null]);
@@ -115,7 +115,7 @@ test('after the merge every approval channel is published with the edited texts,
   assert.deepEqual([onDevto?.kind, onDevto?.accountId, onDevto?.externalId], ['post', devto.id, 'devto-1'], 'the account it went out with');
   assert.equal((await registry.posts(launch.id, { channel: 'bluesky' }))[0]?.accountId, null, 'credentials from .env have no account');
 
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(calls.length, 4, 'a second round publishes nothing again');
 });
 
@@ -143,7 +143,7 @@ test('a temporary failure leaves the launch partial and is retried; a permanent 
   assert.ok(first.state === 'partial' && first.problems.some((p) => p.startsWith('mastodon:') && p.endsWith('(will retry)')));
   assert.ok(first.state === 'partial' && first.problems.some((p) => p.startsWith('instagram:') && !p.endsWith('(will retry)')));
 
-  const second = await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  const second = await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(second.state, 'published', 'Mastodon went through; Instagram is not retried');
   assert.equal(mastodonTries, 2);
   assert.equal(calls.filter((c) => c.channel === 'devto').length, 1);
@@ -189,7 +189,7 @@ test('the newsletter sends one campaign per language with the edited issue, and 
   );
   assert.deepEqual(await registry.cursorsWithPrefix('newsletter-sent:'), [], 'the rows are the record');
 
-  await publishLaunch((await registry.get(launch.id))!, withNewsletter, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  await publishLaunch((await registry.launches.get(launch.id))!, withNewsletter, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(sends.length, 1, 'never sent twice');
 });
 
@@ -214,7 +214,7 @@ test('a newsletter with nobody subscribed is recorded once and not retried', asy
   const first = await publishLaunch(launch, withNewsletter, deps);
   assert.ok(first.state !== 'waiting' && first.state !== 'skipped');
   assert.match(first.state === 'published' || first.state === 'partial' ? first.problems.join() : '', /no subscribers yet in the en list/);
-  await publishLaunch((await registry.get(launch.id))!, withNewsletter, deps);
+  await publishLaunch((await registry.launches.get(launch.id))!, withNewsletter, deps);
   assert.equal(reads, 1);
 });
 
@@ -262,8 +262,8 @@ test('the Instagram comment is its own row, and a second round neither reposts n
   };
   const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { instagram: account.id } };
   await publishLaunch(launch, brand, deps);
-  await registry.setStatus(launch.id, 'drafted', launch.detail);
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await registry.launches.setStatus(launch.id, 'drafted', launch.detail);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.deepEqual(done, ['post', 'comment post-1']);
   assert.deepEqual(
     (await registry.posts(launch.id, { channel: 'instagram' })).map((p) => [p.kind, p.externalId, p.url, p.accountId]),
@@ -307,7 +307,7 @@ test('a newsletter issue that went out is kept when the other language fails, an
   assert.equal(first.state, 'partial');
   assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => p.kind), ['issue:en']);
 
-  const second = await publishLaunch((await registry.get(launch.id))!, withNewsletter, deps);
+  const second = await publishLaunch((await registry.launches.get(launch.id))!, withNewsletter, deps);
   assert.equal(second.state, 'published');
   assert.deepEqual(sends, [3, 4], 'English once, Spanish once it went through');
   assert.deepEqual(
@@ -367,7 +367,7 @@ test('Hashnode, Telegram and Discord are published with the edited drafts', asyn
   });
   assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
 
-  await publishLaunch((await registry.get(launch.id))!, brand, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(calls.length, 7, 'a second round publishes nothing again');
 });
 
@@ -390,7 +390,7 @@ test('when the article goes live Google is asked to read the sitemap, once, and 
   assert.equal(calls.length, 4);
   assert.deepEqual(submitted, ['https://josegarrido.dev/sitemap-index.xml']);
 
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(submitted.length, 1, 'the article was already recorded: not asked again');
 });
 
@@ -407,8 +407,8 @@ test('the blog records one article per language, each at its own URL', async () 
   const { publishers } = recorder();
   const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   await publishLaunch(launch, brand, deps);
-  await registry.setStatus(launch.id, 'drafted', launch.detail);
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await registry.launches.setStatus(launch.id, 'drafted', launch.detail);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.deepEqual(
     (await registry.posts(launch.id, { channel: 'blog' })).map((p) => [p.kind, p.url, p.externalId]),
     [
@@ -428,8 +428,8 @@ test('a post deleted after the launch is never published again, even with the la
   await deletePost(mastodon!.id, { registry, editors: async () => ({ mastodon: { edit: async () => {}, delete: async () => {} } }) });
 
   const before = calls.length;
-  await registry.setStatus(launch.id, 'drafted', launch.detail);
-  assert.equal((await publishLaunch((await registry.get(launch.id))!, brand, deps)).state, 'published');
+  await registry.launches.setStatus(launch.id, 'drafted', launch.detail);
+  assert.equal((await publishLaunch((await registry.launches.get(launch.id))!, brand, deps)).state, 'published');
   assert.equal(calls.length, before, 'deleting never re-enables publishing the same piece');
   assert.equal((await registry.post(mastodon!.id))!.status, 'deleted');
 });
@@ -450,21 +450,21 @@ test('a scheduled channel waits for its time, never holds the others back, and g
   assert.equal(first.state, 'partial');
   assert.deepEqual(first.state === 'partial' && first.scheduled, [{ channel: 'bluesky', at: hours(2).toISOString() }]);
   assert.deepEqual(calls.map((c) => c.channel), ['devto', 'mastodon', 'instagram'], 'the other channels go out at once');
-  assert.equal((await registry.get(launch.id))!.status, 'drafted', 'the launch waits for its scheduled piece');
+  assert.equal((await registry.launches.get(launch.id))!.status, 'drafted', 'the launch waits for its scheduled piece');
 
   clock = hours(1);
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(calls.length, 3, 'not before its time');
 
   clock = hours(2);
-  const due = await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  const due = await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(due.state, 'published');
   assert.deepEqual(calls.map((c) => c.channel), ['devto', 'mastodon', 'instagram', 'bluesky']);
   const [out] = await registry.posts(launch.id, { channel: 'bluesky' });
   assert.deepEqual([out?.id, out?.status, out?.externalId, out?.scheduledAt], [waiting?.id, 'live', 'bluesky-1', hours(2).toISOString()], 'the same row, now live, keeping its slot');
 
-  await registry.setStatus(launch.id, 'drafted', launch.detail);
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await registry.launches.setStatus(launch.id, 'drafted', launch.detail);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(calls.length, 4, 'a launch happens once');
 });
 
@@ -522,7 +522,7 @@ test('a schedule is refused for a channel out already, one Shipcast does not pub
   const rows = await registry.posts(launch.id, { channel: 'bluesky' });
   assert.deepEqual(rows.map((p) => [p.status, p.scheduledAt]), [['scheduled', hours(3).toISOString()]]);
 
-  await registry.setStatus(launch.id, 'published', launch.detail);
+  await registry.launches.setStatus(launch.id, 'published', launch.detail);
   await assert.rejects(scheduleLaunch(registry, launch.id, { mastodon: hours(1) }, { now: T }), refused('refused'));
 });
 
@@ -628,14 +628,14 @@ test('GitHub Discussions, Threads and LinkedIn are published once with the edite
   for (const c of ['githubDiscussions', 'threads', 'linkedin']) assert.ok(channels.includes(c), c);
 
   const before = calls.length;
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(calls.length, before, 'a second round publishes nothing again');
 });
 
 test('an article written in the app opens no discussion: it belongs to no project repo', async () => {
   const registry = await memoryRegistry();
-  const { launch: claimed } = await registry.claim({ repo: 'yeyo11/launches', ref: 'article:notes', trigger: 'article', kind: 'launch', brand: 'personal' });
-  const launch = await registry.setStatus(claimed.id, 'drafted', 'direct:abc');
+  const { launch: claimed } = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:notes', trigger: 'article', kind: 'launch', brand: 'personal' });
+  const launch = await registry.launches.setStatus(claimed.id, 'drafted', 'direct:abc');
   const files = {
     'yeyo11/launches/articles/notes/pack.json@HEAD': JSON.stringify({ ...pack, githubDiscussions: { title: 't', body: 'b' } }),
     'yeyo11/launches/articles/notes/launch.yml@HEAD': 'enabled: true\nbrand: personal\npublishing:\n  devto: off\n  bluesky: off\n  mastodon: off\n  instagram: off\n  githubDiscussions: approval\n',
@@ -676,7 +676,7 @@ test('Reddit gets one post per subreddit from its edited draft, linking the arti
   const rows = (await registry.posts(launch.id, { channel: 'reddit' })).map((p) => [p.kind, p.externalId]);
   assert.deepEqual(rows, [['post:claudeai', 't3_ClaudeAI'], ['post:selfhosted', 't3_selfhosted']]);
 
-  await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.equal(sent.length, 2, 'a second round posts nothing again');
   assert.ok(calls.length > 0);
 });

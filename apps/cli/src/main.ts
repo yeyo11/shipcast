@@ -125,7 +125,7 @@ function reportPublish(result: PublishResult): void {
 /** Publishes what is ready: each drafted launch whose pull request was merged and whose article is live. */
 async function publishReady(round: RoundDeps): Promise<void> {
   const services = await buildServices({ env: round.env, brand: round.brand, registry: round.registry, github: round.github, secrets: round.secrets });
-  for (const launch of (await round.registry.recent(100)).filter((l) => l.status === 'drafted')) reportPublish(await publishOne(launch, round, services));
+  for (const launch of (await round.registry.launches.recent(100)).filter((l) => l.status === 'drafted')) reportPublish(await publishOne(launch, round, services));
 }
 
 /**
@@ -200,7 +200,7 @@ async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case 'status': {
-        const launches = await registry.recent();
+        const launches = await registry.launches.recent();
         if (launches.length === 0) console.log('No launches yet.');
         for (const l of launches) {
           console.log(`${l.createdAt.slice(0, 16).replace('T', ' ')}  ${l.repo} ${l.ref}  ${l.kind}  ${l.status}${l.detail ? `  ${l.detail.split('\n')[0]}` : ''}`);
@@ -306,7 +306,7 @@ async function main(argv: string[]): Promise<number> {
         }
         let claimed: Launch;
         try {
-          ({ launch: claimed } = await new LaunchService({ launches: registry, claims: deps, github }).claimManual(repo, values.ref, loadBrandNow, reportPreflight));
+          ({ launch: claimed } = await new LaunchService({ launches: registry.launches, claims: deps, github }).claimManual(repo, values.ref, loadBrandNow, reportPreflight));
         } catch (error) {
           if (!(error instanceof LaunchRefused)) throw error;
           const found = error.launch;

@@ -90,7 +90,7 @@ const firstPublished = (launches: ReadonlyArray<{ status: string; createdAt: str
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
 
 export async function loadStats(registry: Registry, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
-  const [accounts, launches] = await Promise.all([registry.accounts(), registry.recent(LAUNCH_OPTIONS)]);
+  const [accounts, launches] = await Promise.all([registry.accounts(), registry.launches.recent(LAUNCH_OPTIONS)]);
   const period = resolvePeriod(search, today, firstPublished(launches));
   const bucket = effectiveBucket(search.bucket, period.days);
   const filters = {
@@ -262,7 +262,7 @@ const SEARCH_LAUNCHES = 100;
  */
 export async function loadSearch(registry: Registry, range: { from: string; to: string; launches?: readonly number[] }): Promise<SearchView> {
   const wanted = range.launches ? new Set(range.launches) : null;
-  const published = (await registry.recent(LAUNCH_OPTIONS)).filter((l) => l.status === 'published' && (!wanted || wanted.has(l.id))).slice(0, SEARCH_LAUNCHES);
+  const published = (await registry.launches.recent(LAUNCH_OPTIONS)).filter((l) => l.status === 'published' && (!wanted || wanted.has(l.id))).slice(0, SEARCH_LAUNCHES);
   const read = async (url: string, engine: 'google' | 'bing'): Promise<IndexView | null> => {
     const status = await indexStatus(registry, url, engine);
     return status ? { indexed: status.indexed, coverage: status.coverage, checkedAt: status.checkedAt } : null;

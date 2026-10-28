@@ -41,7 +41,7 @@ async function get(deps: ApiDeps, path: string, token: string) {
 
 async function seed(registry: Registry) {
   const account = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const { post } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', accountId: account.id, externalId: 'at://1', url: 'https://bsky.app/1' });
   await registry.recordMetrics(launch.id, 'bluesky', { likes: 2 }, new Date('2026-10-12T06:00:00Z'), post.id);
   await registry.recordMetrics(launch.id, 'bluesky', { likes: 9 }, new Date('2026-10-17T06:00:00Z'), post.id);

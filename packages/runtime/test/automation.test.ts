@@ -70,8 +70,8 @@ test('deliveries become actions: claim a release, publish a merge, ignore the re
 
 test('a merged pull request finds its drafted launch', async () => {
   const registry = await memoryRegistry();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
   assert.equal((await launchOfPullRequest({ registry }, 'https://github.com/yeyo11/launches/pull/9'))?.id, launch.id);
   assert.equal(await launchOfPullRequest({ registry }, 'https://github.com/yeyo11/launches/pull/10'), undefined);
 });

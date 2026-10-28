@@ -102,7 +102,7 @@ test('ci publish: a merged pull request is published once its article is live, p
     tries++;
     if (tries < 3) return { state: 'waiting', launch, reason: 'https://example.dev/en/blog/app/ is not live yet' };
     await registry.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
-    const done = await registry.setStatus(launch.id, 'published');
+    const done = await registry.launches.setStatus(launch.id, 'published');
     return { state: 'published', launch: done, posted: [{ channel: 'bluesky', url: 'https://bsky.app/1' }], problems: [], scheduled: [], failures: [], heldElsewhere: [] };
   };
   const { deps, lines } = run(remote, 'publish', drafted, { publish });

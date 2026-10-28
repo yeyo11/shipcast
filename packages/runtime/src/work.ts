@@ -92,7 +92,7 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
   const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
   const launch = async (id: number) => {
-    const found = await registry.get(id);
+    const found = await registry.launches.get(id);
     if (!found) throw new Error(`no launch ${id}`);
     return found;
   };

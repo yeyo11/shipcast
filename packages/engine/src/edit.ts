@@ -187,7 +187,7 @@ async function editArticle(post: Post, changes: PostChanges, deps: EditDeps): Pr
  */
 async function deleteArticle(post: Post, deps: EditDeps): Promise<void> {
   const { github, launchesRepo } = blogOf(deps);
-  const launch = await deps.registry.get(post.launchId);
+  const launch = await deps.registry.launches.get(post.launchId);
   if (!launch) throw new PostRefused('not_found', 'the post’s launch is gone');
   const path = articlePath(post);
   const files: CommitFile[] = [];
@@ -348,7 +348,7 @@ const outcomeOf = async (post: Pick<Post, 'id' | 'channel' | 'kind'>, run: () =>
 };
 
 async function eachPost(launchId: number, selection: PostSelection, deps: EditDeps, run: (post: Post) => Promise<Post>): Promise<PostOutcome[]> {
-  if (!(await deps.registry.get(launchId))) throw new PostRefused('not_found', 'no such launch');
+  if (!(await deps.registry.launches.get(launchId))) throw new PostRefused('not_found', 'no such launch');
   const outcomes: PostOutcome[] = [];
   // One at a time: a network that rate-limits sees one request of ours, and the order is the launch's (or the owner's)
   if (selection && 'postIds' in selection) {

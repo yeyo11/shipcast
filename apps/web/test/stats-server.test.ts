@@ -10,8 +10,8 @@ const TODAY = '2026-10-25';
 
 async function seed(registry: Registry) {
   const account = await registry.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
   const { post } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'post', accountId: account.id, externalId: 'b1', url: 'https://bsky.example/1' });
   for (const [day, likes] of [['10', 2], ['15', 10], ['20', 30]] as const) await registry.recordMetrics(launch.id, 'bluesky', { likes, reposts: 1 }, at(day), post.id);
   await registry.recordSnapshot(account.id, { followers: 100, following: 10, posts: 3 }, at('18', 4));

@@ -56,7 +56,7 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
   const registry = await memory();
   const store = new TelemetryStore(registry.database);
   const now = new Date();
-  const { launch } = await registry.claim({ repo: 'yeyo11/shipcast', ref: 'v0.2.0', trigger: 'release', kind: 'major', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v0.2.0', trigger: 'release', kind: 'major', brand: 'personal' });
   // Still waiting an hour after its time: missed
   await registry.schedulePost(launch.id, 'mastodon', new Date(now.getTime() - 3_600_000));
   // A live piece read two hours ago, and one never read
@@ -81,8 +81,8 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
 test('two rows with one network id are a duplicate', async () => {
   const registry = await memory();
   const store = new TelemetryStore(registry.database);
-  const a = await registry.claim({ repo: 'yeyo11/shipcast', ref: 'v1', trigger: 'release', kind: 'major', brand: 'personal' });
-  const b = await registry.claim({ repo: 'yeyo11/shipcast', ref: 'v2', trigger: 'release', kind: 'major', brand: 'personal' });
+  const a = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v1', trigger: 'release', kind: 'major', brand: 'personal' });
+  const b = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v2', trigger: 'release', kind: 'major', brand: 'personal' });
   await registry.recordPost({ launchId: a.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
   await registry.recordPost({ launchId: b.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
   const results = await runChecks(registry, store, { cadenceHours: 6 });

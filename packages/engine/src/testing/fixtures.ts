@@ -22,7 +22,7 @@ export interface LaunchFixture {
 
 /** A claimed launch moved to `status` (drafted unless said) */
 export async function aLaunch(registry: Registry, fixture: LaunchFixture = {}): Promise<Launch> {
-  const { launch } = await registry.claim({
+  const { launch } = await registry.launches.claim({
     repo: fixture.repo ?? 'yeyo11/claudio',
     ref: fixture.ref ?? 'v1.0.0',
     trigger: fixture.trigger ?? 'release',
@@ -31,7 +31,7 @@ export async function aLaunch(registry: Registry, fixture: LaunchFixture = {}): 
   });
   const status = fixture.status ?? 'drafted';
   const detail = fixture.detail === undefined ? `https://github.com/${LAUNCHES_REPO}/pull/3` : fixture.detail;
-  return registry.setStatus(launch.id, status, detail);
+  return registry.launches.setStatus(launch.id, status, detail);
 }
 
 export interface PostFixture {

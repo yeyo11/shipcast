@@ -16,7 +16,7 @@ const [url, prefix, queue] = process.argv.slice(2) as [string, string, QueueName
 
 const registry = {
   jobs: async () => [],
-  launchesPage: async () => ({ launches: [] }),
+  launches: { launchesPage: async () => ({ launches: [] }) },
   recordJob: async () => ({}),
   updateJob: async () => undefined,
   logJob: async () => undefined,

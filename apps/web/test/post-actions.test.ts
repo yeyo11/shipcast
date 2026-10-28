@@ -40,8 +40,8 @@ async function setup() {
 }
 
 async function published(registry: Registry) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram' | 'devto' | 'instagram', externalId: string) =>
     (await registry.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
   return { launch, mastodon: await record('mastodon', 'm1'), bluesky: await record('bluesky', 'at://did:plc:me/app.bsky.feed.post/b1'), telegram: await record('telegram', '11'), devto: await record('devto', '42'), instagram: await record('instagram', 'ig1') };
@@ -82,7 +82,7 @@ test('what a network cannot do, a bad request and a network’s refusal all come
 test('several pieces take the same shared fields, each network what it has; one refusal never stops the rest', async () => {
   const s = await setup();
   const { launch, mastodon, bluesky, telegram, devto } = await published(s.registry);
-  const { launch: other } = await s.registry.claim({ repo: 'yeyo11/other', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch: other } = await s.registry.launches.claim({ repo: 'yeyo11/other', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const { post: foreign } = await s.registry.recordPost({ launchId: other.id, channel: 'mastodon', externalId: 'f1', url: 'https://m/f1' });
   const answer = await editMany(s.deps, { launchId: launch.id, postIds: [mastodon.id, bluesky.id, telegram.id, devto.id, foreign.id, mastodon.id], changes: { text: 'Shared text', link: 'https://josegarrido.dev/en/blog/claudio' } });
   assert.equal(answer.ok, true);
@@ -128,8 +128,8 @@ test('deleting everything asks for the repo’s name, then deletes what each net
 
 test('a drafted launch’s channel is scheduled, moved and cancelled, armed each time; what has no time is refused', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
   const when = new Date(Date.now() + 2 * 86_400_000);
   const scheduled = await schedule(s.deps, { launchId: launch.id, channel: 'mastodon', at: when.toISOString() });
   assert.equal(scheduled.ok, true);
@@ -150,8 +150,8 @@ test('a drafted launch’s channel is scheduled, moved and cancelled, armed each
   assert.equal(!noOffset.ok && noOffset.reason, 'invalid', 'a time without its offset is nobody’s time');
   const tooFar = await schedule(s.deps, { launchId: launch.id, channel: 'mastodon', at: new Date(Date.now() + 90 * 86_400_000).toISOString() });
   assert.equal(tooFar.ok, false);
-  const { launch: done } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v4.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(done.id, 'published');
+  const { launch: done } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v4.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(done.id, 'published');
   const late = await schedule(s.deps, { launchId: done.id, channel: 'mastodon', at: when.toISOString() });
   assert.equal(late.ok, false, 'a published launch has nothing left to schedule');
 });

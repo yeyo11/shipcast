@@ -182,7 +182,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const http = deps.fetch ?? globalThis.fetch;
   const approved = await approval(launch, deps);
   if (approved.state === 'waiting') return { state: 'waiting', launch, reason: approved.reason };
-  if (approved.state === 'closed') return { state: 'skipped', launch: await registry.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
+  if (approved.state === 'closed') return { state: 'skipped', launch: await registry.launches.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
 
   const dir = launchDir(launch);
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
@@ -536,6 +536,6 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     if (mode === 'off' || unpublishable || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
     if (!(await registry.cursor(failureKey(launch, c))) && !(await registry.cursor(cancelledKey(launch.id, c)))) pending.push(c);
   }
-  if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.get(launch.id))!, posted, problems, scheduled, failures, heldElsewhere };
-  return { state: 'published', launch: await registry.setStatus(launch.id, 'published', launch.detail), posted, problems, scheduled, failures, heldElsewhere };
+  if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.launches.get(launch.id))!, posted, problems, scheduled, failures, heldElsewhere };
+  return { state: 'published', launch: await registry.launches.setStatus(launch.id, 'published', launch.detail), posted, problems, scheduled, failures, heldElsewhere };
 }

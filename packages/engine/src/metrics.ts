@@ -92,7 +92,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   };
 
   let unindexed = false;
-  const launches = (await registry.recent(500)).filter((l) => l.status === 'published');
+  const launches = (await registry.launches.recent(500)).filter((l) => l.status === 'published');
   for (const launch of launches) {
     const since = launch.createdAt.slice(0, 10);
     const until = day(now);

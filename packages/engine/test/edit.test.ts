@@ -27,8 +27,8 @@ function fakeEditors(sent: Sent[], fail: Partial<Record<Channel, Error>> = {}): 
 const image = (async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } })) as unknown as typeof fetch;
 
 async function launchWith(registry: Registry, channels: Array<{ channel: Parameters<Registry['recordPost']>[0]['channel']; kind?: Parameters<Registry['recordPost']>[0]['kind']; externalId: string; accountId?: number | null }>) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
   const posts = [];
   for (const c of channels) posts.push((await registry.recordPost({ launchId: launch.id, channel: c.channel, kind: c.kind ?? 'post', externalId: c.externalId, url: `https://${c.channel}.example/${c.externalId}`, accountId: c.accountId ?? null })).post);
   return { launch, posts };

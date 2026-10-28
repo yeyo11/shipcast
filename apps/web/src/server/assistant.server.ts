@@ -8,7 +8,7 @@ export async function assistantDeps(): Promise<AssistantDeps> {
   return {
     setup: () => setupFor(ctx.deps, 'assistant'),
     brand: () => ctx.brand(),
-    launch: async (launchId) => (await ctx.registry.get(launchId)) ?? undefined,
+    launch: async (launchId) => (await ctx.registry.launches.get(launchId)) ?? undefined,
     grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }),
     checkout: (repo, ref) => ctx.deps.checkout(repo, ref),
     sessions: ctx.registry,

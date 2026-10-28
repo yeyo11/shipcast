@@ -165,8 +165,8 @@ test('each route needs its scope', async () => {
 test('launches are paged by cursor and filtered by status', async () => {
   const s = await setup();
   for (let i = 1; i <= 5; i++) {
-    const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: `v0.${i}.0`, trigger: 'release', kind: 'launch', brand: 'personal' });
-    if (i % 2 === 0) await s.registry.setStatus(launch.id, 'published');
+    const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: `v0.${i}.0`, trigger: 'release', kind: 'launch', brand: 'personal' });
+    if (i % 2 === 0) await s.registry.launches.setStatus(launch.id, 'published');
   }
   const first = await body(await call(s.deps, 'GET', '/launches?limit=2', { token: s.read }));
   const refs = (page: Record<string, unknown>) => (page.launches as Array<{ ref: string }>).map((l) => l.ref);
@@ -191,7 +191,7 @@ test('launches are paged by cursor and filtered by status', async () => {
 test('launches are searched, filtered and sorted, and a cursor keeps its sort', async () => {
   const s = await setup();
   const claim = (repo: string, ref: string, trigger: 'release' | 'manual' | 'article' = 'release', kind: 'launch' | 'minor' = 'minor') =>
-    s.registry.claim({ repo, ref, trigger, kind, brand: 'personal' });
+    s.registry.launches.claim({ repo, ref, trigger, kind, brand: 'personal' });
   await claim('yeyo11/claudio', 'v1.0.0', 'release', 'launch');
   await claim('yeyo11/claudio', 'v1.1.0', 'manual');
   await claim('yeyo11/shipcast', 'v0.1.0');
@@ -219,8 +219,8 @@ test('launches are searched, filtered and sorted, and a cursor keeps its sort', 
 
 test('a launch comes with its posts, numbers, index status and drafts summary', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'drafted', 'Drafts: https://github.com/yeyo11/launches/pull/7');
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'drafted', 'Drafts: https://github.com/yeyo11/launches/pull/7');
   await s.registry.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: null, url: 'https://josegarrido.dev/en/blog/claudio' });
   await s.registry.recordMetrics(launch.id, 'blog', { views: 12 }, new Date('2026-10-25T00:00:00Z'));
 
@@ -281,8 +281,8 @@ test('jobs come a page at a time, and the cursor walks the whole day', async () 
 
 test('the writes start the same work the pages do, with their checks', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'published');
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'published');
   await s.registry.setCursor(`publish-failed:${launch.id}:devto`, 'rejected');
 
   const accepted = await call(s.deps, 'POST', '/launches', { token: s.write, body: { repo: 'yeyo11/claudio', ref: 'v2.0.0', direct: true } });
@@ -305,7 +305,7 @@ test('the writes start the same work the pages do, with their checks', async () 
   const retry = await call(s.deps, 'POST', `/launches/${launch.id}/retry/devto`, { token: s.write });
   assert.equal(retry.status, 202);
   assert.equal(await s.registry.cursor(`publish-failed:${launch.id}:devto`), undefined, 'the failure is forgotten');
-  assert.equal((await s.registry.get(launch.id))?.status, 'drafted');
+  assert.equal((await s.registry.launches.get(launch.id))?.status, 'drafted');
 
   const article = await call(s.deps, 'POST', '/articles', { token: s.write, body: { title: ' Hello ', markdown: 'Body', lang: 'en', channels: ['devto', 'nowhere'] } });
   assert.equal(article.status, 202);
@@ -338,8 +338,8 @@ test('the OpenAPI document is public and lists every route with its scope', asyn
 });
 
 async function publishedLaunch(registry: Registry) {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v2.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
   const record = async (channel: 'mastodon' | 'bluesky' | 'telegram', externalId: string) =>
     (await registry.recordPost({ launchId: launch.id, channel, externalId, url: `https://${channel}.example/${externalId}` })).post;
   return { launch, mastodon: await record('mastodon', '111'), bluesky: await record('bluesky', 'at://did:plc:a/app.bsky.feed.post/1'), telegram: await record('telegram', '@c:5') };
@@ -406,8 +406,8 @@ test('the capability map is readable with the read scope', async () => {
 
 test('a launch’s channels are scheduled, moved and cancelled through the API', async () => {
   const s = await setup();
-  const { launch } = await s.registry.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  await s.registry.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await s.registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/9');
 
   const refusedScope = await call(s.deps, 'POST', `/launches/${launch.id}/schedule`, { token: s.read, body: { times: { bluesky: '2030-01-01T10:00:00Z' } } });
   assert.equal(refusedScope.status, 403);

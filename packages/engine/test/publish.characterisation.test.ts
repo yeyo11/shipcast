@@ -85,7 +85,7 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
   assert.equal(await registry.cursor(failed(launch.id, 'bluesky')), undefined);
   assert.equal(await registry.cursor(failed(launch.id, 'discord')), undefined);
 
-  const second = await publishLaunch((await registry.get(launch.id))!, brand, deps);
+  const second = await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.ok(second.state === 'published');
   assert.deepEqual(fake.log.slice(5), ['bluesky publish', 'discord publish'], 'the temporary failures again, Telegram not');
   assert.deepEqual(second.posted.map((p) => p.channel), ['bluesky', 'discord']);
@@ -99,7 +99,7 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
 
   // A retry of the channel, as the publish job does it: forget the failure, draft the launch again
   await registry.deleteCursor(failed(launch.id, 'telegram'));
-  const retried = await publishLaunch(await registry.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
+  const retried = await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.ok(retried.state === 'published', 'failing for good again still publishes the launch');
   assert.deepEqual(retried.problems, [
     'instagram: no piece in the pack or no credentials configured',
@@ -110,7 +110,7 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
 
   fake.heal('telegram', 'publish');
   await registry.deleteCursor(failed(launch.id, 'telegram'));
-  const healed = await publishLaunch(await registry.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
+  const healed = await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.deepEqual(healed.state === 'published' && healed.posted, [{ channel: 'telegram', url: 'https://telegram.example/1' }]);
   assert.equal(fake.callsOf('telegram').length, 3);
   assert.equal(fake.callsOf('devto').length, 1, 'nothing out already went again');
@@ -182,7 +182,7 @@ test('a due scheduled piece that fails for now stays scheduled in its slot and i
   assert.equal(out.state, 'published');
   const [live] = await registry.posts(launch.id, { channel: 'bluesky' });
   assert.deepEqual([live?.id, live?.status, live?.externalId, live?.scheduledAt], [waiting?.id, 'live', 'bluesky-1', slot.toISOString()]);
-  await publishLaunch(await registry.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
+  await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.equal(fake.callsOf('bluesky').length, 2, 'once out, never again');
 });
 

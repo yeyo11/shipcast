@@ -10,11 +10,11 @@ const release: NewLaunch = { repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 're
 
 test('a release is claimed once: the second claim gets the existing launch back', async () => {
   const registry = await memory();
-  const first = await registry.claim(release);
+  const first = await registry.launches.claim(release);
   assert.equal(first.claimed, true);
   assert.equal(first.launch.status, 'detected');
 
-  const again = await registry.claim({ ...release, trigger: 'manual', kind: 'minor' });
+  const again = await registry.launches.claim({ ...release, trigger: 'manual', kind: 'minor' });
   assert.equal(again.claimed, false);
   assert.equal(again.launch.id, first.launch.id);
   assert.equal(again.launch.kind, 'major', 'the first claim is the one that counts');
@@ -22,23 +22,23 @@ test('a release is claimed once: the second claim gets the existing launch back'
 
 test('claims of the same release at once: exactly one wins', async () => {
   const registry = await memory();
-  const claims = await Promise.all(Array.from({ length: 5 }, () => registry.claim(release)));
+  const claims = await Promise.all(Array.from({ length: 5 }, () => registry.launches.claim(release)));
   assert.equal(claims.filter((c) => c.claimed).length, 1);
   assert.equal(new Set(claims.map((c) => c.launch.id)).size, 1);
 });
 
 test('timestamps are ISO 8601 in UTC with milliseconds, as SQLite wrote them', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
   assert.match(launch.createdAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.equal(launch.updatedAt, launch.createdAt, 'one statement, one moment');
 });
 
 test('a skipped release stays recorded, so the next poll does not pick it up again', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
-  await registry.setStatus(launch.id, 'skipped', 'launch.yml has enabled: false');
-  const again = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
+  await registry.launches.setStatus(launch.id, 'skipped', 'launch.yml has enabled: false');
+  const again = await registry.launches.claim(release);
   assert.equal(again.claimed, false);
   assert.equal(again.launch.status, 'skipped');
   assert.equal(again.launch.detail, 'launch.yml has enabled: false');
@@ -46,20 +46,20 @@ test('a skipped release stays recorded, so the next poll does not pick it up aga
 
 test('the last published ref feeds the pack inference; drafts and failures do not count', async () => {
   const registry = await memory();
-  assert.equal(await registry.lastPublishedRef('yeyo11/claudio'), undefined);
+  assert.equal(await registry.launches.lastPublishedRef('yeyo11/claudio'), undefined);
 
-  const a = (await registry.claim({ ...release, ref: 'v0.8.0' })).launch;
-  await registry.setStatus(a.id, 'published');
-  const b = (await registry.claim({ ...release, ref: 'v0.8.1' })).launch;
-  await registry.setStatus(b.id, 'failed', 'dev.to answered 500');
+  const a = (await registry.launches.claim({ ...release, ref: 'v0.8.0' })).launch;
+  await registry.launches.setStatus(a.id, 'published');
+  const b = (await registry.launches.claim({ ...release, ref: 'v0.8.1' })).launch;
+  await registry.launches.setStatus(b.id, 'failed', 'dev.to answered 500');
 
-  assert.equal(await registry.lastPublishedRef('yeyo11/claudio'), 'v0.8.0');
-  assert.equal(await registry.lastPublishedRef('yeyo11/other'), undefined);
+  assert.equal(await registry.launches.lastPublishedRef('yeyo11/claudio'), 'v0.8.0');
+  assert.equal(await registry.launches.lastPublishedRef('yeyo11/other'), undefined);
 });
 
 test('a piece is published once per launch, channel, account and kind', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
   const account = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
   const first = await registry.recordPost({ launchId: launch.id, channel: 'devto', accountId: account.id, url: 'https://dev.to/x', externalId: '1' });
   assert.equal(first.recorded, true);
@@ -76,7 +76,7 @@ test('a piece is published once per launch, channel, account and kind', async ()
 
 test('with no account, nulls are not distinct: a blog article is still recorded once', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
   const piece = { launchId: launch.id, channel: 'blog' as const, kind: 'article:en' as const, url: 'https://example.dev/en/a/', externalId: 'a' };
   assert.equal((await registry.recordPost(piece)).recorded, true);
   const again = await registry.recordPost({ ...piece, url: 'https://example.dev/en/b/' });
@@ -95,7 +95,7 @@ test('with no account, nulls are not distinct: a blog article is still recorded 
 
 test('removing an account keeps its pieces, no longer attributed', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
   const account = await registry.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: {} });
   const { post } = await registry.recordPost({ launchId: launch.id, channel: 'mastodon', accountId: account.id, url: 'https://m/1', externalId: '1' });
   await registry.deleteAccount(account.id);
@@ -116,7 +116,7 @@ test('settings hold what the owner chose, typed as it was stored', async () => {
 });
 
 test('setStatus on an unknown launch throws instead of silently doing nothing', async () => {
-  await assert.rejects((await memory()).setStatus(999, 'published'), /no launch with id 999/);
+  await assert.rejects((await memory()).launches.setStatus(999, 'published'), /no launch with id 999/);
 });
 
 test('cursors keep polling state across restarts, and the schema survives reopening', async () => {
@@ -124,13 +124,13 @@ test('cursors keep polling state across restarts, and the schema survives reopen
   try {
     const first = await Registry.memory(dir);
     await first.setCursor('events:yeyo11', 'W/"etag-1"');
-    await first.claim(release);
+    await first.launches.claim(release);
     await first.close();
 
     // Reopening runs the migrations again: already applied, they change nothing
     const reopened = await Registry.memory(dir);
     assert.equal(await reopened.cursor('events:yeyo11'), 'W/"etag-1"');
-    assert.equal((await reopened.find('yeyo11/claudio', 'v0.9.0'))?.status, 'detected');
+    assert.equal((await reopened.launches.find('yeyo11/claudio', 'v0.9.0'))?.status, 'detected');
     await reopened.setCursor('events:yeyo11', 'W/"etag-2"');
     assert.equal(await reopened.cursor('events:yeyo11'), 'W/"etag-2"');
     await reopened.close();
@@ -141,8 +141,8 @@ test('cursors keep polling state across restarts, and the schema survives reopen
 
 test('a channel that failed for good can be retried, without posting the others again', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
-  await registry.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/1');
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/1');
   await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
   await registry.setCursor(`publish-failed:${launch.id}:newsletter`, 'Brevo: 405');
   await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
@@ -157,12 +157,12 @@ test('a channel that failed for good can be retried, without posting the others 
 
 test('a retry leaves alone a launch whose channel already has its post', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
-  await registry.setStatus(launch.id, 'published');
+  const { launch } = await registry.launches.claim(release);
+  await registry.launches.setStatus(launch.id, 'published');
   await registry.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
   await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
   assert.deepEqual(await retryChannelEverywhere(registry, 'devto'), []);
-  assert.equal((await registry.get(launch.id))?.status, 'published');
+  assert.equal((await registry.launches.get(launch.id))?.status, 'published');
 });
 
 test('accounts: the first per network and brand is the primary, and another can take over', async () => {
@@ -206,7 +206,7 @@ test('cursors are listed by prefix', async () => {
 
 test('metrics keep every reading; the latest of each is the newest', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
   await registry.recordMetrics(launch.id, 'devto', { views: 10, likes: 1, broken: Number.NaN }, new Date('2026-10-01T00:00:00Z'));
   await registry.recordMetrics(launch.id, 'devto', { views: 25.5 }, new Date('2026-10-02T00:00:00Z'));
   assert.deepEqual(
@@ -221,7 +221,7 @@ test('metrics keep every reading; the latest of each is the newest', async () =>
 
 test('a job row keeps its first record, a bounded log, and is forgotten once old', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
+  const { launch } = await registry.launches.claim(release);
   const job = await registry.recordJob({ id: 'a', queue: 'publish', title: 'Publishing claudio v0.9.0', launchId: launch.id });
   assert.equal(job.state, 'created');
   assert.equal((await registry.recordJob({ id: 'a', queue: 'publish', title: 'another' })).title, 'Publishing claudio v0.9.0');
@@ -245,8 +245,8 @@ test('a job row keeps its first record, a bounded log, and is forgotten once old
 
 test('a launch’s sent replies are counted per channel: only others’ comments answered, never another launch’s', async () => {
   const registry = await memory();
-  const { launch } = await registry.claim(release);
-  const { launch: other } = await registry.claim({ ...release, ref: 'v1.0.0' });
+  const { launch } = await registry.launches.claim(release);
+  const { launch: other } = await registry.launches.claim({ ...release, ref: 'v1.0.0' });
   const { post: mastodon } = await registry.recordPost({ launchId: launch.id, channel: 'mastodon', url: 'https://m/1', externalId: '1' });
   const { post: bluesky } = await registry.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://b/1', externalId: 'b1' });
   const { post: elsewhere } = await registry.recordPost({ launchId: other.id, channel: 'mastodon', url: 'https://m/2', externalId: '2' });

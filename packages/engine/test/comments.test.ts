@@ -56,7 +56,7 @@ interface World {
 
 async function world(channel: 'mastodon' | 'devto' = 'mastodon'): Promise<World> {
   const registry = await memoryRegistry();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const { post } = await registry.recordPost({ launchId: launch.id, channel, externalId: '100', url: 'https://mastodon.social/@me/100' });
   const w: World = {
     registry,

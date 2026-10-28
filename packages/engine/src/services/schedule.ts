@@ -30,7 +30,7 @@ export class ScheduleService {
 
   /** Sets the time of each channel named; a channel scheduled already is moved */
   async schedule(launchId: number, times: Partial<Record<Channel, Date>>): Promise<Post[]> {
-    const launch = await this.#deps.store.get(launchId);
+    const launch = await this.#deps.store.launches.get(launchId);
     if (!launch) throw new ScheduleRefused('not_found', 'no such launch');
     // Best effort: a launch.yml that cannot be read yet (an article's, before its merge) leaves the check to the publish step
     const config = await this.#deps.launchConfig(launch).catch(() => undefined);

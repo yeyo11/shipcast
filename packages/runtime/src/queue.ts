@@ -241,9 +241,9 @@ export async function reconcileRows(registry: Registry, find: (record: JobRecord
   // cannot be started again; failed, it can, and its page says why
   const live = await registry.jobs({ states: ['created', 'active', 'retry'], queues: ['draft', 'article'], limit: 500 });
   const drafting = new Set(live.map((j) => j.launchId));
-  const { launches } = await registry.launchesPage({ status: 'generating', limit: 100 });
+  const { launches } = await registry.launches.launchesPage({ status: 'generating', limit: 100 });
   for (const launch of launches) {
-    if (!drafting.has(launch.id)) await registry.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
+    if (!drafting.has(launch.id)) await registry.launches.setStatus(launch.id, 'failed', 'The draft was interrupted when Shipcast stopped. Launch it again.');
   }
 }
 

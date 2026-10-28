@@ -80,8 +80,8 @@ async function draftAndRecord(deps: CiDeps, launch: Launch, brand: Brand): Promi
     }
   });
   await deps.state.use(async (registry) => {
-    if (result.ok) await registry.setStatus(launch.id, 'drafted', result.pullRequest);
-    else await registry.setStatus(launch.id, 'failed', result.problems.join('\n'));
+    if (result.ok) await registry.launches.setStatus(launch.id, 'drafted', result.pullRequest);
+    else await registry.launches.setStatus(launch.id, 'failed', result.problems.join('\n'));
   }, `record the draft of ${nameOf(launch)}`);
   if (result.ok) deps.log(`Drafted ${nameOf(launch)}: ${result.pullRequest}`);
   else deps.log(`Could not draft ${nameOf(launch)}:\n${result.problems.map((p) => `  ${p}`).join('\n')}`);
@@ -163,7 +163,7 @@ export async function ciPublish(deps: CiDeps, options: PublishOptions): Promise<
 
   if (deps.dryRun) {
     await deps.state.scratch(async (registry) => {
-      const launches = options.pullRequest ? [await launchOfPullRequest({ registry }, options.pullRequest)].filter((l) => l !== undefined) : (await registry.recent(100)).filter((l) => l.status === 'drafted');
+      const launches = options.pullRequest ? [await launchOfPullRequest({ registry }, options.pullRequest)].filter((l) => l !== undefined) : (await registry.launches.recent(100)).filter((l) => l.status === 'drafted');
       if (launches.length === 0) deps.log('Dry run: no drafted launch to publish');
       for (const launch of launches) {
         deps.log(`Dry run: would publish ${nameOf(launch)} once its pull request is merged and its article is live (${launch.detail ?? ''})`);
@@ -175,7 +175,7 @@ export async function ciPublish(deps: CiDeps, options: PublishOptions): Promise<
 
   for (let attempt = 1; ; attempt++) {
     const results = await deps.state.use(async (registry) => {
-      const launches = options.pullRequest ? [await launchOfPullRequest({ registry }, options.pullRequest)].filter((l) => l !== undefined) : (await registry.recent(100)).filter((l) => l.status === 'drafted');
+      const launches = options.pullRequest ? [await launchOfPullRequest({ registry }, options.pullRequest)].filter((l) => l !== undefined) : (await registry.launches.recent(100)).filter((l) => l.status === 'drafted');
       const out: PublishResult[] = [];
       for (const launch of launches) out.push(await deps.publish(launch, brand, registry));
       return out;
@@ -223,7 +223,7 @@ export async function ciRound(deps: CiDeps, options: { detect: boolean }): Promi
         else if (outcome.result === 'invalid-config') deps.log(`${outcome.event.repo}: ${outcome.launch.detail ?? 'invalid launch.yml'}`);
       }
     }
-    for (const launch of (await registry.recent(100)).filter((l) => l.status === 'drafted')) {
+    for (const launch of (await registry.launches.recent(100)).filter((l) => l.status === 'drafted')) {
       if (deps.dryRun) {
         deps.log(`Dry run: would try to publish ${nameOf(launch)}`);
         for (const line of (await deps.plan?.(launch)) ?? []) deps.log(`  ${line}`);

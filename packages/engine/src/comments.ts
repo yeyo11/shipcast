@@ -272,7 +272,7 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
   const fail = async (problem: string) => (await registry.updateComment(id, { status: 'failed', problem }, OPEN)) ?? comment;
   try {
     const post = (await registry.post(comment.postId))!;
-    const launch = (await registry.get(comment.launchId))!;
+    const launch = (await registry.launches.get(comment.launchId))!;
     if (!contexts.has(launch.id)) contexts.set(launch.id, deps.context(launch));
     const context = await contexts.get(launch.id)!;
     const setup = await deps.setup();

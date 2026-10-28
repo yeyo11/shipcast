@@ -202,7 +202,7 @@ async function growthOf(registry: Registry, accountId: number, now: Date, days =
 
 /** The repos the brand launched, the newest first, each once */
 async function projectsOf(registry: Registry): Promise<string[]> {
-  const repos = (await registry.recent(100)).filter((l) => l.status === 'published' && !isArticle(l)).map((l) => l.repo);
+  const repos = (await registry.launches.recent(100)).filter((l) => l.status === 'published' && !isArticle(l)).map((l) => l.repo);
   return [...new Set(repos)].slice(0, 10);
 }
 

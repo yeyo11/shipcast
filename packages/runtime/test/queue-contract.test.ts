@@ -123,7 +123,7 @@ async function until(check: () => boolean | Promise<boolean>, timeoutMs = 20_000
 }
 
 async function launch(registry: Registry): Promise<number> {
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   return launch.id;
 }
 
@@ -476,7 +476,7 @@ describe('BullMQ beyond the contract', { skip: redisSkip }, () => {
 
   run('Redis lost: the scheduled posts are rebuilt from Postgres, once however often it runs', async (backend, db) => {
     const launchId = await launch(db.registry);
-    await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
+    await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
     const soon = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() + 1500)))!;
     const later = (await db.registry.schedulePost(launchId, 'mastodon', new Date(Date.now() + 3600_000)))!;
     const first = backend.process(db) as BullQueue;

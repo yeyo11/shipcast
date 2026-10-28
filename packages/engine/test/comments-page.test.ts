@@ -9,7 +9,7 @@ import { memoryRegistry } from '../src/testing.ts';
 async function seeded() {
   const registry = await memoryRegistry();
   const make = async (ref: string, channels: Channel[]) => {
-    const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref, trigger: 'release', kind: 'major', brand: 'personal' });
+    const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref, trigger: 'release', kind: 'major', brand: 'personal' });
     const made = [];
     for (const channel of channels) made.push((await registry.recordPost({ launchId: launch.id, channel, externalId: `${ref}-${channel}`, url: `https://example.com/${ref}/${channel}` })).post);
     return { launch, posts: made };

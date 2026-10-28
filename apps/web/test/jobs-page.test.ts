@@ -74,7 +74,7 @@ test('rounds that ended well and jobs that found automation off are neither list
 
 test('a launch’s jobs are listed whenever they ran', async () => {
   const registry = await memoryRegistry();
-  const { launch } = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.recordJob({ id: 'a', queue: 'draft', title: 'Drafting', launchId: launch.id });
   await registry.recordJob({ id: 'b', queue: 'draft', title: 'Other' });
   assert.deepEqual((await jobsView(registry, { launchId: launch.id })).map((j) => j.id), ['a']);
