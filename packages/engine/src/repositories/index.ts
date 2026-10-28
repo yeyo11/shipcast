@@ -1,4 +1,5 @@
-import { connectPglite, connectPostgres, type Database } from '../db/connect.ts';
+import { connectPglite, connectPostgres, type Database, type PoolOptions } from '../db/connect.ts';
+export { pingDatabase, type PoolOptions } from '../db/connect.ts';
 import { PublishAttempts } from '../publishing/attempts.ts';
 import { LaunchRepository } from './launches.ts';
 import { AssistantRepository } from './assistant.ts';
@@ -95,8 +96,8 @@ export interface OpenRepositories extends Repositories {
 }
 
 /** The registry on a Postgres server (`SHIPCAST_DATABASE_URL`), its migrations applied */
-export async function connectRepositories(url: string): Promise<OpenRepositories> {
-  const { db, close } = await connectPostgres(url);
+export async function connectRepositories(url: string, pool: PoolOptions = {}): Promise<OpenRepositories> {
+  const { db, close } = await connectPostgres(url, {}, pool);
   return { ...repositoriesOn(db), close };
 }
 
