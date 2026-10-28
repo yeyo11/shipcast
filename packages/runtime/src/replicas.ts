@@ -25,7 +25,11 @@ export interface ReplicaEvents {
 
 const CACHE_EVENTS = ['settings.changed', 'github.installation.changed', 'brand.changed'] as const;
 
-export async function replicaEvents(shared: Pick<SharedState, 'events' | 'backend'>, caches: ReplicaCaches, log: (line: string) => void = (line) => console.error(line)): Promise<ReplicaEvents> {
+/**
+ * `pages`: with `realtime-ui` the open pages listen on the bus too (realtime/stream.ts), so a single
+ * process without Redis still puts its changes on its in-memory bus, where only they hear them
+ */
+export async function replicaEvents(shared: Pick<SharedState, 'events' | 'backend'>, caches: ReplicaCaches, log: (line: string) => void = (line) => console.error(line), options: { pages?: boolean } = {}): Promise<ReplicaEvents> {
   const react = async (event: EventName) => {
     if (event === 'settings.changed') {
       await caches.refresh();
@@ -36,6 +40,7 @@ export async function replicaEvents(shared: Pick<SharedState, 'events' | 'backen
   const onEvent = (event: EventName) => () =>
     void react(event).catch((error: unknown) => log(`${event}: ${error instanceof Error ? error.message : String(error)}`));
   const distributed = shared.backend === 'redis';
+  const publish = distributed || options.pages === true;
   if (distributed) {
     for (const event of CACHE_EVENTS) await shared.events.subscribe(event, onEvent(event));
     // Events sent while the subscription was down are lost: read again what they would have said
@@ -46,12 +51,12 @@ export async function replicaEvents(shared: Pick<SharedState, 'events' | 'backen
   }
   return {
     announce: async (event, payload) => {
-      if (distributed) await shared.events.publish(event, payload);
-      else await react(event);
+      if (!distributed) await react(event);
+      if (publish) await shared.events.publish(event, payload);
     },
     settingsSaved: async (key = 'settings') => {
       await caches.refresh();
-      if (distributed) await shared.events.publish('settings.changed', { key });
+      if (publish) await shared.events.publish('settings.changed', { key });
     },
   };
 }

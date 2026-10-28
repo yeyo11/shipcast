@@ -21,7 +21,8 @@ import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
 import { poolOptions, roleFromEnv, split } from './roles.ts';
 import { githubCaches, type GitHubCaches } from './github-events.ts';
-import type { Cache } from './redis/ports.ts';
+import { withEvents } from './realtime/publish.ts';
+import type { Cache, EventBus } from './redis/ports.ts';
 import { GitHubUserTokens } from './github-user.ts';
 import { secretStoreFor, type SecretStore } from './secrets.ts';
 import { importEnvSettings, RuntimeSettings } from './settings.ts';
@@ -52,6 +53,8 @@ export interface Runtime {
   githubCaches: GitHubCaches | undefined;
   /** With `github-events`: the drafts snapshots the launch page reads instead of GitHub */
   drafts: DraftSnapshotService | undefined;
+  /** With `realtime-ui` and a bus: sends the registry's coalesced events still waiting, part of a stop */
+  flushEvents(): Promise<void>;
 }
 
 /**
@@ -102,6 +105,11 @@ export interface RuntimeOptions {
    * serves the others; this process's memory when not given
    */
   cache?: Cache;
+  /**
+   * The bus the registry's writes are announced on, with `realtime-ui` on (realtime/publish.ts): set
+   * by a process that serves pages or works jobs, so every change a page shows reaches it
+   */
+  events?: EventBus;
 }
 
 const BRAND_TTL_MS = 5 * 60_000;
@@ -110,8 +118,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const env = options.env ?? process.env;
   const log = options.log ?? (() => undefined);
   const config = loadConfig(env, options.root);
-  const registry = options.registry ?? (await connectRepositories(config.databaseUrl, poolOptions(env)));
   const flags = options.flags ?? Flags.fromEnv(env);
+  const opened = options.registry ?? (await connectRepositories(config.databaseUrl, poolOptions(env)));
+  // Wrapped before anything is built on it, so every writer below (the pipeline, the drafts, the jobs) announces
+  const announced = flags.on('realtime-ui') && options.events ? withEvents(opened, options.events) : undefined;
+  const registry = announced?.registry ?? opened;
   const secrets = options.secrets ?? secretStoreFor(config, env, { flags, rows: new SecretRows(registry.database) });
   // One session key and API pepper across replicas, read once per process (app-keys.ts)
   provisionAppKeys(secrets, { env, lock: new PostgresLock(registry.database) });
@@ -204,5 +215,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     githubCaches: caches,
     drafts,
+    flushEvents: async () => {
+      await announced?.flush();
+    },
   };
 }

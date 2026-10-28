@@ -70,9 +70,20 @@ export interface Lock {
 export interface ShipcastEvents {
   /** A setting was saved: every replica reloads it */
   'settings.changed': { key: string };
+  /** A launch's row, its failures or its drafts snapshot changed; a claim is a new one */
   'launch.changed': { launchId: number };
-  'post.changed': { postId: number; launchId: number };
+  /** A piece was recorded, edited, deleted or (un)scheduled; null when a whole channel's schedule was cleared */
+  'post.changed': { postId: number | null; launchId: number };
+  /** A job's row: sent, started, a line of its log (coalesced), ended */
   'job.changed': { id: string; queue: string; state: JobRecord['state']; launchId: number | null };
+  /** A comment was recorded, drafted, sent or set aside */
+  'comment.changed': { commentId: number; launchId: number };
+  /** A launch's numbers were read: one per run per launch, not one per reading */
+  'metrics.changed': { launchId: number };
+  /** An account was connected, edited, checked, made primary, removed or its numbers were read */
+  'account.changed': { accountId: number };
+  /** The bell's dismissals changed */
+  'attention.changed': { dismissed: number };
   /** The GitHub App's installation changed: every replica looks it up again */
   'github.installation.changed': { reason: string };
   /** The launches repo changed (a push): every replica reads the brand again */

@@ -35,3 +35,4 @@ export * from './health.ts';
 export * from './replicas.ts';
 export * from './logger.ts';
 export * from './github-events.ts';
+export * from './realtime/publish.ts';

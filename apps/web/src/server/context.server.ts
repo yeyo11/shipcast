@@ -4,6 +4,7 @@ import { TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubR
 import {
   attachTelemetryStore,
   buildServices,
+  ConfigError,
   Flags,
   installTelemetry,
   type TelemetryRecorder,
@@ -111,9 +112,11 @@ async function createContext(): Promise<AppContext> {
   const role = roleFromEnv(process.env);
   const app = loadAppConfig(process.env);
   const proc = processState(process.env, role === 'all' ? 'app' : role);
+  // A job's events must reach the pages from another process: only Redis's bus carries them there
+  if (flags.on('realtime-ui') && split(role) && proc.shared.backend !== 'redis') throw new ConfigError('the realtime-ui flag on split processes (SHIPCAST_ROLE) needs redis-state, whose bus carries the events between them');
   // A preview's GitHub client reads for real and only pretends to write: no pull request, commit or merge
   // With redis-state the GitHub ETag and file caches are every replica's (redis-cache); otherwise a bounded one of this process
-  const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }), ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
+  const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }), events: proc.shared.events, ...(fakeNetworks() && { githubFetch: previewGitHubFetch() }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
   const clock = runsTheClock(role);
@@ -148,7 +151,7 @@ async function createContext(): Promise<AppContext> {
     }),
   };
   // Another replica's save, the App's installation and the brand reach this process's caches
-  const events = await replicaEvents(proc.shared, runtime);
+  const events = await replicaEvents(proc.shared, runtime, undefined, { pages: flags.on('realtime-ui') });
   const ctx: AppContext = {
     config,
     app,
@@ -179,6 +182,8 @@ async function createContext(): Promise<AppContext> {
   // The steps of a stop, in their phases (lifecycle.ts): the HTTP server's own is main.ts's
   onStop('queue', 'the job queue', () => queue.stop());
   onStop('telemetry', 'the telemetry', () => telemetry.stop());
+  // After the queue stopped, before the bus closes: a job's last state is not left in a coalescing timer
+  onStop('telemetry', 'the pending events', () => runtime.flushEvents());
   onStop('redis', 'Redis', () => proc.close());
   onStop('db', 'the registry', () => registry.close());
   stopOnSignals(process.env);
