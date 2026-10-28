@@ -10,7 +10,8 @@
     "node": ">=24.22.1"
   },
   "scripts": {
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && pnpm deps",
+    "deps": "depcruise packages apps --config .dependency-cruiser.cjs --output-type err",
     "test": "pnpm -r test",
     "shipcast": "node apps/cli/src/main.ts",
     "app": "pnpm --filter @shipcast/web build && node apps/web/main.ts",
@@ -19,7 +20,9 @@
     "illustrations:specimen": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/illustrations-specimen.tsx"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.20",
     "@types/node": "^24.19.2",
+    "dependency-cruiser": "^18.7.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
