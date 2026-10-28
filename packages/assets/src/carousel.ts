@@ -1,8 +1,7 @@
-import { readFile } from 'node:fs/promises';
 import { Resvg } from '@resvg/resvg-js';
 import jpeg from 'jpeg-js';
 import satori from 'satori';
-import { box, dots, EDITORIAL_FONTS, el, headline, INK, MUTED, TEXT, type Look, type OgNode } from './og.ts';
+import { box, dots, editorialFonts, el, headline, INK, MUTED, TEXT, type Look, type OgNode } from './og.ts';
 
 /** Instagram's tallest feed format: 4:5. Every piece of a carousel shares the first one's shape. */
 export const SLIDE_WIDTH = 1080;
@@ -158,7 +157,7 @@ function withImages(node: OgNode, images: SlideImage[]): OgNode {
 
 /** A slide as JPEG, the one image format Instagram accepts. */
 export async function renderSlide(node: OgNode, images: SlideImage[] = [], height = SLIDE_HEIGHT): Promise<{ png: Uint8Array; jpeg: Uint8Array }> {
-  const fonts = await Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
+  const fonts = await editorialFonts();
   const svg = await satori(withImages(node, images) as never, { width: SLIDE_WIDTH, height, fonts });
   const rendered = new Resvg(svg, { fitTo: { mode: 'width', value: SLIDE_WIDTH } }).render();
   const jpg = jpeg.encode({ data: Buffer.from(rendered.pixels), width: rendered.width, height: rendered.height }, 90).data;

@@ -180,7 +180,7 @@ function illustration(colour: string, kind: Motif): OgNode {
  */
 export async function renderIllustration(look: Look, scale = 2): Promise<Uint8Array> {
   const { colour, motif: kind } = look;
-  const fonts = await Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
+  const fonts = await editorialFonts();
   const svg = await satori(illustration(colour, kind) as never, { width: 560, height: OG_HEIGHT, fonts });
   return new Uint8Array(new Resvg(svg, { fitTo: { mode: 'width', value: 560 * scale } }).render().asPng());
 }
@@ -203,7 +203,7 @@ export async function renderCover(look: Look): Promise<Uint8Array> {
     // The motif is drawn in a 560 × 630 panel; scaled up from its corner, it fills the right side
     box({ position: 'absolute', left: 716, top: -38, width: 560, height: OG_HEIGHT, transform: `scale(${scale})`, transformOrigin: 'top left' }, [motif(kind, colour)]),
   ]);
-  const fonts = await Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
+  const fonts = await editorialFonts();
   const svg = await satori(scene as never, { width: COVER_WIDTH, height: COVER_HEIGHT, fonts });
   const rendered = new Resvg(svg, { fitTo: { mode: 'width', value: COVER_WIDTH } }).render();
   return new Uint8Array(jpeg.encode({ data: Buffer.from(rendered.pixels), width: rendered.width, height: rendered.height }, 92).data);
@@ -217,6 +217,14 @@ export const EDITORIAL_FONTS: OgFont[] = [
   { name: 'Instrument Sans', path: font('InstrumentSans-Regular.ttf'), weight: 400, style: 'normal' },
   { name: 'Instrument Sans', path: font('InstrumentSans-SemiBold.ttf'), weight: 600, style: 'normal' },
 ];
+
+let loaded: Promise<Array<{ name: string; data: Buffer; weight: OgFont['weight']; style: OgFont['style'] }>> | undefined;
+
+/** The editorial fonts' bytes, read once per process: every image and video frame draws with them */
+export function editorialFonts() {
+  loaded ??= Promise.all(EDITORIAL_FONTS.map(async (f) => ({ name: f.name, data: await readFile(f.path), weight: f.weight, style: f.style })));
+  return loaded;
+}
 
 export const EDITORIAL_THEME: OgTheme = {
   fonts: EDITORIAL_FONTS,
