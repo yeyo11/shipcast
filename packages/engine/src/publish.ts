@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleUrl as urlOf, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleUrl as urlOf, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -142,7 +142,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   // Published without a pull request: the drafts went straight onto the launches repo's main branch
   const direct = launch.detail?.startsWith('direct:') ?? false;
   if (!direct) {
-    const number = Number(/\/pull\/(\d+)$/.exec(launch.detail ?? '')?.[1]);
+    const number = pullRequestNumber(launch);
     if (!number) return { state: 'waiting', launch, reason: 'no drafts pull request recorded' };
     const state = await github.pullRequestState(deps.launchesRepo, number);
     if (state === 'open') return { state: 'waiting', launch, reason: 'the drafts pull request is open' };

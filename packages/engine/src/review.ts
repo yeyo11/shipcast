@@ -1,4 +1,4 @@
-import { draftBody, pieceLimitProblem } from '@shipcast/schema';
+import { draftBody, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
 import type { Launch } from './registry.ts';
 
@@ -42,12 +42,6 @@ const CHANNEL_FILES: Record<string, string> = {
   'newsletter-es.md': 'Newsletter (es)',
   'release-notes.md': 'Release notes',
 };
-
-/** The pull request number a launch's detail points to, if it went through one */
-export function pullRequestNumber(launch: Launch): number | undefined {
-  const number = Number(/\/pull\/(\d+)/.exec(launch.detail ?? '')?.[1]);
-  return number || undefined;
-}
 
 function describe(path: string, dir: string): Omit<Draft, 'content' | 'url'> {
   const article = /^src\/content\/posts\/(en|es)\//.exec(path);
