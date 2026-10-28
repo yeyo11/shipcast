@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { CallCount, TelemetryStore, TimingCount } from '@shipcast/engine';
-import { classify, Flags, instrumentFetch, PROBE_ORIGIN, quotaOf, TelemetryRecorder, withOrigin } from '../src/index.ts';
+import { classify, Flags, registerAiHost, instrumentFetch, PROBE_ORIGIN, quotaOf, TelemetryRecorder, withOrigin } from '../src/index.ts';
 
 test('a call is labelled by provider and endpoint, with no id, name, token or query', () => {
   assert.deepEqual(classify('https://api.github.com/repos/yeyo11/shipcast/pulls/42/files?per_page=100&access_token=x'), { provider: 'github', endpoint: '/repos/:owner/:repo/pulls/:n/files' });
@@ -19,6 +19,21 @@ test('a call is labelled by provider and endpoint, with no id, name, token or qu
   for (const label of [classify('https://api.telegram.org/bot1:SECRET/getMe'), classify('https://graph.threads.net/me?access_token=SECRET')]) {
     assert.doesNotMatch(JSON.stringify(label), /SECRET/);
   }
+});
+
+test('an AI server is labelled as one, never as Mastodon', () => {
+  // claudio's OpenAI-compatible API lives under /api/v1, like Mastodon's: the route tells them apart
+  assert.deepEqual(classify('http://localhost:8798/api/v1/chat/completions'), { provider: 'claudio', endpoint: '/api/v1/chat/completions' });
+  assert.equal(classify('http://claudio.internal:8798/api/v1/models').provider, 'claudio');
+  assert.equal(classify('http://localhost:8080/v1/chat/completions').provider, 'openai-compatible');
+  assert.equal(classify('https://api.anthropic.com/v1/messages').provider, 'anthropic');
+  assert.equal(classify('https://api.openai.com/v1/responses').provider, 'openai');
+  assert.equal(classify('https://mastodon.social/api/v1/statuses').provider, 'mastodon');
+  // A registered host names every call to it, claudio's REST API included, whatever the path
+  registerAiHost('http://apps-1.tail.ts.net:8799/', 'claudio');
+  assert.equal(classify('http://apps-1.tail.ts.net:8799/api/chats/abc').provider, 'claudio');
+  assert.equal(classify('http://apps-1.tail.ts.net:8800/api/chats/abc').provider, 'apps-1.tail.ts.net', 'the port is part of the host registered');
+  registerAiHost('not a url', 'x');
 });
 
 test('quota headers become the share used', () => {

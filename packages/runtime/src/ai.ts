@@ -13,6 +13,7 @@ import {
 import type { Brand } from '@shipcast/schema';
 import { credentialsFor } from './services.ts';
 import type { SecretStore } from './secrets.ts';
+import { registerAiHost } from './telemetry/classify.ts';
 
 /** What choosing a task's provider needs: the settings, the keychain, and claudio's address and token from the settings */
 export interface AiDeps {
@@ -34,7 +35,12 @@ const NAMES: Record<AiProviderId, string> = { claudio: 'claudio', anthropic: 'An
  * OpenAI-compatible server are connected accounts, their keys in the keychain like any network's.
  */
 export async function providerFor(id: AiProviderId, deps: AiDeps): Promise<AiProvider> {
-  if (id === 'claudio') return new Claudio({ ...deps.claudio(), fetch: deps.fetch });
+  if (id === 'claudio') {
+    const claudio = deps.claudio();
+    // Its calls are labelled by its host in the measurement; nothing else changes with this
+    registerAiHost(claudio.url, 'claudio');
+    return new Claudio({ ...claudio, fetch: deps.fetch });
+  }
   const found = await credentialsFor(id, { env: deps.env, brand: await deps.brand(), registry: deps.registry, secrets: deps.secrets });
   if (!found) throw new AiNotConnected(`the ${NAMES[id]} is chosen in the AI settings but no account is connected: connect one on the Channels page`);
   const { settings, secrets } = found.credentials;
@@ -43,6 +49,7 @@ export async function providerFor(id: AiProviderId, deps: AiDeps): Promise<AiPro
     return anthropicProvider({ apiKey: secrets.apiKey, fetch: deps.fetch });
   }
   if (!settings.baseUrl || !settings.model) throw new AiNotConnected('the OpenAI-compatible account needs a base URL and a model: connect it again');
+  registerAiHost(settings.baseUrl, 'openai-compatible');
   return openAiCompatibleProvider({ baseUrl: settings.baseUrl, apiKey: secrets.apiKey, model: settings.model, fetch: deps.fetch });
 }
 

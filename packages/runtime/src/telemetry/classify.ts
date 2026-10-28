@@ -35,10 +35,40 @@ const NUMBER = /^\d+$/;
 // Telegram puts the bot's token in the path: /bot<id>:<secret>/sendMessage
 const TELEGRAM_BOT = /^bot\d+:[^/]+$/;
 
+/*
+ * The AI servers whose address is a setting (claudio, an OpenAI-compatible server) cannot be in
+ * HOSTS: where they are is only known once the settings are read, so whoever builds a model for one
+ * registers its host here. Kept on `globalThis` for the reason the recorder is (fetch.ts): the app's
+ * server bundle and its launcher are separate module graphs in one process.
+ */
+const AI_HOSTS = Symbol.for('shipcast.telemetry.ai-hosts');
+const registered = globalThis as typeof globalThis & { [AI_HOSTS]?: Map<string, string> };
+const aiHosts = (): Map<string, string> => (registered[AI_HOSTS] ??= new Map());
+
+/** Labels every call to the host of `url` (its port included) as `provider`; a URL that does not parse is ignored */
+export function registerAiHost(url: string, provider: string): void {
+  try {
+    aiHosts().set(new URL(url).host.toLowerCase(), provider);
+  } catch {
+    // A bad setting fails where it is used, with its own message; a label is not the place
+  }
+}
+
+/*
+ * The OpenAI-compatible routes, as a fallback for an AI server nobody registered. claudio serves them
+ * under `/api/v1`, which is also where Mastodon's API lives: Mastodon has none of these routes, and
+ * the rule runs before Mastodon's so claudio's calls stop being counted as Mastodon's.
+ */
+const OPENAI_ROUTES = /^\/(api\/)?v1\/(chat\/completions|responses|models|completions|embeddings)(\/|$)/;
+
 /** The provider a host belongs to: a known API's name, `mastodon` for any instance's API, else the host itself */
 function providerOf(url: URL): string {
   const host = url.hostname.toLowerCase();
+  const known = aiHosts().get(url.host.toLowerCase());
+  if (known) return known;
   for (const [pattern, name] of HOSTS) if (pattern.test(host)) return name;
+  const openai = OPENAI_ROUTES.exec(url.pathname);
+  if (openai) return openai[1] ? 'claudio' : 'openai-compatible';
   if (/^\/api\/v[12]\//.test(url.pathname) || url.pathname === '/oauth/token') return 'mastodon';
   if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return 'local';
   return host;
