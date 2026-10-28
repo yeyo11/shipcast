@@ -457,7 +457,13 @@ export function draftPrefill(drafts: ReadonlyArray<{ path: string; content?: str
   });
   const content = draft?.content ?? '';
   const front = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(content);
-  if (!front) return { text: content.trim(), title: '' };
+  // A channel's draft opens with its heading and the approval note, which the engine never publishes
+  // (draftBody): left in, an edit sent them to the network as the post's first lines
+  if (!front) {
+    const lines = content.split('\n');
+    const note = lines.findIndex((l) => l.startsWith('> **'));
+    return { text: lines.slice(note + 1).join('\n').trim(), title: '' };
+  }
   const title = /^title:\s*["']?(.*?)["']?\s*$/m.exec(front[1]!)?.[1] ?? '';
   return { text: front[2]!.trim(), title };
 }

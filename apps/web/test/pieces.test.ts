@@ -211,6 +211,9 @@ test('the edit form starts from the merged draft, its front matter’s title in 
   assert.deepEqual(draftPrefill(drafts, { channel: 'blog', kind: 'article:es' }), { text: 'El cuerpo.', title: 'Claudio, por fin' });
   assert.deepEqual(draftPrefill(drafts, { channel: 'blog', kind: 'article:en' }), { text: '', title: '' });
   assert.deepEqual(draftPrefill([], { channel: 'bluesky', kind: 'post' }), { text: '', title: '' });
+  // As a merged draft really is: the heading and approval note are the file's, not the post's
+  const merged = [{ path: 'articles/rea/mastodon.md', content: '# Mastodon\n\n> **Approval:** published when this pull request is merged.\n\nI set up REA.\n\nhttps://josegarrido.dev/en/rea/\n' }];
+  assert.deepEqual(draftPrefill(merged, { channel: 'mastodon', kind: 'post' }), { text: 'I set up REA.\n\nhttps://josegarrido.dev/en/rea/', title: '' });
 });
 
 test('recommended times become chips, best first, the past dropped; a countdown reads in words', () => {
