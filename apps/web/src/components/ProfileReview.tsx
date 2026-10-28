@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyProfileProposal, getProfileReview, profileReviewJob, reviewProfileNow } from '../server/profiles.functions';
 import { DiffView } from './assistant/DiffView';
+import { useLiveEnabled, useLiveInterest } from './live/Live';
 import { useToast } from './Toasts';
 import { Notice, when } from './ui';
 import { ConfirmButton } from './ui/ConfirmButton';
@@ -27,19 +28,37 @@ export function ProfileReview({ account, network, initial, focused }: { account:
     if (focused) ref.current?.scrollIntoView({ block: 'start' });
   }, [focused]);
 
-  // While the review runs, its job is read every few seconds; the review is read again once it ends
-  useEffect(() => {
-    if (!job) return;
-    const timer = setInterval(async () => {
-      const state = await profileReviewJob({ data: job }).catch(() => null);
-      if (!state || state.state === 'created' || state.state === 'active' || state.state === 'retry') return;
-      clearInterval(timer);
-      setJob(null);
+  /** Reads the job once: when it has ended, the review is read again; true once it has */
+  const settle = useCallback(
+    async (id: string) => {
+      const state = await profileReviewJob({ data: id }).catch(() => null);
+      if (!state || state.state === 'created' || state.state === 'active' || state.state === 'retry') return false;
+      setJob((now) => (now === id ? null : now));
       if (state.state === 'failed') toast.fail(state.log.at(-1) ?? 'The review failed');
       setView(await getProfileReview({ data: account.id }));
+      return true;
+    },
+    [account.id, toast],
+  );
+  // Live (realtime-ui): the job's own events (ended, or a resync) say when to read it
+  const live = useLiveEnabled();
+  useLiveInterest(live && job ? ['job'] : null, {
+    accepts: (e) => e.data.id === job && (e.data.state === 'completed' || e.data.state === 'failed'),
+    reload: () => {
+      if (job) void settle(job);
+    },
+    debounceMs: 0,
+  });
+  // Otherwise, while the review runs, its job is read every few seconds
+  useEffect(() => {
+    if (!job || live) return;
+    const timer = setInterval(() => {
+      void settle(job).then((done) => {
+        if (done) clearInterval(timer);
+      });
     }, 3000);
     return () => clearInterval(timer);
-  }, [job, account.id, toast]);
+  }, [job, live, settle]);
 
   const capability = view?.capability;
   if (!capability) return null;

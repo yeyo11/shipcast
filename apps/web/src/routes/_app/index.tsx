@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { MotionConfig } from 'motion/react';
 import { useEffect } from 'react';
 import { LaunchCard } from '../../components/LaunchCard';
+import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
 import { LaunchFilters, LaunchPager, useLaunchesNavigate } from '../../components/LaunchFilters';
 import { ApprovalRow, PendingRow } from '../../components/LaunchRows';
 import { Empty, PageHead } from '../../components/PageHead';
@@ -35,12 +36,15 @@ function Launches() {
   // Every launch there is, whatever the filters: an empty registry is the first run, not a search with no match
   const any = facets.statuses.some((s) => s.count > 0);
   const narrowed = Object.keys(search).some((k) => k !== 'page' && k !== 'sort');
-  // While something runs, the page follows it without a reload
+  // Live (realtime-ui): the list is read again when a launch, a piece or a launch's numbers change
+  const live = useLiveEnabled();
+  useLiveRoute(Route.id, live ? ['launch', 'post', 'metrics'] : null);
+  // Otherwise, while something runs, the page follows it by polling
   useEffect(() => {
-    if (!busy) return;
+    if (live || !busy) return;
     const timer = setInterval(() => router.invalidate(), 5000);
     return () => clearInterval(timer);
-  }, [busy, router]);
+  }, [live, busy, router]);
 
   return (
     <>

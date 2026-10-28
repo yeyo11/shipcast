@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Jobs } from '../../../components/Jobs';
+import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { Channels, metricWords } from '../../../components/launch/Channels';
 import { ChannelIcon, DailyBars, TotalsRow } from '../../../components/launch/Glance';
 import { AccountNumbers } from '../../../components/launch/Numbers';
@@ -260,14 +261,17 @@ function LaunchPage() {
   const [busy, setBusy] = useState(false);
   const { launch, review, index, jobs, pieces, numbers } = data;
   const running = jobs.some((j) => j.state === 'running' && !j.queued) || launch.status === 'generating';
+  // Live (realtime-ui): this launch's own events reload it, whether or not something runs
+  const live = useLiveEnabled();
+  useLiveRoute(Route.id, live ? [`launch:${launch.id}`, `post:${launch.id}`, `job:${launch.id}`, `comment:${launch.id}`, `metrics:${launch.id}`] : null);
   useEffect(() => {
-    if (!running) return;
+    if (live || !running) return;
     // Never a second read while one is still on its way: they used to pile up and be cut ("Failed to fetch")
     const timer = setInterval(() => {
       if (router.state.status !== 'pending') void router.invalidate();
     }, 5000);
     return () => clearInterval(timer);
-  }, [running, router]);
+  }, [live, running, router]);
 
   const reviewOk = review && !('error' in review) ? review : undefined;
   const open = reviewOk?.pullRequest.state === 'open';

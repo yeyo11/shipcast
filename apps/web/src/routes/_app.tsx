@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } 
 import { useRef, useState, type ReactNode } from 'react';
 import { AttentionBell } from '../components/AttentionBell';
 import { BannerProvider } from '../components/BannerState';
+import { LiveProvider, LiveStatusNote } from '../components/live/Live';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { requestTour } from '../components/tour/request';
@@ -76,7 +77,7 @@ function SignOutForm({ className = 'btn btn-small' }: { className?: string }) {
 }
 
 function Shell() {
-  const { login, name, avatarUrl, banner, webMcp } = Route.useLoaderData();
+  const { login, name, avatarUrl, banner, webMcp, live } = Route.useLoaderData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [palette, setPalette] = useState(false);
   const [more, setMore] = useState(false);
@@ -88,150 +89,153 @@ function Shell() {
   const settingsHere = inSettings(path);
 
   return (
-    <ToastProvider>
-      <TooltipProvider>
-        <SmoothScroll />
-        <a className="skip" href="#main">
-          Skip to the content
-        </a>
-        <header className="top">
-          <div className="top-inner wrap">
-            <Link to="/" className="lockup" aria-label="Shipcast, the launches" activeOptions={EXACT}>
-              <img src="/logo/mark.svg" alt="" />
-              <span>Shipcast</span>
-            </Link>
-            <nav className="nav" aria-label="Sections">
-              {TOP.map((s) => (
-                <Link key={s.to} to={s.to} aria-current={current(s)} activeOptions={EXACT}>
-                  {s.label}
-                </Link>
-              ))}
-            </nav>
-            <div className="top-tools">
-              <Tooltip content={`Search (${shortcut})`} side="bottom">
-                <button type="button" className="ui-icon-button search-button" aria-label="Search" onClick={() => setPalette(true)} aria-keyshortcuts="Meta+K Control+K">
-                  <SearchIcon />
-                </button>
-              </Tooltip>
-              <AttentionBell />
-              <div className="who-menu">
-                <Menu
-                  trigger={
-                    <button type="button" className="who" aria-label={`Signed in as @${login}`}>
-                      <Avatar src={avatarUrl} alt="" size={30} />
-                      <span>@{login}</span>
-                    </button>
-                  }
-                  entries={[
-                    { kind: 'note', label: name ? `${name} (@${login})` : `@${login}` },
-                    { kind: 'separator' },
-                    {
-                      kind: 'submenu',
-                      label: 'Settings',
-                      current: settingsHere,
-                      entries: SETTINGS_GROUP.map((s) => ({ label: s.label, current: s.match(path), onSelect: () => void navigate({ to: s.to }) })),
-                    },
-                    { kind: 'separator' },
-                    { label: 'Take the tour', onSelect: requestTour },
-                    { label: 'Sign out', onSelect: () => signOut.current?.requestSubmit() },
-                  ]}
-                />
-                <form ref={signOut} method="post" action="/auth/logout" hidden />
+    <LiveProvider enabled={live}>
+      <ToastProvider>
+        <TooltipProvider>
+          <SmoothScroll />
+          <a className="skip" href="#main">
+            Skip to the content
+          </a>
+          <header className="top">
+            <div className="top-inner wrap">
+              <Link to="/" className="lockup" aria-label="Shipcast, the launches" activeOptions={EXACT}>
+                <img src="/logo/mark.svg" alt="" />
+                <span>Shipcast</span>
+              </Link>
+              <nav className="nav" aria-label="Sections">
+                {TOP.map((s) => (
+                  <Link key={s.to} to={s.to} aria-current={current(s)} activeOptions={EXACT}>
+                    {s.label}
+                  </Link>
+                ))}
+              </nav>
+              <div className="top-tools">
+                <Tooltip content={`Search (${shortcut})`} side="bottom">
+                  <button type="button" className="ui-icon-button search-button" aria-label="Search" onClick={() => setPalette(true)} aria-keyshortcuts="Meta+K Control+K">
+                    <SearchIcon />
+                  </button>
+                </Tooltip>
+                <AttentionBell />
+                <div className="who-menu">
+                  <Menu
+                    trigger={
+                      <button type="button" className="who" aria-label={`Signed in as @${login}`}>
+                        <Avatar src={avatarUrl} alt="" size={30} />
+                        <span>@{login}</span>
+                      </button>
+                    }
+                    entries={[
+                      { kind: 'note', label: name ? `${name} (@${login})` : `@${login}` },
+                      { kind: 'separator' },
+                      {
+                        kind: 'submenu',
+                        label: 'Settings',
+                        current: settingsHere,
+                        entries: SETTINGS_GROUP.map((s) => ({ label: s.label, current: s.match(path), onSelect: () => void navigate({ to: s.to }) })),
+                      },
+                      { kind: 'separator' },
+                      { label: 'Take the tour', onSelect: requestTour },
+                      { label: 'Sign out', onSelect: () => signOut.current?.requestSubmit() },
+                    ]}
+                  />
+                  <form ref={signOut} method="post" action="/auth/logout" hidden />
+                </div>
               </div>
             </div>
-          </div>
-        </header>
-        <main id="main" className="wrap" tabIndex={-1} data-path={path}>
-          <BannerProvider initial={banner}>
-            <Outlet />
-          </BannerProvider>
-        </main>
-        <nav className="bottom-bar" aria-label="Sections">
-          {BOTTOM.map((s) => {
-            const Icon = s.icon!;
-            return (
-              <Link key={s.to} to={s.to} aria-current={current(s)} activeOptions={EXACT}>
-                <Icon size={22} />
-                <span>{s.label}</span>
-              </Link>
-            );
-          })}
-          <Drawer
-            title="More"
-            open={more}
-            onOpenChange={setMore}
-            trigger={
-              <button type="button" data-current={inMore ? '' : undefined} aria-label={inMore ? 'More, current section inside' : 'More'}>
-                <MoreIcon size={22} />
-                <span>More</span>
-              </button>
-            }
-          >
-            <nav aria-label="More sections">
-              <ul className="drawer-links">
-                <li>
-                  <DrawerClose render={<Link to={COMMENTS.to} aria-current={current(COMMENTS)} activeOptions={EXACT} />}>{COMMENTS.label}</DrawerClose>
-                </li>
-                <li>
-                  <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} activeOptions={EXACT} />}>Launch a repo</DrawerClose>
-                </li>
-                {/* The group is the li's child: a li with a role of its own is no longer a list item */}
-                <li>
-                  <div role="group" aria-labelledby="more-settings" className="drawer-group" data-current={settingsHere ? '' : undefined}>
-                    <span id="more-settings" className="drawer-group-title">
-                      {settingsHere && <span className="ui-option-dot" aria-hidden="true" />}
-                      Settings
-                      {settingsHere && <span className="visually-hidden">, the current section</span>}
-                    </span>
-                    <ul className="drawer-sublinks">
-                      {SETTINGS_GROUP.map((s) => (
-                        <li key={s.to}>
-                          <DrawerClose render={<Link to={s.to} aria-current={current(s)} activeOptions={EXACT} />}>{s.label}</DrawerClose>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMore(false);
-                      setPalette(true);
-                    }}
-                  >
-                    Search sections and actions
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMore(false);
-                      requestTour();
-                    }}
-                  >
-                    Take the tour
-                  </button>
-                </li>
-              </ul>
-            </nav>
-            <div className="drawer-who">
-              <span className="account-who">
-                <Avatar src={avatarUrl} alt="" size={36} />
-                <span>
-                  <strong>@{login}</strong>
-                  {name && <span className="muted"> · {name}</span>}
+          </header>
+          <main id="main" className="wrap" tabIndex={-1} data-path={path}>
+            <LiveStatusNote />
+            <BannerProvider initial={banner}>
+              <Outlet />
+            </BannerProvider>
+          </main>
+          <nav className="bottom-bar" aria-label="Sections">
+            {BOTTOM.map((s) => {
+              const Icon = s.icon!;
+              return (
+                <Link key={s.to} to={s.to} aria-current={current(s)} activeOptions={EXACT}>
+                  <Icon size={22} />
+                  <span>{s.label}</span>
+                </Link>
+              );
+            })}
+            <Drawer
+              title="More"
+              open={more}
+              onOpenChange={setMore}
+              trigger={
+                <button type="button" data-current={inMore ? '' : undefined} aria-label={inMore ? 'More, current section inside' : 'More'}>
+                  <MoreIcon size={22} />
+                  <span>More</span>
+                </button>
+              }
+            >
+              <nav aria-label="More sections">
+                <ul className="drawer-links">
+                  <li>
+                    <DrawerClose render={<Link to={COMMENTS.to} aria-current={current(COMMENTS)} activeOptions={EXACT} />}>{COMMENTS.label}</DrawerClose>
+                  </li>
+                  <li>
+                    <DrawerClose render={<Link to="/launch" aria-current={path === '/launch' ? 'page' : undefined} activeOptions={EXACT} />}>Launch a repo</DrawerClose>
+                  </li>
+                  {/* The group is the li's child: a li with a role of its own is no longer a list item */}
+                  <li>
+                    <div role="group" aria-labelledby="more-settings" className="drawer-group" data-current={settingsHere ? '' : undefined}>
+                      <span id="more-settings" className="drawer-group-title">
+                        {settingsHere && <span className="ui-option-dot" aria-hidden="true" />}
+                        Settings
+                        {settingsHere && <span className="visually-hidden">, the current section</span>}
+                      </span>
+                      <ul className="drawer-sublinks">
+                        {SETTINGS_GROUP.map((s) => (
+                          <li key={s.to}>
+                            <DrawerClose render={<Link to={s.to} aria-current={current(s)} activeOptions={EXACT} />}>{s.label}</DrawerClose>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMore(false);
+                        setPalette(true);
+                      }}
+                    >
+                      Search sections and actions
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMore(false);
+                        requestTour();
+                      }}
+                    >
+                      Take the tour
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+              <div className="drawer-who">
+                <span className="account-who">
+                  <Avatar src={avatarUrl} alt="" size={36} />
+                  <span>
+                    <strong>@{login}</strong>
+                    {name && <span className="muted"> · {name}</span>}
+                  </span>
                 </span>
-              </span>
-              <SignOutForm />
-            </div>
-          </Drawer>
-        </nav>
-        <CommandPalette open={palette} onOpenChange={setPalette} />
-        <TourHost />
-        <WebMcpHost enabled={webMcp} />
-      </TooltipProvider>
-    </ToastProvider>
+                <SignOutForm />
+              </div>
+            </Drawer>
+          </nav>
+          <CommandPalette open={palette} onOpenChange={setPalette} />
+          <TourHost />
+          <WebMcpHost enabled={webMcp} />
+        </TooltipProvider>
+      </ToastProvider>
+    </LiveProvider>
   );
 }

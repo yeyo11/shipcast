@@ -4,6 +4,7 @@ import { dayLabel, overlayComparison, seriesCsv, type ChartSeries } from '../../
 import { assignColours } from '../../components/charts/palette';
 import { TimeChart } from '../../components/charts/TimeChart';
 import { OnboardMeasure, Scale } from '../../components/illustrations';
+import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
 import { Empty, PageHead } from '../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { Accounts } from '../../components/stats/Accounts';
@@ -63,6 +64,8 @@ function Loading() {
 
 function Stats() {
   const { stats, growth, search: searchData } = Route.useLoaderData();
+  // Live (realtime-ui): a metrics run, an account's numbers or a new piece reloads the figures
+  useLiveRoute(Route.id, useLiveEnabled() ? ['metrics', 'account', 'post'] : null);
   const { tab = 'overview', ...address } = Route.useSearch();
   const search = withDefaults(address);
   const navigate = useNavigate({ from: Route.fullPath });

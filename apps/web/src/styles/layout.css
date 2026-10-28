@@ -149,3 +149,6 @@ main:has(.save-bar) { padding-bottom: 168px; }
   .save-bar { bottom: calc(84px + env(safe-area-inset-bottom)); padding: 10px 10px 10px 16px; }
   main:has(.save-bar) { padding-bottom: calc(196px + env(safe-area-inset-bottom)); }
 }
+
+/* The live stream is down: one quiet line above the page, never a banner */
+.live-note { margin: 8px 0 0; font-size: 13px; color: var(--sc-muted); }

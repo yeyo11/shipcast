@@ -10,8 +10,10 @@ import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
  * no token.
  */
 export const whoAmI = createServerFn({ method: 'GET' }).handler(async () => {
-  const session = await readSession((await appContext()).secrets, cookieOf(getRequest(), SESSION_COOKIE));
+  const ctx = await appContext();
+  const session = await readSession(ctx.secrets, cookieOf(getRequest(), SESSION_COOKIE));
   const login = session?.login ?? '';
   const fallback = login ? `https://avatars.githubusercontent.com/${encodeURIComponent(login)}?size=64` : null;
-  return { login, name: session?.name ?? null, avatarUrl: imageUrl(session?.avatarUrl) ?? fallback };
+  // With realtime-ui the tab opens the event stream instead of polling (components/live)
+  return { login, name: session?.name ?? null, avatarUrl: imageUrl(session?.avatarUrl) ?? fallback, live: ctx.live !== undefined };
 });

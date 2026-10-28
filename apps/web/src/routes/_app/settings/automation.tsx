@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { JobsPanel } from '../../../components/Jobs';
+import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { Automation as SortingMachine } from '../../../components/illustrations';
 import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { SaveBar } from '../../../components/SaveBar';
@@ -59,13 +60,15 @@ function Automation() {
     setMode(data.mode);
     setIntervalText(String(data.intervalSeconds));
   }, [data.mode, data.intervalSeconds]);
-  // While a round runs, the page follows it
+  // Live (realtime-ui): any job's row or a saved setting reloads it; otherwise, while a round runs, it polls
+  const live = useLiveEnabled();
+  useLiveRoute(Route.id, live ? ['job', 'settings'] : null);
   const working = data.running || data.jobs.counts.running > 0;
   useEffect(() => {
-    if (!working) return;
+    if (live || !working) return;
     const timer = window.setInterval(() => void router.invalidate(), 4000);
     return () => window.clearInterval(timer);
-  }, [working, router]);
+  }, [live, working, router]);
 
   const save = async () => {
     setBusy(true);

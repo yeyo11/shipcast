@@ -2,6 +2,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { attentionLabel, countOf, type Attention, type AttentionItem } from '../server/attention';
 import { clearAttention, dismissAttention, getAttention } from '../server/attention.functions';
+import { useLiveEnabled, useLiveInterest } from './live/Live';
 import { BellIcon, CloseIcon } from './ui/icons';
 import { ResponsiveMenu } from './ui/ResponsiveMenu';
 
@@ -71,10 +72,14 @@ export function AttentionBell() {
   useEffect(() => {
     void load();
   }, [load, path]);
+  // Live (realtime-ui): read again when something its lines come from changes, never on a timer
+  const live = useLiveEnabled();
+  useLiveInterest(live ? ['attention', 'launch', 'post', 'comment', 'account'] : null, { reload: () => void load(), debounceMs: 1000 });
   useEffect(() => {
+    if (live) return;
     const timer = setInterval(() => void load(), REFRESH_MS);
     return () => clearInterval(timer);
-  }, [load]);
+  }, [live, load]);
   useEffect(() => {
     if (open) void load();
     else setSaid('');

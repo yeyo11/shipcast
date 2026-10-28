@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-r
 import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
 import { NoAccounts, Pigeonholes } from '../../../components/illustrations';
+import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { ChannelIcon } from '../../../components/launch/Glance';
 import { Empty, PageHead } from '../../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
@@ -275,6 +276,8 @@ function Group({ networks, brands }: { networks: NetworkView[]; brands: Data['br
 
 function Channels() {
   const data = Route.useLoaderData();
+  // Live (realtime-ui): an account connected, checked or removed, here or in another tab, reloads the list
+  useLiveRoute(Route.id, useLiveEnabled() ? ['account'] : null);
   const router = useRouter();
   const toast = useToast();
   const navigate = useNavigate();

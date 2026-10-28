@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Mailbox } from '../../components/illustrations';
+import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
 import { PageHead } from '../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { useToast } from '../../components/Toasts';
@@ -318,6 +319,8 @@ function Pager({ page, search }: { page: Data['page']; search: CommentsSearch })
 
 function Comments() {
   const data = Route.useLoaderData();
+  // Live (realtime-ui): a comment read, drafted or sent, or a piece it hangs under, reloads the list
+  useLiveRoute(Route.id, useLiveEnabled() ? ['comment', 'post'] : null);
   const search = Route.useSearch();
   const router = useRouter();
   const toast = useToast();
