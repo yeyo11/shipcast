@@ -34,11 +34,19 @@ export const PROMPTS_KEY = 'prompts';
 /** Versions kept per prompt; the oldest go first */
 export const MAX_PROMPT_VERSIONS = 50;
 
-const TaskChoice = z.strictObject({
-  provider: z.enum(AI_PROVIDERS),
-  /** Empty means the provider's own default */
-  model: z.string().trim().max(200).optional(),
-});
+/**
+ * One task's choice, over a list of provider ids: the registry's listed providers below, and the
+ * contract test's with a provider added, to show a new provider is offered from its module alone.
+ */
+export function taskChoiceFor<const Id extends string>(providers: readonly [Id, ...Id[]]) {
+  return z.strictObject({
+    provider: z.enum(providers),
+    /** Empty means the provider's own default */
+    model: z.string().trim().max(200).optional(),
+  });
+}
+
+const TaskChoice = taskChoiceFor(AI_PROVIDERS);
 export type TaskChoice = z.infer<typeof TaskChoice>;
 
 const AiSettings = z.strictObject({

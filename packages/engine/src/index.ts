@@ -3,6 +3,7 @@ export * from './github.ts';
 export * from './github-app.ts';
 export * from './detect.ts';
 export * from './ai.ts';
+export * from './ai/providers/index.ts';
 export * from './ai-settings.ts';
 export * from './claudio.ts';
 export * from './workspace.ts';

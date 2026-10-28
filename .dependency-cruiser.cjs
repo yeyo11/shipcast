@@ -94,6 +94,17 @@ module.exports = {
       to: { path: '^packages/engine/src/repositories/index[.]ts$', dependencyTypesNot: ['type-only'] },
     },
     {
+      name: 'ai-provider-sdks-only-in-provider-modules',
+      comment:
+        'a provider SDK (@ai-sdk/anthropic, @ai-sdk/openai…) is imported only by its provider module in ' +
+        'packages/engine/src/ai/providers and by the AI task runner: everything else asks the runner, so adding a provider is ' +
+        'its module and a registry line. The SDK\'s shared types (@ai-sdk/provider, @ai-sdk/provider-utils) are not a provider. ' +
+        'Remaining users until the tasks move to the runner: packages/engine/src/ai.ts and packages/engine/src/claudio.ts',
+      severity: 'error',
+      from: { pathNot: '^packages/engine/src/(ai/providers/|ai/runner[.]ts$|ai[.]ts$|claudio[.]ts$)' },
+      to: { path: '(^|/)@ai-sdk/', pathNot: '(^|/)@ai-sdk/provider(-utils)?/' },
+    },
+    {
       name: 'no-cycles-between-packages',
       comment: 'workspace packages form a DAG: a cycle through two packages is a layering error',
       severity: 'error',
@@ -107,7 +118,9 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: '(^|/)(dist|build|\\.output|\\.tanstack|\\.vinxi)/' },
+    // The project's own build output; a package's `dist` under node_modules stays, as a leaf (it is not
+    // followed), so a rule can see what is imported from it, such as a provider SDK
+    exclude: { path: '^(packages|apps)/[^/]+/(dist|build|\\.output|\\.tanstack|\\.vinxi)/' },
     // TypeScript 7 has no compiler API dependency-cruiser can use yet: swc parses the sources
     parser: 'swc',
     tsPreCompilationDeps: true,

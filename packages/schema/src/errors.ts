@@ -67,3 +67,45 @@ export class InvalidRequest extends ShipcastError {
 export function httpStatusOf(error: unknown): number {
   return error instanceof ShipcastError ? error.httpStatus : 500;
 }
+
+/**
+ * Why an AI call gave no usable answer. `ai_not_connected`: a setting or key is missing or refused,
+ * which only the owner fixes (reconnect the provider); `ai_rate_limited` and `ai_unavailable`: the
+ * provider's state, worth the job queue's retry; `ai_refused`: the request as sent (a 4xx), refused
+ * every time; `ai_timeout` and `ai_aborted`: the run's own deadline or its caller's; `ai_invalid_output`
+ * and `ai_no_answer`: the model answered, but not with what the task asked, even after its repair.
+ */
+export type AiErrorCode =
+  | 'ai_not_connected'
+  | 'ai_rate_limited'
+  | 'ai_unavailable'
+  | 'ai_refused'
+  | 'ai_timeout'
+  | 'ai_aborted'
+  | 'ai_invalid_output'
+  | 'ai_no_answer';
+
+const AI_ERRORS: Record<AiErrorCode, { retryable: boolean; httpStatus: number }> = {
+  ai_not_connected: { retryable: false, httpStatus: 409 },
+  ai_rate_limited: { retryable: true, httpStatus: 503 },
+  ai_unavailable: { retryable: true, httpStatus: 502 },
+  ai_refused: { retryable: false, httpStatus: 502 },
+  // A run that ran out of time may finish on the next try, when the provider is less loaded
+  ai_timeout: { retryable: true, httpStatus: 504 },
+  ai_aborted: { retryable: false, httpStatus: 499 },
+  ai_invalid_output: { retryable: false, httpStatus: 502 },
+  ai_no_answer: { retryable: false, httpStatus: 502 },
+};
+
+/** Every failure of the AI layer, whichever provider: the code says what to do about it */
+export class AiError extends ShipcastError {
+  declare readonly code: AiErrorCode;
+  /** The provider's id, when the failure is one provider's */
+  readonly provider: string | undefined;
+
+  constructor(code: AiErrorCode, message: string, options: { provider?: string; cause?: unknown } = {}) {
+    super(message, { code, ...AI_ERRORS[code], cause: options.cause });
+    this.name = 'AiError';
+    this.provider = options.provider;
+  }
+}

@@ -7,14 +7,18 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { z } from 'zod';
+import { DEFAULT_ANTHROPIC_MODEL } from './ai/providers/anthropic.ts';
+import { DEFAULT_OPENAI_MODEL } from './ai/providers/openai.ts';
+import { LISTED_AI_PROVIDERS, type ListedAiProviderId } from './ai/providers/registry.ts';
 import type { PromptTexts } from './prompt.ts';
 
 /** What Shipcast asks an AI for; each one has its own provider and model in the AI settings */
 export const AI_TASKS = ['pack', 'article', 'assistant', 'replies', 'profile'] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
-export const AI_PROVIDERS = ['claudio', 'anthropic', 'openaiCompatible'] as const;
-export type AiProviderId = (typeof AI_PROVIDERS)[number];
+/** The providers the AI settings offer: the registry's listed ones (ai/providers/registry.ts) */
+export const AI_PROVIDERS = LISTED_AI_PROVIDERS;
+export type AiProviderId = ListedAiProviderId;
 
 /** One request for structured work: a prompt answered with JSON of a schema, maybe after reading a repo. */
 export interface ObjectRequest {
@@ -82,11 +86,6 @@ export interface AiSetup {
   tone?: string;
 }
 
-/** Anthropic's current Opus, the default when the Anthropic API is chosen without a model */
-export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
-
-/** The OpenAI API's default in Action mode, where a developer picks OpenAI by a variable */
-export const DEFAULT_OPENAI_MODEL = 'gpt-5.5';
 
 /** How many tool rounds an SDK provider may take reading a repo before it must answer */
 const MAX_STEPS = 40;
