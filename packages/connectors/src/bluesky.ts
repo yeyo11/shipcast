@@ -1,5 +1,8 @@
 import {
   checkProblem,
+  chunks,
+  secretTag,
+  type IdentityCache,
   ConnectorError,
   expectOk,
   imageUrl,
@@ -89,8 +92,10 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
   readonly #service: string;
   readonly #appView: string;
   #session: Session | undefined;
+  readonly #cache: IdentityCache | undefined;
 
-  constructor(options: { identifier: string; appPassword: string; fetch?: typeof fetch; service?: string; appView?: string }) {
+  constructor(options: { identifier: string; appPassword: string; fetch?: typeof fetch; service?: string; appView?: string; cache?: IdentityCache }) {
+    this.#cache = options.cache;
     this.#identifier = options.identifier;
     this.#password = options.appPassword;
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -323,6 +328,84 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
   async profileStats(): Promise<ProfileStats> {
     const profile = await this.#profile(this.#session?.did ?? this.#identifier);
     return statsOf({ followers: profile.followersCount, following: profile.followsCount, posts: profile.postsCount });
+  }
+
+  /**
+   * The numbers of many posts from the public AppView, 25 per call (getPosts' most). A post missing
+   * from the answer is gone or hidden, and is left out rather than read as zeros.
+   */
+  async metricsMany(uris: readonly string[]): Promise<Map<string, Metrics>> {
+    const out = new Map<string, Metrics>();
+    for (const batch of chunks(uris, 25)) {
+      const query = new URLSearchParams();
+      for (const uri of batch) query.append('uris', uri);
+      const { posts } = await json<{ posts: Array<{ uri: string; likeCount?: number; repostCount?: number; replyCount?: number; quoteCount?: number }> }>(
+        'Bluesky',
+        await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?${query}`),
+        'metrics',
+      );
+      for (const post of posts) out.set(post.uri, { likes: post.likeCount ?? 0, reposts: post.repostCount ?? 0, replies: post.replyCount ?? 0, quotes: post.quoteCount ?? 0 });
+    }
+    return out;
+  }
+
+  /**
+   * A session for reading, kept between runs where a cache is given: an access JWT lives about two
+   * hours, so an hourly run signs in about once in two instead of every time. Publishing never uses
+   * it: a stale one costs a read a retry, never a post.
+   */
+  async #readSession(fresh = false): Promise<Session> {
+    if (!this.#cache) return this.#login();
+    const key = `bluesky-session:${secretTag(`${this.#service}|${this.#identifier}|${this.#password}`)}`;
+    if (fresh) await this.#cache.delete(key);
+    const raw = await this.#cache.remember(key, 90 * 60, async () => {
+      this.#session = undefined;
+      return JSON.stringify(await this.#login());
+    });
+    return JSON.parse(raw) as Session;
+  }
+
+  /**
+   * The account's reply, mention and quote notifications newer than `since` (an ISO time, the newest
+   * one seen last run), newest first, five pages of 50 at most: one call in a quiet hour. Each comes
+   * with the root of its thread, which is the post Shipcast published when it is a comment on one.
+   */
+  async notificationsSince(since: string | undefined): Promise<{ items: Array<{ uri: string; root?: string; parent?: string; at: string }>; newest: string | undefined }> {
+    const items: Array<{ uri: string; root?: string; parent?: string; at: string }> = [];
+    let newest: string | undefined;
+    let cursor: string | undefined;
+    let retried = false;
+    for (let page = 0; page < 5; page++) {
+      const session = await this.#readSession();
+      const query = new URLSearchParams({ limit: '50', ...(cursor && { cursor }) });
+      for (const reason of ['reply', 'mention', 'quote']) query.append('reasons', reason);
+      const response = await this.#fetch(`${this.#service}/xrpc/app.bsky.notification.listNotifications?${query}`, { headers: { authorization: `Bearer ${session.accessJwt}` } });
+      if ((response.status === 400 || response.status === 401) && this.#cache && !retried) {
+        // The kept session expired early: sign in again once
+        retried = true;
+        await this.#readSession(true);
+        page--;
+        continue;
+      }
+      const answer = await json<{
+        cursor?: string;
+        notifications: Array<{ uri: string; reason: string; indexedAt: string; record?: { reply?: { root?: { uri: string }; parent?: { uri: string } } } }>;
+      }>('Bluesky', response, 'read the notifications');
+      let older = false;
+      for (const n of answer.notifications) {
+        newest = newest === undefined || n.indexedAt > newest ? n.indexedAt : newest;
+        if (since !== undefined && n.indexedAt <= since) {
+          older = true;
+          continue;
+        }
+        const root = n.record?.reply?.root?.uri;
+        const parent = n.record?.reply?.parent?.uri;
+        items.push({ uri: n.uri, ...(root && { root }), ...(parent && { parent }), at: n.indexedAt });
+      }
+      cursor = answer.cursor;
+      if (older || !cursor || answer.notifications.length === 0) break;
+    }
+    return { items, newest: newest ?? since };
   }
 
   async metrics(externalId: string): Promise<Metrics> {

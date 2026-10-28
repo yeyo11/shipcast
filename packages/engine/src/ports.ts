@@ -42,7 +42,7 @@ export type CommentListing = { comments: Pick<CommentRepository, 'comments' | 'c
 export type CursorWriter = { cursors: Pick<CursorRepository, 'setCursor'> };
 
 /** What a metrics reading reads and records: the published launches, their posts, the numbers and the cursors that pace the sources */
-export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'>; metrics: Pick<MetricRepository, 'recordMetrics'>; cursors: Pick<CursorRepository, 'cursor' | 'setCursor'> };
+export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'>; metrics: Pick<MetricRepository, 'recordMetrics' | 'lastChecked'>; cursors: Pick<CursorRepository, 'cursor' | 'setCursor'> };
 
 /** The connected accounts, read, renamed and made the primary of their network */
 export type AccountStore = Pick<AccountRepository, 'account' | 'accounts' | 'primaryAccount' | 'updateAccount' | 'makePrimary'>;

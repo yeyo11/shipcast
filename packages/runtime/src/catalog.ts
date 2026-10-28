@@ -1,4 +1,4 @@
-import { BingWebmaster, checkProblem, CloudflareAnalytics, json, SearchConsole, type Check, type ServiceAccount } from '@shipcast/connectors';
+import { BingWebmaster, checkProblem, CloudflareAnalytics, json, SearchConsole, type Check, type IdentityCache, type ServiceAccount } from '@shipcast/connectors';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildContext, envCredentials, MissingField, networkOf, type AnyChannelAdapter, type Connection, type Credentials, type Field, type NetworkSpec, type SourceSpec } from './channels/adapter.ts';
 import { CHANNEL_ADAPTERS } from './channels/registry.ts';
@@ -227,11 +227,11 @@ export function buildConnector(
   credentials: Credentials,
   brand: Brand,
   http: typeof fetch = globalThis.fetch,
-  options: { adapters?: readonly AnyChannelAdapter[]; buckets?: TokenBucket } = {},
+  options: { adapters?: readonly AnyChannelAdapter[]; buckets?: TokenBucket; cache?: IdentityCache } = {},
 ): Built {
   const spec = networkSpec(id, options.adapters);
   if (!spec) throw new MissingField(`${id} has nothing to connect`);
-  return spec.build(buildContext(id, credentials, brand, http, options.buckets));
+  return spec.build(buildContext(id, credentials, brand, http, options.buckets, options.cache));
 }
 
 /**

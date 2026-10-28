@@ -1,4 +1,4 @@
-import { MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { characters, singleDraft } from './text.ts';
 
 const limits = { mastodonCharacters: 500 } as const;
@@ -57,6 +57,6 @@ export const mastodon = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.35 },
     ],
   },
-  metrics: { families: { reactions: ['favourites'], comments: ['replies'], shares: ['boosts'] }, primary: ['favourites', 'boosts'] },
+  metrics: { families: { reactions: ['favourites'], comments: ['replies'], shares: ['boosts'] }, primary: ['favourites', 'boosts'], cadence: HOURLY_BATCHED },
   chartSlot: 1,
 } as const satisfies ChannelDefinition<'mastodon'>;

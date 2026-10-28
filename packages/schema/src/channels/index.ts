@@ -4,6 +4,7 @@
 export * from './definition.ts';
 export * from './registry.ts';
 export * from './text.ts';
+export * from './cadence.ts';
 // Each channel's definition on its own, for its adapter half in packages/runtime/src/channels, which
 // is typed against the definition's literal id
 export { blog } from './blog.ts';

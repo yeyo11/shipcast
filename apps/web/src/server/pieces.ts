@@ -41,6 +41,8 @@ export interface ReadingInput {
   name: string;
   value: number;
   takenAt: string;
+  /** When the value was last read again unchanged; the series ends there, not at its last change */
+  checkedAt?: string;
 }
 
 /** What the page needs of a piece after a change, to update its row in place */
@@ -147,8 +149,8 @@ export function pieceRows(input: {
     for (const r of readings) {
       latest.set(r.name, r.value);
       const n = numbers.get(r.name);
-      if (n) numbers.set(r.name, { ...n, value: r.value, series: [...n.series, r.value], to: r.takenAt });
-      else numbers.set(r.name, { name: r.name, value: r.value, first: r.value, series: [r.value], from: r.takenAt, to: r.takenAt });
+      if (n) numbers.set(r.name, { ...n, value: r.value, series: [...n.series, r.value], to: r.checkedAt ?? r.takenAt });
+      else numbers.set(r.name, { name: r.name, value: r.value, first: r.value, series: [r.value], from: r.takenAt, to: r.checkedAt ?? r.takenAt });
     }
     const lead = (PRIMARY_METRIC[post.channel] ?? []).find((name) => latest.has(name)) ?? [...latest.keys()][0];
     const account = post.accountId === null ? undefined : accounts.get(post.accountId);

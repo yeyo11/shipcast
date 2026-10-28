@@ -1,5 +1,5 @@
 import type { Brand } from '@shipcast/schema';
-import { collectMetrics, type CollectResult, type MetricSources } from '../metrics.ts';
+import { collectHourly, collectMetrics, type CollectResult, type MetricSources } from '../metrics.ts';
 import type { MetricStore } from '../ports.ts';
 
 /** The cursor that tells when the numbers were last read: the app shows it, the round paces itself by it */
@@ -20,6 +20,13 @@ export class MetricsService {
   /** Reads and records the numbers, and remembers when; one source failing never stops the others */
   async readNow(brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
     const result = await collectMetrics(this.#store, brand, sources, now);
+    await this.#store.cursors.setCursor(METRICS_AT_KEY, now.toISOString());
+    return result;
+  }
+
+  /** The hourly reads (the `batched-metrics` flag): each source at its own cadence, batched, unchanged values only checked */
+  async readHourly(brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
+    const result = await collectHourly(this.#store, brand, sources, now);
     await this.#store.cursors.setCursor(METRICS_AT_KEY, now.toISOString());
     return result;
   }

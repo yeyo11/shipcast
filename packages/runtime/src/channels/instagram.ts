@@ -1,3 +1,4 @@
+import { countFeed } from './feeds.ts';
 import { exchangeInstagramCode, Instagram, instagramAuthorizeUrl } from '@shipcast/connectors';
 import { instagram } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -42,13 +43,13 @@ export const instagramAdapter = channelAdapter({
         refresher: (settings, accessToken, http) => (settings.userId ? new Instagram({ userId: settings.userId, accessToken, fetch: http }) : undefined),
         envToken: { tokenKey: INSTAGRAM_TOKEN_KEY, refreshedKey: INSTAGRAM_REFRESHED_KEY },
       },
-      build: ({ need, fetch }) => {
-        const connector = new Instagram({ userId: need('userId'), accessToken: need('accessToken'), fetch });
+      build: ({ need, fetch, cache }) => {
+        const connector = new Instagram({ userId: need('userId'), accessToken: need('accessToken'), fetch, ...(cache && { cache }) });
         return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), audienceHours: () => connector.audienceHours() };
       },
     },
   },
   publisher: (c) => c,
   metrics: (c) => c,
-  comments: (c) => ({ reader: c, replier: c }),
+  comments: (c) => ({ reader: c, replier: c, feed: countFeed(() => c.commentCounts()) }),
 });

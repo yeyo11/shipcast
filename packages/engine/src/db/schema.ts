@@ -82,6 +82,9 @@ export const metrics = pgTable(
     // SQLite's REAL is an 8-byte float; Postgres' `real` is 4 bytes and would round the readings
     value: doublePrecision('value').notNull(),
     takenAt: text('taken_at').notNull(),
+    // The last time the same values were read again: an unchanged reading moves this instead of
+    // adding a row, so a reading stands for [taken_at, checked_at]; null when it was read only once
+    checkedAt: text('checked_at'),
   },
   (t) => [index('metrics_by_launch').on(t.launchId, t.source, t.name, t.takenAt), index('metrics_by_post').on(t.postId)],
 );

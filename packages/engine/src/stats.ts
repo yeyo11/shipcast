@@ -148,7 +148,10 @@ interface CounterRow {
   accountId: number | null;
   /** The increase in each window asked, in order */
   increase: number[];
-  /** Readings taken inside each window */
+  /**
+   * Readings inside each window: rows taken in it, and a row from before it read again unchanged
+   * in it (its `checked_at`), which is a reading of the window that added no row
+   */
   readings: number[];
 }
 
@@ -166,7 +169,10 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
   const joins = windows.map((w, i) => {
     const [b, x, f] = [`b${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL];
     return sql`
-      LEFT JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${w.from} ORDER BY m.taken_at DESC LIMIT 1) ${b} ON true
+      LEFT JOIN LATERAL (
+        SELECT m.taken_at, m.value, coalesce(m.checked_at, m.taken_at) >= ${w.from} AS held
+        FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${w.from} ORDER BY m.taken_at DESC LIMIT 1
+      ) ${b} ON true
       LEFT JOIN LATERAL (SELECT max(m.value) AS hi, count(*) AS n FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${w.from} AND m.taken_at < ${w.to}) ${x} ON true
       LEFT JOIN LATERAL (
         SELECT m.taken_at, m.value FROM metrics m
@@ -180,7 +186,7 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
       `,
       (array_agg(b#.value ORDER BY b#.taken_at DESC NULLS LAST))[1]::float8 AS base#,
       max(x#.hi)::float8 AS hi#,
-      sum(x#.n)::int AS n#,
+      sum(x#.n)::int + count(*) FILTER (WHERE b#.held) AS n#,
       (array_agg(f#.value ORDER BY f#.taken_at NULLS LAST))[1]::float8 AS first#`.replaceAll('#', String(i)),
     ),
   );

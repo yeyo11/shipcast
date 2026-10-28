@@ -184,10 +184,31 @@ export interface ChannelDefinition<Id extends string = string> {
     families: Partial<Record<StatsMetric, readonly string[]>>;
     /** The first of these a piece has is its row's number */
     primary: readonly string[];
+    /** How often its numbers are worth reading (phase 8 of docs/plans/performance-refactor.md) */
+    cadence: MetricCadence;
   };
   /** Its series' slot in the charts' palette (`ink` for the text colour), when one is its own */
   chartSlot?: number | 'ink';
 }
+
+/**
+ * How often a source's numbers are read: never faster than the source itself updates them, since a
+ * read that cannot find anything new is a call spent for nothing.
+ */
+export interface MetricCadence {
+  /** Hours between two reads of one piece (or one launch, for a site-level source) */
+  hours: number;
+  /**
+   * `batched`: many pieces per call; `conditional`: a validated GET, whose 304 costs nothing when
+   * nothing changed; `single`: one call per item, where the network offers nothing better
+   */
+  read: 'batched' | 'conditional' | 'single';
+  /** Why this often, in words */
+  why: string;
+}
+
+/** The cadence of the networks whose counts move within the hour, read many pieces per call */
+export const HOURLY_BATCHED: MetricCadence = { hours: 1, read: 'batched', why: 'changes within the hour' };
 
 /** Workdays, midweek and the weekend, as the posting windows say them */
 export const WORKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4];

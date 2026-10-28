@@ -1,12 +1,14 @@
 import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
-import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
+import { MemoryEtagCache, type EtagCache } from '@shipcast/connectors';
+import { channelCadence, pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, RECONCILE_GRACE_MS, type Handlers, type JobQueue } from './queue.ts';
 import { handlersOf, runsTheClock, split, type Role } from './roles.ts';
-import type { Lock } from './redis/ports.ts';
+import type { Cache, Lock } from './redis/ports.ts';
 import { pollGitHub, takeGitHubPoll } from './github-events.ts';
-import { notifications, notify, readMetrics, refreshInstagramTokens, runRound } from './rounds.ts';
+import { notifications, notify, readMetrics, readMetricsHourly, refreshInstagramTokens, runRound } from './rounds.ts';
+import { MemoryCache } from './redis/memory.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
 import { buildServices, publishConnectors, type Services } from './services.ts';
@@ -33,6 +35,13 @@ export interface WorkDeps {
   flags?: Flags;
   /** With `github-events`: the drafts snapshots deliveries and the hourly poll keep current */
   drafts?: DraftSnapshotService;
+  /**
+   * Where the hourly reads keep accounts' identities and sessions between runs (`batched-metrics`):
+   * Redis's cache where the process has one, else this process's memory
+   */
+  cache?: Cache;
+  /** The validators of the hourly reads' conditional requests; this process's memory when not given */
+  etags?: EtagCache;
 }
 
 /** The one key of the round queue: whichever process sends a round, there is one queued and one running at most */
@@ -96,6 +105,11 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const flags = d.flags ?? new Flags();
   const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
+  // Phase 8: the hourly reads, with what they keep between runs, which lives as long as the process
+  const batched = flags.on('batched-metrics');
+  const cache = d.cache ?? new MemoryCache();
+  const etags = d.etags ?? new MemoryEtagCache();
+  const hourlyServicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets, cache, etags }));
   const launch = async (id: number) => {
     const found = await registry.launches.get(id);
     if (!found) throw new Error(`no launch ${id}`);
@@ -320,7 +334,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         return;
       }
       const brand = await d.brand();
-      for (const line of await readMetrics({ registry, brand }, await servicesFor(brand))) job.log(line);
+      const lines = batched ? await readMetricsHourly({ registry, brand }, await hourlyServicesFor(brand)) : await readMetrics({ registry, brand }, await servicesFor(brand));
+      for (const line of lines) job.log(line);
     },
 
     async 'instagram-tokens'({ reason }, job) {
@@ -362,14 +377,15 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         return;
       }
       const brand = await d.brand();
-      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }) });
+      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }), ...(batched && { cache }) });
       if (commentId !== undefined) {
         const drafted = await draftReply(commentId, deps);
         if (drafted.status === 'failed') throw new Error(drafted.problem ?? 'could not draft');
         job.log(drafted.draft ? `Drafted: ${drafted.draft}` : `Suggested: dismiss (${drafted.classification ?? 'no reply'})`);
         return;
       }
-      const result = await runComments(deps, { log: (line) => job.log(line) });
+      // With batched-metrics each account's feed is asked first and only the posts it names are read
+      const result = await runComments(deps, { log: (line) => job.log(line), ...(batched && { feeds: { cursors: registry.cursors } }) });
       if (result.drafted.length > 0) job.log(`Drafted ${result.drafted.length}; sent ${result.sent.length}`);
       const notice = commentsNotice(result, d.env.SHIPCAST_PUBLIC_URL);
       if (notice) await notify(await servicesFor(brand), notice);
@@ -379,7 +395,9 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
 
     /** The measurement's checks (docs/plans/performance-refactor.md), from the registry only: no provider is called */
     async checks(_data, job) {
-      for (const result of await runChecks(registry, new TelemetryStore(registry.database), { cadenceHours: METRICS_CADENCE_HOURS })) {
+      // With the hourly reads each channel is fresh within its own cadence (its definition's)
+      const cadence = batched ? { cadenceHours: METRICS_HOURLY_CADENCE_HOURS, cadenceOf: (channel: string) => channelCadence(channel)?.hours } : { cadenceHours: METRICS_CADENCE_HOURS };
+      for (const result of await runChecks(registry, new TelemetryStore(registry.database), cadence)) {
         job.log(`${result.name}: ${result.ok ? 'ok' : 'NOT OK'} (${Math.round(result.value * 1000) / 1000})`);
       }
     },
@@ -412,6 +430,12 @@ export async function syncNow(queue: JobQueue, account: Pick<Account, 'id' | 'la
 export const METRICS_CRON = '0 */6 * * *';
 /** The hours between two runs of METRICS_CRON: how old a reading may be and still be fresh */
 export const METRICS_CADENCE_HOURS = 6;
+/**
+ * With `batched-metrics`: the metrics job every hour, off the round's and the checks' minutes; each
+ * run reads only the sources whose cadence is due, so most of them read only the hourly ones
+ */
+export const METRICS_HOURLY_CRON = '3 * * * *';
+export const METRICS_HOURLY_CADENCE_HOURS = 1;
 export const TOKENS_CRON = '30 3 * * *';
 // After the token refresh, so an Instagram token renewed that night is the one that reads
 export const SNAPSHOTS_CRON = '0 4 * * *';
@@ -451,7 +475,9 @@ export async function startWorking(queue: JobQueue, d: WorkDeps, options: Workin
   await queue.schedule('checks', CHECKS_CRON, { reason: 'hourly' });
   // Only a process that can load the pages (the web app) times them
   if (options.scheduleProbe ?? options.handlers?.probe !== undefined) await queue.schedule('probe', PROBE_CRON, { reason: 'hourly' });
-  await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
+  // The same schedule's name either way: turning the flag off and restarting puts the six hours back
+  if ((d.flags ?? new Flags()).on('batched-metrics')) await queue.schedule('metrics', METRICS_HOURLY_CRON, { reason: 'hourly' });
+  else await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
   await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });
   await queue.schedule('comments', COMMENTS_CRON, { reason: 'every 30 minutes' }, { singletonKey: COMMENTS_KEY });

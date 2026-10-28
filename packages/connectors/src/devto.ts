@@ -1,4 +1,4 @@
-import { checkProblem, expectOk, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, expectOk, secretTag, type IdentityCache, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 /** What an edit may change; whatever is left out stays as it is */
 export type DevtoEdit = Partial<DevtoArticle>;
@@ -24,8 +24,10 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
   readonly #fetch: typeof fetch;
   readonly #base: string;
   #username: Promise<string> | undefined;
+  readonly #cache: IdentityCache | undefined;
 
-  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string }) {
+  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string; cache?: IdentityCache }) {
+    this.#cache = options.cache;
     this.#key = options.apiKey;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = options.baseUrl ?? 'https://dev.to/api';
@@ -84,10 +86,13 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
 
   /** The key owner's username, read once: what tells the owner's replies from the others' */
   async #ownName(): Promise<string> {
-    this.#username ??= this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() })
-      .then((response) => json<{ username: string }>('dev.to', response, 'read the account'))
-      .then(
-        (me) => me.username,
+    const load = () =>
+      this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() })
+        .then((response) => json<{ username: string }>('dev.to', response, 'read the account'))
+        .then((me) => me.username);
+    // A username rarely changes: kept a day between runs, so /users/me is not asked hourly
+    this.#username ??= (this.#cache ? this.#cache.remember(`devto-me:${secretTag(this.#key)}`, 86_400, load) : load()).then(
+        (name) => name,
         (error: unknown) => {
           this.#username = undefined;
           throw error;
@@ -188,6 +193,39 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
       followers: await this.#count('/followers/users', 'count the followers'),
       posts: await this.#count('/articles/me/published', 'count the articles'),
     });
+  }
+
+  /**
+   * The author's own list, every article with its counts, ten pages of 100 at most: one call for a
+   * hundred articles, whatever number of them a run asks about.
+   */
+  async #mine(): Promise<Array<{ id: number; page_views_count: number; public_reactions_count: number; comments_count: number }>> {
+    const all: Array<{ id: number; page_views_count: number; public_reactions_count: number; comments_count: number }> = [];
+    for (let page = 1; page <= 10; page++) {
+      const response = await this.#fetch(`${this.#base}/articles/me/all?per_page=100&page=${page}`, { headers: this.#headers() });
+      const articles = await json<typeof all>('dev.to', response, 'metrics');
+      all.push(...articles);
+      if (articles.length < 100) break;
+    }
+    return all;
+  }
+
+  /** The numbers of many articles from one read of the author's list; an article not on it is left out */
+  async metricsMany(ids: readonly string[]): Promise<Map<string, Metrics>> {
+    const wanted = new Set(ids);
+    const out = new Map<string, Metrics>();
+    for (const a of await this.#mine()) {
+      if (wanted.has(String(a.id))) out.set(String(a.id), { views: a.page_views_count, reactions: a.public_reactions_count, comments: a.comments_count });
+    }
+    return out;
+  }
+
+  /**
+   * Each of the author's articles with how many comments it has, from one read of the list: Forem has
+   * no notifications API, so a count that moved is what says an article has comments to read.
+   */
+  async commentCounts(): Promise<Map<string, number>> {
+    return new Map((await this.#mine()).map((a) => [String(a.id), a.comments_count]));
   }
 
   /** Views are only visible to the author, so they come from the author's list, not the public article. */

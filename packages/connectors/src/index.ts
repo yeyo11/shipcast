@@ -14,6 +14,7 @@ export * from './telegram.ts';
 export * from './discord.ts';
 export * from './bing-webmaster.ts';
 export * from './github-discussions.ts';
+export * from './github-repo.ts';
 export * from './threads.ts';
 export * from './linkedin.ts';
 export * from './reddit.ts';

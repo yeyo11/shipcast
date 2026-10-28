@@ -1,4 +1,5 @@
 import {
+  chunks,
   ConnectorError,
   imageUrl,
   type Comment,
@@ -178,6 +179,43 @@ export class GitHubDiscussions implements Editable<DiscussionEdit>, Deletable, C
   }
 
   /**
+   * The numbers of many discussions, a hundred per query through `nodes(ids:)`. A node that is null
+   * (deleted, or out of the App's reach) is left out.
+   */
+  async metricsMany(ids: readonly string[]): Promise<Map<string, Metrics>> {
+    type Node = { id: string; upvoteCount: number; reactions: { totalCount: number }; comments: { totalCount: number } } | null;
+    const out = new Map<string, Metrics>();
+    for (const batch of chunks(ids, 100)) {
+      const { nodes } = await this.#query<{ nodes: Node[] }>(
+        'query($ids: [ID!]!) { nodes(ids: $ids) { ... on Discussion { id upvoteCount reactions { totalCount } comments { totalCount } } } }',
+        { ids: batch },
+        'metrics',
+      );
+      for (const node of nodes) if (node?.id) out.set(node.id, { reactions: node.reactions.totalCount, upvotes: node.upvoteCount, comments: node.comments.totalCount });
+    }
+    return out;
+  }
+
+  /**
+   * The comments of many discussions, twenty per query through `nodes(ids:)` (each with its first
+   * hundred comments and their replies): the whole thread of every launch's discussion in one call.
+   * A discussion that is gone is left out.
+   */
+  async commentsMany(ids: readonly string[]): Promise<Map<string, Comment[]>> {
+    type Node = { id: string; comments: { nodes: Array<DiscussionComment & { replies: { nodes: DiscussionComment[] } }> } } | null;
+    const out = new Map<string, Comment[]>();
+    for (const batch of chunks(ids, 20)) {
+      const { nodes } = await this.#query<{ nodes: Node[] }>(
+        `query($ids: [ID!]!) { nodes(ids: $ids) { ... on Discussion { id comments(first: 100) { nodes { ${COMMENT_FIELDS} replies(first: 100) { nodes { ${COMMENT_FIELDS} } } } } } } }`,
+        { ids: batch },
+        'read the comments',
+      );
+      for (const node of nodes) if (node?.id) out.set(node.id, threadOf(node.comments.nodes));
+    }
+    return out;
+  }
+
+  /**
    * The comments and their replies, the first hundred of each (a launch's discussion is not a forum).
    * The App's own comments are Shipcast's replies; the repo owner's are the owner's own words, kept
    * for the thread and never answered.
@@ -190,24 +228,7 @@ export class GitHubDiscussions implements Editable<DiscussionEdit>, Deletable, C
       'read the comments',
     );
     if (!node) throw new ConnectorError(NETWORK, 'read the comments: the discussion is gone', 404);
-    const out: Comment[] = [];
-    const add = (c: DiscussionComment, parent?: string) => {
-      const avatarUrl = imageUrl(c.author?.avatarUrl);
-      out.push({
-        externalId: c.id,
-        author: { handle: `@${c.author?.login ?? 'ghost'}`, ...(avatarUrl && { avatarUrl }) },
-        text: c.body,
-        createdAt: c.createdAt,
-        url: c.url,
-        ...(parent && { inReplyTo: parent }),
-        own: c.viewerDidAuthor || c.authorAssociation === 'OWNER',
-      });
-    };
-    for (const comment of node.comments.nodes) {
-      add(comment);
-      for (const reply of comment.replies.nodes) add(reply, comment.id);
-    }
-    return out;
+    return threadOf(node.comments.nodes);
   }
 
   /**
@@ -226,4 +247,26 @@ export class GitHubDiscussions implements Editable<DiscussionEdit>, Deletable, C
     );
     return { externalId: addDiscussionComment.comment.id, url: addDiscussionComment.comment.url };
   }
+}
+
+/** A discussion's comments and their replies, flattened. The App's own comments are Shipcast's; the repo owner's are the owner's */
+function threadOf(comments: ReadonlyArray<DiscussionComment & { replies: { nodes: DiscussionComment[] } }>): Comment[] {
+  const out: Comment[] = [];
+  const add = (c: DiscussionComment, parent?: string) => {
+    const avatarUrl = imageUrl(c.author?.avatarUrl);
+    out.push({
+      externalId: c.id,
+      author: { handle: `@${c.author?.login ?? 'ghost'}`, ...(avatarUrl && { avatarUrl }) },
+      text: c.body,
+      createdAt: c.createdAt,
+      url: c.url,
+      ...(parent && { inReplyTo: parent }),
+      own: c.viewerDidAuthor || c.authorAssociation === 'OWNER',
+    });
+  };
+  for (const comment of comments) {
+    add(comment);
+    for (const reply of comment.replies.nodes) add(reply, comment.id);
+  }
+  return out;
 }

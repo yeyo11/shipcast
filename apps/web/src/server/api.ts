@@ -962,7 +962,7 @@ export function openApiDocument(publicUrl: string) {
           properties: {
             ...launchProperties,
             detail: { type: ['string', 'null'] },
-            metrics: { type: 'array', items: { type: 'object', properties: { source: { type: 'string' }, name: { type: 'string' }, value: { type: 'number' }, takenAt: { type: 'string' } } } },
+            metrics: { type: 'array', items: { type: 'object', properties: { source: { type: 'string' }, name: { type: 'string' }, value: { type: 'number' }, takenAt: { type: 'string' }, checkedAt: { type: 'string', description: 'When the value was last read again unchanged' } } } },
             index: {
               type: 'array',
               items: {

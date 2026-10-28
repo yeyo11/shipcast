@@ -33,8 +33,8 @@ export const threadsAdapter = channelAdapter({
         everyMs: THIRTY_DAYS_MS,
         refresher: (settings, accessToken, http) => (settings.userId ? new Threads({ userId: settings.userId, accessToken, fetch: http }) : undefined),
       },
-      build: ({ need, fetch }) => {
-        const connector = new Threads({ userId: need('userId'), accessToken: need('accessToken'), fetch });
+      build: ({ need, fetch, cache }) => {
+        const connector = new Threads({ userId: need('userId'), accessToken: need('accessToken'), fetch, ...(cache && { cache }) });
         return { connector, check: () => connector.check(), profileStats: () => connector.profileStats() };
       },
     },
@@ -42,5 +42,6 @@ export const threadsAdapter = channelAdapter({
   publisher: (c) => c,
   editor: (c) => c,
   metrics: (c) => c,
+  // No feed: Threads lists no replies since a cursor nor a reply count per post, so each post is read
   comments: (c) => ({ reader: c, replier: c }),
 });

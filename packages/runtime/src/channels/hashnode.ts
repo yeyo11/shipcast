@@ -1,3 +1,4 @@
+import { batchReader } from '@shipcast/engine';
 import { Hashnode } from '@shipcast/connectors';
 import { hashnode } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -28,5 +29,6 @@ export const hashnodeAdapter = channelAdapter({
   },
   publisher: (c) => c,
   editor: (c) => c,
-  metrics: (c) => c,
+  // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
 });

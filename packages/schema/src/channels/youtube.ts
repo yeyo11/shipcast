@@ -1,4 +1,4 @@
-import { WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 
 /*
  * YouTube: two videos a launch, a vertical Short and a horizontal video, drawn by packages/assets from
@@ -150,6 +150,6 @@ export const youtube = {
       { days: WEEKEND, from: 9, to: 12, weight: 0.8 },
     ],
   },
-  metrics: { families: { views: ['views'], reactions: ['likes'], comments: ['comments'] }, primary: ['views', 'likes'] },
+  metrics: { families: { views: ['views'], reactions: ['likes'], comments: ['comments'] }, primary: ['views', 'likes'], cadence: HOURLY_BATCHED },
   // No slot of its own: its brand is red, which in Cartel only means failure; it takes the first free one
 } as const satisfies ChannelDefinition<'youtube'>;

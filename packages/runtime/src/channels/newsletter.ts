@@ -1,3 +1,4 @@
+import { batchReader } from '@shipcast/engine';
 import { Brevo } from '@shipcast/connectors';
 import { newsletter } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -24,5 +25,6 @@ export const newsletterAdapter = channelAdapter({
   // Without lists in brand.yml there is nobody to send it to
   usable: (brand) => Boolean(brand.newsletter),
   publisher: (c) => c,
-  metrics: (c) => c,
+  // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
 });
