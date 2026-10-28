@@ -3,6 +3,7 @@ import { editDraft, preflight } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
+import { repoList } from './repo-list';
 import { id, object, text } from './input';
 import { ownerAvatarUrl } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
@@ -118,9 +119,9 @@ export const publishAgain = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => publishAgainFor((await appContext()).registry, data.id, data.channel, startPublishing));
 
 export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
-  const { github, brand } = await appContext();
-  const b = await brand();
-  return { owner: b.github, repos: await github.userRepos(b.github) };
+  const ctx = await appContext();
+  const b = await ctx.brand();
+  return { owner: b.github, repos: await repoList({ github: ctx.github, cache: ctx.flags.on('realtime-ui') ? ctx.process.shared.cache : undefined }, b.github) };
 });
 
 export const listReleases = createServerFn({ method: 'GET' })

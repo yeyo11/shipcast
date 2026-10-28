@@ -2,7 +2,17 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LaunchService, type ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { instrumentFetch, withOrigin, type CallSample, type TelemetryRecorder } from '@shipcast/runtime';
+import { instrumentFetch, MemoryStore, withOrigin, type CallSample, type TelemetryRecorder } from '@shipcast/runtime';
+import { MemoryCache } from '@shipcast/runtime/redis';
+import { Brand } from '@shipcast/schema';
+import { commentService } from '../src/server/app-services.ts';
+import { attentionFor } from '../src/server/attention.server.ts';
+import { automationView } from '../src/server/automation.server.ts';
+import { channelsViewOf } from '../src/server/channels-view.server.ts';
+import { commentView } from '../src/server/comment-view.ts';
+import { jobsPage } from '../src/server/jobs.server.ts';
+import { profileView } from '../src/server/profile-api.ts';
+import { repoList } from '../src/server/repo-list.ts';
 import { launchPage } from '../src/server/launch-page.server.ts';
 import { launchNumbers, postAccounts, readTimezone } from '../src/server/launch-summary.server.ts';
 import { launchView } from '../src/server/launches.server.ts';
@@ -98,6 +108,53 @@ test("the launches list and the stats pages' loaders make no outbound call", asy
     ...(await counted('fn:loadSearch', () => loadSearch(registry, { from: '2026-10-01', to: '2026-10-28' }))),
   ];
   assert.deepEqual(calls, []);
+});
+
+/*
+ * Phase 9 (realtime-ui): every route's loader, not only the launch page's. What each page's server
+ * function reads, run on a seeded registry with fetch throwing: the list, a launch (above), the
+ * comments, the stats (above), the channels, Automation and its jobs, the bell, a profile review, and
+ * the one list only GitHub has (the repositories of "Launch a repo"), which is a cached read.
+ */
+test("the comments, channels, automation, bell and profile loaders make no outbound call", async () => {
+  const { registry, launch } = await seeded();
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
+  await registry.comments.recordComment({ postId: post.id, channel: 'bluesky', externalId: 'c1', author: { handle: 'someone' }, text: 'Nice', createdAt: new Date().toISOString(), own: false });
+  const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: 'Me', settings: { handle: 'me.bsky.social' } });
+  await registry.jobs.recordJob({ id: 'job-1', queue: 'draft', title: 'Drafting', launchId: launch.id });
+  const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+  const calls = [
+    ...(await counted('fn:listComments', async () => {
+      const comments = commentService({ registry });
+      const { page } = await comments.page({ own: false });
+      assert.equal(page.comments.map(commentView).length, 1);
+      await comments.settings();
+    })),
+    ...(await counted('fn:getChannels', async () => {
+      const view = await channelsViewOf({ registry, secrets: new MemoryStore(), brand: async () => brand, settings: { oauthApp: () => undefined } });
+      assert.equal(view.networks.find((n) => n.id === 'bluesky')?.accounts.length, 1);
+    })),
+    ...(await counted('fn:getAutomation', async () => {
+      await automationView({ registry });
+      assert.equal((await jobsPage(registry, { page: 1, state: 'all' })).jobs.length, 1);
+    })),
+    ...(await counted('fn:getAttention', () => attentionFor(registry))),
+    ...(await counted('fn:getProfileReview', () => profileView(registry, account.id))),
+  ];
+  assert.deepEqual(calls, []);
+});
+
+test('the repositories of "Launch a repo" are a cached read: GitHub once, then the cache', async () => {
+  const cache = new MemoryCache();
+  let asked = 0;
+  const github = { userRepos: async () => (asked++, [{ repo: 'yeyo11/claudio', description: null, pushedAt: '2026-10-01T00:00:00Z' }]) };
+  await repoList({ github, cache }, 'yeyo11');
+  const calls = await counted('fn:listRepos', async () => {
+    const repos = await repoList({ github: { userRepos: () => Promise.reject(new Error('GitHub was called')) }, cache }, 'yeyo11');
+    assert.equal(repos[0]?.repo, 'yeyo11/claudio');
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(asked, 1);
 });
 
 test('the counting fetch would see a loader that reached out, under its origin', async () => {

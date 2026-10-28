@@ -16,7 +16,7 @@ export async function automationChanged(ctx: AppContext): Promise<void> {
   if ((await readAutomation(ctx.registry)).mode !== 'off') await scheduleRound(ctx.queue, 'settings changed', 15);
 }
 
-export async function automationView(ctx: AppContext) {
+export async function automationView(ctx: Pick<AppContext, 'registry'>) {
   return {
     ...(await readAutomation(ctx.registry)),
     running: await roundRunning(ctx.registry),
