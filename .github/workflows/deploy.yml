@@ -1,0 +1,44 @@
+# Deploys the image that `Image` just published to apps-1 (yeyo11/infra, stacks/shipcast;
+# docs/decisions/0003-continuous-deployment.md there). The repository is public, so this runs on a
+# GitHub-hosted runner, never the server's self-hosted one: the job joins the tailnet as an
+# ephemeral `tag:ci` node and runs `deploy-stack` as `deploy`, which can run nothing else.
+#
+# It needs, in the repository's `production` environment:
+#   secrets TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET   Tailscale OAuth client allowed to tag nodes tag:ci
+#   variable DEPLOY_HOST                           the server's tailnet name: apps-1
+#
+# A deploy restarts the app for a few seconds: its process also runs the engine's rounds, which must
+# not run twice side by side. Roll back from yeyo11/infra (Actions -> rollback).
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [Image]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  deploy:
+    # Only after a push to main whose image was published; a failed or cancelled build deploys nothing.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Deploy
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        # The tag `Image` gave this commit; the server ignores anything that is not a plain tag.
+        run: tailscale ssh "deploy@${DEPLOY_HOST}" deploy-stack shipcast "sha-${HEAD_SHA::12}"
