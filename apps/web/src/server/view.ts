@@ -1,3 +1,5 @@
+import { CHANNEL_ICONS, CHANNELS, channelName } from '@shipcast/schema/channels';
+
 /** How the app names states, shared by the server functions and the pages */
 
 export type Tone = 'published' | 'waiting' | 'draft' | 'quiet' | 'failed';
@@ -72,42 +74,19 @@ export function groupChannels(launch: Pick<LaunchView, 'posts' | 'failures' | 'r
   });
 }
 
+/** Each channel's one name (its definition's), and the metric sources that are not channels, as their cards on a launch's page are titled */
 export const CHANNEL_NAMES: Record<string, string> = {
-  blog: 'Blog',
-  devto: 'dev.to',
-  bluesky: 'Bluesky',
-  mastodon: 'Mastodon',
-  instagram: 'Instagram',
-  newsletter: 'Newsletter',
-  hashnode: 'Hashnode',
-  telegram: 'Telegram',
-  discord: 'Discord',
-  githubDiscussions: 'GitHub Discussions',
-  threads: 'Threads',
-  reddit: 'Reddit',
-  linkedin: 'LinkedIn',
-  // Metric sources that are not channels, as their cards on a launch's page are titled
+  ...Object.fromEntries(CHANNELS.map((c) => [c, channelName(c)])),
   search: 'Google Search',
   bing: 'Bing',
   github: 'GitHub',
 };
 
-/** The design system's glyph for a channel, when it has one */
+/** The design system's glyph for a channel, from its definition, or for a source or network that has one */
 export function channelIcon(channel: string): string | undefined {
   const file: Record<string, string> = {
-    blog: 'blog',
-    devto: 'devto',
-    bluesky: 'bluesky',
-    mastodon: 'mastodon',
-    instagram: 'instagram',
-    hashnode: 'hashnode',
-    reddit: 'reddit',
-    linkedin: 'linkedin',
-    telegram: 'telegram',
-    discord: 'discord',
+    ...CHANNEL_ICONS,
     github: 'github',
-    githubDiscussions: 'github',
-    newsletter: 'newsletter',
     // An account's network, where it is not its channel's name
     brevo: 'newsletter',
   };

@@ -1,5 +1,5 @@
 import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
-import type { Channel } from '@shipcast/schema';
+import { draftOf, type Channel } from '@shipcast/schema';
 import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
 import { accountAvatar } from './pieces.ts';
 
@@ -50,11 +50,8 @@ async function schedulingChannels(
   const config = await launchConfigOf(deps.github, deps.launchesRepo, launch).catch(() => undefined);
   // Only needed when launch.yml cannot be read; the caller may still be reading them from GitHub
   const draftPaths = config ? [] : await deps.draftPaths;
-  const drafted = (channel: Channel) =>
-    draftPaths.some((path) => {
-      const name = path.split('/').at(-1) ?? '';
-      return name === `${channel}.md` || (channel === 'newsletter' && name.startsWith('newsletter-'));
-    });
+  // Each channel's drafts found by its own matcher: `github-discussion.md`, `newsletter-<lang>.md`
+  const drafted = (channel: Channel) => draftPaths.some((path) => draftOf(path)?.channel === channel);
   const candidates = SCHEDULABLE_CHANNELS.filter((channel) => {
     if (config) return config.publishing[channel] !== 'off';
     return drafted(channel);

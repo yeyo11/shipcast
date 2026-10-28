@@ -1,4 +1,5 @@
 import type { Capability, EditField, PostChanges } from '@shipcast/engine';
+import { channelDefinition, channelName, draftOf, isMainPiece, PRIMARY_METRIC } from '@shipcast/schema/channels';
 import { draftBody, splitFrontMatter } from '@shipcast/schema/markdown';
 import { markOf, type Mark } from './launch-summary.ts';
 
@@ -6,7 +7,7 @@ import { markOf, type Mark } from './launch-summary.ts';
  * The launch page's published pieces, as plain data the page and the tests share: a row per piece
  * with what it can do and, when it cannot, why; what an edit of several pieces at once changes on
  * each; the recommended times as chips. Only types come from the engine, so this module is safe in
- * the browser bundle. The rules mirror the engine's (packages/engine/src/edit.ts), which refuses
+ * the browser bundle; the channels' data is their definitions'. The rules mirror the engine's (packages/engine/src/edit.ts), which refuses
  * again on the server: the page only says it first. See docs/web-app.md
  */
 
@@ -88,27 +89,17 @@ export interface PieceRow {
 }
 
 /*
- * The number each network's row leads with: the first of these the piece has. They are names of
- * METRIC_FAMILIES (packages/engine/src/stats.ts), a test checks it: views where a network counts
- * them, its reaction otherwise.
+ * The number each network's row leads with: the first of these the piece has, from its channel's
+ * definition (`metrics.primary`, readings of its METRIC_FAMILIES, which a test checks): views where a
+ * network counts them, its reaction otherwise.
  */
-export const PRIMARY_METRIC: Readonly<Record<string, readonly string[]>> = {
-  devto: ['views', 'reactions'],
-  hashnode: ['views', 'reactions'],
-  bluesky: ['likes', 'reposts'],
-  mastodon: ['favourites', 'boosts'],
-  instagram: ['views', 'likes'],
-  newsletter: ['opens', 'clicks'],
-};
+export { PRIMARY_METRIC };
 
-const NAMES: Record<string, string> = { devto: 'dev.to', hashnode: 'Hashnode', mastodon: 'Mastodon', telegram: 'Telegram', discord: 'Discord', bluesky: 'Bluesky', instagram: 'Instagram', newsletter: 'The newsletter', brevo: 'The newsletter', blog: 'The blog', reddit: 'Reddit', threads: 'Threads', linkedin: 'LinkedIn', githubDiscussions: 'GitHub Discussions' };
-export const networkName = (channel: string) => NAMES[channel] ?? channel;
+/** A channel's one name; an account's network is named as the channel it publishes (Brevo, the newsletter) */
+export const networkName = (channel: string) => channelName(channel === 'brevo' ? 'newsletter' : channel);
 
 /** A post's own piece, a blog article or a subreddit's post: what the engine edits and deletes (a story, a comment or an issue is not) */
-export const isMainPiece = (channel: string, kind: string) => {
-  if (channel === 'blog') return kind.startsWith('article:');
-  return channel === 'reddit' ? kind.startsWith('post:') : kind === 'post';
-};
+export { isMainPiece };
 
 function pieceLabel(kind: string): string {
   if (kind === 'post') return '';
@@ -341,25 +332,28 @@ export interface SharedChanges {
   imageAlt?: string;
 }
 
-/** What a field becomes on a network, in the owner's words */
+/** What a field becomes on a network, in the owner's words: its definition's word for it, or the plain one */
 function fieldOn(channel: string, field: EditField): string {
-  const article = channel === 'devto' || channel === 'hashnode' || channel === 'blog';
+  const named = channelDefinition(channel)?.edit.fieldNames?.[field];
+  if (named) return named;
   switch (field) {
     case 'text':
-      return article ? 'the whole article body' : channel === 'discord' ? 'the message' : 'the text';
+      return 'the text';
     case 'link':
-      return article ? 'the canonical URL' : 'the link, after the text';
+      return 'the link, after the text';
     case 'image':
-      return article ? 'the cover' : channel === 'telegram' ? 'the photo' : 'the image';
+      return 'the image';
     default:
       return field;
   }
 }
 
 /** Networks whose post is text alone: a link goes after the text, so the text must come with it */
-const TEXT_POSTS = ['mastodon', 'telegram', 'discord'];
+const linkAfterText = (channel: string) => channelDefinition(channel)?.edit.linkAfterText === true;
 /** Networks that replace the text whole and cannot keep it: a change there needs the text */
-const TEXT_REQUIRED = ['telegram', 'discord'];
+const textRequired = (channel: string) => channelDefinition(channel)?.edit.textRequired === true;
+/** Networks that carry an article: the text is its whole body */
+const carriesArticle = (channel: string) => channelDefinition(channel)?.edit.article === true;
 
 const sharedFields = (changes: SharedChanges): EditField[] => [
   ...(changes.text !== undefined ? (['text'] as const) : []),
@@ -385,13 +379,13 @@ export function multiEditPlan(rows: readonly PieceRow[], changes: SharedChanges)
     const dropped = asked.filter((f) => !row.edit.fields.includes(f));
     if (asked.length === 0) return { ...base, ok: false, reason: 'Nothing to change yet' };
     if (kept.length === 0) return { ...base, ok: false, reason: `${networkName(row.channel)} takes none of these: it changes ${row.edit.fields.join(', ')}` };
-    if (TEXT_POSTS.includes(row.channel) && kept.includes('link') && !kept.includes('text')) {
+    if (linkAfterText(row.channel) && kept.includes('link') && !kept.includes('text')) {
       return { ...base, ok: false, reason: `${networkName(row.channel)} replaces the whole text: write the text to go with the link` };
     }
-    if (TEXT_REQUIRED.includes(row.channel) && !kept.includes('text')) {
+    if (textRequired(row.channel) && !kept.includes('text')) {
       return { ...base, ok: false, reason: `${networkName(row.channel)} replaces the text whole: write the text` };
     }
-    const article = row.channel === 'devto' || row.channel === 'hashnode' || row.channel === 'blog';
+    const article = carriesArticle(row.channel);
     return {
       ...base,
       ok: true,
@@ -405,7 +399,7 @@ export function multiEditPlan(rows: readonly PieceRow[], changes: SharedChanges)
 /** The text a text-only network shows after an edit: the text, then the link, as the engine composes it */
 export function composedText(channel: string, changes: Pick<PostChanges, 'text' | 'link'>): string | undefined {
   if (changes.text === undefined) return undefined;
-  return TEXT_POSTS.includes(channel) && changes.link ? `${changes.text.trimEnd()}\n\n${changes.link}` : changes.text;
+  return linkAfterText(channel) && changes.link ? `${changes.text.trimEnd()}\n\n${changes.link}` : changes.text;
 }
 
 /** The form of one piece's edit, as typed */
@@ -428,7 +422,7 @@ export function singleEditChanges(channel: string, fields: readonly EditField[],
   const has = (f: EditField) => fields.includes(f);
   const link = has('link') && changed('link') && form.link.trim() !== '' ? form.link.trim() : undefined;
   const imageUrl = has('image') && changed('imageUrl') && form.imageUrl.trim() !== '' ? form.imageUrl.trim() : undefined;
-  const needsText = (TEXT_POSTS.includes(channel) && link !== undefined) || (channel === 'telegram' && imageUrl !== undefined);
+  const needsText = (linkAfterText(channel) && link !== undefined) || (textRequired(channel) && channelDefinition(channel)?.edit.fields.includes('image') === true && imageUrl !== undefined);
   const text = has('text') && (changed('text') || needsText) && form.text.trim() !== '' ? form.text : undefined;
   const tags = form.tags
     .split(',')
@@ -451,17 +445,23 @@ export function singleEditChanges(channel: string, fields: readonly EditField[],
  */
 export function draftPrefill(drafts: ReadonlyArray<{ path: string; content?: string }>, row: Pick<PieceRow, 'channel' | 'kind'>): { text: string; title: string } {
   const lang = /^article:(\w+)$/.exec(row.kind)?.[1];
+  const subreddit = /^post:(.+)$/.exec(row.kind)?.[1];
   const draft = drafts.find((d) => {
-    const name = d.path.split('/').at(-1) ?? '';
     if (row.channel === 'blog') return lang !== undefined && d.path.startsWith(`src/content/posts/${lang}/`);
-    return name === `${row.channel}.md`;
+    // Found through the channel's own matcher: `github-discussion.md`, a subreddit's `reddit-<sub>.md`
+    const of = draftOf(d.path);
+    return of?.channel === row.channel && (subreddit === undefined || of.part === subreddit.toLowerCase());
   });
   const content = draft?.content ?? '';
   const front = splitFrontMatter(content);
-  // A channel's draft opens with its heading and the approval note, which are never the post's
-  if (!front) return { text: draftBody(content), title: '' };
-  const title = /^title:\s*["']?(.*?)["']?\s*$/m.exec(front.front)?.[1] ?? '';
-  return { text: front.body.trim(), title };
+  if (front) {
+    const title = /^title:\s*["']?(.*?)["']?\s*$/m.exec(front.front)?.[1] ?? '';
+    return { text: front.body.trim(), title };
+  }
+  // A channel's draft opens with its heading and the approval note, which are never the post's; what
+  // follows is read as its definition says (a discussion's title line is its title, not its text)
+  const read = channelDefinition(row.channel)?.draft?.read(draftBody(content));
+  return { text: read?.text ?? draftBody(content), title: read?.title ?? '' };
 }
 
 /* ---------- Scheduling ---------- */

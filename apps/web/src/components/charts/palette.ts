@@ -12,6 +12,8 @@
  * Everything past what a chart can tell apart folds into "other", in the muted text colour.
  */
 
+import { CHANNEL_SLOTS } from '@shipcast/schema/channels';
+
 export interface Slot {
   name: string;
   night: string;
@@ -32,17 +34,12 @@ export const SLOTS: readonly Slot[] = [
 /** The surfaces a chart sits on, per theme, from design/tokens.css: every slot passes 3:1 on each */
 export const SURFACES = { night: ['#141413', '#1F1F1D'], day: ['#FFFFFF', '#EDEEF0'] } as const;
 
-/** Each network's slot, nearest its own brand colour; dev.to is the ink, see above */
-export const CHANNEL_SLOT: Readonly<Record<string, number | 'ink'>> = {
-  bluesky: 0,
-  mastodon: 1,
-  instagram: 2,
-  github: 3,
-  hashnode: 4,
-  blog: 5,
-  newsletter: 6,
-  devto: 'ink',
-};
+/**
+ * Each network's slot, nearest its own brand colour: a channel's from its definition (dev.to is the
+ * ink, see above), and GitHub's, a source that is not a channel. Threads and the others past the
+ * seven slots have none of their own: they take the first free one.
+ */
+export const CHANNEL_SLOT: Readonly<Record<string, number | 'ink'>> = { ...CHANNEL_SLOTS, github: 3 };
 
 export const INK = 'var(--sc-text)';
 export const OTHER = 'var(--sc-muted)';
