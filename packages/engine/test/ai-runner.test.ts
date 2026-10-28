@@ -10,6 +10,7 @@ import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { z } from 'zod';
 import {
   aiProvider,
+  anthropicAiProvider,
   AiTaskRunner,
   claudioAiProvider,
   fakeAiProvider,
@@ -290,4 +291,39 @@ test('no provider’s secret reaches an error message, whatever its server echoe
       });
     }
   }
+});
+
+test('a provider that caches gets its breakpoints on a run with the repo’s tools: the system prompt and every call', async () => {
+  const caching = anthropicAiProvider.capabilities.promptCaching;
+  assert.ok(caching, 'the Anthropic API declares its prompt caching');
+  const cachingProvider = (model: MockLanguageModelV4): AiProviderDefinition => {
+    const base = mockProvider(model);
+    return { ...base, capabilities: { ...base.capabilities, promptCaching: caching }, providerOptions: { anthropic: { sendReasoning: false } } };
+  };
+  const { hostDir, repo } = await workspace();
+  const model = scripted(toolCall('repo_overview', {}), toolCall(SUBMIT_TOOL, { answer: '42' }));
+  const toolCalls: string[] = [];
+  const steps: Array<number | undefined> = [];
+  const runner = runnerWith({ provider: cachingProvider(model), settings: { apiKey: 'k' } }, { hostDir });
+  await runner.run(answerTask('always'), {
+    system: 'Read the code.',
+    prompt: 'What is the answer?',
+    repo: { hostDir: repo },
+    observer: { toolCall: (c) => toolCalls.push(c.name), step: (u) => steps.push(u.inputTokens) },
+  });
+  for (const call of model.doStreamCalls) {
+    assert.deepEqual(call.providerOptions, { anthropic: { sendReasoning: false, cacheControl: { type: 'ephemeral' } } }, 'the call’s breakpoint, beside the provider’s own options');
+    const system = call.prompt[0]!;
+    assert.equal(system.role, 'system');
+    assert.deepEqual(system.providerOptions, { anthropic: { cacheControl: { type: 'ephemeral' } } }, 'the system prompt’s breakpoint, on every step');
+  }
+  assert.equal(model.doStreamCalls.length, 2);
+  assert.deepEqual(toolCalls, ['repo_overview', SUBMIT_TOOL], 'the observer saw every tool call');
+  assert.deepEqual(steps, [10, 10], 'and every model call’s tokens');
+
+  // No tools, no loop to cache: the call is left as the provider sends it
+  const plain = scripted(textParts('{"answer":"yes"}'));
+  await runnerWith({ provider: cachingProvider(plain), settings: { apiKey: 'k' } }).run(answerTask(), { system: 'Be brief.', prompt: 'Answer.' });
+  assert.deepEqual(plain.doStreamCalls[0]!.providerOptions, { anthropic: { sendReasoning: false } });
+  assert.equal(plain.doStreamCalls[0]!.prompt[0]!.providerOptions, undefined);
 });

@@ -1,4 +1,4 @@
-import type { LanguageModel } from 'ai';
+import type { LanguageModel, SystemModelMessage } from 'ai';
 
 /*
  * What Shipcast knows about one AI provider, as one module per provider in this folder, listed once
@@ -32,12 +32,28 @@ export type StructuredOutputSupport = 'native' | 'native-without-tools' | 'none'
  */
 export type RepoAccess = 'remote-workspace' | 'local-tools';
 
+/** Provider options as the AI SDK takes them on a message or a call, nested values included */
+export type AiMessageOptions = NonNullable<SystemModelMessage['providerOptions']>;
+
+/**
+ * How a provider caches the prompt's prefix, as AI SDK provider options. A local-tools run sends the
+ * same tools, system prompt and growing history on every step; cached, a step pays for its new
+ * messages only. `system` marks the system prompt (the tools come before it, so they are cached
+ * with it); `call` goes on every call, for the provider's own breakpoint at the end of the history.
+ */
+export interface AiPromptCaching {
+  system: AiMessageOptions;
+  call: AiMessageOptions;
+}
+
 export interface AiCapabilities {
   streaming: boolean;
   /** Whether the provider takes client tools (function calling) */
   tools: boolean;
   structuredOutput: StructuredOutputSupport;
   repoAccess: RepoAccess;
+  /** Applied by the runner to every run with the repo's tools; none for a provider that caches on its own or not at all */
+  promptCaching?: AiPromptCaching;
 }
 
 /** A provider's settings, by its fields' keys; an empty value is as good as none */

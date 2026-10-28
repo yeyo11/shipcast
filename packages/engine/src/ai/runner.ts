@@ -1,9 +1,9 @@
 import { AiError, type AiTask, type AiTaskDefinition, type AiTaskLimits } from '@shipcast/schema';
-import { hasToolCall, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModelUsage, type ModelMessage, type OutputInterface, type StopCondition, type ToolSet } from 'ai';
+import { hasToolCall, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModelUsage, type ModelMessage, type OutputInterface, type StopCondition, type SystemModelMessage, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import type { TimingKind, TimingOutcome } from '../telemetry/store.ts';
 import { toAiError } from './errors.ts';
-import type { AiProviderDefinition, AiProviderSettings, AiRequestContext } from './providers/definition.ts';
+import type { AiMessageOptions, AiProviderDefinition, AiProviderSettings, AiRequestContext } from './providers/definition.ts';
 import { repoTools } from './repo-tools.ts';
 import type { WorkspaceMount } from './workspace-mount.ts';
 
@@ -51,6 +51,15 @@ export interface AiRunInput {
   abortSignal?: AbortSignal;
   /** This run's own ceilings over the task's: the spend ceiling from the settings */
   limits?: Partial<AiTaskLimits>;
+  /** Told of every tool call and every model call as they happen: how an evaluation sees a run */
+  observer?: AiRunObserver;
+}
+
+/** What a run did, step by step */
+export interface AiRunObserver {
+  toolCall?(call: { name: string; input: unknown }): void;
+  /** One model call's tokens, the cached ones included */
+  step?(usage: LanguageModelUsage): void;
 }
 
 /** Tokens over every model call of a run, the repair included */
@@ -98,8 +107,12 @@ interface Plan {
   limits: AiTaskLimits;
   tools: ToolSet;
   headers: Record<string, string>;
-  system: string | undefined;
+  /** A message rather than a string when the provider caches it */
+  system: string | SystemModelMessage | undefined;
   messages: ModelMessage[];
+  /** The provider's own, and its cache breakpoint on a run with tools */
+  providerOptions: AiMessageOptions | undefined;
+  observer: AiRunObserver | undefined;
   signal: AbortSignal;
   /** The run's own deadline, to tell it from the caller's abort */
   deadline: AbortSignal;
@@ -228,6 +241,10 @@ export class AiTaskRunner {
     const deadline = AbortSignal.timeout(limits.timeoutMs);
     const messages: ModelMessage[] = input.messages ?? [{ role: 'user', content: input.prompt ?? '' }];
     const secrets = provider.settings.filter((f) => f.secret).map((f) => settings[f.key] ?? '').filter(Boolean);
+    // A tool loop resends the same tools, system prompt and history on every step: cached, a step pays for what it adds
+    const caching = Object.keys(tools).length > 0 ? provider.capabilities.promptCaching : undefined;
+    const system = caching && input.system !== undefined ? { role: 'system' as const, content: input.system, providerOptions: caching.system } : input.system;
+    const providerOptions = caching ? mergeOptions(provider.providerOptions, caching.call) : provider.providerOptions;
     return {
       task,
       setup,
@@ -235,8 +252,10 @@ export class AiTaskRunner {
       limits,
       tools,
       headers: provider.requestHeaders?.(settings, context) ?? {},
-      system: input.system,
+      system,
       messages,
+      providerOptions,
+      observer: input.observer,
       signal: input.abortSignal ? AbortSignal.any([deadline, input.abortSignal]) : deadline,
       deadline,
       secrets,
@@ -313,7 +332,7 @@ export class AiTaskRunner {
       ...(options.tools && { tools: options.tools }),
       ...(options.toolChoice && { toolChoice: options.toolChoice }),
       ...(options.output && { output: options.output }),
-      ...(provider.providerOptions && { providerOptions: provider.providerOptions }),
+      ...(plan.providerOptions && { providerOptions: plan.providerOptions }),
       // The failure is read from the stream below; the default handler would only log it
       onError: () => undefined,
     });
@@ -325,13 +344,23 @@ export class AiTaskRunner {
       else if (part.type === 'text-delta') {
         text += part.text;
         onText?.(part.text);
-      } else if (part.type === 'tool-call' && part.toolName === SUBMIT_TOOL) submitted = { toolCallId: part.toolCallId, input: part.input };
+      } else if (part.type === 'tool-call') {
+        plan.observer?.toolCall?.({ name: part.toolName, input: part.input });
+        if (part.toolName === SUBMIT_TOOL) submitted = { toolCallId: part.toolCallId, input: part.input };
+      } else if (part.type === 'finish-step') plan.observer?.step?.(part.usage);
     }
     if (plan.signal.aborted) throw plan.signal.reason ?? new Error('aborted');
     if (failure) throw failure.error;
     const [steps, usage, response] = await Promise.all([result.steps, result.totalUsage, result.response]);
     return { text, steps: steps.length, usage, responseMessages: response.messages, ...(submitted && { submitted }) };
   }
+}
+
+/** Two sets of provider options as one, per provider: a cache breakpoint beside the provider's own options */
+function mergeOptions(a: AiMessageOptions | undefined, b: AiMessageOptions): AiMessageOptions {
+  const out: AiMessageOptions = { ...a };
+  for (const [provider, options] of Object.entries(b)) out[provider] = { ...out[provider], ...options };
+  return out;
 }
 
 function parseJson(text: string): unknown {
