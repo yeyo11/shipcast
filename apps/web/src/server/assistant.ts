@@ -7,12 +7,14 @@ import {
   isAssistantAction,
   launchCodeRef,
   type AiSetup,
+  type AiTaskRunner,
   type AssistantContext,
+  type PromptOptions,
   type Checkout,
   type Launch,
   type AssistantRepository,
 } from '@shipcast/engine';
-import type { Brand } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, type Brand } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
 import { splitProposals } from '../components/assistant/diff.ts';
 import { id, InvalidInput, object, text } from './input.ts';
@@ -25,8 +27,12 @@ import { id, InvalidInput, object, text } from './input.ts';
  */
 
 export interface AssistantDeps {
-  /** The `assistant` task's provider, model, prompts and tone, from the AI settings */
-  setup(): Promise<AiSetup>;
+  /** The `assistant` task's provider, model, prompts and tone, from the AI settings; unused with `aiRunner` */
+  setup?(): Promise<AiSetup>;
+  /** With `ai-runner`: the AI task runner the actions and the chat stream from */
+  aiRunner?: AiTaskRunner;
+  /** The owner's tone (and prompts), read before each answer on the runner */
+  texts?(): Promise<PromptOptions>;
   brand(): Promise<Brand>;
   launch(id: number): Promise<Launch | undefined>;
   /** What a launch's text is grounded in: its analysis, or nothing for an article */
@@ -120,7 +126,9 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
       ...(request.channel && { channel: request.channel }),
       ...(grounding.launch && { launch: grounding.launch }),
     };
-    const [setup, brand] = await Promise.all([deps.setup(), deps.brand()]);
+    const runner = deps.aiRunner;
+    const [setup, brand] = await Promise.all([runner ? undefined : legacySetup(deps), deps.brand()]);
+    const tone = setup ? setup.tone : (await deps.texts?.())?.tone;
     const selection = request.selection.trim() ? request.selection : request.document;
 
     if (request.action === 'check') {
@@ -130,8 +138,9 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
         yield { type: 'job', id: await deps.startCheck(launch, { text: selection, ...(context.lang && { lang: context.lang }), ...(context.channel && { channel: context.channel }) }) };
         return;
       }
+      const checkSetup = setup ?? (await legacySetup(deps));
       const checkout = await deps.checkout(launch.repo, launchCodeRef(launch));
-      const answer = await checkAgainstCode(selection, context, { setup, brand, checkout, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
+      const answer = await checkAgainstCode(selection, context, { setup: checkSetup, brand, checkout, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
       yield { type: 'check', revised: answer.revised, findings: answer.findings };
       yield { type: 'done' };
       return;
@@ -141,22 +150,17 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
     const saving = request.action === 'chat' && deps.sessions ? await startSaving(request, launch, deps.sessions) : undefined;
 
     let whole = false;
-    const common = { model: setup.model, cwd: deps.aiWorkdir ?? '/workspace', ...(signal && { abortSignal: signal }), onWhole: () => (whole = true) };
-    const stream =
+    const input =
       request.action === 'chat'
         ? (() => {
-            const chat = buildChat(request.messages ?? [], { ...context, selection: request.selection }, brand, { tone: setup.tone });
-            return setup.provider.streamText({ ...common, system: chat.system, messages: chat.messages });
+            const chat = buildChat(request.messages ?? [], { ...context, selection: request.selection }, brand, { ...(tone && { tone }) });
+            return { system: chat.system, messages: chat.messages };
           })()
-        : (() => {
-            const prompt = buildActionPrompt(
-              { action: request.action, selection, ...(request.target && isAdaptTarget(request.target) && { target: request.target }) },
-              context,
-              brand,
-              { tone: setup.tone },
-            );
-            return setup.provider.streamText({ ...common, system: prompt.system, prompt: prompt.prompt });
-          })();
+        : buildActionPrompt({ action: request.action, selection, ...(request.target && isAdaptTarget(request.target) && { target: request.target }) }, context, brand, { ...(tone && { tone }) });
+    // On the runner every provider streams: there is no whole-answer fallback to announce
+    const stream = runner
+      ? runner.stream(AI_TASK_DEFINITIONS.assistant, { ...input, ...(signal && { abortSignal: signal }) }).textStream
+      : setup!.provider.streamText({ ...input, model: setup!.model, cwd: deps.aiWorkdir ?? '/workspace', ...(signal && { abortSignal: signal }), onWhole: () => (whole = true) });
 
     let told = false;
     let answer = '';
@@ -191,6 +195,12 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
     if (signal?.aborted) return;
     yield { type: 'error', message: message(error) };
   }
+}
+
+/** The old provider path's setup, which every caller without the runner gives */
+async function legacySetup(deps: AssistantDeps): Promise<AiSetup> {
+  if (!deps.setup) throw new Error('the assistant has neither the AI task runner nor a provider');
+  return deps.setup();
 }
 
 type Sessions = NonNullable<AssistantDeps['sessions']>;

@@ -7,7 +7,8 @@ import { appContext } from './context.server';
 export async function assistantDeps(): Promise<AssistantDeps> {
   const ctx = await appContext();
   return {
-    setup: () => setupFor(ctx.deps, 'assistant'),
+    // With `ai-runner` the answers stream from the runner, with the owner's texts; else from the old provider
+    ...(ctx.deps.aiRunner ? { aiRunner: ctx.deps.aiRunner, texts: ctx.deps.aiTexts ?? (async () => ({})) } : { setup: () => setupFor(ctx.deps, 'assistant') }),
     brand: () => ctx.brand(),
     launch: async (launchId) => (await ctx.registry.launches.get(launchId)) ?? undefined,
     grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }),
