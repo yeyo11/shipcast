@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LruEtagCache } from '@shipcast/connectors';
-import { CacheEtagStore, githubCaches, GitHubFileCache } from '../src/index.ts';
+import { CacheEtagStore, githubCaches, githubEventEffects, GitHubFileCache } from '../src/index.ts';
 import { MemoryCache } from '../src/redis/index.ts';
 
 test('the file cache keeps the launches repo’s settings files at HEAD and a tag’s launch.yml, nothing else', () => {
@@ -38,4 +38,24 @@ test('the ETags live in the shared cache when there is one, in a bounded LRU oth
   await shared.etags.set('k', { etag: '"1"', body: 'x', status: 200, headers: { a: 'b' } });
   assert.deepEqual(await shared.etags.get('k'), { etag: '"1"', body: 'x', status: 200, headers: { a: 'b' } });
   assert.ok(githubCaches(undefined, () => undefined).etags instanceof LruEtagCache);
+});
+
+test("a launches repo pull request's changes queue its snapshot; anything else of a pull request does not", () => {
+  const pr = (action: string, repo = 'yeyo11/launches') => githubEventEffects('pull_request', { action, repository: { full_name: repo }, pull_request: { number: 7 } }, 'yeyo11/launches');
+  for (const action of ['opened', 'synchronize', 'edited', 'closed', 'reopened']) assert.deepEqual(pr(action), { snapshot: 7 }, action);
+  assert.deepEqual(pr('labeled'), {});
+  assert.deepEqual(pr('opened', 'yeyo11/claudio'), {}, 'a pull request of another repo');
+});
+
+test('a push to the default branch forgets the files it touched; a tag, a force-push or a long push forgets the repo', () => {
+  const repository = { full_name: 'yeyo11/launches', default_branch: 'main' };
+  const push = (payload: Record<string, unknown>) => githubEventEffects('push', { repository, ...payload }, 'yeyo11/launches');
+  assert.deepEqual(push({ ref: 'refs/heads/main', commits: [{ added: ['a/pack.json'], modified: ['brand.yml'], removed: [] }, { modified: ['brand.yml'] }] }), {
+    forget: { repo: 'yeyo11/launches', paths: ['a/pack.json', 'brand.yml'] },
+  });
+  assert.deepEqual(push({ ref: 'refs/heads/launch/x', commits: [{ modified: ['brand.yml'] }] }), {}, 'a draft branch is the pull request’s');
+  assert.deepEqual(push({ ref: 'refs/tags/v1', commits: [] }), { forget: { repo: 'yeyo11/launches' } });
+  assert.deepEqual(push({ ref: 'refs/heads/main', forced: true, commits: [] }), { forget: { repo: 'yeyo11/launches' } });
+  assert.deepEqual(push({ ref: 'refs/heads/main', commits: Array.from({ length: 20 }, () => ({ modified: ['x'] })) }), { forget: { repo: 'yeyo11/launches' } });
+  assert.deepEqual(githubEventEffects('release', { repository }, 'yeyo11/launches'), {});
 });

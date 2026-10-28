@@ -20,6 +20,7 @@ import {
   type SecretStore,
   type WorkDeps,
 } from '@shipcast/runtime';
+import type { DeliveryDedupe } from '@shipcast/runtime/redis';
 import type { Brand } from '@shipcast/schema';
 import { fakeNetworks, previewFetch, previewGitHubFetch, previewServices } from './preview.server';
 
@@ -65,6 +66,11 @@ export interface AppContext {
   /** With `github-events`: the drafts snapshots the launch page reads, and the caches deliveries invalidate */
   drafts: DraftSnapshotService | undefined;
   githubCaches: GitHubCaches | undefined;
+  /**
+   * The X-GitHub-Delivery ids already handled; the Redis one when the composition sets it, so a
+   * redelivery reaching another replica is dropped too. The webhook keeps one in memory otherwise.
+   */
+  deliveries?: DeliveryDedupe;
 }
 
 let context: Promise<AppContext> | undefined;
@@ -101,6 +107,7 @@ async function createContext(): Promise<AppContext> {
     brand,
     refresh: runtime.refresh,
     flags,
+    ...(runtime.drafts && { drafts: runtime.drafts }),
     // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
     ...(fakeNetworks() && {
       services: async (b: Brand) => previewServices(await buildServices({ env: process.env, brand: b, registry, github, secrets, fetch: previewFetch })),

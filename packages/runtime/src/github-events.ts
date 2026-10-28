@@ -107,3 +107,49 @@ export function githubCaches(cache: Cache | undefined, launchesRepo: () => strin
     files: new GitHubFileCache(cache ?? new MemoryCache(), launchesRepo),
   };
 }
+
+/** What a delivery changes in what Shipcast holds of GitHub: a snapshot to read again, files to forget */
+export interface GitHubEventEffects {
+  /** The launches repo's pull request whose snapshot is read again, by a job */
+  snapshot?: number;
+  /** Files kept from this repo that the push changed; every file of it when `paths` is absent */
+  forget?: { repo: string; paths?: string[] };
+}
+
+interface EventPayload {
+  action?: string;
+  ref?: string;
+  forced?: boolean;
+  repository?: { full_name?: string; default_branch?: string };
+  pull_request?: { number?: number };
+  commits?: Array<{ added?: string[]; modified?: string[]; removed?: string[] }>;
+}
+
+/** The pull request actions that change what the page shows: its files, its title or its state */
+const SNAPSHOT_ACTIONS = new Set(['opened', 'reopened', 'synchronize', 'edited', 'closed']);
+/** GitHub lists at most this many commits in a push; past it the paths are not all known */
+const PUSH_COMMITS_LISTED = 20;
+
+/**
+ * Decided from the delivery alone, like webhookAction, and as cheap: the webhook applies the
+ * forgetting inline (a cache delete) and queues the snapshot's read, so the answer stays immediate.
+ */
+export function githubEventEffects(event: string | null, payload: EventPayload, launchesRepo: string): GitHubEventEffects {
+  const repo = payload.repository?.full_name;
+  if (!repo) return {};
+  if (event === 'pull_request') {
+    const number = payload.pull_request?.number;
+    if (norm(repo) !== norm(launchesRepo) || !number || !SNAPSHOT_ACTIONS.has(payload.action ?? '')) return {};
+    return { snapshot: number };
+  }
+  if (event !== 'push' || !payload.ref) return {};
+  // A tag moved or made: a release's launch.yml read at it may have changed
+  if (payload.ref.startsWith('refs/tags/')) return { forget: { repo } };
+  const branch = payload.repository?.default_branch;
+  if (!branch || payload.ref !== `refs/heads/${branch}`) return {};
+  const commits = payload.commits ?? [];
+  // A force-push or a push longer than GitHub lists: which files moved is not known, so all of them
+  if (payload.forced || commits.length >= PUSH_COMMITS_LISTED) return { forget: { repo } };
+  const paths = [...new Set(commits.flatMap((c) => [...(c.added ?? []), ...(c.modified ?? []), ...(c.removed ?? [])]))];
+  return paths.length > 0 ? { forget: { repo, paths } } : {};
+}

@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
+import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
 import { pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
@@ -28,6 +28,8 @@ export interface WorkDeps {
   refresh?: () => Promise<void>;
   /** The refactor's switches; all off when not given */
   flags?: Flags;
+  /** With `github-events`: the drafts snapshots deliveries and the hourly poll keep current */
+  drafts?: DraftSnapshotService;
 }
 
 /** The one key of the round queue: whichever process sends a round, there is one queued and one running at most */
@@ -204,6 +206,22 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
       }
       job.log(`${post.channel} is due: publishing ${nameOf(current)}`);
       await startPublishing(queue, current);
+    },
+
+    /** GitHub said a drafts pull request changed: its snapshot is read again, off the webhook's request */
+    async 'drafts-snapshot'({ pullRequest }, job) {
+      if (!d.drafts) {
+        job.log('The drafts snapshot is off (github-events): nothing to read');
+        return;
+      }
+      const launch = await d.drafts.launchOf(pullRequest);
+      if (!launch) {
+        job.log(`Pull request #${pullRequest} is not one of Shipcast's launches`);
+        return;
+      }
+      job.link(pageOf(launch.id));
+      const snapshot = await d.drafts.refresh(launch);
+      job.log(snapshot ? `Read #${pullRequest}: ${snapshot.pullRequest.state}, ${snapshot.files.length} files` : 'The launch has no drafts pull request');
     },
 
     /** A delivery's work: what GitHub announced is claimed and drafted, or a merged launch published */
