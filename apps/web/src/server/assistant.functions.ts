@@ -1,3 +1,4 @@
+import { assistantCheckState } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { id, InvalidInput, object, text } from './input';
@@ -55,3 +56,8 @@ export const settleAssistantProposal = createServerFn({ method: 'POST' })
     const { registry } = await appContext();
     return { ok: await registry.assistant.settleAssistantProposal(data.messageId, data.index, data.state) };
   });
+
+/** Where a check against the code worked as a job stands: the page reads it when the job's events say it ended */
+export const assistantCheckJob = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => text(input, 'job', 200))
+  .handler(async ({ data }) => (await assistantCheckState((await appContext()).registry, data)) ?? null);

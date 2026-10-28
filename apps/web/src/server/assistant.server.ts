@@ -1,4 +1,5 @@
 import { launchGrounding, setupFor } from '@shipcast/engine';
+import { startAssistantCheck } from '@shipcast/runtime';
 import type { AssistantDeps } from './assistant.ts';
 import { appContext } from './context.server';
 
@@ -12,6 +13,8 @@ export async function assistantDeps(): Promise<AssistantDeps> {
     grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }),
     checkout: (repo, ref) => ctx.deps.checkout(repo, ref),
     sessions: ctx.registry.assistant,
+    // With `ai-runner` the check is a heavy job the page follows, never work inside this request
+    ...(ctx.deps.aiRunner && { startCheck: (launch, request) => startAssistantCheck(ctx.queue, launch, request) }),
     aiWorkdir: ctx.deps.aiWorkdir ?? ctx.config.workspaceProviderDir,
     ...(ctx.deps.maxBudgetUsd !== undefined && { maxBudgetUsd: ctx.deps.maxBudgetUsd }),
   };

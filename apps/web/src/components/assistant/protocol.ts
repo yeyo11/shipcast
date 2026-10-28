@@ -42,12 +42,23 @@ export interface AssistantRequest {
 
 export type CheckVerdict = 'backed' | 'planned' | 'not-found' | 'contradicted';
 
+export interface CheckFinding {
+  claim: string;
+  verdict: CheckVerdict;
+  evidence: string;
+}
+
 /** One line of the answer's stream, as NDJSON */
 export type AssistantEvent =
   /** The provider cannot stream: the whole answer arrives at once, after a wait */
   | { type: 'whole' }
   | { type: 'text'; text: string }
-  | { type: 'check'; revised: string; findings: Array<{ claim: string; verdict: CheckVerdict; evidence: string }> }
+  | { type: 'check'; revised: string; findings: CheckFinding[] }
+  /**
+   * The answer is worked as a job (the check against the code, with `ai-runner`): the stream ends
+   * here, and the page follows the job and reads its result (follow.ts) as the `check` it would have been
+   */
+  | { type: 'job'; id: string }
   | { type: 'error'; message: string }
   /** A chat turn was saved: the session it belongs to, and the answer's row for settling its proposals */
   | { type: 'saved'; sessionId: number; messageId: number }

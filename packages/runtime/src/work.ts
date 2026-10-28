@@ -16,6 +16,7 @@ import { takeSnapshots } from './snapshots.ts';
 import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
 import { COMMENTS_CRON, COMMENTS_KEY, commentsNotice, replyDeps } from './comments.ts';
 import { runProfileReview } from './profiles.ts';
+import { runAssistantCheck } from './assistant-check.ts';
 
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
 export interface WorkDeps {
@@ -408,6 +409,11 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       if (account) job.link(`/channels/${account.network}?review=${account.id}`);
       const brand = await d.brand();
       await runProfileReview({ registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) }, request, (line) => job.log(line));
+    },
+
+    /** The writing assistant's check of a launch's text against its code (`ai-runner`), for the page that follows the job */
+    async 'assistant-check'(data, job) {
+      await runAssistantCheck({ registry, pipeline: d.pipeline, brand: await d.brand() }, data, job);
     },
   };
 }

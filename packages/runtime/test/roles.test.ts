@@ -105,7 +105,7 @@ test('the queue table gives every queue to exactly one of the worker roles', () 
   assert.deepEqual([...worker, ...heavy].sort(), [...QUEUE_NAMES].sort());
   assert.equal(worker.filter((q) => heavy.includes(q)).length, 0);
   assert.deepEqual(queuesOf('web'), []);
-  assert.deepEqual(heavy.sort(), ['article', 'comments', 'draft', 'probe', 'profile-review']);
+  assert.deepEqual(heavy.sort(), ['article', 'assistant-check', 'comments', 'draft', 'probe', 'profile-review']);
   for (const q of QUEUE_NAMES) assert.ok(QUEUE_ROLES[q]);
 });
 

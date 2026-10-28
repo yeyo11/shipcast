@@ -25,6 +25,8 @@ export const QUEUE_ROLES: Readonly<Record<QueueName, 'worker' | 'heavy'>> = {
   article: 'heavy',
   // An AI run per account
   'profile-review': 'heavy',
+  // A clone and an AI run reading it, moved out of the web request that asked for it
+  'assistant-check': 'heavy',
   // Reads the comments and drafts each new one's reply with the AI, in one job: the AI makes it heavy
   // until reading and drafting are separate queues
   comments: 'heavy',

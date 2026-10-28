@@ -35,6 +35,11 @@ export interface AssistantDeps {
   /** Where claudio's REST fallback works when there is no repo: its workspace root */
   aiWorkdir?: string;
   maxBudgetUsd?: number;
+  /**
+   * With `ai-runner`: queues the check against the code as a heavy job and gives its id, so no clone
+   * nor agent runs inside this request; without it the check runs here, as before
+   */
+  startCheck?(launch: Launch, request: { text: string; lang?: string; channel?: string }): Promise<string>;
   /** Where chat turns are kept; without it the chat is not saved */
   sessions?: Pick<AssistantRepository, 'createAssistantSession' | 'assistantSession' | 'addAssistantMessage'>;
 }
@@ -121,6 +126,10 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
     if (request.action === 'check') {
       if (!launch || context.kind !== 'launch') throw new AssistantRefused('an article has no code to check against: the article itself is the truth');
       yield { type: 'whole' };
+      if (deps.startCheck) {
+        yield { type: 'job', id: await deps.startCheck(launch, { text: selection, ...(context.lang && { lang: context.lang }), ...(context.channel && { channel: context.channel }) }) };
+        return;
+      }
       const checkout = await deps.checkout(launch.repo, launchCodeRef(launch));
       const answer = await checkAgainstCode(selection, context, { setup, brand, checkout, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
       yield { type: 'check', revised: answer.revised, findings: answer.findings };

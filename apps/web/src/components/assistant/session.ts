@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadAssistantSession, settleAssistantProposal } from '../../server/assistant.functions';
+import { assistantCheckJob, loadAssistantSession, settleAssistantProposal } from '../../server/assistant.functions';
+import { useLiveClient } from '../live/Live';
 import { applyProposal } from './diff';
+import { followJob } from './follow';
 import { readEvents, type Action, type AssistantEvent, type AssistantRequest, type ChatTurn, type CheckVerdict } from './protocol';
 
 /** A range of the text, as the textarea reports a selection */
@@ -101,6 +103,10 @@ export function useAssistant(target: AssistantTarget) {
   const chatAbort = useRef<AbortController | null>(null);
   const latest = useRef(target);
   latest.current = target;
+  // Read when a check's job is followed: the client as it is then
+  const liveClient = useLiveClient();
+  const live = useRef(liveClient);
+  live.current = liveClient;
 
   useEffect(
     () => () => {
@@ -139,6 +145,25 @@ export function useAssistant(target: AssistantTarget) {
         if (event.type === 'whole') update((p) => ({ ...p, whole: true }));
         else if (event.type === 'text') update((p) => ({ ...p, text: p.text + event.text }));
         else if (event.type === 'check') update((p) => ({ ...p, text: event.revised, findings: event.findings }));
+        else if (event.type === 'job') {
+          // The check runs as a job: the stream has ended, the proposal waits for the job's result
+          const read = async () => {
+            const state = await assistantCheckJob({ data: event.id });
+            return state && state.state !== 'running' ? state : undefined;
+          };
+          followJob(event.id, { read, ...(live.current && { live: live.current }), signal: controller.signal })
+            .then((state) => {
+              if (state.state === 'done') {
+                update((p) => ({ ...p, streaming: false, text: state.revised, findings: state.findings }));
+                setAnnounce(`${label}: the proposal is ready below the text`);
+              } else {
+                update((p) => ({ ...p, streaming: false, problem: state.problem }));
+                setAnnounce(`${label} failed`);
+              }
+            })
+            // Aborted: another action replaced this one, or the editor closed
+            .catch(() => undefined);
+        }
         else if (event.type === 'error') {
           update((p) => ({ ...p, streaming: false, problem: event.message }));
           setAnnounce(`${label} failed`);

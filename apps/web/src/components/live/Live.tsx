@@ -32,6 +32,11 @@ export function useLiveEnabled(): boolean {
   return useContext(LiveContext).enabled;
 }
 
+/** The tab's live client, for what follows something outside React's render (a job a request started); none with the flag off */
+export function useLiveClient(): LiveClient | undefined {
+  return useContext(LiveContext).client;
+}
+
 export function useLiveStatus(): LiveStatus | undefined {
   const { client } = useContext(LiveContext);
   const [status, setStatus] = useState<LiveStatus | undefined>(client?.status);

@@ -16,6 +16,7 @@ export * from './snapshots.ts';
 export * from './edits.ts';
 export * from './comments.ts';
 export * from './profiles.ts';
+export * from './assistant-check.ts';
 export * from './settings.ts';
 export * from './github-user.ts';
 export * from './webmcp.ts';
