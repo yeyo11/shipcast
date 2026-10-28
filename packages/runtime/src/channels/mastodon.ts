@@ -1,3 +1,4 @@
+import { mastodonFeed } from './feeds.ts';
 import { batchReader } from '@shipcast/engine';
 import { Mastodon } from '@shipcast/connectors';
 import { mastodon } from '@shipcast/schema';
@@ -55,5 +56,5 @@ export const mastodonAdapter = channelAdapter({
   editor: (c) => c,
   // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
-  comments: (c) => ({ reader: c, replier: c }),
+  comments: (c) => ({ reader: c, replier: c, feed: mastodonFeed(c) }),
 });

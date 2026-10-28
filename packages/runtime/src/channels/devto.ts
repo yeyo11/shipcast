@@ -1,3 +1,4 @@
+import { countFeed } from './feeds.ts';
 import { batchReader } from '@shipcast/engine';
 import { Devto } from '@shipcast/connectors';
 import { devto } from '@shipcast/schema';
@@ -26,5 +27,5 @@ export const devtoAdapter = channelAdapter({
   // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   // Forem has no endpoint to write a comment: dev.to's are read only
-  comments: (c) => ({ reader: c }),
+  comments: (c) => ({ reader: c, feed: countFeed(() => c.commentCounts()) }),
 });

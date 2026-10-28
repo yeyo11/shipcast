@@ -1,3 +1,4 @@
+import { countFeed } from './feeds.ts';
 import { exchangeInstagramCode, Instagram, instagramAuthorizeUrl } from '@shipcast/connectors';
 import { instagram } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -50,5 +51,5 @@ export const instagramAdapter = channelAdapter({
   },
   publisher: (c) => c,
   metrics: (c) => c,
-  comments: (c) => ({ reader: c, replier: c }),
+  comments: (c) => ({ reader: c, replier: c, feed: countFeed(() => c.commentCounts()) }),
 });

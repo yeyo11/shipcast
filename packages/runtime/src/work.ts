@@ -354,14 +354,15 @@ export function workHandlers(queue: WorkQueue, d: WorkDeps): Handlers {
         return;
       }
       const brand = await d.brand();
-      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }) });
+      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }), ...(batched && { cache }) });
       if (commentId !== undefined) {
         const drafted = await draftReply(commentId, deps);
         if (drafted.status === 'failed') throw new Error(drafted.problem ?? 'could not draft');
         job.log(drafted.draft ? `Drafted: ${drafted.draft}` : `Suggested: dismiss (${drafted.classification ?? 'no reply'})`);
         return;
       }
-      const result = await runComments(deps, { log: (line) => job.log(line) });
+      // With batched-metrics each account's feed is asked first and only the posts it names are read
+      const result = await runComments(deps, { log: (line) => job.log(line), ...(batched && { feeds: { cursors: registry.cursors } }) });
       if (result.drafted.length > 0) job.log(`Drafted ${result.drafted.length}; sent ${result.sent.length}`);
       const notice = commentsNotice(result, d.env.SHIPCAST_PUBLIC_URL);
       if (notice) await notify(await servicesFor(brand), notice);

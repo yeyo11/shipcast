@@ -42,5 +42,6 @@ export const threadsAdapter = channelAdapter({
   publisher: (c) => c,
   editor: (c) => c,
   metrics: (c) => c,
+  // No feed: Threads lists no replies since a cursor nor a reply count per post, so each post is read
   comments: (c) => ({ reader: c, replier: c }),
 });

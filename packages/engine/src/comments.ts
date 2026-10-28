@@ -7,6 +7,7 @@ import type { GitHubSource } from './github.ts';
 import { ANALYSIS_TOOLS, buildReplyPrompt, type ReplyPromptInput } from './prompt.ts';
 import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Repositories } from './repositories/index.ts';
 import type { CommentStore, SettingReader, SettingStore } from './ports.ts';
+import type { CursorRepository } from './repositories/cursors.ts';
 import type { Checkout } from './workspace.ts';
 
 /*
@@ -79,10 +80,45 @@ export type CommentRefusal = 'not_found' | 'unsupported' | 'invalid' | 'state' |
 
 export class CommentRefused extends Refused<CommentRefusal> {}
 
+/** A post a comment feed is asked about: the registry's id and the network's */
+export interface FeedPost {
+  postId: number;
+  externalId: string;
+}
+
+/** What a feed says moved since its cursor */
+export interface FeedChanges {
+  /** Where the next run starts; undefined keeps the one it had */
+  cursor: string | undefined;
+  /** The posts (network ids) with comments the cursor has not seen: each is read whole */
+  touched: ReadonlySet<string>;
+  /** Posts whose whole thread the feed read itself (GitHub's nodes(ids:)), needing no read of their own */
+  comments?: ReadonlyMap<string, Comment[]>;
+}
+
+/**
+ * The CommentFeed capability (docs/plans/performance-refactor.md, "One definition per channel"):
+ * one call per account says which of its posts have new comments, from the network's notifications
+ * since a cursor or a listing of its posts' comment counts, so only those are read. Without a cursor
+ * (the first run) every post is touched.
+ */
+export interface CommentFeed {
+  changes(
+    posts: readonly FeedPost[],
+    cursor: string | undefined,
+    known: {
+      /** The post (its network id) a comment already recorded is under: how a reply to a reply is placed */
+      postOfComment(commentExternalId: string): Promise<string | undefined>;
+    },
+  ): Promise<FeedChanges>;
+}
+
 /** A channel's comment connectors, built with the account the post went out with */
 export interface CommentConnectors {
   reader?: CommentReader;
   replier?: Replier;
+  /** Where the network has a feed of what is new (the `batched-metrics` flag reads it first) */
+  feed?: CommentFeed;
 }
 
 export interface CommentDeps {
@@ -152,33 +188,144 @@ export async function fetchComments(deps: CommentDeps, options: { days?: number 
     }
     read++;
     found += list.length;
-    for (const c of list) {
-      const { recorded, comment } = await registry.comments.recordComment({
-        postId: post.id,
-        channel: post.channel,
-        externalId: c.externalId,
-        author: c.author,
-        text: c.text,
-        ...(c.url && { url: c.url }),
-        createdAt: c.createdAt,
-        ...(c.inReplyTo && { inReplyTo: c.inReplyTo }),
-        own: c.own,
-        // The owner's own words are kept for the thread's context, never answered
-        status: c.own ? 'dismissed' : 'new',
-      });
-      if (recorded && !comment.own) added.push(comment);
+    const recorded = await recordThread(registry, post, list);
+    added.push(...recorded.added);
+    answeredByHand += recorded.answeredByHand;
+  }
+  return { posts: read, found, added, answeredByHand, gone, problems: [...problems] };
+}
+
+/**
+ * Records one post's comments as the network listed them: the new ones by others are returned, and
+ * a reply the owner wrote on the network marks the comment it answers as sent.
+ */
+async function recordThread(registry: CommentDeps['registry'], post: Post, list: readonly Comment[]): Promise<{ added: CommentRecord[]; answeredByHand: number }> {
+  const added: CommentRecord[] = [];
+  let answeredByHand = 0;
+  for (const c of list) {
+    const { recorded, comment } = await registry.comments.recordComment({
+      postId: post.id,
+      channel: post.channel,
+      externalId: c.externalId,
+      author: c.author,
+      text: c.text,
+      ...(c.url && { url: c.url }),
+      createdAt: c.createdAt,
+      ...(c.inReplyTo && { inReplyTo: c.inReplyTo }),
+      own: c.own,
+      // The owner's own words are kept for the thread's context, never answered
+      status: c.own ? 'dismissed' : 'new',
+    });
+    if (recorded && !comment.own) added.push(comment);
+  }
+  for (const c of list) {
+    if (!c.own || !c.inReplyTo) continue;
+    const parent = await registry.comments.commentByExternalId(post.channel, c.inReplyTo);
+    if (!parent || parent.own || parent.sentExternalId === c.externalId) continue;
+    const marked = await registry.comments.updateComment(
+      parent.id,
+      { status: 'sent', sentExternalId: c.externalId, sentUrl: c.url ?? null, sentAt: c.createdAt, note: 'Answered on the network', problem: null },
+      ['new', 'draft-ready', 'failed'],
+    );
+    if (marked) answeredByHand++;
+  }
+  return { added, answeredByHand };
+}
+
+/** Where an account's comment feed resumes */
+export const commentFeedKey = (channel: string, accountId: number | null) => `comments-feed:${channel}:${accountId ?? 'env'}`;
+/** When an account's posts were last all read whole */
+export const commentSweepKey = (channel: string, accountId: number | null) => `comments-sweep:${channel}:${accountId ?? 'env'}`;
+/**
+ * Once a day every post is read whole even where a feed says nothing moved: a feed does not see the
+ * owner's own replies (no network notifies its author of them), which is what marks a comment
+ * answered by hand, nor a reply deep in an old thread on the feeds that only date their threads.
+ */
+export const COMMENT_SWEEP_HOURS = 24;
+
+/**
+ * The comment run of the `batched-metrics` flag: the same posts as `fetchComments`, one connector
+ * per account, each account's feed asked once and only the posts it names read; a network with no
+ * feed (Threads) is read post by post, as before. The cursors are kept per account.
+ */
+export async function fetchCommentsByFeed(deps: CommentDeps, cursors: Pick<CursorRepository, 'cursor' | 'setCursor'>, options: { days?: number } = {}): Promise<FetchResult> {
+  const { registry } = deps;
+  const now = deps.now?.() ?? new Date();
+  const settings = await readCommentSettings(registry);
+  const channels = COMMENT_CHANNELS.filter((c) => settings.replies[c] !== 'off');
+  const since = new Date(now.getTime() - (options.days ?? 30) * 86_400_000).toISOString();
+  const posts = (await registry.posts.postsSince(since, channels)).filter((p): p is Post & { externalId: string; channel: CommentChannel } => p.externalId !== null && isCommentChannel(p.channel));
+  const problems = new Set<string>();
+  const added: CommentRecord[] = [];
+  const gone: Post[] = [];
+  let found = 0;
+  let read = 0;
+  let answeredByHand = 0;
+
+  const accounts = new Map<string, typeof posts>();
+  for (const post of posts) {
+    const key = `${post.channel}|${post.accountId ?? 'env'}`;
+    accounts.set(key, [...(accounts.get(key) ?? []), post]);
+  }
+  for (const group of accounts.values()) {
+    const { channel, accountId } = group[0]!;
+    const name = NAMES(channel);
+    let connectors: CommentConnectors;
+    try {
+      connectors = await deps.connectors(channel, accountId);
+    } catch (error) {
+      problems.add(`${name}: ${message(error)}`);
+      continue;
     }
-    for (const c of list) {
-      if (!c.own || !c.inReplyTo) continue;
-      const parent = await registry.comments.commentByExternalId(post.channel, c.inReplyTo);
-      if (!parent || parent.own || parent.sentExternalId === c.externalId) continue;
-      const marked = await registry.comments.updateComment(
-        parent.id,
-        { status: 'sent', sentExternalId: c.externalId, sentUrl: c.url ?? null, sentAt: c.createdAt, note: 'Answered on the network', problem: null },
-        ['new', 'draft-ready', 'failed'],
-      );
-      if (marked) answeredByHand++;
+    const { reader, feed } = connectors;
+    if (!reader) {
+      problems.add(`${name}: no connected account to read comments with`);
+      continue;
     }
+    const sweepAt = await cursors.cursor(commentSweepKey(channel, accountId));
+    const sweep = !feed || !sweepAt || now.getTime() - Date.parse(sweepAt) >= COMMENT_SWEEP_HOURS * 3_600_000 - 10 * 60_000;
+    let changes: FeedChanges | undefined;
+    if (feed) {
+      try {
+        const postOf = new Map(group.map((p) => [p.id, p.externalId]));
+        changes = await feed.changes(
+          group.map((p) => ({ postId: p.id, externalId: p.externalId })),
+          await cursors.cursor(commentFeedKey(channel, accountId)),
+          { postOfComment: async (id) => postOf.get((await registry.comments.commentByExternalId(channel, id))?.postId ?? -1) },
+        );
+      } catch (error) {
+        // A feed that fails is said; the posts wait for the next run rather than all being read now
+        problems.add(`${name} feed: ${message(error)}`);
+        continue;
+      }
+    }
+    let failed = false;
+    for (const post of group) {
+      let list = changes?.comments?.get(post.externalId);
+      if (!list) {
+        if (!sweep && !changes?.touched.has(post.externalId)) continue;
+        try {
+          list = await reader.comments(post.externalId);
+        } catch (error) {
+          if (error instanceof PostGone) {
+            gone.push(await registry.posts.updatePost(post.id, { status: 'deleted' }));
+            continue;
+          }
+          problems.add(`${name} post ${post.id}: ${message(error)}`);
+          failed = true;
+          continue;
+        }
+      }
+      read++;
+      found += list.length;
+      const recorded = await recordThread(registry, post, list);
+      added.push(...recorded.added);
+      answeredByHand += recorded.answeredByHand;
+    }
+    // A post that could not be read keeps the cursor where it was, so the next run asks again
+    if (failed) continue;
+    if (changes?.cursor !== undefined) await cursors.setCursor(commentFeedKey(channel, accountId), changes.cursor);
+    if (sweep && feed) await cursors.setCursor(commentSweepKey(channel, accountId), now.toISOString());
   }
   return { posts: read, found, added, answeredByHand, gone, problems: [...problems] };
 }
@@ -388,9 +535,12 @@ export const MAX_DRAFTS_PER_RUN = 20;
  * then send the drafts of the channels set to auto (never a comment to dismiss, never a draft over
  * the limit). A draft or a send that fails is recorded on its comment and the run goes on.
  */
-export async function runComments(deps: ReplyDeps, options: { days?: number; log?: (line: string) => void } = {}): Promise<CommentRunResult> {
+export async function runComments(
+  deps: ReplyDeps,
+  options: { days?: number; log?: (line: string) => void; feeds?: { cursors: Pick<CursorRepository, 'cursor' | 'setCursor'> } } = {},
+): Promise<CommentRunResult> {
   const log = options.log ?? (() => {});
-  const fetched = await fetchComments(deps, options);
+  const fetched = options.feeds ? await fetchCommentsByFeed(deps, options.feeds.cursors, options) : await fetchComments(deps, options);
   log(`Read ${fetched.posts} posts: ${fetched.found} comments, ${fetched.added.length} new${fetched.answeredByHand ? `, ${fetched.answeredByHand} already answered by you` : ''}`);
   for (const post of fetched.gone) log(`${isCommentChannel(post.channel) ? NAMES(post.channel) : post.channel} post ${post.id} no longer exists on the network: marked deleted, and not read again`);
   for (const problem of fetched.problems) log(problem);

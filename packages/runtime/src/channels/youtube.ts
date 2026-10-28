@@ -1,3 +1,4 @@
+import { youtubeFeed } from './feeds.ts';
 import { ConnectorError, exchangeYouTubeCode, PostGone, YouTube, youtubeAuthorizeUrl, YOUTUBE_DAILY_UNITS, YOUTUBE_UNITS, type YouTubeVideo } from '@shipcast/connectors';
 import { batchReader, youtubeStrategy, type ChangeEditor, type YouTubePublisher } from '@shipcast/engine';
 import { youtube } from '@shipcast/schema';
@@ -127,5 +128,5 @@ export const youtubeAdapter = channelAdapter({
       return values;
     },
   }),
-  comments: ({ youtube: connector }: YouTubeConnection) => ({ reader: connector, replier: connector }),
+  comments: ({ youtube: connector }: YouTubeConnection) => ({ reader: connector, replier: connector, feed: youtubeFeed(connector) }),
 });
