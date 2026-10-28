@@ -25,3 +25,4 @@ export * from './telemetry/origin.ts';
 export * from './telemetry/quota.ts';
 export * from './telemetry/recorder.ts';
 export * from './telemetry/fetch.ts';
+export * from './logger.ts';

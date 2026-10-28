@@ -9,7 +9,12 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 export interface WorkOrigin {
   name: string;
   probe: boolean;
+  /** Ids every log line inside carries (`requestId`, `jobId`): one store serves counting and logging */
+  correlation?: Correlation;
 }
+
+/** Ids that tie a request's or a job's log lines together */
+export type Correlation = Readonly<Record<string, string>>;
 
 const storage = new AsyncLocalStorage<WorkOrigin>();
 
@@ -20,6 +25,18 @@ export function currentOrigin(): WorkOrigin {
 
 /** Runs `work` under an origin; a probe stays a probe in whatever it calls */
 export function withOrigin<T>(name: string, work: () => T, options: { probe?: boolean } = {}): T {
-  const probe = options.probe === true || storage.getStore()?.probe === true;
-  return storage.run({ name, probe }, work);
+  const there = storage.getStore();
+  const probe = options.probe === true || there?.probe === true;
+  return storage.run({ name, probe, ...(there?.correlation && { correlation: there.correlation }) }, work);
+}
+
+/** Runs `work` with ids bound to every log line inside it, added to any already bound */
+export function withCorrelation<T>(ids: Correlation, work: () => T): T {
+  const there = currentOrigin();
+  return storage.run({ ...there, correlation: { ...there.correlation, ...ids } }, work);
+}
+
+/** The ids bound to the work running now; empty outside any */
+export function currentCorrelation(): Correlation {
+  return storage.getStore()?.correlation ?? {};
 }

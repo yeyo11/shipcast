@@ -16,7 +16,8 @@
     "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
     "@shipcast/schema": "workspace:*",
-    "pg-boss": "^12.38.0"
+    "pg-boss": "^12.38.0",
+    "pino": "^10.4.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11"
