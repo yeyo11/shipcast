@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-28T10:16:36.869342913Z
-updated_at: 2026-10-28T10:52:43.172606145Z
+created_at: 2026-10-28T10:56:57.542623147Z
+updated_at: 2026-10-28T12:00:32.654105637Z
 tags:
     - plan
     - goal
@@ -48,8 +48,8 @@ explicitly. Everything else goes on without waiting.
 | Secrets | **An encrypted `secrets` table in Postgres** (envelope encryption with `SHIPCAST_SECRETS_KEY`, atomic per-row writes, a version column); the keychain stays for a local install |
 | Processes | **web + worker + heavy worker**, each scaled on its own |
 | Refactor approach | **Incremental, protected by tests**: characterisation tests before moving code, one piece at a time, behind a flag where it changes behaviour |
-| Deploys | **This run deploys each verified phase to `apps-1` itself**, over `tailscale ssh yeyo@apps-1`. Never on the owner's laptop |
-| Measurement windows | **Keep working during them** on refactors that change no deployed behaviour; deploy nothing that would alter a window until it ends |
+| Deploys | **Continuous deployment** (corrected on 2026-10-28). Every push to Shipcast's `main` runs `CI → Image → Deploy` and lands on `apps-1` by itself (`.github/workflows/deploy.yml`, infra decision `0003-continuous-deployment.md`). **Pushing to `main` is deploying.** The run watches each `Deploy` workflow to the end and checks production after it. A hand-run `deploy-stack` over SSH is only for a rollback or an emergency, and then the run tells the owner. Never on the owner's laptop |
+| Measurement windows | **Keep working during them, on branches.** Nothing reaches `main` while a window runs, because any push deploys and restarts the app, which disturbs the measurement. The exception is a production fix that cannot wait: it restarts the window and is reported. Work done during a window is merged to `main` when the window ends |
 | YouTube | **Built in this run, right after the channel modules (phase 3b)**, as the first new network on them |
 | YouTube on the real channel | **Allowed, private only**: upload v0.2.0's two videos privately (Google keeps an unaudited project's uploads private anyway), edit one's description, delete nothing |
 
@@ -58,33 +58,37 @@ explicitly. Everything else goes on without waiting.
 - **Production runs on `apps-1`**, from the infra repo `yeyo11/infra`:
   - its checkout is `~/Escritorio/infra`; the stack is `stacks/shipcast`, the tunnel is in
     `stacks/edge`;
-  - the image is `ghcr.io/yeyo11/shipcast:latest`, built by CI from `main`;
+  - the image is `ghcr.io/yeyo11/shipcast:sha-<12>`, built by CI from `main` and deployed by the
+    `Deploy` workflow over Tailscale (`tag:ci`, the `deploy` user, which can only run `deploy-stack`);
   - Postgres 17 is in the stack;
   - TLS is Traefik's, and the server is tailnet-only today;
-  - read `stacks/shipcast/README.md`, the infra repo's own README and conventions, and Shipcast's
-    `docs/server.md`.
+  - read `stacks/shipcast/README.md`, the infra repo's own README, `AGENTS.md` (its safety rules) and
+    `docs/decisions/0003-continuous-deployment.md`, and Shipcast's `docs/server.md`.
 - **No claudio on the server**: the AI there is the Anthropic API or an OpenAI-compatible server,
   chosen in the app's AI settings. claudio stays supported for local installs. The heavy worker must
   not depend on a claudio sidecar; where claudio is used, its workspace must be per job.
 - **The owner's laptop never runs Shipcast**: no `systemctl --user` units and no `pnpm app`. Its old
   Tailscale Serve forward was removed on 2026-10-28.
-- **Measured** before any of this (the stop-gap commits of 2026-10-28, up to `7ed9732`, were not
-  deployed yet):
+- **Measured** before any of this, before the stop-gap commits of 2026-10-28 (up to `7ed9732`) were
+  deployed:
   - the launch page loaded in 5.2 s;
   - `getLaunch` took 4.7 s;
   - in 24 h: 280 rounds, 47 comment runs, 4 metric runs (39 s each);
   - provider calls were not counted.
+
+  Those stop-gaps were deployed by CI on 2026-10-28, with phase 0's telemetry (`2ea5497`, `1be7c00`).
 - **What the audits found** (provider calls, correctness, code structure, horizontal-scale hazards,
   with file references) is summarised in the plan. Treat it as a map and verify each point in the
   code before changing it.
 - **Live work not to disturb**: the REA article's launch (launch 6) still had scheduled pieces on
-  2026-10-28 (Instagram 18:00 Madrid, the newsletter on Thursday 29th at 09:00). Before every
-  deploy, list the scheduled posts and keep **at least 20 minutes clear** of any of them.
-- **YouTube's token**: the owner prepared `~/Escritorio/shipcast/data/youtube-oauth.json` (laptop,
-  mode 600, created 2026-10-27 18:04; `client_id`, `client_secret`, `refresh_token`). Whether the
-  Google consent screen is *In production* or *Testing* is not known. In *Testing* the refresh token
-  expires 7 days after it was made, around **2026-11-03**: use it before then, or ask the owner to
-  publish the consent screen and make a new one.
+  2026-10-28 (Instagram 18:00 Madrid, the newsletter on Thursday 29th at 09:00). Before every push to
+  `main`, list the scheduled posts and keep **at least 20 minutes clear** of any of them.
+- **YouTube's token**: the owner prepared `~/Escritorio/shipcast/data/youtube-oauth.json`.
+  - It is on the laptop, mode 600, created 2026-10-27 18:04, with `client_id`, `client_secret` and
+    `refresh_token`.
+  - Whether the Google consent screen is *In production* or *Testing* is not known.
+  - In *Testing*, the refresh token expires 7 days after it was made, around **2026-11-03**. Use it
+    before then, or ask the owner to publish the consent screen and make a new one.
 
 ## Rules for the run
 
@@ -95,8 +99,9 @@ explicitly. Everything else goes on without waiting.
     `main` and clean;
   - stage files by name, never `git add -A`;
   - Conventional Commits with the `Co-Authored-By` line;
-  - work in your own worktree from `origin/main` and push straight to `origin main`, with no pull
-    requests;
+  - work in your own worktree from `origin/main`;
+  - outside a measurement window, push straight to `origin main` (no pull requests), knowing that it
+    deploys; inside a window, push to a branch only;
   - commit after every point, so a session limit loses nothing;
   - sub-agents each in their own worktree and branch, integrated by the lead.
 - **Code quality is a requirement, not a nice-to-have.**
@@ -107,23 +112,25 @@ explicitly. Everything else goes on without waiting.
   - The dependency rules checked in CI from phase 1 on.
   - Every new module comes with tests.
   - A phase is not done while it leaves a duplicate or a bypass of a service behind.
-- **Deploy each verified phase**:
-  1. check the scheduled posts (the 20-minute rule);
+- **Ship each verified phase by pushing to `main`**, since that deploys it:
+  1. check the scheduled posts: **no push within 20 minutes of one**;
   2. `pg_dump -Fc` of the registry on the server, kept, and a copy into the laptop's
      `~/Escritorio/shipcast/data/backups/`;
   3. note the table counts;
-  4. wait for the CI image of the commit;
-  5. deploy the stack as the infra repo documents;
+  4. push, then follow the run's `CI`, `Image` and `Deploy` workflows to the end;
+  5. check that the server runs the commit's image (`sha-<12 chars>`);
   6. check `https://shipcast.josegarrido.dev/api/health` (and `/readyz` once it exists);
   7. compare the counts;
   8. watch the next round and the next scheduled post.
 
-  If anything is off, roll back to the previous image and stop to report.
+  If anything is off, roll back by pushing a revert (CI deploys it). A hand-run
+  `deploy-stack shipcast sha-<previous>` is only for an emergency the revert cannot wait for; tell the
+  owner, then stop to report.
 - **Migrations are additive only**; data is only ever copied, verified and then switched. **The
   owner's data is never lost.**
 - **Infra changes** (Redis, PgBouncer, the tunnel route, new services, health checks) are commits to
-  `yeyo11/infra`, following its conventions. Secrets go on the server's `.env` or in the encrypted
-  table, never in a repository.
+  `yeyo11/infra`, following its conventions and safety rules. Secrets go on the server's `.env` or in
+  the encrypted table, never in a repository.
 - **Real accounts**: this run publishes nothing new, **except v0.2.0's two private YouTube videos**
   (phase 3b). Any other test that touches a network uses a preview with fake networks
   (`SHIPCAST_PREVIEW_FAKE_NETWORKS=1`, its own throwaway Postgres, never TLS). Scheduled pieces already
@@ -142,12 +149,15 @@ criteria met, verified and deployed (except where a measurement window forbids d
 0. **Instrument, then the baseline.**
    - The outbound-call counter (`provider_calls`), `Server-Timing` and page timings, job metrics, the
      freshness and correctness checks, and a feature flag per later phase.
-   - Deploy it (it also ships the undeployed stop-gaps of 2026-10-28; record that).
-   - **Start the 48 h baseline window**, and keep the instrumentation unchanged during it.
+   - Deploy it (it also ships the stop-gaps of 2026-10-28; record that).
+   - **Start the 48 h baseline window**, and keep the instrumentation unchanged during it. Record the
+     window's start (the deploy's time) and its end in the docs, so the after-window compares the
+     same hours.
 
    *Exit*: one full day of numbers is visible per provider, endpoint, page and job; the correctness
    checks run green.
-1. **Foundations** (can proceed during the baseline; deploy nothing behavioural until it ends):
+1. **Foundations** (proceeds during the baseline **on branches**, merged to `main` once the window
+   ends):
    - the shared test kit and characterisation tests (publishing, editing, scheduling, comments,
      metrics);
    - `HttpClient` (timeouts, retries honouring `Retry-After`, quota headers, instrumentation, ETag
@@ -220,6 +230,8 @@ criteria met, verified and deployed (except where a measurement window forbids d
    - Both Redis instances in the stack; BullMQ replaces pg-boss after draining it.
    - Delayed posts reconciled with Postgres; per-provider limiters and breakers.
    - The web / worker / heavy-worker processes, with per-job workspaces.
+   - The `Deploy` workflow and the infra stack updated to roll out the new services, so a deploy
+     still never runs two engines' rounds at once.
 
    *Exit*: a worker can be killed mid-job and a Redis restarted with no duplicate and no lost job;
    the schedule is rebuilt from Postgres.
@@ -254,7 +266,7 @@ Done alongside the phases, where they fit:
   table (item, state, evidence) into that goal's **Outcome**; fix what fits, list what does not.
 - **Milestone 5 of goal-v0.2 and this run's own docs**:
   - `status.md`, which still described the app running on the owner's laptop (last updated
-    2026-10-25), rewritten for the server, v0.2.0, YouTube and this refactor;
+    2026-10-25), rewritten for the server, continuous deployment, v0.2.0, YouTube and this refactor;
   - the roadmap ticks in [after-mvp.md](after-mvp.md);
   - `decisions/redis.md`, `decisions/architecture.md` and `decisions/youtube.md`;
   - updates to `web-app.md`, `engine.md`, `stats.md`, `publishing.md`, `server.md`, `accounts.md`
@@ -271,7 +283,7 @@ Done alongside the phases, where they fit:
 
 ## Done when
 
-- [ ] every phase's exit criteria met, each phase deployed and verified on `apps-1`
+- [ ] every phase's exit criteria met, each phase deployed (through CI) and verified on `apps-1`
 - [ ] YouTube built as one channel module, v0.2.0's two videos up privately and edited (or why not),
       the audit form prepared
 - [ ] the before/after report with real numbers for every KPI in the plan, and the targets met or
