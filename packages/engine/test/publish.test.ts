@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import { Brand, parseLaunchConfig, draftBody } from '@shipcast/schema';
-import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
-import { memoryRegistry } from '../src/testing.ts';
+import { Brand, parseLaunchConfig, draftBody, type Channel } from '@shipcast/schema';
+import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type Publishers } from '../src/index.ts';
+import { FakeConnectors, FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const D = 'launches/claudio/v0.8.2';
@@ -32,26 +32,8 @@ const merged: Record<string, string> = {
   'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\nreddit:\n  subreddits: [ClaudeAI]\n',
 };
 
-class FakeGitHub implements GitHubSource {
-  state: 'open' | 'merged' | 'closed';
-  files: Record<string, string>;
-  constructor(state: 'open' | 'merged' | 'closed', files = merged) {
-    this.state = state;
-    this.files = files;
-  }
-  async userEvents(): Promise<EventsPage> {
-    return { notModified: true };
-  }
-  async fileAt(repo: string, path: string, ref: string) {
-    return this.files[`${repo}/${path}@${ref}`];
-  }
-  async latestRelease() {
-    return undefined;
-  }
-  async pullRequestState() {
-    return this.state;
-  }
-}
+/** GitHub after the merge (or before it), with the owner's edits in the drafts */
+const gh = (state: 'open' | 'merged' | 'closed', files = merged) => new FakeGitHub({ pullRequestState: state, files });
 
 /** The deployed site: which URLs answer, and the image bytes. */
 function site(live: boolean): typeof fetch {
@@ -63,14 +45,11 @@ function site(live: boolean): typeof fetch {
   }) as typeof fetch;
 }
 
+/** Publishers for four channels; Instagram's is its post alone, with no story or comment to send */
 function recorder() {
-  const calls: Array<{ channel: string; input: unknown }> = [];
-  const ok = (channel: string) => async (input: unknown) => {
-    calls.push({ channel, input });
-    return { externalId: `${channel}-1`, url: `https://${channel}.example/1` };
-  };
-  const publishers: Publishers = { devto: { publish: ok('devto') }, bluesky: { publish: ok('bluesky') }, mastodon: { publish: ok('mastodon') }, instagram: { publish: ok('instagram') } };
-  return { calls, publishers };
+  const fake = new FakeConnectors();
+  const publishers: Publishers = { ...fake.publishers(['devto', 'bluesky', 'mastodon']), instagram: { publish: fake.publishers(['instagram']).instagram!.publish } };
+  return { calls: fake.calls, publishers };
 }
 
 async function drafted(registry: Registry) {
@@ -86,16 +65,16 @@ test('nothing is published while the drafts pull request is open, nor before the
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
-  const open = await publishLaunch(launch, brand, { github: new FakeGitHub('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  const open = await publishLaunch(launch, brand, { github: gh('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(open.state, 'waiting');
-  const notLive = await publishLaunch(launch, brand, { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(false) });
+  const notLive = await publishLaunch(launch, brand, { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(false) });
   assert.deepEqual(notLive.state === 'waiting' && notLive.reason, 'https://josegarrido.dev/en/claudio/ is not live yet');
   assert.equal(calls.length, 0);
 });
 
 test('a drafts pull request closed without merging skips the launch', async () => {
   const registry = await memoryRegistry();
-  const result = await publishLaunch(await drafted(registry), brand, { github: new FakeGitHub('closed'), registry, launchesRepo: 'yeyo11/launches', publishers: {}, fetch: site(true) });
+  const result = await publishLaunch(await drafted(registry), brand, { github: gh('closed'), registry, launchesRepo: 'yeyo11/launches', publishers: {}, fetch: site(true) });
   assert.equal(result.state, 'skipped');
   assert.match(result.launch.detail ?? '', /closed without merging/);
 });
@@ -105,7 +84,7 @@ test('after the merge every approval channel is published with the edited texts,
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   const devto = await registry.addAccount({ network: 'devto', brand: 'personal', label: '@me', settings: {} });
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { devto: devto.id } };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { devto: devto.id } };
 
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published');
@@ -157,7 +136,7 @@ test('a temporary failure leaves the launch partial and is retried; a permanent 
       throw new ConnectorError('Instagram', 'publish: 400 invalid token', 400);
     },
   };
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
 
   const first = await publishLaunch(launch, brand, deps);
   assert.equal(first.state, 'partial');
@@ -194,7 +173,7 @@ test('the newsletter sends one campaign per language with the edited issue, and 
       send: async (c) => (sends.push(c), { externalId: '901', url: 'https://app.brevo.com/marketing-campaign/report/901' }),
     },
   };
-  const result = await publishLaunch(launch, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  const result = await publishLaunch(launch, withNewsletter, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
 
   assert.equal(sends.length, 1, 'the Spanish list has nobody yet');
   assert.equal(sends[0]!.listId, 3);
@@ -210,7 +189,7 @@ test('the newsletter sends one campaign per language with the edited issue, and 
   );
   assert.deepEqual(await registry.cursorsWithPrefix('newsletter-sent:'), [], 'the rows are the record');
 
-  await publishLaunch((await registry.get(launch.id))!, withNewsletter, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  await publishLaunch((await registry.get(launch.id))!, withNewsletter, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(sends.length, 1, 'never sent twice');
 });
 
@@ -231,7 +210,7 @@ test('a newsletter with nobody subscribed is recorded once and not retried', asy
   const launch = await drafted(registry);
   let reads = 0;
   const publishers: Publishers = { newsletter: { subscribers: async () => (reads++, 0), send: async () => assert.fail('nothing to send') } };
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   const first = await publishLaunch(launch, withNewsletter, deps);
   assert.ok(first.state !== 'waiting' && first.state !== 'skipped');
   assert.match(first.state === 'published' || first.state === 'partial' ? first.problems.join() : '', /no subscribers yet in the en list/);
@@ -256,7 +235,7 @@ test('after the Instagram carousel, its story and the edited comment go out once
       },
     },
   };
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   const first = await publishLaunch(launch, brand, deps);
   assert.ok(first.state === 'published' && first.problems.some((p) => p.startsWith('instagram comment: Instagram: comment: 403')));
   assert.deepEqual(done, ['post', 'story instagram-story.jpg']);
@@ -281,7 +260,7 @@ test('the Instagram comment is its own row, and a second round neither reposts n
       comment: async (id) => (done.push(`comment ${id}`), { id: 'c-1' }),
     },
   };
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { instagram: account.id } };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), accounts: { instagram: account.id } };
   await publishLaunch(launch, brand, deps);
   await registry.setStatus(launch.id, 'drafted', launch.detail);
   await publishLaunch((await registry.get(launch.id))!, brand, deps);
@@ -323,7 +302,7 @@ test('a newsletter issue that went out is kept when the other language fails, an
       },
     },
   };
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   const first = await publishLaunch(launch, withNewsletter, deps);
   assert.equal(first.state, 'partial');
   assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => p.kind), ['issue:en']);
@@ -358,14 +337,14 @@ test('Hashnode, Telegram and Discord are published with the edited drafts', asyn
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
-  const ok = (channel: string) => async (input: unknown) => {
-    calls.push({ channel, input });
+  const ok = (channel: Channel) => async (input: unknown) => {
+    calls.push({ channel, action: 'publish', input });
     return { externalId: `${channel}-1`, url: `https://${channel}.example/1` };
   };
   publishers.hashnode = { publish: ok('hashnode') };
   publishers.telegram = { publish: ok('telegram') };
   publishers.discord = { publish: ok('discord') };
-  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  const result = await publishLaunch(launch, brand, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
 
   assert.equal(result.state, 'published');
   const input = (channel: string) => calls.find((c) => c.channel === channel)!.input;
@@ -388,7 +367,7 @@ test('Hashnode, Telegram and Discord are published with the edited drafts', asyn
   });
   assert.deepEqual((await registry.posts(launch.id)).map((p) => p.channel).sort(), ['blog', 'bluesky', 'devto', 'discord', 'hashnode', 'instagram', 'mastodon', 'telegram']);
 
-  await publishLaunch((await registry.get(launch.id))!, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  await publishLaunch((await registry.get(launch.id))!, brand, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(calls.length, 7, 'a second round publishes nothing again');
 });
 
@@ -404,7 +383,7 @@ test('when the article goes live Google is asked to read the sitemap, once, and 
       throw new Error('Search Console: submit the sitemap: 503');
     },
   };
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), search };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), search };
 
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published');
@@ -426,7 +405,7 @@ test('the blog records one article per language, each at its own URL', async () 
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { publishers } = recorder();
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   await publishLaunch(launch, brand, deps);
   await registry.setStatus(launch.id, 'drafted', launch.detail);
   await publishLaunch((await registry.get(launch.id))!, brand, deps);
@@ -443,7 +422,7 @@ test('a post deleted after the launch is never published again, even with the la
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   assert.equal((await publishLaunch(launch, brand, deps)).state, 'published');
   const [mastodon] = await registry.posts(launch.id, { channel: 'mastodon' });
   await deletePost(mastodon!.id, { registry, editors: async () => ({ mastodon: { edit: async () => {}, delete: async () => {} } }) });
@@ -466,7 +445,7 @@ test('a scheduled channel waits for its time, never holds the others back, and g
   assert.deepEqual([waiting?.status, waiting?.scheduledAt, waiting?.externalId], ['scheduled', hours(2).toISOString(), null]);
 
   let clock = T;
-  const deps = { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => clock };
+  const deps = { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => clock };
   const first = await publishLaunch(launch, brand, deps);
   assert.equal(first.state, 'partial');
   assert.deepEqual(first.state === 'partial' && first.scheduled, [{ channel: 'bluesky', at: hours(2).toISOString() }]);
@@ -495,7 +474,7 @@ test('a slot missed while the machine was off goes out on the next run', async (
   const { calls, publishers } = recorder();
   await scheduleLaunch(registry, launch.id, { mastodon: hours(1), bluesky: hours(30) }, { now: T });
   // Off from before the first slot until three days later
-  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => hours(72) });
+  const result = await publishLaunch(launch, brand, { github: gh('merged'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => hours(72) });
   assert.equal(result.state, 'published', 'overdue is sent, not dropped');
   assert.equal(calls.filter((c) => c.channel === 'mastodon' || c.channel === 'bluesky').length, 2);
 });
@@ -505,7 +484,7 @@ test('a scheduled piece is moved and cancelled; a cancelled channel is not publi
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
   const [bluesky, mastodon] = await scheduleLaunch(registry, launch.id, { bluesky: hours(5), mastodon: hours(5) }, { now: T });
-  const deps = { github: new FakeGitHub('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => T };
+  const deps = { github: gh('open'), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true), now: () => T };
 
   // Moved to a time past: due at once
   assert.equal((await reschedulePost(registry, bluesky!.id, hours(-1), { now: T })).scheduledAt, hours(-1).toISOString());
@@ -519,7 +498,7 @@ test('a scheduled piece is moved and cancelled; a cancelled channel is not publi
   await cancelScheduledPost(registry, again.id);
   assert.equal((await publishLaunch(launch, brand, deps)).state, 'waiting', 'nothing goes out before the merge, scheduled or not');
 
-  const result = await publishLaunch(launch, brand, { ...deps, github: new FakeGitHub('merged') });
+  const result = await publishLaunch(launch, brand, { ...deps, github: gh('merged') });
   assert.equal(result.state, 'published');
   assert.deepEqual(calls.map((c) => c.channel).sort(), ['bluesky', 'devto', 'instagram'], 'the cancelled channel is left out');
 });
@@ -564,7 +543,7 @@ test('the newsletter’s scheduled row goes once its issues are out', async () =
   const launch = await drafted(registry);
   await scheduleLaunch(registry, launch.id, { newsletter: hours(1) }, { now: T });
   const publishers: Publishers = { newsletter: { subscribers: async () => 5, send: async () => ({ externalId: '77', url: 'https://app.brevo.com/r/77' }) } };
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   assert.equal((await publishLaunch(launch, withNewsletter, { ...deps, now: () => T })).state, 'partial');
   assert.equal((await publishLaunch(launch, withNewsletter, { ...deps, now: () => hours(2) })).state, 'published');
   assert.deepEqual((await registry.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.status]), [['issue:en', 'live']]);
@@ -587,12 +566,12 @@ test('LinkedIn speaks the brand\'s language for it and shares that language\'s a
   const { calls, publishers } = recorder();
   publishers.linkedin = {
     publish: async (input: unknown) => {
-      calls.push({ channel: 'linkedin', input });
+      calls.push({ channel: 'linkedin', action: 'publish', input });
       return { externalId: 'li-1', url: 'https://linkedin.example/1' };
     },
   };
   const spanish = Brand.parse({ ...brand, languages: { blog: ['en', 'es'], linkedin: 'es' } });
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   assert.equal((await publishLaunch(launch, spanish, deps)).state, 'published');
   assert.deepEqual(calls.find((c) => c.channel === 'linkedin')!.input, {
     text: 'En español',
@@ -622,14 +601,14 @@ test('GitHub Discussions, Threads and LinkedIn are published once with the edite
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const { calls, publishers } = recorder();
-  const ok = (channel: string) => async (input: unknown) => {
-    calls.push({ channel, input });
+  const ok = (channel: Channel) => async (input: unknown) => {
+    calls.push({ channel, action: 'publish', input });
     return { externalId: `${channel}-1`, url: `https://${channel}.example/1` };
   };
   publishers.githubDiscussions = { publish: ok('githubDiscussions') };
   publishers.threads = { publish: ok('threads') };
   publishers.linkedin = { publish: ok('linkedin') };
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   const result = await publishLaunch(launch, brand, deps);
 
   assert.equal(result.state, 'published');
@@ -664,7 +643,7 @@ test('an article written in the app opens no discussion: it belongs to no projec
   };
   const { calls, publishers } = recorder();
   publishers.githubDiscussions = { publish: async () => assert.fail('no discussion for an article') };
-  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  const result = await publishLaunch(launch, brand, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(result.state, 'published');
   assert.equal(calls.length, 0);
 });
@@ -687,7 +666,7 @@ test('Reddit gets one post per subreddit from its edited draft, linking the arti
     },
     find: async () => assert.fail('nothing was attempted before'),
   };
-  const deps = { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
+  const deps = { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) };
   const result = await publishLaunch(launch, brand, deps);
   assert.equal(result.state, 'published', JSON.stringify(result));
   assert.deepEqual(sent, [
@@ -725,7 +704,7 @@ test('a Reddit post whose answer was lost is found instead of posted twice, and 
       return p.subreddit === 'ClaudeAI' ? { externalId: 't3_lost', url: 'https://www.reddit.com/r/ClaudeAI/comments/lost/' } : undefined;
     },
   };
-  const result = await publishLaunch(launch, brand, { github: new FakeGitHub('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
+  const result = await publishLaunch(launch, brand, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.deepEqual(submitted, ['selfhosted'], 'r/ClaudeAI was found, not submitted again');
   assert.deepEqual((await registry.posts(launch.id, { channel: 'reddit' })).map((p) => p.externalId).sort(), ['t3_lost', 't3_selfhosted']);
   assert.ok(result.state === 'published' || result.state === 'partial');

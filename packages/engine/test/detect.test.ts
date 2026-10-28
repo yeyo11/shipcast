@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
-import { detect, type EventsPage, type GitHubEvent, type GitHubSource } from '../src/index.ts';
-import { memoryRegistry } from '../src/testing.ts';
+import { detect, type EventsPage, type GitHubEvent } from '../src/index.ts';
+import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
 
@@ -12,34 +12,15 @@ function release(id: string, repo: string, tag: string, prerelease = false): Git
   return { id, type: 'release', repo, tag, prerelease, url: `https://github.com/${repo}/releases/tag/${tag}`, at: '2026-10-24T10:00:00Z' };
 }
 
-/** A GitHub with fixed events and files; records what it was asked. */
-class FakeGitHub implements GitHubSource {
-  calls: string[] = [];
-  pages: EventsPage[];
-  files: Record<string, string>;
-  constructor(pages: EventsPage[], files: Record<string, string> = {}) {
-    this.pages = pages;
-    this.files = files;
-  }
-  async userEvents(owner: string, etag?: string): Promise<EventsPage> {
-    this.calls.push(`events ${owner} ${etag ?? '-'}`);
-    return this.pages.shift() ?? { notModified: true };
-  }
-  async fileAt(repo: string, path: string, ref: string): Promise<string | undefined> {
-    this.calls.push(`file ${repo} ${path} ${ref}`);
-    return this.files[`${repo}@${ref}`];
-  }
-  async latestRelease(): Promise<undefined> {
-    return undefined;
-  }
-  async pullRequestState(): Promise<'open'> {
-    return 'open';
-  }
+/** A GitHub with fixed event pages and each repo's launch.yml by `owner/name@ref` */
+function fakeGitHub(pages: EventsPage[], launchYmls: Record<string, string> = {}): FakeGitHub {
+  const files = Object.fromEntries(Object.entries(launchYmls).map(([at, text]) => [at.replace('@', '/.github/launch.yml@'), text]));
+  return new FakeGitHub({ events: pages, files });
 }
 
 test('a published release of an enabled repo is claimed, with the pack inferred from the version', async () => {
   const registry = await memoryRegistry();
-  const github = new FakeGitHub(
+  const github = fakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': VALID },
   );
@@ -48,14 +29,14 @@ test('a published release of an enabled repo is claimed, with the pack inferred 
   assert.ok(outcome && 'launch' in outcome);
   assert.equal(outcome.launch.kind, 'launch', 'the first launch of a project');
   assert.equal(outcome.launch.trigger, 'release');
-  assert.ok(github.calls.includes('file yeyo11/claudio .github/launch.yml v0.9.0'), 'launch.yml is read at the tag');
+  assert.ok(github.called('fileAt').some((args) => args.join(' ') === 'yeyo11/claudio .github/launch.yml v0.9.0'), 'launch.yml is read at the tag');
 });
 
 test('the next major after a published launch is a major pack', async () => {
   const registry = await memoryRegistry();
   const first = await registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.setStatus(first.launch.id, 'published');
-  const github = new FakeGitHub(
+  const github = fakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': VALID },
   );
@@ -66,7 +47,7 @@ test('the next major after a published launch is a major pack', async () => {
 
 test('repos without launch.yml, disabled ones and pre-releases are ignored without a record', async () => {
   const registry = await memoryRegistry();
-  const github = new FakeGitHub(
+  const github = fakeGitHub(
     [
       {
         notModified: false,
@@ -90,7 +71,7 @@ test('repos without launch.yml, disabled ones and pre-releases are ignored witho
 
 test('a launch.yml for another brand is refused: brands never mix', async () => {
   const registry = await memoryRegistry();
-  const github = new FakeGitHub(
+  const github = fakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/tool', 'v1.0.0')] }],
     { 'yeyo11/tool@v1.0.0': 'enabled: true\nbrand: company\n' },
   );
@@ -101,7 +82,7 @@ test('a launch.yml for another brand is refused: brands never mix', async () => 
 
 test('an invalid launch.yml is recorded as failed with its line, and not retried', async () => {
   const registry = await memoryRegistry();
-  const github = new FakeGitHub(
+  const github = fakeGitHub(
     [{ notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] }],
     { 'yeyo11/claudio@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  reddit: manual\n' },
   );
@@ -114,7 +95,7 @@ test('an invalid launch.yml is recorded as failed with its line, and not retried
 
 test('events already seen are skipped, and a 304 costs nothing', async () => {
   const registry = await memoryRegistry();
-  const github = new FakeGitHub(
+  const github = fakeGitHub(
     [
       { notModified: false, etag: 'W/"1"', events: [release('100', 'yeyo11/claudio', 'v0.9.0')] },
       { notModified: true },
@@ -136,8 +117,8 @@ test('events already seen are skipped, and a 304 costs nothing', async () => {
     'only the new event is considered',
   );
   assert.deepEqual(
-    github.calls.filter((c) => c.startsWith('events')),
-    ['events yeyo11 -', 'events yeyo11 W/"1"', 'events yeyo11 W/"1"'],
+    github.called('userEvents'),
+    [['yeyo11', undefined], ['yeyo11', 'W/"1"'], ['yeyo11', 'W/"1"']],
     'every request after the first carries the last etag',
   );
 });
@@ -145,12 +126,12 @@ test('events already seen are skipped, and a 304 costs nothing', async () => {
 test('a repo made public launches only when launch.yml enables that trigger', async () => {
   const registry = await memoryRegistry();
   const event: GitHubEvent = { id: '200', type: 'public', repo: 'yeyo11/new', at: '2026-10-24T11:00:00Z' };
-  const off = new FakeGitHub([{ notModified: false, etag: 'W/"1"', events: [event] }], { 'yeyo11/new@HEAD': VALID });
+  const off = fakeGitHub([{ notModified: false, etag: 'W/"1"', events: [event] }], { 'yeyo11/new@HEAD': VALID });
   const [ignored] = await detect({ github: off, registry, brand });
   assert.equal(ignored?.result, 'ignored');
 
   const registry2 = await memoryRegistry();
-  const on = new FakeGitHub([{ notModified: false, etag: 'W/"1"', events: [event] }], {
+  const on = fakeGitHub([{ notModified: false, etag: 'W/"1"', events: [event] }], {
     'yeyo11/new@HEAD': `${VALID}triggers:\n  public: true\n`,
   });
   const [claimed] = await detect({ github: on, registry: registry2, brand });

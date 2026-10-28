@@ -9,48 +9,19 @@ import {
   editPost,
   editPosts,
   PostRefused,
-  type BlogRepo,
-  type CommitFile,
   type EditDeps,
-  type Editors,
   type Registry,
 } from '../src/index.ts';
-import { memoryRegistry } from '../src/testing.ts';
+import type { Channel } from '@shipcast/schema';
+import { FakeConnectors, FakeGitHub, memoryRegistry, type ConnectorCall } from '../src/testing/index.ts';
 
-interface Sent {
-  channel: string;
-  action: 'edit' | 'delete';
-  id: string;
-  input?: unknown;
-  accountId: number | null;
-}
+type Sent = ConnectorCall;
 
-/** Every editor records what it was sent and with which account it was built */
-function fakeEditors(sent: Sent[], fail: Partial<Record<string, Error>> = {}): EditDeps['editors'] {
-  return async (channel, accountId) => {
-    const one = (name: string) => ({
-      edit: async (id: string, input: unknown) => {
-        if (fail[name]) throw fail[name];
-        sent.push({ channel: name, action: 'edit', id, input, accountId });
-      },
-      delete: async (id: string) => {
-        if (fail[name]) throw fail[name];
-        sent.push({ channel: name, action: 'delete', id, accountId });
-      },
-    });
-    const all: Editors = {
-      mastodon: one('mastodon'),
-      telegram: one('telegram'),
-      discord: one('discord'),
-      devto: one('devto'),
-      hashnode: one('hashnode'),
-      bluesky: { delete: one('bluesky').delete },
-      githubDiscussions: one('githubDiscussions'),
-      threads: { delete: one('threads').delete },
-      linkedin: { delete: one('linkedin').delete },
-    };
-    return { [channel]: all[channel as keyof Editors] } as Editors;
-  };
+/** Every editor records what it was sent and with which account it was built; `fail` makes a channel's edits and deletes throw */
+function fakeEditors(sent: Sent[], fail: Partial<Record<Channel, Error>> = {}): EditDeps['editors'] {
+  const fake = new FakeConnectors(sent);
+  for (const [channel, error] of Object.entries(fail) as Array<[Channel, Error]>) fake.fail(channel, 'edit', error).fail(channel, 'delete', error);
+  return fake.editors();
 }
 
 const image = (async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/png' } })) as unknown as typeof fetch;
@@ -195,36 +166,17 @@ test('a launch-wide edit or delete can be limited to some channels', async () =>
   await assert.rejects(editPosts(999, { text: 'x' }, undefined, deps), (e) => e instanceof PostRefused && e.reason === 'not_found');
 });
 
-class FakeRepo implements BlogRepo {
-  files: Record<string, string>;
-  commits: Array<{ message: string; files: CommitFile[] }> = [];
-  constructor(files: Record<string, string>) {
-    this.files = files;
-  }
-  async fileAt(_repo: string, path: string) {
-    return this.files[path];
-  }
-  async commitToBranch(_repo: string, branch: string, message: string, files: CommitFile[]) {
-    assert.equal(branch, 'main');
-    this.commits.push({ message, files });
-    for (const f of files) {
-      if ('delete' in f) delete this.files[f.path];
-      else if ('content' in f) this.files[f.path] = f.content;
-    }
-    return { sha: 'abc' };
-  }
-  async filesUnder(_repo: string, _ref: string, folder: string) {
-    return Object.keys(this.files).filter((p) => p.startsWith(`${folder}/`));
-  }
-}
+/** The launches repo with these files on main */
+const launchesRepo = (files: Record<string, string>) => new FakeGitHub({ files: Object.fromEntries(Object.entries(files).map(([path, content]) => [FakeGitHub.key('yeyo11/launches', path), content])) });
 
 test('the blog is edited by a commit that keeps the front matter and sets updatedDate', async () => {
   const registry = await memoryRegistry();
   const { posts } = await launchWith(registry, [{ channel: 'blog', kind: 'article:en', externalId: 'claudio' }]);
-  const repo = new FakeRepo({ 'src/content/posts/en/claudio.md': '---\ntitle: "Old"\ndescription: "D"\npubDate: 2026-10-01\n# kept\nlang: en\n---\n\nOld body.\n' });
+  const repo = launchesRepo({ 'src/content/posts/en/claudio.md': '---\ntitle: "Old"\ndescription: "D"\npubDate: 2026-10-01\n# kept\nlang: en\n---\n\nOld body.\n' });
   const edited = await editPost(posts[0]!.id, { title: 'New', text: 'New body.' }, { registry, editors: fakeEditors([]), blog: { github: repo, launchesRepo: 'yeyo11/launches' }, now: () => new Date('2026-10-25T10:00:00Z') });
   assert.equal(edited.status, 'edited');
-  assert.equal(repo.files['src/content/posts/en/claudio.md'], '---\ntitle: "New"\ndescription: "D"\npubDate: 2026-10-01\n# kept\nlang: en\nupdatedDate: 2026-10-25\n---\n\nNew body.\n');
+  assert.deepEqual(repo.commits.map((c) => c.branch), ['main']);
+  assert.equal(repo.file('yeyo11/launches', 'src/content/posts/en/claudio.md'), '---\ntitle: "New"\ndescription: "D"\npubDate: 2026-10-01\n# kept\nlang: en\nupdatedDate: 2026-10-25\n---\n\nNew body.\n');
   await assert.rejects(editPost(posts[0]!.id, { link: 'https://x.dev' }, { registry, editors: fakeEditors([]), blog: { github: repo, launchesRepo: 'yeyo11/launches' } }), /cannot change link/);
 });
 
@@ -235,7 +187,7 @@ test('deleting an article removes it, and the launch media only with the last la
     { channel: 'blog', kind: 'article:es', externalId: 'claudio-es' },
   ]);
   const media = 'public/launches/claudio/v1.0.0';
-  const repo = new FakeRepo({
+  const repo = launchesRepo({
     'src/content/posts/en/claudio.md': '---\ntitle: x\n---\n\nx\n',
     'src/content/posts/es/claudio-es.md': '---\ntitle: x\n---\n\nx\n',
     [`${media}/og.png`]: 'png',
@@ -247,7 +199,8 @@ test('deleting an article removes it, and the launch media only with the last la
   assert.deepEqual(repo.commits[0]!.files, [{ path: 'src/content/posts/en/claudio.md', delete: true }], 'the Spanish article still shows the media');
   await deletePost(posts[1]!.id, deps);
   assert.deepEqual(repo.commits[1]!.files.map((f) => f.path).sort(), [`${media}/og.jpg`, `${media}/og.png`, 'src/content/posts/es/claudio-es.md']);
-  assert.ok(repo.files['public/launches/other/v1/og.png'], 'another launch’s media are not touched');
+  assert.deepEqual(repo.commits.map((c) => c.branch), ['main', 'main']);
+  assert.ok(repo.file('yeyo11/launches', 'public/launches/other/v1/og.png'), 'another launch’s media are not touched');
 });
 
 test('the capability map covers every channel, and says why where it refuses', () => {

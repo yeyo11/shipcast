@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
 import type { GitHubRest, PipelineDeps, Registry } from '@shipcast/engine';
-import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing';
+import { clonePglite, connectPglite, FakeGitHub, registryOn } from '@shipcast/engine/testing';
 import { armScheduled, currentOrigin, LOST_RUNNING, TelemetryRecorder, MemoryStore, NEVER_RAN, RetryLater, ROUND_KEY, scheduleRound, startWorking, WorkQueue, workHandlers, writeAutomation, type QueueOptions, type WorkDeps } from '../src/index.ts';
 
 /*
@@ -277,7 +277,7 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
   await db.registry.unschedulePost(cancelled.id);
   await before.stop();
 
-  const merged = { ...deps(db.registry), github: { pullRequestState: async () => 'merged' } as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
+  const merged = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'merged' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
   const afterRestart = queueOn(db);
   const published: number[] = [];
   await afterRestart.work({
@@ -300,7 +300,7 @@ test('a due piece of a launch whose drafts still wait for approval waits for the
   const launchId = await launch(db.registry);
   await db.registry.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
   const post = (await db.registry.schedulePost(launchId, 'bluesky', new Date(Date.now() - 1000)))!;
-  const open = { ...deps(db.registry), github: { pullRequestState: async () => 'open' } as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
+  const open = { ...deps(db.registry), github: new FakeGitHub({ pullRequestState: 'open' }) as unknown as GitHubRest, pipeline: { launchesRepo: 'yeyo11/launches' } as unknown as PipelineDeps };
   const queue = queueOn(db);
   let publishes = 0;
   await queue.work({

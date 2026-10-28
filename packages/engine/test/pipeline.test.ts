@@ -7,42 +7,12 @@ import {
   loadProjects,
   Registry,
   type AiProvider,
-  type EventsPage,
   type ObjectRequest,
-  type GitHubSource,
-  type GitHubWriter,
-  type PullRequestDraft,
 } from '../src/index.ts';
-import { memoryRegistry } from '../src/testing.ts';
+import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n  reddit: off\n';
-
-class FakeGitHub implements GitHubSource, GitHubWriter {
-  files: Record<string, string>;
-  latest: string | undefined;
-  opened: PullRequestDraft[] = [];
-  constructor(files: Record<string, string>, latest?: string) {
-    this.files = files;
-    this.latest = latest;
-  }
-  async userEvents(): Promise<EventsPage> {
-    return { notModified: true };
-  }
-  async fileAt(repo: string, path: string, ref: string) {
-    return this.files[`${repo}/${path}@${ref}`];
-  }
-  async latestRelease() {
-    return this.latest ? { tag: this.latest, url: 'u' } : undefined;
-  }
-  async pullRequestState(): Promise<'open'> {
-    return 'open';
-  }
-  async openPullRequest(draft: PullRequestDraft) {
-    this.opened.push(draft);
-    return { number: 1, url: 'https://github.com/yeyo11/launches/pull/1', created: true };
-  }
-}
 
 const article = { title: 'claudio', description: 'd', markdown: 'b' };
 const pack = {
@@ -73,10 +43,13 @@ class FakeAi implements AiProvider {
 
 async function setup(output: unknown = pack, files: Record<string, string> = {}) {
   const github = new FakeGitHub({
-    'yeyo11/launches/brand.yml@HEAD': BRAND_YML,
-    'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML,
-    ...files,
-  }, 'v0.9.0');
+    files: {
+      'yeyo11/launches/brand.yml@HEAD': BRAND_YML,
+      'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML,
+      ...files,
+    },
+    latestRelease: { tag: 'v0.9.0', url: 'u' },
+  });
   const registry = await memoryRegistry();
   const clones: string[] = [];
   const deps = {
@@ -98,14 +71,14 @@ async function setup(output: unknown = pack, files: Record<string, string> = {})
 test('the brand comes from the launches repo, validated', async () => {
   const { github } = await setup();
   assert.equal((await loadBrand(github, 'yeyo11/launches')).site, 'https://josegarrido.dev');
-  await assert.rejects(loadBrand(new FakeGitHub({}), 'yeyo11/launches'), /has no brand.yml/);
+  await assert.rejects(loadBrand(new FakeGitHub(), 'yeyo11/launches'), /has no brand.yml/);
 });
 
 test('the known projects come from the launches repo; without projects.yml there are none', async () => {
   const { github } = await setup(pack, { 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: "#2FD7A0"\n  motif: phone\n' });
   assert.equal((await loadProjects(github, 'yeyo11/launches'))['claudio']?.motif, 'phone');
-  assert.deepEqual(await loadProjects(new FakeGitHub({}), 'yeyo11/launches'), {});
-  const broken = new FakeGitHub({ 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: green\n  motif: phone\n' });
+  assert.deepEqual(await loadProjects(new FakeGitHub(), 'yeyo11/launches'), {});
+  const broken = new FakeGitHub({ files: { 'yeyo11/launches/projects.yml@HEAD': 'claudio:\n  colour: green\n  motif: phone\n' } });
   await assert.rejects(loadProjects(broken, 'yeyo11/launches'), /projects\.yml is invalid/);
 });
 

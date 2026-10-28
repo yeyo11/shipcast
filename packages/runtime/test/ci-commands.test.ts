@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { parseSnapshot, type DraftResult, type EventsPage, type GitHubSource, type GitHubWriter, type Launch, type PublishResult, type Registry } from '@shipcast/engine';
+import { parseSnapshot, type DraftResult, type Launch, type PublishResult, type Registry } from '@shipcast/engine';
+import { FakeGitHub } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import { BranchState, ciLaunch, ciPublish, GitStateStore, launchTarget, type CiDeps } from '../src/index.ts';
 
@@ -25,22 +26,13 @@ function bareRemote(): string {
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me' });
 const RELEASE = { action: 'published', repository: { full_name: 'me/app' }, release: { id: 9, tag_name: 'v1.0.0', prerelease: false, draft: false } };
 
-class FakeGitHub implements GitHubSource, GitHubWriter {
-  async userEvents(): Promise<EventsPage> {
-    return { notModified: true };
-  }
-  async fileAt(repo: string, _path: string, ref: string): Promise<string | undefined> {
-    return repo === 'me/app' && ref === 'v1.0.0' ? 'enabled: true\nbrand: personal\n' : undefined;
-  }
-  async latestRelease(): Promise<{ tag: string; url: string }> {
-    return { tag: 'v1.0.0', url: 'https://github.com/me/app/releases/tag/v1.0.0' };
-  }
-  async pullRequestState(): Promise<'merged'> {
-    return 'merged';
-  }
-  async openPullRequest(): Promise<{ number: number; url: string; created: boolean }> {
-    throw new Error('the fake draft opens no pull request');
-  }
+/** The released repo with its launch.yml at the tag; the fake draft opens no pull request */
+function fakeGitHub(): FakeGitHub {
+  return new FakeGitHub({
+    files: { 'me/app/.github/launch.yml@v1.0.0': 'enabled: true\nbrand: personal\n' },
+    latestRelease: { tag: 'v1.0.0', url: 'https://github.com/me/app/releases/tag/v1.0.0' },
+    pullRequestState: 'merged',
+  }).failOn('openPullRequest', new Error('the fake draft opens no pull request'));
 }
 
 /** One workflow run: its own scratch clone of the state, its own log, a draft that only counts */
@@ -48,7 +40,7 @@ function run(remote: string, holder: string, drafted: string[], options: { dryRu
   const lines: string[] = [];
   const deps: CiDeps = {
     launchesRepo: 'me/launches',
-    github: new FakeGitHub(),
+    github: fakeGitHub(),
     state: new BranchState(new GitStateStore({ remote }), { holder, leaseMs: 60_000, waitMs: 120_000, pollMs: 200, dryRun: options.dryRun ?? false }),
     brand: async () => brand,
     draft: async (launch: Launch): Promise<DraftResult> => {
