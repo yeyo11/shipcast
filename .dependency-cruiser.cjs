@@ -64,11 +64,15 @@ module.exports = {
       to: { path: `${ws('apps/web', 'apps/cli')}|^apps/` },
     },
     {
-      name: 'web-ui-not-connectors',
-      comment: 'routes and components are entry points: they reach the networks through the server, never a connector directly',
+      name: 'web-entry-points-not-connectors-or-registry',
+      comment:
+        'routes, components and server functions (*.functions.ts) are entry points: they reach the networks and the registry ' +
+        'through the engine services (apps/web/src/server/app-services.ts) and the *.server.ts modules, never a connector or ' +
+        'the Registry module. The engine re-exports Registry from its index, which a module rule cannot tell from the rest of ' +
+        'the index: this catches a deep import, and the type itself is kept out by review',
       severity: 'error',
-      from: { path: '^apps/web/src/(routes|components)/' },
-      to: { path: ws('packages/connectors') },
+      from: { path: '^apps/web/src/((routes|components)/|server/[^/]+[.]functions[.]tsx?$)' },
+      to: { path: `${ws('packages/connectors')}|^packages/engine/src/(registry|repositories/)` },
     },
     {
       name: 'no-cycles-between-packages',

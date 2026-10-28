@@ -1,4 +1,4 @@
-import { ShipcastError } from '@shipcast/schema';
+import { imageUrl, ShipcastError } from '@shipcast/schema';
 
 /** A connector's failure: which network, what it answered, and whether trying again could help. */
 export class ConnectorError extends ShipcastError {
@@ -70,18 +70,8 @@ export interface ProfileStats {
   extra?: Record<string, number>;
 }
 
-/**
- * The picture's URL, only when it is plain https: the app renders it in an <img>, so a `javascript:`
- * or an `http:` address from a network's answer never reaches the page.
- */
-export function imageUrl(value: unknown): string | undefined {
-  if (typeof value !== 'string' || value.length > 2000) return undefined;
-  try {
-    return new URL(value).protocol === 'https:' ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
+// The check lives in the domain, where the app's pages use it too
+export { imageUrl };
 
 /** Keeps what is a number: networks answer null or leave a count out when it is hidden */
 export function counts(values: Record<string, unknown>): Record<string, number> {
