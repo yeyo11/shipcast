@@ -133,4 +133,15 @@ export const AI_TASK_DEFINITIONS = {
     needsRepo: 'never',
     limits: { maxSteps: 5, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 5, maxBudgetUsd: 0.5 },
   }),
+  /**
+   * Whether a provider answers at all, for onboarding and the AI settings (a provider without a
+   * readiness of its own): one word, spending next to nothing, run with the provider being tested
+   * rather than the settings' choice. The onboarding's old test gave it 30 s.
+   */
+  providerCheck: task<string>({
+    id: 'provider-check',
+    settingsTask: 'assistant',
+    needsRepo: 'never',
+    limits: { maxSteps: 1, maxOutputTokens: 16, timeoutMs: 30_000, maxTurns: 1, maxBudgetUsd: 0.05 },
+  }),
 } as const;

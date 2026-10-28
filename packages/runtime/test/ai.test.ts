@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { savePrompt, writeAiSettings } from '@shipcast/engine';
-import { memoryRegistry } from '@shipcast/engine/testing';
+import { fakeClaudio, fakeJson, memoryRegistry } from '@shipcast/engine/testing';
 import { AiError, Brand } from '@shipcast/schema';
-import { accountSecretKey, aiRunnerFor, aiRunSetup, aiSetup, AiNotConnected, Flags, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
+import { accountSecretKey, aiProviderCheck, aiRunnerFor, aiRunSetup, aiSetup, AiNotConnected, Flags, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
@@ -74,4 +74,47 @@ test('the AI task runner reads the same settings and keychain as the old provide
 test('the ai-runner flag is off unless it is set', () => {
   assert.equal(Flags.fromEnv({}).on('ai-runner'), false);
   assert.equal(Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner' }).on('ai-runner'), true);
+});
+
+test('ai-runner: testing a provider asks Claudio’s readiness, and says when Claude is not signed in', async () => {
+  const claudio = await fakeClaudio({ ready: (_, res) => fakeJson(res, 503, { ready: false, reason: 'signed-out' }) });
+  try {
+    const d = { ...(await deps()), claudio: () => ({ url: claudio.url, token: 't' }) };
+    const runner = aiRunnerFor({ ...d, archives: { tarballUrl: async () => assert.fail('no archive') } });
+    const checked = await aiProviderCheck(runner, 'claudio', d);
+    assert.equal(checked.ok, false);
+    assert.match(checked.ok ? '' : checked.problem, /is not signed in to Claude: sign in on Claudio/);
+    assert.deepEqual(claudio.seen.map((s) => `${s.method} ${s.path}`), ['GET /api/ready'], 'no model call to say it');
+  } finally {
+    await claudio.close();
+  }
+  const ready = await fakeClaudio();
+  try {
+    const d = { ...(await deps()), claudio: () => ({ url: ready.url, token: 't' }) };
+    assert.equal((await aiProviderCheck(aiRunnerFor({ ...d, archives: { tarballUrl: async () => '' } }), 'claudio', d)).ok, true);
+  } finally {
+    await ready.close();
+  }
+});
+
+test('ai-runner: a provider without a readiness is tested with one cheap call, its failure in AiError’s words', async () => {
+  const d = await deps();
+  const missing = await aiProviderCheck(aiRunnerFor({ ...d, archives: { tarballUrl: async () => '' } }), 'anthropic', d);
+  assert.deepEqual(missing.ok ? undefined : missing.code, 'ai_not_connected');
+  assert.match(missing.ok ? '' : missing.problem, /no account is connected: connect one on the Channels page/);
+
+  const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
+  await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-revoked' }), 'Anthropic API');
+  const asked: string[] = [];
+  const refusing = (async (url: string | URL | Request) => {
+    asked.push(String(url));
+    return Response.json({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }, { status: 401 });
+  }) as typeof fetch;
+  const withFetch = { ...d, fetch: refusing };
+  const refused = await aiProviderCheck(aiRunnerFor({ ...withFetch, archives: { tarballUrl: async () => '' } }), 'anthropic', withFetch);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.ok ? '' : refused.code, 'ai_not_connected');
+  assert.match(refused.ok ? '' : refused.problem, /refused its credentials \(401\): reconnect the AI provider/);
+  assert.doesNotMatch(refused.ok ? '' : refused.problem, /sk-ant-revoked/);
+  assert.match(asked[0] ?? '', /api\.anthropic\.com\/v1\/messages/);
 });

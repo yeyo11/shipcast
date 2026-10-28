@@ -1,5 +1,5 @@
 import { readAiSettings, writeAiSettings, AI_PROVIDERS, AI_TASKS, type AiProviderId } from '@shipcast/engine';
-import { InvalidSetting, NETWORKS, providerFor, readAutomation } from '@shipcast/runtime';
+import { aiProviderCheck, InvalidSetting, NETWORKS, providerFor, readAutomation } from '@shipcast/runtime';
 import { parseBrand, formatIssues } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { accountService, launchService, settingsService } from './app-services';
@@ -284,6 +284,11 @@ export const testProvider = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await appContext();
     try {
+      // With `ai-runner`: the provider module's own readiness (Claudio's /api/ready says when Claude is not signed in) or one cheap call, its failure in AiError's words
+      if (ctx.deps.aiRunner) {
+        const checked = await aiProviderCheck(ctx.deps.aiRunner, data, { env: process.env, registry: ctx.registry, secrets: ctx.secrets, claudio: () => ctx.settings.claudio(), brand: () => ctx.brand() });
+        return checked.ok ? { ok: true as const, detail: checked.detail } : { ok: false as const, problem: checked.problem };
+      }
       if (data === 'claudio') {
         const { url, token } = ctx.settings.claudio();
         const response = await fetch(`${url}/api/providers/claude-code/models`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });

@@ -2,6 +2,8 @@ import {
   aiProviderDefinition,
   AiTaskRunner,
   anthropicProvider,
+  checkAiProvider,
+  type AiProviderCheck,
   Claudio,
   currentPrompts,
   openAiCompatibleProvider,
@@ -122,4 +124,22 @@ export function aiRunnerFor(deps: AiDeps & { archives: RepoArchiveSource; teleme
     ...(deps.telemetry && { telemetry: deps.telemetry }),
     ...(deps.fetch && { fetch: deps.fetch }),
   });
+}
+
+/**
+ * Tests one provider for onboarding and the AI settings (`ai-runner`), whichever the settings choose
+ * for the tasks: its connected account or settings read as a task would read them, then its
+ * readiness or one cheap call (engine's checkAiProvider). A missing account is said, not thrown.
+ */
+export async function aiProviderCheck(runner: AiTaskRunner, id: string, deps: AiDeps): Promise<AiProviderCheck> {
+  const provider = aiProviderDefinition(id);
+  if (!provider) return { ok: false, code: 'ai_not_connected', problem: `"${id}" is not an AI provider` };
+  let settings: AiProviderSettings;
+  try {
+    settings = await aiProviderSettings(id, deps);
+  } catch (error) {
+    if (error instanceof AiError) return { ok: false, code: error.code, problem: error.message };
+    throw error;
+  }
+  return checkAiProvider(runner, { provider, settings }, deps.fetch ? { fetch: deps.fetch } : {});
 }
