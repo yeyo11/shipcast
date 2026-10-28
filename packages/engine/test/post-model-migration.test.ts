@@ -84,10 +84,10 @@ test('the post model migration converts an install in place, losing nothing', as
     // The channels' readings point at their posts; the old newsletter sums and the site's stay the launch's
     const [devto] = await registry.posts.posts(1, { channel: 'devto' });
     const [instagram] = await registry.posts.posts(1, { channel: 'instagram', kind: 'post' });
-    assert.deepEqual((await registry.postMetrics(devto!.id)).map((m) => `${m.name}=${m.value}`), ['views=310']);
-    assert.deepEqual((await registry.postMetrics(instagram!.id)).map((m) => `${m.name}=${m.value}`), ['likes=9']);
+    assert.deepEqual((await registry.metrics.postMetrics(devto!.id)).map((m) => `${m.name}=${m.value}`), ['views=310']);
+    assert.deepEqual((await registry.metrics.postMetrics(instagram!.id)).map((m) => `${m.name}=${m.value}`), ['likes=9']);
     assert.deepEqual(
-      (await registry.latestMetrics(1)).map((m) => `${m.source}.${m.name}=${m.value}`),
+      (await registry.metrics.latestMetrics(1)).map((m) => `${m.source}.${m.name}=${m.value}`),
       ['blog.views=48', 'devto.views=310', 'github.stars=120', 'instagram.likes=9', 'newsletter.clicks=7'],
     );
 

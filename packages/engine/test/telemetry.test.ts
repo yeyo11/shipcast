@@ -61,7 +61,7 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
   await registry.posts.schedulePost(launch.id, 'mastodon', new Date(now.getTime() - 3_600_000));
   // A live piece read two hours ago, and one never read
   const { post: read } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
-  await registry.recordMetrics(launch.id, 'bluesky', { likes: 3 }, new Date(now.getTime() - 2 * 3_600_000), read.id);
+  await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 3 }, new Date(now.getTime() - 2 * 3_600_000), read.id);
   await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'comment', externalId: 'at://2', url: 'https://bsky.app/2' });
 
   const results = await runChecks(registry, store, { now, cadenceHours: 6 });

@@ -75,7 +75,7 @@ test('every row of a SQLite registry is copied as it was, ids included, and new 
       updatedAt: '2026-10-02T10:00:00.000Z',
     });
     assert.deepEqual((await registry.posts.posts(3)).map((p) => p.channel), ['blog', 'devto']);
-    assert.deepEqual((await registry.metricHistory(3, 'devto', 'views')).map((m) => m.value), [10, 12.5]);
+    assert.deepEqual((await registry.metrics.metricHistory(3, 'devto', 'views')).map((m) => m.value), [10, 12.5]);
     assert.equal(await registry.launches.lastPublishedRef('yeyo11/claudio'), 'v0.8.0');
     assert.equal((await registry.primaryAccount('personal', 'mastodon'))?.settings.instance, 'https://fosstodon.org');
     assert.equal((await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'minor', brand: 'personal' })).claimed, false, 'a launch moved is still claimed');

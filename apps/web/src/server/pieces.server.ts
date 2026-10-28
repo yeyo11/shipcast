@@ -19,7 +19,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
   const [posts, accounts, readings, replies] = await Promise.all([
     registry.posts.posts(launch.id),
     registry.accounts(),
-    registry.postMetricHistory(launch.id),
+    registry.metrics.postMetricHistory(launch.id),
     // What the assistant answered, counted per channel: the page never lists them
     registry.sentReplies(launch.id),
   ]);

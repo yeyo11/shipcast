@@ -86,5 +86,5 @@ export async function withMetrics(
   readings: ReadonlyArray<{ source: string; values: Record<string, number>; postId?: number | null }>,
   takenAt: Date = new Date('2026-11-03T09:00:00.000Z'),
 ): Promise<void> {
-  for (const r of readings) await registry.recordMetrics(launchId, r.source, r.values, takenAt, r.postId ?? null);
+  for (const r of readings) await registry.metrics.recordMetrics(launchId, r.source, r.values, takenAt, r.postId ?? null);
 }

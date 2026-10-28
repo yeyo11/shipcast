@@ -1,5 +1,6 @@
 import type { Registry } from './registry.ts';
 import type { LaunchRepository } from './repositories/launches.ts';
+import type { MetricRepository } from './repositories/metrics.ts';
 import type { PostRepository } from './repositories/posts.ts';
 
 /*
@@ -35,7 +36,7 @@ export type CommentListing = Pick<Registry, 'comments' | 'commentsPage' | 'comme
 export type CursorWriter = Pick<Registry, 'setCursor'>;
 
 /** What a metrics reading reads and records: the published launches, their posts, the numbers and the cursors that pace the sources */
-export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'> } & Pick<Registry, 'recordMetrics' | 'cursor' | 'setCursor'>;
+export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'>; metrics: Pick<MetricRepository, 'recordMetrics'> } & Pick<Registry, 'cursor' | 'setCursor'>;
 
 /** The connected accounts, read, renamed and made the primary of their network */
 export type AccountStore = Pick<Registry, 'account' | 'accounts' | 'primaryAccount' | 'updateAccount' | 'makePrimary'>;

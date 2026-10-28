@@ -12,7 +12,7 @@ export const Route = createFileRoute('/api/launches')({
         const launches = await registry.launches.recent(100);
         return Response.json(
           await Promise.all(
-            launches.map(async (l) => ({ ...(await launchView(registry, l)), metrics: await registry.latestMetrics(l.id), jobs: await jobsView(registry, { launchId: l.id }) })),
+            launches.map(async (l) => ({ ...(await launchView(registry, l)), metrics: await registry.metrics.latestMetrics(l.id), jobs: await jobsView(registry, { launchId: l.id }) })),
           ),
         );
       },

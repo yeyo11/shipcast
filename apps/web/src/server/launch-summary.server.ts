@@ -6,7 +6,7 @@ import { channelTotals, dailyViews, latestByPiece, launchTotals, postAccountName
  * read at different times all count, plus the latest reading of each launch-wide source.
  */
 async function readingsOf(registry: Registry, launch: Launch): Promise<CounterReading[]> {
-  const [site, history, posts] = await Promise.all([registry.latestMetrics(launch.id), registry.postMetricHistory(launch.id), registry.posts.posts(launch.id)]);
+  const [site, history, posts] = await Promise.all([registry.metrics.latestMetrics(launch.id), registry.metrics.postMetricHistory(launch.id), registry.posts.posts(launch.id)]);
   const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
   const pieces = latestByPiece(history).flatMap((r) => {
     const source = channel.get(r.postId);

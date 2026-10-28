@@ -207,16 +207,16 @@ test('cursors are listed by prefix', async () => {
 test('metrics keep every reading; the latest of each is the newest', async () => {
   const registry = await memory();
   const { launch } = await registry.launches.claim(release);
-  await registry.recordMetrics(launch.id, 'devto', { views: 10, likes: 1, broken: Number.NaN }, new Date('2026-10-01T00:00:00Z'));
-  await registry.recordMetrics(launch.id, 'devto', { views: 25.5 }, new Date('2026-10-02T00:00:00Z'));
+  await registry.metrics.recordMetrics(launch.id, 'devto', { views: 10, likes: 1, broken: Number.NaN }, new Date('2026-10-01T00:00:00Z'));
+  await registry.metrics.recordMetrics(launch.id, 'devto', { views: 25.5 }, new Date('2026-10-02T00:00:00Z'));
   assert.deepEqual(
-    (await registry.latestMetrics(launch.id)).map((m) => [m.name, m.value]),
+    (await registry.metrics.latestMetrics(launch.id)).map((m) => [m.name, m.value]),
     [
       ['likes', 1],
       ['views', 25.5],
     ],
   );
-  assert.deepEqual((await registry.metricHistory(launch.id, 'devto', 'views')).map((m) => m.value), [10, 25.5]);
+  assert.deepEqual((await registry.metrics.metricHistory(launch.id, 'devto', 'views')).map((m) => m.value), [10, 25.5]);
 });
 
 test('a job row keeps its first record, a bounded log, and is forgotten once old', async () => {

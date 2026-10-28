@@ -35,7 +35,7 @@ const HEADLINE: Array<[string, string, string]> = [
 export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
   const [cursors, metrics, posts, replies] = await Promise.all([
     registry.cursorsWithPrefix(failurePrefix(launch.id)),
-    registry.latestMetrics(launch.id),
+    registry.metrics.latestMetrics(launch.id),
     registry.posts.posts(launch.id),
     registry.sentReplies(launch.id),
   ]);
@@ -80,7 +80,7 @@ export async function launchDetail(registry: Registry, launch: Launch, deps: { g
     ),
   );
   const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
-  const [review, latest, view] = await Promise.all([reviewing, registry.latestMetrics(launch.id), launchView(registry, launch)]);
+  const [review, latest, view] = await Promise.all([reviewing, registry.metrics.latestMetrics(launch.id), launchView(registry, launch)]);
   const metrics = latest.map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt }));
   return { launch: view, detail: launch.detail, review: review ?? null, metrics, index };
 }

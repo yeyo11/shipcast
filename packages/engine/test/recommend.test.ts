@@ -121,8 +121,8 @@ test('the registry’s history is the stats ranking’s popularity per network, 
   for (const [i, n] of likes.entries()) {
     const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: `v${i + 1}`, trigger: 'release', kind: 'launch', brand: 'personal' });
     const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: `at://${i}`, url: `https://bsky.app/${i}` });
-    await registry.recordMetrics(launch.id, 'bluesky', { likes: 0, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-01T00:00:00Z'), post.id);
-    await registry.recordMetrics(launch.id, 'bluesky', { likes: n, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-02T00:00:00Z'), post.id);
+    await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 0, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-01T00:00:00Z'), post.id);
+    await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: n, reposts: 0, replies: 0, quotes: 0 }, new Date('2026-07-02T00:00:00Z'), post.id);
     ids.push(post.id);
   }
   const { launch: other } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v9', trigger: 'release', kind: 'launch', brand: 'personal' });

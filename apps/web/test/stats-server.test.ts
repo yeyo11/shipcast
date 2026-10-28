@@ -13,7 +13,7 @@ async function seed(registry: Registry) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published');
   const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'post', accountId: account.id, externalId: 'b1', url: 'https://bsky.example/1' });
-  for (const [day, likes] of [['10', 2], ['15', 10], ['20', 30]] as const) await registry.recordMetrics(launch.id, 'bluesky', { likes, reposts: 1 }, at(day), post.id);
+  for (const [day, likes] of [['10', 2], ['15', 10], ['20', 30]] as const) await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes, reposts: 1 }, at(day), post.id);
   await registry.recordSnapshot(account.id, { followers: 100, following: 10, posts: 3 }, at('18', 4));
   await registry.recordSnapshot(account.id, { followers: 112, following: 10, posts: 4 }, at('24', 4));
   return { account, launch };
@@ -106,7 +106,7 @@ test('the search tab lists each article page with what each engine said, and the
   const url = 'https://blog.example/en/claudio/';
   await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: 'a1', url });
   await registry.setCursor(indexStatusKey(url), JSON.stringify({ indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
-  for (const [day, impressions] of [['12', 5], ['22', 40]] as const) await registry.recordMetrics(launch.id, 'search', { impressions, clicks: 1 }, at(day));
+  for (const [day, impressions] of [['12', 5], ['22', 40]] as const) await registry.metrics.recordMetrics(launch.id, 'search', { impressions, clicks: 1 }, at(day));
 
   const view = await loadSearch(registry, { from: '2026-09-26', to: TODAY });
   assert.equal(view.launches.length, 1);

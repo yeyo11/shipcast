@@ -28,7 +28,7 @@ test('cumulative readings become increases per bucket, carried over a missing da
   const post = await piece(registry, l.id, 'bluesky', null);
   // Two rounds on the 20th, none on the 22nd, an unlike on the 23rd that the 24th passes again
   for (const [day, hour, likes] of [['20', 6, 4], ['20', 18, 10], ['21', 6, 15], ['23', 6, 12], ['24', 6, 18]] as const) {
-    await registry.recordMetrics(l.id, 'bluesky', { likes, reposts: 1 }, at(day, hour), post.id);
+    await registry.metrics.recordMetrics(l.id, 'bluesky', { likes, reposts: 1 }, at(day, hour), post.id);
   }
 
   const series = await statsSeries(registry, { metric: 'reactions', groupBy: 'channel', from: '2026-10-20', to: '2026-10-24', bucket: 'day' });
@@ -69,11 +69,11 @@ test('popularity is normalised per network: two networks with very different sca
   const sky6 = await piece(registry, l.id, 'bluesky', null);
   const sky1 = await piece(registry, l2.id, 'bluesky', null);
   const sky2 = await piece(registry, l3.id, 'bluesky', null);
-  await registry.recordMetrics(l.id, 'devto', { views: 1000, reactions: 20, comments: 0 }, at('20'), devA.id);
-  await registry.recordMetrics(l2.id, 'devto', { views: 500, reactions: 10, comments: 0 }, at('20'), devB.id);
-  await registry.recordMetrics(l.id, 'bluesky', { likes: 6, reposts: 0, replies: 0 }, at('20'), sky6.id);
-  await registry.recordMetrics(l2.id, 'bluesky', { likes: 1, reposts: 0, replies: 0 }, at('20'), sky1.id);
-  await registry.recordMetrics(l3.id, 'bluesky', { likes: 2, reposts: 0, replies: 0 }, at('20'), sky2.id);
+  await registry.metrics.recordMetrics(l.id, 'devto', { views: 1000, reactions: 20, comments: 0 }, at('20'), devA.id);
+  await registry.metrics.recordMetrics(l2.id, 'devto', { views: 500, reactions: 10, comments: 0 }, at('20'), devB.id);
+  await registry.metrics.recordMetrics(l.id, 'bluesky', { likes: 6, reposts: 0, replies: 0 }, at('20'), sky6.id);
+  await registry.metrics.recordMetrics(l2.id, 'bluesky', { likes: 1, reposts: 0, replies: 0 }, at('20'), sky1.id);
+  await registry.metrics.recordMetrics(l3.id, 'bluesky', { likes: 2, reposts: 0, replies: 0 }, at('20'), sky2.id);
 
   const ranking = await statsRanking(registry, { by: 'post', from: '2026-10-20', to: '2026-10-20' });
   assert.deepEqual(
@@ -115,7 +115,7 @@ test('a network nobody engaged with has no yardstick and is not ranked', async (
   const registry = await memoryRegistry();
   const l = await launch(registry);
   const post = await piece(registry, l.id, 'mastodon', null);
-  await registry.recordMetrics(l.id, 'mastodon', { favourites: 0, boosts: 0, replies: 0 }, at('20'), post.id);
+  await registry.metrics.recordMetrics(l.id, 'mastodon', { favourites: 0, boosts: 0, replies: 0 }, at('20'), post.id);
   const ranking = await statsRanking(registry, { by: 'post', from: '2026-10-20', to: '2026-10-20' });
   assert.deepEqual(ranking.entries, []);
 });
@@ -129,11 +129,11 @@ test('the overview compares with the previous period, per channel and per accoun
   const dev = await piece(registry, l1.id, 'devto', devto.id);
   const sky = await piece(registry, l2.id, 'bluesky', bluesky.id);
   // The 10th to the 14th is the previous period of the 15th to the 19th
-  await registry.recordMetrics(l1.id, 'devto', { views: 100, reactions: 2, comments: 0 }, at('12'), dev.id);
-  await registry.recordMetrics(l1.id, 'devto', { views: 400, reactions: 5, comments: 1 }, at('17'), dev.id);
-  await registry.recordMetrics(l2.id, 'bluesky', { likes: 3 }, at('16'), sky.id);
-  await registry.recordMetrics(l1.id, 'blog', { views: 40 }, at('13'));
-  await registry.recordMetrics(l1.id, 'blog', { views: 90 }, at('18'));
+  await registry.metrics.recordMetrics(l1.id, 'devto', { views: 100, reactions: 2, comments: 0 }, at('12'), dev.id);
+  await registry.metrics.recordMetrics(l1.id, 'devto', { views: 400, reactions: 5, comments: 1 }, at('17'), dev.id);
+  await registry.metrics.recordMetrics(l2.id, 'bluesky', { likes: 3 }, at('16'), sky.id);
+  await registry.metrics.recordMetrics(l1.id, 'blog', { views: 40 }, at('13'));
+  await registry.metrics.recordMetrics(l1.id, 'blog', { views: 90 }, at('18'));
 
   const overview = await statsOverview(registry, { from: '2026-10-15', to: '2026-10-19', compareTo: 'previous' });
   assert.deepEqual(overview.compareTo, { from: '2026-10-10T00:00:00.000Z', to: '2026-10-15T00:00:00.000Z' });
@@ -166,8 +166,8 @@ test('GitHub counts once per repo and starts at its first reading; old launch-wi
   const v2 = await launch(registry, 'yeyo11/claudio', 'v2.0.0');
   // Both launches read the same repo at the same moments
   for (const l of [v1, v2]) {
-    await registry.recordMetrics(l.id, 'github', { stars: 120, forks: 9 }, at('20'));
-    await registry.recordMetrics(l.id, 'github', { stars: 130, forks: 9 }, at('21'));
+    await registry.metrics.recordMetrics(l.id, 'github', { stars: 120, forks: 9 }, at('20'));
+    await registry.metrics.recordMetrics(l.id, 'github', { stars: 130, forks: 9 }, at('21'));
   }
   const overview = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-21' });
   assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 10, shares: 0 }, 'the stars it had before are not growth');
@@ -176,8 +176,8 @@ test('GitHub counts once per repo and starts at its first reading; old launch-wi
 
   // A newsletter launch from before readings pointed at their piece: the sum of both issues, then each issue
   const issueEn = await piece(registry, v1.id, 'newsletter', null, 'issue:en');
-  await registry.recordMetrics(v1.id, 'newsletter', { opens: 7 }, at('20'));
-  await registry.recordMetrics(v1.id, 'newsletter', { opens: 8 }, at('21'), issueEn.id);
+  await registry.metrics.recordMetrics(v1.id, 'newsletter', { opens: 7 }, at('20'));
+  await registry.metrics.recordMetrics(v1.id, 'newsletter', { opens: 8 }, at('21'), issueEn.id);
   const news = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-21', channels: ['newsletter'] });
   assert.deepEqual(news.channels[0]?.metrics, { views: 8, clicks: 0, impressions: 0 });
 });
@@ -188,7 +188,7 @@ test('a series groups by account and launch with labels, and folds what passes t
   const launches = [await launch(registry, 'yeyo11/a', 'v1'), await launch(registry, 'yeyo11/b', 'v1'), await launch(registry, 'yeyo11/c', 'v1')];
   for (const [i, l] of launches.entries()) {
     const post = await piece(registry, l.id, 'mastodon', i === 0 ? account.id : null);
-    await registry.recordMetrics(l.id, 'mastodon', { favourites: (i + 1) * 10 }, at('20'), post.id);
+    await registry.metrics.recordMetrics(l.id, 'mastodon', { favourites: (i + 1) * 10 }, at('20'), post.id);
   }
   const byLaunch = await statsSeries(registry, { metric: 'reactions', groupBy: 'launch', from: '2026-10-20', to: '2026-10-20', bucket: 'day', limit: 2 });
   assert.deepEqual(byLaunch.groups.map((g) => [g.label, g.total]), [['yeyo11/c v1', 30], ['yeyo11/b v1', 20]]);

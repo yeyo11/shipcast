@@ -80,7 +80,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   const problems: string[] = [];
   const record = async (launchId: number, source: string, values: Record<string, number | undefined>, postId: number | null = null) => {
     const clean = Object.fromEntries(Object.entries(values).filter((e): e is [string, number] => typeof e[1] === 'number'));
-    await registry.recordMetrics(launchId, source, clean, now, postId);
+    await registry.metrics.recordMetrics(launchId, source, clean, now, postId);
     readings += Object.keys(clean).length;
   };
   const attempt = async (what: string, fn: () => Promise<void>) => {
