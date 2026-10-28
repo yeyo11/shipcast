@@ -168,7 +168,7 @@ test('git: log over a range and paths, tags newest first, show a file at a ref, 
 test('repo_overview gives the tree, the manifests and the first lines of the docs in one answer', async () => {
   const out = await js().overview({ lines: 10 });
   assert.match(out, /## Tree \(12 files\)\n[\s\S]*src\/ \(4 files\)/);
-  assert.match(out, /Latest tags: v2\.0\.0, v1\.0\.0/);
+  assert.match(out, /Latest tags: v2\.0\.0 2026-02-02, v1\.0\.0 2026-01-01/);
   assert.match(out, /package\.json: demo@2\.0\.0\n {2}test: node --test\n {2}build: tsc/);
   assert.match(out, /packages\/core\/package\.json: @demo\/core@1\.1\.0/);
   for (const doc of ['README.md', 'CHANGELOG.md', 'docs/status.md', 'docs/known-limitations.md']) assert.match(out, new RegExp(`## ${doc.replace('.', '\\.')}\n`));

@@ -140,7 +140,7 @@ test('a run goes through the AI task runner and records the answer, steps, tool 
 
   assert.equal(replyRecord?.ok, true, replyRecord?.error);
   assert.deepEqual(replyRecord.output, { classification: 'question', language: 'en', dismiss: false, reply: 'It answers 42.', reason: 'a question' });
-  assert.deepEqual(replyRecord.toolCalls[0], { name: 'search', args: '{"pattern":"answer","context":2}' });
+  assert.deepEqual(replyRecord.toolCalls[0], { name: 'search', args: '{"pattern":"answer","context":2,"mode":"content"}' }, 'the input as the tool took it, its defaults filled in');
 
   const firstPrompt = JSON.stringify(model.doStreamCalls[0]!.prompt);
   assert.match(firstPrompt, /Launch me\/demo at v1\.0\.0/, 'the pack prompt is buildPrompt’s');
