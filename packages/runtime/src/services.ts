@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { bindStrategy, GitHubRest, type ChannelPublishing, type MetricSources, type Notifier, type PublishConnectors, type Publishers, type Repositories } from '@shipcast/engine';
+import { GitHubRepoStats, type EtagCache, type IdentityCache } from '@shipcast/connectors';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, networkSpec, SOURCES, type Built } from './catalog.ts';
 import { networkOf, type AnyChannelAdapter, type Credentials } from './channels/adapter.ts';
@@ -27,6 +28,10 @@ export interface ServiceDeps {
   adapters?: readonly AnyChannelAdapter[];
   /** The per-provider budgets every process shares, for the networks that keep a quota (redis/state.ts) */
   buckets?: TokenBucket;
+  /** Where accounts' identities are kept between runs (the hourly reads); without it each run asks again */
+  cache?: IdentityCache;
+  /** The validators of the repo counts' conditional reads, kept between runs */
+  etags?: EtagCache;
 }
 
 export interface Services {
@@ -94,7 +99,9 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
   const publishers: Publishers = {};
   const strategies: Record<string, ChannelPublishing> = {};
   const posts: NonNullable<MetricSources['posts']> = {};
-  const sources: MetricSources = { posts, github: deps.github };
+  // The split GitHub reader is only read by the hourly reads; the six-hourly ones read `github` whole
+  const githubRepo = new GitHubRepoStats({ auth: deps.github.auth, ...(deps.fetch && { fetch: deps.fetch }), ...(deps.etags && { etags: deps.etags }) });
+  const sources: MetricSources = { posts, github: deps.github, githubRepo };
   const configured: string[] = [];
   const origins: Record<string, Origin> = {};
   let instagram: Services['instagram'];
@@ -105,7 +112,7 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     if (!found) return undefined;
     const credentials = found.origin.kind === 'env' ? await withRefreshedEnvToken(id, found.credentials, registry, adapters) : found.credentials;
     try {
-      const connection = buildConnector(id, credentials, brand, deps.fetch, { adapters, ...(deps.buckets && { buckets: deps.buckets }) });
+      const connection = buildConnector(id, credentials, brand, deps.fetch, { adapters, ...(deps.buckets && { buckets: deps.buckets }), ...(deps.cache && { cache: deps.cache }) });
       origins[id] = found.origin;
       return { connection, credentials };
     } catch {

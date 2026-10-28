@@ -160,6 +160,12 @@ export async function refreshInstagramTokens(d: Pick<RoundDeps, 'registry' | 'se
   return lines;
 }
 
+/** The hourly reads (the `batched-metrics` flag): each source at its own cadence, batched, unchanged values only checked */
+export async function readMetricsHourly(d: Pick<RoundDeps, 'registry' | 'brand'>, services: Services, now = new Date()): Promise<string[]> {
+  const result = await new MetricsService(d.registry).readHourly(d.brand, services.sources, now);
+  return [`Metrics: ${result.readings} readings`, ...result.problems.map((p) => `  ${p}`)];
+}
+
 /** Reads every published launch's numbers now, and remembers when */
 export async function readMetrics(d: Pick<RoundDeps, 'registry' | 'brand'>, services: Services, now = new Date()): Promise<string[]> {
   const result = await new MetricsService(d.registry).readNow(d.brand, services.sources, now);

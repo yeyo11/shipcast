@@ -1,5 +1,5 @@
 import { ConnectorError, exchangeYouTubeCode, PostGone, YouTube, youtubeAuthorizeUrl, YOUTUBE_DAILY_UNITS, YOUTUBE_UNITS, type YouTubeVideo } from '@shipcast/connectors';
-import { youtubeStrategy, type ChangeEditor, type YouTubePublisher } from '@shipcast/engine';
+import { batchReader, youtubeStrategy, type ChangeEditor, type YouTubePublisher } from '@shipcast/engine';
 import { youtube } from '@shipcast/schema';
 import { MemoryTokenBucket } from '../redis/memory.ts';
 import type { BucketSpec, TokenBucket } from '../redis/ports.ts';
@@ -96,11 +96,11 @@ export const youtubeAdapter = channelAdapter({
         exchange: async (app, redirectUri, code, http) => ({ credentials: youtubeCredentials(app, (await exchangeYouTubeCode(app, redirectUri, code, http)).refreshToken) }),
         errorParams: ['error_description', 'error'],
       },
-      build: ({ need, fetch, buckets }) => {
+      build: ({ need, fetch, buckets, cache }) => {
         const quota = new YouTubeQuota(buckets);
         // A failed count never fails the call it counts: the quota is a guard, not the work
         const onUnits = (units: number) => void quota.spend(units).catch(() => undefined);
-        const connector = new YouTube({ clientId: need('clientId'), clientSecret: need('clientSecret'), refreshToken: need('refreshToken'), onUnits, ...(fetch && { fetch }) });
+        const connector = new YouTube({ clientId: need('clientId'), clientSecret: need('clientSecret'), refreshToken: need('refreshToken'), onUnits, ...(fetch && { fetch }), ...(cache && { cache }) });
         return { connector: { youtube: connector, quota }, check: () => connector.check(), profileStats: () => connector.stats() };
       },
     },
@@ -120,6 +120,7 @@ export const youtubeAdapter = channelAdapter({
   }),
   metrics: ({ youtube: connector }: YouTubeConnection) => ({
     metricsMany: (ids: string[]) => connector.metrics(ids),
+    read: batchReader((ids) => connector.metrics(ids)).read,
     metrics: async (id: string) => {
       const values = (await connector.metrics([id])).get(id);
       if (!values) throw new PostGone('YouTube', `the video ${id} is not on the channel any more`, 404);

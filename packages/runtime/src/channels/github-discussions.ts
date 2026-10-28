@@ -1,3 +1,4 @@
+import { batchReader } from '@shipcast/engine';
 import { GitHubDiscussions } from '@shipcast/connectors';
 import { githubDiscussions } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -11,6 +12,7 @@ export const githubDiscussionsAdapter = channelAdapter({
   connect: { kind: 'engine', configured: 'github discussions', build: ({ auth, fetch }) => new GitHubDiscussions({ auth, ...(fetch && { fetch }) }) },
   publisher: (c) => c,
   editor: (c) => c,
-  metrics: (c) => c,
+  // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   comments: (c) => ({ reader: c, replier: c }),
 });

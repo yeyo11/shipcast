@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { GitHubTokenSource } from '@shipcast/connectors';
+import type { GitHubTokenSource, IdentityCache } from '@shipcast/connectors';
 import { PostRefused, type CommentDeps, type EditDeps, type Editors, type Repositories } from '@shipcast/engine';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildConnector, credentialsFromEnv, network } from './catalog.ts';
@@ -21,6 +21,8 @@ export interface EditorDeps {
   /** The channels' adapters; the registry's by default */
   adapters?: readonly AnyChannelAdapter[];
   buckets?: TokenBucket;
+  /** Where accounts' identities are kept between runs (the comment feeds); without it each connector asks again */
+  cache?: IdentityCache;
 }
 
 /**
@@ -50,7 +52,7 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
   }
   if (!credentials) return undefined;
   try {
-    const built = buildConnector(spec.id, credentials, deps.brand, deps.fetch, { ...(deps.adapters && { adapters: deps.adapters }), ...(deps.buckets && { buckets: deps.buckets }) });
+    const built = buildConnector(spec.id, credentials, deps.brand, deps.fetch, { ...(deps.adapters && { adapters: deps.adapters }), ...(deps.buckets && { buckets: deps.buckets }), ...(deps.cache && { cache: deps.cache }) });
     return { adapter, connector: built.connector };
   } catch (error) {
     if (error instanceof MissingField) throw new PostRefused('no_credentials', `${name}: ${error.message}`);

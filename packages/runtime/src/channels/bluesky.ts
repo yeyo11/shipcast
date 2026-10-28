@@ -1,3 +1,4 @@
+import { batchReader } from '@shipcast/engine';
 import { Bluesky } from '@shipcast/connectors';
 import { bluesky } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -26,14 +27,15 @@ export const blueskyAdapter = channelAdapter({
         { name: 'BLUESKY_HANDLE', key: 'handle', secret: false, fallback: (brand) => blueskyHandle(brand.handles.bluesky), how: 'your handle, like you.bsky.social' },
         { name: 'BLUESKY_APP_PASSWORD', key: 'appPassword', secret: true, how: 'https://bsky.app/settings/app-passwords' },
       ],
-      build: ({ need, fetch }) => {
-        const connector = new Bluesky({ identifier: need('handle'), appPassword: need('appPassword'), fetch });
+      build: ({ need, fetch, cache }) => {
+        const connector = new Bluesky({ identifier: need('handle'), appPassword: need('appPassword'), fetch, ...(cache && { cache }) });
         return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), profile: () => connector.profile(), editProfile: (e) => connector.editProfile(e) };
       },
     },
   },
   publisher: (c) => c,
   editor: (c) => c,
-  metrics: (c) => c,
+  // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   comments: (c) => ({ reader: c, replier: c }),
 });

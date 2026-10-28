@@ -1,4 +1,4 @@
-import type { Check, GitHubTokenSource, Profile, ProfileEdit, ProfileStats } from '@shipcast/connectors';
+import type { Check, GitHubTokenSource, IdentityCache, Profile, ProfileEdit, ProfileStats } from '@shipcast/connectors';
 import type { CommentConnectors, Editors, MetricSources, Publishers, PublishStrategy } from '@shipcast/engine';
 import type { Brand, Channel, ChannelDefinition } from '@shipcast/schema';
 import type { TokenBucket } from '../redis/ports.ts';
@@ -42,6 +42,8 @@ export interface BuildContext {
   fetch: typeof fetch | undefined;
   /** The per-provider budgets every process shares (redis/ports.ts), for a network with a quota to keep under */
   buckets: TokenBucket | undefined;
+  /** Where the account's identity (its id, username, a read session) is kept between runs, when the process has a cache */
+  cache: IdentityCache | undefined;
 }
 
 /** One account's connector, and what every network's offers whatever its channel: its check and its account */
@@ -198,9 +200,9 @@ export function need(values: Record<string, string>, key: string, network: strin
 }
 
 /** The context a connector is built in, over one account's credentials */
-export function buildContext(network: string, credentials: Credentials, brand: Brand, http: typeof fetch | undefined, buckets?: TokenBucket): BuildContext {
+export function buildContext(network: string, credentials: Credentials, brand: Brand, http: typeof fetch | undefined, buckets?: TokenBucket, cache?: IdentityCache): BuildContext {
   const all = { ...credentials.settings, ...credentials.secrets };
-  return { need: (key) => need(all, key, network), get: (key) => all[key] || undefined, brand, fetch: http, buckets };
+  return { need: (key) => need(all, key, network), get: (key) => all[key] || undefined, brand, fetch: http, buckets, cache };
 }
 
 /**

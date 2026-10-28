@@ -1,3 +1,4 @@
+import { batchReader } from '@shipcast/engine';
 import { Mastodon } from '@shipcast/connectors';
 import { mastodon } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
@@ -44,14 +45,15 @@ export const mastodonAdapter = channelAdapter({
           how: 'https://<your server>/settings/applications (New application; scopes read, write:statuses, write:media)',
         },
       ],
-      build: ({ need, fetch }) => {
-        const connector = new Mastodon({ instance: need('instance'), accessToken: need('accessToken'), fetch });
+      build: ({ need, fetch, cache }) => {
+        const connector = new Mastodon({ instance: need('instance'), accessToken: need('accessToken'), fetch, ...(cache && { cache }) });
         return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), profile: () => connector.profile(), editProfile: (e) => connector.editProfile(e) };
       },
     },
   },
   publisher: (c) => c,
   editor: (c) => c,
-  metrics: (c) => c,
+  // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   comments: (c) => ({ reader: c, replier: c }),
 });
