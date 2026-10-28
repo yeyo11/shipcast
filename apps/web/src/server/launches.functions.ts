@@ -4,13 +4,12 @@ import { createServerFn } from '@tanstack/react-start';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
 import { id, object, text } from './input';
-import { jobsView } from './jobs.server';
 import { ownerAvatarUrl } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
-import { launchNumbers, postAccounts, readTimezone, waitingComments } from './launch-summary.server';
-import { launchPieces } from './pieces.server';
+import { launchPage } from './launch-page.server';
+import { launchNumbers, postAccounts, readTimezone } from './launch-summary.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
-import { launchDetail, launchView, publishAgain as publishAgainFor } from './launches.server';
+import { launchView, publishAgain as publishAgainFor } from './launches.server';
 import { articleRequest, channelName, launchRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing } from './work.server';
 
@@ -56,26 +55,32 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = ctx;
     const launch = await launchService(ctx).get(data);
     if (!launch) return null;
-    // Everything at once: the page waited for each read in turn, the slowest (GitHub's) first
-    const detailing = launchDetail(registry, launch, { github, launchesRepo: deps.launchesRepo });
-    // Caught here as well: launchPieces may never wait for it, and a rejection nobody awaits would end the process
-    const draftPaths = detailing.then((d) => (d.review && !('error' in d.review) ? d.review.drafts.map((x) => x.path) : [])).catch(() => []);
-    const [detail, pieces, jobs, numbers, waiting] = await Promise.all([
-      detailing,
-      launchPieces(registry, launch, { github, launchesRepo: deps.launchesRepo, draftPaths }),
-      jobsView(registry, { launchId: launch.id }),
-      launchNumbers(registry, [launch]),
-      waitingComments(registry, launch.id),
-    ]);
+    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, ...(ctx.drafts && { drafts: ctx.drafts }) }, launch);
     return {
-      ...detail,
-      pieces,
-      jobs,
-      numbers: numbers.get(launch.id)!,
-      waitingComments: waiting,
+      ...page,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
       fakeNetworks: fakeNetworks(),
     };
+  });
+
+/**
+ * "Refresh from GitHub": the drafts pull request read again and its snapshot rewritten, for when the
+ * owner knows GitHub changed and the delivery has not arrived. Only with `github-events`, where the
+ * page reads the snapshot; without it every view already reads GitHub.
+ */
+export const refreshDrafts = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => id(input))
+  .handler(async ({ data }) => {
+    const ctx = await appContext();
+    if (!ctx.drafts) return { ok: false as const, problem: 'the drafts are read from GitHub on every view already' };
+    const launch = await launchService(ctx).get(data);
+    if (!launch) return { ok: false as const, problem: 'no such launch' };
+    try {
+      const snapshot = await ctx.drafts.refresh(launch);
+      return snapshot ? { ok: true as const, readAt: snapshot.readAt } : { ok: false as const, problem: 'this launch has no drafts pull request' };
+    } catch (error) {
+      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+    }
   });
 
 export const saveDraft = createServerFn({ method: 'POST' })
@@ -92,6 +97,8 @@ export const saveDraft = createServerFn({ method: 'POST' })
     if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
     try {
       await editDraft(launch, data.path, data.content, { github, launchesRepo: deps.launchesRepo });
+      // The page reads the snapshot: the edit shows at once, before GitHub's delivery confirms it
+      await ctx.drafts?.edited(launch, data.path, data.content.endsWith('\n') ? data.content : `${data.content}\n`);
       return { ok: true as const };
     } catch (error) {
       return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };

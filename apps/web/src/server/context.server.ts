@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { TelemetryStore, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   attachTelemetryStore,
   buildServices,
@@ -14,6 +14,7 @@ import {
   type AppConfig,
   type Config,
   type GitHubAccess,
+  type GitHubCaches,
   type GitHubUserTokens,
   type RuntimeSettings,
   type SecretStore,
@@ -61,6 +62,9 @@ export interface AppContext {
   brand(): Promise<Brand>;
   /** Every brand, by id; one per launches repo, so one today */
   brands(): Promise<Map<string, Brand>>;
+  /** With `github-events`: the drafts snapshots the launch page reads, and the caches deliveries invalidate */
+  drafts: DraftSnapshotService | undefined;
+  githubCaches: GitHubCaches | undefined;
 }
 
 let context: Promise<AppContext> | undefined;
@@ -123,6 +127,8 @@ async function createContext(): Promise<AppContext> {
       const b = await brand();
       return new Map([[b.id, b]]);
     },
+    drafts: runtime.drafts,
+    githubCaches: runtime.githubCaches,
   };
   // The app works every queue: what it sends, and the rounds and schedules nobody starts by hand
   const { probePages } = await import('./probe.server');

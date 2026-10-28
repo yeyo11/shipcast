@@ -5,6 +5,7 @@ import {
   GitHubRest,
   loadBrand,
   connectRepositories,
+  DraftSnapshotService,
   PostgresLock,
   type OpenRepositories,
   type AiProvider,
@@ -44,6 +45,8 @@ export interface Runtime {
   refresh(): Promise<void>;
   /** With `github-events`: the GitHub client's ETag and file caches, which webhooks and the poll invalidate */
   githubCaches: GitHubCaches | undefined;
+  /** With `github-events`: the drafts snapshots the launch page reads instead of GitHub */
+  drafts: DraftSnapshotService | undefined;
 }
 
 /**
@@ -140,6 +143,16 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     return cached.brand;
   };
 
+  const drafts = caches
+    ? new DraftSnapshotService({
+        github,
+        registry,
+        get launchesRepo() {
+          return settings.current().launchesRepo ?? '';
+        },
+      })
+    : undefined;
+
   const pipeline: PipelineDeps = {
     github,
     ai: new SettingsClaudio(settings, options.fetch),
@@ -161,6 +174,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return settings.current().maxBudgetUsd;
     },
     checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir }, repo, ref),
+    ...(drafts && { drafts }),
   };
 
   return {
@@ -178,5 +192,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       await settings.read();
     },
     githubCaches: caches,
+    drafts,
   };
 }

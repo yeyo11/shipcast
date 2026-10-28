@@ -13,7 +13,7 @@ import { Notice, number, Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
 import { Tabs } from '../../../components/ui/Tabs';
 import { launchDateLabel } from '../../../server/launch-summary';
-import { approveDrafts, getLaunch, launchRepo, publishAgain, saveDraft } from '../../../server/launches.functions';
+import { approveDrafts, getLaunch, launchRepo, publishAgain, refreshDrafts, saveDraft } from '../../../server/launches.functions';
 import { zonedLabel } from '../../../server/pieces';
 import { CHANNEL_NAMES } from '../../../server/view';
 
@@ -41,7 +41,7 @@ export const Route = createFileRoute('/_app/launches/$id')({
     ...(typeof search.channel === 'string' && search.channel !== '' && { channel: search.channel }),
   }),
   // A change of tab or channel is a new address but the same data: kept for 30 s instead of read
-  // again from GitHub on every click; an action still reloads it at once (router.invalidate)
+  // again on every click; an action still reloads it at once (router.invalidate)
   staleTime: 30_000,
   loader: async ({ params }) => {
     const data = await getLaunch({ data: Number(params.id) });
@@ -322,6 +322,16 @@ function LaunchPage() {
     await router.invalidate();
   };
 
+  // With the drafts snapshot the page shows the pull request as last read, and can read it again
+  const readAt = 'draftsReadAt' in data ? data.draftsReadAt : undefined;
+  const refresh = async () => {
+    setBusy(true);
+    const answer = await refreshDrafts({ data: launch.id }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
+    setBusy(false);
+    if (!answer.ok) toast.fail(answer.problem);
+    await router.invalidate();
+  };
+
   const approve = async () => {
     setBusy(true);
     const answer = await approveDrafts({ data: launch.id });
@@ -459,6 +469,15 @@ function LaunchPage() {
             label: 'Content',
             panel: (
               <div className="content-tab">
+                {readAt !== undefined && (launch.pullRequest || readAt) && (
+                  <p className="quiet">
+                    <span>{readAt ? `Drafts read from GitHub ${when(readAt)}` : 'The drafts have not been read from GitHub yet'}</span>
+                    <span aria-hidden="true">·</span>
+                    <button className="btn btn-small" disabled={busy} onClick={refresh}>
+                      Refresh from GitHub
+                    </button>
+                  </p>
+                )}
                 {review && 'error' in review && <Notice tone="bad">Could not read the drafts: {review.error}</Notice>}
                 {failedEmpty && (
                   <Empty art={<EmptyDrafts width={220} />} title="Nothing was drafted">

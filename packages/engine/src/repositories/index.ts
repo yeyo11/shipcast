@@ -8,6 +8,7 @@ import { CommentRepository } from './comments.ts';
 import { JobRepository } from './jobs.ts';
 import { AccountRepository } from './accounts.ts';
 import { CursorRepository } from './cursors.ts';
+import { DraftSnapshotRepository } from './draft-snapshots.ts';
 import { SettingRepository } from './settings.ts';
 import { MetricRepository } from './metrics.ts';
 import { PostRepository } from './posts.ts';
@@ -34,6 +35,7 @@ export * from './comments.ts';
 export * from './jobs.ts';
 export * from './accounts.ts';
 export * from './cursors.ts';
+export * from './draft-snapshots.ts';
 export * from './settings.ts';
 export * from './metrics.ts';
 export * from './posts.ts';
@@ -52,6 +54,8 @@ export interface Repositories {
   readonly jobs: JobRepository;
   readonly accounts: AccountRepository;
   readonly cursors: CursorRepository;
+  /** The drafts pull requests as last read from GitHub: what the launch page shows (phase 7) */
+  readonly drafts: DraftSnapshotRepository;
   readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
@@ -73,6 +77,7 @@ export function repositoriesOn(db: Database): Repositories {
     jobs: new JobRepository(db),
     accounts: new AccountRepository(db),
     cursors: new CursorRepository(db),
+    drafts: new DraftSnapshotRepository(db),
     settings: new SettingRepository(db),
     metrics: new MetricRepository(db),
     posts: new PostRepository(db),

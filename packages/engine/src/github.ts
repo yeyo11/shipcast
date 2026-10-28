@@ -349,27 +349,32 @@ export class GitHubRest implements GitHubSource, GitHubWriter {
   }
 
   /** A pull request's branch and state, for reviewing its drafts */
-  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string }> {
+  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string; headSha: string }> {
     const pr = (await this.#ok('GET', `/repos/${repo}/pulls/${number}`)) as {
       number: number;
       html_url: string;
       state: 'open' | 'closed';
       merged: boolean;
       title: string;
-      head: { ref: string };
+      head: { ref: string; sha: string };
     };
-    return { number: pr.number, url: pr.html_url, state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed', branch: pr.head.ref, title: pr.title };
+    return { number: pr.number, url: pr.html_url, state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed', branch: pr.head.ref, title: pr.title, headSha: pr.head.sha };
   }
 
   /** The paths a pull request adds or changes (up to 300, GitHub's page limit times three) */
   async pullRequestFiles(repo: string, number: number): Promise<string[]> {
-    const paths: string[] = [];
+    return (await this.pullRequestFileEntries(repo, number)).map((f) => f.path);
+  }
+
+  /** The same, with each file's blob sha, which the drafts snapshot keeps */
+  async pullRequestFileEntries(repo: string, number: number): Promise<Array<{ path: string; sha: string | null }>> {
+    const entries: Array<{ path: string; sha: string | null }> = [];
     for (let page = 1; page <= 3; page++) {
-      const files = (await this.#ok('GET', `/repos/${repo}/pulls/${number}/files?per_page=100&page=${page}`)) as Array<{ filename: string; status: string }>;
-      paths.push(...files.filter((f) => f.status !== 'removed').map((f) => f.filename));
+      const files = (await this.#ok('GET', `/repos/${repo}/pulls/${number}/files?per_page=100&page=${page}`)) as Array<{ filename: string; status: string; sha?: string | null }>;
+      entries.push(...files.filter((f) => f.status !== 'removed').map((f) => ({ path: f.filename, sha: f.sha ?? null })));
       if (files.length < 100) break;
     }
-    return paths;
+    return entries;
   }
 
   /** Replaces one text file on a branch, as one commit: an edit made in the app */
