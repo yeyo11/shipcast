@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import type { Editors, Registry } from '@shipcast/engine';
-import { memoryRegistry } from '@shipcast/engine/testing';
+import { FakeGitHub, memoryRegistry } from '@shipcast/engine/testing';
 import { cancel, deleteAll, deleteOne, editMany, editOne, move, recommend, schedule, type PostActionDeps } from '../src/server/post-actions.ts';
 
 /*
@@ -33,7 +33,7 @@ async function setup() {
       for (const p of posts) armed.push(`${p.channel} ${p.scheduledAt}`);
     },
     // No launch.yml to read: scheduling leaves that check to the publish step
-    github: { fileAt: async () => Promise.reject(new Error('404')) },
+    github: new FakeGitHub().failOn('fileAt', new Error('404')),
     launchesRepo: 'yeyo11/launches',
   };
   return { registry, deps, sent, armed };

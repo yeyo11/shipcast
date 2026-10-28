@@ -16,10 +16,9 @@ import {
   restorePrompt,
   savePrompt,
   writeAiSettings,
-  type GitHubSource,
   type Launch,
 } from '../src/index.ts';
-import { memoryRegistry } from '../src/testing.ts';
+import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'From brand.yml.' });
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
@@ -97,12 +96,7 @@ test('the rules that keep the text true to the code, and the schema, cannot be o
 
 test('a preview renders a past launch’s final prompt from its launch.yml, without an AI', async () => {
   const files: Record<string, string> = { 'yeyo11/claudio/.github/launch.yml@v0.9.0': 'enabled: true\nbrand: personal\npublishing:\n  telegram: approval\n' };
-  const github: GitHubSource = {
-    userEvents: async () => assert.fail('not used'),
-    fileAt: async (repo, path, ref) => files[`${repo}/${path}@${ref}`],
-    latestRelease: async () => undefined,
-    pullRequestState: async () => 'merged',
-  };
+  const github = new FakeGitHub({ files, pullRequestState: 'merged' });
   const shown = await previewPrompt(launch, brand, { github, launchesRepo: 'yeyo11/launches' }, { prompts: { 'channel.telegram': 'telegram: a plain post.' } });
   assert.equal(shown.task, 'pack');
   assert.match(shown.prompt, /- telegram: a plain post\./);

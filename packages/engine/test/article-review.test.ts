@@ -14,61 +14,24 @@ import {
   readReview,
   Registry,
   type AiProvider,
-  type EventsPage,
   type ObjectRequest,
-  type GitHubSource,
-  type GitHubWriter,
-  type PullRequestDraft,
-  type ReviewGitHub,
 } from '../src/index.ts';
-import { memoryRegistry } from '../src/testing.ts';
+import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n';
 
-class FakeGitHub implements GitHubSource, GitHubWriter, ReviewGitHub {
-  files: Record<string, string>;
-  opened: PullRequestDraft[] = [];
-  commits: Array<{ repo: string; branch: string; message: string; files: PullRequestDraft['files'] }> = [];
-  updates: Array<{ branch: string; path: string; content: string }> = [];
-  merged: number[] = [];
-  prState: 'open' | 'merged' | 'closed' = 'open';
-  constructor(files: Record<string, string>) {
-    this.files = files;
-  }
-  async userEvents(): Promise<EventsPage> {
-    return { notModified: true };
-  }
-  async fileAt(repo: string, path: string, ref: string) {
-    return this.files[`${repo}/${path}@${ref}`];
-  }
-  async latestRelease() {
-    return { tag: 'v0.9.0', url: 'u' };
-  }
-  async pullRequestState() {
-    return this.prState;
-  }
-  async openPullRequest(draft: PullRequestDraft) {
-    this.opened.push(draft);
-    return { number: 7, url: 'https://github.com/yeyo11/launches/pull/7', created: true };
-  }
-  async commitToBranch(repo: string, branch: string, message: string, files: PullRequestDraft['files']) {
-    this.commits.push({ repo, branch, message, files });
-    return { sha: 'abc123' };
-  }
-  async pullRequest(_repo: string, number: number) {
-    return { number, url: `https://github.com/yeyo11/launches/pull/${number}`, state: this.prState, branch: 'launch/claudio-v0.9.0', title: 'Launch claudio v0.9.0' };
-  }
-  async pullRequestFiles() {
-    return ['launches/claudio/v0.9.0/bluesky.md', 'public/launches/claudio/v0.9.0/og.png', 'src/content/posts/en/claudio.md', 'launches/claudio/v0.9.0/pack.json'];
-  }
-  async updateFile(_repo: string, branch: string, path: string, content: string) {
-    this.updates.push({ branch, path, content });
-  }
-  async mergePullRequest(_repo: string, number: number) {
-    this.merged.push(number);
-    return { sha: 'merged' };
-  }
+/** The launches repo whose drafts pull request is #7, launch/claudio-v0.9.0 */
+function fakeGitHub(files: Record<string, string>): FakeGitHub {
+  const github = new FakeGitHub({ files, firstPullRequest: 7 });
+  github.addPullRequest({
+    repo: 'yeyo11/launches',
+    number: 7,
+    branch: 'launch/claudio-v0.9.0',
+    title: 'Launch claudio v0.9.0',
+    files: ['launches/claudio/v0.9.0/bluesky.md', 'public/launches/claudio/v0.9.0/og.png', 'src/content/posts/en/claudio.md', 'launches/claudio/v0.9.0/pack.json'],
+  });
+  return github;
 }
 
 class FakeAi implements AiProvider {
@@ -111,7 +74,7 @@ async function deps(github: FakeGitHub, output: unknown = launchPack) {
 }
 
 test('published directly, the drafts go onto main in one commit and the launch says so', async () => {
-  const github = new FakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML });
+  const github = fakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML });
   const d = await deps(github);
   const brand = await loadBrand(github, 'yeyo11/launches');
   const { launch } = await d.registry.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
@@ -119,7 +82,7 @@ test('published directly, the drafts go onto main in one commit and the launch s
   assert.ok(result.ok);
   assert.equal(github.opened.length, 0, 'no pull request');
   assert.equal(github.commits[0]?.branch, 'main');
-  assert.match((await d.registry.get(launch.id))?.detail ?? '', /^direct:abc123 /);
+  assert.match((await d.registry.get(launch.id))?.detail ?? '', /^direct:sha1 /);
   const bluesky = github.commits[0]?.files.find((f) => f.path.endsWith('/bluesky.md'));
   assert.match(bluesky && 'content' in bluesky ? bluesky.content : '', /^> \*\*Published directly:\*\*/m, 'no merge to speak of');
 });
@@ -146,7 +109,7 @@ test('an article lives under articles/, is claimed once, and turns on only the c
 });
 
 test('an article keeps the owner’s words, gets its translation and pieces, and carries its channels', async () => {
-  const github = new FakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML });
+  const github = fakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML });
   const pack = { ...launchPack, project: { name: 'x', repo: 'https://github.com/x/y' }, devto: undefined, mastodon: undefined };
   const d = await deps(github, pack);
   const brand = await loadBrand(github, 'yeyo11/launches');
@@ -170,7 +133,7 @@ test('an article keeps the owner’s words, gets its translation and pieces, and
 });
 
 test('reviewing reads the drafts from the pull request; edits land on its branch; approving merges it', async () => {
-  const github = new FakeGitHub({
+  const github = fakeGitHub({
     'yeyo11/launches/launches/claudio/v0.9.0/bluesky.md@launch/claudio-v0.9.0': '# Bluesky\n\nhello',
     'yeyo11/launches/src/content/posts/en/claudio.md@launch/claudio-v0.9.0': '---\ntitle: x\n---\nbody',
   });
@@ -185,7 +148,7 @@ test('reviewing reads the drafts from the pull request; edits land on its branch
   assert.match(review?.drafts[2]?.url ?? '', /raw\.githubusercontent\.com\/yeyo11\/launches\/launch\/claudio-v0\.9\.0\/public\//);
 
   await editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', '# Bluesky\n\nedited', d);
-  assert.deepEqual(github.updates[0], { branch: 'launch/claudio-v0.9.0', path: 'launches/claudio/v0.9.0/bluesky.md', content: '# Bluesky\n\nedited\n' });
+  assert.deepEqual(github.updates.map(({ branch, path, content }) => ({ branch, path, content }))[0], { branch: 'launch/claudio-v0.9.0', path: 'launches/claudio/v0.9.0/bluesky.md', content: '# Bluesky\n\nedited\n' });
   await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/pack.json', '{}', d), /not a draft/);
   // A post the network would refuse is refused here, before the merge, not when it fails to publish
   const long = `# Bluesky\n\n> **Approval:** x\n\n${'a'.repeat(280)} https://josegarrido.dev/en/claudio/?ref=bluesky`;
@@ -194,7 +157,6 @@ test('reviewing reads the drafts from the pull request; edits land on its branch
 
   await approveLaunch(drafted, d);
   assert.deepEqual(github.merged, [7]);
-  github.prState = 'merged';
   await assert.rejects(approveLaunch(drafted, d), /is merged/);
   await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', 'x', d), /no longer open/);
 });
