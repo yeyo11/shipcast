@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ANALYSIS_RULES, parseLaunchConfig } from '@shipcast/schema';
-import { draftLaunch, generatePackOnRunner, loadBrand, SdkProvider, type PipelineDeps } from '../src/index.ts';
+import { draftLaunch, generatePackOnRunner, loadBrand, type PipelineDeps } from '../src/index.ts';
+import { SdkProvider } from '../src/legacy-ai.ts';
 import {
   claudioAnswer,
   claudioChats,
@@ -45,7 +46,7 @@ const pack = {
   githubDiscussions: { title: 'claudio 0.9', body: 'What shipped. https://josegarrido.dev/en/claudio/?ref=github' },
 };
 
-async function world(ai: Pick<PipelineDeps, 'ai' | 'aiRunner'> & Partial<Pick<PipelineDeps, 'maxBudgetUsd' | 'aiTexts'>>) {
+async function world(ai: Partial<Pick<PipelineDeps, 'ai' | 'aiRunner'>> & Partial<Pick<PipelineDeps, 'maxBudgetUsd' | 'aiTexts'>>) {
   const github = new FakeGitHub({
     files: { 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML },
     latestRelease: { tag: 'v0.9.0', url: 'u' },
@@ -66,8 +67,6 @@ async function world(ai: Pick<PipelineDeps, 'ai' | 'aiRunner'> & Partial<Pick<Pi
   return { github, registry, deps, brand, launch, hostPath };
 }
 
-const unused = new SdkProvider({ id: 'test', model: () => assert.fail('the old provider is not asked with the runner') });
-
 /** What a draft leaves: the launch's status and detail, and the pull request's files as text */
 async function outcome(w: Awaited<ReturnType<typeof world>>) {
   const result = await draftLaunch(w.launch, w.brand, w.deps);
@@ -84,7 +83,7 @@ test('pack: for the same answer the runner leaves the launch as the old path doe
   const old = await outcome(await world({ ai: new SdkProvider({ id: 'test', model: () => oldModel }) }));
   // Through the runner with the repo's tools, a provider answers through the submit tool
   const model = scriptedModel(submitParts(pack));
-  const now = await outcome(await world({ ai: unused, aiRunner: mockRunner(model) }));
+  const now = await outcome(await world({ aiRunner: mockRunner(model) }));
   assert.equal(now.ok, true);
   assert.deepEqual(now, old);
   assert.equal(now.status, 'drafted');
@@ -96,7 +95,7 @@ test('pack: a pack that falls short fails the launch with the problems, and Clau
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify({ ...pack, bluesky: undefined }), 'chat-41') });
   const gh = await fakeGitHubArchives();
   try {
-    const w = await world({ ai: unused, aiRunner: fakeClaudioRunner(claudio, gh) });
+    const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh) });
     const result = await draftLaunch(w.launch, w.brand, w.deps);
     assert.equal(result.ok, false);
     assert.equal(w.github.opened.length, 0, 'no pull request for a pack that fails');
@@ -119,7 +118,7 @@ test('pack: the settings’ budget is the run’s, as it was the old path’s, a
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack)) });
   const gh = await fakeGitHubArchives();
   try {
-    const w = await world({ ai: unused, aiRunner: fakeClaudioRunner(claudio, gh), maxBudgetUsd: 2.5, aiTexts: async () => ({ tone: 'Dry and exact.' }) });
+    const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh), maxBudgetUsd: 2.5, aiTexts: async () => ({ tone: 'Dry and exact.' }) });
     assert.equal((await draftLaunch(w.launch, w.brand, w.deps)).ok, true);
     const chat = claudioChats(claudio)[0]!;
     assert.equal(chat.headers['x-claudio-max-budget-usd'], '2.5');
@@ -134,7 +133,7 @@ test('pack: a provider that refuses fails the launch with a readable problem, an
   const claudio = await fakeClaudio({ chat: refuse });
   const gh = await fakeGitHubArchives();
   try {
-    const w = await world({ ai: unused, aiRunner: fakeClaudioRunner(claudio, gh) });
+    const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh) });
     const result = await draftLaunch(w.launch, w.brand, w.deps);
     assert.equal(result.ok, false);
     const after = (await w.registry.launches.get(w.launch.id))!;
@@ -148,7 +147,7 @@ test('pack: a provider that refuses fails the launch with a readable problem, an
 
 test('pack: an answer still invalid after its repair fails the launch with what is wrong', async () => {
   const model = scriptedModel(submitParts({ kind: 'launch' }), submitParts({ kind: 'launch' }, 'call-2'));
-  const w = await world({ ai: unused, aiRunner: mockRunner(model) });
+  const w = await world({ aiRunner: mockRunner(model) });
   const result = await draftLaunch(w.launch, w.brand, w.deps);
   assert.equal(result.ok, false);
   assert.equal(model.doStreamCalls.length, 2, 'one answer and one repair');
@@ -167,7 +166,7 @@ test('pack: the generation carries Claudio’s chat id and the turn’s cost, as
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack), 'chat-9') });
   const gh = await fakeGitHubArchives();
   try {
-    const w = await world({ ai: unused });
+    const w = await world({});
     const parsed = parseLaunchConfig(LAUNCH_YML);
     assert.ok(parsed.ok);
     const generated = await generatePackOnRunner({ runner: fakeClaudioRunner(claudio, gh), launch: w.launch, config: parsed.value, brand: w.brand, checkout: { hostPath: w.hostPath, providerPath: '' }, ref: 'v0.9.0' });

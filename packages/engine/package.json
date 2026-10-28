@@ -8,7 +8,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./edit-rules": "./src/edit-rules.ts",
-    "./testing": "./src/testing/index.ts"
+    "./legacy-ai": "./src/legacy-ai.ts",
+    "./testing": "./src/testing/index.ts",
+    "./testing/legacy-ai": "./src/testing/ai.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

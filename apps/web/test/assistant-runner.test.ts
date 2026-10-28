@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { AiTaskRunner, Launch } from '@shipcast/engine';
-import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, memoryRegistry, mockRunner, mockStreamingProvider, scriptedModel, textParts } from '@shipcast/engine/testing';
+import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, memoryRegistry, mockRunner, scriptedModel, textParts } from '@shipcast/engine/testing';
+import { mockStreamingProvider } from '@shipcast/engine/testing/legacy-ai';
 import { Brand } from '@shipcast/schema';
 import { readEvents, type AssistantEvent } from '../src/components/assistant/protocol.ts';
 import { handleAssistant, type AssistantDeps } from '../src/server/assistant.ts';

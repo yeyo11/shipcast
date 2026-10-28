@@ -1,5 +1,7 @@
 import { SdkProvider } from '../ai.ts';
 
+// LEGACY (`@shipcast/engine/testing/legacy-ai`): the old provider's streaming mock; the runner's are in ai-runner.ts
+
 /** What a mock streaming provider was asked, for assertions */
 export interface StreamCall {
   system?: string;

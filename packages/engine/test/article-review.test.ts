@@ -1,21 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  approveLaunch,
-  articleConfig,
-  articleSlug,
-  claimArticle,
-  draftArticle,
-  draftLaunch,
-  editDraft,
-  isArticle,
-  launchDir,
-  loadBrand,
-  readReview,
-  type Repositories,
-  type AiProvider,
-  type ObjectRequest,
-} from '../src/index.ts';
+import { approveLaunch, articleConfig, articleSlug, claimArticle, draftArticle, draftLaunch, editDraft, isArticle, launchDir, loadBrand, readReview, type Repositories } from '../src/index.ts';
+import { type AiProvider, type ObjectRequest } from '../src/legacy-ai.ts';
 import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';

@@ -3,23 +3,8 @@ import { test } from 'node:test';
 import { ConnectorError, PostGone, type Comment, type ReplyTarget } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
 import { MockLanguageModelV4 } from 'ai/test';
-import {
-  CommentRefused,
-  dismissComment,
-  draftReply,
-  editReplyDraft,
-  fetchComments,
-  LOCKED_REPLY_RULES,
-  readCommentSettings,
-  runComments,
-  SdkProvider,
-  sendReply,
-  writeCommentSettings,
-  type CommentConnectors,
-  type Repositories,
-  type ReplyContext,
-  type ReplyDeps,
-} from '../src/index.ts';
+import { CommentRefused, dismissComment, draftReply, editReplyDraft, fetchComments, LOCKED_REPLY_RULES, readCommentSettings, runComments, sendReply, writeCommentSettings, type CommentConnectors, type Repositories, type ReplyContext, type ReplyDeps } from '../src/index.ts';
+import { SdkProvider } from '../src/legacy-ai.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 type GenerateResult = Extract<Awaited<ReturnType<MockLanguageModelV4['doGenerate']>>, { content: unknown }>;

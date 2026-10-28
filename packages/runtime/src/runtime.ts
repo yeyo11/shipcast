@@ -1,6 +1,5 @@
 import {
   checkout,
-  Claudio,
   currentAiTexts,
   GitHubApp,
   GitHubRest,
@@ -10,12 +9,11 @@ import {
   PostgresLock,
   SecretRows,
   type OpenRepositories,
-  type AiProvider,
   type AiTaskRunner,
-  type ObjectRequest,
   type PipelineDeps,
-  type TextRequest,
 } from '@shipcast/engine';
+// LEGACY (flag off): claudio's REST client behind the pipeline's default provider
+import { Claudio, type AiProvider, type ObjectRequest, type TextRequest } from '@shipcast/engine/legacy-ai';
 import type { Brand } from '@shipcast/schema';
 import { aiRunnerFor, aiSetup } from './ai.ts';
 import { provisionAppKeys } from './app-keys.ts';

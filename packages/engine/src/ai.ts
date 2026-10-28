@@ -5,18 +5,15 @@ import { generateText, jsonSchema, Output, stepCountIs, streamText, type JSONSch
 import { DEFAULT_ANTHROPIC_MODEL } from './ai/providers/anthropic.ts';
 import { DEFAULT_OPENAI_MODEL } from './ai/providers/openai.ts';
 import { repoTools } from './ai/repo-tools.ts';
-import { LISTED_AI_PROVIDERS, type ListedAiProviderId } from './ai/providers/registry.ts';
+import type { AiProviderId } from './ai/providers/registry.ts';
 import type { PromptTexts } from './prompt.ts';
 
-// The read-only tools over a checkout live with the AI task runner, which is where they go next
-export { OutsideRepo, REPO_TOOL_LIMITS, REPO_TOOL_NAMES, RepoReader, repoTools, type RepoToolsOptions } from './ai/repo-tools.ts';
-
-/** What Shipcast asks an AI for; each one has its own provider and model in the AI settings (packages/schema/src/ai/tasks.ts) */
-export { AI_TASKS, type AiTask } from '@shipcast/schema';
-
-/** The providers the AI settings offer: the registry's listed ones (ai/providers/registry.ts) */
-export const AI_PROVIDERS = LISTED_AI_PROVIDERS;
-export type AiProviderId = ListedAiProviderId;
+/*
+ * LEGACY: the AI layer before the AI task runner (packages/engine/src/ai/), still what every task
+ * runs on with the `ai-runner` flag off. Reached only through `@shipcast/engine/legacy-ai`, and only
+ * from the files .dependency-cruiser.cjs lists (rule `legacy-ai-layer-only-in-legacy-files`), so its
+ * removal is a delete of those files' old branches and of this file.
+ */
 
 /** One request for structured work: a prompt answered with JSON of a schema, maybe after reading a repo. */
 export interface ObjectRequest {

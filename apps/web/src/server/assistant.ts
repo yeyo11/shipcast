@@ -6,7 +6,6 @@ import {
   isAdaptTarget,
   isAssistantAction,
   launchCodeRef,
-  type AiSetup,
   type AiTaskRunner,
   type AssistantContext,
   type PromptOptions,
@@ -14,6 +13,8 @@ import {
   type Launch,
   type AssistantRepository,
 } from '@shipcast/engine';
+// LEGACY (flag off): the old provider's setup, and the check run inside the request
+import type { AiSetup } from '@shipcast/engine/legacy-ai';
 import { AI_TASK_DEFINITIONS, type Brand } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
 import { splitProposals } from '../components/assistant/diff.ts';

@@ -1,4 +1,5 @@
-import { launchGrounding, setupFor } from '@shipcast/engine';
+import { launchGrounding } from '@shipcast/engine';
+import { setupFor } from '@shipcast/engine/legacy-ai';
 import { startAssistantCheck } from '@shipcast/runtime';
 import type { AssistantDeps } from './assistant.ts';
 import { appContext } from './context.server';

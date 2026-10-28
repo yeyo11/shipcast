@@ -5,6 +5,7 @@ import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, keepPubDates, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
 import { generatePack, generatePackOnRunner, type Generated } from './generate.ts';
+import { setupFor } from './legacy-ai.ts';
 import type { PromptOptions } from './prompt.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
@@ -14,9 +15,9 @@ import type { Checkout } from './workspace.ts';
 
 export interface PipelineDeps {
   github: GitHubSource & GitHubWriter;
-  /** The provider every task falls back on when there are no AI settings to read */
-  ai: AiProvider;
-  /** What a task runs with, read from the AI settings each time, so an edit applies to the next draft */
+  /** LEGACY (flag off): the provider every task falls back on when there are no AI settings to read */
+  ai?: AiProvider;
+  /** LEGACY (flag off): what a task runs with, read from the AI settings each time, so an edit applies to the next draft */
   aiSetup?: (task: AiTask) => Promise<AiSetup>;
   /**
    * With `ai-runner`: the AI task runner every task runs on instead of `ai` and `aiSetup`, which
@@ -48,10 +49,6 @@ export async function aiTextsOf(deps: Pick<PipelineDeps, 'aiTexts'>): Promise<Pr
   return deps.aiTexts ? deps.aiTexts() : {};
 }
 
-/** A task's provider, model and prompts: the settings', or the default provider with the prompts in code */
-export async function setupFor(deps: Pick<PipelineDeps, 'ai' | 'aiSetup'>, task: AiTask): Promise<AiSetup> {
-  return deps.aiSetup ? deps.aiSetup(task) : { provider: deps.ai, prompts: {} };
-}
 
 export interface DraftOptions {
   /**

@@ -1,4 +1,5 @@
-import { reviewProfile, setupFor, type Account, type PipelineDeps, type ProfileConnector, type ProfileDeps, type Repositories } from '@shipcast/engine';
+import { setupFor } from '@shipcast/engine/legacy-ai';
+import { reviewProfile, type Account, type PipelineDeps, type ProfileConnector, type ProfileDeps, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { buildConnector } from './catalog.ts';
 import { MissingField } from './channels/adapter.ts';

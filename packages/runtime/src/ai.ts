@@ -1,23 +1,20 @@
 import {
   aiProviderDefinition,
   AiTaskRunner,
-  anthropicProvider,
   checkAiProvider,
   type AiProviderCheck,
-  Claudio,
   currentPrompts,
-  openAiCompatibleProvider,
   readAiSettings,
   type AiProviderSettings,
   type AiRunSetup,
   type AiTelemetry,
   type RepoArchiveSource,
-  type AiProvider,
   type AiProviderId,
-  type AiSetup,
   type AiTask,
   type Repositories,
 } from '@shipcast/engine';
+// LEGACY (flag off): the old providers, until the AI task runner is the only path
+import { anthropicProvider, Claudio, openAiCompatibleProvider, type AiProvider, type AiSetup } from '@shipcast/engine/legacy-ai';
 import { AiError, type Brand } from '@shipcast/schema';
 import { credentialsFor } from './services.ts';
 import type { SecretStore } from './secrets.ts';

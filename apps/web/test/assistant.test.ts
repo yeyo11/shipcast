@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Claudio, LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES, type AiProvider, type Launch } from '@shipcast/engine';
-import { memoryRegistry, mockStreamingProvider, type StreamCall } from '@shipcast/engine/testing';
+import { LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES, type Launch } from '@shipcast/engine';
+import { Claudio, type AiProvider } from '@shipcast/engine/legacy-ai';
+import { memoryRegistry } from '@shipcast/engine/testing';
+import { mockStreamingProvider, type StreamCall } from '@shipcast/engine/testing/legacy-ai';
 import { Brand } from '@shipcast/schema';
 import { readEvents, type AssistantEvent } from '../src/components/assistant/protocol.ts';
 import { handleAssistant, parseAssistantRequest, sessionTitle, type AssistantDeps } from '../src/server/assistant.ts';

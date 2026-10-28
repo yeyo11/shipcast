@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, LaunchConfig } from '@shipcast/schema';
-import { ANALYSIS_TOOLS, buildPrompt, generatePack, type AiProvider, type ObjectRequest, type Launch } from '../src/index.ts';
+import { ANALYSIS_TOOLS, buildPrompt, generatePack, type Launch } from '../src/index.ts';
+import { type AiProvider, type ObjectRequest } from '../src/legacy-ai.ts';
 
 const brand = Brand.parse({
   id: 'personal',

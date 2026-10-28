@@ -5,7 +5,6 @@
  */
 
 export * from './registry.ts';
-export * from './ai.ts';
 export * from './ai-runner.ts';
 export * from './claudio.ts';
 export * from './github.ts';

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { claimArticle, draftArticle, loadBrand, SdkProvider, type PipelineDeps } from '../src/index.ts';
+import { claimArticle, draftArticle, loadBrand, type PipelineDeps } from '../src/index.ts';
+import { SdkProvider } from '../src/legacy-ai.ts';
 import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, FakeGitHub, jsonModel, memoryRegistry, mockRunner, scriptedModel, textParts } from '../src/testing/index.ts';
 
 /*
@@ -21,9 +22,7 @@ const pack = {
 };
 const input = { title: 'My own title', markdown: 'My own words.', lang: 'en' as const, channels: ['bluesky' as const] };
 
-const unused = new SdkProvider({ id: 'test', model: () => assert.fail('the old provider is not asked with the runner') });
-
-async function draft(ai: Pick<PipelineDeps, 'ai' | 'aiRunner'> & Partial<Pick<PipelineDeps, 'maxBudgetUsd'>>) {
+async function draft(ai: Partial<Pick<PipelineDeps, 'ai' | 'aiRunner'>> & Partial<Pick<PipelineDeps, 'maxBudgetUsd'>>) {
   const github = new FakeGitHub({ files: { 'yeyo11/launches/brand.yml@HEAD': BRAND_YML } });
   const registry = await memoryRegistry();
   const deps: PipelineDeps = {
@@ -47,7 +46,7 @@ test('article: for the same answer the runner leaves the drafts and the launch a
   const oldModel = jsonModel(pack);
   const old = await draft({ ai: new SdkProvider({ id: 'test', model: () => oldModel }) });
   const model = jsonModel(pack);
-  const now = await draft({ ai: unused, aiRunner: mockRunner(model) });
+  const now = await draft({ aiRunner: mockRunner(model) });
   assert.equal(now.ok, true);
   assert.deepEqual(now, old);
   const call = model.doStreamCalls[0]!;
@@ -60,7 +59,7 @@ test('article: on Claudio no workspace is made, and the settings’ budget is th
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack)) });
   const gh = await fakeGitHubArchives();
   try {
-    const now = await draft({ ai: unused, aiRunner: fakeClaudioRunner(claudio, gh), maxBudgetUsd: 1.5 });
+    const now = await draft({ aiRunner: fakeClaudioRunner(claudio, gh), maxBudgetUsd: 1.5 });
     assert.equal(now.ok, true);
     assert.deepEqual(claudio.seen.map((s) => `${s.method} ${s.path}`), ['POST /api/v1/chat/completions']);
     assert.equal(claudioChats(claudio)[0]!.headers['x-claudio-max-budget-usd'], '1.5');
@@ -74,7 +73,7 @@ test('article: a refused call and an answer that stays invalid fail the launch w
   const claudio = await fakeClaudio({ chat: (_, res) => claudioRefusal(res, 401, 'invalid_api_key', 'bad token') });
   const gh = await fakeGitHubArchives();
   try {
-    const refused = await draft({ ai: unused, aiRunner: fakeClaudioRunner(claudio, gh) });
+    const refused = await draft({ aiRunner: fakeClaudioRunner(claudio, gh) });
     assert.equal(refused.ok, false);
     assert.equal(refused.status, 'failed');
     assert.match(refused.detail ?? '', /refused its credentials \(401\): reconnect the AI provider/);
@@ -82,7 +81,7 @@ test('article: a refused call and an answer that stays invalid fail the launch w
   } finally {
     await Promise.all([claudio.close(), gh.close()]);
   }
-  const invalid = await draft({ ai: unused, aiRunner: mockRunner(scriptedModel(textParts('{"kind":"launch"}'))) });
+  const invalid = await draft({ aiRunner: mockRunner(scriptedModel(textParts('{"kind":"launch"}'))) });
   assert.equal(invalid.status, 'failed');
   assert.match(invalid.detail ?? '', /answer to article is not valid, even after a repair/);
 });

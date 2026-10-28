@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { Brand, LaunchConfig } from '@shipcast/schema';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
-import { generateArticlePack, generatePack, LOCKED_ARTICLE_RULES, LOCKED_LAUNCH_RULES, SdkProvider, type AiSetup, type AiTask, type Launch } from '../src/index.ts';
+import { generateArticlePack, generatePack, LOCKED_ARTICLE_RULES, LOCKED_LAUNCH_RULES, type AiTask, type Launch } from '../src/index.ts';
+import { SdkProvider, type AiSetup } from '../src/legacy-ai.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });

@@ -1,19 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
-import {
-  ADAPT_TARGETS,
-  AssistantRefused,
-  buildActionPrompt,
-  buildChat,
-  checkAgainstCode,
-  Claudio,
-  LOCKED_ASSISTANT_ARTICLE_RULES,
-  LOCKED_ASSISTANT_LAUNCH_RULES,
-  parseTitles,
-  transcript,
-  type AssistantContext,
-} from '../src/index.ts';
+import { ADAPT_TARGETS, AssistantRefused, buildActionPrompt, buildChat, checkAgainstCode, LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES, parseTitles, type AssistantContext } from '../src/index.ts';
+import { Claudio, transcript } from '../src/legacy-ai.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'plain and direct.' });
 

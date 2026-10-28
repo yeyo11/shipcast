@@ -1,26 +1,23 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import {
-  anthropicProvider,
   checkout,
   currentPrompts,
   draftLaunch,
-  fakePackProvider,
   GitHubApp,
   GitHubRest,
   launchConfigOf,
   loadBrand,
-  openAiCompatibleProvider,
-  openAiProvider,
   readAiSettings,
   connectRepositories,
   type Repositories,
   DEFAULT_ANTHROPIC_MODEL,
   DEFAULT_OPENAI_MODEL,
-  type AiProvider,
   type Launch,
   type PipelineDeps,
 } from '@shipcast/engine';
+// LEGACY: Action mode still builds the old providers; it moves to the AI task runner before the old layer is removed
+import { anthropicProvider, fakePackProvider, openAiCompatibleProvider, openAiProvider, type AiProvider } from '@shipcast/engine/legacy-ai';
 import type { Brand } from '@shipcast/schema';
 import {
   BranchState,

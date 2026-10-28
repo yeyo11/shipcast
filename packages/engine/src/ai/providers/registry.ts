@@ -43,3 +43,7 @@ export function aiProviderDefinition(id: string): AiProviderDefinition | undefin
 
 /** A provider's name, or the id as given */
 export const aiProviderName = (id: string): string => TABLES.names[id] ?? id;
+
+/** The providers the AI settings offer, as the settings name them */
+export const AI_PROVIDERS = LISTED_AI_PROVIDERS;
+export type AiProviderId = ListedAiProviderId;

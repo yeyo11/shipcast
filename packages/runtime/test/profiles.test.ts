@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { editProfile, readProfileReview, type AiProvider, type PipelineDeps } from '@shipcast/engine';
+import { editProfile, readProfileReview, type PipelineDeps } from '@shipcast/engine';
+import { type AiProvider } from '@shipcast/engine/legacy-ai';
 import { jsonModel, memoryRegistry, mockRunner } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import { accountSecretKey, MemoryStore, profileConnector, profileDeps, runProfileReview } from '../src/index.ts';
@@ -76,8 +77,7 @@ test('with ai-runner the review job runs on the pipeline’s runner, with the ow
   };
   const old = await run({ ai: fakeAi(answer) } as unknown as PipelineDeps);
   const model = jsonModel(answer);
-  const unused: AiProvider = { id: 'test', generateObject: async () => assert.fail('the old provider is not asked'), streamText: async function* () {} };
-  const now = await run({ ai: unused, aiRunner: mockRunner(model), aiTexts: async () => ({ tone: 'Plain words.' }) } as unknown as PipelineDeps);
+  const now = await run({ aiRunner: mockRunner(model), aiTexts: async () => ({ tone: 'Plain words.' }) } as unknown as PipelineDeps);
   assert.deepEqual(now, old);
   assert.match(JSON.stringify(model.doStreamCalls[0]!.prompt), /Plain words\./);
   assert.ok(!('setup' in profileDeps({ registry: await memoryRegistry(), secrets: new MemoryStore(), brand, pipeline: { aiRunner: mockRunner(model) } as unknown as PipelineDeps })), 'no old provider set up beside the runner');

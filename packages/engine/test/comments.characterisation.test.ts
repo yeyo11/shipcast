@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { PostGone, type Comment } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
 import { MockLanguageModelV4 } from 'ai/test';
-import { runComments, SdkProvider, writeCommentSettings, type ReplyDeps } from '../src/index.ts';
+import { runComments, writeCommentSettings, type ReplyDeps } from '../src/index.ts';
+import { SdkProvider } from '../src/legacy-ai.ts';
 import { aPublishedLaunch, FakeConnectors, memoryRegistry } from '../src/testing/index.ts';
 
 /*

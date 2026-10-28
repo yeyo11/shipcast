@@ -12,7 +12,8 @@ import {
 import { stringify } from 'yaml';
 import { keepPubDates, launchDir, renderDrafts, screenshotPaths } from './drafts.ts';
 import { buildAssets } from './launch-assets.ts';
-import { aiTextsOf, deliverDrafts, readProjects, setupFor, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
+import { setupFor } from './legacy-ai.ts';
+import { aiTextsOf, deliverDrafts, readProjects, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
 import { buildArticlePrompt } from './prompt.ts';
 import type { Launch } from './repositories/index.ts';
 

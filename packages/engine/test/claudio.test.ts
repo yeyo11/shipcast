@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Claudio, ClaudioError, type ObjectRequest } from '../src/index.ts';
+import { Claudio, ClaudioError, type ObjectRequest } from '../src/legacy-ai.ts';
 
 interface Call {
   method: string;

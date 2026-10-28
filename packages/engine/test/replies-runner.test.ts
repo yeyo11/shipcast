@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { Comment } from '@shipcast/connectors';
 import { ANALYSIS_RULES, Brand } from '@shipcast/schema';
-import { draftReply, fetchComments, runComments, SdkProvider, type AiTaskRunner, type ReplyContext, type ReplyDeps, type Repositories } from '../src/index.ts';
+import { draftReply, fetchComments, runComments, type AiTaskRunner, type ReplyContext, type ReplyDeps, type Repositories } from '../src/index.ts';
+import { SdkProvider } from '../src/legacy-ai.ts';
 import {
   claudioAnswer,
   claudioChats,

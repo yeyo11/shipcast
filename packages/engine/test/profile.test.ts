@@ -3,23 +3,8 @@ import { test } from 'node:test';
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
 import { MockLanguageModelV4 } from 'ai/test';
-import {
-  buildProfileReviewPrompt,
-  capabilityWithReview,
-  editProfile,
-  fieldProblem,
-  LOCKED_PROFILE_RULES,
-  parseLinks,
-  profileCapability,
-  ProfileRefused,
-  proposalEdit,
-  readProfileReview,
-  reviewProfile,
-  SdkProvider,
-  type Account,
-  type ProfileDeps,
-  type Repositories,
-} from '../src/index.ts';
+import { buildProfileReviewPrompt, capabilityWithReview, editProfile, fieldProblem, LOCKED_PROFILE_RULES, parseLinks, profileCapability, ProfileRefused, proposalEdit, readProfileReview, reviewProfile, type Account, type ProfileDeps, type Repositories } from '../src/index.ts';
+import { SdkProvider } from '../src/legacy-ai.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 /*

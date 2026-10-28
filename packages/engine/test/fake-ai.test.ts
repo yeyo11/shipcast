@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { Brand, LaunchConfig, parseLaunchConfig } from '@shipcast/schema';
-import { FAKE_NOTICE, fakePack, fakePackProvider, generatePack, type Launch } from '../src/index.ts';
+import { FAKE_NOTICE, fakePack, generatePack, type Launch } from '../src/index.ts';
+import { fakePackProvider } from '../src/legacy-ai.ts';
 
 const brand = Brand.parse({
   id: 'dev',

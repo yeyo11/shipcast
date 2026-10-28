@@ -1,6 +1,9 @@
-import { contentPackJsonSchema, formatIssues, InvalidRequest, parseLaunchConfig, ShipcastError, type Brand, type LaunchConfig } from '@shipcast/schema';
+import { AI_TASKS, contentPackJsonSchema, formatIssues, InvalidRequest, parseLaunchConfig, ShipcastError, type AiTask, type Brand, type LaunchConfig } from '@shipcast/schema';
 import { z } from 'zod';
-import { AI_PROVIDERS, AI_TASKS, type AiTask } from './ai.ts';
+import { AI_PROVIDERS } from './ai/providers/registry.ts';
+
+/** What Shipcast asks an AI for; each one has its own provider and model in the AI settings (packages/schema/src/ai/tasks.ts) */
+export { AI_TASKS, type AiTask } from '@shipcast/schema';
 import { articleConfig } from './article.ts';
 import { LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES } from './assistant.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';

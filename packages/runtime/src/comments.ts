@@ -1,4 +1,5 @@
-import { launchReplyContext, setupFor, type CommentRunResult, type PipelineDeps, type Repositories, type ReplyDeps } from '@shipcast/engine';
+import { setupFor } from '@shipcast/engine/legacy-ai';
+import { launchReplyContext, type CommentRunResult, type PipelineDeps, type Repositories, type ReplyDeps } from '@shipcast/engine';
 import type { GitHubTokenSource, IdentityCache } from '@shipcast/connectors';
 import type { Brand } from '@shipcast/schema';
 import { commentConnectors } from './edits.ts';
