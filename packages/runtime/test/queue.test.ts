@@ -175,7 +175,7 @@ test('with automation off a round does nothing and sends no next one; a start se
   assert.equal(done?.state, 'completed');
   assert.deepEqual(done?.log, ['Automation is off: no round']);
   assert.deepEqual(await queue.queued('round', ROUND_KEY), [], 'the chain stops');
-  assert.equal(await db.registry.cursor('automation:last-round'), undefined, 'no round was run');
+  assert.equal(await db.registry.cursors.cursor('automation:last-round'), undefined, 'no round was run');
 
   const metrics = await queue.send('metrics', { reason: 'every 6 hours' });
   assert.deepEqual((await queue.wait(metrics!, 20_000, 100))?.log, ['Automation is off: the numbers are read by hand']);
@@ -252,13 +252,13 @@ test('the handlers of a publish job retry a channel only once and leave a launch
   const db = await database();
   const launchId = await launch(db.registry);
   const queue = queueOn(db);
-  await db.registry.setCursor(`publish-failed:${launchId}:devto`, 'HTTP 500');
+  await db.registry.cursors.setCursor(`publish-failed:${launchId}:devto`, 'HTTP 500');
   await queue.work({ publish: workHandlers(queue, deps(db.registry)).publish });
   const id = await queue.send('publish', { launchId, retryChannel: 'devto' }, { launchId, singletonKey: `launch:${launchId}` });
   const done = await queue.wait(id!, 20_000, 100);
   assert.equal(done?.state, 'completed');
   assert.deepEqual(done?.log, ['Nothing to publish: the launch is detected']);
-  assert.equal(await db.registry.cursor(`publish-failed:${launchId}:devto`), undefined, 'the failure is forgotten');
+  assert.equal(await db.registry.cursors.cursor(`publish-failed:${launchId}:devto`), undefined, 'the failure is forgotten');
 });
 
 test('a scheduled piece wakes its launch’s publishing when due, also after a restart, and not when cancelled', async () => {

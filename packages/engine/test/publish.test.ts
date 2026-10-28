@@ -187,7 +187,7 @@ test('the newsletter sends one campaign per language with the edited issue, and 
     (await registry.posts.posts(launch.id, { channel: 'newsletter' })).map((p) => [p.kind, p.externalId, p.url]),
     [['issue:en', '901', 'https://app.brevo.com/marketing-campaign/report/901']],
   );
-  assert.deepEqual(await registry.cursorsWithPrefix('newsletter-sent:'), [], 'the rows are the record');
+  assert.deepEqual(await registry.cursors.cursorsWithPrefix('newsletter-sent:'), [], 'the rows are the record');
 
   await publishLaunch((await registry.launches.get(launch.id))!, withNewsletter, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
   assert.equal(sends.length, 1, 'never sent twice');
@@ -246,7 +246,7 @@ test('after the Instagram carousel, its story and the edited comment go out once
       ['story', 'story-1'],
     ],
   );
-  assert.deepEqual(await registry.cursorsWithPrefix('instagram-'), [], 'the rows are the record');
+  assert.deepEqual(await registry.cursors.cursorsWithPrefix('instagram-'), [], 'the rows are the record');
 });
 
 test('the Instagram comment is its own row, and a second round neither reposts nor comments again', async () => {
@@ -493,7 +493,7 @@ test('a scheduled piece is moved and cancelled; a cancelled channel is not publi
 
   // Scheduled again (which forgets the cancel), then cancelled again
   await scheduleLaunch(registry, launch.id, { mastodon: hours(6) }, { now: T });
-  assert.equal(await registry.cursor(`publish-cancelled:${launch.id}:mastodon`), undefined);
+  assert.equal(await registry.cursors.cursor(`publish-cancelled:${launch.id}:mastodon`), undefined);
   const again = (await registry.posts.posts(launch.id, { channel: 'mastodon' }))[0]!;
   await cancelScheduledPost(registry, again.id);
   assert.equal((await publishLaunch(launch, brand, deps)).state, 'waiting', 'nothing goes out before the merge, scheduled or not');
@@ -691,7 +691,7 @@ test('a Reddit post whose answer was lost is found instead of posted twice, and 
   const launch = await drafted(registry);
   const { publishers } = recorder();
   // The first round's submit to r/ClaudeAI reached Reddit, but its answer never came back
-  await registry.setCursor(`reddit-attempt:${launch.id}:claudeai`, '2026-10-27T10:00:00.000Z');
+  await registry.cursors.setCursor(`reddit-attempt:${launch.id}:claudeai`, '2026-10-27T10:00:00.000Z');
   const submitted: string[] = [];
   publishers.reddit = {
     publish: async (p) => {

@@ -1,4 +1,5 @@
 import type { Registry } from './registry.ts';
+import type { CursorRepository } from './repositories/cursors.ts';
 import type { LaunchRepository } from './repositories/launches.ts';
 import type { MetricRepository } from './repositories/metrics.ts';
 import type { PostRepository } from './repositories/posts.ts';
@@ -28,7 +29,7 @@ export type SettingStore = { settings: Pick<SettingRepository, 'setting' | 'setS
 export type SettingReader = { settings: Pick<SettingRepository, 'setting'> };
 
 /** A launch's scheduled pieces, with the cursor that remembers a channel cancelled, and the time zone */
-export type ScheduleStore = { launches: LaunchLookup; posts: Pick<PostRepository, 'post' | 'posts' | 'schedulePost' | 'reschedulePost' | 'unschedulePost'> } & Pick<Registry, 'setCursor' | 'deleteCursor'> & SettingStore;
+export type ScheduleStore = { launches: LaunchLookup; posts: Pick<PostRepository, 'post' | 'posts' | 'schedulePost' | 'reschedulePost' | 'unschedulePost'> ; cursors: Pick<CursorRepository, 'setCursor' | 'deleteCursor'> } & SettingStore;
 
 /** The comments a reply is drafted, edited or dismissed on */
 export type CommentStore = Pick<Registry, 'comment' | 'commentByExternalId' | 'updateComment'>;
@@ -37,10 +38,10 @@ export type CommentStore = Pick<Registry, 'comment' | 'commentByExternalId' | 'u
 export type CommentListing = Pick<Registry, 'comments' | 'commentsPage' | 'commentFacets' | 'commentPosts'>;
 
 /** A single cursor written when something happened (the last metrics reading, the last round) */
-export type CursorWriter = Pick<Registry, 'setCursor'>;
+export type CursorWriter = { cursors: Pick<CursorRepository, 'setCursor'> };
 
 /** What a metrics reading reads and records: the published launches, their posts, the numbers and the cursors that pace the sources */
-export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'>; metrics: Pick<MetricRepository, 'recordMetrics'> } & Pick<Registry, 'cursor' | 'setCursor'>;
+export type MetricStore = { launches: Pick<LaunchRepository, 'recent'>; posts: Pick<PostRepository, 'posts'>; metrics: Pick<MetricRepository, 'recordMetrics'>; cursors: Pick<CursorRepository, 'cursor' | 'setCursor'> };
 
 /** The connected accounts, read, renamed and made the primary of their network */
 export type AccountStore = Pick<Registry, 'account' | 'accounts' | 'primaryAccount' | 'updateAccount' | 'makePrimary'>;

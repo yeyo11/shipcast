@@ -111,7 +111,7 @@ const reviewKey = (accountId: number) => `profile-review:${accountId}`;
 
 /** The account's latest review; undefined when it has none, or the one stored no longer parses */
 export async function readProfileReview(registry: Registry, accountId: number): Promise<ProfileReview | undefined> {
-  const text = await registry.cursor(reviewKey(accountId));
+  const text = await registry.cursors.cursor(reviewKey(accountId));
   if (!text) return undefined;
   try {
     const value = JSON.parse(text) as ProfileReview;
@@ -277,7 +277,7 @@ export async function reviewProfile(
     proposals.push({ field: p.field, current, proposed, why: p.why.trim(), ...(problem && { problem }) });
   }
   const review: ProfileReview = { accountId: account.id, network: account.network, reviewedAt: now.toISOString(), language, summary: parsed.data.summary.trim(), profile, proposals };
-  await registry.setCursor(reviewKey(account.id), JSON.stringify(review));
+  await registry.cursors.setCursor(reviewKey(account.id), JSON.stringify(review));
   return review;
 }
 
@@ -318,7 +318,7 @@ export async function editProfile(deps: Pick<ProfileDeps, 'registry' | 'connecto
         changed = true;
       }
     }
-    if (changed) await deps.registry.setCursor(reviewKey(account.id), JSON.stringify(review));
+    if (changed) await deps.registry.cursors.setCursor(reviewKey(account.id), JSON.stringify(review));
   }
   return connector.profile ? connector.profile().catch(() => undefined) : undefined;
 }

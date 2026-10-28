@@ -97,7 +97,7 @@ export async function scheduleLaunch(registry: ScheduleStore, launchId: number, 
   const scheduled: Post[] = [];
   for (const [channel, at] of entries) {
     // Scheduling again what was cancelled brings it back
-    await registry.deleteCursor(cancelledKey(launchId, channel));
+    await registry.cursors.deleteCursor(cancelledKey(launchId, channel));
     const post = await registry.posts.schedulePost(launchId, channel, at);
     if (!post) throw new ScheduleRefused('refused', `${channel} went out while it was being scheduled`);
     scheduled.push(post);
@@ -128,6 +128,6 @@ export async function cancelScheduledPost(registry: ScheduleStore, postId: numbe
   const post = await scheduledPost(registry, postId);
   const removed = await registry.posts.unschedulePost(postId);
   if (!removed) throw new ScheduleRefused('refused', `post ${postId} went out while it was being cancelled`);
-  await registry.setCursor(cancelledKey(post.launchId, post.channel), new Date().toISOString());
+  await registry.cursors.setCursor(cancelledKey(post.launchId, post.channel), new Date().toISOString());
   return removed;
 }

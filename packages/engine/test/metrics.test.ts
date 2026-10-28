@@ -117,7 +117,7 @@ test("Google's view of each language is kept, and an article it lacks has the si
   assert.equal(submitted.length, 1, 'not again the same day');
   await collectMetrics(registry, brand, sources, new Date('2026-10-31T13:00:00Z'));
   assert.equal(submitted.length, 2, 'again the next day, while Google still lacks it');
-  assert.equal(await registry.cursor(SITEMAP_SUBMITTED_KEY), '2026-10-31T13:00:00.000Z');
+  assert.equal(await registry.cursors.cursor(SITEMAP_SUBMITTED_KEY), '2026-10-31T13:00:00.000Z');
 });
 
 test('with every article indexed the sitemap is left alone', async () => {

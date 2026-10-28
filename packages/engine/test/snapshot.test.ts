@@ -10,8 +10,8 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   await first.registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
   await first.registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://x', url: 'https://bsky.app/x' });
   const account = await first.registry.addAccount({ network: 'devto', brand: 'personal', label: '@yeyo', settings: { a: 'b' } });
-  await first.registry.setCursor('events-last-id:yeyo11', '123');
-  await first.registry.setCursor('instagram-token', 'secret-token');
+  await first.registry.cursors.setCursor('events-last-id:yeyo11', '123');
+  await first.registry.cursors.setCursor('instagram-token', 'secret-token');
   await first.registry.settings.setSetting('ai', { tasks: {}, tone: 'plain' });
   await first.registry.addApiToken({ name: 'cli', hash: 'abc', scopes: ['read'] });
   const text = formatSnapshot(await first.dump());
@@ -32,8 +32,8 @@ test('a snapshot round trip keeps every row, the ids and the once-only claim', a
   assert.equal(restored?.detail, 'https://github.com/yeyo11/launches/pull/7');
   assert.equal((await second.registry.posts.posts(launch.id)).length, 1);
   assert.equal((await second.registry.account(account.id))?.label, '@yeyo');
-  assert.equal(await second.registry.cursor('events-last-id:yeyo11'), '123');
-  assert.equal(await second.registry.cursor('instagram-token'), undefined);
+  assert.equal(await second.registry.cursors.cursor('events-last-id:yeyo11'), '123');
+  assert.equal(await second.registry.cursors.cursor('instagram-token'), undefined);
   assert.deepEqual(await second.registry.settings.setting('ai'), { tasks: {}, tone: 'plain' });
 
   // The same release again is refused; a new one takes the next id, after the restored ones

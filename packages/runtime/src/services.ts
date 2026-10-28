@@ -82,7 +82,7 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
     let credentials = found.credentials;
     // A token Shipcast refreshed while it still came from .env lives in the registry
     if (id === 'instagram' && found.origin.kind === 'env') {
-      const fresh = await registry.cursor(INSTAGRAM_TOKEN_KEY);
+      const fresh = await registry.cursors.cursor(INSTAGRAM_TOKEN_KEY);
       if (fresh) credentials = { ...credentials, secrets: { ...credentials.secrets, accessToken: fresh } };
     }
     try {
@@ -200,10 +200,10 @@ export async function refreshInstagramToken(
   const { connector, origin } = services.instagram;
   const { registry } = deps;
   const account = origin.kind === 'account' ? await registry.account(origin.id) : undefined;
-  const last = account ? account.settings.refreshedAt : await registry.cursor(INSTAGRAM_REFRESHED_KEY);
+  const last = account ? account.settings.refreshedAt : await registry.cursors.cursor(INSTAGRAM_REFRESHED_KEY);
   const remember = async (at: Date): Promise<void> => {
     if (account) await registry.updateAccount(account.id, { settings: { ...account.settings, refreshedAt: at.toISOString() } });
-    else await registry.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
+    else await registry.cursors.setCursor(INSTAGRAM_REFRESHED_KEY, at.toISOString());
   };
   if (!last) {
     await remember(now);
@@ -215,7 +215,7 @@ export async function refreshInstagramToken(
     const secrets = (await getJson(deps.secrets, accountSecretKey(account.id))) ?? {};
     await deps.secrets.set(accountSecretKey(account.id), JSON.stringify({ ...secrets, accessToken: fresh.accessToken }), `${account.network} ${account.label}`);
   } else {
-    await registry.setCursor(INSTAGRAM_TOKEN_KEY, fresh.accessToken);
+    await registry.cursors.setCursor(INSTAGRAM_TOKEN_KEY, fresh.accessToken);
   }
   await remember(now);
   return `Instagram token refreshed; valid for ${Math.round(fresh.expiresIn / 86400)} more days`;

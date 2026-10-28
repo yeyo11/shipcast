@@ -283,7 +283,7 @@ test('the writes start the same work the pages do, with their checks', async () 
   const s = await setup();
   const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   await s.registry.launches.setStatus(launch.id, 'published');
-  await s.registry.setCursor(`publish-failed:${launch.id}:devto`, 'rejected');
+  await s.registry.cursors.setCursor(`publish-failed:${launch.id}:devto`, 'rejected');
 
   const accepted = await call(s.deps, 'POST', '/launches', { token: s.write, body: { repo: 'yeyo11/claudio', ref: 'v2.0.0', direct: true } });
   assert.equal(accepted.status, 202);
@@ -304,7 +304,7 @@ test('the writes start the same work the pages do, with their checks', async () 
   assert.equal((await call(s.deps, 'POST', `/launches/${launch.id}/retry/nowhere`, { token: s.write })).status, 400);
   const retry = await call(s.deps, 'POST', `/launches/${launch.id}/retry/devto`, { token: s.write });
   assert.equal(retry.status, 202);
-  assert.equal(await s.registry.cursor(`publish-failed:${launch.id}:devto`), undefined, 'the failure is forgotten');
+  assert.equal(await s.registry.cursors.cursor(`publish-failed:${launch.id}:devto`), undefined, 'the failure is forgotten');
   assert.equal((await s.registry.launches.get(launch.id))?.status, 'drafted');
 
   const article = await call(s.deps, 'POST', '/articles', { token: s.write, body: { title: ' Hello ', markdown: 'Body', lang: 'en', channels: ['devto', 'nowhere'] } });

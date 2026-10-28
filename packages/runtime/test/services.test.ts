@@ -62,7 +62,7 @@ test('a connected account wins over .env, and .env never speaks for another bran
 
 test('a refreshed Instagram token in the registry wins over the one in .env', async () => {
   const registry = await memoryRegistry();
-  await registry.setCursor(INSTAGRAM_TOKEN_KEY, 'fresh');
+  await registry.cursors.setCursor(INSTAGRAM_TOKEN_KEY, 'fresh');
   const services = await buildServices(await deps({ INSTAGRAM_USER_ID: '1', INSTAGRAM_ACCESS_TOKEN: 'old' }, { registry }));
   assert.ok(services.configured.includes('instagram'));
 });
@@ -78,13 +78,13 @@ test('the Instagram token from .env is refreshed every 30 days, never on the fir
   const services = withFakeInstagram(await buildServices(d), { kind: 'env' }, counter);
 
   assert.equal(await refreshInstagramToken(services, d, new Date('2026-10-01T00:00:00Z')), undefined);
-  assert.equal(await d.registry.cursor(INSTAGRAM_REFRESHED_KEY), '2026-10-01T00:00:00.000Z');
+  assert.equal(await d.registry.cursors.cursor(INSTAGRAM_REFRESHED_KEY), '2026-10-01T00:00:00.000Z');
   assert.equal(await refreshInstagramToken(services, d, new Date('2026-10-20T00:00:00Z')), undefined);
   assert.equal(counter.n, 0);
 
   assert.match((await refreshInstagramToken(services, d, new Date('2026-11-01T00:00:00Z'))) ?? '', /refreshed; valid for 60/);
   assert.equal(counter.n, 1);
-  assert.equal(await d.registry.cursor(INSTAGRAM_TOKEN_KEY), 'new');
+  assert.equal(await d.registry.cursors.cursor(INSTAGRAM_TOKEN_KEY), 'new');
 });
 
 test('a connected Instagram account keeps its refreshed token in the keychain', async () => {
@@ -97,7 +97,7 @@ test('a connected Instagram account keeps its refreshed token in the keychain', 
   assert.match((await refreshInstagramToken(services, d, new Date('2026-10-05T00:00:00Z'))) ?? '', /refreshed/);
   assert.equal(JSON.parse((await d.secrets.get(accountSecretKey(account.id)))!).accessToken, 'new');
   assert.equal((await d.registry.account(account.id))?.settings.refreshedAt, '2026-10-05T00:00:00.000Z');
-  assert.equal(await d.registry.cursor(INSTAGRAM_TOKEN_KEY), undefined, 'nothing in the registry');
+  assert.equal(await d.registry.cursors.cursor(INSTAGRAM_TOKEN_KEY), undefined, 'nothing in the registry');
 });
 
 test('Telegram posts to its channel and tells the owner in their own chat', async () => {

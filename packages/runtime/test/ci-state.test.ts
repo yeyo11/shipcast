@@ -151,7 +151,7 @@ test('the branch state: a run saves its registry and frees the lease; a dry run 
     // A failure inside the work still saves what was done before it, and frees the lease
     await assert.rejects(
       state.use(async (registry) => {
-        await registry.setCursor('seen', 'yes');
+        await registry.cursors.setCursor('seen', 'yes');
         throw new Error('boom');
       }),
       /boom/,

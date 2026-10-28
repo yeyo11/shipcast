@@ -78,7 +78,7 @@ test('the post model migration converts an install in place, losing nothing', as
     assert.equal(await registry.settings.setting('automation:mode'), 'webhook');
     assert.equal(await registry.settings.setting('automation:interval'), 120);
 
-    const left = (await registry.cursorsWithPrefix('')).map((c) => c.key);
+    const left = (await registry.cursors.cursorsWithPrefix('')).map((c) => c.key);
     assert.deepEqual(left, ['automation:last-round', 'events-etag:yeyo11', 'newsletter-sent:99:en', 'publish-failed:3:devto'], 'only state, and what had nothing to become');
 
     // The channels' readings point at their posts; the old newsletter sums and the site's stay the launch's

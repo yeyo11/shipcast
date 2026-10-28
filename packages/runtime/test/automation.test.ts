@@ -81,7 +81,7 @@ test('automation settings default to polling every five minutes and never under 
   assert.deepEqual(await readAutomation(registry), { mode: 'poll', intervalSeconds: 300 });
   assert.deepEqual(await writeAutomation(registry, { mode: 'webhook', intervalSeconds: 10 }), { mode: 'webhook', intervalSeconds: 60 });
   assert.equal(await registry.settings.setting<number>('automation:interval'), 60, 'a setting, kept as a number');
-  assert.equal(await registry.cursor('automation:mode'), undefined, 'not a cursor');
+  assert.equal(await registry.cursors.cursor('automation:mode'), undefined, 'not a cursor');
   await record(registry, 'automation:last-round', { at: 'now', summary: 's', lines: Array.from({ length: 30 }, (_, i) => String(i)) });
   assert.equal((await lastHappened(registry, 'automation:last-round'))?.lines.length, 20);
 });

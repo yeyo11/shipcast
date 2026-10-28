@@ -39,7 +39,7 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
   } else if (deps.brand.id === envBrand(deps.env)) {
     credentials = credentialsFromEnv(network.id, deps.env, deps.brand, deps.readFile ?? ((path) => readFileSync(path, 'utf8')));
     // A token Shipcast refreshed while it still came from .env lives in the registry, as publishing reads it
-    const fresh = network.id === 'instagram' && credentials ? await deps.registry.cursor(INSTAGRAM_TOKEN_KEY) : undefined;
+    const fresh = network.id === 'instagram' && credentials ? await deps.registry.cursors.cursor(INSTAGRAM_TOKEN_KEY) : undefined;
     if (credentials && fresh) credentials = { ...credentials, secrets: { ...credentials.secrets, accessToken: fresh } };
   }
   if (!credentials) return undefined;

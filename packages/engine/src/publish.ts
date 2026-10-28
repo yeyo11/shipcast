@@ -372,10 +372,10 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               const text = body.includes(articleUrl) ? body : `${body}\n\n${link}`;
               try {
                 // A submit whose answer was lost may be up: look for it before submitting again
-                const attempted = await registry.cursor(redditAttemptKey(launch.id, piece.subreddit));
+                const attempted = await registry.cursors.cursor(redditAttemptKey(launch.id, piece.subreddit));
                 let result = attempted ? await reddit.find({ subreddit: piece.subreddit, title }, new Date(attempted)) : undefined;
                 if (!result) {
-                  await registry.setCursor(redditAttemptKey(launch.id, piece.subreddit), new Date().toISOString());
+                  await registry.cursors.setCursor(redditAttemptKey(launch.id, piece.subreddit), new Date().toISOString());
                   result = await reddit.publish({ subreddit: piece.subreddit, title, text });
                 }
                 await registry.posts.recordPost({ launchId: launch.id, channel: 'reddit', kind, accountId: accountOf('reddit'), externalId: result.externalId, url: result.url });
@@ -485,7 +485,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   for (const channel of PUBLISHED_BY_ENGINE) {
     const mode = config.publishing[channel];
     if (mode === 'off' || done(pieces, channel)) continue;
-    if ((await registry.cursor(failureKey(launch, channel))) || (await registry.cursor(cancelledKey(launch.id, channel)))) continue;
+    if ((await registry.cursors.cursor(failureKey(launch, channel))) || (await registry.cursors.cursor(cancelledKey(launch.id, channel)))) continue;
     const at = later(pieces, channel);
     if (at) {
       scheduled.push({ channel, at });
@@ -499,7 +499,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     try {
       // Claimed for this run, then checked again: a worker that read the pieces before another's went out sends nothing
       const guarded = deps.guard
-        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !done(await registry.posts.posts(launch.id), channel) && !(await registry.cursor(failureKey(launch, channel))) }, run)
+        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !done(await registry.posts.posts(launch.id), channel) && !(await registry.cursors.cursor(failureKey(launch, channel))) }, run)
         : { ran: true as const, value: await run() };
       if (!guarded.ran) {
         if (guarded.attempt.state !== 'live') heldElsewhere.push({ channel, why: notSentBecause(guarded.attempt) });
@@ -518,7 +518,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       const retryable = isRetryable(error);
       failures.push({ channel, message, retryable });
       if (!retryable) {
-        await registry.setCursor(failureKey(launch, channel), message);
+        await registry.cursors.setCursor(failureKey(launch, channel), message);
         // A retry of the channel is sent at once: its time has come already
         await registry.posts.clearSchedule(launch.id, channel);
       }
@@ -534,7 +534,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     // piece of it is scheduled, and publishing the launch would leave that piece waiting for ever
     const unpublishable = !publishers[c] && !(deps.keepUnpublishable && piecesNow.some((p) => p.channel === c && p.status === 'scheduled'));
     if (mode === 'off' || unpublishable || finished.has(c) || done(piecesNow, c) || later(piecesNow, c)) continue;
-    if (!(await registry.cursor(failureKey(launch, c))) && !(await registry.cursor(cancelledKey(launch.id, c)))) pending.push(c);
+    if (!(await registry.cursors.cursor(failureKey(launch, c))) && !(await registry.cursors.cursor(cancelledKey(launch.id, c)))) pending.push(c);
   }
   if (pending.length > 0 || scheduled.length > 0) return { state: 'partial', launch: (await registry.launches.get(launch.id))!, posted, problems, scheduled, failures, heldElsewhere };
   return { state: 'published', launch: await registry.launches.setStatus(launch.id, 'published', launch.detail), posted, problems, scheduled, failures, heldElsewhere };

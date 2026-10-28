@@ -20,7 +20,7 @@ export class MetricsService {
   /** Reads and records the numbers, and remembers when; one source failing never stops the others */
   async readNow(brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
     const result = await collectMetrics(this.#store, brand, sources, now);
-    await this.#store.setCursor(METRICS_AT_KEY, now.toISOString());
+    await this.#store.cursors.setCursor(METRICS_AT_KEY, now.toISOString());
     return result;
   }
 }

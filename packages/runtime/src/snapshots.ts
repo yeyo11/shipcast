@@ -66,7 +66,7 @@ async function readAudience(
   try {
     const audience = await instagram.audienceHours();
     if (!audience) return 'no online-follower hours given';
-    await deps.registry.setCursor(audienceKey(account.id), JSON.stringify({ ...audience, takenAt: now.toISOString() }));
+    await deps.registry.cursors.setCursor(audienceKey(account.id), JSON.stringify({ ...audience, takenAt: now.toISOString() }));
     return 'online-follower hours read';
   } catch (error) {
     return `online-follower hours not read: ${message(error)}`;

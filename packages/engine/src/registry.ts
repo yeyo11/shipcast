@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, like, lt, max, notInArr
 import type { Channel, Language } from '@shipcast/schema';
 import { connectPglite, connectPostgres, type Database } from './db/connect.ts';
 import { LaunchRepository } from './repositories/launches.ts';
+import { CursorRepository } from './repositories/cursors.ts';
 import { SettingRepository } from './repositories/settings.ts';
 import { MetricRepository } from './repositories/metrics.ts';
 import { PostRepository } from './repositories/posts.ts';
@@ -425,6 +426,7 @@ export class Registry {
   readonly #db: Database;
   readonly #close: () => Promise<void>;
   readonly launches: LaunchRepository;
+  readonly cursors: CursorRepository;
   readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
@@ -434,6 +436,7 @@ export class Registry {
     this.#db = db;
     this.#close = close;
     this.launches = new LaunchRepository(db);
+    this.cursors = new CursorRepository(db);
     this.settings = new SettingRepository(db);
     this.metrics = new MetricRepository(db);
     this.posts = new PostRepository(db);
@@ -484,31 +487,6 @@ export class Registry {
     const result: unknown = await this.#db.execute(query);
     if (Array.isArray(result)) return result as T[];
     return (result as { rows: T[] }).rows;
-  }
-
-  /** Small pieces of polling state, such as the ETag of the last events page; what the owner chooses is a setting */
-  async cursor(key: string): Promise<string | undefined> {
-    const [row] = await this.#db.select({ value: cursors.value }).from(cursors).where(eq(cursors.key, key));
-    return row?.value;
-  }
-
-  async setCursor(key: string, value: string): Promise<void> {
-    await this.#db.insert(cursors).values({ key, value }).onConflictDoUpdate({ target: cursors.key, set: { value } });
-  }
-
-  async deleteCursor(key: string): Promise<void> {
-    await this.#db.delete(cursors).where(eq(cursors.key, key));
-  }
-
-  /** Every cursor whose key starts with a prefix, such as the failures of one launch (`publish-failed:12:`) */
-  async cursorsWithPrefix(prefix: string): Promise<Array<{ key: string; value: string }>> {
-    // starts_with, not LIKE: a `_` in the prefix is a character, not a wildcard. Ordered bytewise, as
-    // SQLite did, whatever collation the database was created with
-    return this.#db
-      .select({ key: cursors.key, value: cursors.value })
-      .from(cursors)
-      .where(sql`starts_with(${cursors.key}, ${prefix})`)
-      .orderBy(sql`${cursors.key} COLLATE "C"`);
   }
 
   async accounts(filter: { brand?: string; network?: string } = {}): Promise<Account[]> {

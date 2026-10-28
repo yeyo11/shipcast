@@ -28,10 +28,10 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
   const etagKey = `events-etag:${owner}`;
   const lastKey = `events-last-id:${owner}`;
 
-  const page = await github.userEvents(owner, await registry.cursor(etagKey));
+  const page = await github.userEvents(owner, await registry.cursors.cursor(etagKey));
   if (page.notModified) return [];
 
-  const lastSeen = BigInt((await registry.cursor(lastKey)) ?? '0');
+  const lastSeen = BigInt((await registry.cursors.cursor(lastKey)) ?? '0');
   // Oldest first, so launches are claimed in the order they happened
   const fresh = page.events.filter((e) => BigInt(e.id) > lastSeen).reverse();
 
@@ -39,9 +39,9 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
   for (const event of fresh) {
     outcomes.push(await claimEvent(event, { github, registry, brand }));
     // Advanced per event, so a crash halfway through resumes where it stopped
-    await registry.setCursor(lastKey, event.id);
+    await registry.cursors.setCursor(lastKey, event.id);
   }
-  if (page.etag) await registry.setCursor(etagKey, page.etag);
+  if (page.etag) await registry.cursors.setCursor(etagKey, page.etag);
   return outcomes;
 }
 

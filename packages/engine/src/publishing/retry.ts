@@ -13,7 +13,7 @@ export { failureKey, failurePrefix, parseFailureKey };
  * channel stays failed for every other launch. Returns the launch as it is now.
  */
 export async function retryChannel(registry: Registry, launchId: number, channel: Channel, attempts?: PublishAttempts): Promise<Launch | undefined> {
-  await registry.deleteCursor(failureKey(launchId, channel));
+  await registry.cursors.deleteCursor(failureKey(launchId, channel));
   await attempts?.reset(launchId, channel);
   const launch = await registry.launches.get(launchId);
   if (!launch || launch.status !== 'published') return launch;
@@ -25,7 +25,7 @@ export async function retryChannel(registry: Registry, launchId: number, channel
 /** Try again on a channel for every launch it failed on (`shipcast publish --retry`); the launches reopened */
 export async function retryChannelEverywhere(registry: Registry, channel: Channel, attempts?: PublishAttempts): Promise<Launch[]> {
   const reopened: Launch[] = [];
-  for (const { key } of await registry.cursorsWithPrefix(failurePrefix())) {
+  for (const { key } of await registry.cursors.cursorsWithPrefix(failurePrefix())) {
     const parsed = parseFailureKey(key);
     if (!parsed || parsed.channel !== channel) continue;
     const before = await registry.launches.get(parsed.launchId);

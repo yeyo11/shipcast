@@ -81,9 +81,9 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
   assert.equal(first.launch.status, 'drafted', 'partial leaves the launch drafted');
   assert.deepEqual(await rows(registry, launch.id), ['blog article:en live claudio', 'devto post live devto-1', 'threads post live threads-1']);
   // Only the permanent failure is remembered, as a cursor holding the network's words
-  assert.equal(await registry.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found');
-  assert.equal(await registry.cursor(failed(launch.id, 'bluesky')), undefined);
-  assert.equal(await registry.cursor(failed(launch.id, 'discord')), undefined);
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'bluesky')), undefined);
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'discord')), undefined);
 
   const second = await publishLaunch((await registry.launches.get(launch.id))!, brand, deps);
   assert.ok(second.state === 'published');
@@ -98,7 +98,7 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
   assert.equal(second.launch.detail, launch.detail);
 
   // A retry of the channel, as the publish job does it: forget the failure, draft the launch again
-  await registry.deleteCursor(failed(launch.id, 'telegram'));
+  await registry.cursors.deleteCursor(failed(launch.id, 'telegram'));
   const retried = await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.ok(retried.state === 'published', 'failing for good again still publishes the launch');
   assert.deepEqual(retried.problems, [
@@ -106,10 +106,10 @@ test('mixed channels: what goes out, what is recorded, and what each kind of fai
     'telegram: Telegram: publish: 400 chat not found',
     'githubDiscussions: no piece in the pack or no credentials configured',
   ]);
-  assert.equal(await registry.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found', 'and is remembered again');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 400 chat not found', 'and is remembered again');
 
   fake.heal('telegram', 'publish');
-  await registry.deleteCursor(failed(launch.id, 'telegram'));
+  await registry.cursors.deleteCursor(failed(launch.id, 'telegram'));
   const healed = await publishLaunch(await registry.launches.setStatus(launch.id, 'drafted', launch.detail), brand, deps);
   assert.deepEqual(healed.state === 'published' && healed.posted, [{ channel: 'telegram', url: 'https://telegram.example/1' }]);
   assert.equal(fake.callsOf('telegram').length, 3);
@@ -130,8 +130,8 @@ test('what counts as temporary: 429, a ConnectorError with no status, anything w
     result.problems.filter((p) => !p.includes('no piece in the pack')),
     ['devto: dev.to: publish: 429 (will retry)', 'telegram: Telegram: publish: 500', 'discord: Discord: timed out (will retry)', 'threads: quota spent'],
   );
-  assert.equal(await registry.cursor(failed(launch.id, 'threads')), 'quota spent');
-  assert.equal(await registry.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 500');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'threads')), 'quota spent');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'telegram')), 'Telegram: publish: 500');
 });
 
 test('why a launch waits: no pull request recorded, its pull request open, no pack on main, an unreadable launch.yml; a direct launch skips the pull request', async () => {
@@ -196,7 +196,7 @@ test('a due scheduled piece that fails for good loses its row, and the launch is
   const result = await publishLaunch(launch, brand, { github: merged(ONLY_BLUESKY), registry, launchesRepo: LAUNCHES_REPO, publishers: fake.publishers(['bluesky']), fetch: site, now: clock.now });
   assert.deepEqual([result.state, result.state === 'published' && result.problems], ['published', ['bluesky: Bluesky: publish: 400 invalid']]);
   assert.deepEqual(await registry.posts.posts(launch.id, { channel: 'bluesky' }), [], 'the scheduled row is cleared');
-  assert.equal(await registry.cursor(failed(launch.id, 'bluesky')), 'Bluesky: publish: 400 invalid');
+  assert.equal(await registry.cursors.cursor(failed(launch.id, 'bluesky')), 'Bluesky: publish: 400 invalid');
 });
 
 test('a piece moved later waits for its new time', async () => {

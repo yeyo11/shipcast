@@ -112,7 +112,7 @@ test('settings hold what the owner chose, typed as it was stored', async () => {
   assert.equal(await registry.settings.setting<number>('automation:interval'), 600);
   await registry.settings.setSetting('nested', { a: [1, 2], b: null });
   assert.deepEqual(await registry.settings.setting('nested'), { a: [1, 2], b: null });
-  assert.equal(await registry.cursor('automation:mode'), undefined, 'not a cursor');
+  assert.equal(await registry.cursors.cursor('automation:mode'), undefined, 'not a cursor');
 });
 
 test('setStatus on an unknown launch throws instead of silently doing nothing', async () => {
@@ -123,16 +123,16 @@ test('cursors keep polling state across restarts, and the schema survives reopen
   const dir = mkdtempSync(join(tmpdir(), 'shipcast-registry-'));
   try {
     const first = await Registry.memory(dir);
-    await first.setCursor('events:yeyo11', 'W/"etag-1"');
+    await first.cursors.setCursor('events:yeyo11', 'W/"etag-1"');
     await first.launches.claim(release);
     await first.close();
 
     // Reopening runs the migrations again: already applied, they change nothing
     const reopened = await Registry.memory(dir);
-    assert.equal(await reopened.cursor('events:yeyo11'), 'W/"etag-1"');
+    assert.equal(await reopened.cursors.cursor('events:yeyo11'), 'W/"etag-1"');
     assert.equal((await reopened.launches.find('yeyo11/claudio', 'v0.9.0'))?.status, 'detected');
-    await reopened.setCursor('events:yeyo11', 'W/"etag-2"');
-    assert.equal(await reopened.cursor('events:yeyo11'), 'W/"etag-2"');
+    await reopened.cursors.setCursor('events:yeyo11', 'W/"etag-2"');
+    assert.equal(await reopened.cursors.cursor('events:yeyo11'), 'W/"etag-2"');
     await reopened.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -144,14 +144,14 @@ test('a channel that failed for good can be retried, without posting the others 
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
   await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/1');
   await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
-  await registry.setCursor(`publish-failed:${launch.id}:newsletter`, 'Brevo: 405');
-  await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
+  await registry.cursors.setCursor(`publish-failed:${launch.id}:newsletter`, 'Brevo: 405');
+  await registry.cursors.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
 
   const reopened = await retryChannelEverywhere(registry, 'newsletter');
   assert.deepEqual(reopened.map((l) => l.status), ['drafted']);
   assert.equal(reopened[0]!.detail, 'https://github.com/yeyo11/launches/pull/1', 'the pull request stays recorded');
-  assert.equal(await registry.cursor(`publish-failed:${launch.id}:newsletter`), undefined);
-  assert.equal(await registry.cursor(`publish-failed:${launch.id}:devto`), 'stale', 'other channels untouched');
+  assert.equal(await registry.cursors.cursor(`publish-failed:${launch.id}:newsletter`), undefined);
+  assert.equal(await registry.cursors.cursor(`publish-failed:${launch.id}:devto`), 'stale', 'other channels untouched');
   assert.deepEqual(await retryChannelEverywhere(registry, 'newsletter'), [], 'nothing left to retry');
 });
 
@@ -160,7 +160,7 @@ test('a retry leaves alone a launch whose channel already has its post', async (
   const { launch } = await registry.launches.claim(release);
   await registry.launches.setStatus(launch.id, 'published');
   await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', url: 'https://dev.to/x', externalId: '1' });
-  await registry.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
+  await registry.cursors.setCursor(`publish-failed:${launch.id}:devto`, 'stale');
   assert.deepEqual(await retryChannelEverywhere(registry, 'devto'), []);
   assert.equal((await registry.launches.get(launch.id))?.status, 'published');
 });
@@ -197,11 +197,11 @@ test('accounts added at once for a new network and brand get one primary between
 
 test('cursors are listed by prefix', async () => {
   const registry = await memory();
-  await registry.setCursor('publish-failed:1:devto', 'rejected');
-  await registry.setCursor('publish-failed:1:bluesky', 'down');
-  await registry.setCursor('publish-failed:12:devto', 'other launch');
-  await registry.setCursor('publish-failedX1:devto', 'not a match for a LIKE wildcard either');
-  assert.deepEqual((await registry.cursorsWithPrefix('publish-failed:1:')).map((c) => c.key), ['publish-failed:1:bluesky', 'publish-failed:1:devto']);
+  await registry.cursors.setCursor('publish-failed:1:devto', 'rejected');
+  await registry.cursors.setCursor('publish-failed:1:bluesky', 'down');
+  await registry.cursors.setCursor('publish-failed:12:devto', 'other launch');
+  await registry.cursors.setCursor('publish-failedX1:devto', 'not a match for a LIKE wildcard either');
+  assert.deepEqual((await registry.cursors.cursorsWithPrefix('publish-failed:1:')).map((c) => c.key), ['publish-failed:1:bluesky', 'publish-failed:1:devto']);
 });
 
 test('metrics keep every reading; the latest of each is the newest', async () => {

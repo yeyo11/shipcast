@@ -34,7 +34,7 @@ const HEADLINE: Array<[string, string, string]> = [
 
 export async function launchView(registry: Registry, launch: Launch): Promise<LaunchView> {
   const [cursors, metrics, posts, replies] = await Promise.all([
-    registry.cursorsWithPrefix(failurePrefix(launch.id)),
+    registry.cursors.cursorsWithPrefix(failurePrefix(launch.id)),
     registry.metrics.latestMetrics(launch.id),
     registry.posts.posts(launch.id),
     registry.sentReplies(launch.id),

@@ -43,11 +43,11 @@ export interface Happened {
 }
 
 export async function record(registry: Registry, key: string, happened: Happened): Promise<void> {
-  await registry.setCursor(key, JSON.stringify({ ...happened, lines: happened.lines.slice(-20) }));
+  await registry.cursors.setCursor(key, JSON.stringify({ ...happened, lines: happened.lines.slice(-20) }));
 }
 
 export async function lastHappened(registry: Registry, key: string): Promise<Happened | null> {
-  const raw = await registry.cursor(key);
+  const raw = await registry.cursors.cursor(key);
   try {
     return JSON.parse(raw ?? 'null') as Happened | null;
   } catch {

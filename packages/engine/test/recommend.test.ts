@@ -137,7 +137,7 @@ test('the registry’s history is the stats ranking’s popularity per network, 
 
   // The Instagram audience is read from the account's kept hours
   const account = await registry.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
-  await registry.setCursor(audienceKey(account.id), JSON.stringify({ timeZone: 'America/Los_Angeles', hours: Array.from({ length: 24 }, (_, h) => h), takenAt: '2026-07-01T00:00:00Z' }));
+  await registry.cursors.setCursor(audienceKey(account.id), JSON.stringify({ timeZone: 'America/Los_Angeles', hours: Array.from({ length: 24 }, (_, h) => h), takenAt: '2026-07-01T00:00:00Z' }));
   assert.equal((await recommendFor(registry, 'instagram', { now: SUMMER_MONDAY })).audience, true);
   await assert.rejects(recommendFor(registry, 'reddit'));
 });

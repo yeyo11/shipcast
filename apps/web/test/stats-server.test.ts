@@ -105,7 +105,7 @@ test('the search tab lists each article page with what each engine said, and the
   const { launch } = await seed(registry);
   const url = 'https://blog.example/en/claudio/';
   await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: 'a1', url });
-  await registry.setCursor(indexStatusKey(url), JSON.stringify({ indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
+  await registry.cursors.setCursor(indexStatusKey(url), JSON.stringify({ indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
   for (const [day, impressions] of [['12', 5], ['22', 40]] as const) await registry.metrics.recordMetrics(launch.id, 'search', { impressions, clicks: 1 }, at(day));
 
   const view = await loadSearch(registry, { from: '2026-09-26', to: TODAY });

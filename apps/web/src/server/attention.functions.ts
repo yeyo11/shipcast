@@ -11,7 +11,7 @@ async function readInput(): Promise<AttentionInput> {
   const { registry } = await appContext();
   const [launches, failures, accounts, facets, newest, scheduled] = await Promise.all([
     registry.launches.recent(60),
-    registry.cursorsWithPrefix(failurePrefix()),
+    registry.cursors.cursorsWithPrefix(failurePrefix()),
     registry.accounts(),
     registry.commentFacets(false),
     registry.newestWaitingCommentId(false),
