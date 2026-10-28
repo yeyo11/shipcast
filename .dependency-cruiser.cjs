@@ -47,8 +47,6 @@ const LEGACY_AI_FILES = [
   'packages/runtime/src/profiles.ts',
   'apps/web/src/server/assistant.ts',
   'apps/web/src/server/assistant.server.ts',
-  // Action mode, still on the old providers
-  'apps/cli/src/ci.ts',
   // Tests of the old path, or comparing it with the runner's
   'packages/engine/test/ai.test.ts',
   'packages/engine/test/article-review.test.ts',
@@ -57,7 +55,6 @@ const LEGACY_AI_FILES = [
   'packages/engine/test/claudio.test.ts',
   'packages/engine/test/comments.characterisation.test.ts',
   'packages/engine/test/comments.test.ts',
-  'packages/engine/test/fake-ai.test.ts',
   'packages/engine/test/generate.test.ts',
   'packages/engine/test/pack-runner.test.ts',
   'packages/engine/test/pipeline.test.ts',

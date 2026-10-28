@@ -2,13 +2,12 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util';
 import {
   checkout,
-  currentPrompts,
+  currentAiTexts,
   draftLaunch,
   GitHubApp,
   GitHubRest,
   launchConfigOf,
   loadBrand,
-  readAiSettings,
   connectRepositories,
   type Repositories,
   DEFAULT_ANTHROPIC_MODEL,
@@ -16,13 +15,12 @@ import {
   type Launch,
   type PipelineDeps,
 } from '@shipcast/engine';
-// LEGACY: Action mode still builds the old providers; it moves to the AI task runner before the old layer is removed
-import { anthropicProvider, fakePackProvider, openAiCompatibleProvider, openAiProvider, type AiProvider } from '@shipcast/engine/legacy-ai';
 import type { Brand } from '@shipcast/schema';
 import {
   BranchState,
   buildServices,
   channelPlan,
+  ciAiRunner,
   ciLaunch,
   ciPublish,
   ciRound,
@@ -72,36 +70,6 @@ class MemorySecrets implements SecretStore {
   }
   async delete(key: string): Promise<void> {
     this.#values.delete(key);
-  }
-}
-
-/** Stands in where a dry run asks for an AI: it never gets one, so an accidental call is loud */
-const NO_AI = 'no AI provider is configured (SHIPCAST_AI_PROVIDER, anthropic or openai, with ANTHROPIC_API_KEY or OPENAI_API_KEY)';
-const noAi: AiProvider = {
-  id: 'anthropic',
-  generateObject() {
-    throw new Error(NO_AI);
-  },
-  streamText() {
-    throw new Error(NO_AI);
-  },
-};
-
-/**
- * The provider a launch is drafted with. The fake one is built per launch, since its placeholder pack
- * names the launch it was asked for.
- */
-export function aiProviderOf(ai: CiAi | undefined, launch?: { launch: Launch; brand: Brand }): AiProvider {
-  if (!ai) return noAi;
-  switch (ai.kind) {
-    case 'anthropic':
-      return anthropicProvider({ apiKey: ai.apiKey });
-    case 'openai':
-      return openAiProvider({ apiKey: ai.apiKey });
-    case 'openaiCompatible':
-      return openAiCompatibleProvider({ baseUrl: ai.baseUrl, apiKey: ai.apiKey, model: ai.model });
-    case 'fake':
-      return launch ? fakePackProvider(launch.launch, launch.brand) : noAi;
   }
 }
 
@@ -186,7 +154,7 @@ function authenticatedCheckout(token: () => Promise<string>, workspaceDir: strin
     process.env.GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader';
     process.env.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${value}`).toString('base64')}`;
     try {
-      // The SDK providers read the clone on this machine, so the provider's view is the host's
+      // The runner's tools read the clone on this machine, so the provider's view is the host's
       return await checkout({ hostDir: workspaceDir, providerDir: workspaceDir }, repo, ref);
     } finally {
       for (const [name, v] of [['GIT_CONFIG_COUNT', saved.count], ['GIT_CONFIG_KEY_0', saved.key], ['GIT_CONFIG_VALUE_0', saved.value]] as const) {
@@ -201,19 +169,16 @@ function authenticatedCheckout(token: () => Promise<string>, workspaceDir: strin
 export type CiPipelineBase = Pick<PipelineDeps, 'github' | 'launchesRepo' | 'checkout' | 'fetch' | 'now'> & { registry: Repositories };
 
 /**
- * The pipeline a draft or a publish runs with: the AI the environment chose, and the owner's edited
- * prompts and tone from the registry. A draft passes its launch, which the fake provider's pack names.
+ * The pipeline a draft or a publish runs with: the AI the environment chose, on the AI task runner,
+ * and the owner's edited prompts and tone from the registry. The AI settings' choice of provider is
+ * the server's and is not read. A draft passes its launch, which the fake provider's pack names.
+ *
+ * The runner is unconditional here. `ai-runner` is the server's rollout switch (SHIPCAST_FLAGS); the
+ * Action has no flags, so a SHIPCAST_FLAGS a workflow happens to set is not read for the AI, and Action
+ * mode never runs on the old layer.
  */
 export function ciPipeline(ai: CiAi | undefined, base: CiPipelineBase, launch?: { launch: Launch; brand: Brand }): PipelineDeps {
-  const { registry } = base;
-  const provider = aiProviderOf(ai, launch);
-  const model = ai && 'model' in ai ? ai.model : undefined;
-  return {
-    ...base,
-    ai: provider,
-    // The edited prompts and the tone override live in the registry; the provider is always CI's own
-    aiSetup: async () => ({ provider, ...(model && { model }), prompts: await currentPrompts(registry), tone: (await readAiSettings(registry)).tone }),
-  };
+  return { ...base, aiRunner: ciAiRunner(ai, launch), aiTexts: () => currentAiTexts(base.registry) };
 }
 
 /** Everything a `ci` command needs, built from the environment */
