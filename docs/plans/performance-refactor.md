@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-28T09:09:39.179624399Z
-updated_at: 2026-10-28T09:09:39.179624399Z
+created_at: 2026-10-28T09:26:08.212715688Z
+updated_at: 2026-10-28T09:26:08.212715688Z
 tags:
     - plan
     - performance
@@ -11,308 +11,468 @@ tags:
     - metrics
     - providers
     - observability
+    - architecture
+    - solid
+    - scaling
 ---
-# Plan: fewer provider calls, a fast app, Redis for queues, caches and events
+# Plan: fewer provider calls, a fast app, clean architecture, ready to scale out
 
 Written on 2026-10-28 with the owner, after the REA article's launch page took 5 s to load, re-read
-GitHub every 5 s and ended in "Failed to fetch". This is the **plan only**: nothing here is built
-yet. It replaces the stop-gap fixes of that day (`0e2189b`, `f48c96a`) with a design that scales, and
-it is measured before and after so the result is a number, not an impression.
+GitHub every 5 s and ended in "Failed to fetch". It was widened the same day: the code must follow
+SOLID and reuse one implementation of each piece of logic through services, and Shipcast must run as
+several replicas and workers without failing. This is the **plan only**: nothing here is built yet.
+It replaces the stop-gaps of that day (`0e2189b`, `f48c96a`, and `7ed9732`, which copied
+`draftBody` into the web app), and it is measured before and after.
 
 ## Goals and the rule above them
 
-1. **Spend as little as possible on external providers**: fewer calls, smaller calls, no repeated
-   reads of data that did not change, every quota watched.
-2. **A fast app**: a page reads the registry only, never a provider, and updates when something
-   changes instead of polling.
-3. **Durable, scalable background work** on Redis (BullMQ), with per-provider rate limits.
+1. **Spend as little as possible on external providers**: fewer and smaller calls, no repeated reads
+   of unchanged data, every quota watched.
+2. **A fast app**: pages read the registry only and update on events, not by polling.
+3. **Clean, reusable code**:
+   - one implementation of each use case and each rule, reached by every entry point (web, REST API,
+     MCP, CLI, workers) through services;
+   - SOLID throughout;
+   - adding a network means one module, not forty edits.
+4. **Horizontal scale**: N web replicas and N workers of each kind, stateless, with no lost writes,
+   no double posts and no per-process truth.
 
-**The rule: no saving may cost correctness.** Postgres stays the only source of truth. Redis holds
-queues, short-lived caches, counters and events, all of which can be lost and rebuilt. A cached
-answer is only served when it is *known* to be current (validated by the provider's ETag, or
-invalidated by an event); anything else is read again. Every number shown keeps the time it was read
-at, so a stale value can never pass for a fresh one.
+**The rule: no saving and no refactor may cost correctness.**
+- Postgres stays the only source of truth.
+- Redis holds queues, caches, counters, locks and events, all of which can be lost and rebuilt.
+- A cached answer is served only when it is known to be current (validated by the provider's ETag,
+  or invalidated by an event).
+- Every number keeps the time it was read.
+- Behaviour is pinned by tests before code moves.
 
 ## Decisions taken with the owner (2026-10-28)
 
 | Question | Decision |
 | --- | --- |
-| Redis's role | **Everything**: BullMQ replaces pg-boss for the queues, schedules and crons; Redis also for caches, quotas and pub/sub. This reverses [decisions/job-queue.md](../decisions/job-queue.md)'s "no new server", which is why it needs its own decision document |
-| Metrics freshness | **Every hour, always**, for every live post; never read more often than the provider itself updates the number (below) |
-| Webhooks | **Expose only `/api/github/webhook`** to the internet, signed with HMAC; polling becomes a slow safety net |
-| Measurement | **48 h of baseline before, 48 h after**, same instrumentation, same calendar shape (weekday to weekday) |
+| Redis's role | **Everything**: BullMQ replaces pg-boss for queues, schedules and crons; Redis is also used for caches, quotas, locks, shared ephemeral state and pub/sub. Supersedes part of [decisions/job-queue.md](../decisions/job-queue.md) in a new decision document |
+| Metrics freshness | **Every hour, always**, for every live post, never faster than the provider updates the number |
+| Webhooks | **Only `/api/github/webhook` is public**, HMAC first; polling becomes a slow safety net |
+| Measurement | **48 h of baseline before, 48 h after**, weekday to weekday |
+| Scale target | **The owner's installation with N replicas** (one owner and their brands; no multi-tenant model) |
+| Secrets | **An encrypted table in Postgres** (envelope encryption with the environment's master key, atomic per-row writes); the OS keychain stays for a local install |
+| Processes | **web + worker + heavy worker**, each scaled on its own |
+| Refactor approach | **Incremental, protected by tests**: characterisation tests first, one piece moved at a time, production never broken |
 
 ## Where it stands: measured on 2026-10-28
 
-Production on `apps-1` (8 cores, 23 GB, Postgres 17), 12 connected accounts, 6 launches, 34 posts.
+Production on `apps-1` (8 cores, 23 GB, Postgres 17), 12 connected accounts, 6 launches, 34 posts,
+about 42,000 lines of source in 103 test files' worth of coverage.
 
 | What | Value |
 | --- | --- |
 | Launch page (REA article), document load | **5.2 s** |
-| `getLaunch` server function | **4.7 s**; the shell's four other calls 60–100 ms |
-| Reading the 13 drafts of one PR from GitHub one by one | ~6 s |
-| Launch page while a job "runs" | reloads every 5 s: ~18 GitHub calls per reload, ~200 calls/min per open tab |
-| Rounds in 24 h | 280 (every 300 s), 2.8 s average |
-| Comment runs in 24 h | 47 (every 30 min), 4.0 s average |
-| Metric runs in 24 h | 4 (every 6 h), 39.4 s average; 372 readings stored |
-| Provider calls per day, per provider | **not counted anywhere today**: phase 0 adds it |
+| `getLaunch` server function | **4.7 s** (the shell's four other calls take 60–100 ms) |
+| Reading one PR's 13 drafts from GitHub, one by one | ~6 s |
+| Launch page while a job "runs" | reloads every 5 s, ~18 GitHub calls per reload, ~200 calls/min per open tab |
+| Rounds / comment runs / metric runs in 24 h | 280 (2.8 s avg) / 47 (4.0 s) / 4 (39.4 s; 372 readings) |
+| Provider calls per day | **not counted anywhere today** (phase 0 adds it) |
 
-## What the inventory found
+## What the audits found (2026-10-28)
 
-The full inventory (every outbound call, file and trigger) was taken from the code on 2026-10-28. The
-waste, by size:
+### Provider calls
 
-1. **Pages read providers.** `getLaunch` reads the drafts pull request (PR, files, one `contents` per
-   draft) and `launch.yml` from GitHub on every view, merged PRs included, and every 5 s while a job
-   runs. `brand()` is read from GitHub every 5 minutes per process.
-2. **Polling instead of events.** 288 rounds a day poll GitHub events (with ETag, the one conditional
-   request in the codebase). The UI polls in four places (launch list 5 s, launch page 5 s, Automation
-   4 s, the bell 3 min), each re-running every loader of the route, the shell's included.
-3. **N+1 loops against APIs.**
-   - Metrics: one call per post on dev.to, Bluesky, Mastodon, Instagram, Threads, Hashnode, Brevo
-     and Discussions.
-   - Per URL: one call on Cloudflare, two on Google, two on Bing. GitHub repo stats are read once per
-     launch, not once per repo.
-   - The dev.to article list is paginated again for every post.
-   - Comments: per post, every 30 minutes, with a **new connector per post**, so `/me` and
-     `verify_credentials` repeat for every post, and Bluesky opens a new session per reply.
-4. **Unbatched endpoints that batch.** Bluesky `getPosts` takes 25 URIs per call; Cloudflare's
-   GraphQL can group by path; GitHub GraphQL `nodes(ids:)`; Meta's batch requests.
-5. **Rarely-changing data read again.**
-   - `launch.yml`, `pack.json` and `projects.yml` are re-read on every attempt.
-   - The index status of URLs that are already indexed is inspected 4×/day.
-   - Old launches' metrics are read forever.
-   - A fresh `git clone` is made per comment run, even for an immutable tag.
-6. **Tokens and sessions** live as long as one connector instance (Search Console, Reddit,
-   Bluesky), so they are minted again for every job.
-7. **A correctness gap.** The round's publish step and a `publish` job can publish the same launch
-   at once. `busy()` is check-then-act, and most channels are only protected by the unique `posts`
-   row written *after* the network call.
+- **Pages read providers.**
+  - `getLaunch` reads the drafts PR and `launch.yml` from GitHub on every view, every 5 s while a
+    job runs.
+  - `brand()` is read from GitHub every 5 min per process.
+- **Polling instead of events.** There are 288 rounds a day. The UI polls in 4 places, each
+  re-running every loader of the route.
+- **N+1 loops.**
+  - Metrics: one call per post on 8 networks, plus Cloudflare 1, Google 2 and Bing 2 per URL; GitHub
+    stats once per launch, not per repo; the dev.to list re-paginated per post.
+  - Comments: per post every 30 min, with a new connector per post, so `/me`, `verify_credentials`
+    and Bluesky sessions repeat.
+- **Batch endpoints unused**: Bluesky `getPosts` (25 per call), Cloudflare grouped by path, GitHub
+  `nodes(ids:)`, Meta batches.
+- **Rarely-changing data re-read.**
+  - `launch.yml`, `pack.json` and `projects.yml` on every attempt.
+  - Index status of already-indexed URLs, 4×/day.
+  - Old launches' metrics, forever.
+  - A fresh clone per run.
+- **Tokens and sessions** live one connector instance long.
+- **Only one conditional request** exists (GitHub events); there are **no HTTP timeouts** anywhere
+  (no `AbortSignal.timeout`) and no handling of `Retry-After`.
 
-## The design
+### Correctness
 
-### 1. Redis on the server, two roles kept apart
+- The round's publish step and a `publish` job can publish the same launch at once: `busy()` is
+  check-then-act, and most channels are protected only by the unique `posts` row written *after*
+  the network call.
+- Retry state travels as strings: the cursor key `publish-failed:<launch>:<channel>` is built in 7
+  places, and `' (will retry)'` is appended to a message and later searched for.
 
-- **`redis-queue`**: BullMQ needs `maxmemory-policy noeviction` and durable writes. It runs with AOF
-  (`appendfsync everysec`) on a volume, is backed up with the stack, and is never a cache.
-- **`redis-cache`**: `allkeys-lru`, no persistence. Losing it costs only re-reads.
+### Code structure
 
-Both are private to the Docker network, with a password, Redis 7 (or Valkey 8). Two instances rather
-than two logical databases, because the eviction policy is per instance.
+1. **No channel abstraction.**
+   - Adding one network touches **more than 25 tables and switches in about 40 places** across
+     schema, engine, runtime, web, CLI and MCP: `CHANNELS`, `LIMITS`, `PIECE_LIMITS`, prompts, draft
+     blocks, `CHANNEL_FILES`, `Publishers`, `CAPABILITIES`, `Editors`, comment tables, `ADAPT_TARGETS`,
+     catalog switches, the `services.ts` wiring blocks, `CHANNEL_NAMES` and `DRAFT_CHANNELS`…
+   - They have **already drifted**: Threads has no icon, `DRAFT_CHANNELS` lacks three networks, and
+     `draftPrefill` never matches `github-discussion.md` or `newsletter-xx.md`.
+2. **God objects.**
+   - `Registry`: about 77 methods across 12 areas in one class of about 1,040 lines.
+   - `publishLaunch`: 356 lines, with 12 publisher closures inline.
+   - `workHandlers`: 11 inline handlers.
+   - The REST `ROUTES` table: about 430 lines.
+   - `LaunchPage`: about 270 lines.
+3. **No application-service layer.**
+   - Web server functions call the registry directly (about 40 calls across 5 files).
+   - Use cases are implemented more than once:
+     - retry: web/API, the publish job and the CLI each have their own, with different semantics;
+     - multi-edit: re-implemented in `post-actions.ts` instead of calling `editPosts`;
+     - publish and notify: both in the queue handler and in `rounds.ts`;
+     - error-to-HTTP mapping: three near-identical wrappers plus a fourth.
+   - Business rules live in web modules (`pieces.ts`, 575 lines).
+4. **Duplication.**
+   - The front-matter regex appears 3 times.
+   - `draftBody` appears twice (once copied on 2026-10-28).
+   - The PR-number regex appears 3 times.
+   - `LANGUAGE_NAMES` appears twice.
+   - Channel display names appear in **11 maps** that disagree.
+   - Article URL wrappers, `Refused` error classes of the same shape (4), per-connector token caching
+     (4) and connector wiring written three times.
+5. **No shared base error type, no logger** (output goes through `console.*`, `job.log` and injected
+   callbacks), and GitHub fakes hand-written in 12+ test files.
+
+### Horizontal scale
+
+Every web process is also a full worker (`context.server.ts:113` calls `startWorking`).
+
+| Hazard | Severity |
+| --- | --- |
+| Secrets in a local encrypted file rewritten whole (lost writes across processes), or in the per-machine keychain | blocker |
+| `workspace/` clones shared with claudio by a host mount; names depend only on repo and ref, and each checkout deletes the other's | blocker |
+| OAuth `state` in memory: a callback reaching another replica fails | blocker |
+| Session key and API-token pepper created on first use with no lock: two replicas can create different ones | high |
+| GitHub user-token refresh guarded per process: two replicas refresh with the same refresh token, the second fails and **deletes the good token** | high |
+| Settings held per process: a save reaches only the replica that took it | high |
+| API failure limiter per process, and behind a proxy every client is the proxy | high |
+| Console sign-in links per process | high |
+| Heavy work (git, Chromium, ffmpeg, satori, claudio polling up to 30 min) inside web processes; long AI work inside a web request | high |
+| TLS issued per instance outside proxy mode | high |
+| GitHub App installation cache refreshed only on the replica that got the webhook | medium |
+| Boot-time reconcile can fail a draft that is just starting; boot re-sends crons and moves the round on every start | medium |
+| About 15 DB connections per replica (postgres.js 10 + pg-boss 4 + migrator): about 6 replicas fit the default 100 | medium |
+| Shutdown does not drain HTTP; a draft killed mid-run waits 2 h; no readiness check | medium |
+| Brand cached per process; webhook redeliveries re-queued; display cursors last-write-wins | low |
+
+Already safe across processes:
+- migrations under an advisory lock;
+- pg-boss cron and stately keys;
+- unique claims with `ON CONFLICT DO NOTHING`;
+- advisory locks on accounts and schedules;
+- compare-and-set for comment replies;
+- GitHub sign-in state in a cookie;
+- a stateless MCP endpoint;
+- job state read from Postgres.
+
+## Target architecture
+
+### Layers and the dependency rule
+
+```text
+entry points   web server functions · REST API · MCP (via the API) · CLI · workers' job handlers
+                 ↓  validate input, call ONE application service, map the result; no logic
+application    services (use cases)
+                 ↓  depend on ports (interfaces) only
+domain         schema, rules, channel definitions, value objects (pure, no I/O)
+                 ↑  implemented by
+adapters       Postgres repositories · BullMQ · Redis cache/locks/events · HttpClient · connectors · GitHub · AI
+```
+
+- **Application services**, one per area, are the only place a use case lives:
+  - `LaunchService` (detect, claim, draft, approve);
+  - `PublishingService` (publish a launch, retry a channel);
+  - `PostService` (edit, delete, multi-edit);
+  - `ScheduleService`, `CommentService`, `MetricsService`, `AccountService`, `DraftService`
+    (snapshot, refresh, edit);
+  - `SettingsService`, `NotificationService`.
+
+  Each is reused by every entry point. Retry, multi-edit, publish+notify and error mapping each
+  exist once.
+- **Ports** (interface segregation): `LaunchRepository`, `PostRepository`, `MetricRepository`,
+  `JobRepository`, `SecretStore`, `Queue`, `Cache`, `Lock`, `EventBus`, `Clock`, `Logger`,
+  `HttpClient`, and the channel capabilities below. Services take only the ports they use.
+- **Composition roots**, one per process type: web, worker, heavy worker, CLI, GitHub Action. They are
+  the only places adapters are built. They replace `appContext()` being reached from 30 files and
+  `buildServices` being called from 7.
+- **A guard**: dependency rules checked in CI (dependency-cruiser):
+  - entry points never import repositories or connectors;
+  - the domain imports nothing with I/O;
+  - web modules hold no business rules.
+
+  Size budgets (file and function length) are warned on in review.
+
+### One definition per channel (open/closed)
+
+Each network becomes **one module** that exports a `ChannelDefinition`:
+
+- id, display names (one source of truth for every label);
+- language rules;
+- its content-pack schema piece and prompt brief;
+- the draft file it writes and how it is read back;
+- limits and how they are counted;
+- capabilities;
+- connector factory and credential/OAuth spec;
+- metric cadence;
+- rate-limit policy;
+- icon id.
+
+A `channels` registry lists them. Every table that is keyed by channel today is derived from it.
+Behaviour is split into **capability interfaces**, and a connector implements only what its network
+offers:
+- `Publisher`, `Editor`, `Deleter`;
+- `MetricReader` (batch-first: many posts per call);
+- `CommentFeed` (notifications since a cursor), `Replier`;
+- `ProfileReader`, `ProfileEditor`.
+
+**Contract tests** run every channel through the same suite. Adding a network becomes one folder plus
+one line in the registry.
+
+### Publishing as a state machine, not strings
+
+- `publishLaunch` becomes `PublishingService`, which runs each channel's `Publisher` as a strategy.
+- Each piece has a persisted state (`pending → attempting → live | retryable | failed`) in an
+  attempt row (outbox), written under a per-piece lock before any network call.
+- Typed results replace the `publish-failed:` cursor-key strings and `' (will retry)'`.
+
+### The registry split by aggregate
+
+- The `Registry` god-class becomes repositories, one per aggregate:
+  - launches, posts and attempts, metrics, accounts and snapshots;
+  - jobs, comments, settings, typed cursors, API tokens, assistant sessions, attention.
+- They sit on the same Drizzle schema.
+- A thin `Registry` facade delegates to them during the migration and is removed at the end
+  (strangler).
+
+### Cross-cutting, written once
+
+- **`HttpClient`**: every connector and the GitHub client use one HTTP layer. It provides:
+  - a timeout on every call (`AbortSignal.timeout`);
+  - retries with backoff that honour `Retry-After`, on idempotent requests only;
+  - rate-limit header parsing into the quota counters;
+  - the ETag cache;
+  - the per-call instrumentation;
+  - error mapping.
+
+  Token and session caching is one `TokenCache` (Redis, with a lock around refresh), not four
+  hand-written versions.
+- **Errors**: one `ShipcastError` base with a code, `retryable` and an HTTP status, mapped to HTTP in
+  one place for the API and the pages.
+- **Logging**: a structured logger (pino) with request and job correlation ids, replacing
+  `console.*`. OpenTelemetry tracing is optional, behind the same interface.
+- **Shared helpers**: front matter, draft body, PR number, article URL, language names. Each lives
+  once in the domain package, and the duplicates (including the copy made on 2026-10-28) are
+  removed.
+- **A shared test kit**:
+  - fakes for GitHub, every capability, Redis, the clock and the queue;
+  - registry fixtures;
+  - contract suites.
+
+  It replaces the hand-written fakes in 12+ files.
+
+## Scaling out: process types and shared state
+
+| Process | Runs | Scales by |
+| --- | --- | --- |
+| **web** | HTTP, SSE, server functions; enqueues work, never runs it | requests |
+| **worker** | publish, scheduled posts, metrics, comments (reads), snapshots, token refreshes, deliveries, rounds | queue depth, per-provider limits |
+| **heavy worker** | drafting, articles, assets (satori, Chromium, ffmpeg), comment replies with AI, profile reviews, assistant checks | AI and CPU jobs |
+
+The heavy worker runs **claudio as its sidecar** with its own ephemeral volume. Workspaces are
+**per job** (a unique directory, removed at the end), so no two jobs share a clone and no host mount
+is shared across machines.
+
+| Hazard | Fix |
+| --- | --- |
+| Secrets file or keychain | **Encrypted `secrets` table in Postgres**: each value is encrypted with a data key wrapped by the master key from the environment; one row per secret, atomic writes, a version column for optimistic concurrency. The keychain stays only for a local single install |
+| Session key and API pepper race | Created once under an advisory lock, or provisioned in the bootstrap environment; read once per process and cached |
+| GitHub user-token refresh | A distributed lock; inside it, re-read the token, refresh only if still due, write, release; never delete a token that another replica just wrote |
+| OAuth `state`, console links | Redis, single use, with a TTL |
+| Settings per process | Settings in Postgres, a `settings.changed` event on the bus; every replica reloads on it |
+| GitHub App installation cache, brand | `redis-cache`, invalidated by `installation*` and `push` webhooks for every replica at once |
+| API failure limiter | Redis counters keyed by client; the client address taken from a trusted proxy header |
+| Boot side effects | Crons as BullMQ job schedulers (idempotent); reconcile as a job under a lock, never at boot; the round never moved by a restart |
+| Long AI work in a request | A heavy-worker job whose progress streams to the page over SSE |
+| DB connections | PgBouncer (transaction mode) in front of Postgres; pool sizes set per process type |
+| Shutdown and health | Graceful drain: stop taking HTTP and jobs, finish or hand back running jobs (BullMQ lock renewal), then exit. `/livez` and `/readyz` (DB and Redis ping, draining state) |
+| TLS | Proxy mode only on the server; certificates are the proxy's job |
+| Webhook redeliveries | Dedupe by `X-GitHub-Delivery` in Redis |
+| SSE across replicas | Redis pub/sub fan-out; no sticky sessions needed |
+
+## Provider efficiency and freshness (unchanged from the first version)
+
+### 1. Redis, two instances
+
+- **`redis-queue`**: `noeviction`, AOF `everysec`, on a volume, backed up with the stack.
+- **`redis-cache`**: `allkeys-lru`, no persistence.
+
+Both are private to the Docker network, password protected, Redis 7 (or Valkey 8).
 
 ### 2. Queues on BullMQ
 
-- **Mapping.**
-  - Each pg-boss queue becomes a BullMQ queue with the same policy.
-  - Stately keys become `jobId` dedupe: `round`, `launch:<id>`, `post:<id>`, `account:<id>`.
-  - Retries and delays become `attempts` with backoff.
-  - Crons become **job schedulers** (`upsertJobScheduler`), sent once whichever process runs them.
-- **Scheduled posts** become delayed jobs with `jobId = post:<id>`. Postgres's `posts.scheduled_at`
-  stays the truth: every start, and every 10 minutes, the posts table is reconciled with the delayed
-  jobs, so a lost Redis rebuilds the schedule.
-- **The `jobs` table stays** as the audit and the UI's list, written from BullMQ's events.
-- **Per-provider rate limits** come from one queue per provider family for network calls
-  (`net:github`, `net:meta`, `net:bluesky`…), each with BullMQ's limiter set from that provider's
-  published limits and the remaining quota it reports (below).
-- **Correctness first.** Every publish goes through the `publish` queue with `jobId = launch:<id>`;
-  the round only *enqueues*. Before any network write, an **attempt row** (outbox) is written in
-  Postgres under a per-piece lock (`SELECT … FOR UPDATE`, or a Redis lock with a fencing token
-  checked by the row). The provider's idempotency key is sent where one exists. A retry reconciles
-  with the network first (`find`, as Reddit does today) when there is no key.
-- **Cutover.** pg-boss is drained (no new jobs, running ones finish), then BullMQ starts from the
-  Postgres truth: drafted launches, scheduled posts, crons. pg-boss's schema stays read-only for a
-  week, then is dropped.
-- **Tests**: BullMQ needs a real Redis. Tests use a throwaway `redis-server` started per test run
-  (testcontainers, or the binary in CI); the registry keeps PGlite.
-- **GitHub Action mode** keeps working without Redis: it has no queue today, and keeps its
-  registry-snapshot path.
+- Stately keys become `jobId` dedupe, and crons become job schedulers.
+- Scheduled posts become delayed jobs `post:<id>`, reconciled with `posts.scheduled_at` at start and
+  every 10 minutes.
+- The `jobs` table stays as the audit, fed by BullMQ events.
+- Network calls are limited per provider, from the quota each provider reports.
+- Cutover: drain pg-boss, then start BullMQ from the Postgres truth.
+- Tests use a throwaway Redis. The GitHub Action mode keeps working without Redis.
 
-### 3. GitHub: events in, conditional requests out
+### 3. GitHub by events
 
-- **Public webhook, and only that.** `/api/github/webhook` is reachable from the internet (a
-  Cloudflare Tunnel, or a Traefik route that admits that path alone). Everything else stays
-  tailnet-only. The HMAC signature is checked before anything else, and deliveries are deduped by
-  `X-GitHub-Delivery` in Redis (24 h).
-- **Events that replace reads.**
-  - `release`, `repository` (made public) and `installation*` as today.
-  - `pull_request` (`opened`, `synchronize`, `closed`) on the launches repo refreshes that launch's
-    drafts snapshot.
-  - `push` to the launches repo's `main` invalidates `brand.yml`, `projects.yml` and the
-    `launch.yml`/`pack.json` of the paths it touched.
-- **Polling becomes a safety net**: once an hour (configurable), still conditional (ETag), so a
-  missed delivery is caught.
-- **Drafts in the registry.** A new table (additive migration) holds each draft's path, kind,
-  content, blob `sha` and when it was read. It is written:
-  - when Shipcast opens the PR;
-  - on every edit Shipcast saves;
-  - on `pull_request.synchronize`;
-  - on the merge.
+- **The public webhook.**
+  - `pull_request` refreshes the drafts snapshot.
+  - `push` to the launches repo's `main` invalidates `brand.yml`, `projects.yml` and the touched
+    `launch.yml`/`pack.json`.
+  - `release`/`installation` work as today.
+- **Hourly conditional polling** as a safety net.
+- **The drafts snapshot table**:
+  - written when the PR is opened, on every edit, on `synchronize` and on merge;
+  - pages read it, with **Refresh from GitHub** to force a read;
+  - every GitHub GET goes through the ETag cache (a 304 is free and proves the body is current);
+  - repo stats are read once per repo;
+  - clones of immutable tags are reused within a heavy worker.
 
-  The launch page and the API read it; GitHub is never called from a page. **Refresh from GitHub**
-  forces a read, compared by `sha`.
-- **One HTTP cache for every GitHub GET** (in `GitHubRest`): the body and ETag in `redis-cache`, sent
-  back as `If-None-Match`. A 304 does not count against the installation's 5,000/h, and the body is
-  known to be current. This covers `contents`, repos, releases, PRs and traffic.
-- **Repo stats once per repo per run**, not once per launch. **Clones** of immutable tags are kept by
-  `sha` and reused.
+### 4. Networks
 
-### 4. Networks: reuse, batch, read only what can have changed
-
-- **One connector per account per run**, shared by every post of that run. Sessions and tokens (the
-  Bluesky session, Reddit, Search Console OAuth) are cached in `redis-cache` until just before they
-  expire. Own-identity lookups (`/me`, `verify_credentials`) are cached for a day and invalidated
-  when the account is reconnected.
-- **Batching.**
-  - Bluesky `getPosts`, 25 per call.
-  - Cloudflare: one RUM query grouped by `requestPath` for every article.
-  - dev.to: one `/articles/me/all` per run, shared.
-  - GitHub Discussions: `nodes(ids:)`.
-  - Meta: batch requests where the Graph API allows them.
-  - Brevo: one statistics call per campaign list.
-- **Comments from notification feeds, not per post**:
-  - Mastodon `notifications?types[]=mention&since_id=`;
-  - Bluesky `listNotifications` with a cursor;
-  - Threads/Instagram replies with `since`.
-
-  Each feed is **one call per account** instead of one per post. dev.to has no feed and stays per
-  article, on its comment count first.
-- **Quotas watched**: every response's rate-limit headers (`X-RateLimit-*`, Meta's
-  `X-App-Usage`/`X-Business-Use-Case-Usage`, Bluesky's `ratelimit-*`) update a per-provider counter
-  in Redis. The limiter slows down before the limit. A **circuit breaker** pauses a provider after
-  repeated 429/5xx and resumes it with backoff, and the app shows it on Channels.
+- One connector per account per run; sessions, tokens and identities cached in Redis.
+- **Batching**: Bluesky 25 posts per call, Cloudflare one query, one dev.to list per run, GitHub
+  `nodes(ids:)`, Meta batches, Brevo.
+- **Comments from notification feeds**, one call per account.
+- **Quotas watched** from the rate-limit headers, with breakers on repeated 429/5xx shown on Channels.
 
 ### 5. Metrics every hour, never faster than the source
 
-The owner chose hourly reads for every live post. Each source is read **every hour, or at the
-pace its provider updates the number, whichever is slower**. Reading faster costs quota and adds no
-truth:
-
 | Source | Cadence | Why |
 | --- | --- | --- |
-| Bluesky, Mastodon, dev.to, Hashnode, Threads, Instagram, Discussions, Brevo, Cloudflare RUM | hourly, batched | they change within the hour |
-| GitHub stars | hourly (one call per repo, conditional) | live number |
-| GitHub traffic (views, clones) | daily | GitHub buckets it by day |
-| Google Search Console analytics | daily | data lags 2–3 days |
-| Google URL inspection | daily until indexed, then weekly | 2,000 inspections/day per property |
-| Bing traffic and URL info | daily | daily data |
+| Bluesky, Mastodon, dev.to, Hashnode, Threads, Instagram, Discussions, Brevo, Cloudflare RUM | hourly, batched | changes within the hour |
+| GitHub stars | hourly, conditional | live |
+| GitHub traffic | daily | bucketed by day |
+| Search Console analytics | daily | 2–3 days of lag |
+| Google URL inspection | daily until indexed, then weekly | 2,000 per day per property |
+| Bing | daily | daily data |
 
-- Every reading keeps the provider's own "as of" when it gives one, and Shipcast's `checked_at`.
-- An hourly run that finds a value unchanged still records that it checked. The page says "checked
-  at", so the user always knows how fresh a number is.
-- **Open point for the owner**: whether an unchanged value adds a new row (the series as today) or
-  only moves `checked_at` on the last one (a smaller table, the same truth). It is decided before
-  phase 4.
+Each reading keeps the provider's "as of" and Shipcast's `checked_at`, and the page says when it was
+checked.
 
-### 6. A live app without polling
+### 6. A live UI
 
-- **One SSE stream** (`/api/events`, behind the session) per tab. The server subscribes to a Redis
-  pub/sub channel. Every process (app, `watch`, workers) publishes there when a job changes state,
-  a post is recorded, a launch changes or a comment arrives.
-- **Events carry what changed**, not the data, for example `{ type: 'launch', id: 6 }`. The client
-  invalidates only the matching loader, so a launch's event never reloads the shell.
-- **Reconnection** with `Last-Event-ID` and a short replay buffer in Redis (a capped stream). On a
-  gap, one full reload.
-- **Removed**: the four `setInterval`s. A 60 s safety reload remains only while the stream is down.
+- **One SSE stream per tab** over Redis pub/sub.
+- **Events name what changed**, so only the matching loader reloads.
+- **Reconnect** with `Last-Event-ID`.
+- **The four `setInterval`s are removed.**
 
 ### 7. Pages read the registry only
 
-- Loaders query Postgres, in parallel, with indexes for their queries.
-- Shared, heavy aggregates (the launch list's numbers, stats) are cached in `redis-cache` under a
-  **version key** bumped by the events that change them. That is invalidation, not a TTL guess.
-- **A test fails** if a page's server function makes any external call: a fetch guard in the web
-  tests.
+- Parallel, indexed queries.
+- Heavy aggregates cached under version keys bumped by events.
+- **A test fails** if a page's server function makes an external call.
 
 ## Instrumentation and the before/after comparison
 
-**Phase 0 builds it first and changes nothing else.**
+**Phase 0 instruments and changes nothing else.**
+- **Every outbound call**: provider, endpoint template, status, latency, bytes, 304, cache hit or
+  retry, and quota headers. Stored hourly in `provider_calls`, with raw samples in Redis for a day.
+- **Pages**: `Server-Timing` per server function, stored per hour (p50, p95, p99), plus scheduled
+  browser timings of fixed pages.
+- **Jobs**: duration, attempts, queue wait and failures.
+- **Freshness**: the age of each post's newest reading per source.
+- **Correctness**: a daily check of the registry against every connected account, plus duplicates
+  and missed schedules.
 
-- **Every outbound call is counted** by one wrapper around `fetch` in the connectors and the GitHub
-  client. It records:
-  - provider, endpoint template (no ids or secrets) and method;
-  - status, latency and bytes;
-  - whether it was a 304, a cache hit or a retry;
-  - the rate-limit headers.
-
-  Counts aggregate per hour into an additive Postgres table (`provider_calls`), and raw samples stay
-  in Redis for a day.
-- **Pages**: a `Server-Timing` header per server function, its duration stored per hour (p50, p95,
-  p99). Browser navigation timings come from the reflow-check script run on a schedule against fixed
-  pages: the launch list, a launch with 13 drafts, Stats, Comments.
-- **Jobs**: duration, attempts, queue wait and failures per queue.
-- **Freshness**: for every live post and source, the age of its newest reading. It must stay under
-  the cadence above.
-- **Correctness checks during both windows**:
-  - a daily job compares the registry with every connected account (posts that exist, are deleted or
-    edited; follower counts against a direct read);
-  - duplicate posts must be 0;
-  - missed scheduled posts must be 0.
-
-**The comparison**: 48 h of baseline on the current code (with phase 0 deployed), the refactor, then
-48 h after, weekday to weekday. The report is one table per KPI, before, after and change:
+48 h of baseline before, 48 h after, then a table of before, after and change for each KPI:
 
 | KPI | Target after |
 | --- | --- |
-| Provider calls per day, total and per provider | −70 % or better, with metrics read *more* often |
+| Provider calls per day, total and per provider | −70 % or better, with metrics read more often |
 | GitHub calls per day; share answered 304 | −80 %; 304s above 60 % |
 | `getLaunch` p95 (server) | under 150 ms, 0 external calls |
-| Launch page load, 13 drafts (p95) | under 1 s |
-| UI requests per open tab per minute, idle | under 1 (today up to ~12 server calls) |
-| Comment runs: calls per run | one per account, not per post |
-| Metric freshness | every source within its cadence 99 % of the time |
-| Duplicates, missed schedules, registry vs network mismatches | 0, 0, 0 |
+| Launch page with 13 drafts, load p95 | under 1 s |
+| UI requests per idle open tab per minute | under 1 |
+| Comment runs | one call per account, not per post |
+| Metric freshness | within cadence 99 % of the time |
+| Duplicates / missed schedules / registry vs network mismatches | 0 / 0 / 0 |
 | Peak quota use per provider | under 50 % of its limit |
+| **Scale test**: 3 web + 2 worker + 1 heavy replicas for 48 h | the same 0 / 0 / 0, no lost secret writes, no failed OAuth callbacks |
+| **Chaos**: kill a worker mid-publish, restart Redis, roll a deploy | no duplicate, no lost job, schedules rebuilt from Postgres |
+| Code: places to edit to add a network | from about 40 to 1 module plus 1 registry line |
+| Code: duplicated helpers and channel-name maps | 0 duplicates; one channel registry |
 
 ## Phases
 
-Each phase ships on its own, verified, deployed by the owner or the server's agent, and
-reversible.
+Incremental. Every phase ships alone, is verified, is deployed by whoever deploys the server, and is
+reversible. Each refactor phase starts with characterisation tests of the current behaviour.
 
-0. **Instrument** (above) and add a feature flag per phase. Deploy, then **48 h of baseline**.
-1. **Redis in the stack** (both instances, backups, health checks), the HTTP cache for GitHub, the
-   connector pool, and token and session caching. No behaviour change visible to the user.
-2. **Correctness first**:
-   - every publish through the queue;
-   - attempt rows (outbox) and per-piece locks;
-   - idempotency keys;
-   - the round only enqueues.
+0. **Instrument and baseline.** The call counter, page timings, job and freshness metrics, a feature
+   flag per phase. Deploy, then 48 h of baseline.
+1. **Foundations.**
+   - The shared test kit and characterisation tests of publishing, editing, scheduling, comments and
+     metrics.
+   - `HttpClient` (timeouts, retries, quota headers, instrumentation), `ShipcastError`, the logger.
+   - The domain helpers de-duplicated.
+   - The dependency rules in CI.
+2. **Correctness.**
+   - `PublishingService`: every publish through it.
+   - The piece state machine with attempt rows and per-piece locks.
+   - Idempotency keys.
+   - The round only enqueues.
 
-   It ships before any queue swap, with tests that run the round and a publish job together.
-3. **BullMQ replaces pg-boss**:
-   - queues, schedulers, delayed posts reconciled with Postgres, per-provider limiters and breakers;
-   - drain-and-cutover;
-   - the `jobs` table fed from BullMQ events.
-4. **GitHub events**:
-   - the public webhook route;
-   - the drafts snapshot table;
-   - `push` and `pull_request` invalidation;
-   - polling down to hourly.
-5. **Metrics and comments**: hourly batched reads at each source's cadence, notification feeds,
-   repo-level stats, the index-status cadence.
-6. **Realtime UI**: SSE over Redis pub/sub, the `setInterval`s removed, registry-only loaders, the
-   external-call guard test.
-7. **48 h after**, the comparison report, and the docs: a new decision document
-   (`decisions/redis.md`, superseding parts of `job-queue.md`), plus `web-app.md`, `engine.md`,
-   `stats.md`, `publishing.md` and `server.md`.
+   Tests run the round and a publish job together.
+3. **Channel plugins and services.**
+   - `ChannelDefinition`, the capability interfaces and contract tests, one channel at a time.
+   - The application services, with entry points thinned to call them.
+   - The duplicate implementations of retry, multi-edit, notify and error mapping removed.
+4. **Registry split** into repositories behind the facade, then the facade removed.
+5. **Scale-out state.**
+   - The encrypted `secrets` table (migrated from the file and keychain, verified, backed up) and the
+     locks for token refreshes.
+   - Redis for OAuth state, links, the limiter and caches.
+   - The settings event, health and readiness, graceful shutdown, PgBouncer.
+6. **Redis and BullMQ, and the process split.**
+   - Both Redis instances in the stack.
+   - BullMQ replaces pg-boss.
+   - web / worker / heavy worker with claudio as the sidecar and per-job workspaces.
+7. **GitHub by events.** The public webhook route, the drafts snapshot, `push`/`pull_request`
+   invalidation, the ETag cache, polling down to hourly.
+8. **Metrics and comments.** Hourly batched reads at each source's cadence, notification feeds,
+   repo-level stats.
+9. **Realtime UI.** SSE over Redis, the `setInterval`s removed, registry-only loaders, the
+   external-call guard.
+10. **Measure and prove.**
+    - 48 h after.
+    - The scale test and the chaos tests.
+    - The comparison report.
+    - The docs: `decisions/redis.md` and `decisions/architecture.md` (layers, services, channel
+      plugins), plus updates to `web-app.md`, `engine.md`, `stats.md`, `publishing.md`, `server.md`
+      and `accounts.md`.
 
 ## Risks and how each is handled
 
 | Risk | Handling |
 | --- | --- |
-| Redis lost or flushed | Postgres is the truth: schedules, drafts and state are rebuilt from it; caches only cost re-reads |
-| A cached value served after it changed | Only validated caches (ETag) or event-invalidated version keys; no blind TTL for data shown as current |
-| A missed webhook | The hourly conditional poll, and **Refresh** on the page |
-| Duplicate posts during the queue cutover | Phase 2 (outbox, locks, idempotency) ships first; the cutover drains pg-boss before BullMQ starts |
-| Provider bans for bursts | Per-provider limiters fed by the headers, breakers, and batching lowering the volume |
-| A public webhook endpoint | One path only, HMAC checked first, body size limit, rate limit, delivery dedupe |
-| Tests needing Redis | A throwaway Redis per run, with no mock to keep in step |
+| A refactor changes behaviour | Characterisation tests before each move; one piece at a time behind a flag |
+| Redis lost or flushed | Postgres is the truth: schedules, drafts and state are rebuilt; caches cost re-reads |
+| A cached value served after it changed | Only ETag-validated caches or event-invalidated version keys |
+| A missed webhook | Hourly conditional poll, and **Refresh** on the page |
+| Duplicate posts during the queue cutover | Phase 2 first; pg-boss drained before BullMQ starts |
+| Secrets migration loses a token | Copied with a verification read-back, the old store kept read-only until verified, a backup in `data/backups/` |
+| Provider bans for bursts | Per-provider limiters, breakers, batching |
+| A public webhook endpoint | One path, HMAC first, size and rate limits, delivery dedupe |
+| Too many DB connections with replicas | PgBouncer, pools sized per process type |
 
 ## Still to settle with the owner
 
-- Unchanged metric values: a new row each hour, or `checked_at` on the last row (section 5).
-- The tunnel for the public webhook: Cloudflare Tunnel or a Traefik route (it touches the infra repo
-  and the server's agent).
+- Unchanged metric values: a new row each hour, or `checked_at` moved on the last row.
+- The tunnel for the public webhook: Cloudflare Tunnel or a Traefik route (infra repo, server agent).
 - Who deploys each phase, since the agent does not deploy Shipcast on the server.
 
 ## Related
 
-[[decisions/job-queue.md]] · [[web-app.md]] · [[engine.md]] · [[stats.md]] · [[publishing.md]] · [[decisions/github-app.md]] · [[decisions/comment-assistant.md]] · [[plans/after-mvp.md]] · [[status.md]]
+[[decisions/job-queue.md]] · [[web-app.md]] · [[engine.md]] · [[stats.md]] · [[publishing.md]] · [[accounts.md]] · [[decisions/github-app.md]] · [[decisions/comment-assistant.md]] · [[plans/after-mvp.md]] · [[status.md]]
