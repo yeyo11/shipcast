@@ -258,7 +258,7 @@ export class AiTaskRunner {
     const tools: ToolSet = repo?.hostDir && !remote ? repoTools(repo.hostDir) : {};
     const call: AiCallContext = {
       task: task.id,
-      limits: { ...(limits.maxTurns !== undefined && { maxTurns: limits.maxTurns }), ...(limits.maxBudgetUsd !== undefined && { maxBudgetUsd: limits.maxBudgetUsd }) },
+      limits: { ...(limits.maxTurns !== undefined && { maxTurns: limits.maxTurns }), maxBudgetUsd: limits.maxBudgetUsd },
     };
     const deadline = AbortSignal.timeout(limits.timeoutMs);
     const messages: ModelMessage[] = input.messages ?? [{ role: 'user', content: input.prompt ?? '' }];

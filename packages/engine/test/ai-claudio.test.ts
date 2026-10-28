@@ -67,7 +67,7 @@ function sse(res: ServerResponse, content: string, headers: Record<string, strin
   );
 }
 
-const WORKSPACE = { id: 'ws-1', cwd: '/workspaces/ws-1/demo-abc123', bytes: 2048, files: 3, expiresAt: '2026-10-28T12:00:00Z' };
+const WORKSPACE = { id: 'ws-1', bytes: 2048, files: 3, expiresAt: '2026-10-28T12:00:00Z' };
 const CODELOAD = 'https://codeload.github.com/yeyo11/demo/legacy.tar.gz/refs/tags/v1';
 const CLAUDIO_TOKEN = 'claudio-token-1a2b';
 const GITHUB_TOKEN = 'ghs_installation-secret-9z8y';
@@ -112,7 +112,7 @@ const answerTask = (needsRepo: AiTaskDefinition['needsRepo']): AiTaskDefinition<
     name: 'answer',
   },
   needsRepo,
-  limits: { maxSteps: 12, maxOutputTokens: 1000, timeoutMs: 10_000, maxTurns: 12 },
+  limits: { maxSteps: 12, maxOutputTokens: 1000, timeoutMs: 10_000, maxTurns: 12, maxBudgetUsd: 0.75 },
 });
 
 function runnerOn(claudioUrl: string, githubUrl: string): AiTaskRunner {
@@ -141,7 +141,7 @@ test('createClaudio: a streamed chat completion with Claudio’s headers from pr
       prompt: 'Answer.',
       maxRetries: 0,
       output: Output.object({ schema: jsonSchema({ type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false }), name: 'answer' }),
-      providerOptions: { claudio: { workspace: 'ws-9', allowedTools: ['Read', 'Bash(ls *)'], maxTurns: 7, maxBudgetUsd: 1.5, newChat: true, user: 'shipcast' } },
+      providerOptions: { claudio: { workspace: 'ws-9', allowedTools: ['Read', 'Bash(ls *)'], maxTurns: 7, maxBudgetUsd: 1.5, user: 'shipcast' } },
     });
     assert.deepEqual(await result.output, { answer: 'from claudio' });
     assert.deepEqual((await result.providerMetadata)?.claudio, { costUsd: 0.12, chatId: 'chat-7' });
@@ -153,14 +153,13 @@ test('createClaudio: a streamed chat completion with Claudio’s headers from pr
     assert.deepEqual(JSON.parse(String(chat.headers['x-claudio-allowed-tools'])), ['Read', 'Bash(ls *)']);
     assert.equal(chat.headers['x-claudio-max-turns'], '7');
     assert.equal(chat.headers['x-claudio-max-budget-usd'], '1.5');
-    assert.equal(chat.headers['x-claudio-new-chat'], 'true');
     assert.equal(chat.headers['x-claudio-tool-preset'], undefined);
     const body = JSON.parse(chat.body) as Record<string, unknown>;
     assert.equal(body.stream, true);
     assert.equal(body.model, 'default');
     assert.equal((body.response_format as { type: string }).type, 'json_schema');
     assert.equal(body.tools, undefined, 'Claude Code uses its own tools: no client tools');
-    for (const key of ['workspace', 'allowedTools', 'maxTurns', 'maxBudgetUsd', 'newChat']) assert.equal(body[key], undefined, `${key} goes in a header, never in the body`);
+    for (const key of ['workspace', 'allowedTools', 'maxTurns', 'maxBudgetUsd']) assert.equal(body[key], undefined, `${key} goes in a header, never in the body`);
     assert.equal(body.user, 'shipcast', 'another key under claudio still reaches the body, as the OpenAI-compatible model sends it');
   } finally {
     await fake.close();
@@ -200,17 +199,19 @@ test('the runner: a workspace from the codeload URL, the analysis rules and the 
     assert.equal(chat.headers['x-claudio-workspace'], 'ws-1');
     assert.deepEqual(JSON.parse(String(chat.headers['x-claudio-allowed-tools'])), [...ANALYSIS_RULES]);
     assert.equal(chat.headers['x-claudio-max-turns'], '12');
-    assert.equal(chat.headers['x-claudio-max-budget-usd'], '2');
-    assert.equal(chat.headers['x-claudio-new-chat'], 'true');
+    assert.equal(chat.headers['x-claudio-max-budget-usd'], '2', 'the run’s budget over the task’s');
+    const messages = (JSON.parse(chat.body) as { messages: Array<{ role: string }> }).messages;
+    assert.ok(!messages.some((m) => m.role === 'assistant'), 'no assistant message: Claudio starts a chat of its own');
     onlyClaudiosToken(fake);
 
-    // A task without the repo: no workspace, a chat of its own all the same
+    // A task without the repo: no workspace, its own ceilings all the same
     fake.seen.length = 0;
     await runner.run(answerTask('never'), { prompt: 'Answer.' });
     assert.deepEqual(fake.seen.map((s) => `${s.method} ${s.path}`), ['POST /api/v1/chat/completions']);
     assert.equal(fake.seen[0]!.headers['x-claudio-workspace'], undefined);
     assert.equal(fake.seen[0]!.headers['x-claudio-allowed-tools'], undefined);
-    assert.equal(fake.seen[0]!.headers['x-claudio-new-chat'], 'true');
+    assert.equal(fake.seen[0]!.headers['x-claudio-max-budget-usd'], '0.75', 'the task’s budget, always sent');
+    assert.equal(fake.seen[0]!.headers['x-claudio-max-turns'], '12');
   } finally {
     await Promise.all([fake.close(), gh.close()]);
   }
@@ -246,9 +247,20 @@ test('the runner deletes the workspace after a failed run and after an aborted o
 });
 
 test('each of Claudio’s error codes becomes the AiError of its table entry', async () => {
-  const chatCodes = ['rate_limit_exceeded', 'max-turns', 'max-budget', 'tool-blocked', 'cwd-missing', 'workspace-not-found', 'starting', 'signed-out'];
-  for (const code of chatCodes) {
-    const status = code === 'rate_limit_exceeded' ? 429 : code === 'workspace-not-found' ? 404 : code === 'starting' || code === 'signed-out' ? 503 : 400;
+  const chatCodes: Array<[number, string]> = [
+    [429, 'rate_limit_exceeded'],
+    [422, 'max_turns'],
+    [422, 'max_budget'],
+    [422, 'tool_blocked'],
+    [422, 'no_structured_output'],
+    [400, 'cwd_missing'],
+    [404, 'workspace_not_found'],
+    [410, 'workspace_expired'],
+    [409, 'policy_mismatch'],
+    [503, 'starting'],
+    [503, 'signed-out'],
+  ];
+  for (const [status, code] of chatCodes) {
     const fake = await claudio((_, res) => json(res, status, { error: { message: `claudio says ${code} ${CLAUDIO_TOKEN}`, type: 'invalid_request_error', code } }));
     try {
       await assert.rejects(runnerOn(fake.url, 'http://127.0.0.1:9').run(answerTask('never'), { prompt: 'Answer.' }), (error: unknown) => {
@@ -263,10 +275,12 @@ test('each of Claudio’s error codes becomes the AiError of its table entry', a
     }
   }
 
-  // An error chunk in the middle of the stream carries its code too
+  // Streamed, Claudio sends the error as the last chunk before [DONE], after what was written so far
   const midStream = await claudio((_, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' });
-    res.end(`data: ${JSON.stringify({ error: { message: 'out of turns', type: 'agent_error', code: 'max-turns' } })}\n\ndata: [DONE]\n\n`);
+    const partial = { id: 'c', object: 'chat.completion.chunk', created: 0, model: 'default', choices: [{ index: 0, delta: { role: 'assistant', content: '{"ans' }, finish_reason: null }] };
+    const error = { error: { message: 'max turns reached', type: 'invalid_request_error', code: 'max_turns' } };
+    res.end(`data: ${JSON.stringify(partial)}\n\ndata: ${JSON.stringify(error)}\n\ndata: [DONE]\n\n`);
   });
   try {
     await assert.rejects(runnerOn(midStream.url, 'http://127.0.0.1:9').run(answerTask('never'), { prompt: 'Answer.' }), (error: unknown) => error instanceof AiError && error.code === 'ai_no_answer');
@@ -324,7 +338,7 @@ test('ClaudioWorkspaces: created from a URL or a gzip tarball, and a delete of o
   });
   try {
     const workspaces = new ClaudioWorkspaces({ baseURL: fake.url, token: CLAUDIO_TOKEN });
-    assert.equal((await workspaces.create({ url: CODELOAD })).cwd, WORKSPACE.cwd);
+    assert.equal((await workspaces.create({ url: CODELOAD })).id, WORKSPACE.id);
     const archive = new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0]);
     await workspaces.create({ archive });
     assert.equal(fake.seen[1]!.headers['content-type'], 'application/gzip');

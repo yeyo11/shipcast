@@ -68,7 +68,7 @@ export interface AiCallContext {
   /** The workspace a remote agent reads the repository in, and what it may run there; none for a task without the repo */
   workspace?: { id: string; allowedTools: readonly string[] };
   /** The task's own ceilings, for a provider that can be told them; Shipcast enforces its timeout and output tokens itself */
-  limits: { maxTurns?: number; maxBudgetUsd?: number };
+  limits: { maxTurns?: number; maxBudgetUsd: number };
 }
 
 /** What a remote agent's workspace is made from: a URL the provider downloads itself, or a gzip tarball sent to it */

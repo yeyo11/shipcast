@@ -10,14 +10,17 @@ import { z } from 'zod';
  * request headers (the only way its /v1 takes them) and reads its response header back.
  */
 
-/** Claudio's wire names, in one place: the ones still pending on Claudio's side (`newChat`) are adjusted here */
+/**
+ * Claudio's wire names, in one place. There is no header for a new chat: a request whose history has
+ * no assistant message always starts one (retries included), and the workspace, allowed tools and
+ * ceilings are part of the chat's key, so continuing a chat with other values is refused (409).
+ */
 export const CLAUDIO_WIRE = {
   workspace: 'X-Claudio-Workspace',
   maxTurns: 'X-Claudio-Max-Turns',
   maxBudgetUsd: 'X-Claudio-Max-Budget-Usd',
   allowedTools: 'X-Claudio-Allowed-Tools',
   toolPreset: 'X-Claudio-Tool-Preset',
-  newChat: 'X-Claudio-New-Chat',
   /** Response header: the chat Claudio ran the call in */
   chatId: 'x-claudio-chat-id',
 } as const;
@@ -25,7 +28,8 @@ export const CLAUDIO_WIRE = {
 /**
  * `providerOptions.claudio`: where Claude Code works (a workspace's id, from ClaudioWorkspaces), what
  * it may run there (Claude Code permission rules, or the name of one of Claudio's presets, never
- * both), its own ceilings, and whether the call starts a chat of its own rather than continuing one.
+ * both), and its own ceilings. Without a budget Claudio applies its own default (1 USD), so a caller
+ * that knows its ceiling sends it.
  */
 export const ClaudioCallOptions = z
   .strictObject({
@@ -34,7 +38,6 @@ export const ClaudioCallOptions = z
     toolPreset: z.string().min(1).optional(),
     maxTurns: z.number().int().positive().optional(),
     maxBudgetUsd: z.number().positive().optional(),
-    newChat: z.boolean().optional(),
   })
   .refine((o) => !(o.allowedTools && o.toolPreset), { message: 'allowedTools and toolPreset are exclusive: Claudio refuses both together', path: ['toolPreset'] });
 export type ClaudioCallOptions = z.infer<typeof ClaudioCallOptions>;
@@ -56,7 +59,6 @@ export function claudioHeaders(options: ClaudioCallOptions): Record<string, stri
   if (options.toolPreset !== undefined) headers[CLAUDIO_WIRE.toolPreset] = options.toolPreset;
   if (options.maxTurns !== undefined) headers[CLAUDIO_WIRE.maxTurns] = String(options.maxTurns);
   if (options.maxBudgetUsd !== undefined) headers[CLAUDIO_WIRE.maxBudgetUsd] = String(options.maxBudgetUsd);
-  if (options.newChat) headers[CLAUDIO_WIRE.newChat] = 'true';
   return headers;
 }
 

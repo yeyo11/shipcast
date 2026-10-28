@@ -63,9 +63,9 @@ const answerTask = (needsRepo: AiTaskDefinition['needsRepo'] = 'never', maxSteps
     name: 'answer',
   },
   needsRepo,
-  limits: { maxSteps, maxOutputTokens: 1000, timeoutMs: 10_000 },
+  limits: { maxSteps, maxOutputTokens: 1000, timeoutMs: 10_000, maxBudgetUsd: 1 },
 });
-const textTask: AiTaskDefinition = { id: 'assistant', settingsTask: 'assistant', needsRepo: 'never', limits: { maxSteps: 1, maxOutputTokens: 1000, timeoutMs: 10_000 } };
+const textTask: AiTaskDefinition = { id: 'assistant', settingsTask: 'assistant', needsRepo: 'never', limits: { maxSteps: 1, maxOutputTokens: 1000, timeoutMs: 10_000, maxBudgetUsd: 1 } };
 
 async function workspace(): Promise<{ hostDir: string; repo: string }> {
   const hostDir = await mkdtemp(join(tmpdir(), 'shipcast-runner-'));

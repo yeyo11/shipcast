@@ -14,9 +14,8 @@ import { CLAUDIO_ERRORS } from './errors.ts';
 
 /** A workspace as Claudio created it */
 export const ClaudioWorkspace = z.object({
+  /** All a chat names it by (X-Claudio-Workspace): where it lies on Claudio's side is Claudio's business */
   id: z.string().min(1),
-  /** Where Claude Code works, on Claudio's side: GitHub's single top-level folder */
-  cwd: z.string(),
   bytes: z.number(),
   files: z.number(),
   expiresAt: z.string(),
@@ -48,7 +47,12 @@ export class ClaudioWorkspaces {
     this.#provider = settings.provider ?? DEFAULT_PROVIDER;
   }
 
-  /** A workspace from a URL Claudio downloads (https, an allowed host) or from a gzip tarball sent in the body */
+  /**
+   * A workspace from a URL Claudio downloads (https, an allowed host) or from a gzip tarball sent in
+   * the body, which must hold no `.git` path. Claudio may download api.github.com's tarball URL too,
+   * but a private repo's needs a GitHub token there, which never goes to Claudio: the runner gives it
+   * codeload's URL, resolved on Shipcast's side.
+   */
   async create(source: WorkspaceSource, signal?: AbortSignal): Promise<ClaudioWorkspace> {
     const body = 'url' in source ? { body: JSON.stringify({ url: source.url }), type: 'application/json' } : { body: source.archive, type: 'application/gzip' };
     const response = await this.#call('api/workspaces', {

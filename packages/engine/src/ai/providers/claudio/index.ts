@@ -26,7 +26,8 @@ const named = { id: self.id, name: NAME, errors: CLAUDIO_ERRORS };
  * workspace of its own (from the codeload URL the runner gets from GitHub), Claude Code explores it
  * with the declared read-only rules, and the answer comes in the response format; no client tools
  * (Claudio refuses them beside a response format), no folder shared with this machine. Every call
- * starts a chat of its own, with the task's turn and budget ceilings.
+ * carries the task's turn and budget ceilings; a run's history has no assistant message, so Claudio
+ * starts a chat of its own for it.
  */
 export const claudioAiProvider = aiProvider({
   ...self,
@@ -49,10 +50,9 @@ export const claudioAiProvider = aiProvider({
   ready: (settings, options = {}) => claudioReady({ baseURL: need(self, settings, 'url'), provider: named, ...(options.fetch && { fetch: options.fetch }) }),
   callOptions(context) {
     const options: ClaudioCallOptions = {
-      newChat: true,
       ...(context.workspace && { workspace: context.workspace.id, allowedTools: [...context.workspace.allowedTools] }),
       ...(context.limits.maxTurns !== undefined && { maxTurns: context.limits.maxTurns }),
-      ...(context.limits.maxBudgetUsd !== undefined && { maxBudgetUsd: context.limits.maxBudgetUsd }),
+      maxBudgetUsd: context.limits.maxBudgetUsd,
     };
     return { claudio: options };
   },
