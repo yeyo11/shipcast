@@ -4,7 +4,8 @@ import { Refused, splitFrontMatter, type Channel } from '@shipcast/schema';
 import { isScalar, parseDocument } from 'yaml';
 import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
-import { kindLanguage, type Post, type Registry } from './registry.ts';
+import type { PostStore } from './ports.ts';
+import { kindLanguage, type Post } from './registry.ts';
 
 /*
  * Editing and deleting what a launch published, per piece or for a whole launch at once. A piece's
@@ -137,7 +138,7 @@ export interface BlogRepo {
 }
 
 export interface EditDeps {
-  registry: Registry;
+  registry: PostStore;
   /**
    * The connectors of a channel built with the account a piece went out with (`null`: the `.env`
    * credentials), never the channel's primary account of today, which may be another one.
@@ -192,7 +193,7 @@ function describe(post: Post): string {
   return post.kind === 'post' ? `${nameOf(post.channel)} post ${post.id}` : `${nameOf(post.channel)} ${post.kind} ${post.id}`;
 }
 
-async function existing(registry: Registry, postId: number): Promise<Post> {
+async function existing(registry: PostStore, postId: number): Promise<Post> {
   const post = await registry.post(postId);
   if (!post) throw new PostRefused('not_found', 'no such post');
   return post;
@@ -402,39 +403,66 @@ export async function deletePost(postId: number, deps: EditDeps): Promise<Post> 
   return deps.registry.updatePost(post.id, { status: 'deleted' });
 }
 
-/** One piece's result in an operation on a whole launch */
+/**
+ * One piece's result in an operation on several. A piece named by an id that is not the launch's has
+ * no channel to report (`''`).
+ */
 export type PostOutcome =
   | { postId: number; channel: Channel; kind: string; ok: true; post: Post }
-  | { postId: number; channel: Channel; kind: string; ok: false; reason: RefusalReason | 'failed'; problem: string };
+  | { postId: number; channel: Channel | ''; kind: string; ok: false; reason: RefusalReason | 'failed'; problem: string };
 
-async function eachPost(launchId: number, channels: readonly Channel[] | undefined, deps: EditDeps, run: (post: Post) => Promise<Post>): Promise<PostOutcome[]> {
-  if (!(await deps.registry.get(launchId))) throw new PostRefused('not_found', 'no such launch');
-  const pieces = (await deps.registry.posts(launchId)).filter((p) => p.status !== 'deleted' && p.status !== 'scheduled' && (!channels || channels.includes(p.channel)));
-  const outcomes: PostOutcome[] = [];
-  // One at a time: a network that rate-limits sees one request of ours, and the order is the launch's
-  for (const post of pieces) {
-    const base = { postId: post.id, channel: post.channel, kind: post.kind };
-    try {
-      outcomes.push({ ...base, ok: true, post: await run(post) });
-    } catch (error) {
-      const reason = error instanceof PostRefused ? error.reason : 'failed';
-      outcomes.push({ ...base, ok: false, reason, problem: error instanceof Error ? error.message : String(error) });
-    }
+/**
+ * Which pieces of a launch an operation covers. Channels (all of them when none are named) cover
+ * the pieces out on them: one deleted or still scheduled is not there to change, and is left out.
+ * Ids cover exactly the pieces named, in that order, and each one that cannot be changed is
+ * reported with why, deleted and scheduled ones included: the owner chose it, so silence would read
+ * as done. The launch page names pieces (the blog's English article, not its Spanish one); the REST
+ * API names channels.
+ */
+export type PostSelection = readonly Channel[] | undefined | { postIds: readonly number[] };
+
+const outcomeOf = async (post: Pick<Post, 'id' | 'channel' | 'kind'>, run: () => Promise<Post>): Promise<PostOutcome> => {
+  const base = { postId: post.id, channel: post.channel, kind: post.kind };
+  try {
+    return { ...base, ok: true, post: await run() };
+  } catch (error) {
+    const reason = error instanceof PostRefused ? error.reason : 'failed';
+    return { ...base, ok: false, reason, problem: error instanceof Error ? error.message : String(error) };
   }
+};
+
+async function eachPost(launchId: number, selection: PostSelection, deps: EditDeps, run: (post: Post) => Promise<Post>): Promise<PostOutcome[]> {
+  if (!(await deps.registry.get(launchId))) throw new PostRefused('not_found', 'no such launch');
+  const outcomes: PostOutcome[] = [];
+  // One at a time: a network that rate-limits sees one request of ours, and the order is the launch's (or the owner's)
+  if (selection && 'postIds' in selection) {
+    for (const postId of selection.postIds) {
+      const post = await deps.registry.post(postId);
+      if (!post || post.launchId !== launchId) {
+        outcomes.push({ postId, channel: post?.channel ?? '', kind: post?.kind ?? '', ok: false, reason: 'not_found', problem: `post ${postId} is not a piece of this launch` });
+        continue;
+      }
+      outcomes.push(await outcomeOf(post, () => run(post)));
+    }
+    return outcomes;
+  }
+  const channels = selection;
+  const pieces = (await deps.registry.posts(launchId)).filter((p) => p.status !== 'deleted' && p.status !== 'scheduled' && (!channels || channels.includes(p.channel)));
+  for (const post of pieces) outcomes.push(await outcomeOf(post, () => run(post)));
   return outcomes;
 }
 
 /**
- * The same change to every piece of a launch on the channels named (all of them when none are),
- * each network taking the fields it has: a text goes to Mastodon and Telegram as the post, to
- * Discord as the message, to dev.to and Hashnode as the article's body. A piece that cannot take it
- * is reported, never failing the others.
+ * The same change to the pieces of a launch selected (PostSelection), each network taking the
+ * fields it has: a text goes to Mastodon and Telegram as the post, to Discord as the message, to
+ * dev.to and Hashnode as the article's body. A piece that cannot take it is reported, never failing
+ * the others. This is the one multi-edit: the launch page and the REST API both call it.
  */
-export function editPosts(launchId: number, changes: PostChanges, channels: readonly Channel[] | undefined, deps: EditDeps): Promise<PostOutcome[]> {
-  return eachPost(launchId, channels, deps, (post) => editPost(post.id, changes, deps, { strict: false }));
+export function editPosts(launchId: number, changes: PostChanges, selection: PostSelection, deps: EditDeps): Promise<PostOutcome[]> {
+  return eachPost(launchId, selection, deps, (post) => editPost(post.id, changes, deps, { strict: false }));
 }
 
-/** Deletes every piece of a launch on the channels named (all of them when none are), reporting what cannot be */
-export function deleteLaunchPosts(launchId: number, channels: readonly Channel[] | undefined, deps: EditDeps): Promise<PostOutcome[]> {
-  return eachPost(launchId, channels, deps, (post) => deletePost(post.id, deps));
+/** Deletes the pieces of a launch selected (every live one when no channel is named), reporting what cannot be */
+export function deleteLaunchPosts(launchId: number, selection: PostSelection, deps: EditDeps): Promise<PostOutcome[]> {
+  return eachPost(launchId, selection, deps, (post) => deletePost(post.id, deps));
 }

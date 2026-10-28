@@ -1,6 +1,7 @@
 import { Refused, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { cancelledKey, PUBLISHED_BY_ENGINE } from './publish.ts';
-import type { Post, Registry } from './registry.ts';
+import type { ScheduleStore, SettingStore } from './ports.ts';
+import type { Post } from './registry.ts';
 
 /*
  * Scheduled publishing: a channel's piece of a launch can wait for a time instead of going out as
@@ -37,12 +38,12 @@ export function isTimeZone(name: unknown): name is string {
 }
 
 /** The owner's time zone, or Madrid until one is set */
-export async function readTimezone(registry: Registry): Promise<string> {
+export async function readTimezone(registry: Pick<SettingStore, 'setting'>): Promise<string> {
   const stored = await registry.setting<string>(TIMEZONE_KEY);
   return isTimeZone(stored) ? stored : DEFAULT_TIMEZONE;
 }
 
-export async function saveTimezone(registry: Registry, name: unknown): Promise<string> {
+export async function saveTimezone(registry: SettingStore, name: unknown): Promise<string> {
   if (!isTimeZone(name)) throw new ScheduleRefused('invalid', 'timezone is an IANA zone such as Europe/Madrid');
   await registry.setSetting(TIMEZONE_KEY, name);
   return name;
@@ -75,7 +76,7 @@ export interface ScheduleOptions {
  * scheduled is moved. Refused as a whole, before anything is written, when a channel cannot be
  * scheduled: not one the engine publishes, off in launch.yml, or already out.
  */
-export async function scheduleLaunch(registry: Registry, launchId: number, times: Partial<Record<Channel, Date>>, options: ScheduleOptions = {}): Promise<Post[]> {
+export async function scheduleLaunch(registry: ScheduleStore, launchId: number, times: Partial<Record<Channel, Date>>, options: ScheduleOptions = {}): Promise<Post[]> {
   const now = options.now ?? new Date();
   const launch = await registry.get(launchId);
   if (!launch) throw new ScheduleRefused('not_found', 'no such launch');
@@ -103,7 +104,7 @@ export async function scheduleLaunch(registry: Registry, launchId: number, times
   return scheduled;
 }
 
-async function scheduledPost(registry: Registry, postId: number): Promise<Post> {
+async function scheduledPost(registry: ScheduleStore, postId: number): Promise<Post> {
   const post = await registry.post(postId);
   if (!post) throw new ScheduleRefused('not_found', 'no such post');
   if (post.status !== 'scheduled') throw new ScheduleRefused('refused', `post ${postId} is ${post.status}, not scheduled`);
@@ -111,7 +112,7 @@ async function scheduledPost(registry: Registry, postId: number): Promise<Post> 
 }
 
 /** Moves a scheduled piece to another time; a time already past sends it on the next publish run */
-export async function reschedulePost(registry: Registry, postId: number, at: Date, options: { now?: Date } = {}): Promise<Post> {
+export async function reschedulePost(registry: ScheduleStore, postId: number, at: Date, options: { now?: Date } = {}): Promise<Post> {
   await scheduledPost(registry, postId);
   const moved = await registry.reschedulePost(postId, when(at, options.now ?? new Date()));
   if (!moved) throw new ScheduleRefused('refused', `post ${postId} went out while it was being moved`);
@@ -122,7 +123,7 @@ export async function reschedulePost(registry: Registry, postId: number, at: Dat
  * Cancels a scheduled piece: its row goes and its channel is not published for that launch, until
  * it is scheduled again. To send it now instead, move it to now.
  */
-export async function cancelScheduledPost(registry: Registry, postId: number): Promise<Post> {
+export async function cancelScheduledPost(registry: ScheduleStore, postId: number): Promise<Post> {
   const post = await scheduledPost(registry, postId);
   const removed = await registry.unschedulePost(postId);
   if (!removed) throw new ScheduleRefused('refused', `post ${postId} went out while it was being cancelled`);
