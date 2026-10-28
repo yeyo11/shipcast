@@ -30,9 +30,10 @@ export const telegramAdapter = channelAdapter({
   },
   publisher: (c) => c,
   editor: (c) => c,
-  // Notices go to the owner's own chat with the bot when one is set, not to the public channel
-  notifier: (connection, credentials, http) => {
+  // The owner's notices go only to their own chat with the bot; with none set there is no notifier,
+  // never the channel a launch publishes to, which is public
+  notifier: (_connection, credentials, http) => {
     const chat = credentials.settings.notifyChatId?.trim();
-    return chat ? new Telegram({ botToken: credentials.secrets.botToken!, chatId: chat, fetch: http }) : connection.connector;
+    return chat ? new Telegram({ botToken: credentials.secrets.botToken!, chatId: chat, fetch: http }) : undefined;
   },
 });

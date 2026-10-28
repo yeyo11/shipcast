@@ -167,8 +167,8 @@ export interface ChannelAdapter<C = unknown, Id extends string = string, P = Pub
   metrics?(connector: C): PostMetricReader;
   /** As the reader of a post's comments, and the replier where the network takes replies */
   comments?(connector: C): CommentConnectors;
-  /** As the bot that tells the owner what is waiting, with the account's own notification chat */
-  notifier?(connection: Connection<C>, credentials: Credentials, http: typeof fetch | undefined): { notify(text: string): Promise<unknown> };
+  /** As the bot that tells the owner what is waiting, in the owner's own chat; undefined when none is set */
+  notifier?(connection: Connection<C>, credentials: Credentials, http: typeof fetch | undefined): { notify(text: string): Promise<unknown> } | undefined;
 }
 
 /**
