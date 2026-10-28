@@ -30,3 +30,5 @@ export * from './telemetry/histogram.ts';
 export * from './telemetry/store.ts';
 export * from './telemetry/checks.ts';
 export * from './telemetry/report.ts';
+export * from './publishing/attempts.ts';
+export * from './publishing/guard.ts';

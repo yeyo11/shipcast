@@ -349,3 +349,36 @@ export const checks = pgTable(
   },
   (t) => [index('checks_by_name').on(t.name, t.takenAt)],
 );
+
+/*
+ * Publishing as a state machine (docs/plans/performance-refactor.md, phase 2): one row per piece of a
+ * launch (its channel and kind, whatever account), written under the row's own claim BEFORE the
+ * network is called. Two workers that reach the same piece at once (the round and a publish job, two
+ * replicas) cannot both call the network: only the one whose claim wrote the row does. A claim whose
+ * worker died leaves `attempting` with a lease in the past; for a network that cannot tell whether the
+ * first call went out, the piece becomes `unknown` instead of being sent again.
+ */
+export const publishAttempts = pgTable(
+  'publish_attempts',
+  {
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id),
+    channel: text('channel').notNull(),
+    // post, story, comment, issue:<lang>, subreddit:<name>…, as the piece's posts row names it
+    kind: text('kind').notNull(),
+    // attempting, live, retryable, failed or unknown
+    state: text('state').notNull(),
+    attempts: integer('attempts').notNull().default(1),
+    // Until when the worker that claimed it owns it; past it, the claim is stale
+    leaseUntil: text('lease_until'),
+    // Who holds the claim: the job's id, or the process for a round
+    holder: text('holder'),
+    error: text('error'),
+    externalId: text('external_id'),
+    url: text('url'),
+    startedAt: text('started_at').notNull().default(nowIso),
+    updatedAt: text('updated_at').notNull().default(nowIso),
+  },
+  (t) => [primaryKey({ name: 'publish_attempts_piece', columns: [t.launchId, t.channel, t.kind] }), index('publish_attempts_by_state').on(t.state)],
+);
