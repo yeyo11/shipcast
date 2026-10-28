@@ -67,7 +67,7 @@ export function claudioAnswer(res: ServerResponse, content: string, chatId = 'ch
   res.writeHead(200, { 'content-type': 'text/event-stream', ...(chatId && { 'x-claudio-chat-id': chatId }) });
   res.end(
     chunk({ choices: [{ index: 0, delta: { role: 'assistant', content }, finish_reason: null }] }) +
-      chunk({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, total_cost_usd: 0.12 } }) +
+      chunk({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, cost_usd: 0.12 } }) +
       'data: [DONE]\n\n',
   );
 }

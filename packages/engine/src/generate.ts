@@ -1,13 +1,13 @@
 import { AI_TASK_DEFINITIONS, ContentPack, contentPackJsonSchema, missingPieces, type Brand, type LaunchConfig } from '@shipcast/schema';
 import type { AiProvider } from './ai.ts';
-import { chatIdOf, type AiTaskRunner } from './ai/runner.ts';
+import { chatIdOf, costOf, type AiTaskRunner } from './ai/runner.ts';
 import { ANALYSIS_TOOLS, buildPrompt, type PromptOptions } from './prompt.ts';
 import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
 export type Generated =
-  | { ok: true; pack: ContentPack; chatId: string | undefined }
-  | { ok: false; problems: string[]; chatId: string | undefined };
+  | { ok: true; pack: ContentPack; chatId: string | undefined; costUsd?: number | null }
+  | { ok: false; problems: string[]; chatId: string | undefined; costUsd?: number | null };
 
 export interface GenerateOptions extends PromptOptions {
   ai: AiProvider;
@@ -58,7 +58,7 @@ export async function generatePack(options: GenerateOptions): Promise<Generated>
 
   const pack = parsed.data;
   const problems = packProblems(pack, launch, config, brand);
-  return problems.length > 0 ? { ok: false, problems, chatId: result.chatId } : { ok: true, pack, chatId: result.chatId };
+  return problems.length > 0 ? { ok: false, problems, chatId: result.chatId, costUsd: result.costUsd } : { ok: true, pack, chatId: result.chatId, costUsd: result.costUsd };
 }
 
 /** What keeps a valid pack from being this launch's: another kind or repo, or a channel it turns on left without its piece */
@@ -108,6 +108,7 @@ export async function generatePackOnRunner(options: RunnerGenerateOptions): Prom
     return { ok: false, problems: [error instanceof Error ? error.message : String(error)], chatId: chatIdOf(error) };
   }
   const chatId = chatIdOf(result);
+  const costUsd = costOf(result);
   const problems = packProblems(result.output, launch, config, brand);
-  return problems.length > 0 ? { ok: false, problems, chatId } : { ok: true, pack: result.output, chatId };
+  return problems.length > 0 ? { ok: false, problems, chatId, costUsd } : { ok: true, pack: result.output, chatId, costUsd };
 }

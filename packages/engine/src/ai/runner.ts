@@ -426,6 +426,15 @@ export function chatIdOf(outcome: Pick<AiRunResult<unknown>, 'provider' | 'provi
   return chatIdIn(metadata, outcome.provider);
 }
 
+/**
+ * What a run cost, when its provider says (Claudio's turn cost, `providerMetadata.claudio.costUsd`):
+ * the old path's `costUsd`, kept for the records only and never shown. Null when the provider does not say.
+ */
+export function costOf(result: Pick<AiRunResult<unknown>, 'provider' | 'providerMetadata'>): number | null {
+  const cost = result.providerMetadata?.[result.provider]?.costUsd;
+  return typeof cost === 'number' ? cost : null;
+}
+
 /** Two sets of provider options as one, per provider: a cache breakpoint beside the provider's own options */
 function mergeOptions(a: AiMessageOptions | undefined, b: AiMessageOptions): AiMessageOptions {
   const out: AiMessageOptions = { ...a };

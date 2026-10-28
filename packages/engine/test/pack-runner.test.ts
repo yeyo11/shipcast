@@ -3,8 +3,8 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { ANALYSIS_RULES } from '@shipcast/schema';
-import { draftLaunch, loadBrand, SdkProvider, type PipelineDeps } from '../src/index.ts';
+import { ANALYSIS_RULES, parseLaunchConfig } from '@shipcast/schema';
+import { draftLaunch, generatePackOnRunner, loadBrand, SdkProvider, type PipelineDeps } from '../src/index.ts';
 import {
   claudioAnswer,
   claudioChats,
@@ -161,4 +161,20 @@ test('pack: without a runner the old provider still drafts it: the flag off is t
   assert.equal((await draftLaunch(w.launch, w.brand, w.deps)).ok, true);
   assert.equal(model.doGenerateCalls.length, 1);
   assert.equal(model.doStreamCalls.length, 0);
+});
+
+test('pack: the generation carries Claudio’s chat id and the turn’s cost, as the old path’s result did', async () => {
+  const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack), 'chat-9') });
+  const gh = await fakeGitHubArchives();
+  try {
+    const w = await world({ ai: unused });
+    const parsed = parseLaunchConfig(LAUNCH_YML);
+    assert.ok(parsed.ok);
+    const generated = await generatePackOnRunner({ runner: fakeClaudioRunner(claudio, gh), launch: w.launch, config: parsed.value, brand: w.brand, checkout: { hostPath: w.hostPath, providerPath: '' }, ref: 'v0.9.0' });
+    assert.equal(generated.ok, true);
+    assert.equal(generated.chatId, 'chat-9');
+    assert.equal(generated.costUsd, 0.12, 'usage.cost_usd, through providerMetadata.claudio.costUsd');
+  } finally {
+    await Promise.all([claudio.close(), gh.close()]);
+  }
 });
