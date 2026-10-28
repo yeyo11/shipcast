@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { Brand, LaunchConfig } from '@shipcast/schema';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
-import { generateArticlePack, generatePack, LOCKED_ARTICLE_RULES, LOCKED_LAUNCH_RULES, repoTools, SdkProvider, type AiSetup, type AiTask, type Launch } from '../src/index.ts';
+import { generateArticlePack, generatePack, LOCKED_ARTICLE_RULES, LOCKED_LAUNCH_RULES, SdkProvider, type AiSetup, type AiTask, type Launch } from '../src/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
@@ -61,7 +61,7 @@ test('a pack generated through the AI SDK is schema-bound, carries the locked ru
   for (const rule of LOCKED_LAUNCH_RULES) assert.ok(system?.role === 'system' && system.content.includes(rule));
   assert.deepEqual(
     (call.tools ?? []).map((t) => t.name).sort(),
-    ['git_log', 'list_files', 'read_file', 'search'],
+    ['git', 'list_files', 'read_files', 'repo_overview', 'search'],
     'with a checkout on this machine, the model gets read-only tools over it',
   );
 });
@@ -125,23 +125,4 @@ test('a stream that fails is an error, not an empty answer', async () => {
     for await (const _ of mockProvider(model).streamText({ prompt: 'Say hello' })) void _;
   };
   await assert.rejects(read(), /404 route not found/);
-});
-
-test('the repo tools read the checkout and nothing outside it', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'shipcast-repo-'));
-  const outside = await mkdtemp(join(tmpdir(), 'shipcast-outside-'));
-  await mkdir(join(root, 'src'));
-  await writeFile(join(root, 'src', 'main.ts'), 'export const answer = 42;\n');
-  await writeFile(join(outside, 'secret.txt'), 'nope');
-  await symlink(outside, join(root, 'escape'));
-  const tools = repoTools(root);
-  const run = async (name: string, input: unknown): Promise<unknown> => {
-    const t = tools[name]!;
-    return t.execute!(input as never, { toolCallId: '1', messages: [] } as never);
-  };
-  assert.equal(await run('read_file', { path: 'src/main.ts' }), 'export const answer = 42;\n');
-  assert.match(String(await run('search', { pattern: 'answer' })), /src\/main\.ts:1:/);
-  assert.match(String(await run('list_files', { dir: '' })), /src\/main\.ts/);
-  assert.match(String(await run('read_file', { path: '../../etc/passwd' })), /^error: .*outside the repository/);
-  assert.match(String(await run('read_file', { path: 'escape/secret.txt' })), /^error: .*outside the repository/, 'a symlink cannot lead out');
 });

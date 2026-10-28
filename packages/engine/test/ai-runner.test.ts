@@ -108,14 +108,14 @@ test('a provider with a response format answers in it: no tools, the schema sent
 
 test('with the repo’s tools, the model reads the checkout and answers through the submit tool', async () => {
   const { hostDir, repo } = await workspace();
-  const model = scripted(toolCall('git_log', { limit: 5 }), toolCall('read_file', { path: 'src/main.ts' }), toolCall(SUBMIT_TOOL, { answer: '42' }));
+  const model = scripted(toolCall('git', { command: 'log', n: 5 }), toolCall('read_files', { files: [{ path: 'src/main.ts' }] }), toolCall(SUBMIT_TOOL, { answer: '42' }));
   const runner = runnerWith({ provider: mockProvider(model), settings: { apiKey: 'k' } }, { hostDir });
   const result = await runner.run(answerTask('always'), { prompt: 'What is the answer?', repo: { hostDir: repo } });
   assert.deepEqual(result.output, { answer: '42' });
   assert.equal(result.steps, 3);
   assert.deepEqual(result.usage.totalTokens, 45, 'tokens summed over every step');
   const first = model.doStreamCalls[0]!;
-  assert.deepEqual((first.tools ?? []).map((t) => t.name).sort(), ['git_log', 'list_files', 'read_file', 'search', SUBMIT_TOOL]);
+  assert.deepEqual((first.tools ?? []).map((t) => t.name).sort(), ['git', 'list_files', 'read_files', 'repo_overview', 'search', SUBMIT_TOOL]);
   assert.equal(first.responseFormat?.type ?? 'text', 'text', 'no response format beside tools');
   assert.deepEqual(first.toolChoice, { type: 'required' });
   assert.match(promptText(model.doStreamCalls[1]!), /feat: the answer/, 'the git history came back to the model');
@@ -152,7 +152,7 @@ test('an invalid answer is sent back once with what is wrong, and the repaired o
 
 test('a model that only reads until its step ceiling has no answer', async () => {
   const { hostDir, repo } = await workspace();
-  const model = scripted(toolCall('list_files', { dir: '' }));
+  const model = scripted(toolCall('list_files', {}));
   await assert.rejects(
     runnerWith({ provider: mockProvider(model), settings: { apiKey: 'k' } }, { hostDir }).run(answerTask('always', 3), { prompt: 'Answer.', repo: { hostDir: repo } }),
     (error: unknown) => error instanceof AiError && error.code === 'ai_no_answer' && /all 3 steps/.test(error.message),
@@ -270,7 +270,7 @@ test('a local-tools provider over HTTP gets the repo’s tools and the submit to
   assert.deepEqual(result.output, { answer: 'done' });
   const body = requests[0]!.body;
   const tools = (body.tools as Array<{ function: { name: string } }>).map((t) => t.function.name).sort();
-  assert.deepEqual(tools, ['git_log', 'list_files', 'read_file', 'search', SUBMIT_TOOL]);
+  assert.deepEqual(tools, ['git', 'list_files', 'read_files', 'repo_overview', 'search', SUBMIT_TOOL]);
   assert.equal(body.response_format, undefined);
   assert.equal(requests[0]!.headers.get('x-claudio-cwd'), null);
 });

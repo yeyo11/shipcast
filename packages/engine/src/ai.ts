@@ -9,7 +9,7 @@ import { LISTED_AI_PROVIDERS, type ListedAiProviderId } from './ai/providers/reg
 import type { PromptTexts } from './prompt.ts';
 
 // The read-only tools over a checkout live with the AI task runner, which is where they go next
-export { OutsideRepo, repoTools } from './ai/repo-tools.ts';
+export { OutsideRepo, REPO_TOOL_LIMITS, REPO_TOOL_NAMES, RepoReader, repoTools, type RepoToolsOptions } from './ai/repo-tools.ts';
 
 /** What Shipcast asks an AI for; each one has its own provider and model in the AI settings (packages/schema/src/ai/tasks.ts) */
 export { AI_TASKS, type AiTask } from '@shipcast/schema';
