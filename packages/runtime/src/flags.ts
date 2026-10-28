@@ -19,6 +19,8 @@ export const FLAGS = {
   'batched-metrics': 'Hourly, batched metrics and comment feeds',
   /** Phase 9: the pages update over SSE instead of polling */
   'realtime-ui': 'Pages updated over server-sent events',
+  /** The AI layer: every task run by Shipcast's own AI task runner, providers only as models */
+  'ai-runner': 'AI tasks through the AI task runner',
 } as const;
 
 export type Flag = keyof typeof FLAGS;

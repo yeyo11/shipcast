@@ -1,16 +1,23 @@
 import {
+  aiProviderDefinition,
+  AiTaskRunner,
   anthropicProvider,
   Claudio,
   currentPrompts,
   openAiCompatibleProvider,
   readAiSettings,
+  workspaceMount,
+  type AiProviderSettings,
+  type AiRunSetup,
+  type AiTelemetry,
+  type Workspace,
   type AiProvider,
   type AiProviderId,
   type AiSetup,
   type AiTask,
   type Repositories,
 } from '@shipcast/engine';
-import type { Brand } from '@shipcast/schema';
+import { AiError, type Brand } from '@shipcast/schema';
 import { credentialsFor } from './services.ts';
 import type { SecretStore } from './secrets.ts';
 import { registerAiHost } from './telemetry/classify.ts';
@@ -30,6 +37,12 @@ export class AiNotConnected extends Error {}
 
 const NAMES: Record<AiProviderId, string> = { claudio: 'claudio', anthropic: 'Anthropic API', openaiCompatible: 'OpenAI-compatible' };
 
+/** An AI provider's connected account, as the keychain and the registry hold it; claudio has none, its URL and token are settings */
+async function connectedAccount(id: string, deps: AiDeps): Promise<{ settings: Record<string, string>; secrets: Record<string, string> } | undefined> {
+  const found = await credentialsFor(id, { env: deps.env, brand: await deps.brand(), registry: deps.registry, secrets: deps.secrets });
+  return found?.credentials;
+}
+
 /**
  * A provider by id. claudio's URL and token are settings (the token in the keychain); the Anthropic API and an
  * OpenAI-compatible server are connected accounts, their keys in the keychain like any network's.
@@ -41,9 +54,9 @@ export async function providerFor(id: AiProviderId, deps: AiDeps): Promise<AiPro
     registerAiHost(claudio.url, 'claudio');
     return new Claudio({ ...claudio, fetch: deps.fetch });
   }
-  const found = await credentialsFor(id, { env: deps.env, brand: await deps.brand(), registry: deps.registry, secrets: deps.secrets });
+  const found = await connectedAccount(id, deps);
   if (!found) throw new AiNotConnected(`the ${NAMES[id]} is chosen in the AI settings but no account is connected: connect one on the Channels page`);
-  const { settings, secrets } = found.credentials;
+  const { settings, secrets } = found;
   if (id === 'anthropic') {
     if (!secrets.apiKey) throw new AiNotConnected('the Anthropic account has no API key: connect it again');
     return anthropicProvider({ apiKey: secrets.apiKey, fetch: deps.fetch });
@@ -68,4 +81,46 @@ export function aiSetup(deps: AiDeps): (task: AiTask) => Promise<AiSetup> {
       tone: settings.tone,
     };
   };
+}
+
+/**
+ * A provider's settings for the AI task runner, by its definition's field keys, read where the old
+ * providers read them: claudio's URL and token from the settings (its read-only tool preset, while it
+ * is not a setting of the app, from SHIPCAST_CLAUDIO_TOOL_PRESET), every other provider's from its
+ * connected account. The host of a provider at an address of its own is registered for the measurement.
+ */
+export async function aiProviderSettings(id: string, deps: AiDeps): Promise<AiProviderSettings> {
+  if (id === 'claudio') {
+    const claudio = deps.claudio();
+    registerAiHost(claudio.url, 'claudio');
+    const toolPreset = deps.env.SHIPCAST_CLAUDIO_TOOL_PRESET?.trim();
+    return { url: claudio.url, token: claudio.token, ...(toolPreset && { toolPreset }) };
+  }
+  const found = await connectedAccount(id, deps);
+  if (!found) throw new AiError('ai_not_connected', `the ${aiProviderDefinition(id)?.name ?? id} is chosen in the AI settings but no account is connected: connect one on the Channels page`, { provider: id });
+  if (found.settings.baseUrl) registerAiHost(found.settings.baseUrl, 'openai-compatible');
+  return { ...found.settings, ...found.secrets };
+}
+
+/** What the runner runs a task with: the task's provider and model as the AI settings have them when it runs */
+export function aiRunSetup(deps: AiDeps): (task: AiTask) => Promise<AiRunSetup> {
+  return async (task) => {
+    const choice = (await readAiSettings(deps.registry)).tasks[task];
+    const provider = aiProviderDefinition(choice.provider);
+    if (!provider) throw new AiError('ai_not_connected', `the AI settings choose "${choice.provider}" for ${task}, which is not a provider`);
+    return { provider, settings: await aiProviderSettings(choice.provider, deps), ...(choice.model && { model: choice.model }) };
+  };
+}
+
+/**
+ * The AI task runner (`ai-runner` flag), on the same settings and keychain as the old providers. No
+ * task uses it yet: built beside them, so moving a task is a swap.
+ */
+export function aiRunnerFor(deps: AiDeps & { workspace: Pick<Workspace, 'hostDir' | 'providerDir'>; telemetry?: AiTelemetry }): AiTaskRunner {
+  return new AiTaskRunner({
+    resolve: aiRunSetup(deps),
+    mount: workspaceMount(deps.workspace),
+    ...(deps.telemetry && { telemetry: deps.telemetry }),
+    ...(deps.fetch && { fetch: deps.fetch }),
+  });
 }

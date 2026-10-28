@@ -10,12 +10,13 @@ import {
   SecretRows,
   type OpenRepositories,
   type AiProvider,
+  type AiTaskRunner,
   type ObjectRequest,
   type PipelineDeps,
   type TextRequest,
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
-import { aiSetup } from './ai.ts';
+import { aiRunnerFor, aiSetup } from './ai.ts';
 import { provisionAppKeys } from './app-keys.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
@@ -26,6 +27,7 @@ import type { Cache, EventBus } from './redis/ports.ts';
 import { GitHubUserTokens } from './github-user.ts';
 import { secretStoreFor, type SecretStore } from './secrets.ts';
 import { importEnvSettings, RuntimeSettings } from './settings.ts';
+import { telemetry } from './telemetry/fetch.ts';
 
 /** How the engine reaches GitHub, for `shipcast status` and the Settings page */
 export type GitHubAccess = { kind: 'app'; slug: string | undefined; bot: string | undefined } | { kind: 'token' };
@@ -43,6 +45,8 @@ export interface Runtime {
   /** The owner's user token from the last sign-in through the App; absent without an App */
   userTokens: GitHubUserTokens | undefined;
   pipeline: PipelineDeps;
+  /** With `ai-runner`: the AI task runner, built beside the old providers; no task runs on it yet */
+  aiRunner: AiTaskRunner | undefined;
   /** The brand the launches repo speaks for, read again every few minutes; SettingMissing without a launches repo */
   brand(): Promise<Brand>;
   /** Reads the settings again: after a save in the app, and before each round */
@@ -171,17 +175,23 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     : undefined;
 
+  // What choosing a task's provider needs, for the old providers and the runner alike
+  const aiDeps = {
+    env,
+    registry,
+    secrets,
+    claudio: () => settings.claudio(),
+    brand,
+    ...(options.fetch && { fetch: options.fetch }),
+  };
+  const workspace = { hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir };
+  const recorder = telemetry();
+  const aiRunner = flags.on('ai-runner') ? aiRunnerFor({ ...aiDeps, workspace, ...(recorder && { telemetry: recorder }) }) : undefined;
+
   const pipeline: PipelineDeps = {
     github,
     ai: new SettingsClaudio(settings, options.fetch),
-    aiSetup: aiSetup({
-      env,
-      registry,
-      secrets,
-      claudio: () => settings.claudio(),
-      brand,
-      ...(options.fetch && { fetch: options.fetch }),
-    }),
+    aiSetup: aiSetup(aiDeps),
     registry,
     // Getters: the engine reads them as plain values, and they follow the settings. Empty while
     // unset; every way into the pipeline reads the brand first, which says what is missing
@@ -192,7 +202,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       return settings.current().maxBudgetUsd;
     },
     // Beside other processes each job clones into a folder of its own, removed at its end
-    checkout: (repo, ref) => checkout({ hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir, perJob: split(roleFromEnv(env)) }, repo, ref),
+    checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),
   };
 
@@ -206,6 +216,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     access,
     userTokens,
     pipeline,
+    aiRunner,
     brand,
     refresh: async () => {
       await settings.read();
