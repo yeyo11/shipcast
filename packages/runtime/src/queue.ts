@@ -1,5 +1,5 @@
 import type { ArticleInput, JobRecord, Registry } from '@shipcast/engine';
-import type { Channel } from '@shipcast/schema';
+import { ShipcastError, type Channel } from '@shipcast/schema';
 import { fromPglite, PgBoss, type ConstructorOptions, type PGliteLike, type Queue } from 'pg-boss';
 import { withOrigin } from './telemetry/origin.ts';
 import type { TelemetryRecorder } from './telemetry/recorder.ts';
@@ -83,8 +83,12 @@ const QUEUES: Record<QueueName, QueueSpec> = {
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];
 
 /** Thrown by a handler that cannot finish yet: its job is tried again after the queue's delay */
-export class RetryLater extends Error {
+export class RetryLater extends ShipcastError {
   override name = 'RetryLater';
+
+  constructor(message: string) {
+    super(message, { code: 'retry_later', retryable: true, httpStatus: 503 });
+  }
 }
 
 /** What a handler gets besides its job's data */

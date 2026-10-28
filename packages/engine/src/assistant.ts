@@ -1,4 +1,4 @@
-import { ContentPack, languageName, LIMITS, PIECE_LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
+import { ContentPack, languageName, LIMITS, ShipcastError, PIECE_LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
@@ -295,7 +295,11 @@ export function buildCheckPrompt(text: string, context: AssistantContext, brand:
 }
 
 /** Thrown for a request the assistant cannot do here, with the reason for the owner */
-export class AssistantRefused extends Error {}
+export class AssistantRefused extends ShipcastError {
+  constructor(message: string) {
+    super(message, { code: 'refused', httpStatus: 409 });
+  }
+}
 
 /**
  * Checks a launch's text against its released code: an agent reads the checkout with the read-only

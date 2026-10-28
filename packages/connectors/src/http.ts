@@ -1,19 +1,22 @@
+import { ShipcastError } from '@shipcast/schema';
+
 /** A connector's failure: which network, what it answered, and whether trying again could help. */
-export class ConnectorError extends Error {
+export class ConnectorError extends ShipcastError {
   readonly network: string;
   readonly status: number | undefined;
   readonly #retryable: boolean | undefined;
 
   /** `retryable` overrides the status, for a failure whose retry would repeat what already happened */
   constructor(network: string, message: string, status?: number, retryable?: boolean) {
-    super(`${network}: ${message}`);
+    // The network's failure, not the caller's: an HTTP answer says so with 502, whatever it answered
+    super(`${network}: ${message}`, { code: 'upstream', httpStatus: 502 });
     this.network = network;
     this.status = status;
     this.#retryable = retryable;
   }
 
   /** Rate limits and server errors pass; a refused request will be refused again */
-  get retryable(): boolean {
+  override get retryable(): boolean {
     return this.#retryable ?? (this.status === undefined || this.status === 429 || this.status >= 500);
   }
 }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ConnectorError } from '@shipcast/connectors';
-import { splitFrontMatter, type Channel } from '@shipcast/schema';
+import { Refused, splitFrontMatter, type Channel } from '@shipcast/schema';
 import { isScalar, parseDocument } from 'yaml';
 import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
@@ -88,14 +88,7 @@ export const CAPABILITIES: Readonly<Record<Channel, Capability>> = {
 /** Why an edit or a delete was not made, so the API can answer 404 or 409 */
 export type RefusalReason = 'not_found' | 'unsupported' | 'deleted' | 'invalid' | 'no_credentials';
 
-export class PostRefused extends Error {
-  readonly reason: RefusalReason;
-
-  constructor(reason: RefusalReason, message: string) {
-    super(message);
-    this.reason = reason;
-  }
-}
+export class PostRefused extends Refused<RefusalReason> {}
 
 /**
  * A change to published pieces. The shared fields (text, link, image) are what every network has in

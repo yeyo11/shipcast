@@ -1,4 +1,4 @@
-import type { Channel, LaunchConfig } from '@shipcast/schema';
+import { Refused, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { cancelledKey, PUBLISHED_BY_ENGINE } from './publish.ts';
 import type { Post, Registry } from './registry.ts';
 
@@ -16,14 +16,8 @@ export const TIMEZONE_KEY = 'timezone';
 export const DEFAULT_TIMEZONE = 'Europe/Madrid';
 
 /** Why a schedule was refused: no such launch or post, an input that is not valid, or a state that does not allow it */
-export class ScheduleRefused extends Error {
-  readonly reason: 'not_found' | 'invalid' | 'refused';
-
-  constructor(reason: 'not_found' | 'invalid' | 'refused', message: string) {
-    super(message);
-    this.name = 'ScheduleRefused';
-    this.reason = reason;
-  }
+export class ScheduleRefused extends Refused<'not_found' | 'invalid' | 'refused'> {
+  override name = 'ScheduleRefused';
 }
 
 /**

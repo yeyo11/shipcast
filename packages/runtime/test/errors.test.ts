@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { ShipcastError } from '@shipcast/schema';
 import { ConfigError, RetryLater, SettingMissing } from '../src/index.ts';
 
 // Characterisation of the runtime's errors, pinned before they took the shared base
@@ -16,4 +17,15 @@ test('the runtime errors keep their messages and names', () => {
   const config = new ConfigError('bad .env');
   assert.ok(config instanceof Error);
   assert.equal(config.message, 'bad .env');
+});
+
+test('the runtime errors are Shipcast errors: a retry later is retryable, the rest are not', () => {
+  assert.deepEqual(
+    [new SettingMissing('launchesRepo'), new RetryLater('x'), new ConfigError('y')].map((e) => [e instanceof ShipcastError, e.code, e.retryable, e.httpStatus]),
+    [
+      [true, 'setting_missing', false, 409],
+      [true, 'retry_later', true, 503],
+      [true, 'config', false, 500],
+    ],
+  );
 });
