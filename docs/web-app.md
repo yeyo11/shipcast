@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T16:39:38.711118317Z
-updated_at: 2026-10-27T17:40:56.888542084Z
+created_at: 2026-10-27T18:22:10.41780007Z
+updated_at: 2026-10-28T08:02:37.073847998Z
 tags:
     - web-app
     - dashboard
@@ -143,7 +143,11 @@ runs on the owner's machine.
   and Edit the drafts), and one that is drafting or was not launched a quiet dashed row with a way to
   it. The grid holds only launches that went out (published, in part or failing), every card the
   height of the tallest (`grid-auto-rows: 1fr`, the marks on the card's bottom edge). The split is
-  `splitLaunches` in `src/server/launch-list.ts`, tested. **Each title has the project's picture**, a
+  `splitLaunches` in `src/server/launch-list.ts`, tested. **A launch's state is read from its pieces
+  too** (since 2026-10-28): the registry keeps a launch `drafted` until its last piece is out, so a
+  drafted launch with pieces (the blog live, the others scheduled) is **Going out** or **Scheduled** and
+  a card in the grid; only one with nothing out or scheduled waits for the owner (`stateOf` in
+  `src/server/launches.server.ts`, tested). **Each title has the project's picture**, a
   40 px tile (`components/ProjectAvatar.tsx`): the repo owner's public GitHub avatar
   (`https://github.com/<owner>.png?size=80`, built by `ownerAvatarUrl` only for a valid login and
   passed through `imageUrl` on the server), lazy and decorative; when there is none or it fails to
@@ -158,7 +162,8 @@ runs on the owner's machine.
   one-line yellow strip with **Approve and publish** (and Open the pull request) while its drafts
   wait, then **its numbers first**: the totals (views, reactions, comments, clicks, stars) and views
   per day as bars. One quiet line links what waits on the owner (comments to answer, a channel's
-  scheduled time, a running job). Below, four tabs kept in the address (`?tab=`, and `?channel=`):
+  scheduled time, a running job; a scheduled piece's job, queued until its time, is not a running
+  job, since its time is already on the line). Below, four tabs kept in the address (`?tab=`, and `?channel=`):
   **Channels**, a strip of channel chips (glyph and state dot) choosing one channel, shown with its
   totals, each piece with its link, its numbers over time, Edit and Delete (or Unpublish) where its
   network allows them or Retry when it failed, its time while it is not out yet (a day picked in the
@@ -168,6 +173,9 @@ runs on the owner's machine.
   branch) and the media, folded rows (an Accordion) opened on demand. **Search engines**, each
   engine's view of each language's article. **Details**, the properties, the accounts it went out
   with and how their followers moved, the last reading of every number, and the launch's jobs.
+  A launch that failed before its drafts were written opens on **Details**, where the job's log says
+  why; Content says nothing was drafted, and the failure notice of a release with nothing out has
+  **Launch it again**, the same retry as launching it by hand (since 2026-10-28).
 - **Launch a repo** (`/launch`): the owner's repos (a combobox with a search) and their releases (a
   select), the [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice,
   and the choice between reviewing the drafts first or publishing without review. Drafting is a job
