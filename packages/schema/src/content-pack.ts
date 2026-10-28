@@ -50,6 +50,28 @@ export const LIMITS = {
   linkedinText: 1300,
 } as const;
 
+/**
+ * The networks whose piece is one capped text, measured the way each network counts it: what the
+ * draft editor refuses to save and the writing assistant is told, so a text the network would refuse
+ * is caught before it is merged, not when it fails to publish.
+ */
+export const PIECE_LIMITS = {
+  bluesky: { max: LIMITS.blueskyGraphemes, length: graphemeCount, network: 'Bluesky', counting: 'the link included' },
+  mastodon: { max: LIMITS.mastodonCharacters, length: (t: string) => t.length, network: 'Mastodon', counting: 'the link and hashtags included' },
+  threads: { max: LIMITS.threadsText, length: threadsLength, network: 'Threads', counting: 'the link included, an emoji counting as four or more' },
+  telegram: { max: LIMITS.telegramText, length: (t: string) => t.length, network: 'Telegram', counting: 'the link included' },
+  discord: { max: LIMITS.discordText, length: (t: string) => t.length, network: 'Discord', counting: 'the link included' },
+  linkedin: { max: LIMITS.linkedinText, length: (t: string) => t.length, network: 'LinkedIn', counting: 'the hashtags included' },
+} as const satisfies Partial<Record<Channel, { max: number; length: (text: string) => number; network: string; counting: string }>>;
+
+/** What is wrong with a piece's text for its network, if anything: its length against the network's cap */
+export function pieceLimitProblem(channel: string, text: string): string | undefined {
+  const limit = (PIECE_LIMITS as Partial<Record<string, (typeof PIECE_LIMITS)[keyof typeof PIECE_LIMITS]>>)[channel];
+  if (!limit) return undefined;
+  const length = limit.length(text);
+  return length > limit.max ? `${limit.network} takes at most ${limit.max} characters (${limit.counting}); this is ${length}` : undefined;
+}
+
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
 
 const ArticleVersion = z.strictObject({

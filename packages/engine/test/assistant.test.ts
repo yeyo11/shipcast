@@ -166,3 +166,11 @@ test('a chat becomes one labelled transcript for the REST fallback', () => {
   assert.match(text, /The owner wrote:\nMake it punchier\n\nYou wrote:\nLike this\?\n\nThe owner wrote:\nShorter/);
   assert.match(text, /Answer the owner’s last message\. Put your whole answer in `text`\.$/);
 });
+
+test('a network piece carries its cap into every action and the chat, counted the way the network counts', () => {
+  const improve = buildActionPrompt({ action: 'improve', selection: 'claudio corre Claude Code como servicio.' }, launch, brand);
+  assert.match(improve.system, /must stay within 300 characters, the link included/);
+  assert.doesNotMatch(buildActionPrompt({ action: 'improve', selection: 'I built a small tool.' }, article, brand).system, /must stay within/);
+  const linkedin = buildActionPrompt({ action: 'shorten', selection: 'x' }, { ...launch, channel: 'linkedin' }, brand);
+  assert.match(linkedin.system, /within 1300 characters, the hashtags included/);
+});

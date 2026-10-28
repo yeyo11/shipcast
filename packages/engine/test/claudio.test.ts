@@ -84,6 +84,25 @@ test('a chat that ends without calling StructuredOutput is an error, not an empt
   );
 });
 
+test('a usage limit says so, with when it resets, instead of "without a structured answer"', async () => {
+  // As Shipcast v0.2.0's drafting chat was seen on 2026-10-27: idle, the limit a synthetic line, the execution not ended yet
+  const limited = view('idle');
+  limited.entries.push(
+    { role: 'assistant', isSidechain: false, model: 'claude-sonnet-5-5', blocks: [{ type: 'tool_use', name: 'Bash', input: {} }] },
+    { role: 'assistant', isSidechain: false, model: '<synthetic>', blocks: [{ type: 'text', text: "You've hit your session limit · resets 7:30pm (UTC)" }] },
+  );
+  await assert.rejects(client([limited], []).generateObject(request), (e) => {
+    assert.ok(e instanceof ClaudioError);
+    assert.equal(e.message, "Claude's usage limit was reached (You've hit your session limit · resets 7:30pm (UTC)): launch it again once it resets");
+    assert.equal(e.chatId, 'chat-1');
+    return true;
+  });
+  // Another synthetic stop keeps its own words
+  const stopped = view('idle', { outcome: 'stopped' });
+  stopped.entries.push({ role: 'assistant', isSidechain: false, model: '<synthetic>', blocks: [{ type: 'text', text: 'Credit balance is too low' }] });
+  await assert.rejects(client([stopped], []).generateObject(request), /^Error: claudio chat stopped: Credit balance is too low$|claudio chat stopped: Credit balance is too low/);
+});
+
 test('a live chat whose turn ended with words but no StructuredOutput is caught at once', async () => {
   const calls: Call[] = [];
   const talked = view('idle');

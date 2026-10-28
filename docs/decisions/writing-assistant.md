@@ -1,12 +1,13 @@
 ---
-created_at: 2026-10-26T11:02:17.837649584Z
-updated_at: 2026-10-26T12:40:09.108264824Z
+created_at: 2026-10-26T16:39:23.13001651Z
+updated_at: 2026-10-28T07:49:25.301811959Z
 tags:
     - decision
     - web-app
     - ai
     - writing-assistant
     - phase-8
+    - limits
 ---
 # The writing assistant
 
@@ -27,6 +28,20 @@ so the editing surface stays apart from the launch's numbers and actions).
   selection; a rewrite it proposes comes back marked as a proposal.
 - **Every proposal is a diff**, word by word, with Accept and Reject. Insertions and deletions are told
   apart by more than colour, so the diff reads without seeing colour.
+
+## A network's cap
+
+Added on 2026-10-28. A draft of a network with one capped text (Bluesky, Mastodon, Threads, Telegram,
+Discord, LinkedIn) carries its cap into every quick action and chat turn: the system prompt says the
+post itself, not the draft's heading and approval note, must stay within that many characters,
+counted as the network counts them (`PIECE_LIMITS` in `packages/schema`: graphemes on Bluesky, an
+emoji as its UTF-8 bytes on Threads), and to shorten what would not fit. Before this, **Improve** on
+the REA article's Bluesky post proposed 305 characters, link included, which Bluesky refuses.
+
+Saving is the net under it: `editDraft` refuses a channel draft past its network's cap with the
+network, the cap and the length ("Bluesky takes at most 300 characters (the link included); this is
+305"), so a post the network would refuse is caught before the merge instead of failing at
+publishing time.
 
 ## What it may say
 

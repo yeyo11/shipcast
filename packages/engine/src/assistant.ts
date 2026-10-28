@@ -1,4 +1,4 @@
-import { ContentPack, LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
+import { ContentPack, LIMITS, PIECE_LIMITS, type Brand, type ContentPack as Pack } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiSetup } from './ai.ts';
@@ -104,7 +104,14 @@ export function assistantSystem(context: AssistantContext, brand: Brand, options
         ...(context.launch.analysis ? [analysisLines(context.launch.analysis)] : ['The launch has no analysis on record: claim nothing the text does not already say.']),
       ]
     : ['The text is an article the owner wrote.'];
-  const where = context.channel ? [`It is the piece for ${ADAPT_TARGETS[context.channel as AdaptTarget]?.name ?? context.channel}.`] : [];
+  const limit = context.channel ? (PIECE_LIMITS as Partial<Record<string, { max: number; counting: string }>>)[context.channel] : undefined;
+  const where = context.channel
+    ? [
+        `It is the piece for ${ADAPT_TARGETS[context.channel as AdaptTarget]?.name ?? context.channel}.`,
+        // Every action and chat answer must fit it: Improve once proposed a Bluesky post the network refuses
+        ...(limit ? [`The post itself (not the draft's heading and approval note above it) must stay within ${limit.max} characters, ${limit.counting}: whatever you propose, count it, and shorten it to fit if it would not.`] : []),
+      ]
+    : [];
   return [
     `You help ${brand.displayName} edit what they publish under their name.`,
     `How to write: ${how}`,

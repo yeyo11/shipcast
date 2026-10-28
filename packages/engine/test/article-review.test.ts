@@ -187,6 +187,10 @@ test('reviewing reads the drafts from the pull request; edits land on its branch
   await editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', '# Bluesky\n\nedited', d);
   assert.deepEqual(github.updates[0], { branch: 'launch/claudio-v0.9.0', path: 'launches/claudio/v0.9.0/bluesky.md', content: '# Bluesky\n\nedited\n' });
   await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/pack.json', '{}', d), /not a draft/);
+  // A post the network would refuse is refused here, before the merge, not when it fails to publish
+  const long = `# Bluesky\n\n> **Approval:** x\n\n${'a'.repeat(280)} https://josegarrido.dev/en/claudio/?ref=bluesky`;
+  await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', long, d), /Bluesky takes at most 300 characters \(the link included\); this is 328/);
+  assert.equal(github.updates.length, 1, 'nothing is committed');
 
   await approveLaunch(drafted, d);
   assert.deepEqual(github.merged, [7]);

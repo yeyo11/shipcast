@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   Brand,
   ContentPack,
+  pieceLimitProblem,
   contentPackJsonSchema,
   graphemeCount,
   DEFAULT_MODES,
@@ -191,4 +192,12 @@ test('missingPieces requires each new piece once its channel is on, and an artic
   const pack = ContentPack.parse({ ...noArticle, threads: { text: 't' }, linkedin: { text: 'l' } });
   const blogOff = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { blog: 'off', devto: 'off', threads: 'approval', linkedin: 'approval' } });
   assert.deepEqual(missingPieces(pack, blogOff, brand), ['linkedin: LinkedIn shares the article, which is missing']);
+});
+
+test('a piece is measured against its network the way that network counts', () => {
+  assert.equal(pieceLimitProblem('bluesky', 'é'.repeat(300)), undefined, 'Bluesky counts graphemes');
+  assert.match(pieceLimitProblem('bluesky', 'a'.repeat(301)) ?? '', /^Bluesky takes at most 300 characters \(the link included\); this is 301$/);
+  assert.match(pieceLimitProblem('threads', `${'a'.repeat(497)}🔎`) ?? '', /this is 501/, 'an emoji is its UTF-8 bytes on Threads');
+  assert.equal(pieceLimitProblem('linkedin', 'a'.repeat(1300)), undefined);
+  assert.equal(pieceLimitProblem('devto', 'a'.repeat(99_999)), undefined, 'an article has no cap here');
 });

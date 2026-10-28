@@ -15,6 +15,7 @@ interface ChatBlock {
   type: string;
   name?: string;
   input?: unknown;
+  text?: string;
 }
 
 interface ChatView {
@@ -22,9 +23,10 @@ interface ChatView {
     id: string;
     state: 'working' | 'waiting' | 'idle';
     alive: boolean;
-    executions: Array<{ outcome: 'completed' | 'failed' | 'stopped' | 'interrupted' | null; error: string | null; costUsd: number | null }>;
+    executions: Array<{ outcome: 'completed' | 'failed' | 'stopped' | 'interrupted' | null; error: string | null; costUsd: number | null; cause?: string | null }>;
   };
-  entries: Array<{ role: string; isSidechain?: boolean; blocks: ChatBlock[] }>;
+  /** `model` is `<synthetic>` on a line Claude Code wrote itself, such as a usage limit, not the model */
+  entries: Array<{ role: string; isSidechain?: boolean; model?: string | null; blocks: ChatBlock[] }>;
 }
 
 export interface ClaudioOptions {
@@ -164,7 +166,7 @@ export class Claudio implements AiProvider {
         // kept alive for a follow-up would otherwise only be noticed at the timeout
         const spoke = view.entries.some((e) => e.role === 'assistant' && !e.isSidechain);
         if (view.chat.state === 'idle' && (!view.chat.alive || last?.outcome || spoke)) {
-          throw new ClaudioError('claudio chat ended without a structured answer', chatId);
+          throw new ClaudioError(noAnswer(view), chatId);
         }
         if (Date.now() > deadline) throw new ClaudioError(`claudio chat took longer than ${this.#timeoutMs} ms`, chatId);
         // Whoever asked has gone (the page was closed): the chat is stopped below instead of finishing for nobody
@@ -178,6 +180,22 @@ export class Claudio implements AiProvider {
 }
 
 /** The input of the main agent's newest `StructuredOutput` call: the answer to the schema. */
+/**
+ * Why a chat ended without an answer, in words the owner can act on. Claude Code writes a usage
+ * limit as a synthetic assistant line ("You've hit your session limit · resets 7:30pm (UTC)"), and
+ * the chat goes idle before its execution records the error: Shipcast v0.2.0's launch failed that way
+ * on 2026-10-27 and only said "ended without a structured answer".
+ */
+export function noAnswer(view: Pick<ChatView, 'chat' | 'entries'>): string {
+  const last = view.chat.executions.at(-1);
+  const synthetic = view.entries.findLast((e) => e.role === 'assistant' && !e.isSidechain && e.model === '<synthetic>');
+  const said = synthetic?.blocks.findLast((b) => b.type === 'text' && b.text)?.text?.trim() ?? last?.error ?? undefined;
+  if (last?.cause === 'rate-limit' || (said && /\b(usage|session|rate) limit\b|hit your limit/i.test(said))) {
+    return `Claude's usage limit was reached${said ? ` (${said})` : ''}: launch it again once it resets`;
+  }
+  return said ? `claudio chat stopped: ${said}` : 'claudio chat ended without a structured answer';
+}
+
 function structuredOutput(view: ChatView): unknown {
   for (let i = view.entries.length - 1; i >= 0; i--) {
     const entry = view.entries[i]!;

@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-24T14:26:53.041915405Z
-updated_at: 2026-10-25T15:51:34.592518919Z
+created_at: 2026-10-25T16:02:35.655722265Z
+updated_at: 2026-10-28T07:49:42.015993253Z
 tags:
     - claudio
     - ai-provider
     - docker
     - operations
+    - errors
 ---
 # claudio, the AI provider
 
@@ -49,6 +50,13 @@ per task in the AI settings; it is the default for every task
 - **Streamed text, on its OpenAI-compatible surface.** `streamText`, for the writing assistant, goes
   through `@ai-sdk/openai-compatible` with the base URL `<claudio>/api/v1`. That surface is designed in
   claudio but not built yet (2026-10-25: the instance answers 404), so it works once claudio ships it.
+- **A chat that ends without an answer** says why, in words the owner can act on (`noAnswer` in
+  `packages/engine/src/claudio.ts`). Claude Code writes a usage limit as a synthetic assistant line
+  ("You've hit your session limit · resets 7:30pm (UTC)") and the chat goes idle before its execution
+  records the error, so the line itself is read: the launch fails with "Claude's usage limit was
+  reached (…): launch it again once it resets", and its page offers **Launch it again**. Any other
+  synthetic stop keeps its own words. Added on 2026-10-28, after Shipcast v0.2.0's drafting failed that
+  way and only said "ended without a structured answer".
 - **Models.** A model chosen in the AI settings is passed as claudio's own model value (`default`,
   `opus`, `fable`, `sonnet`…, from `GET /api/providers/claude-code/models`); without one, claudio's
   default.
@@ -68,4 +76,4 @@ per task in the AI settings; it is the default for every task
 
 ## Related
 
-[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[decisions/ai-providers.md]] · [[engine.md]] · [[status.md]]
+[[plans/shipcast.md]] · [[decisions/mvp-scope.md]] · [[decisions/ai-providers.md]] · [[engine.md]] · [[status.md]] · [[decisions/writing-assistant.md]]

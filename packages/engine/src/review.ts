@@ -1,4 +1,6 @@
+import { pieceLimitProblem } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
+import { draftBody } from './publish.ts';
 import type { Launch } from './registry.ts';
 
 /** The GitHub calls reviewing a launch's drafts makes; `GitHubRest` has them all */
@@ -94,6 +96,10 @@ export async function editDraft(launch: Launch, path: string, content: string, d
   if (review.pullRequest.state !== 'open') throw new ReviewError('the pull request is no longer open: its drafts were already decided');
   const draft = review.drafts.find((d) => d.path === path);
   if (!draft || (draft.kind !== 'article' && draft.kind !== 'channel')) throw new ReviewError(`${path} is not a draft of this launch`);
+  // The network would refuse it at publishing time, after the merge: refused here, while it can still be fixed
+  const channel = /([a-z]+)\.md$/.exec(path)?.[1];
+  const tooLong = draft.kind === 'channel' && channel ? pieceLimitProblem(channel, draftBody(content)) : undefined;
+  if (tooLong) throw new ReviewError(`${draft.label}: ${tooLong}`);
   await deps.github.updateFile(deps.launchesRepo, review.pullRequest.branch, path, content.endsWith('\n') ? content : `${content}\n`, `Edit ${draft.label} in Shipcast`);
 }
 
