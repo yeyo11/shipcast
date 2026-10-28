@@ -4,6 +4,7 @@ import { Refused, splitFrontMatter, type Channel } from '@shipcast/schema';
 import { isScalar, parseDocument } from 'yaml';
 import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
+import { composedText, isMainPiece } from './edit-rules.ts';
 import type { PostStore } from './ports.ts';
 import { kindLanguage, type Post } from './registry.ts';
 
@@ -183,11 +184,8 @@ function fieldsOf(changes: PostChanges): EditField[] {
   return fields;
 }
 
-/** A post's own piece, a blog article or a subreddit's post; a story, a comment or a newsletter issue is not edited from here */
-function isMain(post: Post): boolean {
-  if (post.channel === 'blog') return post.kind.startsWith('article:');
-  return post.channel === 'reddit' ? post.kind.startsWith('post:') : post.kind === 'post';
-}
+/** A post's own piece, a blog article or a subreddit's post (edit-rules.ts, which the page reads too) */
+const isMain = (post: Post) => isMainPiece(post.channel, post.kind);
 
 function describe(post: Post): string {
   return post.kind === 'post' ? `${nameOf(post.channel)} post ${post.id}` : `${nameOf(post.channel)} ${post.kind} ${post.id}`;
@@ -215,8 +213,7 @@ function textWithLink(channel: Channel, changes: PostChanges): string | undefine
   if (changes.link !== undefined && changes.text === undefined) {
     throw new PostRefused('invalid', `${nameOf(channel)} replaces the whole text: send the text with the link`);
   }
-  if (changes.text === undefined) return undefined;
-  return changes.link ? `${changes.text.trimEnd()}\n\n${changes.link}` : changes.text;
+  return composedText(channel, changes);
 }
 
 async function imageBytes(url: string, alt: string | undefined, http: typeof fetch): Promise<Image> {
