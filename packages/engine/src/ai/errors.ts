@@ -1,5 +1,5 @@
 import { AiError, type AiErrorCode } from '@shipcast/schema';
-import { APICallError, RetryError } from 'ai';
+import { APICallError, RetryError, StreamProviderError } from 'ai';
 
 /**
  * What a provider's own error codes mean, by the code its error body carries (`error.code` of an
@@ -41,8 +41,8 @@ const minutes = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} min`
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * The code and message of an error body: OpenAI's `{ error: { code, message } }`, the inner object
- * alone (an error chunk of a stream), or a flat `{ code | error: string, message }`.
+ * The code and message of an error body: OpenAI's `{ error: { code, message } }`, or a flat
+ * `{ code | error: string, message }`.
  */
 export function errorBodyOf(body: unknown): { code?: string; message?: string } {
   const parsed = typeof body === 'string' ? safeJson(body) : body;
@@ -108,10 +108,9 @@ export function toAiError(error: unknown, context: FailureContext): unknown {
   if (cause instanceof TypeError && /fetch|network|ECONNREFUSED|ENOTFOUND/i.test(`${cause.message} ${String(cause.cause ?? '')}`)) {
     return new AiError('ai_unavailable', `the ${provider.name} could not be reached: ${redact(cause.message, secrets)}`, options);
   }
-  // An error chunk in the middle of a stream: the SDK passes the provider's error object as it came,
-  // with no status, so its code is all there is to go by
-  if (isRecord(cause) && !(cause instanceof Error) && errorBodyOf(cause).message !== undefined) {
-    return fromHttpFailure({ status: undefined, body: JSON.stringify(cause) }, context, error);
+  // An error chunk in the middle of a stream: the SDK keeps the provider's code, and a status only when the chunk had one
+  if (StreamProviderError.isInstance(cause)) {
+    return fromHttpFailure({ status: cause.statusCode, body: JSON.stringify({ error: { message: cause.message, ...(cause.code !== undefined && { code: String(cause.code) }) } }) }, context, error);
   }
   return error;
 }
