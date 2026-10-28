@@ -1,9 +1,9 @@
 import { Refused, type Brand } from '@shipcast/schema';
 import { claimArticle, type ArticleInput } from '../article.ts';
 import { claimManual, type PipelineDeps } from '../pipeline.ts';
-import type { LaunchLookup } from '../ports.ts';
+import type { LaunchCatalog } from '../ports.ts';
 import { preflight, type Preflight, type PreflightSource } from '../preflight.ts';
-import type { Launch } from '../registry.ts';
+import type { Launch, LaunchFilter } from '../registry.ts';
 import { approveLaunch, type ReviewGitHub } from '../review.ts';
 
 /** Why a launch was not started, approved or published again; `launch` is the one found in the way, when there is one */
@@ -23,7 +23,7 @@ export interface Claimed {
 }
 
 export interface LaunchServiceDeps {
-  launches: LaunchLookup;
+  launches: LaunchCatalog;
   /** The claim's: the registry that records it once, and GitHub for the latest release when no ref is named */
   claims: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>;
   github: PreflightSource & ReviewGitHub;
@@ -47,6 +47,21 @@ export class LaunchService {
     const launch = await this.#deps.launches.get(launchId);
     if (!launch) throw new LaunchRefused('not_found', 'no such launch');
     return launch;
+  }
+
+  get(launchId: number): Promise<Launch | undefined> {
+    return this.#deps.launches.get(launchId);
+  }
+
+  /** The newest launches, for a picker */
+  recent(limit: number): Promise<Launch[]> {
+    return this.#deps.launches.recent(limit);
+  }
+
+  /** One page of the launches list for its filters, with what the filters can offer */
+  async page(filter: LaunchFilter & { page?: number; pageSize?: number }) {
+    const [page, facets] = await Promise.all([this.#deps.launches.launchList(filter), this.#deps.launches.launchFacets()]);
+    return { page, facets };
   }
 
   /** The repo's checks before a launch: a release, launch.yml, a README… */

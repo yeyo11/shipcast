@@ -2,10 +2,14 @@ import {
   AccountService,
   CommentService,
   launchConfigOf,
+  LaunchService,
+  SettingsService,
   PostService,
   ScheduleService,
   type CommentDeps,
   type EditDeps,
+  type GitHubRest,
+  type PipelineDeps,
   type Post,
   type Registry,
   type ReviewGitHub,
@@ -48,3 +52,9 @@ export const commentService = (deps: { registry: Registry; sending?: () => Promi
   });
 
 export const accountService = (deps: { registry: Registry }) => new AccountService(deps.registry);
+
+export const settingsService = (deps: { registry: Registry }) => new SettingsService(deps.registry);
+
+/** Over the app's pipeline (the claim's registry and launches repo) and its GitHub (the pre-flight, the merge) */
+export const launchService = (deps: { registry: Registry; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest }) =>
+  new LaunchService({ launches: deps.registry, claims: deps.deps, github: deps.github });

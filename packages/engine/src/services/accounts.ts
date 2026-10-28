@@ -17,9 +17,14 @@ export class AccountService {
     return this.#store.account(accountId);
   }
 
-  /** The accounts, without their secrets: those live in the secret store, never in a row */
-  list(): Promise<Account[]> {
-    return this.#store.accounts();
+  /** The accounts, of one network or brand when asked, without their secrets: those live in the secret store, never in a row */
+  list(filter: { brand?: string; network?: string } = {}): Promise<Account[]> {
+    return this.#store.accounts(filter);
+  }
+
+  /** The account a brand publishes with on a network, if one is connected */
+  primary(brand: string, network: string): Promise<Account | undefined> {
+    return this.#store.primaryAccount(brand, network);
   }
 
   /** A label of the owner's own; an empty one is not taken (false), since an account needs a name to tell it apart */

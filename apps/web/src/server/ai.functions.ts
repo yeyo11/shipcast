@@ -15,6 +15,7 @@ import {
   type AiProviderId,
 } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
+import { accountService, launchService } from './app-services';
 import { appContext } from './context.server';
 import { forOwner } from './errors';
 import { id, InvalidInput, object, text } from './input';
@@ -30,7 +31,7 @@ export const getAiSettings = createServerFn({ method: 'GET' }).handler(async () 
       id: provider,
       name: PROVIDER_NAMES[provider],
       // claudio's address and token still come from .env; the others are connected accounts
-      connected: provider === 'claudio' ? true : (await ctx.registry.primaryAccount(brand.id, provider)) !== undefined,
+      connected: provider === 'claudio' ? true : (await accountService(ctx).primary(brand.id, provider)) !== undefined,
     })),
   );
   const locked = lockedPrompts();
@@ -46,7 +47,7 @@ export const getAiSettings = createServerFn({ method: 'GET' }).handler(async () 
     })),
     variables: [...PROMPT_VARIABLES],
     locked: { launchRules: [...locked.launchRules], articleRules: [...locked.articleRules], replyRules: [...locked.replyRules], profileRules: [...locked.profileRules], assistantLaunchRules: [...locked.assistantLaunchRules], assistantArticleRules: [...locked.assistantArticleRules], packSchema: JSON.stringify(locked.packSchema, null, 2) },
-    launches: (await ctx.registry.recent(50)).map((l) => ({ id: l.id, label: `${l.repo} ${l.ref.replace(/^article:/, '')} · ${l.status}` })),
+    launches: (await launchService(ctx).recent(50)).map((l) => ({ id: l.id, label: `${l.repo} ${l.ref.replace(/^article:/, '')} · ${l.status}` })),
   };
 });
 
@@ -74,7 +75,7 @@ export const previewAiPrompt = createServerFn({ method: 'POST' })
   .handler(async ({ data }) =>
     forOwner(async () => {
       const ctx = await appContext();
-      const launch = await ctx.registry.get(data);
+      const launch = await launchService(ctx).get(data);
       if (!launch) throw new InvalidInput(`no launch ${data}`);
       const settings = await readAiSettings(ctx.registry);
       return previewPrompt(launch, await ctx.brand(), { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }, { prompts: await currentPrompts(ctx.registry), tone: settings.tone });

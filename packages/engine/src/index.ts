@@ -36,4 +36,5 @@ export * from './repositories/secret-rows.ts';
 export * from './publishing/retry.ts';
 export * from './publishing/service.ts';
 export * from './ports.ts';
+export * from './edit-rules.ts';
 export * from './services/index.ts';

@@ -10,3 +10,4 @@ export * from './metrics.ts';
 export * from './notifications.ts';
 export * from './posts.ts';
 export * from './schedule.ts';
+export * from './settings.ts';

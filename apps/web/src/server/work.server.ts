@@ -1,6 +1,7 @@
-import { LaunchRefused, LaunchService, type ArticleInput, type Launch, type Post } from '@shipcast/engine';
+import { LaunchRefused, type ArticleInput, type Launch, type Post } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import { armScheduled, startDrafting, startPublishing as queuePublishing } from '@shipcast/runtime';
+import { launchService } from './app-services';
 import { appContext } from './context.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 
@@ -12,10 +13,7 @@ import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 type Started = { ok: true; job: string } | { ok: false; problem: string };
 
 /** The engine's LaunchService over the app's registry, GitHub and pipeline */
-async function launches(): Promise<LaunchService> {
-  const { registry, deps, github } = await appContext();
-  return new LaunchService({ launches: registry, claims: deps, github });
-}
+const launches = async () => launchService(await appContext());
 
 /** A refusal of the LaunchService as the answer's problem; anything else is a bug and is thrown */
 async function started(run: () => Promise<Started>): Promise<Started> {

@@ -11,6 +11,9 @@ import type { Registry } from './registry.ts';
 /** Finding a launch by id */
 export type LaunchLookup = Pick<Registry, 'get'>;
 
+/** The launches as the pages list them: by id, the newest, and a filtered page with what its filters can offer */
+export type LaunchCatalog = LaunchLookup & Pick<Registry, 'recent' | 'launchList' | 'launchFacets'>;
+
 /** A launch's published pieces, read and marked edited or deleted */
 export type PostStore = Pick<Registry, 'get' | 'post' | 'posts' | 'updatePost'>;
 
@@ -33,4 +36,4 @@ export type CursorWriter = Pick<Registry, 'setCursor'>;
 export type MetricStore = Pick<Registry, 'recent' | 'posts' | 'recordMetrics' | 'cursor' | 'setCursor'>;
 
 /** The connected accounts, read, renamed and made the primary of their network */
-export type AccountStore = Pick<Registry, 'account' | 'accounts' | 'updateAccount' | 'makePrimary'>;
+export type AccountStore = Pick<Registry, 'account' | 'accounts' | 'primaryAccount' | 'updateAccount' | 'makePrimary'>;

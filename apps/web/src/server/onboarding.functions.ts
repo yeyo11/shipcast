@@ -2,6 +2,7 @@ import { readAiSettings, writeAiSettings, AI_PROVIDERS, AI_TASKS, type AiProvide
 import { InvalidSetting, NETWORKS, providerFor, readAutomation } from '@shipcast/runtime';
 import { parseBrand, formatIssues } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
+import { accountService, launchService, settingsService } from './app-services';
 import { appContext, type AppContext } from './context.server';
 import { InvalidInput, object, text } from './input';
 import {
@@ -51,17 +52,17 @@ async function providerReady(ctx: AppContext, provider: AiProviderId): Promise<b
     const { claudioUrl, claudioToken } = ctx.settings.current();
     return Boolean(claudioUrl && claudioToken);
   }
-  return (await ctx.registry.accounts({ network: provider })).length > 0;
+  return (await accountService(ctx).list({ network: provider })).length > 0;
 }
 
 async function detect(ctx: AppContext) {
   const brand = await brandStatus(ctx);
   const ai = await readAiSettings(ctx.registry);
   const ready = Object.fromEntries(await Promise.all(AI_PROVIDERS.map(async (p) => [p, await providerReady(ctx, p)] as const))) as Record<AiProviderId, boolean>;
-  const accounts = await ctx.registry.accounts();
+  const accounts = await accountService(ctx).list();
   const channelIds = new Set(NETWORKS.filter((n) => n.channel).map((n) => n.id));
-  const hasLaunches = (await ctx.registry.recent(1)).length > 0;
-  const automationChosen = (await ctx.registry.setting<string>('automation:mode')) !== undefined;
+  const hasLaunches = (await launchService(ctx).recent(1)).length > 0;
+  const automationChosen = (await settingsService(ctx).read<string>('automation:mode')) !== undefined;
   const detected: Detected = {
     brand: brand.ok,
     ai: AI_TASKS.every((task) => ready[ai.tasks[task].provider]),
@@ -74,9 +75,9 @@ async function detect(ctx: AppContext) {
 }
 
 async function load(ctx: AppContext, detected: Detected, hasLaunches: boolean): Promise<OnboardingState> {
-  const stored = readState(await ctx.registry.setting<unknown>(ONBOARDING_KEY));
+  const stored = readState(await settingsService(ctx).read<unknown>(ONBOARDING_KEY));
   const state = stored ? reconcile(stored, detected) : initialState(detected, { hasLaunches });
-  if (!stored || JSON.stringify(stored) !== JSON.stringify(state)) await ctx.registry.setSetting(ONBOARDING_KEY, state);
+  if (!stored || JSON.stringify(stored) !== JSON.stringify(state)) await settingsService(ctx).save(ONBOARDING_KEY, state);
   return state;
 }
 
@@ -84,7 +85,7 @@ async function save(change: (state: OnboardingState) => OnboardingState): Promis
   const ctx = await appContext();
   const { detected, hasLaunches } = await detect(ctx);
   const next = change(await load(ctx, detected, hasLaunches));
-  await ctx.registry.setSetting(ONBOARDING_KEY, next);
+  await settingsService(ctx).save(ONBOARDING_KEY, next);
   return next;
 }
 
@@ -95,7 +96,7 @@ async function save(change: (state: OnboardingState) => OnboardingState): Promis
  */
 export const getOnboardingState = createServerFn({ method: 'GET' }).handler(async () => {
   const ctx = await appContext();
-  const stored = readState(await ctx.registry.setting<unknown>(ONBOARDING_KEY));
+  const stored = readState(await settingsService(ctx).read<unknown>(ONBOARDING_KEY));
   if (stored) return stored;
   const { detected, hasLaunches } = await detect(ctx);
   return load(ctx, detected, hasLaunches);
