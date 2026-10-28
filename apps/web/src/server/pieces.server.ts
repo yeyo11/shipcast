@@ -21,7 +21,7 @@ export async function launchPieces(registry: Registry, launch: Launch, deps: { g
     registry.accounts.accounts(),
     registry.metrics.postMetricHistory(launch.id),
     // What the assistant answered, counted per channel: the page never lists them
-    registry.sentReplies(launch.id),
+    registry.comments.sentReplies(launch.id),
   ]);
   const out = posts.filter((p) => p.status !== 'scheduled');
   const shaped = accounts.map((a) => ({ id: a.id, network: a.network, label: a.label, identity: a.identity, avatarUrl: accountAvatar(a) }));

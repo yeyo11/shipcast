@@ -13,8 +13,8 @@ async function readInput(): Promise<AttentionInput> {
     registry.launches.recent(60),
     registry.cursors.cursorsWithPrefix(failurePrefix()),
     registry.accounts.accounts(),
-    registry.commentFacets(false),
-    registry.newestWaitingCommentId(false),
+    registry.comments.commentFacets(false),
+    registry.comments.newestWaitingCommentId(false),
     registry.posts.scheduledPosts(),
   ]);
   return {

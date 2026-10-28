@@ -37,7 +37,7 @@ export async function launchView(registry: Registry, launch: Launch): Promise<La
     registry.cursors.cursorsWithPrefix(failurePrefix(launch.id)),
     registry.metrics.latestMetrics(launch.id),
     registry.posts.posts(launch.id),
-    registry.sentReplies(launch.id),
+    registry.comments.sentReplies(launch.id),
   ]);
   const failures = cursors.map((c) => ({ channel: c.key.split(':')[2] ?? '', message: c.value }));
   const pullRequest = launch.detail?.match(/https:\/\/github\.com\/\S+\/pull\/\d+/)?.[0];

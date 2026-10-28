@@ -21,5 +21,5 @@ test('clearing keeps the dismissals of the lines still there and forgets the res
 
 test('with no comment waiting there is no newest one', async () => {
   const registry = await memoryRegistry();
-  assert.equal(await registry.newestWaitingCommentId(), null);
+  assert.equal(await registry.comments.newestWaitingCommentId(), null);
 });

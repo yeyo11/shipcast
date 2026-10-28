@@ -94,7 +94,7 @@ async function setup(): Promise<Setup> {
     },
     redraftComment: async (id) => {
       calls.push(`redraft ${id}`);
-      return (await registry.comment(id)) ? { ok: true, job: 'j7' } : { ok: false, problem: 'no such comment' };
+      return (await registry.comments.comment(id)) ? { ok: true, job: 'j7' } : { ok: false, problem: 'no such comment' };
     },
   };
   const tokens = { registry, secrets };
@@ -496,7 +496,7 @@ async function commented(registry: Registry) {
   const { post: devto } = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/me/x' });
   const add = async (postId: number, channel: 'mastodon' | 'devto', externalId: string, own = false) =>
     (
-      await registry.recordComment({
+      await registry.comments.recordComment({
         postId,
         channel,
         externalId,
@@ -543,7 +543,7 @@ test('a reply is edited, approved and sent with the write scope; what cannot be 
 
   await call(s.deps, 'PATCH', `/comments/${other.id}`, { token: s.write, body: { draft: 'refused' } });
   assert.equal((await call(s.deps, 'POST', `/comments/${other.id}/approve`, { token: s.write })).status, 502);
-  assert.equal((await s.registry.comment(other.id))!.status, 'failed');
+  assert.equal((await s.registry.comments.comment(other.id))!.status, 'failed');
 
   await call(s.deps, 'PATCH', `/comments/${devto.id}`, { token: s.write, body: { draft: 'Thanks!' } });
   assert.equal((await call(s.deps, 'POST', `/comments/${devto.id}/approve`, { token: s.write })).status, 409, 'dev.to cannot reply');

@@ -27,15 +27,15 @@ export class CommentService {
 
   /** The comments the filter matches, the newest first */
   list(filter: CommentFilter): Promise<CommentRecord[]> {
-    return this.#store.comments(filter);
+    return this.#store.comments.comments(filter);
   }
 
   /** One page of the comments page, with what its filters can offer: the channels, states and, for a launch, its posts */
   async page(filter: CommentPageFilter) {
     const [page, facets, posts] = await Promise.all([
-      this.#store.commentsPage(filter),
-      this.#store.commentFacets(filter.own ?? false),
-      filter.launchId ? this.#store.commentPosts(filter.launchId, filter.own ?? false) : Promise.resolve([]),
+      this.#store.comments.commentsPage(filter),
+      this.#store.comments.commentFacets(filter.own ?? false),
+      filter.launchId ? this.#store.comments.commentPosts(filter.launchId, filter.own ?? false) : Promise.resolve([]),
     ]);
     return { page, facets: { ...facets, posts } };
   }

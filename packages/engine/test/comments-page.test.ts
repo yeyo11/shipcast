@@ -20,7 +20,7 @@ async function seeded() {
 }
 
 async function add(registry: Registry, postId: number, channel: Channel, n: number, status: CommentStatus, text: string, handle = '@someone') {
-  const { comment } = await registry.recordComment({
+  const { comment } = await registry.comments.recordComment({
     postId,
     channel,
     externalId: `${channel}-${postId}-${n}`,
@@ -29,23 +29,23 @@ async function add(registry: Registry, postId: number, channel: Channel, n: numb
     createdAt: `2026-10-${String(10 + (n % 15)).padStart(2, '0')}T10:00:00.000Z`,
     own: false,
   });
-  await registry.updateComment(comment.id, { status });
+  await registry.comments.updateComment(comment.id, { status });
 }
 
 test('the page is cut by the database and the total counts every match', async () => {
   const { registry, a } = await seeded();
   for (let i = 0; i < 30; i++) await add(registry, a.posts[0]!.id, 'mastodon', i, 'new', `comment ${i}`);
-  const first = await registry.commentsPage({ pageSize: 10 });
+  const first = await registry.comments.commentsPage({ pageSize: 10 });
   assert.equal(first.total, 30);
   assert.equal(first.pages, 3);
   assert.equal(first.comments.length, 10);
-  const last = await registry.commentsPage({ pageSize: 10, page: 3 });
+  const last = await registry.comments.commentsPage({ pageSize: 10, page: 3 });
   assert.equal(last.comments.length, 10);
-  const ids = new Set([...first.comments, ...(await registry.commentsPage({ pageSize: 10, page: 2 })).comments, ...last.comments].map((c) => c.id));
+  const ids = new Set([...first.comments, ...(await registry.comments.commentsPage({ pageSize: 10, page: 2 })).comments, ...last.comments].map((c) => c.id));
   assert.equal(ids.size, 30, 'no comment on two pages, none missed');
   const dates = first.comments.map((c) => c.createdAt);
   assert.deepEqual(dates, [...dates].sort().reverse(), 'newest first');
-  assert.equal((await registry.commentsPage({ pageSize: 10, page: 99 })).page, 3, 'a page past the end shows the last');
+  assert.equal((await registry.comments.commentsPage({ pageSize: 10, page: 99 })).page, 3, 'a page past the end shows the last');
 });
 
 test('the filters narrow by state, channel, launch, post and text, together', async () => {
@@ -57,7 +57,7 @@ test('the filters narrow by state, channel, launch, post and text, together', as
   await add(registry, bs1, 'bluesky', 4, 'dismissed', 'spam spam');
   await add(registry, b.posts[0]!.id, 'mastodon', 5, 'failed', '100% broken_link');
 
-  const total = async (f: Parameters<Registry['commentsPage']>[0]) => (await registry.commentsPage(f)).total;
+  const total = async (f: Parameters<Registry['comments']['commentsPage']>[0]) => (await registry.comments.commentsPage(f)).total;
   assert.equal(await total({}), 5);
   assert.equal(await total({ bucket: 'waiting' }), 3, 'new, drafted and failed wait for a reply');
   assert.equal(await total({ bucket: 'replied' }), 1);
@@ -81,7 +81,7 @@ test('the facets count what each filter would offer, in grouped queries', async 
   await add(registry, a.posts[0]!.id, 'mastodon', 1, 'new', 'one');
   await add(registry, a.posts[1]!.id, 'bluesky', 2, 'sent', 'two');
   await add(registry, b.posts[0]!.id, 'mastodon', 3, 'dismissed', 'three');
-  const facets = await registry.commentFacets();
+  const facets = await registry.comments.commentFacets();
   assert.deepEqual(facets.channels, [
     { channel: 'bluesky', count: 1 },
     { channel: 'mastodon', count: 2 },
@@ -94,7 +94,7 @@ test('the facets count what each filter would offer, in grouped queries', async 
     ],
   );
   assert.deepEqual(facets.buckets, { waiting: 1, replied: 1, ignored: 1 });
-  const posts = await registry.commentPosts(a.launch.id);
+  const posts = await registry.comments.commentPosts(a.launch.id);
   assert.deepEqual(
     posts.map((p) => [p.channel, p.count]),
     [

@@ -75,7 +75,7 @@ export async function postAccounts(registry: Registry, launches: readonly Launch
 
 /** What a launch's page says in its quiet line, besides what is scheduled: the comments still to answer */
 export async function waitingComments(registry: Registry, launchId: number): Promise<number> {
-  const comments = await registry.comments({ launchId, own: false, limit: 200 });
+  const comments = await registry.comments.comments({ launchId, own: false, limit: 200 });
   return comments.filter((c) => c.status === 'new' || c.status === 'draft-ready' || c.status === 'failed').length;
 }
 

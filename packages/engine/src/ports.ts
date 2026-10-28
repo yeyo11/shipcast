@@ -1,5 +1,6 @@
 import type { Registry } from './registry.ts';
 import type { AccountRepository } from './repositories/accounts.ts';
+import type { CommentRepository } from './repositories/comments.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import type { LaunchRepository } from './repositories/launches.ts';
 import type { MetricRepository } from './repositories/metrics.ts';
@@ -33,10 +34,10 @@ export type SettingReader = { settings: Pick<SettingRepository, 'setting'> };
 export type ScheduleStore = { launches: LaunchLookup; posts: Pick<PostRepository, 'post' | 'posts' | 'schedulePost' | 'reschedulePost' | 'unschedulePost'> ; cursors: Pick<CursorRepository, 'setCursor' | 'deleteCursor'> } & SettingStore;
 
 /** The comments a reply is drafted, edited or dismissed on */
-export type CommentStore = Pick<Registry, 'comment' | 'commentByExternalId' | 'updateComment'>;
+export type CommentStore = { comments: Pick<CommentRepository, 'comment' | 'commentByExternalId' | 'updateComment'> };
 
 /** The comment list's reads, a page at a time with what its filters can offer */
-export type CommentListing = Pick<Registry, 'comments' | 'commentsPage' | 'commentFacets' | 'commentPosts'>;
+export type CommentListing = { comments: Pick<CommentRepository, 'comments' | 'commentsPage' | 'commentFacets' | 'commentPosts'> };
 
 /** A single cursor written when something happened (the last metrics reading, the last round) */
 export type CursorWriter = { cursors: Pick<CursorRepository, 'setCursor'> };

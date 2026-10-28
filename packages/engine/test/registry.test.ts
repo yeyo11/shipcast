@@ -251,13 +251,13 @@ test('a launch’s sent replies are counted per channel: only others’ comments
   const { post: bluesky } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', url: 'https://b/1', externalId: 'b1' });
   const { post: elsewhere } = await registry.posts.recordPost({ launchId: other.id, channel: 'mastodon', url: 'https://m/2', externalId: '2' });
   const comment = (postId: number, channel: 'mastodon' | 'bluesky', externalId: string, status: 'sent' | 'new', own = false) =>
-    registry.recordComment({ postId, channel, externalId, author: { handle: '@ana' }, text: 'hi', createdAt: '2026-10-25T10:00:00.000Z', own, status });
+    registry.comments.recordComment({ postId, channel, externalId, author: { handle: '@ana' }, text: 'hi', createdAt: '2026-10-25T10:00:00.000Z', own, status });
   await comment(mastodon.id, 'mastodon', 'c1', 'sent');
   await comment(mastodon.id, 'mastodon', 'c2', 'sent');
   await comment(mastodon.id, 'mastodon', 'c3', 'new');
   await comment(mastodon.id, 'mastodon', 'c4', 'sent', true);
   await comment(bluesky.id, 'bluesky', 'c5', 'sent');
   await comment(elsewhere.id, 'mastodon', 'c6', 'sent');
-  assert.deepEqual(await registry.sentReplies(launch.id), { mastodon: 2, bluesky: 1 });
-  assert.deepEqual(await registry.sentReplies(9999), {});
+  assert.deepEqual(await registry.comments.sentReplies(launch.id), { mastodon: 2, bluesky: 1 });
+  assert.deepEqual(await registry.comments.sentReplies(9999), {});
 });

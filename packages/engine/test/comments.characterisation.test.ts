@@ -71,7 +71,7 @@ test('one run over several posts: read, drafted, sent where auto, logged; a seco
   assert.deepEqual(fake.callsOf('mastodon', 'reply').map((c) => c.input), [
     { target: { postExternalId: 'm1', commentExternalId: '101', authorHandle: '@ana@fosstodon.org' }, text: 'Thanks for asking.', key: 'shipcast-reply-mastodon-101' },
   ]);
-  const states = Object.fromEntries((await registry.comments({ limit: 50 })).map((c) => [`${c.channel}:${c.externalId}`, c.status]));
+  const states = Object.fromEntries((await registry.comments.comments({ limit: 50 })).map((c) => [`${c.channel}:${c.externalId}`, c.status]));
   assert.deepEqual(states, { 'mastodon:101': 'sent', 'mastodon:102': 'draft-ready', 'bluesky:201': 'draft-ready', 'devto:401': 'draft-ready' });
   assert.deepEqual(fake.callsOf('threads'), [], 'a channel set to off is never asked');
   assert.deepEqual(fake.callsOf('telegram'), [], 'nor one without comments');
