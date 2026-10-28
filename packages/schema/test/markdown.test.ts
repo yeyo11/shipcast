@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseFrontMatter, splitFrontMatter } from '../src/index.ts';
+import { draftBody, parseFrontMatter, splitFrontMatter } from '../src/index.ts';
 
 // The cases the copies in engine (edit, publish) and web (the edit prefill) agreed on before they
 // became this one
@@ -25,4 +25,14 @@ test('parsed, the front matter is its YAML and the body is trimmed; without one 
   assert.deepEqual(parseFrontMatter('---\ntitle: "A"\ntags: [x, y]\n---\n\n Body \n'), { data: { title: 'A', tags: ['x', 'y'] }, body: 'Body' });
   assert.deepEqual(parseFrontMatter('---\n\n---\nbody'), { data: {}, body: 'body' });
   assert.deepEqual(parseFrontMatter('  no front matter \n'), { data: {}, body: '  no front matter \n' });
+});
+
+test('draftBody keeps what follows the first approval line, trimmed, and the whole text without one', () => {
+  assert.equal(draftBody('# Bluesky\n\n> **Approval:** published when merged.\n\nThe post.\n'), 'The post.');
+  assert.equal(draftBody('  Just the post \n'), 'Just the post');
+  assert.equal(draftBody(''), '');
+  assert.equal(draftBody('# X\n> **Approval:** a\nfirst\n> **Note:** b\nsecond\n'), 'first\n> **Note:** b\nsecond');
+  assert.equal(draftBody('# X\n > **Approval:** indented\nbody'), '# X\n > **Approval:** indented\nbody', 'an indented note is not the note');
+  assert.equal(draftBody('# X\r\n> **Approval:** a\r\n\r\nPost\r\n'), 'Post');
+  assert.equal(draftBody('# X\n> **Approval:** a'), '');
 });

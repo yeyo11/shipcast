@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import { Brand, parseLaunchConfig } from '@shipcast/schema';
-import { absoluteLinks, cancelScheduledPost, deletePost, draftBody, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
+import { Brand, parseLaunchConfig, draftBody } from '@shipcast/schema';
+import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Registry, type EventsPage, type GitHubSource, type Publishers } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });

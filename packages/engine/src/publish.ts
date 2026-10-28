@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleUrl as urlOf, ContentPack, lookOf, parseFrontMatter, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleUrl as urlOf, ContentPack, draftBody, lookOf, parseFrontMatter, parseLaunchConfig, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -96,16 +96,6 @@ export type PublishResult =
       /** Channels waiting for their time: the launch stays drafted until they are out */
       scheduled: Array<{ channel: Channel; at: string }>;
     };
-
-/** A draft file's text as edited in the pull request: everything after its mode line. */
-export function draftBody(markdown: string): string {
-  const lines = markdown.split('\n');
-  const mode = lines.findIndex((l) => l.startsWith('> **'));
-  return lines
-    .slice(mode + 1)
-    .join('\n')
-    .trim();
-}
 
 /**
  * The article's Markdown with its root-relative links and images (`](/articles/x/a.png)`) on the

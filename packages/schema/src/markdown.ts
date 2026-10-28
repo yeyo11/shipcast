@@ -11,3 +11,17 @@ export function splitFrontMatter(markdown: string): { front: string; body: strin
   return match ? { front: match[1]!, body: match[2]! } : undefined;
 }
 
+
+/**
+ * A draft file's text as edited in the pull request: everything after its mode line (`> **Approval:**…`).
+ * The heading and that note are the file's, never the post's: left in, an edit sent them to the
+ * network as the post's first lines.
+ */
+export function draftBody(markdown: string): string {
+  const lines = markdown.split('\n');
+  const mode = lines.findIndex((l) => l.startsWith('> **'));
+  return lines
+    .slice(mode + 1)
+    .join('\n')
+    .trim();
+}

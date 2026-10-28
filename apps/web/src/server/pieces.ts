@@ -1,5 +1,5 @@
 import type { Capability, EditField, PostChanges } from '@shipcast/engine';
-import { splitFrontMatter } from '@shipcast/schema/markdown';
+import { draftBody, splitFrontMatter } from '@shipcast/schema/markdown';
 import { markOf, type Mark } from './launch-summary.ts';
 
 /*
@@ -458,13 +458,8 @@ export function draftPrefill(drafts: ReadonlyArray<{ path: string; content?: str
   });
   const content = draft?.content ?? '';
   const front = splitFrontMatter(content);
-  // A channel's draft opens with its heading and the approval note, which the engine never publishes
-  // (draftBody): left in, an edit sent them to the network as the post's first lines
-  if (!front) {
-    const lines = content.split('\n');
-    const note = lines.findIndex((l) => l.startsWith('> **'));
-    return { text: lines.slice(note + 1).join('\n').trim(), title: '' };
-  }
+  // A channel's draft opens with its heading and the approval note, which are never the post's
+  if (!front) return { text: draftBody(content), title: '' };
   const title = /^title:\s*["']?(.*?)["']?\s*$/m.exec(front.front)?.[1] ?? '';
   return { text: front.body.trim(), title };
 }

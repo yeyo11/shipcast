@@ -1,20 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { articleUrl, ContentPack } from '@shipcast/schema';
-import { draftBody, parseDiscussionDraft, parseInstagramDraft, pullRequestNumber, type Launch } from '../src/index.ts';
+import { parseDiscussionDraft, parseInstagramDraft, pullRequestNumber, type Launch } from '../src/index.ts';
 
 // Characterisation: what the helpers duplicated across engine, runtime and web do today, pinned
 // before they move to the domain package, so the move can be checked against them
-
-test('draftBody keeps what follows the first approval line, trimmed, and the whole text without one', () => {
-  assert.equal(draftBody('# Bluesky\n\n> **Approval:** published when merged.\n\nThe post.\n'), 'The post.');
-  assert.equal(draftBody('  Just the post \n'), 'Just the post');
-  assert.equal(draftBody(''), '');
-  assert.equal(draftBody('# X\n> **Approval:** a\nfirst\n> **Note:** b\nsecond\n'), 'first\n> **Note:** b\nsecond');
-  assert.equal(draftBody('# X\n > **Approval:** indented\nbody'), '# X\n > **Approval:** indented\nbody', 'an indented note is not the note');
-  assert.equal(draftBody('# X\r\n> **Approval:** a\r\n\r\nPost\r\n'), 'Post');
-  assert.equal(draftBody('# X\n> **Approval:** a'), '');
-});
 
 const detail = (value: string | null) => ({ detail: value }) as Launch;
 

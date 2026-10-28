@@ -1,6 +1,5 @@
-import { pieceLimitProblem } from '@shipcast/schema';
+import { draftBody, pieceLimitProblem } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
-import { draftBody } from './publish.ts';
 import type { Launch } from './registry.ts';
 
 /** The GitHub calls reviewing a launch's drafts makes; `GitHubRest` has them all */
