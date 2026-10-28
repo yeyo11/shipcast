@@ -4,6 +4,7 @@ import {
   GitHubApp,
   GitHubRest,
   loadBrand,
+  PostgresLock,
   Registry,
   type AiProvider,
   type ObjectRequest,
@@ -111,7 +112,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const githubFetch = options.githubFetch ?? options.fetch;
   const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }) });
   const access: GitHubAccess = app ? { kind: 'app', slug: app.slug, bot: app.slug ? `${app.slug}[bot]` : undefined } : { kind: 'token' };
-  const userTokens = app ? new GitHubUserTokens({ secrets, client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
+  // The refresh is locked across every process on the registry: two replicas never spend one refresh token
+  const userTokens = app ? new GitHubUserTokens({ secrets, lock: new PostgresLock(registry.database), client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
 
   let cached: { repo: string; brand: Brand; at: number } | undefined;
   const brand = async (): Promise<Brand> => {

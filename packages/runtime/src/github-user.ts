@@ -1,3 +1,4 @@
+import { LocalLock, type Lock } from '@shipcast/engine';
 import type { SecretStore } from './secrets.ts';
 
 /** The keychain key of the signed-in owner's GitHub user token */
@@ -69,18 +70,24 @@ const MARGIN_MS = 5 * 60_000;
 /**
  * The owner's GitHub user token, kept in the keychain and refreshed on its own: asking for it within
  * five minutes of its expiry swaps the refresh token for a new pair, saved at once, since GitHub
- * invalidates the old refresh token as it hands out the new one.
+ * invalidates the old refresh token as it hands out the new one. With several processes the refresh
+ * runs under a lock shared by all of them, and inside it the token is read again: a replica that
+ * waited finds the token another just refreshed and uses it, instead of spending the old refresh
+ * token (which GitHub refuses) and deleting the good one.
  */
 export class GitHubUserTokens {
   readonly #secrets: SecretStore;
   readonly #client: OAuthClient;
   readonly #now: () => number;
+  readonly #lock: Lock;
   #refreshing: Promise<string | undefined> | undefined;
 
-  constructor(options: { secrets: SecretStore; client: OAuthClient; now?: () => number }) {
+  /** `lock` is shared by every process that refreshes this token (the registry's Postgres); this process's own by default */
+  constructor(options: { secrets: SecretStore; client: OAuthClient; now?: () => number; lock?: Lock }) {
     this.#secrets = options.secrets;
     this.#client = options.client;
     this.#now = options.now ?? Date.now;
+    this.#lock = options.lock ?? new LocalLock();
   }
 
   /** Keeps the token a sign-in gave */
@@ -108,17 +115,34 @@ export class GitHubUserTokens {
   async token(): Promise<string | undefined> {
     const token = await this.stored();
     if (!token) return undefined;
-    if (!token.expiresAt || Date.parse(token.expiresAt) - MARGIN_MS > this.#now()) return token.accessToken;
+    if (!this.#due(token)) return token.accessToken;
     // Two callers at once share one refresh: a second one would spend the refresh token already spent
-    this.#refreshing ??= this.#refresh(token).finally(() => {
-      this.#refreshing = undefined;
-    });
+    this.#refreshing ??= this.#lock
+      .run(GITHUB_USER_KEY, async () => {
+        // Read again under the lock: another process may have refreshed it while this one waited
+        const current = await this.stored();
+        if (!current) return undefined;
+        return this.#due(current) ? this.#refresh(current) : current.accessToken;
+      })
+      .finally(() => {
+        this.#refreshing = undefined;
+      });
     return this.#refreshing;
+  }
+
+  #due(token: UserToken): boolean {
+    return token.expiresAt !== undefined && Date.parse(token.expiresAt) - MARGIN_MS <= this.#now();
+  }
+
+  /** Deletes the stored token only if it is still the one that failed: never one another process just wrote */
+  async #forgetIfStill(token: UserToken): Promise<void> {
+    const current = await this.stored();
+    if (current && current.refreshToken === token.refreshToken && current.accessToken === token.accessToken) await this.#secrets.delete(GITHUB_USER_KEY);
   }
 
   async #refresh(token: UserToken): Promise<string | undefined> {
     if (!token.refreshToken || (token.refreshExpiresAt && Date.parse(token.refreshExpiresAt) <= this.#now())) {
-      await this.#secrets.delete(GITHUB_USER_KEY);
+      await this.#forgetIfStill(token);
       return undefined;
     }
     try {
@@ -127,7 +151,7 @@ export class GitHubUserTokens {
     } catch (error) {
       // A refused refresh token (revoked, or the App's secret changed) will not work later either
       if (error instanceof GitHubSignInError) {
-        await this.#secrets.delete(GITHUB_USER_KEY);
+        await this.#forgetIfStill(token);
         return undefined;
       }
       throw error;

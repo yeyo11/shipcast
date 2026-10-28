@@ -71,3 +71,49 @@ test('a refresh token that expired or was refused means signing in again, not an
   await forever.save('yeyo11', { access_token: 'ghu_x' });
   assert.equal(await forever.token(), 'ghu_x', 'an App without expiring tokens gives one that is never refreshed');
 });
+
+test('two replicas refreshing at once under the shared lock: one refresh, both get the new token, none deletes it', async () => {
+  const { memoryRegistry } = await import('@shipcast/engine/testing');
+  const { PostgresLock } = await import('@shipcast/engine');
+  const registry = await memoryRegistry();
+  const secrets = new MemoryStore();
+  const bodies: Array<Record<string, string>> = [];
+  // GitHub spends a refresh token as it answers: a second use of ghr_1 is refused
+  let spent = false;
+  const endpoint = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, string>;
+    bodies.push(body);
+    await new Promise((r) => setTimeout(r, 20));
+    if (body.refresh_token === 'ghr_1' && spent) return Response.json({ error: 'bad_refresh_token', error_description: 'The refresh token passed is incorrect or expired.' });
+    spent = true;
+    return Response.json(pair(2));
+  }) as typeof fetch;
+  const client = { clientId: 'Iv23app', clientSecret: 's', fetch: endpoint };
+  // Each replica has its own instance (and its own in-process sharing); only the lock is common
+  const lock = new PostgresLock(registry.database);
+  const a = new GitHubUserTokens({ secrets, client, lock, now: () => NOW });
+  const b = new GitHubUserTokens({ secrets, client, lock, now: () => NOW });
+  await a.save('yeyo11', { ...pair(1), expires_in: 60 });
+
+  const [fromA, fromB] = await Promise.all([a.token(), b.token()]);
+  assert.deepEqual([fromA, fromB], ['ghu_2', 'ghu_2']);
+  assert.equal(bodies.length, 1, 'the replica that waited found the token refreshed');
+  assert.equal((await a.stored())?.refreshToken, 'ghr_2', 'the good token is kept');
+});
+
+test('a failed refresh never deletes a token another replica wrote meanwhile', async () => {
+  const secrets = new MemoryStore();
+  const client = {
+    clientId: 'c',
+    clientSecret: 's',
+    fetch: (async () => {
+      // While this replica's refresh is out, another one stores a fresh pair
+      await secrets.set(GITHUB_USER_KEY, JSON.stringify({ login: 'yeyo11', accessToken: 'ghu_9', refreshToken: 'ghr_9', expiresAt: new Date(NOW + 8 * 3_600_000).toISOString() }), 'x');
+      return Response.json({ error: 'bad_refresh_token', error_description: 'expired' });
+    }) as typeof fetch,
+  };
+  const tokens = new GitHubUserTokens({ secrets, client, now: () => NOW });
+  await tokens.save('yeyo11', { ...pair(1), expires_in: 60 });
+  assert.equal(await tokens.token(), undefined);
+  assert.equal((await tokens.stored())?.accessToken, 'ghu_9');
+});
