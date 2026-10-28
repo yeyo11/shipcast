@@ -1,4 +1,4 @@
-import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishAttempts, PublishRefused, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, type Launch, type Registry, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -97,7 +97,7 @@ export async function publishAgain(
 ): Promise<{ ok: true; job: string } | { ok: false; problem: string }> {
   let launch: Launch;
   try {
-    launch = await publishAgainIn(registry, launchId, channel, new PublishAttempts(registry.database));
+    launch = await publishAgainIn(registry, launchId, channel, registry.attempts);
   } catch (error) {
     if (error instanceof PublishRefused) return { ok: false, problem: error.message };
     throw error;

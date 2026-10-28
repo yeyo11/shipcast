@@ -184,7 +184,7 @@ async function counters(registry: Registry, windows: readonly StatsWindow[], fil
       (array_agg(f#.value ORDER BY f#.taken_at NULLS LAST))[1]::float8 AS first#`.replaceAll('#', String(i)),
     ),
   );
-  const rows = await registry.selectRows<Record<string, unknown>>(sql`
+  const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`
     WITH ${counterSet(filter)}
     SELECT c.unit, c.source, c.name, max(c.launch_id)::int AS launch_id, max(c.post_id)::int AS post_id, max(c.account_id)::int AS account_id
       ${sql.join(columns, sql``)}
@@ -410,7 +410,7 @@ export async function statsSeries(registry: Registry, options: SeriesOptions): P
         : options.groupBy === 'launchChannel'
           ? sql`u.launch_id::text || ':' || u.source`
           : sql`u.launch_id::text`;
-  const rows = await registry.selectRows<{ key: string; bucket: string | null; increase: number }>(sql`
+  const rows = await registry.queries.selectRows<{ key: string; bucket: string | null; increase: number }>(sql`
     WITH ${counterSet(options, options.metric)},
     w AS (
       SELECT c.unit, c.name, m.taken_at, m.value FROM c
@@ -493,7 +493,7 @@ async function groupLabels(registry: Registry, groupBy: SeriesGroupBy, keys: str
 
 async function launchNames(registry: Registry, ids: number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
-  const rows = await registry.selectRows<{ id: number; repo: string; ref: string }>(sql`SELECT id, repo, ref FROM launches WHERE ${inList(sql`id`, ids)}`);
+  const rows = await registry.queries.selectRows<{ id: number; repo: string; ref: string }>(sql`SELECT id, repo, ref FROM launches WHERE ${inList(sql`id`, ids)}`);
   return new Map(rows.map((r) => [Number(r.id), `${r.repo} ${r.ref}`]));
 }
 
@@ -663,7 +663,7 @@ export async function statsRanking(registry: Registry, options: RankingOptions):
   const posts = new Map(
     postIds.length === 0
       ? []
-      : (await registry.selectRows<{ id: number; kind: string; url: string | null }>(sql`SELECT id, kind, url FROM posts WHERE ${inList(sql`id`, postIds)}`)).map((p) => [Number(p.id), p]),
+      : (await registry.queries.selectRows<{ id: number; kind: string; url: string | null }>(sql`SELECT id, kind, url FROM posts WHERE ${inList(sql`id`, postIds)}`)).map((p) => [Number(p.id), p]),
   );
   const launches = await launchNames(registry, [...new Set(page.flatMap((d) => (d.launchId === null ? [] : [d.launchId])))]);
   const accounts = options.by === 'account' ? new Map((await registry.accounts.accounts()).map((a) => [a.id, a])) : new Map();
@@ -719,7 +719,7 @@ const diff = (a: number | null, b: number | null) => (a === null || b === null ?
 export async function accountGrowth(registry: Registry, accountId: number, range: { from: string; to: string }): Promise<AccountGrowth> {
   if (!DATE.test(range.from) || !DATE.test(range.to)) throw new InvalidPeriod('from and to are days, YYYY-MM-DD');
   if (range.to < range.from) throw new InvalidPeriod('to comes after from');
-  const rows = await registry.selectRows<Record<string, unknown>>(sql`
+  const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`
     SELECT * FROM (
       SELECT day, taken_at, followers, following, posts,
         lag(day) OVER w AS prev_day, lag(followers) OVER w AS prev_followers, lag(following) OVER w AS prev_following, lag(posts) OVER w AS prev_posts

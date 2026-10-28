@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs, parseEnv } from 'node:util';
 import { resolve } from 'node:path';
 import { checkStdioOptions, McpSetupError, serveShipcastStdio } from '@shipcast/mcp';
-import { draftLaunch, LaunchRefused, LaunchService, preflight, PublishAttempts, retryChannelEverywhere, TelemetryStore, type DraftResult, type Launch, type Preflight, type PublishResult } from '@shipcast/engine';
+import { draftLaunch, LaunchRefused, LaunchService, preflight, retryChannelEverywhere, TelemetryStore, type DraftResult, type Launch, type Preflight, type PublishResult } from '@shipcast/engine';
 import { Channel } from '@shipcast/schema';
 import {
   attachTelemetryStore,
@@ -235,7 +235,7 @@ async function main(argv: string[]): Promise<number> {
             console.error(`--retry needs a channel, not "${values.retry}"`);
             return 2;
           }
-          for (const l of await retryChannelEverywhere(registry, channel.data, new PublishAttempts(registry.database))) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
+          for (const l of await retryChannelEverywhere(registry, channel.data, registry.attempts)) console.log(`Retrying ${channel.data} for ${l.repo} ${l.ref}`);
         }
         const brand = await loadBrandNow();
         await publishReady({ env: process.env, registry, github, secrets, brand, pipeline: deps });

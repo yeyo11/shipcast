@@ -1,4 +1,5 @@
 import type { Database } from '../db/connect.ts';
+import { PublishAttempts } from '../publishing/attempts.ts';
 import { LaunchRepository } from './launches.ts';
 import { AssistantRepository } from './assistant.ts';
 import { AttentionRepository } from './attention.ts';
@@ -10,6 +11,7 @@ import { CursorRepository } from './cursors.ts';
 import { SettingRepository } from './settings.ts';
 import { MetricRepository } from './metrics.ts';
 import { PostRepository } from './posts.ts';
+import { RawQueries } from './sql.ts';
 import { transaction } from './transaction.ts';
 
 /*
@@ -47,6 +49,10 @@ export interface Repositories {
   readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
+  /** The posts' publish attempts, the outbox a worker claims a piece in before it calls the network */
+  readonly attempts: PublishAttempts;
+  /** The read-only SQL the query builder cannot say, for the reports and the checks */
+  readonly queries: RawQueries;
 }
 
 /** The repositories over `db`: a pool, a PGlite, or a transaction */
@@ -64,6 +70,8 @@ export function repositoriesOn(db: Database): Repositories {
     settings: new SettingRepository(db),
     metrics: new MetricRepository(db),
     posts: new PostRepository(db),
+    attempts: new PublishAttempts(db),
+    queries: new RawQueries(db),
   };
 }
 

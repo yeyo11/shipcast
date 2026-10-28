@@ -28,7 +28,7 @@ export async function runChecks(registry: Registry, store: TelemetryStore, optio
 
 async function missedSchedules(registry: Registry, now: Date): Promise<CheckResult> {
   const before = new Date(now.getTime() - MISSED_AFTER_MINUTES * 60_000).toISOString();
-  const rows = await registry.selectRows<{ id: number; launch_id: number; channel: string; scheduled_at: string }>(
+  const rows = await registry.queries.selectRows<{ id: number; launch_id: number; channel: string; scheduled_at: string }>(
     sql`SELECT id, launch_id, channel, scheduled_at FROM posts WHERE status = 'scheduled' AND scheduled_at < ${before} ORDER BY scheduled_at`,
   );
   return { name: 'missed-schedules', ok: rows.length === 0, value: rows.length, detail: { posts: rows.map((r) => ({ id: r.id, launchId: r.launch_id, channel: r.channel, scheduledAt: r.scheduled_at })) } };
@@ -36,12 +36,12 @@ async function missedSchedules(registry: Registry, now: Date): Promise<CheckResu
 
 async function latePosts(registry: Registry, now: Date): Promise<CheckResult> {
   const since = new Date(now.getTime() - 24 * HOUR).toISOString();
-  const rows = await registry.selectRows<{ id: number; channel: string; scheduled_at: string; published_at: string }>(
+  const rows = await registry.queries.selectRows<{ id: number; channel: string; scheduled_at: string; published_at: string }>(
     sql`SELECT id, channel, scheduled_at, published_at FROM posts
         WHERE scheduled_at IS NOT NULL AND status <> 'scheduled' AND published_at >= ${since}
           AND published_at::timestamptz - scheduled_at::timestamptz > make_interval(mins => ${LATE_AFTER_MINUTES})`,
   );
-  const scheduled = await registry.selectRows<{ n: number }>(
+  const scheduled = await registry.queries.selectRows<{ n: number }>(
     sql`SELECT count(*)::int AS n FROM posts WHERE scheduled_at IS NOT NULL AND status <> 'scheduled' AND published_at >= ${since}`,
   );
   return {
@@ -53,10 +53,10 @@ async function latePosts(registry: Registry, now: Date): Promise<CheckResult> {
 }
 
 async function duplicatePieces(registry: Registry): Promise<CheckResult> {
-  const pieces = await registry.selectRows<{ launch_id: number; channel: string; kind: string; n: number }>(
+  const pieces = await registry.queries.selectRows<{ launch_id: number; channel: string; kind: string; n: number }>(
     sql`SELECT launch_id, channel, kind, count(*)::int AS n FROM posts WHERE status IN ('live', 'edited') GROUP BY launch_id, channel, kind HAVING count(*) > 1`,
   );
-  const ids = await registry.selectRows<{ channel: string; external_id: string; n: number }>(
+  const ids = await registry.queries.selectRows<{ channel: string; external_id: string; n: number }>(
     sql`SELECT channel, external_id, count(*)::int AS n FROM posts WHERE external_id IS NOT NULL GROUP BY channel, external_id HAVING count(*) > 1`,
   );
   return {
@@ -78,7 +78,7 @@ interface ChannelFreshness {
 
 async function freshness(registry: Registry, now: Date, cadenceHours: number): Promise<CheckResult> {
   // Only the channels that have ever been read: a channel Shipcast reads no numbers for is not stale
-  const rows = await registry.selectRows<{ channel: string; newest: string | null }>(
+  const rows = await registry.queries.selectRows<{ channel: string; newest: string | null }>(
     sql`SELECT p.channel, max(m.taken_at) AS newest FROM posts p LEFT JOIN metrics m ON m.post_id = p.id
         WHERE p.status IN ('live', 'edited') AND p.external_id IS NOT NULL
           AND p.channel IN (SELECT DISTINCT p2.channel FROM metrics m2 JOIN posts p2 ON p2.id = m2.post_id)

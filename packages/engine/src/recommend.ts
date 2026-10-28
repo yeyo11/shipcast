@@ -290,7 +290,7 @@ export async function channelHistory(registry: Registry, channel: Channel, now: 
   const ranking = await statsRanking(registry, { by: 'post', channels: [channel], from: HISTORY_START, to: new Date(now.getTime() + 1).toISOString(), limit: HISTORY_LIMIT });
   const scores = new Map(ranking.entries.flatMap((e) => (e.postId === null ? [] : [[e.postId, e.score] as const])));
   if (scores.size === 0) return [];
-  const rows = await registry.selectRows<{ id: number; published_at: string }>(
+  const rows = await registry.queries.selectRows<{ id: number; published_at: string }>(
     sql`SELECT id, published_at FROM posts WHERE id IN (${sql.join([...scores.keys()].map((id) => sql`${id}`), sql`, `)}) AND status IN ('live', 'edited') ORDER BY published_at, id`,
   );
   return rows.flatMap((row) => {

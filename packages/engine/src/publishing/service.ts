@@ -2,7 +2,7 @@ import type { Brand, Channel } from '@shipcast/schema';
 import type { GitHubSource } from '../github.ts';
 import { approval, publishLaunch, type PublishDeps, type PublishResult } from '../publish.ts';
 import type { Launch, Registry } from '../registry.ts';
-import { PublishAttempts } from './attempts.ts';
+import type { PublishAttempts } from './attempts.ts';
 import { PieceGuard } from './guard.ts';
 import { publishAgain, retryChannel } from './retry.ts';
 
@@ -25,7 +25,7 @@ export class PublishingService {
     this.#registry = deps.registry;
     this.#github = deps.github;
     this.#launchesRepo = deps.launchesRepo;
-    this.#attempts = deps.attempts ?? new PublishAttempts(deps.registry.database);
+    this.#attempts = deps.attempts ?? deps.registry.attempts;
   }
 
   get attempts(): PublishAttempts {

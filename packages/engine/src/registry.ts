@@ -12,6 +12,8 @@ import { CursorRepository } from './repositories/cursors.ts';
 import { SettingRepository } from './repositories/settings.ts';
 import { MetricRepository } from './repositories/metrics.ts';
 import { PostRepository } from './repositories/posts.ts';
+import { RawQueries } from './repositories/sql.ts';
+import { PublishAttempts } from './publishing/attempts.ts';
 import { accounts, accountSnapshots, apiTokens, assistantMessages, assistantSessions, attentionDismissals, comments, cursors, jobs, launches, metrics, nowIso, posts, settings } from './db/schema.ts';
 
 export * from './repositories/index.ts';
@@ -38,6 +40,8 @@ export class Registry {
   readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
+  readonly attempts: PublishAttempts;
+  readonly queries: RawQueries;
 
   /** Over a database whose schema is already migrated; `connect` and `memory` are the way in */
   constructor(db: Database, close: () => Promise<void> = async () => {}) {
@@ -54,6 +58,8 @@ export class Registry {
     this.settings = new SettingRepository(db);
     this.metrics = new MetricRepository(db);
     this.posts = new PostRepository(db);
+    this.attempts = new PublishAttempts(db);
+    this.queries = new RawQueries(db);
   }
 
   /**
@@ -77,17 +83,6 @@ export class Registry {
   static async memory(dataDir?: string): Promise<Registry> {
     const { db, close } = await connectPglite(dataDir);
     return new Registry(db, close);
-  }
-
-  /**
-   * The rows of a read-only query the query builder cannot say (window functions, FILTER, VALUES),
-   * for the stats in stats.ts. Each driver shapes `execute`'s answer its own way: postgres.js gives
-   * the rows as an array, PGlite an object holding them.
-   */
-  async selectRows<T extends Record<string, unknown>>(query: SQL): Promise<T[]> {
-    const result: unknown = await this.#db.execute(query);
-    if (Array.isArray(result)) return result as T[];
-    return (result as { rows: T[] }).rows;
   }
 
   async close(): Promise<void> {
