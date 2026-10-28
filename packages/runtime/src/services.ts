@@ -30,7 +30,7 @@ export interface Services {
   publishers: Publishers;
   sources: MetricSources;
   instagram: { connector: Instagram; origin: Origin } | undefined;
-  /** The bot that tells the owner what is waiting, when Telegram is connected */
+  /** The bot that tells the owner what is waiting, in the owner's own chat; undefined when no notification chat is set */
   notifier: Telegram | undefined;
   /** Which channels and sources have credentials, for `shipcast status` and the first run */
   configured: string[];
@@ -128,10 +128,11 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
   const telegram = (await built('telegram'))?.telegram;
   if (telegram) {
     publishers.telegram = telegram;
-    // Notices go to the owner's own chat with the bot when one is set, not to the public channel
+    // The owner's notices go only to their own chat with the bot (notifyChatId, TELEGRAM_NOTIFY_CHAT_ID).
+    // With none set there is no notifier: never the channel a launch publishes to, which is public
     const found = await credentialsFor('telegram', deps);
     const notifyChat = found?.credentials.settings.notifyChatId?.trim();
-    notifier = notifyChat && found ? new Telegram({ botToken: found.credentials.secrets.botToken!, chatId: notifyChat, fetch: deps.fetch }) : telegram;
+    notifier = notifyChat && found ? new Telegram({ botToken: found.credentials.secrets.botToken!, chatId: notifyChat, fetch: deps.fetch }) : undefined;
     configured.push('telegram');
   }
   const discord = (await built('discord'))?.discord;

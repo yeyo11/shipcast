@@ -111,3 +111,28 @@ test('Telegram posts to its channel and tells the owner in their own chat', asyn
   await services.notifier?.notify('drafts are waiting');
   assert.deepEqual(sent, ['sendMessage 42']);
 });
+
+test('with no notification chat there is no notifier: owner notices never go to the public channel', async () => {
+  const sent: string[] = [];
+  const http = (async (input: string | URL | Request, init?: RequestInit) => {
+    sent.push(`${String(input).split('/').at(-1)} ${JSON.parse(String(init?.body ?? '{}')).chat_id}`);
+    return Response.json({ ok: true, result: { message_id: 1, chat: { id: -1001, type: 'channel' } } });
+  }) as typeof fetch;
+  // From .env with TELEGRAM_NOTIFY_CHAT_ID unset, and from a connected account whose notifyChatId is empty
+  const fromEnv = await buildServices(await deps({ TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '@mychannel' }, { fetch: http }));
+  assert.ok(fromEnv.configured.includes('telegram'), 'it still publishes to the channel');
+  assert.equal(fromEnv.notifier, undefined);
+
+  const registry = await memoryRegistry();
+  const secrets = new MemoryStore();
+  const account = await registry.accounts.addAccount({ network: 'telegram', brand: 'personal', label: '@mychannel', settings: { chatId: '@mychannel', notifyChatId: '' } });
+  await secrets.set(accountSecretKey(account.id), JSON.stringify({ botToken: 't' }), 'x');
+  const fromAccount = await buildServices(await deps({}, { registry, secrets, fetch: http }));
+  assert.ok(fromAccount.configured.includes('telegram'));
+  assert.equal(fromAccount.notifier, undefined);
+
+  await registry.accounts.updateAccount(account.id, { settings: { chatId: '@mychannel', notifyChatId: '42' } });
+  const withChat = await buildServices(await deps({}, { registry, secrets, fetch: http }));
+  await withChat.notifier?.notify('Shipcast published claudio');
+  assert.deepEqual(sent, ['sendMessage 42'], 'to the owner\'s chat, never to @mychannel');
+});
