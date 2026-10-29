@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T19:57:06.204922261Z
-updated_at: 2026-10-25T20:07:41.20733035Z
+created_at: 2026-10-25T20:20:29.537359897Z
+updated_at: 2026-10-29T01:01:58.117983211Z
 tags:
     - engine
     - registry
@@ -18,237 +18,245 @@ tags:
     - settings
     - stats
     - scheduling
+    - services
+    - repositories
+    - telemetry
 ---
 # The engine
 
 `packages/engine` ([source](../packages/engine/src/)) decides what gets launched, asks the AI for the
-content and opens the drafts pull request; `apps/cli` ([source](../apps/cli/src/)) is the `shipcast`
-command around it and `apps/web` the [web app](web-app.md). What both share (configuration, the
-settings, the keychain, connected accounts, the connectors built from them, and the job queue with
-its handlers) is `@shipcast/runtime` ([accounts.md](accounts.md),
-[decisions/job-queue.md](decisions/job-queue.md), [decisions/github-app.md](decisions/github-app.md)).
-Written on 2026-10-24, extended on 2026-10-25, each piece tested with fakes and checked against the
-real service where it is safe to. It depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md),
-[content-pack.md](content-pack.md), [brands.md](brands.md)).
+content, opens the drafts pull request and publishes; `apps/cli` ([source](../apps/cli/src/)) is the
+`shipcast` command around it and `apps/web` the [web app](web-app.md). What both share (configuration,
+the settings, the secret store, connected accounts, the channel adapters and connectors built from
+them, the job queue with its handlers, Redis) is `@shipcast/runtime` ([accounts.md](accounts.md),
+[decisions/job-queue.md](decisions/job-queue.md), [decisions/redis.md](decisions/redis.md)). It
+depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md), [content-pack.md](content-pack.md),
+[brands.md](brands.md)). Written on 2026-10-24, extended on 2026-10-25, and restructured on
+2026-10-28 into layers ([decisions/architecture.md](decisions/architecture.md)).
+
+## How the engine is laid out
+
+| Layer | Where | Holds |
+| --- | --- | --- |
+| Domain | `packages/schema` | channel definitions (`src/channels`), the pack's schema, AI task definitions (`src/ai`), rules, `ShipcastError`, the failure keys (`failures.ts`); pure, no I/O |
+| Application | `packages/engine/src/services`, `src/publishing` | one service per area, the only place a use case lives |
+| Ports | `packages/engine/src/ports.ts` | narrow `Pick`s of the repositories a service takes (`PostStore`, `ScheduleStore`, `MetricStore`…) |
+| Adapters | `src/repositories`, `github.ts`, `src/ai`, connectors, runtime's channel adapters | Postgres, GitHub, AI providers, networks |
+
+dependency-cruiser checks the direction in `pnpm typecheck`: entry points never import a connector
+or a repository, the domain imports no I/O, and the old AI layer is reachable only from the files
+listed for it.
+
+### Application services
+
+| Service | Use cases |
+| --- | --- |
+| `LaunchService` | the launches list, claim by hand (with the pre-flight check), claim an article, approve |
+| `PublishingService` (`src/publishing/service.ts`) | publish a launch under per-piece claims, Try again on a channel, publish again ([decisions/publishing-state.md](decisions/publishing-state.md)) |
+| `PostService` | edit, delete, edit many, delete a launch's posts |
+| `ScheduleService` | schedule, move, cancel, recommended times, time zone ([scheduling.md](scheduling.md)) |
+| `CommentService` | list, edit a reply's draft, send, dismiss, settings |
+| `MetricsService` | read now; the hourly reads (`readHourly`) |
+| `DraftSnapshotService` | the drafts pull request as last read: written when opened and on each edit, refreshed on a webhook or by hand |
+| `AccountService`, `SettingsService` | rename, make primary; settings |
+| `NotificationService` | the owner's notices (drafted, published), to the private chat only |
+
+The web server functions, the REST API (and the MCP through it), the CLI and the job handlers each
+call one of them and map the result. Errors share `ShipcastError` (code, `retryable`, HTTP status),
+mapped to HTTP in one place in the web app.
 
 ## The launch registry
 
-`Registry` (`registry.ts`) lives in **PostgreSQL**, reached through Drizzle ORM
-([decisions/postgres.md](decisions/postgres.md), since 2026-10-25; before, `node:sqlite` in
-`data/shipcast.db`). `Registry.connect(SHIPCAST_DATABASE_URL)` opens it with postgres.js and applies
-the migrations; the tests use `memoryRegistry()` from `@shipcast/engine/testing`, an in-process
-PGlite. The schema is `src/db/schema.ts`; `pnpm --filter @shipcast/engine db:generate` writes a change
-as a new SQL migration in `packages/engine/drizzle/`, committed and never edited once applied.
-`migrateDatabase` applies them in one transaction for either driver, and can stop at an older one
-(`upTo`), which the SQLite copy and the tests of a conversion use. The second migration,
-`0001_post_model`, converted every install in place to one row per piece and typed settings
-([decisions/post-model.md](decisions/post-model.md)). Every method returns a promise. It is what
-makes "a launch happens once" hold:
+The registry lives in **PostgreSQL**, reached through Drizzle ORM
+([decisions/postgres.md](decisions/postgres.md)). Since 2026-10-28 it is **one repository per
+aggregate** in `src/repositories/`, bundled as `Repositories`; the `Registry` class is gone. A
+composition root (the app's context, the CLI, the runtime, Action mode) opens them once with
+`connectRepositories(SHIPCAST_DATABASE_URL, pool)`, which applies the migrations; the tests use
+`memoryRepositories()`, an in-process PGlite. A consumer takes only the repositories it uses;
+`inTransaction` runs a use case over several in one transaction.
 
-- **`claim(launch)`** inserts a row unique on `(repo, ref)` and reports whether this call made it. A
-  launch is claimed *before* anything is generated, so a second poll, a re-run, a manual launch of
-  the same release or a crash halfway through never starts the same campaign twice; two processes
-  claiming the same release at once get one winner.
+| Repository | Holds |
+| --- | --- |
+| `launches` | claim, statuses, the paged and filtered list, `lastPublishedRef` |
+| `posts` | one row per piece, scheduling |
+| `attempts` (`PublishAttempts`) | the outbox of publish claims (`publish_attempts`) |
+| `metrics` | readings, history, `lastChecked` |
+| `accounts` | connected accounts and their daily snapshots |
+| `drafts` | the drafts snapshot (`draft_snapshots`) |
+| `jobs`, `comments`, `settings`, `cursors`, `apiTokens`, `assistant`, `attention` | as named |
+| `queries` | the raw read-only SQL the query builder cannot say (stats, telemetry reports, checks) |
+
+The schema is `src/db/schema.ts`; `pnpm --filter @shipcast/engine db:generate` writes a change as a
+new SQL migration in `packages/engine/drizzle/`, committed and never edited once applied; migrations
+run under an advisory lock and are additive. The pool is sized per process (`PoolOptions`: `max`,
+`prepare: false` behind PgBouncer, a direct `migrateUrl`; [server.md](server.md)). What makes "a
+launch happens once" hold:
+
+- **`launches.claim(launch)`** inserts a row unique on `(repo, ref)` and reports whether this call
+  made it. A launch is claimed *before* anything is generated, so a second poll, a re-run, a manual
+  launch of the same release or a crash halfway through never starts the same campaign twice.
 - **Statuses**: `detected`, `generating`, `drafted` (the detail is the pull request, or
-  `direct:<sha> <commit URL>` when published without one), `published`, `skipped`, `failed` (the
-  detail says why). Skipped and failed launches keep their row.
-- **Triggers**: `release`, `manual`, `public`, `enabled`, and `article` for an article written in the app.
-- **`lastPublishedRef(repo)`** feeds the pack inference: only `published` launches count.
-- **Posts** are one row per published piece (`posts`, since 2026-10-25): the channel's `post`,
-  Instagram's `story` and `comment`, a newsletter `issue:<lang>`, a blog `article:<lang>`. Each has
-  its `account_id` (null for the blog, or an old piece that cannot be attributed; set to null when the
-  account is removed), `external_id`, `url`, `status` (`scheduled`, `live`, `edited`, `deleted`,
-  `failed`), a nullable `content_hash` and `scheduled_at`, `published_at` and
-  `updated_at`. **`recordPost`** is unique on `(launch, channel, account, kind)` with `NULLS NOT
-  DISTINCT`, so the same piece is never published twice, and returns the row already there when it
-  is; a `scheduled` row of the same launch, channel and kind is turned into the published one instead
-  of a second row. `posts(launch, { channel?, kind? })` and `post(id)` read them. **Scheduling**
-  ([scheduling.md](scheduling.md)): `schedulePost` writes or moves a channel's waiting row (refused
-  once anything of that channel is out), `reschedulePost` and `unschedulePost` move or remove one,
-  `clearSchedule` drops what is left of a finished channel, and `scheduledPosts({ dueBy? })` lists
-  them. The recommended times (`recommend.ts`) learn from the stats ranking's popularity per network,
-  not from a reading of their own.
-- **`recordMetrics`**, **`latestMetrics`** and **`metricHistory`** keep every metric reading
-  ([publishing.md](publishing.md#metrics)). A reading of one piece points at it (`post_id`, read back
-  with `postMetrics`); the site-level sources (blog visits, search, Bing, GitHub) stay the launch's.
-  A launch's numbers add up its pieces' read at the same moment, so two newsletter issues are one
-  newsletter reading. The stats section's queries over them (totals with a comparison period, time
-  series, a ranking by popularity normalised per network, an account's growth) are `stats.ts`, run
-  through **`selectRows`**, the registry's raw read for SQL the query builder cannot say
-  ([stats.md](stats.md)).
-- **Settings** (`settings`: `key`, a `jsonb` value, `updated_at`) hold what the owner chose, read
-  typed with `setting<T>(key)` and written with `setSetting(key, value)`: the automation mode and
-  interval, the AI settings (`ai`) and the prompts' versions (`prompts`), and since the configuration
-  split the launches repo, claudio's URL, the AI budget and the Instagram app id
-  ([decisions/github-app.md](decisions/github-app.md)); the owner's IANA time zone (`timezone`,
-  Europe/Madrid until set, [scheduling.md](scheduling.md)); the onboarding next.
-- **Cursors** keep positions and state only: polling, a channel's permanent failure
-  (`publish-failed:<launch>:<channel>`) or cancelled schedule (`publish-cancelled:<launch>:<channel>`),
-  each Instagram account's online-follower hours (`instagram-audience:<account>`), each article's
+  `direct:<sha> <commit URL>` when published without one), `published`, `skipped`, `failed`.
+  **Triggers**: `release`, `manual`, `public`, `enabled`, `article`.
+- **Posts** are one row per published piece (`posts`, [decisions/post-model.md](decisions/post-model.md)):
+  the channel's `post`, Instagram's `story` and `comment`, a newsletter `issue:<lang>`, a blog
+  `article:<lang>`, YouTube's two videos. Each has its `account_id`, `external_id`, `url`, `status`
+  (`scheduled`, `live`, `edited`, `deleted`, `failed`), `content_hash`, `scheduled_at`,
+  `published_at` and `updated_at`. **`recordPost`** is unique on `(launch, channel, account, kind)`
+  with `NULLS NOT DISTINCT` and returns the row already there; a `scheduled` row of the same piece is
+  turned into the published one. Scheduling: `schedulePost`, `reschedulePost`, `unschedulePost`,
+  `clearSchedule`, `scheduledPosts({ dueBy? })`.
+- **Publish attempts** (`publish_attempts`, migration `0013`): one row per piece, claimed before the
+  network is called; with `publishing-service` on, `PieceGuard` runs every send through it
+  ([publishing.md](publishing.md#publishing-each-piece-once)).
+- **Metrics**: `recordMetrics`, `latestMetrics`, `metricHistory`, `postMetrics`. A reading of one
+  piece points at it (`post_id`); site-level sources stay the launch's. Since migration `0016` a
+  reading has `checked_at`: with `batched-metrics` an unchanged value moves `checked_at` on the last
+  row instead of adding one ([stats.md](stats.md)).
+- **Settings** (`key`, `jsonb` value): the automation mode, the AI settings and prompts, the
+  launches repo, claudio's URL, the AI budget, the Instagram app id, the time zone, the onboarding.
+- **Cursors** keep positions and state only: polling, a channel's permanent failure (its key built
+  and parsed only in `@shipcast/schema/failures`), a cancelled schedule, Instagram audience hours,
   index status, the last round and delivery.
-  `cursorsWithPrefix` lists them, `deleteCursor` forgets one (retrying one launch's channel).
-  `retryChannel` reopens a launch unless that channel already has its post.
-- **Accounts**: the accounts connected per brand ([accounts.md](accounts.md)); adding, making
-  primary and removing one run in a transaction locked per network and brand, so each has one
-  primary. `recordCheck` keeps the picture a working check found (`avatar_url`, migration
-  `0004_account_snapshots`) and leaves the last one when a check finds none.
-- **Account snapshots** (`account_snapshots`, migration `0004_account_snapshots`): an account's
-  followers, following and posts (each nullable: not every network counts them) and a `jsonb` `extra`,
-  keyed by `(account_id, day)` with the day in UTC, so an account has one row a day, the latest
-  reading of it; removing the account removes its rows. `recordSnapshot` upserts the day's row (a
-  late reading never replaces a newer one), `accountSnapshots(id, { since? })` reads the history
-  oldest first, `lastSnapshot(id)` and `lastSnapshots()` the newest
-  ([decisions/account-snapshots.md](decisions/account-snapshots.md)).
-- **Jobs** (`jobs`, migration `0003_jobs`): one row per job of the queue, keyed by pg-boss's id, with
-  its title, launch, state, attempts, last 40 log lines, link and times; what the app shows of the
-  work after it ends and across restarts (`recordJob`, `updateJob`, `logJob`, `jobs`, `pruneJobs`).
-  pg-boss keeps its own tables in the `pgboss` schema ([decisions/job-queue.md](decisions/job-queue.md)).
+- **Accounts** and **account snapshots** ([accounts.md](accounts.md),
+  [decisions/account-snapshots.md](decisions/account-snapshots.md)): adding, making primary and
+  removing run in a transaction locked per network and brand; one snapshot row per account per UTC day.
+- **Jobs** (`jobs`): one row per job of the queue, what the app shows after a job ends; the audit for
+  pg-boss and BullMQ alike ([decisions/job-queue.md](decisions/job-queue.md)).
+- **Secrets** (`secrets`, migration `0014`): sealed rows read through `SecretRows` by the runtime's
+  `TableStore`, used with `secrets-table` ([server.md](server.md)).
+- **Telemetry** (`provider_calls`, `timings`, `checks`, migration `0012`): `src/telemetry/`
+  ([measurement.md](measurement.md)).
 
 An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
-([decisions/postgres.md](decisions/postgres.md#moving-an-install)): the rows land in the first
-migration's schema, SQLite's column for column, and the later migrations convert them like any
-install's.
+([decisions/postgres.md](decisions/postgres.md#moving-an-install)).
 
 ## GitHub access
 
 `GitHubRest` (`github.ts`) is every read and write the engine makes on GitHub. It takes a token or a
-`GitHubAuth`, asked for a token on each request; since 2026-10-25 that is **`GitHubApp`**
-(`github-app.ts`): installation tokens minted from the App's private key (a JWT signed RS256, then
-`POST /app/installations/{id}/access_tokens`), kept until five minutes before they expire, for the
-installation on the launches repo's owner. A `401` makes it forget the token and try once more. The
-commits and pull requests it makes are by the App's bot, `<slug>[bot]`. Without an App in `.env`, the
-old `GITHUB_TOKEN_PERSONAL` is the token. A repo's traffic needs Administration: read, which the App
-does not have: `repoStats` then returns the public numbers only, and traffic comes from a connected
+`GitHubAuth`, asked for a token on each request; that is **`GitHubApp`** (`github-app.ts`):
+installation tokens minted from the App's private key, kept until five minutes before they expire. A
+`401` makes it forget the token and try once more. Without an App, the old `GITHUB_TOKEN_PERSONAL`.
+A repo's traffic needs Administration: read, which the App lacks, so traffic comes from a connected
 GitHub account ([decisions/github-app.md](decisions/github-app.md)).
+
+With `github-events`, `GitHubRest` takes an ETag cache (in `redis-cache` with `redis-state`, a
+bounded in-process one otherwise): **every GET is conditional**, and a 304 is answered from the cache.
+A `push` to the launches repo forgets the files it touched; a `pull_request` queues the drafts
+snapshot's refresh. `RepoArchiveSource` gives the AI runner a release's `codeload` tarball URL,
+resolved with Shipcast's own token, for a provider that downloads the repo itself.
 
 ## Detecting launches
 
 `detect({ github, registry, brand })` (`detect.ts`) reads the brand's account's **public events**
-(`GET /users/{login}/events/public`):
-
-- **Conditional** requests (ETag): a `304` costs no rate limit. GitHub answers `x-poll-interval: 60`,
-  so rounds poll at most once a minute.
-- Events newer than the last seen id, oldest first; the cursor advances per event.
-- **Triggers**: `ReleaseEvent` with action `published`, and `PublicEvent` (a repo made public).
-- `.github/launch.yml` is read **at that tag** (the default branch for a repo made public): no file,
-  `enabled: false`, a pre-release, a trigger turned off, or another brand → ignored, no row; an
-  invalid file → claimed and recorded `failed` with the line-numbered issues; otherwise **claimed**,
-  with the pack from `resolvePack`.
+(`GET /users/{login}/events/public`), conditionally (ETag; a `304` costs no rate limit). Triggers:
+`ReleaseEvent` published, and `PublicEvent`. `.github/launch.yml` is read **at that tag**: no file,
+`enabled: false`, a pre-release, a trigger turned off, or another brand → ignored; an invalid file →
+claimed and recorded `failed` with the line-numbered issues; otherwise **claimed**, with the pack from
+`resolvePack`. With `github-events` releases arrive by webhook and the round's detection runs at most
+hourly, as a safety net.
 
 ## The pre-flight check
 
-`preflight(repo, ref?, { github })` (`preflight.ts`, 2026-10-25) says whether a repo is ready to
-launch, every problem at once, each in a sentence a person can act on: a **published release** (the
-tag, or the latest), a **valid `launch.yml`** with `enabled: true`, a **license** GitHub recognises, a
-**README**, and the **demo** `assets.demo` names (a path in the repo at the ref, or a URL answering
-`HEAD`). All are required; a launch.yml without a demo gets advice, not a block. `shipcast launch` and
-the app's Launch a repo page run it first and stop when a required check fails; `shipcast preflight`
-runs it alone.
+`preflight(repo, ref?, { github })` (`preflight.ts`) says whether a repo is ready to launch, every
+problem at once: a **published release**, a **valid `launch.yml`** with `enabled: true`, a
+**license**, a **README**, and the **demo** `assets.demo` names. `shipcast launch` and the app's Launch
+a repo page run it first.
 
-## The AI providers
+## The AI
 
-`AiProvider` (`ai.ts`, 2026-10-25) is the one interface every AI call goes through:
-`generateObject(request)` for a schema-bound answer (the content pack, an article's distribution) and
-`streamText(request)` for the coming writing assistant. Three providers implement it
-([decisions/ai-providers.md](decisions/ai-providers.md)):
+Two layers, chosen by the `ai-runner` flag ([decisions/ai-layer.md](decisions/ai-layer.md)):
 
-- **`Claudio`** (`claudio.ts`, [claudio.md](claudio.md)): `generateObject` on claudio's REST API,
-  `POST /api/chats` with the prompt, the `cwd` (a path under claudio's `/workspace`), `jsonSchema`,
-  `allowedTools` and `permissionMode: 'dontAsk'`; poll until the main agent calls
-  **`StructuredOutput`**, whose `input` is the answer; then **stop the chat**. Failures, a turn without
-  `StructuredOutput` and the timeout raise `ClaudioError` with the chat id. `streamText` goes through
-  claudio's OpenAI-compatible `/api/v1` with `@ai-sdk/openai-compatible`. Its URL and token are
-  settings, read when a call is made.
-- **`SdkProvider`** on the Vercel AI SDK: `anthropicProvider` (`@ai-sdk/anthropic`, default
-  `claude-opus-5-5`) and `openAiCompatibleProvider` (any chat-completions server). `generateObject` is
-  `generateText` with `Output.object` over the pack's JSON Schema; with a checkout on this machine
-  the model gets read-only `repoTools` (`list_files`, `read_file`, `search`, `git_log`), confined to
-  the checkout.
+- **With `ai-runner`: the AI task runner** (`src/ai/runner.ts`). Every task (`AI_TASK_DEFINITIONS` in
+  `@shipcast/schema`: `pack`, `article`, `assistant`, `assistant-check`, `replies`, `profile`,
+  `provider-check`) runs on the AI SDK the same way: always streamed, no SDK retries (the job queue
+  retries a retryable `AiError`), the task's timeout and the caller's abort, Zod validation with one
+  repair, usage and timing recorded. A task's definition holds its output schema, whether it reads
+  the repo and its limits. A provider is one module in `src/ai/providers/` (`claudio`, `anthropic`,
+  `openaiCompatible`, and `openai` for Action mode), listed in `registry.ts`, with its settings
+  fields, capabilities and how it builds its model. For a `local-tools` provider the runner gives the
+  model read-only tools over the job's clone (`repo_overview`, `read_files`, `search`, `list_files`,
+  `git`, in `repo-tools.ts`) and takes the answer through a strict `submit_answer` tool; a
+  `remote-workspace` provider (claudio) reads the repo in a workspace it downloads itself
+  ([claudio.md](claudio.md)). The runtime builds one runner per process (`aiRunnerFor`), resolving the
+  task's provider and model from the AI settings when the task runs.
+- **Without it: the first layer**, `AiProvider` with `generateObject` and `streamText`
+  ([decisions/ai-providers.md](decisions/ai-providers.md)), reachable only through
+  `@shipcast/engine/legacy-ai` and deleted once the runner is verified in production.
 
-Which provider and model each task uses (`pack`, `article`, `assistant`), the tone override and the
-edited prompts are the **AI settings** (`ai-settings.ts`): `readAiSettings`/`writeAiSettings`,
-`savePrompt`/`restorePrompt`/`promptHistory`/`currentPrompts`, `previewPrompt` (a past launch's final
-prompt, no AI call) and `lockedPrompts`. The pipeline asks `PipelineDeps.aiSetup(task)` before each AI
-call (built by `aiSetup` in `@shipcast/runtime` from the settings and the keychain); without it,
-`PipelineDeps.ai` and the prompts in code are used.
+Either way, the **AI settings** (`ai-settings.ts`) choose a provider and model per task (`pack`,
+`article`, `assistant`, `replies`, `profile`; claudio until set), the tone override and the edited
+prompts (`savePrompt`, `restorePrompt`, `promptHistory`, `currentPrompts`, `previewPrompt`,
+`lockedPrompts`).
 
 ## From a claimed launch to its drafts
 
 `draftLaunch(launch, brand, deps, { direct? })` (`pipeline.ts`) records each step in the registry:
 
 1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's.
-2. **A fresh shallow clone** of the release (`workspace.ts`): `workspace/<owner>__<repo>@<ref>`, which
-   claudio sees as `/workspace/...`; recreated every time so no run leaks into the next.
-3. **The content pack** (`generate.ts`, `prompt.ts`), with the `pack` task's provider and model: a
-   system prompt with the brand's name and tone (the settings' override, else `brand.yml`'s) closed by
-   the **locked** truth rules (only what the code implements is presented as working; no invented
-   commands or numbers; a different text per channel), and a prompt with the pack's brief and one
-   brief per active channel (`channelBrief`), with its limits and links. Briefs are templates the
-   owner may edit (`DEFAULT_PROMPTS`, `{{site}}`, `{{limit.…}}`). Tools are read-only. The answer is
-   accepted only when it validates, matches the launch and `missingPieces` is empty.
-4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, a readable
-   draft per channel at `launches/<project>/<ref>/<channel>.md` saying its mode, and `pack.json`; the
-   media go with them ([publishing.md](publishing.md#the-launchs-media)), read with the project's
-   look from the launches repo's `projects.yml` ([launches-repo.md](launches-repo.md)).
+2. **A fresh shallow clone** of the release (`workspace.ts`). In a split deployment
+   (`SHIPCAST_ROLE`) each job's clone has a unique name and is removed when the job ends
+   (`withJobWorkspace`), so no two jobs share one; a single process keeps the
+   `workspace/<owner>__<repo>@<ref>` name the legacy claudio path reads through its mount.
+3. **The content pack** (`generate.ts`, `prompt.ts`), on the `pack` task: a system prompt with the
+   brand's name and tone closed by the **locked** truth rules (only what the code implements is
+   presented as working; no invented commands or numbers; a different text per channel), and a
+   prompt with the pack's brief and one brief per active channel, each from its channel definition.
+   The answer is accepted only when it validates, matches the launch and `missingPieces` is empty.
+4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, a draft per
+   channel at the file its definition names under `launches/<project>/<ref>/`, and `pack.json`; the
+   media go with them ([publishing.md](publishing.md#the-launchs-media)).
 5. **Delivery** (`deliverDrafts`): a **pull request** in the launches repo (branch
-   `launch/<project>-<ref>`, one commit through the Git data API; an open one is returned instead of
-   a second), or, with `direct`, **one commit straight onto `main`** (`commitToBranch`, moved without
-   force so a branch that moved meanwhile refuses it), which publishes the blog; the engine publishes
-   the channels on its next round.
+   `launch/<project>-<ref>`, one commit through the Git data API), or, with `direct`, **one commit
+   straight onto `main`**. The drafts snapshot is written as the pull request opens.
 
-`claimManual(repo, ref?)` starts a launch by hand: the given tag or the latest release; a failed
-launch asked for again is retried. `loadBrand` and `loadProjects` read `brand.yml` and `projects.yml`
-from the launches repo's default branch. In the app and the rounds, drafting is a `draft` job of the
-queue, never retried on its own since it costs an AI run.
+`claimManual(repo, ref?)` starts a launch by hand. In the app and the rounds, drafting is a `draft`
+job (a `heavy` one in a split), never retried on its own since it costs an AI run.
 
 ## Articles written in the app
 
-`article.ts` (2026-10-25): an article that comes from no release is a launch of its own.
-
-- **Claimed once** (`claimArticle`): repo = the launches repo, ref = `article:<slug>` from its title,
-  trigger `article`. Its pieces live in `articles/<slug>/`, its media in `public/articles/<slug>/`.
-- **Its channels** are the owner's choice in the app (`articleConfig`: the blog and the chosen ones on,
-  drafts-only communities manual, the rest off), written as `articles/<slug>/launch.yml` beside its
-  drafts, which is where publishing reads them.
-- **The AI translates and distributes, never rewrites** (`generateArticlePack`, with the `article`
-  task's provider): it gets the article (`buildArticlePrompt`) and the channels' briefs, no tools, and
-  returns a pack; the owner's title and text then replace the AI's copy of them, so only the other
-  languages and the channels' pieces are the AI's. The locked truth rule becomes "only what the
-  article says". `generateArticlePack` touches neither GitHub nor the registry; `draftArticle` adds
-  the media and the delivery.
-- An article draws no project cover, counts no GitHub stars, and takes its colour from its slug.
+`article.ts`: an article that comes from no release is a launch of its own, claimed once
+(`claimArticle`: repo = the launches repo, ref = `article:<slug>`, trigger `article`). Its channels are
+the owner's choice, written as `articles/<slug>/launch.yml` beside its drafts. **The AI translates and
+distributes, never rewrites** (the `article` task): the owner's title and text replace the AI's copy
+of them, and the locked truth rule becomes "only what the article says".
 
 ## Reviewing and approving
 
-`review.ts` (2026-10-25), for the app: `readReview` lists a launch's drafts from its pull request (the
-articles and channel texts with their content on the branch, the media with a link to their bytes),
-`editDraft` saves an edit as a commit on the pull request's branch (only drafts, only while it is
-open), and `approveLaunch` merges it with a squash, after which publishing follows as on any merge.
+`review.ts`: `readReview` lists a launch's drafts from its pull request, `editDraft` saves an edit as
+a commit on its branch (only drafts, only while open; the snapshot is patched with it), and
+`LaunchService.approve` merges it with a squash, after which publishing follows as on any merge. With
+`github-events` the launch page reads the drafts from the snapshot, never from GitHub; **Refresh from
+GitHub** reads it again.
+
+## Telemetry
+
+`src/telemetry/`: the hourly store of provider calls and timings (`TelemetryStore`), the correctness
+and freshness checks, and the before/after report (`scripts/measure.ts`). See
+[measurement.md](measurement.md).
 
 ## The shipcast command
 
-`pnpm shipcast <command>` from the repo root (`apps/cli`, run by Node's type stripping):
+`pnpm shipcast <command>` from the repo root (`apps/cli`):
 
 | Command | Does |
 | --- | --- |
-| `launch <owner/repo> [--ref <tag>]` | Runs the pre-flight check, then claims and drafts the launch of a release (the latest without `--ref`) |
+| `launch <owner/repo> [--ref <tag>]` | Runs the pre-flight check, then claims and drafts the launch of a release |
 | `preflight <owner/repo> [--ref <tag>]` | The pre-flight check alone |
-| `watch [--interval <s>]` | A worker of the job queue, as the app is: rounds in the Automation settings' mode (detect, draft, publish), the metrics every 6 hours, the token refreshes and the daily account snapshots; `--interval` sets the seconds between rounds (never under 60). Stops on Ctrl+C or SIGTERM ([publishing.md](publishing.md)) |
-| `publish [--retry <channel>]` | Publishing, once ([publishing.md](publishing.md)) |
-| `metrics` | Reads every source now, as a job of the queue, so the app lists it |
-| `sync [<account id>]` | Checks every connected account (or one) and records today's snapshot where its network counts, as a `snapshots` job ([accounts.md](accounts.md#pictures-numbers-and-freshness)) |
-| `status` | The latest launches, their pack and status, how the engine reaches GitHub (the App's installation, the owner's user token), the settings still to set, and which networks and sources are configured |
+| `watch [--interval <s>]` | A worker of the job queue, as the app is: rounds in the Automation settings' mode, the metrics, token refreshes and account snapshots |
+| `publish [--retry <channel>]` | Publishing, once ([publishing.md](publishing.md)); through `PublishingService` with `publishing-service` |
+| `metrics` | Reads every source now, as a job of the queue |
+| `sync [<account id>]` | Checks every connected account (or one) and records today's snapshot |
+| `status` | The latest launches, how the engine reaches GitHub, the settings still to set, what is configured |
+| `token create/list/revoke` | REST API tokens ([api.md](api.md)) |
+| `youtube import <file>` | Connects YouTube once from an OAuth client and refresh token file ([decisions/youtube.md](decisions/youtube.md)) |
+| `secrets migrate [--from keychain\|file]` | Copies every secret into the encrypted table, each read back ([server.md](server.md)) |
+| `init`, `ci`, `mcp` | A local install's setup, Action mode ([decisions/action-mode.md](decisions/action-mode.md)), the MCP server over stdio |
 
-The dashboard moved to the [web app](web-app.md) (`pnpm app`) on 2026-10-25. The command builds the
-same runtime as the app (`createRuntime`): the **bootstrap** from `.env` (the database URL, the
-GitHub App or the old `GITHUB_TOKEN_PERSONAL`, optional `SHIPCAST_DATA_DIR`), the one-time import of
-old `.env` settings, and the **settings** (the launches repo, claudio, the AI budget) from the
-database and the keychain, set in the app's Settings page; a command that needs a missing one says
-which ([decisions/github-app.md](decisions/github-app.md)). `watch` reads the settings again before
-every round. The networks' credentials, and the Anthropic and OpenAI-compatible providers', come
-from connected accounts, with `.env` as a fallback for the networks ([accounts.md](accounts.md)). The
-command uses the AI settings like the app, and prints no AI cost. Every command connects to Postgres
-first, so it must be running (`docker compose up -d postgres`).
+The command builds the same runtime as the app (`createRuntime`): the bootstrap from `.env`, the
+settings from the database and the secret store, the same flags (`SHIPCAST_FLAGS`) and queue. Every
+command connects to Postgres first, so it must be running (`docker compose up -d postgres`). On a
+preview with fake networks only the commands that reach no network run.
 
 **`launch.yml` is read at the release's tag**, so a project's first launch needs a release made after
 its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
@@ -256,10 +264,9 @@ its `launch.yml` reached the default branch (or `--ref` to a tag that has it).
 ## After the drafts
 
 The launch's media, publishing after the merge, the newsletter and metrics are in
-[publishing.md](publishing.md); what the stats section reads from the metrics and the snapshots, and
-how popularity is normalised per network, in [stats.md](stats.md); scheduled publishing and the
-recommended times in [scheduling.md](scheduling.md).
+[publishing.md](publishing.md); the stats section in [stats.md](stats.md); scheduled publishing in
+[scheduling.md](scheduling.md).
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[plans/stack.md]] · [[decisions/mvp-scope.md]] · [[status.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[stats.md]] · [[scheduling.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]]
