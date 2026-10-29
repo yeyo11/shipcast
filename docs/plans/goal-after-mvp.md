@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T14:21:47.566094505Z
-updated_at: 2026-10-25T14:21:47.566094505Z
+created_at: 2026-10-29T00:21:25.065740073Z
+updated_at: 2026-10-29T00:22:05.001577212Z
 tags:
     - plan
     - goal
@@ -199,8 +199,55 @@ published during the run listed in the final report.
 
 ## Outcome
 
-Written when the goal ends.
+Reviewed item by item against the code on 2026-10-29, during the
+[refactor run](goal-refactor.md) (milestone 2 of [goal-v0.2](goal-v0.2.md) asked for it). Of the 32
+items of milestones 1 to 8: 24 done, 3 done in code with a step left (a real run or the owner's), 3
+partial, 1 not done and 1 superseded by a decision. Milestone 9 is the v0.2.0 launch, tracked in
+[goal-v0.2](goal-v0.2.md).
+
+| Milestone | Item | State | Evidence or what is missing |
+| --- | --- | --- | --- |
+| 1 | Durable work on pg-boss | Done | `packages/runtime/src/queue.ts`; the refactor adds BullMQ behind a flag ([decisions/redis.md](../decisions/redis.md)) |
+| 1 | Configuration in two parts, shared by the CLI | Done | `runtime/src/config.ts` (`loadConfig`, `loadAppConfig`) |
+| 1 | The GitHub App | Done | `engine/src/github-app.ts`, `runtime/src/github-user.ts`; the OAuth App and personal token stay as fallbacks by [decisions/github-app.md](../decisions/github-app.md) |
+| 1 | Account snapshots: daily, last synced, stale warning, Sync now | Done | The snapshots job and `syncNow`; `components/stats/Accounts.tsx` |
+| 1 | Instagram webhooks and Mastodon streaming | Not done | [decisions/account-snapshots.md](../decisions/account-snapshots.md) keeps it unbuilt: the daily job and Sync now cover it |
+| 1 | Avatars | Done | `routes/avatars.$accountId.ts` |
+| 1 | Token auth and stable REST routes | Done | `/api/v1` with a bearer token |
+| 2 | The design round, written as decisions | Done | [decisions/app-design-direction.md](../decisions/app-design-direction.md), [decisions/component-layer.md](../decisions/component-layer.md) |
+| 3 | Base UI across the app | Done | No `window.confirm`, native `<select>` or `<details>` left |
+| 3 | Lists on TanStack Table | Superseded | [decisions/lists.md](../decisions/lists.md): paging in the database over indexed queries, no TanStack Table |
+| 3 | Reflow and 44 px targets at 320 px | Partial | `apps/web/scripts/reflow-check.ts` has only run against previews; the production check at 320, 390 and 1280 px is pending, and the script does not yet open the assistant's sheet, the tour, the date pickers, the Comments filters or each Channels tab |
+| 3 | A Lighthouse gate | Partial | `apps/web/scripts/lighthouse-check.ts` scored every page 100 on a preview, but runs by hand only, does not gate performance and has not run against production |
+| 3 | Illustrations | Done | `components/illustrations/*` |
+| 3 | Channels, Blog and Drafts apart | Partial | Channels has its tabs; Drafts went with [decisions/automatic-channels-only.md](../decisions/automatic-channels-only.md); there is no Blog section yet with several measurement sources per site (a new screen, so a design for the owner first) |
+| 3 | Avatars on accounts and the signed-in user | Done | `_app.tsx`, Channels cards |
+| 3 | The onboarding | Done | `routes/onboarding.tsx`, `server/onboarding.ts`, its tests |
+| 3 | The tour | Done | `components/tour/*`, "Take the tour" in help |
+| 4 | Providers through the Vercel AI SDK | Done | The refactor moves every task onto one runner ([decisions/ai-layer.md](../decisions/ai-layer.md)) |
+| 4 | AI settings | Done | `engine/src/ai-settings.ts`, `settings/ai.tsx` |
+| 4 | The writing assistant | Done | `engine/src/assistant.ts`, `components/assistant/*` |
+| 4 | Generated content for search | Done in code | The blog channel's schema and `withScreenshot`, `keepPubDates` in `engine/src/drafts.ts`; only articles generated after it carry it, and no article has been regenerated yet, so `updatedDate` has not run for real. The v0.2.0 article is the first full check |
+| 5 | Edit and delete in the connectors, a capability per network | Done | [decisions/edit-delete.md](../decisions/edit-delete.md); YouTube joins with the refactor ([decisions/youtube.md](../decisions/youtube.md)) |
+| 5 | A launch's page | Done | `components/launch/*` |
+| 5 | Stats | Done | `engine/src/stats.ts`, `components/stats/*` |
+| 5 | Account analysis | Done in code | `engine/src/profile.ts` and its tests; no profile edit has been applied to a real account yet (that waits for the owner's approval in the app; a Mastodon token from before `write:accounts` must reconnect first) |
+| 6 | Scheduling | Done | `engine/src/recommend.ts`, `engine/src/schedule.ts` |
+| 6 | The comment assistant | Done | `engine/src/comments.ts`, `runtime/src/comments.ts` |
+| 7 | MCP and WebMCP | Done | `packages/mcp/src/{stdio,http,webmcp}.ts` |
+| 7 | GitHub Discussions, Threads, LinkedIn | Done | Their connectors |
+| 7 | The Action mode and one-command install | Done in code | `action/`, `apps/cli/src/{init,setup}.ts`, [install.md](../install.md); publishing the CLI to npm and listing the Action on the Marketplace are the owner's steps |
+| 8 | Project pages and the article index | Done | In `yeyo11/launches`, with breadcrumbs |
+| 8 | Each README links the blog | Done | Shipcast's and claudio's READMEs link the launch article in both languages and the project page |
+
+"The queue no longer has this job" (milestone 1 of [goal-v0.2](goal-v0.2.md)): written only by the
+queue's reconcile, for a job row still open whose job the queue no longer holds. The one time it was
+seen, a preview restored from a copy of production had its pg-boss jobs deleted by hand; fixed and
+covered by a test ([decisions/job-queue.md](../decisions/job-queue.md)). On pg-boss it can otherwise
+come only from retention removing a job whose row stayed open. On BullMQ it will also appear, by
+design, for the waiting rounds the cutover leaves behind in pg-boss, and if Redis loses jobs; in both
+cases the work is rebuilt from Postgres.
 
 ## Related
 
-[[plans/after-mvp.md]] · [[plans/goal-finish.md]] · [[plans/search-presence.md]] · [[status.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[search-indexing.md]] · [[plans/design-system.md]] · [[launches-repo.md]]
+[[plans/after-mvp.md]] · [[plans/goal-finish.md]] · [[plans/search-presence.md]] · [[status.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[search-indexing.md]] · [[plans/design-system.md]] · [[launches-repo.md]] · [[plans/goal-refactor.md]] · [[plans/goal-v0.2.md]] · [[decisions/lists.md]] · [[decisions/job-queue.md]]
