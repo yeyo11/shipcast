@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { BlockList } from 'node:net';
 import { onStop } from '@shipcast/runtime';
 import { clientAddress } from './src/server/client-address.ts';
+import { warm } from './src/server/warm.ts';
 
 /**
  * The app in production: the built TanStack Start handler behind Node's own server, with the
@@ -105,12 +106,21 @@ export interface ServeOptions {
 }
 
 const HEALTH = new Set(['/livez', '/readyz']);
+/** How long readiness waits for the warm-up (a few seconds when it works) before it stops holding the process back */
+const WARM_TIMEOUT_MS = 60_000;
 
 export async function serve(options: ServeOptions): Promise<{ close(): Promise<void>; setCertificate(tls: { key: string; cert: string }): void }> {
   const entry = (await import(join(here, 'dist/server/server.js'))) as { default: { fetch(request: Request): Promise<Response> } };
+  let warmth: ReturnType<typeof warm> | undefined;
   const handler = async (request: IncomingMessage, response: ServerResponse) => {
     try {
       const pathname = new URL(request.url ?? '/', 'http://x').pathname;
+      // Not ready until the pages' chunks are loaded (see warm.ts): the proxy keeps visitors on a process that has them
+      if (pathname === '/readyz' && warmth && !warmth.ready()) {
+        response.writeHead(503, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        response.end(JSON.stringify({ ready: false, checks: { process: 'warming' } }));
+        return;
+      }
       if (options.healthOnly && !HEALTH.has(pathname)) {
         response.writeHead(404, { 'content-type': 'text/plain' });
         response.end('This process is a worker: only /livez and /readyz answer here.');
@@ -134,6 +144,8 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
   await new Promise<void>((done) => server.listen(options.port, options.host, done));
   // The app's context, and with it the rounds nobody starts by hand, begins now rather than at the first visit
   void entry.default.fetch(new Request(`${options.origin}/api/health`)).catch(() => undefined);
+  // A worker serves no page, so it has nothing to warm and is ready as soon as its checks are
+  if (!options.healthOnly) warmth = warm(join(here, 'dist/server'), WARM_TIMEOUT_MS);
   /*
    * A stop's HTTP step (lifecycle.ts): no new connection is taken, idle keep-alive ones close now, and
    * the requests in flight get closeTimeoutMs to finish before their connections are cut
