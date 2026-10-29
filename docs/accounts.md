@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-10-29T01:10:30.108049487Z
+updated_at: 2026-10-29T19:44:54.705884301Z
 tags:
     - accounts
     - channels
@@ -38,12 +38,12 @@ through its connector ([decisions/automatic-channels-only.md](decisions/automati
 | Network | Connected with | Publishes | Reads |
 | --- | --- | --- | --- |
 | dev.to | API key | the English article, canonical to the blog | views, reactions, comments |
-| Bluesky | handle and app password | a post with a link card | likes, reposts, replies |
-| Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, replies |
+| Bluesky | handle and app password | a post with a link card | likes, reposts, quotes, replies, saves |
+| Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, quotes, replies |
 | Instagram | Instagram Login (OAuth) | carousel, story, comment | reach, interactions |
 | Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts |
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
-| Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | followers, karma |
+| Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | score, comments, crossposts, upvote ratio; followers, karma |
 | YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; the channel's numbers |
 | Newsletter (Brevo) | API key | one campaign per language | sends, opens, clicks |
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
@@ -137,10 +137,11 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
 - **Each proposal** is a word diff against the field as it is, with an editable text, **Copy**, and,
   where the network and the credential allow it, **Apply**, which asks before it changes the real
   profile.
-- **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description,
-  guarded by `swapRecord`) and a Telegram channel (title and description). dev.to and Hashnode are
-  read but not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their
-  profile for a review and copies the proposals.
+- **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name, description and
+  links, guarded by `swapRecord`) and a Telegram channel (title and description). dev.to, Hashnode
+  and Reddit are read but not edited. LinkedIn reads the name and photo with its token and the owner
+  pastes the About section; Instagram and Threads are neither read nor edited, so the owner pastes
+  their profile for a review and copies the proposals.
 
 ## The secret store
 
@@ -169,18 +170,21 @@ spec says its URLs, scopes and app, and the routes under `/auth/<network>` run t
 `redis-state`, so a callback reaching another replica still finds it.
 
 - **Mastodon** has no central developer portal: Shipcast registers itself on the instance the owner
-  names (`POST /api/v1/apps`, scopes `read:accounts read:statuses write:statuses write:media
-  write:accounts`) the first time, keeps that client in the secret store with its scopes, and sends the
-  owner to authorise. A client registered with other scopes is registered again on the next
-  connection. The token does not expire.
+  names (`POST /api/v1/apps`, scopes `read:accounts read:statuses read:notifications write:statuses
+  write:media write:accounts`) the first time, keeps that client in the secret store with its scopes,
+  and sends the owner to authorise. A client registered with other scopes is registered again on the
+  next connection. The token does not expire. `read:notifications`, which the hourly comment feed
+  needs, joined on 2026-10-29: a token from before keeps publishing and reading, and its comments
+  come with the daily sweep until it is connected again.
 - **Instagram Login** needs the Instagram app id and secret of the owner's Meta app, set in the
   Settings page, and the callback listed exactly in its business login settings. The code becomes a
   short-lived token, swapped at once for a 60-day one, refreshed every 30 days by the
   `instagram-tokens` job.
 - **Threads** and **LinkedIn** use the owner's own app, its id and secret in Settings.
 - **Reddit** needs the owner's Reddit app, its client id and secret in Settings and its redirect uri
-  set to `/auth/reddit/callback`. It asks for `identity submit read` with `duration=permanent`
-  ([publishing.md](publishing.md#reddit)).
+  set to `/auth/reddit/callback`. It asks for `identity submit read history edit` with
+  `duration=permanent` ([publishing.md](publishing.md#reddit)); a token from before 2026-10-29 lacks
+  `history` and `edit`, so finding a lost post and deleting one ask to connect again.
 - **YouTube** needs the owner's Google OAuth client in Settings; scopes `youtube.upload`,
   `youtube.readonly`, `youtube.force-ssl`. With the consent screen in *Testing*, a refresh token lasts
   7 days, and an expired one asks to connect YouTube again ([decisions/youtube.md](decisions/youtube.md)).

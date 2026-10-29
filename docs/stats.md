@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T16:39:48.121797373Z
-updated_at: 2026-10-29T01:08:43.450692641Z
+updated_at: 2026-10-29T19:44:02.760738647Z
 tags:
     - stats
     - metrics
@@ -41,7 +41,8 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | --- | --- | --- | --- | --- | --- | --- |
 | dev.to, Hashnode | views | reactions | comments | | | |
 | Bluesky | | likes | replies | reposts + quotes | | |
-| Mastodon | | favourites | replies | boosts | | |
+| Mastodon | | favourites | replies | boosts + quotes | | |
+| Reddit | | score | comments | crossposts | | |
 | Instagram | views | likes | comments | shares | | reach |
 | Threads | views | likes | replies | reposts + quotes + shares | | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
@@ -51,9 +52,15 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Search Console, Bing | | | | | clicks | impressions |
 | GitHub | | stars | | forks | | |
 
-Left out: Instagram's `saved`, the newsletter's bounces and unsubscribes, the blog's per-source and
-per-language split, and GitHub's views, which are a rolling 14-day count rather than a counter.
-Telegram, Discord, LinkedIn and Reddit read no per-post numbers.
+Left out: Instagram's `saved` and Bluesky's `saves` (its bookmarks), the newsletter's bounces and
+unsubscribes, the blog's per-source and per-language split, GitHub's views, which are a rolling
+14-day count rather than a counter, and Reddit's `upvoteRatio`. Mastodon's `quotes` are read where
+the instance counts them (4.5 and later). Telegram, Discord and LinkedIn read no per-post numbers.
+
+**Ratios.** A reading that is a ratio of one piece, not a count, is listed in its definition's
+`metrics.averaged` (gathered as `AVERAGED_METRICS`; today Reddit's `upvoteRatio`). No family takes
+it, and wherever a launch's pieces are put together (`latestMetrics`, `metricHistory`) it is their
+average instead of their sum.
 
 **Counters.** A counter is listed from the posts and launches, not from the readings, and is one of:
 
