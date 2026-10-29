@@ -90,13 +90,14 @@ h3.ph { font-size: 30px; font-weight: 700; letter-spacing: var(--sc-tracking-tit
 .btn-danger { color: var(--sc-failure); border: 2px solid var(--sc-failure); }
 .btn-small { min-height: 36px; padding: 0 14px; font-size: 13px; }
 .btn svg { flex: none; }
-/* On touch screens every control is at least 44 px tall, the size a thumb hits without aiming */
-@media (pointer: coarse) { .btn-small { min-height: 44px; } }
+/* On touch screens and narrow windows (the app's phone layout, ≤ 860 px) every control is at least
+   44 px tall, the size a thumb hits without aiming; a wide window with a mouse keeps the 36 px look */
+@media (pointer: coarse), (max-width: 860px) { .btn-small { min-height: 44px; } }
 /* A text button reads as text: without background: none the browser paints its grey button box */
 .btn-link { background: none; border: 0; padding: 0; min-height: 0; font: var(--sc-label); text-decoration: underline; text-underline-offset: 3px; color: var(--sc-muted); cursor: pointer; }
 .btn-link:hover { color: var(--sc-text); }
 .btn-link:disabled { opacity: .55; cursor: progress; }
-@media (pointer: coarse) { .btn-link { min-height: 44px; } }
+@media (pointer: coarse), (max-width: 860px) { .btn-link { min-height: 44px; } }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .row > * { min-width: 0; }
 /* A field set in a row with other controls (a Select beside a model input) takes its share of it */

@@ -336,7 +336,8 @@ html::-webkit-scrollbar-thumb:hover { background: var(--sc-muted); }
 .rdp-day_button:hover { background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
 .rdp-day_button:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 1px; }
 .rdp-today:not(.rdp-selected) .rdp-day_button { border: var(--sc-border-control) solid var(--sc-rail); }
-.rdp-outside { color: var(--sc-muted); opacity: .6; }
+/* The muted token alone: faded further by opacity it fell under 4.5:1 against the ground */
+.rdp-outside { color: var(--sc-muted); }
 .rdp-disabled { opacity: .3; }
 .rdp-disabled .rdp-day_button { cursor: default; }
 .rdp-hidden { visibility: hidden; }
@@ -346,8 +347,9 @@ html::-webkit-scrollbar-thumb:hover { background: var(--sc-muted); }
 .rdp-range_start { border-radius: 50% 0 0 50%; background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
 .rdp-range_end { border-radius: 0 50% 50% 0; background: color-mix(in srgb, var(--sc-text) 10%, transparent); }
 .rdp-range_start.rdp-range_end { border-radius: 50%; }
-@media (pointer: coarse) { .rdp-root { --rdp-cell: 44px; } }
-@media (max-width: 400px) { .rdp-root { --rdp-cell: 40px; } }
+@media (pointer: coarse), (max-width: 860px) { .rdp-root { --rdp-cell: 44px; } .rdp-button_previous, .rdp-button_next { width: 44px; height: 44px; } .rdp-month_caption { min-height: 44px; } }
+/* Seven 44 px days and the sheet's padding need 352 px: narrower than that the week cannot keep them */
+@media (max-width: 351px) { .rdp-root { --rdp-cell: 40px; } }
 
 /* The time field (ui/TimeField.tsx): one control in the input's skin holding the hour and minute segments */
 .ui-time { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 0 10px; border-radius: 14px; border: var(--sc-border-control) solid var(--sc-rail); background: var(--sc-ground); color: var(--sc-text); font: var(--sc-body); font-variant-numeric: tabular-nums; }

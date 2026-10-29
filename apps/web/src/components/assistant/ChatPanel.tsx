@@ -282,9 +282,13 @@ function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: 
           </button>
         </div>
       </header>
+      {/* Focusable, so a keyboard can scroll a conversation longer than the panel */}
       <div
         className="chat-list"
         ref={list}
+        role="region"
+        aria-label={view === 'history' ? 'Past sessions' : 'Messages'}
+        tabIndex={0}
         data-lenis-prevent
         onScroll={(e) => {
           const el = e.currentTarget;

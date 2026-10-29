@@ -12,7 +12,8 @@ import { chromium, type BrowserContext, type Locator, type Page } from 'playwrig
  * palette and an alert dialog, so the popups are checked too, and then the surfaces that only exist
  * once opened: the writing assistant (bubble, sheet, history), the tour's first steps, the date
  * pickers on Stats and on a launch, the Comments filters and every Channels tab. Those also fail on a
- * control smaller than 44 px or a popup that leaves the screen. Each of them only opens and closes UI
+ * popup that leaves the screen or a control under the target size: 44 px up to the app's phone
+ * layout (860 px), 24 px wider (WCAG 2.5.8 AA), where a mouse aims and the desktop look stays. Each of them only opens and closes UI
  * (it never sends, saves, schedules or connects) and is skipped, with a line saying why, when what it
  * opens is not there: an empty preview still runs to the end. Not part of `pnpm test`.
  *
@@ -92,8 +93,16 @@ async function shot(page: Page, name: string, width: number, fullPage = true): P
   await page.screenshot({ path: join(values.shots, `${name}-${width}.png`), fullPage });
 }
 
-/** The smallest target a finger can hit reliably (WCAG 2.5.5, and Apple's and Material's minimum) */
-const TARGET = 44;
+/** The smallest target a finger can hit reliably (WCAG 2.5.5, and Apple's and Material's minimum): the project's rule up to its phone layout */
+const TOUCH_TARGET = 44;
+/** WCAG 2.2 AA's minimum (2.5.8), for the wider windows a mouse aims in */
+const POINTER_TARGET = 24;
+/** The app's phone layout: the CSS gives every control 44 px at this width and under */
+const PHONE_MAX = 860;
+
+function targetFor(width: number): number {
+  return width <= PHONE_MAX ? TOUCH_TARGET : POINTER_TARGET;
+}
 
 /**
  * A popup's own problems, which the page-wide check cannot see: a fixed or portalled popup that
@@ -102,6 +111,7 @@ const TARGET = 44;
  * exempt, as WCAG exempts it.
  */
 async function inspectPopup(page: Page, scope: Locator, name: string, width: number): Promise<void> {
+  const target = targetFor(width);
   const found = await scope.first().evaluate((root, min) => {
     const box = root.getBoundingClientRect();
     const out = box.left < -1 || box.right > window.innerWidth + 1 ? `${Math.round(box.left)}..${Math.round(box.right)}px of ${window.innerWidth}` : null;
@@ -122,9 +132,9 @@ async function inspectPopup(page: Page, scope: Locator, name: string, width: num
       small.push(`${target.tagName.toLowerCase()} "${label}" ${Math.round(r.width)}x${Math.round(r.height)}`);
     }
     return { out, small };
-  }, TARGET);
+  }, target);
   if (found.out) findings.push({ page: name, width, problem: `the popup leaves the screen (${found.out})` });
-  if (found.small.length > 0) findings.push({ page: name, width, problem: `${found.small.length} targets under ${TARGET}px (${found.small.slice(0, 5).join(', ')})` });
+  if (found.small.length > 0) findings.push({ page: name, width, problem: `${found.small.length} targets under ${target}px (${found.small.slice(0, 5).join(', ')})` });
   await inspect(page, name, width);
   await shot(page, name, width, false);
 }
@@ -374,7 +384,7 @@ await browser.close();
 // Counted as they are inspected: how many there are depends on what the app has to open
 const skips = skipped.length > 0 ? ` (${skipped.length} skipped)` : '';
 if (findings.length === 0) {
-  console.log(`No horizontal overflow, no target under ${TARGET}px and no serious or critical axe violations: ${views} views at ${widths.join(', ')} px${skips}.`);
+  console.log(`No horizontal overflow, no target under ${TOUCH_TARGET}px (${POINTER_TARGET}px above ${PHONE_MAX}) and no serious or critical axe violations: ${views} views at ${widths.join(', ')} px${skips}.`);
 } else {
   for (const f of findings) console.log(`${f.page} @ ${f.width}px: ${f.problem}`);
   console.log(`${findings.length} problems in ${views} views${skips}.`);
