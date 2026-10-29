@@ -1,10 +1,12 @@
+import { isAveragedMetric } from '@shipcast/schema';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/connect.ts';
 import { metrics } from '../db/schema.ts';
 
 /**
  * One number read from one source for one launch, at one moment. A launch's readings add up its
- * pieces': two newsletter issues read in one round are one reading of the newsletter.
+ * pieces': two newsletter issues read in one round are one reading of the newsletter. A ratio (a
+ * channel's `averaged` readings, Reddit's upvote ratio) is their average instead.
  */
 export interface MetricReading {
   launchId: number;
@@ -32,12 +34,14 @@ const seen = sql<string>`coalesce(${metrics.checkedAt}, ${metrics.takenAt})`;
 /**
  * A launch's sum at each moment it was read, from rows that each hold for [taken_at, seen]: at a
  * moment, every piece's row that held then is added up. With no `checked_at` anywhere (a row a
- * reading) this is the sum of the rows taken at that very moment, as it always was.
+ * reading) this is the sum of the rows taken at that very moment, as it always was. `average` makes
+ * it their mean, for a ratio.
  */
-function sumsAt(rows: ReadonlyArray<{ value: number; takenAt: string; checkedAt: string | null }>, moments: Iterable<string>): Array<{ at: string; value: number }> {
+function sumsAt(rows: ReadonlyArray<{ value: number; takenAt: string; checkedAt: string | null }>, moments: Iterable<string>, average = false): Array<{ at: string; value: number }> {
   return [...new Set(moments)].sort().flatMap((at) => {
     const held = rows.filter((r) => r.takenAt <= at && (r.checkedAt ?? r.takenAt) >= at);
-    return held.length === 0 ? [] : [{ at, value: held.reduce((n, r) => n + r.value, 0) }];
+    const sum = held.reduce((n, r) => n + r.value, 0);
+    return held.length === 0 ? [] : [{ at, value: average ? sum / held.length : sum }];
   });
 }
 
@@ -89,6 +93,12 @@ export class MetricRepository {
    * that read (gone, failed) is left out of the sum, as it always was.
    */
   async latestMetrics(launchId: number): Promise<MetricReading[]> {
+    const rows = await this.#latestSums(launchId);
+    return rows.map(({ pieces, ...r }) => (isAveragedMetric(r.source, r.name) ? { ...r, value: r.value / pieces } : r));
+  }
+
+  /** The newest reading of every metric of a launch, its pieces' added up, with how many there were */
+  async #latestSums(launchId: number): Promise<Array<MetricReading & { pieces: number }>> {
     const last = this.#db
       .select({ source: metrics.source, name: metrics.name, at: sql<string>`max(${seen})`.as('at') })
       .from(metrics)
@@ -101,6 +111,7 @@ export class MetricRepository {
         source: metrics.source,
         name: metrics.name,
         value: sql<number>`sum(${metrics.value})::float8`.mapWith(Number).as('value'),
+        pieces: sql<number>`count(*)::int`.mapWith(Number).as('pieces'),
         takenAt: sql<string>`max(${metrics.takenAt})`.as('taken_at'),
         checkedAt: last.at,
       })
@@ -119,7 +130,7 @@ export class MetricRepository {
       .where(and(eq(metrics.launchId, launchId), eq(metrics.source, source), eq(metrics.name, name)))
       .orderBy(asc(metrics.takenAt));
     const moments = rows.flatMap((r) => (r.checkedAt ? [r.takenAt, r.checkedAt] : [r.takenAt]));
-    return sumsAt(rows, moments).map((p) => ({ launchId, source, name, value: p.value, takenAt: p.at, checkedAt: p.at }));
+    return sumsAt(rows, moments, isAveragedMetric(source, name)).map((p) => ({ launchId, source, name, value: p.value, takenAt: p.at, checkedAt: p.at }));
   }
 
   /**

@@ -109,7 +109,8 @@ test('an edit goes through the engine’s checks before the network, and the net
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, {})).status, 400);
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, { avatar: 'x' })).status, 400);
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, { bio: 'x'.repeat(300) })).status, 400);
-  assert.equal((await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, { links: [] })).status, 400);
+  const telegram = await s.registry.accounts.addAccount({ network: 'telegram', brand: 'personal', label: '@shipnews', settings: {} });
+  assert.equal((await call(s.deps, 'PATCH', `/accounts/${telegram.id}/profile`, s.write, { links: [] })).status, 400, 'a field the network cannot change');
   assert.equal((await call(s.deps, 'PATCH', `/accounts/${ig.id}/profile`, s.write, { bio: 'x' })).status, 409);
   const done = await call(s.deps, 'PATCH', `/accounts/${bsky.id}/profile`, s.write, { bio: 'Builder' });
   assert.equal(done.status, 200);

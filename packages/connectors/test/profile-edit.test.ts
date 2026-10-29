@@ -71,9 +71,10 @@ test('a Mastodon token without write:accounts is told to reconnect', async () =>
   await assert.rejects(mastodon.editProfile({ bio: 'x' }), (error: unknown) => error instanceof ConnectorError && /connect the account again/.test(error.message) && !error.retryable);
 });
 
-test('new Mastodon connections ask for write:accounts', () => {
+test('new Mastodon connections ask for write:accounts and read:notifications', () => {
   assert.match(MASTODON_SCOPES, /\bwrite:accounts\b/);
   assert.match(MASTODON_SCOPES, /\bwrite:statuses\b/);
+  assert.match(MASTODON_SCOPES, /\bread:notifications\b/, 'the hourly comment feed reads the mentions');
 });
 
 const session = () => Response.json({ did: 'did:plc:1', handle: 'me.bsky.social', accessJwt: 'j' });
@@ -124,7 +125,8 @@ test('Bluesky creates the profile record when there is none, and an empty name r
   assert.deepEqual(put.record, { $type: 'app.bsky.actor.profile', description: 'Hello' });
 });
 
-test('Bluesky refuses links and says when the profile changed in between', async () => {
+test('Bluesky refuses a link that is not https, and says when the profile changed in between, removing the links it made for it', async () => {
+  const calls: Call[] = [];
   const bluesky = new Bluesky({
     identifier: 'me.bsky.social',
     appPassword: 'p',
@@ -132,13 +134,62 @@ test('Bluesky refuses links and says when the profile changed in between', async
       [
         ['POST https://bsky.social/xrpc/com.atproto.server.createSession', session],
         ['GET https://bsky.social/xrpc/com.atproto.repo.getRecord', () => Response.json({ cid: 'c', value: {} })],
+        ['POST https://bsky.social/xrpc/com.atproto.repo.createRecord', () => Response.json({ uri: 'at://did:plc:1/app.bsky.actor.link/new1', cid: 'n1' })],
+        ['POST https://bsky.social/xrpc/com.atproto.repo.deleteRecord', () => Response.json({})],
         ['POST https://bsky.social/xrpc/com.atproto.repo.putRecord', () => Response.json({ error: 'InvalidSwap' }, { status: 400 })],
       ],
-      [],
+      calls,
     ),
   });
-  await assert.rejects(bluesky.editProfile({ links: [] }), /no links/);
+  await assert.rejects(bluesky.editProfile({ links: [{ name: 'Site', value: 'http://example.dev' }] }), (e: unknown) => e instanceof ConnectorError && !e.retryable && /not an https address/.test(e.message));
+  assert.equal(calls.length, 0, 'refused before anything is sent');
   await assert.rejects(bluesky.editProfile({ bio: 'x' }), /changed while it was being edited/);
+  calls.length = 0;
+  await assert.rejects(bluesky.editProfile({ links: [{ name: 'Site', value: 'https://example.dev' }] }), /changed while it was being edited/);
+  assert.deepEqual(JSON.parse(String(calls.find((c) => c.url.endsWith('deleteRecord'))!.body)), { repo: 'did:plc:1', collection: 'app.bsky.actor.link', rkey: 'new1' });
+});
+
+test('Bluesky edits the links: one already listed is kept, a new one is created, a dropped one deleted after the profile is written', async () => {
+  const calls: Call[] = [];
+  const kept = { uri: 'at://did:plc:1/app.bsky.actor.link/keep', cid: 'k1' };
+  const gone = { uri: 'at://did:plc:1/app.bsky.actor.link/gone', cid: 'g1' };
+  const bluesky = new Bluesky({
+    identifier: 'me.bsky.social',
+    appPassword: 'p',
+    fetch: fakeFetch(
+      [
+        ['POST https://bsky.social/xrpc/com.atproto.server.createSession', session],
+        [
+          'GET https://bsky.social/xrpc/com.atproto.repo.getRecord?repo=did%3Aplc%3A1&collection=app.bsky.actor.profile',
+          () => Response.json({ cid: 'cid-1', value: { $type: 'app.bsky.actor.profile', description: 'Bio', links: [kept, gone], pronouns: 'he/him' } }),
+        ],
+        ['GET https://bsky.social/xrpc/com.atproto.repo.getRecord?repo=did%3Aplc%3A1&collection=app.bsky.actor.link&rkey=keep', () => Response.json({ ...kept, value: { url: 'https://josegarrido.dev/', title: 'Site' } })],
+        ['GET https://bsky.social/xrpc/com.atproto.repo.getRecord?repo=did%3Aplc%3A1&collection=app.bsky.actor.link&rkey=gone', () => Response.json({ ...gone, value: { url: 'https://old.example/' } })],
+        ['POST https://bsky.social/xrpc/com.atproto.repo.createRecord', () => Response.json({ uri: 'at://did:plc:1/app.bsky.actor.link/new1', cid: 'n1' })],
+        ['POST https://bsky.social/xrpc/com.atproto.repo.putRecord', () => Response.json({})],
+        ['POST https://bsky.social/xrpc/com.atproto.repo.deleteRecord', () => Response.json({})],
+      ],
+      calls,
+    ),
+  });
+  await bluesky.editProfile({ links: [{ name: 'GitHub', value: 'https://github.com/yeyo11' }, { name: 'Site', value: 'https://josegarrido.dev/' }] });
+  const steps = calls.filter((c) => c.method === 'POST' && !c.url.endsWith('createSession')).map((c) => c.url.split('/').at(-1));
+  assert.deepEqual(steps, ['com.atproto.repo.createRecord', 'com.atproto.repo.putRecord', 'com.atproto.repo.deleteRecord']);
+  const create = JSON.parse(String(calls.find((c) => c.url.endsWith('createRecord'))!.body));
+  assert.equal(create.collection, 'app.bsky.actor.link');
+  assert.equal(create.record.url, 'https://github.com/yeyo11');
+  assert.equal(create.record.title, 'GitHub');
+  const put = JSON.parse(String(calls.find((c) => c.url.endsWith('putRecord'))!.body));
+  assert.equal(put.swapRecord, 'cid-1');
+  assert.deepEqual(put.record, { $type: 'app.bsky.actor.profile', description: 'Bio', pronouns: 'he/him', links: [{ uri: 'at://did:plc:1/app.bsky.actor.link/new1', cid: 'n1' }, kept] });
+  assert.deepEqual(JSON.parse(String(calls.find((c) => c.url.endsWith('deleteRecord'))!.body)), { repo: 'did:plc:1', collection: 'app.bsky.actor.link', rkey: 'gone' });
+
+  // An empty list removes the field, and every link it listed
+  calls.length = 0;
+  await bluesky.editProfile({ links: [] });
+  const cleared = JSON.parse(String(calls.find((c) => c.url.endsWith('putRecord'))!.body));
+  assert.equal(cleared.record.links, undefined);
+  assert.equal(calls.filter((c) => c.url.endsWith('deleteRecord')).length, 2);
 });
 
 test('Bluesky reads the public profile: name, description, picture and banner', async () => {
@@ -148,6 +199,31 @@ test('Bluesky reads the public profile: name, description, picture and banner', 
     fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile', () => Response.json({ displayName: 'José', description: 'Bio', avatar: 'https://cdn.bsky.app/a.jpg' })]], []),
   });
   assert.deepEqual(await bluesky.profile(), { displayName: 'José', bio: 'Bio', links: [], hasAvatar: true, hasBanner: false });
+});
+
+test('Bluesky reads the profile’s links, pronouns and pinned post; a link without a title is named by its site', async () => {
+  const profile = {
+    displayName: 'José',
+    pronouns: 'he/him',
+    links: [
+      { uri: 'at://did:plc:1/app.bsky.actor.link/a', cid: 'a', url: 'https://josegarrido.dev/', title: 'José Antonio Garrido' },
+      { uri: 'at://did:plc:1/app.bsky.actor.link/b', cid: 'b', url: 'https://www.github.com/yeyo11' },
+    ],
+    pinnedPost: { uri: 'at://did:plc:1/app.bsky.feed.post/3abc', cid: 'p' },
+  };
+  const read = (answer: unknown) => new Bluesky({ identifier: 'me.bsky.social', appPassword: 'p', fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile', () => Response.json(answer)]], []) }).profile();
+  assert.deepEqual(await read(profile), {
+    displayName: 'José',
+    links: [
+      { name: 'José Antonio Garrido', value: 'https://josegarrido.dev/' },
+      { name: 'github.com', value: 'https://www.github.com/yeyo11' },
+    ],
+    pronouns: 'he/him',
+    pinnedPost: 'https://bsky.app/profile/did:plc:1/post/3abc',
+    hasAvatar: false,
+    hasBanner: false,
+  });
+  assert.deepEqual((await read({ website: 'https://example.dev' })).links, [{ name: 'Website', value: 'https://example.dev' }], 'the deprecated website, where it is all there is');
 });
 
 const telegramRules = (member: unknown, calls: Call[], extra: Array<[string, () => Response]> = []) =>

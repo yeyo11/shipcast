@@ -308,7 +308,7 @@ export type { ProfileFieldId, ProfileLimits } from '@shipcast/schema';
 export interface ProfileReviewInput {
   network: string;
   account: string;
-  profile: { displayName?: string; bio?: string; links: Array<{ name: string; value: string }>; hasAvatar: boolean; hasBanner?: boolean };
+  profile: { displayName?: string; bio?: string; links: Array<{ name: string; value: string }>; pronouns?: string; pinnedPost?: string; hasAvatar: boolean; hasBanner?: boolean };
   /** The fields this network's profile has; the review proposes nothing else */
   fields: readonly ProfileFieldId[];
   limits: ProfileLimits;
@@ -355,6 +355,9 @@ export function buildProfileReviewPrompt(input: ProfileReviewInput, brand: Brand
     `Bio:\n${show(profile.bio)}`,
     `Links:\n${profile.links.length > 0 ? quoted(profile.links.map((l) => `${l.name}: ${l.value}`).join('\n')) : '> (none)'}`,
     `Picture: ${profile.hasAvatar ? 'set' : 'none'}${profile.hasBanner === undefined ? '' : `; banner: ${profile.hasBanner ? 'set' : 'none'}`}`,
+    // Context the review may mention, never fields it proposes
+    ...(profile.pronouns ? [`Pronouns:\n${quoted(profile.pronouns)}`] : []),
+    ...(profile.pinnedPost ? [`Pinned post: ${profile.pinnedPost}`] : []),
     '',
     `What ${input.network} lets a profile have, and its limits:`,
     ...input.fields.map((f) => `- ${f} (the ${FIELD_NAMES[f]}): ${limitText(f, input.limits)}`),

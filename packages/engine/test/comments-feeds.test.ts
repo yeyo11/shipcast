@@ -104,3 +104,29 @@ test('a feed that fails keeps its cursor and reads none of its posts; the other 
   assert.deepEqual(fake.log, ['bluesky comments b1']);
   assert.equal(await registry.cursors.cursor('comments-feed:mastodon:env'), '9');
 });
+
+test('a feed that fails while the daily sweep is due still lets the sweep read every post whole', async () => {
+  const registry = await memoryRegistry();
+  await aPublishedLaunch(registry, [{ channel: 'mastodon', externalId: 'm1' }]);
+  await registry.cursors.setCursor('comments-feed:mastodon:env', '9');
+  // The last sweep was a day ago: this run reads every post, whatever the feed says
+  await registry.cursors.setCursor('comments-sweep:mastodon:env', new Date(Date.now() - 25 * 3_600_000).toISOString());
+  const fake = new FakeConnectors();
+  const readers = fake.commentConnectors();
+  const deps: CommentDeps = {
+    registry,
+    connectors: async (channel, accountId) => ({
+      ...(await readers(channel, accountId)),
+      feed: {
+        changes: async () => {
+          throw new Error('Mastodon: the token was not granted read:notifications');
+        },
+      },
+    }),
+  };
+  const result = await fetchCommentsByFeed(deps, registry.cursors);
+  assert.deepEqual(result.problems, ['Mastodon feed: Mastodon: the token was not granted read:notifications']);
+  assert.deepEqual(fake.log, ['mastodon comments m1'], 'the sweep read the post');
+  assert.equal(await registry.cursors.cursor('comments-feed:mastodon:env'), '9', 'the feed keeps its cursor');
+  assert.ok(Date.parse((await registry.cursors.cursor('comments-sweep:mastodon:env'))!) > Date.now() - 60_000, 'the sweep is recorded');
+});

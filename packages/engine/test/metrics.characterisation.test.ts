@@ -53,13 +53,12 @@ test('one run over several launches: each readable piece is asked once, the rest
     new Date('2026-11-10T12:00:00Z'),
   );
 
-  // LIKELY GAP: a Reddit piece's kind is `post:<subreddit>`, which the read filter (kind === 'post' or
-  // issue:) leaves out, so a Reddit reader given would never be asked; none exists today
-  assert.deepEqual([...fake.log].sort(), ['devto metrics 42', 'instagram metrics ig1', 'newsletter metrics 900'], 'no deleted, story, comment, Reddit, id-less or drafted piece');
+  // A subreddit's post (`post:<subreddit>`) is its channel's main piece, read since Reddit has metrics
+  assert.deepEqual([...fake.log].sort(), ['devto metrics 42', 'instagram metrics ig1', 'newsletter metrics 900', 'reddit metrics r1'], 'no deleted, story, comment, id-less or drafted piece');
   assert.deepEqual(github.called('repoStats'), [['yeyo11/claudio']], 'an article has no repo to count stars on');
   assert.deepEqual(visited.sort(), ['/en/claudio/', '/en/hello/', '/es/claudio-es/']);
   assert.deepEqual(result.problems, ['yeyo11/launches article:hello blog visits: Cloudflare: 500']);
-  assert.equal(result.readings, 10, 'three pieces, four blog numbers, three of GitHub');
+  assert.equal(result.readings, 11, 'four pieces, four blog numbers, three of GitHub');
 
   const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
   assert.deepEqual(latest, {
@@ -73,6 +72,7 @@ test('one run over several launches: each readable piece is asked once, the rest
     'github.watchers': 2,
     'instagram.likes': 3,
     'newsletter.opens': 5,
+    'reddit.upvotes': 1,
   });
   assert.deepEqual(await registry.metrics.latestMetrics(article.id), []);
   assert.deepEqual(await registry.metrics.latestMetrics(drafted.id), []);

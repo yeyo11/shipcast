@@ -79,6 +79,21 @@ test('every reading is kept, so a metric has a history', async () => {
   assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.name === 'likes')?.value, 4);
 });
 
+test('a ratio is averaged across a launch’s pieces, never added up: Reddit’s upvote ratio over two subreddits', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published', 'https://github.com/yeyo11/launches/pull/4');
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'reddit', kind: 'post:selfhosted', url: 'https://www.reddit.com/r/selfhosted/comments/a/', externalId: 't3_a' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'reddit', kind: 'post:claudeai', url: 'https://www.reddit.com/r/ClaudeAI/comments/b/', externalId: 't3_b' });
+  const values: Record<string, Record<string, number>> = { t3_a: { score: 10, comments: 2, crossposts: 0, upvoteRatio: 0.75 }, t3_b: { score: 4, comments: 1, crossposts: 1, upvoteRatio: 0.25 } };
+  const result = await collectMetrics(registry, brand, { posts: { reddit: { metrics: async (id) => values[id]! } } }, new Date('2026-10-30T12:00:00Z'));
+  assert.deepEqual(result.problems, []);
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
+  assert.deepEqual(latest, { 'reddit.comments': 3, 'reddit.crossposts': 1, 'reddit.score': 14, 'reddit.upvoteRatio': 0.5 });
+  assert.deepEqual((await registry.metrics.metricHistory(launch.id, 'reddit', 'upvoteRatio')).map((m) => m.value), [0.5]);
+  assert.deepEqual((await registry.metrics.metricHistory(launch.id, 'reddit', 'score')).map((m) => m.value), [14]);
+});
+
 test('launches not yet published are not read', async () => {
   const registry = await memoryRegistry();
   await registry.launches.claim({ repo: 'yeyo11/x', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });

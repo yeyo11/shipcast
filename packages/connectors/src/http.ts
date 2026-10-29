@@ -215,6 +215,10 @@ export interface Profile {
   displayName?: string;
   bio?: string;
   links: ProfileLink[];
+  /** Where the network has them and they are set (Bluesky): context for a review, never proposed */
+  pronouns?: string;
+  /** The address of the post pinned to the top of the profile, where there is one */
+  pinnedPost?: string;
   hasAvatar: boolean;
   /** Left out where the network has no banner */
   hasBanner?: boolean;

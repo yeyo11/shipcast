@@ -115,8 +115,16 @@ test('Bluesky metrics come from the public AppView, without logging in', async (
     appPassword: 'y',
     fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts', () => Response.json({ posts: [{ likeCount: 9, repostCount: 2, replyCount: 1 }] })]], calls),
   });
-  assert.deepEqual(await bluesky.metrics('at://did:plc:abc/app.bsky.feed.post/3kxyz'), { likes: 9, reposts: 2, replies: 1, quotes: 0 });
+  assert.deepEqual(await bluesky.metrics('at://did:plc:abc/app.bsky.feed.post/3kxyz'), { likes: 9, reposts: 2, replies: 1, quotes: 0, saves: 0 });
   assert.equal(calls.length, 1);
+});
+
+test('Bluesky reads a post’s bookmarks as its saves, one post or many', async () => {
+  const post = { uri: 'at://did:plc:abc/app.bsky.feed.post/3kxyz', likeCount: 1, repostCount: 0, replyCount: 0, quoteCount: 2, bookmarkCount: 4 };
+  const bluesky = new Bluesky({ identifier: 'x', appPassword: 'y', fetch: fakeFetch([['GET https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts', () => Response.json({ posts: [post] })]], []) });
+  const expected = { likes: 1, reposts: 0, replies: 0, quotes: 2, saves: 4 };
+  assert.deepEqual(await bluesky.metrics(post.uri), expected);
+  assert.deepEqual((await bluesky.metricsMany([post.uri])).get(post.uri), expected);
 });
 
 test('Mastodon uploads the described image, then posts publicly with an idempotency key', async () => {
@@ -151,6 +159,31 @@ test('Mastodon metrics read favourites, boosts and replies', async () => {
     fetch: fakeFetch([['GET https://mastodon.social/api/v1/statuses/111', () => Response.json({ favourites_count: 4, reblogs_count: 2, replies_count: 1 })]], []),
   });
   assert.deepEqual(await mastodon.metrics('111'), { favourites: 4, boosts: 2, replies: 1 });
+});
+
+test('Mastodon metrics read quotes where the instance counts them (4.5 and later), in one call for many statuses', async () => {
+  const mastodon = new Mastodon({
+    instance: 'https://mastodon.social',
+    accessToken: 't',
+    fetch: fakeFetch(
+      [
+        [
+          'GET https://mastodon.social/api/v1/statuses?',
+          () =>
+            Response.json([
+              { id: '111', favourites_count: 2, reblogs_count: 1, replies_count: 0, quotes_count: 3 },
+              { id: '112', favourites_count: 1, reblogs_count: 0, replies_count: 1 },
+            ]),
+        ],
+        ['GET https://mastodon.social/api/v1/statuses/113', () => Response.json({ favourites_count: 0, reblogs_count: 0, replies_count: 0, quotes_count: 1 })],
+      ],
+      [],
+    ),
+  });
+  const many = await mastodon.metricsMany(['111', '112']);
+  assert.deepEqual(many.get('111'), { favourites: 2, boosts: 1, replies: 0, quotes: 3 });
+  assert.deepEqual(many.get('112'), { favourites: 1, boosts: 0, replies: 1 }, 'an older instance has no quotes: left out, not read as zero');
+  assert.deepEqual(await mastodon.metrics('113'), { favourites: 0, boosts: 0, replies: 0, quotes: 1 });
 });
 
 const G = 'https://graph.instagram.com/v25.0';

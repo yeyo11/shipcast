@@ -35,13 +35,16 @@ export const linkedin = {
     main: 'post',
   },
   comments: { read: false, reply: false, note: 'Reading comments on a member’s post needs LinkedIn’s Community Management API, granted only to approved companies' },
+  // The About section is pasted; the name and photo are read with the token (OpenID Connect's
+  // userinfo) and fill what the paste leaves out
   profile: {
     read: false,
+    readable: ['displayName', 'avatar'],
     edit: 'no',
-    fields: ['bio', 'avatar'],
+    fields: ['displayName', 'bio', 'avatar'],
     editable: [],
     limits: { bio: 2600 },
-    note: 'Share on LinkedIn cannot read or change a profile: paste the About section to review it, then copy a proposal',
+    note: 'Shipcast reads your name and photo; paste the About section to review it, then copy a proposal. LinkedIn lets no app change a member’s profile',
   },
   posting: {
     note: 'Tuesday to Thursday mornings, where the LinkedIn studies agree',

@@ -32,7 +32,8 @@ export const mastodonAdapter = channelAdapter({
       ],
       permissions: [
         'Posts a public status with an image (write:statuses, write:media)',
-        'Reads its favourites, boosts and replies (read:statuses)',
+        'Reads its favourites, boosts, quotes and replies (read:statuses)',
+        'Reads the mentions, to find new comments every hour (read:notifications)',
         'Changes the profile’s name, bio and fields when you apply a review’s proposal (write:accounts)',
       ],
       howTo: 'Name your instance: Shipcast registers itself there and sends you to authorise it. Or paste an access token.',

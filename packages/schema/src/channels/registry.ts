@@ -109,6 +109,7 @@ export function channelTables(definitions: readonly ChannelDefinition[]) {
     posting: by<{ note: string; windows: readonly PostingWindow[] }>((d) => d.posting),
     metricFamilies: by<Partial<Record<StatsMetric, readonly string[]>>>((d) => d.metrics?.families),
     primaryMetric: by<readonly string[]>((d) => (d.metrics && d.metrics.primary.length > 0 ? d.metrics.primary : undefined)),
+    averagedMetrics: by<readonly string[]>((d) => (d.metrics?.averaged && d.metrics.averaged.length > 0 ? d.metrics.averaged : undefined)),
     chartSlots: by<number | 'ink'>((d) => d.chartSlot),
     limits: Object.assign({}, ...definitions.map((d) => d.limits)) as Record<string, number>,
     pieceLimits: by<PieceLimit>((d) => d.text && { max: d.text.max, length: d.text.length, network: d.name, counting: d.text.counting }),
@@ -169,6 +170,12 @@ export const POSTING_DEFAULTS: Readonly<Partial<Record<ChannelId, { note: string
 export const CHANNEL_METRIC_FAMILIES: Readonly<Record<string, Partial<Record<StatsMetric, readonly string[]>>>> = TABLES.metricFamilies;
 /** The readings a piece's row leads with: the first of these the piece has */
 export const PRIMARY_METRIC: Readonly<Record<string, readonly string[]>> = TABLES.primaryMetric;
+/** The readings of each channel that are averaged across its pieces, never added up (see ChannelDefinition.metrics) */
+export const AVERAGED_METRICS: Readonly<Record<string, readonly string[]>> = TABLES.averagedMetrics;
+/** Whether a channel's reading is a ratio, averaged across pieces rather than summed */
+export function isAveragedMetric(source: string, name: string): boolean {
+  return AVERAGED_METRICS[source]?.includes(name) ?? false;
+}
 /** Each channel's own slot in the charts' palette */
 export const CHANNEL_SLOTS: Readonly<Record<string, number | 'ink'>> = TABLES.chartSlots;
 /** Each channel's default brief, as the AI settings' `channel.<id>` prompts */
@@ -197,7 +204,7 @@ export function isMainPiece(channel: string, kind: string): boolean {
 /**
  * Whether a piece of this kind has numbers of its own to read: a post, each newsletter issue (a
  * campaign of its own), and a post's own pieces where the channel's definition has metrics (each of
- * YouTube's videos; a subreddit's post has none). A story or a comment has none of its post's
+ * YouTube's videos, each subreddit's Reddit post). A story or a comment has none of its post's
  * numbers, and the blog is read per article URL for the launch, never per piece.
  */
 export function readsMetrics(channel: string, kind: string): boolean {

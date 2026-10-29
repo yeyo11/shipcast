@@ -21,7 +21,7 @@ export const blueskyAdapter = channelAdapter({
         { key: 'handle', label: 'Handle', secret: false, placeholder: 'name.bsky.social' },
         { key: 'appPassword', label: 'App password', secret: true, help: 'Never the account password' },
       ],
-      permissions: ['Posts with a link card', 'Reads likes, reposts and replies (public)', 'Changes the profile’s name and description when you apply a review’s proposal'],
+      permissions: ['Posts with a link card', 'Reads likes, reposts, quotes, replies and saves (public)', 'Changes the profile’s name, description and links when you apply a review’s proposal'],
       howTo: 'Bluesky → Settings → Privacy and security → App passwords → Add App Password.',
       env: [
         // The handle can come from brand.yml's profile link instead
