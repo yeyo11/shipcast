@@ -62,7 +62,13 @@ export const devto = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.2 },
     ],
   },
-  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'], cadence: HOURLY_BATCHED },
+  metrics: {
+    families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] },
+    primary: ['views', 'reactions'],
+    cadence: HOURLY_BATCHED,
+    // Forem's analytics (saves, read time, referrers): two calls an article under a 3-a-second limit
+    analytics: { hours: 24, read: 'single', why: 'two calls an article, 3 a second' },
+  },
   // dev.to's brand is black, which fails on the night page: it takes the text colour
   chartSlot: 'ink',
 } as const satisfies ChannelDefinition<'devto'>;

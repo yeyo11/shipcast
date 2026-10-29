@@ -36,3 +36,8 @@ export const INSPECTION_MAX_AGE_DAYS = 90;
 export function channelCadence(channel: string): MetricCadence | undefined {
   return channelDefinition(channel)?.metrics?.cadence;
 }
+
+/** The cadence of a channel's analytics, read apart from its counters; undefined for a channel without */
+export function channelAnalyticsCadence(channel: string): MetricCadence | undefined {
+  return channelDefinition(channel)?.metrics?.analytics;
+}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { YOUTUBE_DAILY_UNITS, YOUTUBE_UNITS } from '@shipcast/connectors';
+import { YOUTUBE_DAILY_UNITS, YOUTUBE_DAILY_UPLOADS, YOUTUBE_UNITS } from '@shipcast/connectors';
 import { GitHubRest, type YouTubePublisher } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
@@ -15,6 +15,8 @@ import {
   uploadUnits,
   YOUTUBE_BUCKET,
   YOUTUBE_PROVIDER,
+  YOUTUBE_UPLOADS_BUCKET,
+  YOUTUBE_UPLOADS_PROVIDER,
   YouTubeImportRefused,
   YouTubeQuota,
 } from '../src/index.ts';
@@ -78,20 +80,33 @@ test('a token file is imported through the connection path: checked, its secrets
   assert.equal((await registry.accounts.accounts({ network: 'youtube' })).length, 1);
 });
 
-test("the day's quota refuses an upload it cannot pay for in full, and counts what every call spent", async () => {
+test("the day's quotas refuse an upload they cannot pay for in full: the uploads' own bucket, then the shared units of its extras", async () => {
   let now = 0;
-  const bucket = new MemoryTokenBucket({ [YOUTUBE_PROVIDER]: YOUTUBE_BUCKET }, { now: () => now });
+  const bucket = new MemoryTokenBucket({ [YOUTUBE_PROVIDER]: YOUTUBE_BUCKET, [YOUTUBE_UPLOADS_PROVIDER]: YOUTUBE_UPLOADS_BUCKET }, { now: () => now });
   const quota = new YouTubeQuota(bucket);
   const upload = { captions: [{ lang: 'en', name: 'English', srt: '' }], thumbnail: { bytes: new Uint8Array(), mimeType: 'image/png' } };
-  assert.equal(uploadUnits(upload), YOUTUBE_UNITS.insert + YOUTUBE_UNITS.captionsInsert + YOUTUBE_UNITS.thumbnailsSet);
+  assert.equal(uploadUnits(upload), YOUTUBE_UNITS.captionsInsert + YOUTUBE_UNITS.thumbnailsSet, 'the upload itself is not in the shared units');
+  assert.equal(YOUTUBE_UNITS.insert, 1);
   assert.equal(await quota.left(), YOUTUBE_DAILY_UNITS);
-  for (let i = 0; i < 3; i++) await quota.spend(uploadUnits(upload));
-  await quota.ensure(uploadUnits(upload), 'an upload');
-  await quota.spend(uploadUnits(upload));
-  await assert.rejects(quota.ensure(uploadUnits(upload), 'an upload'), /today's quota cannot pay for an upload: it costs 2050 units and \d+ are left/);
-  // Half a day later the bucket has refilled enough for another
+  assert.equal(await quota.uploadsLeft(), YOUTUBE_DAILY_UPLOADS);
+
+  // An upload's call goes to its own bucket, never to the shared units
+  await quota.spend(YOUTUBE_UNITS.insert, 'insert');
+  assert.equal(await quota.uploadsLeft(), YOUTUBE_DAILY_UPLOADS - 1);
+  assert.equal(await quota.left(), YOUTUBE_DAILY_UNITS);
+
+  // The shared units spent but for less than an upload's extras
+  await quota.spend(YOUTUBE_DAILY_UNITS - 100, 'list');
+  await assert.rejects(quota.ensureUpload(upload), /cannot pay for an upload's captions and thumbnail: they cost 450 units and \d+ are left/);
+  // An upload with no extras needs none of the shared units
+  await quota.ensureUpload({});
+  // Half a day later the bucket has refilled enough for the extras
   now += 12 * 3600 * 1000;
-  await quota.ensure(uploadUnits(upload), 'an upload');
+  await quota.ensureUpload(upload);
+
+  // The day's uploads spent: refused whatever units are left
+  await quota.spend(YOUTUBE_DAILY_UPLOADS, 'insert');
+  await assert.rejects(quota.ensureUpload({}), /no upload left: 100 a day/);
 });
 
 test('built from a connected account, the publisher spends the shared quota and refuses past it', async () => {
@@ -99,7 +114,7 @@ test('built from a connected account, the publisher spends the shared quota and 
   const secrets = new MemoryStore();
   const account = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@me', settings: { clientId: 'client-1' } });
   await secrets.set(accountSecretKey(account.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'x');
-  const buckets = new MemoryTokenBucket({ [YOUTUBE_PROVIDER]: YOUTUBE_BUCKET });
+  const buckets = new MemoryTokenBucket({ [YOUTUBE_PROVIDER]: YOUTUBE_BUCKET, [YOUTUBE_UPLOADS_PROVIDER]: YOUTUBE_UPLOADS_BUCKET });
   const log: string[] = [];
   const services = await buildServices({ env: {}, brand, registry, github: new GitHubRest({ token: 'g' }), secrets, fetch: google(log), buckets });
   assert.ok(services.configured.includes('youtube'));
@@ -107,11 +122,11 @@ test('built from a connected account, the publisher spends the shared quota and 
   assert.ok(services.strategies.youtube, 'published through its strategy');
   assert.ok(!('youtube' in services.publishers), 'not one of the built-in publishers');
 
-  // Spend the day but for less than an upload, as other calls of other replicas would
-  await new YouTubeQuota(buckets).spend(YOUTUBE_DAILY_UNITS - 100);
+  // Spend the day's uploads, as other replicas would
+  await new YouTubeQuota(buckets).spend(YOUTUBE_DAILY_UPLOADS, 'insert');
   const video = { title: 't', description: 'd', tags: [], lang: 'en', bytes: new Uint8Array([1]), short: true };
   const publisher = (await import('../src/channels/youtube.ts')).youtubeAdapter.publisher;
   const built = (await import('../src/index.ts')).buildConnector('youtube', { settings: { clientId: 'c' }, secrets: { clientSecret: 's', refreshToken: 'r' } }, brand, google(log), { buckets });
-  await assert.rejects((publisher(built.connector as never) as YouTubePublisher).publish(video), /quota cannot pay/);
+  await assert.rejects((publisher(built.connector as never) as YouTubePublisher).publish(video), /no upload left/);
   assert.equal(log.filter((l) => l.includes('/upload/')).length, 0, 'nothing was sent');
 });

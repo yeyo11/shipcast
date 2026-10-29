@@ -137,3 +137,49 @@ export function trackWithinLimit(channel: TrackedChannel, text: string, tracking
   const tagged = track(channel, text, tracking);
   return pieceLimitProblem(channel, tagged) ? text : tagged;
 }
+
+/**
+ * Where a visit came from by its referrer's host, the other half of attribution: the analytics that
+ * keep no query string (Cloudflare Web Analytics, dev.to's referrers) cannot read the UTM tags, so the
+ * referrer is all they have. Named as the channels are (and as their `utm_source`, where they are
+ * tagged); `x`, `hackernews` and `facebook` are not channels but send readers all the same. A host
+ * matches itself and its subdomains. Mastodon readers arrive from their own instance, which can be
+ * any host: only mastodon.social is told apart, every other counts as `other`.
+ */
+export const REFERRER_HOSTS = {
+  bluesky: ['bsky.app'],
+  devto: ['dev.to'],
+  instagram: ['instagram.com'],
+  reddit: ['reddit.com', 'redd.it'],
+  mastodon: ['mastodon.social'],
+  linkedin: ['linkedin.com', 'lnkd.in'],
+  threads: ['threads.net', 'threads.com'],
+  youtube: ['youtube.com', 'youtu.be'],
+  hashnode: ['hashnode.com', 'hashnode.dev'],
+  telegram: ['t.me', 'telegram.org', 'telegram.me'],
+  discord: ['discord.com', 'discordapp.com', 'discord.gg'],
+  github: ['github.com'],
+  x: ['x.com', 'twitter.com', 't.co'],
+  hackernews: ['news.ycombinator.com'],
+  facebook: ['facebook.com', 'fb.com', 'fb.me'],
+} as const satisfies Record<string, readonly string[]>;
+
+/** The search engines a visit can come from, whatever their country's domain */
+const SEARCH = /(^|\.)(google|bing|duckduckgo|ecosia|yahoo|yandex|baidu)\./;
+
+/**
+ * The source of a visit, by its referrer's host and, where it tells more, its path: `direct` without
+ * a referrer, a channel (`githubDiscussions` for a discussion's page on GitHub), `search`, or `other`.
+ */
+export function sourceOfReferrer(host: string | null | undefined, path?: string | null): string {
+  const h = (host ?? '').trim().toLowerCase().replace(/^www\./, '');
+  if (!h) return 'direct';
+  if (SEARCH.test(h)) return 'search';
+  for (const [source, hosts] of Object.entries(REFERRER_HOSTS) as Array<[string, readonly string[]]>) {
+    if (!hosts.some((known) => h === known || h.endsWith(`.${known}`))) continue;
+    // A link in a discussion of the launched repo, not the repo's own page
+    if (source === 'github' && /^\/[^/]+\/[^/]+\/discussions(\/|$)/.test(path ?? '')) return 'githubDiscussions';
+    return source;
+  }
+  return 'other';
+}

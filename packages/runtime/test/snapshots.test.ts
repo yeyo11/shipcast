@@ -23,7 +23,7 @@ const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://jo
 /** Each network's API as the sync reaches it: a check, then the profile's counts */
 const networks = (async (input: string | URL | Request) => {
   const url = String(input);
-  if (url === 'https://dev.to/api/users/me') return Response.json({ username: 'me', profile_image: 'https://media.dev.to/me.png' });
+  if (url === 'https://dev.to/api/users/me') return Response.json({ username: 'me', profile_image: 'https://media.dev.to/me.png', followers_count: 2 });
   if (url.startsWith('https://dev.to/api/followers/users')) return Response.json([{ id: 1 }, { id: 2 }]);
   if (url.startsWith('https://dev.to/api/articles/me/published')) return Response.json([{ id: 1 }]);
   if (url === 'https://mastodon.social/api/v1/accounts/verify_credentials') {

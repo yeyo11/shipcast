@@ -209,6 +209,8 @@ export interface ChannelDefinition<Id extends string = string> {
      * `lastReadHours` after it went out, just before they go
      */
     expiring?: { kind: string; hours: number; lastReadHours: number };
+    /** How often its analytics are, where the network has a slower API apart from its counters (YouTube Analytics) */
+    analytics?: MetricCadence;
   };
   /** Its series' slot in the charts' palette (`ink` for the text colour), when one is its own */
   chartSlot?: number | 'ink';

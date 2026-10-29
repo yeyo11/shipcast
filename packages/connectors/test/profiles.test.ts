@@ -72,7 +72,7 @@ test('Instagram asks /me for the picture on the check and for the counts on the 
   assert.equal(unread?.length, 2, 'insights that fail are said, and never fail the counts');
 });
 
-test('dev.to takes the picture from /users/me and counts followers and articles a thousand at a time', async () => {
+test('dev.to takes the picture from /users/me and, from an instance without followers_count, counts followers and articles a thousand at a time', async () => {
   const calls: Call[] = [];
   const thousand = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
   const devto = new Devto({
@@ -89,7 +89,23 @@ test('dev.to takes the picture from /users/me and counts followers and articles 
   });
   assert.deepEqual(await devto.check(), { ok: true, account: '@me', avatarUrl: 'https://media.dev.to/me.png', displayName: 'José' });
   assert.deepEqual(await devto.profileStats(), { followers: 1002, posts: 3 });
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
+});
+
+test('dev.to takes the followers from /users/me where it counts them, and pages only the articles', async () => {
+  const calls: Call[] = [];
+  const devto = new Devto({
+    apiKey: 'k',
+    fetch: fakeFetch(
+      [
+        ['GET https://dev.to/api/users/me', () => Response.json({ username: 'me', followers_count: 1234 })],
+        ['GET https://dev.to/api/articles/me/published?per_page=1000&page=1', () => Response.json([{ id: 1 }, { id: 2 }, { id: 3 }])],
+      ],
+      calls,
+    ),
+  });
+  assert.deepEqual(await devto.profileStats(), { followers: 1234, posts: 3 });
+  assert.ok(!calls.some((c) => c.url.includes('/followers/users')));
 });
 
 test('Hashnode reads the picture with the check and the counts from me', async () => {

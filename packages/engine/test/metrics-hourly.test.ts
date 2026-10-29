@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { sql } from 'drizzle-orm';
 import { Bluesky, Brevo, CloudflareAnalytics, ConnectorError, Devto, GitHubDiscussions, GitHubRepoStats, Hashnode, Mastodon, MemoryEtagCache } from '@shipcast/connectors';
 import { Brand, channelCadence, type Channel } from '@shipcast/schema';
-import { batchReader, collectHourly, collectMetrics, inspectionDue, runChecks, TelemetryStore, trafficProblemKey, trafficReadKey, type MetricSources } from '../src/index.ts';
+import { batchReader, canonicalKey, collectHourly, collectMetrics, inspectionDue, runChecks, TelemetryStore, trafficProblemKey, trafficReadKey, type MetricSources } from '../src/index.ts';
 import { aPublishedLaunch, memoryRegistry } from '../src/testing/index.ts';
 
 /*
@@ -270,4 +270,24 @@ test('a traffic read GitHub fails for a while is said but not kept for the bell'
   const result = await collectHourly(registry, brand, source, new Date('2026-10-29T10:00:00Z'));
   assert.equal(result.problems.length, 1);
   assert.equal(await registry.cursors.cursor(trafficProblemKey('yeyo11/claudio')), undefined);
+});
+
+test('a page Google files under another canonical is kept for the bell, and forgotten once Google agrees', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await aPublishedLaunch(registry, [
+    { channel: 'blog', kind: 'article:en', externalId: 'a', url: 'https://josegarrido.dev/en/a/' },
+    { channel: 'blog', kind: 'article:es', externalId: 'b', url: 'https://josegarrido.dev/es/b/' },
+  ]);
+  let canonical = 'https://dev.to/me/a-1';
+  const search: MetricSources['search'] = {
+    pageMetrics: async () => ({ clicks: 0, impressions: 0 }),
+    inspect: async (url) => (url.includes('/en/') ? { indexed: true, coverage: 'Submitted and indexed', googleCanonical: canonical } : { indexed: false, coverage: 'URL is unknown to Google' }),
+  };
+  const t0 = new Date('2026-11-03T09:00:00.000Z');
+  await collectHourly(registry, brand, { search }, t0);
+  assert.deepEqual(JSON.parse((await registry.cursors.cursor(canonicalKey(launch.id)))!), [{ url: 'https://josegarrido.dev/en/a/', googleCanonical: 'https://dev.to/me/a-1' }], 'a page not indexed has no canonical: not a mismatch');
+
+  canonical = 'https://josegarrido.dev/en/a/';
+  await collectHourly(registry, brand, { search }, new Date(t0.getTime() + 8 * 24 * HOUR));
+  assert.equal(await registry.cursors.cursor(canonicalKey(launch.id)), undefined);
 });

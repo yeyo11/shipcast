@@ -17,6 +17,13 @@ export interface IndexStatus {
   /** Google's own words: "Submitted and indexed", "Discovered - currently not indexed", "URL is unknown to Google"… */
   coverage: string;
   lastCrawl?: string;
+  /**
+   * The URL Google chose as canonical, absent until it indexes the page. Search Console credits
+   * clicks and impressions to it: when it is not the article's own, the article's numbers miss them
+   */
+  googleCanonical?: string;
+  /** The canonical the page declares */
+  userCanonical?: string;
 }
 
 /**
@@ -87,7 +94,10 @@ export class SearchConsole {
     return statsOf({}, { clicks28d: rows?.[0]?.clicks ?? 0, impressions28d: rows?.[0]?.impressions ?? 0 });
   }
 
-  /** Search numbers of one page URL between two dates (YYYY-MM-DD); Google reports with ~2 days of delay. */
+  /**
+   * Search numbers of one page URL between two dates (YYYY-MM-DD): clicks, impressions, CTR and
+   * average position. Final data only, which Google has two to three days after the search.
+   */
   async pageMetrics(url: string, since: string, until: string): Promise<Metrics> {
     const response = await this.#fetch(
       `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(this.#property)}/searchAnalytics/query`,
@@ -121,13 +131,15 @@ export class SearchConsole {
       body: JSON.stringify({ inspectionUrl: url, siteUrl: this.#property }),
     });
     const { inspectionResult } = await json<{
-      inspectionResult?: { indexStatusResult?: { verdict?: string; coverageState?: string; lastCrawlTime?: string } };
+      inspectionResult?: { indexStatusResult?: { verdict?: string; coverageState?: string; lastCrawlTime?: string; googleCanonical?: string; userCanonical?: string } };
     }>('Search Console', response, 'inspect a URL');
     const status = inspectionResult?.indexStatusResult;
     return {
       indexed: status?.verdict === 'PASS',
       coverage: status?.coverageState ?? 'Unknown',
       ...(status?.lastCrawlTime ? { lastCrawl: status.lastCrawlTime } : {}),
+      ...(status?.googleCanonical ? { googleCanonical: status.googleCanonical } : {}),
+      ...(status?.userCanonical ? { userCanonical: status.userCanonical } : {}),
     };
   }
 

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T16:44:03.12150434Z
-updated_at: 2026-10-29T16:46:03.477217651Z
+updated_at: 2026-10-29T19:49:21.834877807Z
 tags:
     - tracking
     - utm
@@ -76,17 +76,40 @@ rather than a repo and a tag (epic SHP-5, later).
   each adapter hands its network), the `richText` test in `packages/connectors/test/connectors.test.ts`,
   and the newsletter's tracking in `packages/engine/test/publish.test.ts`.
 
+## The other half: where a visit came from
+
+The tags are read by whatever reads the landing page's query string. **Cloudflare Web Analytics,
+the blog's analytics today, does not**: its beacon keeps no query string, and its FAQ says UTM
+parameters are not supported (checked 2026-10-29), so neither `ref` nor the tags reach it. dev.to's
+referrer list is the same: domains only. Those sources attribute a visit by its **referrer**, through
+one table beside the tags (2026-10-29):
+
+- `REFERRER_HOSTS` and `sourceOfReferrer(host, path)` in `packages/schema/src/tracking.ts` name the
+  source of a referrer host: each channel (Bluesky, dev.to, Instagram, Reddit, mastodon.social,
+  LinkedIn and `lnkd.in`, Threads, YouTube and `youtu.be`, Hashnode, Telegram, Discord), GitHub,
+  `x` (`x.com`, `twitter.com`, `t.co`), `hackernews` and `facebook`; a search engine is `search`, no
+  referrer `direct`, anything else `other`. A host matches itself and its subdomains. A GitHub
+  referrer whose path is a repo's `/discussions/` is `githubDiscussions` (Cloudflare gives the
+  referrer's path through GraphQL only).
+- A source is named as its channel and as that channel's `utm_source`, so a visit has one name
+  whichever way it is attributed: when a source that reads the tags arrives, its numbers line up with
+  the referrer's.
+- Used by the blog's numbers (`views_<source>`, [publishing.md](publishing.md#metrics)) and by
+  dev.to's referrers.
+
+Reading the tags themselves needs a source that sees the query string: Cloudflare's zone HTTP
+analytics (server-side, 31 days of retention, so read daily; a `Zone Analytics: Read` token), or the
+blog's Worker in the launches repo logging `utm_source`. Both are an owner decision, not built.
+
 ## Not covered
 
 - **Edits.** Editing a live post (Mastodon, Telegram, Discord, GitHub Discussions) sends the text as
   edited, untagged: an edit that touches a link brings its `?ref=` back.
 - **New text-post channels** published through `textPostStrategy` keep `?ref=<channel>` until their
   adapter tags them and they join `UTM_CHANNELS`.
-- **The site side** (phase 2, SHP-4): the blog's analytics today, Cloudflare Web Analytics, keep no
-  query string, so they read neither `ref` nor the tags and attribute a visit by its referrer's host
-  ([publishing.md](publishing.md#metrics)). Choosing the tool that reads the tags, the blog's
-  conversion events, and a connector that reads visits by source and campaign into the app come next.
+- **The site side** (phase 2, SHP-4): choosing the tool that reads the tags, the blog's conversion
+  events, and a connector that reads visits by source and campaign into the app come next.
 
 ## Related
 
-[[publishing.md]] · [[stats.md]] · [[decisions/mvp-scope.md]] · [[launch-yml.md]] · [[content-pack.md]]
+[[publishing.md]] · [[stats.md]] · [[decisions/mvp-scope.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[search-indexing.md]]

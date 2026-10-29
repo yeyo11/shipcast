@@ -214,10 +214,12 @@ Added on 2026-10-28 as the first network built on the channel modules
 `packages/assets/src/youtube.ts`) from the pack's `youtube` piece: scenes (`card`, `demo`,
 `screenshot`, `cover`) with subtitles burned in and uploaded as an SRT caption track; no voice. Each
 video is its own piece (`post:short`, `post:video`). The upload is resumable and its session's POST is
-never repeated; captions and the thumbnail are extras that never undo a video. The quota (10,000
-units a day; an upload costs 1,600) is checked before an upload starts. Each upload asks for
-`public`; the first two (the Sluice article's, 2026-10-29) came out public although the API project
-is not audited. Should Google keep one `private`, the video is still recorded as published and a
+never repeated; captions and the thumbnail are extras that never undo a video. The quota is checked
+before an upload starts: since 2026-06-01 an upload is one of **100 a day in a bucket of its own**,
+and its captions (400 units each) and thumbnail (50) come out of the project's 10,000 units a day
+(until 2026-10-29 the code charged an upload 1,600 of those units, Google's figure before
+2025-12-04). Each upload asks for `public`, and Google no longer forces an unverified project's uploads
+to private; should one come back `private` anyway, the video is still recorded as published and a
 `youtube-privacy:<postId>` cursor notes "private until Google audits the project": a fallback, not a
 failure ([decisions/youtube.md](decisions/youtube.md#privacy-and-googles-audit)). Not schedulable.
 
@@ -332,13 +334,15 @@ longer read.
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue, added up; every open (`opens_total`), the trackable opens (`opens_trackable`), Apple MPP's (`opens_mpp`), every click (`clicks_total`), the clicks per link (`link:<url>`, the query left out) | Brevo's campaign statistics: `globalStats`, then `linksStats`, from the list of sent campaigns without its HTML (`excludeHtmlContent=true`) |
 | `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram`, `threads`, `reddit`, `githubDiscussions`, `youtube` | views, reactions, comments, likes, reposts, quotes, saves, score, reach… per post | each adapter's metric reader; batch-first (Bluesky 25 posts a call, YouTube 50, Reddit 100) |
+| `youtube` (analytics, daily) | `engagedViews`, `watchMinutes`, `avgViewSeconds`, `avgViewPercent`, `shares`, `subscribersGained` per video | the YouTube Analytics API, one report per video |
+| `devto` (analytics, daily) | `saves`, `avgReadSeconds`, and views by referrer (`views_<source>`) per article | Forem's `/api/analytics/totals` and `/referrers`, with the same API key |
 | `instagram` | per type: every post views, reach, likes, comments, saved, shares, reposts, total interactions; a feed post or carousel also follows, profile visits, `profile_activity` and `bio_link_clicks`; a Reel `avg_watch_ms`, `skip_rate` and, when shared to Facebook, `facebook_views`; a story views, reach, shares, reposts, total interactions, follows, profile visits and its navigation (`taps_forward`, `taps_back`, `exits`, `swipes_forward`) | Instagram's media insights; the type from `media_type`, kept a month |
 | `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
 | `discord` | reactions per message, every emoji's added up | Get Webhook Message, with the webhook that sent it; one call a message |
 | `telegram` | reactions per post, every emoji's added up | `message_reaction_count` updates, collected with `getUpdates` |
-| `blog` | each language's article visits and their sum, and by referrer | Cloudflare Web Analytics' GraphQL API, the paths in one query |
-| `search` | clicks and impressions; Google's URL inspection | Search Console (service account JWT) |
-| `bing` | clicks, impressions, crawl state | Bing Webmaster |
+| `blog` | each language's article page views and their sum, `visits`, and page views by source (`views_<source>`) | Cloudflare Web Analytics' GraphQL API, the paths in one query, grouped by referrer host and path |
+| `search` | clicks, impressions, `ctr`, `position`; Google's URL inspection with its canonical | Search Console (service account JWT) |
+| `bing` | clicks, impressions, `ctr`, crawl state | Bing Webmaster (over a window Bing does not document: [search-indexing.md](search-indexing.md#bing)) |
 | `github` | stars, forks, watchers; views, unique visitors, clones and unique cloners of the last 14 days, the same per day (`views:<day>`, `visitors:<day>`, `clones:<day>`, `cloners:<day>`), the top referrers and pages (`referrer:<site>`, `path:<page>`, with their unique visitors); the stars given each day (`stars:<day>`); the launch's release downloads (`downloads`) and every release's (`downloads_total`) | GitHub REST through the App, once per repo: the counts (`/repos/{repo}`, conditional), the traffic (`traffic/*`, Administration: read) and the history (`/stargazers/history`, `/releases`) |
 
 Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind, age)` in
@@ -368,6 +372,29 @@ whether due or not and nothing else. A story fewer than five accounts saw answer
 it has no numbers yet, which is neither a failure nor stale. A secondary call that fails (a
 Reel's Facebook views when it was not shared there, a breakdown) leaves the rest of the reading;
 Threads' link clicks failing is said in the run's problems while the posts' own numbers count.
+
+**Analytics on their own cadence** (2026-10-29, `collectHourly` only). A channel whose network has a
+slower API apart from its counters declares `metrics.analytics` (a cadence) on its definition, and its
+adapter's metric reader an `analytics(pieces, until)`: YouTube (the YouTube Analytics API, whose
+numbers lag 48 to 72 hours) and dev.to (Forem's analytics, two calls an article under a limit of three
+a second), both daily. Every live piece of the channel is read at once, from its launch's day to
+today, and kept on the piece beside its counters. The `metrics-read:analytics:<channel>` cursor
+records when they were asked for, answered or not, so a refusal is said once a day, never hourly:
+a YouTube connection made before `yt-analytics.readonly` was asked for is one problem of the run
+("connect YouTube again"), and the hourly counters are read as before. Averages (`avgViewSeconds`,
+`avgViewPercent`, `avgReadSeconds`, and the search `position` and `ctr`) are not counters: a launch's
+sum of them means nothing ([stats.md](stats.md)).
+
+**Where a visit came from.** The blog's and dev.to's sources are named by `sourceOfReferrer` in
+`packages/schema/src/tracking.ts`: each channel by its hosts (LinkedIn, Threads, YouTube, Hashnode,
+Telegram, Discord, Bluesky, dev.to, Instagram, Reddit, mastodon.social), GitHub, `x`, `hackernews`,
+`facebook`, `search`, `direct` and `other`; a GitHub referrer in a repo's `/discussions/` is
+`githubDiscussions` (Cloudflare's `refererPath`) ([tracking.md](tracking.md#the-other-half-where-a-visit-came-from)).
+
+**Search engines.** The languages' clicks and impressions are summed, the CTR is that of the sum, and
+the position is weighted by impressions (`searchValues`). Each article's Google-selected canonical is
+read with its inspection; a page Google files under another URL is a line in the bell until Google
+agrees again ([search-indexing.md](search-indexing.md#google)).
 
 **Added on 2026-10-29**, from the metrics coverage audit:
 
@@ -403,14 +430,15 @@ Threads' link clicks failing is said in the run's problems while the posts' own 
   `metrics-problem:github-traffic:<repo>`), and the traffic's cursor stays, so the next hour asks
   again; the first answer clears the line ([decisions/github-app.md](decisions/github-app.md)).
 
-LinkedIn gives no numbers back. The per-post numbers, scored
-per network ([stats.md](stats.md)), are also what the recommended publishing times learn from
+LinkedIn gives no numbers back. The per-post numbers, scored per network ([stats.md](stats.md)),
+are also what the recommended publishing times learn from
 ([scheduling.md](scheduling.md#recommended-times)).
 
 One limit: **Cloudflare Web Analytics does not keep the query string**, so visits are attributed by
-the referrer's host (Mastodon's many hosts count as `other`) and the UTM tags the links carry
-([tracking.md](tracking.md)) wait for an analytics tool that reads them. GitHub's traffic needs the
-App's Administration: read, which `shipcast init` asks for; an App without it is said in the bell.
+the referrer (Mastodon's many hosts count as `other`, and an app that strips the referrer as
+`direct`), and the UTM tags the links carry ([tracking.md](tracking.md)) wait for a source that reads
+them (zone HTTP analytics or the blog's Worker, an owner decision). GitHub's traffic needs the App's
+Administration: read, which `shipcast init` asks for; an App without it is said in the bell.
 
 ## The rounds and the shipcast command
 
@@ -434,4 +462,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]]

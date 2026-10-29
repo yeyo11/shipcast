@@ -1,26 +1,57 @@
 import { HttpClient } from './http-client.ts';
-import { checkProblem, ConnectorError, secretTag, type IdentityCache, imageUrl, okCheck, PostGone, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Metrics, type ProfileStats, type Published, type Replier, type ReplyTarget, type SentReply } from './http.ts';
+import { checkProblem, ConnectorError, secretTag, type IdentityCache, imageUrl, okCheck, PostGone, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Metrics, type Profile, type ProfileEdit, type ProfileEditor, type ProfileLink, type ProfileReader, type ProfileStats, type Published, type Replier, type ReplyTarget, type SentReply } from './http.ts';
 
-/** The scopes Shipcast asks YouTube for: uploading, reading the channel's own data, and managing its videos, captions and comments */
-export const YOUTUBE_SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/youtube.force-ssl'];
+/** The YouTube Analytics scope: watch time, engaged views and shares of the channel's own videos */
+export const YOUTUBE_ANALYTICS_SCOPE = 'https://www.googleapis.com/auth/yt-analytics.readonly';
 
 /**
- * What each call costs of the project's daily quota (10,000 units by default), as Google's quota
- * calculator lists them: an upload costs as much as hundreds of reads, so the caller counts units
- * (`onUnits`) and the per-provider limiter refuses an upload the day's quota cannot pay for.
+ * The scopes Shipcast asks YouTube for: uploading, reading the channel's own data, managing its
+ * videos, captions, comments and channel settings, and its analytics. An account connected before
+ * the analytics scope was asked for keeps working; only its analytics are not read
+ */
+export const YOUTUBE_SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/youtube.force-ssl', YOUTUBE_ANALYTICS_SCOPE];
+
+/**
+ * What the YouTube Analytics API is asked for per video, and the names Shipcast keeps them under.
+ * Lifetime-to-date from the launch's day: Google's numbers lag 48 to 72 hours behind the public counters.
+ * The averages are not counters: they are kept as read, never summed.
+ */
+export const YOUTUBE_ANALYTICS_METRICS = {
+  engagedViews: 'engagedViews',
+  estimatedMinutesWatched: 'watchMinutes',
+  averageViewDuration: 'avgViewSeconds',
+  averageViewPercentage: 'avgViewPercent',
+  shares: 'shares',
+  subscribersGained: 'subscribersGained',
+} as const;
+
+/**
+ * What each call costs, as Google's quota calculator lists it (read 2026-10-29). Every call but an
+ * upload is charged to the project's 10,000 units a day; since 2026-06-01 `videos.insert` has a
+ * bucket of its own, 100 calls a day at one unit each (it cost about 1,600 units of the shared
+ * quota until 2025-12-04, then about 100). The caller counts units (`onUnits`) per bucket
+ * (`youtubeBucketOf`), and the per-provider limiter refuses an upload the day cannot pay for.
  */
 export const YOUTUBE_UNITS = {
   list: 1,
-  insert: 1600,
+  insert: 1,
   update: 50,
   delete: 50,
   captionsInsert: 400,
   thumbnailsSet: 50,
   commentsInsert: 50,
+  channelsUpdate: 50,
 } as const;
 
-/** The project's daily quota when Google has not raised it */
+export type YouTubeCall = keyof typeof YOUTUBE_UNITS;
+
+/** The project's daily units for every call but an upload, when Google has not raised them */
 export const YOUTUBE_DAILY_UNITS = 10_000;
+/** The uploads the project may make a day, in the bucket `videos.insert` has to itself */
+export const YOUTUBE_DAILY_UPLOADS = 100;
+
+/** Which of the project's two daily quotas a call is charged to */
+export const youtubeBucketOf = (call: YouTubeCall): 'uploads' | 'units' => (call === 'insert' ? 'uploads' : 'units');
 
 export interface YouTubeOptions {
   /** The OAuth client the refresh token was issued to: a token is only good with its client */
@@ -29,7 +60,7 @@ export interface YouTubeOptions {
   refreshToken: string;
   fetch?: typeof fetch;
   /** Told the quota units each call spends, so the day's spend can be counted and capped */
-  onUnits?: (units: number, call: keyof typeof YOUTUBE_UNITS) => void;
+  onUnits?: (units: number, call: YouTubeCall) => void;
   /** Where the channel's id is kept between runs, so the hourly reads do not ask for it each time */
   cache?: IdentityCache;
 }
@@ -44,7 +75,7 @@ export interface YouTubeVideo {
   bytes: Uint8Array;
   /** A Short is a vertical video under a minute; its address is /shorts/<id> */
   short: boolean;
-  /** What Shipcast asks for; Google keeps an unaudited project's uploads private whatever is asked */
+  /** What Shipcast asks for; Google no longer forces an unverified project's uploads to private, but the answer says what it set */
   privacy?: 'public' | 'unlisted' | 'private';
   /** Captions to upload beside the burned-in subtitles, one track per language */
   captions?: Array<{ lang: string; name: string; srt: string }>;
@@ -66,6 +97,7 @@ export interface YouTubeEdit {
 }
 
 const API = 'https://www.googleapis.com/youtube/v3';
+const ANALYTICS = 'https://youtubeanalytics.googleapis.com/v2/reports';
 const UPLOAD = 'https://www.googleapis.com/upload/youtube/v3';
 const TOKEN = 'https://oauth2.googleapis.com/token';
 /** Science & Technology: YouTube asks every video for a category, and a launch is that */
@@ -98,6 +130,41 @@ interface CommentSnippet {
   parentId?: string;
 }
 
+interface ChannelBranding {
+  channel?: { title?: string; description?: string; keywords?: string; country?: string; unsubscribedTrailer?: string; defaultLanguage?: string; [key: string]: unknown };
+  image?: { bannerExternalUrl?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** What a channel edit can change, through `brandingSettings`: what is left out stays as it is */
+export interface YouTubeChannelEdit {
+  description?: string;
+  /** Space-separated, a phrase of several words in double quotes, as YouTube Studio writes them */
+  keywords?: string;
+  /** ISO 3166-1 alpha-2 */
+  country?: string;
+  /** A video of the channel's own, by its id or address, played to visitors who have not subscribed */
+  trailer?: string;
+}
+
+/**
+ * The channel's settings that have no field of their own in a profile, read and written as its
+ * links: one `Label: value` line each, so a review can see and propose them like any link
+ */
+const SETTING_LINKS = { Keywords: 'keywords', Country: 'country', Trailer: 'trailer' } as const satisfies Record<string, keyof YouTubeChannelEdit>;
+
+/** A video's id from its id or any of its addresses (watch, youtu.be, shorts) */
+export function youtubeVideoId(value: string): string {
+  const text = value.trim();
+  try {
+    const url = new URL(text);
+    if (url.hostname === 'youtu.be') return url.pathname.slice(1);
+    return url.searchParams.get('v') ?? url.pathname.split('/').filter(Boolean).at(-1) ?? text;
+  } catch {
+    return text;
+  }
+}
+
 const count = (value: string | undefined) => (value === undefined ? undefined : Number(value));
 
 /**
@@ -107,7 +174,7 @@ const count = (value: string | undefined) => (value === undefined ? undefined : 
  * a video read and answered. Every call goes through one HttpClient (timeouts, retries of what is
  * safe to repeat, counted by the process's telemetry) and reports its quota units.
  */
-export class YouTube implements Deletable, CommentReader, Replier {
+export class YouTube implements Deletable, CommentReader, Replier, ProfileReader, ProfileEditor {
   readonly #options: YouTubeOptions;
   readonly #http: HttpClient;
   #token: Promise<string> | undefined;
@@ -118,7 +185,7 @@ export class YouTube implements Deletable, CommentReader, Replier {
     this.#http = new HttpClient({ network: 'YouTube', ...(options.fetch && { fetch: options.fetch }), timeoutMs: 60_000 });
   }
 
-  #units(call: keyof typeof YOUTUBE_UNITS): void {
+  #units(call: YouTubeCall): void {
     this.#options.onUnits?.(YOUTUBE_UNITS[call], call);
   }
 
@@ -324,6 +391,110 @@ export class YouTube implements Deletable, CommentReader, Replier {
     });
     const s = answer.items?.[0]?.statistics ?? {};
     return statsOf({ followers: s.hiddenSubscriberCount ? undefined : count(s.subscriberCount), posts: count(s.videoCount) }, { views: count(s.viewCount) });
+  }
+
+  /**
+   * Each video's YouTube Analytics numbers (YOUTUBE_ANALYTICS_METRICS), lifetime to date from `since`
+   * to `until` (YYYY-MM-DD): one report per video, from the Analytics API's own quota rather than the
+   * Data API's units. A connection made before Shipcast asked for `yt-analytics.readonly`, or a project
+   * with the Analytics API off, is refused with why, once, never as a broken account: the views and
+   * likes of the hourly reads are not touched.
+   */
+  async analytics(videos: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<Map<string, Metrics>> {
+    const out = new Map<string, Metrics>();
+    const asked = Object.keys(YOUTUBE_ANALYTICS_METRICS);
+    for (const video of videos) {
+      const query = new URLSearchParams({ ids: 'channel==MINE', startDate: video.since, endDate: until, metrics: asked.join(','), filters: `video==${video.id}` });
+      const response = await this.#http.request(`${ANALYTICS}?${query}`, { headers: await this.#auth(), what: 'read the analytics' });
+      const text = await response.text();
+      if (response.status === 403 && /SCOPE_INSUFFICIENT|insufficient authentication scopes|insufficientPermissions/i.test(text)) {
+        throw new ConnectorError('YouTube', 'YouTube Analytics was not granted to this connection (yt-analytics.readonly): connect YouTube again from Channels to read watch time, engaged views and shares', 403, false);
+      }
+      if (response.status === 403 && /SERVICE_DISABLED|accessNotConfigured|has not been used in project/i.test(text)) {
+        throw new ConnectorError('YouTube', 'the YouTube Analytics API is off in the Google Cloud project: turn it on, then the analytics are read on the next day', 403, false);
+      }
+      if (!response.ok) throw new ConnectorError('YouTube', `read the analytics: ${response.status} ${text.slice(0, 300)}`, response.status);
+      const answer = JSON.parse(text) as { columnHeaders?: Array<{ name: string }>; rows?: number[][] };
+      const row = answer.rows?.[0];
+      if (!row) continue;
+      const values: Metrics = {};
+      (answer.columnHeaders ?? []).forEach((header, i) => {
+        const name = YOUTUBE_ANALYTICS_METRICS[header.name as keyof typeof YOUTUBE_ANALYTICS_METRICS];
+        const value = row[i];
+        if (name && typeof value === 'number' && Number.isFinite(value)) values[name] = value;
+      });
+      out.set(video.id, values);
+    }
+    return out;
+  }
+
+  /** The channel's `brandingSettings` as YouTube has them, with the channel's id */
+  async #branding(): Promise<{ id: string; branding: ChannelBranding; snippet: { title?: string; thumbnails?: { default?: { url?: string } } } }> {
+    this.#units('list');
+    const answer = await this.#http.json<{ items?: Array<{ id: string; brandingSettings?: ChannelBranding; snippet?: { title?: string; thumbnails?: { default?: { url?: string } } } }> }>(`${API}/channels?part=snippet,brandingSettings&mine=true`, {
+      headers: await this.#auth(),
+      what: 'read the channel',
+    });
+    const item = answer.items?.[0];
+    if (!item) throw new ConnectorError('YouTube', 'this Google account has no YouTube channel: create one, then connect again', 404, false);
+    return { id: item.id, branding: item.brandingSettings ?? {}, snippet: item.snippet ?? {} };
+  }
+
+  /**
+   * The channel as a profile: its name, its description as the bio, and its keywords, country and
+   * trailer as `Label: value` links (it has no links section the API reads). The name and the
+   * picture are changed in YouTube Studio only.
+   */
+  async profile(): Promise<Profile> {
+    const { branding, snippet } = await this.#branding();
+    const channel = branding.channel ?? {};
+    const links: ProfileLink[] = [
+      ...(channel.keywords?.trim() ? [{ name: 'Keywords', value: channel.keywords }] : []),
+      ...(channel.country ? [{ name: 'Country', value: channel.country }] : []),
+      ...(channel.unsubscribedTrailer ? [{ name: 'Trailer', value: `https://www.youtube.com/watch?v=${channel.unsubscribedTrailer}` }] : []),
+    ];
+    const title = channel.title ?? snippet.title;
+    return {
+      ...(title?.trim() && { displayName: title }),
+      ...(channel.description?.trim() && { bio: channel.description }),
+      links,
+      hasAvatar: imageUrl(snippet.thumbnails?.default?.url) !== undefined,
+      hasBanner: Boolean(branding.image?.bannerExternalUrl),
+    };
+  }
+
+  /**
+   * Changes the channel's description, keywords, country or trailer. YouTube deletes every
+   * `brandingSettings` property an update leaves out, so the whole object is read first and only the
+   * given fields change in it.
+   */
+  async editChannel(change: YouTubeChannelEdit): Promise<void> {
+    const { id, branding } = await this.#branding();
+    const channel = {
+      ...branding.channel,
+      ...(change.description !== undefined && { description: change.description }),
+      ...(change.keywords !== undefined && { keywords: change.keywords }),
+      ...(change.country !== undefined && { country: change.country.trim().toUpperCase() }),
+      ...(change.trailer !== undefined && { unsubscribedTrailer: youtubeVideoId(change.trailer) }),
+    };
+    this.#units('channelsUpdate');
+    await this.#http.ok(`${API}/channels?part=brandingSettings`, { method: 'PUT', headers: { ...(await this.#auth()), 'content-type': 'application/json' }, body: JSON.stringify({ id, brandingSettings: { ...branding, channel } }), what: 'edit the channel' });
+  }
+
+  /** A profile edit as a channel edit: the bio is the description, the links its keywords, country and trailer */
+  async editProfile(edit: ProfileEdit): Promise<void> {
+    if (edit.displayName !== undefined) throw new ConnectorError('YouTube', 'the channel’s name is changed in YouTube Studio only', 400, false);
+    const change: YouTubeChannelEdit = { ...(edit.bio !== undefined && { description: edit.bio }) };
+    if (edit.links !== undefined) {
+      for (const link of edit.links) {
+        const field = SETTING_LINKS[link.name.trim() as keyof typeof SETTING_LINKS];
+        if (!field) throw new ConnectorError('YouTube', `a channel has no "${link.name}": its links are ${Object.keys(SETTING_LINKS).join(', ')}`, 400, false);
+        change[field] = link.value;
+      }
+      // A setting left out of the list is cleared, as a link left out is removed elsewhere
+      for (const field of Object.values(SETTING_LINKS)) change[field] ??= '';
+    }
+    await this.editChannel(change);
   }
 
   /** Every comment under a video, top-level ones and their replies, as plain text */

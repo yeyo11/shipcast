@@ -38,21 +38,21 @@ that is a channel publishes through its connector
 
 | Network | Connected with | Publishes | Reads |
 | --- | --- | --- | --- |
-| dev.to | API key | the English article, canonical to the blog | views, reactions, comments |
+| dev.to | API key | the English article, canonical to the blog | views, reactions, comments; daily, saves, read time and referrers (Forem's analytics) |
 | Bluesky | handle and app password | a post with a link card | likes, reposts, quotes, replies, saves |
 | Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, quotes, replies |
 | Instagram | Instagram Login (OAuth) | carousel, story, comment | views, reach and interactions of posts and stories; the account's last day; the profile |
 | Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts, link clicks; the profile's views; the profile |
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
 | Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | score, comments, crossposts, upvote ratio; followers, karma |
-| YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; the channel's numbers |
+| YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; daily, watch time, engaged views, shares (YouTube Analytics); the channel's numbers and profile |
 | Newsletter (Brevo) | API key | one campaign per language | sends, opens (unique, total, Apple MPP's, trackable), clicks (unique, total, per link); the subscribers of brand.yml's lists |
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
 | Telegram | bot token, channel, owner's chat | a post with the launch image | each post's reactions, from the changes Telegram pushes to the bot; the channel's members |
 | Discord | webhook URL; optionally an invite link | a message with an embed | each message's reactions, read back through the webhook; the server's members, through the invite |
 | GitHub profile | a login, no credential | — | the owner's public profile; followers, following, public repos |
-| Blog analytics (Cloudflare) | API token, account id, site tag | — | visits by source |
-| Google Search Console | service account JSON key | — | clicks, impressions, URL inspection |
+| Blog analytics (Cloudflare) | API token, account id, site tag | — | page views and visits, by source |
+| Google Search Console | service account JSON key | — | clicks, impressions, CTR, position, URL inspection with the canonical |
 | Bing Webmaster | API key | — | clicks, impressions, crawl state |
 | Anthropic API, OpenAI-compatible server | API key; base URL and model | — | — (AI providers) |
 
@@ -130,6 +130,8 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
   the network refuses is named in the sync's line and never fails the counts.
   `shipcast sync [<account id>]` runs the same job from the terminal. The newsletter counts the
   subscribers of brand.yml's lists only, and Discord the members of the server its invite opens.
+  dev.to's followers are `/users/me`'s `followers_count` since 2026-10-29 (its articles are still
+  counted by paging their list; an instance without the field still pages its followers).
 - **Freshness.** Each account shows its latest numbers and when it was last synced (`lastSynced`),
   with a warning once that is more than 36 hours old (`isStale`).
 - **Sync now.** A button per account sends a `snapshots` job for that account alone (keyed
@@ -149,11 +151,15 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
   where the network and the credential allow it, **Apply**, which asks before it changes the real
   profile.
 - **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name, description and
-  links, guarded by `swapRecord`), a Telegram channel (title and description) and a Discord webhook
-  (its name). dev.to, Hashnode, Reddit, the GitHub profile, Instagram (name, bio, website, picture)
-  and Threads (name, bio, picture) are read but not edited; the links Instagram's and Threads' APIs
-  leave out may be pasted beside the read (`profile.paste`). LinkedIn reads the name and photo with
-  its token and the owner pastes the About section, then copies the proposals.
+  links, guarded by `swapRecord`), a Telegram channel (title and description), a Discord webhook
+  (its name) and, since 2026-10-29, a YouTube channel: its description as the bio, and its keywords,
+  country and trailer as the links `Keywords: …`, `Country: ES`, `Trailer: <video>`, through
+  `brandingSettings` with the `youtube.force-ssl` scope it already had (its name, picture and banner
+  stay YouTube Studio's; [decisions/youtube.md](decisions/youtube.md#the-channels-profile)). dev.to,
+  Hashnode, Reddit, the GitHub profile, Instagram (name, bio, website, picture) and Threads (name,
+  bio, picture) are read but not edited; the links Instagram's and Threads' APIs leave out may be
+  pasted beside the read (`profile.paste`). LinkedIn reads the name and photo with its token and the
+  owner pastes the About section, then copies the proposals.
 - **The picture** is set only to brand.yml's `avatar`, never to a proposal: **Use brand.yml's
   picture**, beside a review, asks first and then uploads it as a Telegram channel's photo
   (`setChatPhoto`, the same "Change channel info" right) or a Discord webhook's picture (Modify
@@ -202,8 +208,12 @@ spec says its URLs, scopes and app, and the routes under `/auth/<network>` run t
   `duration=permanent` ([publishing.md](publishing.md#reddit)); a token from before 2026-10-29 lacks
   `history` and `edit`, so finding a lost post and deleting one ask to connect again.
 - **YouTube** needs the owner's Google OAuth client in Settings; scopes `youtube.upload`,
-  `youtube.readonly`, `youtube.force-ssl`. With the consent screen in *Testing*, a refresh token lasts
-  7 days, and an expired one asks to connect YouTube again ([decisions/youtube.md](decisions/youtube.md)).
+  `youtube.readonly`, `youtube.force-ssl` and, since 2026-10-29, `yt-analytics.readonly` (with the
+  YouTube Analytics API on in the project). An account connected before that keeps publishing and
+  reading its counters; it is **connected again once** to read its analytics, which say so in the
+  metrics run until then. With the consent screen in *Testing*, a refresh token lasts 7 days, and an
+  expired one asks to connect YouTube again; the connection's instructions say to publish it
+  ([decisions/youtube.md](decisions/youtube.md)).
 - **The owner's GitHub user token** is refreshed under a lock shared by every process; inside it the
   token is read again and refreshed only if still due, so two replicas never spend the same refresh
   token and never delete the good one.

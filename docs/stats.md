@@ -46,7 +46,7 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Instagram | views | likes | comments | shares + reposts | bio-link clicks | |
 | Threads | views | likes | replies | reposts + quotes + shares | link clicks | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
-| YouTube | views | likes | comments | | | |
+| YouTube | views | likes | comments | shares (YouTube Analytics, daily) | | |
 | Telegram, Discord | | reactions | | | | |
 | Newsletter | opens | | | | clicks | delivered |
 | Blog | views | | | | | |
@@ -67,16 +67,24 @@ follows, profile visits, a Reel's watch time, skip rate and Facebook views, and 
 navigation; Bluesky's `saves` (its bookmarks) and Reddit's `upvoteRatio`; the newsletter's bounces,
 unsubscribes, every open (`opens_total`), the opens of readers without privacy protection
 (`opens_trackable`), MPP's opens (`opens_mpp`, a count of events, not of readers), every click
-(`clicks_total`) and the clicks per link (`link:<url>`); the blog's per-source and per-language split;
-and GitHub's views, clones, referrers and pages, which are rolling 14-day counts rather than counters,
-the same per day (`views:<day>`, `clones:<day>`, their unique visitors and cloners), the stars given
-each day (`stars:<day>`) and the releases' downloads (`downloads`, `downloads_total`). Mastodon's
-`quotes` are read where the instance counts them (4.5 and later). LinkedIn reads no per-post numbers.
+(`clicks_total`) and the clicks per link (`link:<url>`); the blog's `visits` and its per-source and
+per-language split; YouTube Analytics' `engagedViews`, `watchMinutes` and `subscribersGained`;
+dev.to's `saves` and per-referrer views; the search engines' `ctr` and `position`; and GitHub's
+views, clones, referrers and pages, which are rolling 14-day counts rather than counters, the same
+per day (`views:<day>`, `clones:<day>`, their unique visitors and cloners), the stars given each day
+(`stars:<day>`) and the releases' downloads (`downloads`, `downloads_total`). Mastodon's `quotes` are
+read where the instance counts them (4.5 and later). LinkedIn reads no per-post numbers.
 
 **Ratios.** A reading that is a ratio of one piece, not a count, is listed in its definition's
 `metrics.averaged` (gathered as `AVERAGED_METRICS`; today Reddit's `upvoteRatio`). No family takes
 it, and wherever a launch's pieces are put together (`latestMetrics`, `metricHistory`) it is their
 average instead of their sum.
+
+**Readings that are not counters.** A few more names are averages or ratios, kept as read and never
+to be summed or differenced: YouTube's `avgViewSeconds` and `avgViewPercent` (per video), dev.to's
+`avgReadSeconds` (per article), and the search engines' `ctr` and `position` (per launch, already
+combined over the languages: `position` weighted by impressions). None of these is in a family, so
+no chart or score reads them yet.
 
 **Counters.** A counter is listed from the posts and launches, not from the readings, and is one of:
 
@@ -206,4 +214,4 @@ search tab's input and what it lists.
 
 ## Related
 
-[[api.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]]
+[[api.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[decisions/youtube.md]] · [[tracking.md]]

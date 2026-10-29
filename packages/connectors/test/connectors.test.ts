@@ -371,3 +371,24 @@ test('Brevo refusing to send leaves a draft and says not to retry, so no second 
     (e: unknown) => e instanceof ConnectorError && !e.retryable && /left as a draft/.test(e.message),
   );
 });
+
+test('dev.to analytics: saves, read time and views by referrer per article; an article without stats is left out', async () => {
+  const calls: Call[] = [];
+  const devto = new Devto({
+    apiKey: 'k',
+    paceMs: 0,
+    fetch: fakeFetch(
+      [
+        ['GET https://dev.to/api/analytics/totals?article_id=7', () => Response.json({ comments: { total: 1 }, follows: { total: 300 }, reactions: { total: 6, like: 4, readinglist: 2, unique_reactors: 5 }, page_views: { total: 410, average_read_time_in_seconds: 95, total_read_time_in_seconds: 38950 } })],
+        ['GET https://dev.to/api/analytics/referrers?article_id=7', () => Response.json({ domains: [{ domain: 'www.google.com', count: 40 }, { domain: 'bing.com', count: 5 }, { domain: 't.co', count: 3 }, { domain: null, count: 200 }] })],
+        ['GET https://dev.to/api/analytics/totals?article_id=8', () => Response.json({ error: 'not published' }, { status: 422 })],
+      ],
+      calls,
+    ),
+  });
+  const out = await devto.analytics([{ id: '7' }, { id: '8' }]);
+  assert.deepEqual(out.get('7'), { saves: 2, avgReadSeconds: 95, views_search: 45, views_x: 3, views_direct: 200 });
+  assert.equal(out.has('8'), false);
+  assert.equal(calls[0]!.headers['api-key'], 'k');
+  assert.equal(calls.length, 3, 'no referrers asked for an article without stats');
+});

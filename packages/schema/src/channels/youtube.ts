@@ -136,12 +136,13 @@ export const youtube = {
   },
   comments: { read: true, reply: true, note: 'The comments under each video, and replies in their thread (youtube.force-ssl)', replyLimit: 500 },
   profile: {
-    read: false,
-    edit: 'no',
+    read: true,
+    edit: 'yes',
     fields: ['displayName', 'bio', 'links', 'avatar'],
-    editable: [],
-    limits: { displayName: 100, bio: 1000 },
-    note: 'The channel’s name and description are changed in YouTube Studio: paste them to review them',
+    editable: ['bio', 'links'],
+    // The links are the channel's settings: `Keywords` (500 characters), `Country` (two letters) and `Trailer` (one of its videos)
+    limits: { displayName: 100, bio: 1000, links: { count: 3, name: 8, value: 500 } },
+    note: 'The description changes here, and the keywords, country and trailer as the links `Keywords: …`, `Country: ES`, `Trailer: <video>`; the name, the picture and the banner are changed in YouTube Studio',
   },
   posting: {
     note: 'weekday afternoons and the weekend morning, when developers watch rather than skim',
@@ -150,6 +151,12 @@ export const youtube = {
       { days: WEEKEND, from: 9, to: 12, weight: 0.8 },
     ],
   },
-  metrics: { families: { views: ['views'], reactions: ['likes'], comments: ['comments'] }, primary: ['views', 'likes'], cadence: HOURLY_BATCHED },
+  metrics: {
+    families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'] },
+    primary: ['views', 'likes'],
+    cadence: HOURLY_BATCHED,
+    // YouTube Analytics (watch time, engaged views, shares): Google's numbers lag 48 to 72 hours
+    analytics: { hours: 24, read: 'single', why: 'YouTube Analytics lags 48–72 hours' },
+  },
   // No slot of its own: its brand is red, which in Cartel only means failure; it takes the first free one
 } as const satisfies ChannelDefinition<'youtube'>;

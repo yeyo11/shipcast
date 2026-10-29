@@ -1,7 +1,17 @@
+import { sourceOfReferrer } from '@shipcast/schema';
 import { checkProblem, expectOk, secretTag, type IdentityCache, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 /** What an edit may change; whatever is left out stays as it is */
 export type DevtoEdit = Partial<DevtoArticle>;
+
+/** Forem's `/api/analytics/totals` for one article, as `AnalyticsService#totals` builds it */
+interface ForemTotals {
+  reactions?: { total?: number; like?: number; readinglist?: number; unique_reactors?: number };
+  page_views?: { total?: number; average_read_time_in_seconds?: number; total_read_time_in_seconds?: number };
+}
+
+/** Forem's rate limit is 3 GETs a second per IP: the analytics calls are spaced at least this far apart */
+const ANALYTICS_PACE_MS = 400;
 
 export interface DevtoArticle {
   title: string;
@@ -26,8 +36,12 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
   #username: Promise<string> | undefined;
   readonly #cache: IdentityCache | undefined;
 
-  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string; cache?: IdentityCache }) {
+  readonly #paceMs: number;
+
+  /** `paceMs` spaces the analytics calls (Forem allows 3 GETs a second); a test gives 0 */
+  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string; cache?: IdentityCache; paceMs?: number }) {
     this.#cache = options.cache;
+    this.#paceMs = options.paceMs ?? ANALYTICS_PACE_MS;
     this.#key = options.apiKey;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = options.baseUrl ?? 'https://dev.to/api';
@@ -188,11 +202,49 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
     };
   }
 
+  /** The followers as /users/me counts them (Forem's `followers_count`), and the articles by paging their list */
   async profileStats(): Promise<ProfileStats> {
+    const me = await json<{ followers_count?: number }>('dev.to', await this.#fetch(`${this.#base}/users/me`, { headers: this.#headers() }), 'read the account');
     return statsOf({
-      followers: await this.#count('/followers/users', 'count the followers'),
+      // An instance older than the field still counts them by paging
+      followers: me.followers_count ?? (await this.#count('/followers/users', 'count the followers')),
       posts: await this.#count('/articles/me/published', 'count the articles'),
     });
+  }
+
+  /**
+   * What dev.to's own dashboard shows per article and its list does not, from Forem's analytics API
+   * with the same key: `saves` (reading-list bookmarks, which the public reactions leave out),
+   * `avgReadSeconds` (logged-in readers only), and the views by referrer (its top 20 domains, as
+   * `views_<source>`, the blog's names). Two calls an article, spaced for Forem's rate limit: read on
+   * the channel's analytics cadence, not hourly. The `follows` of the totals are the account's, not
+   * the article's, and are left to the profile's numbers. An article Forem has no stats for (not
+   * published, or not the key's) is left out.
+   */
+  async analytics(articles: ReadonlyArray<{ id: string }>): Promise<Map<string, Metrics>> {
+    const out = new Map<string, Metrics>();
+    let calls = 0;
+    const get = async <T>(path: string, what: string): Promise<T | undefined> => {
+      if (calls++ > 0 && this.#paceMs > 0) await new Promise((resolve) => setTimeout(resolve, this.#paceMs));
+      const response = await this.#fetch(`${this.#base}${path}`, { headers: this.#headers() });
+      if (response.status === 422 || response.status === 404) return undefined;
+      return json<T>('dev.to', response, what);
+    };
+    for (const { id } of articles) {
+      const query = `article_id=${encodeURIComponent(id)}`;
+      const totals = await get<ForemTotals>(`/analytics/totals?${query}`, 'read the analytics');
+      if (!totals) continue;
+      const values: Metrics = {};
+      if (totals.reactions?.readinglist !== undefined) values.saves = totals.reactions.readinglist;
+      if (totals.page_views?.average_read_time_in_seconds !== undefined) values.avgReadSeconds = totals.page_views.average_read_time_in_seconds;
+      const referrers = await get<{ domains?: Array<{ domain: string | null; count: number }> }>(`/analytics/referrers?${query}`, 'read the referrers');
+      for (const { domain, count } of referrers?.domains ?? []) {
+        const name = `views_${sourceOfReferrer(domain)}`;
+        values[name] = (values[name] ?? 0) + count;
+      }
+      out.set(id, values);
+    }
+    return out;
   }
 
   /**
