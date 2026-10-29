@@ -74,6 +74,14 @@ async function launchMedia(context: PublishContext, work: string): Promise<Media
       if (shot?.type.startsWith('image/png')) screenshots.push({ bytes: shot.bytes, mimeType: 'image/png' });
     }
   }
+  // Then the images the article itself shows, in its order: an article has no site to capture, so
+  // these are its only screenshots (the ones the owner put in its body, on the blog's own address)
+  for (const url of articleImages(context)) {
+    const response = await context.fetch(url).catch(() => undefined);
+    const type = response?.ok ? (response.headers.get('content-type') ?? '') : '';
+    if (!response || !(type.startsWith('image/png') || type.startsWith('image/jpeg'))) continue;
+    screenshots.push({ bytes: new Uint8Array(await response.arrayBuffer()), mimeType: type.startsWith('image/png') ? 'image/png' : 'image/jpeg' });
+  }
   let demo: string | undefined;
   for (const file of ['demo.gif', 'instagram-02.mp4']) {
     const found = await fetched(context, file);
@@ -83,6 +91,24 @@ async function launchMedia(context: PublishContext, work: string): Promise<Media
     break;
   }
   return { cover, screenshots, demo };
+}
+
+/**
+ * The PNG and JPEG images of the English article's body (the one every channel links), as addresses
+ * on the article's own site; an image of another site is left out, since its bytes are not the launch's
+ */
+export function articleImages(context: Pick<PublishContext, 'pack' | 'articleUrl'>): string[] {
+  const markdown = context.pack.article?.en?.markdown ?? context.pack.article?.es?.markdown ?? '';
+  const site = new URL(context.articleUrl);
+  const urls: string[] = [];
+  for (const match of markdown.matchAll(/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?/g)) {
+    const raw = match[1];
+    if (!raw) continue;
+    const url = new URL(raw, site);
+    if (url.host !== site.host || !/\.(png|jpe?g)$/i.test(url.pathname) || urls.includes(url.href)) continue;
+    urls.push(url.href);
+  }
+  return urls;
 }
 
 /**

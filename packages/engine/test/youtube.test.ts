@@ -220,3 +220,20 @@ test("YouTube's numbers are read in one batch for every video, and a video the a
   assert.equal(result.readings, 2);
   assert.deepEqual(result.problems, []);
 });
+
+test('an article with no site to capture gives YouTube the images of its own body, on its own site only', async () => {
+  const { articleImages } = await import('../src/publishing/youtube.ts');
+  const markdown = [
+    'Intro.',
+    '![The status](/articles/sluice/sluice-status.png)',
+    '![A hit](https://josegarrido.dev/articles/sluice/cache-hit.jpg "title")',
+    '![Elsewhere](https://example.com/other.png)',
+    '![An animation](/articles/sluice/demo.gif)',
+    '![Again](/articles/sluice/sluice-status.png)',
+  ].join('\n\n');
+  const pack = { article: { en: { markdown } } } as unknown as ContentPack;
+  assert.deepEqual(articleImages({ pack, articleUrl: 'https://josegarrido.dev/en/sluice/' }), [
+    'https://josegarrido.dev/articles/sluice/sluice-status.png',
+    'https://josegarrido.dev/articles/sluice/cache-hit.jpg',
+  ]);
+});
