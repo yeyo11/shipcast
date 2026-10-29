@@ -43,7 +43,7 @@ const goodPack = {
   ],
 };
 
-const checkout = { hostPath: '/tmp/x', providerPath: '/workspace/yeyo11__claudio@v0.9.0' };
+const checkout = { hostPath: '/tmp/x' };
 
 /** The pack generated on a runner whose model answers `answer` through the submit tool */
 async function generated(answer: unknown) {

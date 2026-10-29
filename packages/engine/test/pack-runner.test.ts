@@ -54,7 +54,7 @@ async function world(ai: Pick<PipelineDeps, 'aiRunner'> & Partial<Pick<PipelineD
     github,
     registry,
     launchesRepo: 'yeyo11/launches',
-    checkout: async () => ({ hostPath, providerPath: '/workspace/x' }),
+    checkout: async () => ({ hostPath }),
     now: () => new Date('2026-10-25T00:00:00Z'),
     fetch: (async () => new Response(null, { status: 404 })) as typeof fetch,
     ...ai,
@@ -161,7 +161,7 @@ test('pack: the generation carries Claudio’s chat id and the turn’s cost', a
     const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh) });
     const parsed = parseLaunchConfig(LAUNCH_YML);
     assert.ok(parsed.ok);
-    const generated = await generatePack({ runner: w.deps.aiRunner, launch: w.launch, config: parsed.value, brand: w.brand, checkout: { hostPath: w.hostPath, providerPath: '' }, ref: 'v0.9.0' });
+    const generated = await generatePack({ runner: w.deps.aiRunner, launch: w.launch, config: parsed.value, brand: w.brand, checkout: { hostPath: w.hostPath }, ref: 'v0.9.0' });
     assert.equal(generated.ok, true);
     assert.equal(generated.chatId, 'chat-9');
     assert.equal(generated.costUsd, 0.12, 'usage.cost_usd, through providerMetadata.claudio.costUsd');

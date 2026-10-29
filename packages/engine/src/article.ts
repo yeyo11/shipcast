@@ -106,7 +106,7 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
     launch,
     config,
     brand,
-    checkout: { hostPath: '', providerPath: '' },
+    checkout: { hostPath: '' },
     projects: known.projects,
     projectsText: known.text,
     fetch: deps.fetch,

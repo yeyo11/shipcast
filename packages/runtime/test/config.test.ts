@@ -22,7 +22,6 @@ test('the bootstrap is the database and the GitHub App: nothing else is needed t
   assert.equal(config.databaseUrl, DATABASE.SHIPCAST_DATABASE_URL);
   assert.equal(config.dataDir, '/repo/data');
   assert.equal(config.workspaceHostDir, '/repo/workspace');
-  assert.equal(config.workspaceProviderDir, '/workspace');
   assert.equal(config.keychainService, 'shipcast');
   assert.deepEqual(config.githubApp, { appId: '123', slug: 'shipcast-test', clientId: 'Iv23app', clientSecret: 'app-secret', webhookSecret: 'hook', privateKey: PEM });
   assert.equal(config.githubToken, undefined);

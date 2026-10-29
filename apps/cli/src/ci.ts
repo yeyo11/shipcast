@@ -154,8 +154,7 @@ function authenticatedCheckout(token: () => Promise<string>, workspaceDir: strin
     process.env.GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader';
     process.env.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${value}`).toString('base64')}`;
     try {
-      // The runner's tools read the clone on this machine, so the provider's view is the host's
-      return await checkout({ hostDir: workspaceDir, providerDir: workspaceDir }, repo, ref);
+      return await checkout({ hostDir: workspaceDir }, repo, ref);
     } finally {
       for (const [name, v] of [['GIT_CONFIG_COUNT', saved.count], ['GIT_CONFIG_KEY_0', saved.key], ['GIT_CONFIG_VALUE_0', saved.value]] as const) {
         if (v === undefined) delete process.env[name];

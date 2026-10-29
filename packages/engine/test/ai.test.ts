@@ -54,7 +54,7 @@ test('a pack is schema-bound, carries the locked rules, runs on the model the se
   const chosen: Array<string | undefined> = [];
   const runner = new AiTaskRunner({ resolve: async () => ({ provider: choosingProvider(model, chosen), settings: { apiKey: 'k' }, model: 'claude-opus-5-5' }) });
   const dir = await mkdtemp(join(tmpdir(), 'shipcast-ai-'));
-  const result = await generatePack({ runner, launch, config, brand, checkout: { hostPath: dir, providerPath: '/workspace/x' }, ref: 'v0.9.0' });
+  const result = await generatePack({ runner, launch, config, brand, checkout: { hostPath: dir }, ref: 'v0.9.0' });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.ok(chosen.length > 0 && chosen.every((id) => id === 'claude-opus-5-5'), 'the model the settings chose is the one called');
 
@@ -72,7 +72,7 @@ test('a pack that is not valid even after its repair is refused, never trusted',
   const bad = { ...pack, bluesky: { lang: 'en', text: 'x'.repeat(400) } };
   const model = scriptedModel(submitParts(bad), submitParts(bad, 'call-2'));
   const dir = await mkdtemp(join(tmpdir(), 'shipcast-ai-'));
-  const result = await generatePack({ runner: mockRunner(model), launch, config, brand, checkout: { hostPath: dir, providerPath: '' }, ref: 'v0.9.0' });
+  const result = await generatePack({ runner: mockRunner(model), launch, config, brand, checkout: { hostPath: dir }, ref: 'v0.9.0' });
   assert.equal(result.ok, false);
   assert.ok(!result.ok && result.problems.some((p) => /not valid, even after a repair: .*bluesky/.test(p)), JSON.stringify(result));
 });

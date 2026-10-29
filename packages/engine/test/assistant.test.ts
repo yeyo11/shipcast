@@ -91,7 +91,7 @@ test('the chat asks for a fenced proposal of the selection, or of the whole text
 
 test('checking against the code is refused for an article: there is no code behind it', async () => {
   const model = scriptedModel(textParts('never'));
-  await assert.rejects(checkAgainstCode('x', article, { runner: mockRunner(model), brand, checkout: { providerPath: '/w', hostPath: '/w' } }), AssistantRefused);
+  await assert.rejects(checkAgainstCode('x', article, { runner: mockRunner(model), brand, checkout: { hostPath: '/w' } }), AssistantRefused);
   assert.equal(model.doStreamCalls.length, 0, 'nothing is asked of the AI');
 });
 

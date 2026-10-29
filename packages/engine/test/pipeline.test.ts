@@ -38,7 +38,7 @@ async function setup(output: unknown = pack, files: Record<string, string> = {})
     launchesRepo: 'yeyo11/launches',
     checkout: async (repo: string, ref: string) => {
       clones.push(`${repo}@${ref}`);
-      return { hostPath: '/h', providerPath: '/workspace/x' };
+      return { hostPath: '/h' };
     },
     now: () => new Date('2026-10-25T00:00:00Z'),
     // The site serves no covers

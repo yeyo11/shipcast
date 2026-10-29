@@ -154,7 +154,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     brand,
     ...(options.fetch && { fetch: options.fetch }),
   };
-  const workspace = { hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir };
+  const workspace = { hostDir: config.workspaceHostDir };
   const recorder = telemetry();
   const aiRunner = aiRunnerFor({ ...aiDeps, archives: github, ...(recorder && { telemetry: recorder }) });
 

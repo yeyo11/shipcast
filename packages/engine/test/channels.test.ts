@@ -124,7 +124,7 @@ test('Threads and GitHub Discussions are measured, adapted to and answered like 
   const context = await launchReplyContext({
     github: { fileAt: async () => JSON.stringify(pack) },
     launchesRepo: 'yeyo11/launches',
-    checkout: async () => ({ providerPath: '/w', hostPath: '/w' }),
+    checkout: async () => ({ hostPath: '/w' }),
   })(launch);
   assert.deepEqual(context.postText, {
     devto: 'claudio\n\nClaude Code as a service.',

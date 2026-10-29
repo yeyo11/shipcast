@@ -26,8 +26,8 @@ export interface Config {
   databaseUrl: string;
   /** Files Shipcast keeps on disk, such as the TLS certificate; the registry is in Postgres */
   dataDir: string;
+  /** Where releases are cloned for the AI task runner's tools to read */
   workspaceHostDir: string;
-  workspaceProviderDir: string;
   /** The keychain's service name; another one keeps a second install's secrets apart */
   keychainService: string;
   githubApp: GitHubAppConfig | undefined;
@@ -104,9 +104,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, root = process.
     root,
     databaseUrl,
     dataDir: resolve(root, env.SHIPCAST_DATA_DIR?.trim() || 'data'),
-    // claudio mounts the repo's ./workspace as /workspace (docker-compose.yml)
     workspaceHostDir: resolve(root, 'workspace'),
-    workspaceProviderDir: '/workspace',
     keychainService: env.SHIPCAST_KEYCHAIN_SERVICE?.trim() || 'shipcast',
     githubApp,
     githubToken,

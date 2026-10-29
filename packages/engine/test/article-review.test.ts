@@ -50,7 +50,7 @@ async function deps(github: FakeGitHub, output: unknown = launchPack) {
     aiRunner: mockRunner(model),
     registry: await memoryRegistry(),
     launchesRepo: 'yeyo11/launches',
-    checkout: async () => ({ hostPath: '/h', providerPath: '/workspace/x' }),
+    checkout: async () => ({ hostPath: '/h' }),
     now: () => new Date('2026-10-25T00:00:00Z'),
     fetch: (async () => new Response(null, { status: 404 })) as typeof fetch,
   };

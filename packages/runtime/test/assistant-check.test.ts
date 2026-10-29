@@ -73,7 +73,7 @@ async function world(runner: AiTaskRunner) {
     launchesRepo: 'yeyo11/launches',
     checkout: async (repo: string, ref: string) => {
       clones.push(`${repo}@${ref}`);
-      return { hostPath, providerPath: '' };
+      return { hostPath };
     },
     aiRunner: runner,
     aiTexts: async () => ({ tone: 'Plain words.' }),

@@ -53,7 +53,7 @@ function withRepo(fn: (repo: string) => Promise<void>): () => Promise<void> {
 test(
   'without an Instagram piece, the launch gets its OG image as PNG and JPEG under public/',
   withRepo(async (repo) => {
-    const built = await buildAssets({ projects: listed, pack, launch, config: LaunchConfig.parse({ enabled: true, brand: 'personal' }), brand, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack, launch, config: LaunchConfig.parse({ enabled: true, brand: 'personal' }), brand, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     assert.deepEqual(
       built.files.map((f) => f.path),
@@ -68,7 +68,7 @@ test(
   'a demo named in launch.yml but missing from the repo stops the launch',
   withRepo(async (repo) => {
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { demo: 'docs/media/tour.gif' } });
-    const built = await buildAssets({ projects: listed, pack: withInstagram, fetch: noCover, launch, config, brand, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack: withInstagram, fetch: noCover, launch, config, brand, checkout: { hostPath: repo } });
     assert.deepEqual(built, { ok: false, problem: 'launch.yml names the demo docs/media/tour.gif, which is not in the repository at v0.8.2' });
   }),
 );
@@ -77,7 +77,7 @@ test(
   'a demo path that climbs out of the clone is refused',
   withRepo(async (repo) => {
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { demo: '../../etc/passwd' } });
-    const built = await buildAssets({ projects: listed, pack: withInstagram, fetch: noCover, launch, config, brand, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack: withInstagram, fetch: noCover, launch, config, brand, checkout: { hostPath: repo } });
     assert.equal(built.ok, false);
   }),
 );
@@ -104,7 +104,7 @@ test(
     mkdirSync(join(repo, 'docs/media'), { recursive: true });
     execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10', '-t', '1', join(repo, 'docs/media/tour.gif')]);
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { demo: 'docs/media/tour.gif' } });
-    const built = await buildAssets({ projects: listed, pack: withInstagram, launch, config, brand, fetch: noCover, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack: withInstagram, launch, config, brand, fetch: noCover, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     const dir = 'public/launches/claudio/v0.8.2';
     assert.deepEqual(built.files.map((f) => f.path).sort(), [
@@ -126,7 +126,7 @@ test(
   'a project with no cover anywhere gets one generated, and projects.yml pointing to it',
   withRepo(async (repo) => {
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
-    const built = await buildAssets({ pack, launch, config, brand, fetch: noCover, projectsText: PROJECTS_YML.replace('claudio', 'other'), projects: {}, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ pack, launch, config, brand, fetch: noCover, projectsText: PROJECTS_YML.replace('claudio', 'other'), projects: {}, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     const cover = built.files.find((f) => f.path === 'public/covers/claudio.jpg');
     assert.ok(cover && 'bytes' in cover && cover.bytes.length > 5_000);
@@ -145,7 +145,7 @@ test(
   withRepo(async (repo) => {
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
     const served = (async () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { 'content-type': 'image/jpeg' } })) as typeof fetch;
-    const built = await buildAssets({ pack, launch, config, brand, fetch: served, projects: {}, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ pack, launch, config, brand, fetch: served, projects: {}, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     assert.ok(!built.files.some((f) => f.path.startsWith('public/covers/')));
     assert.ok(built.files.some((f) => f.path === 'projects.yml'), 'but projects.yml learns where it is');
@@ -156,7 +156,7 @@ test(
   'a project that has its cover in projects.yml gets neither a cover nor a projects.yml change',
   withRepo(async (repo) => {
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
-    const built = await buildAssets({ pack, launch, config, brand, projects: listed, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ pack, launch, config, brand, projects: listed, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     assert.ok(!built.files.some((f) => f.path === 'projects.yml' || f.path.startsWith('public/covers/')));
   }),
@@ -188,7 +188,7 @@ test(
   withRepo(async (repo) => {
     const { capture, calls } = fakeCapture();
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
-    const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     const dir = 'public/launches/claudio/v0.8.2';
     const paths = built.files.map((f) => f.path);
@@ -204,7 +204,7 @@ test(
   withRepo(async (repo) => {
     const { capture, calls } = fakeCapture();
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example', demo: 'docs/tour.gif' } });
-    const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     assert.deepEqual(calls, ['screenshots https://claudio.example 0']);
     assert.ok(!built.files.some((f) => f.path.endsWith('demo.gif')));
@@ -216,7 +216,7 @@ test(
   withRepo(async (repo) => {
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
     for (const failing of [{ failScreenshots: true }, { failTour: true }]) {
-      const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture: fakeCapture(failing).capture, checkout: { hostPath: repo, providerPath: '/w' } });
+      const built = await buildAssets({ projects: listed, pack, launch, config, brand, capture: fakeCapture(failing).capture, checkout: { hostPath: repo } });
       assert.equal(built.ok, false);
       assert.match(!built.ok ? built.problem : '', /^could not capture https:\/\/claudio\.example: /);
     }
@@ -237,7 +237,7 @@ test(
     const bytes = new Uint8Array(readFileSync(gif));
     const capture: SiteCapture = { screenshots: async () => [], tour: async () => ({ gif: bytes, seconds: 1 }) };
     const config = LaunchConfig.parse({ enabled: true, brand: 'personal', assets: { site: 'https://claudio.example' } });
-    const built = await buildAssets({ projects: listed, pack: withInstagram, launch, config, brand, capture, fetch: noCover, checkout: { hostPath: repo, providerPath: '/w' } });
+    const built = await buildAssets({ projects: listed, pack: withInstagram, launch, config, brand, capture, fetch: noCover, checkout: { hostPath: repo } });
     assert.ok(built.ok);
     const video = built.files.find((f) => f.path.endsWith('instagram-02.mp4'));
     assert.ok(video && 'bytes' in video && video.bytes.length > 1000);

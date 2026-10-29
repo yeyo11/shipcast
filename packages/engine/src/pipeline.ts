@@ -23,7 +23,7 @@ export interface PipelineDeps {
   registry: Pick<Repositories, 'launches'>;
   /** The repo whose blog and drafts this engine writes to, e.g. `yeyo11/launches` */
   launchesRepo: string;
-  /** Clones a repo at a ref into the workspace shared with the AI */
+  /** Clones a repo at a ref into the workspace, for the AI task runner's tools to read */
   checkout: (repo: string, ref: string) => Promise<Checkout>;
   now?: () => Date;
   maxBudgetUsd?: number;
