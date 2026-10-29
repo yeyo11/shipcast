@@ -74,6 +74,10 @@ export const ANALYSIS_RULES = [
   'Bash(grep *)',
   'Bash(wc *)',
   'Bash(cut *)',
+  'Bash(sort *)',
+  'Bash(uniq *)',
+  'Bash(tr *)',
+  'Bash(rg *)',
 ] as const;
 
 /** The AI SDK providers' tool rounds before they must answer (packages/engine/src/ai.ts, MAX_STEPS) */

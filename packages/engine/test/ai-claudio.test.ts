@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { AiError, ANALYSIS_RULES, type AiTaskDefinition } from '@shipcast/schema';
 import { InvalidArgumentError, jsonSchema, Output, streamText } from 'ai';
 import { z } from 'zod';
+import { claudioHeaders } from '../src/ai/providers/claudio/model.ts';
 import { AiTaskRunner, CLAUDIO_ERRORS, claudioAiProvider, ClaudioWorkspaces, createClaudio, GitHubError, GitHubRest, type AiRunSetup } from '../src/index.ts';
 
 /*
@@ -167,6 +168,11 @@ test('createClaudio: a streamed chat completion with Claudio’s headers from pr
   }
 });
 
+test('the budget header never carries more decimals than Claudio accepts', () => {
+  assert.equal(claudioHeaders({ maxBudgetUsd: 0.1 + 0.2 })['X-Claudio-Max-Budget-Usd'], '0.3');
+  assert.equal(claudioHeaders({ maxBudgetUsd: 2 })['X-Claudio-Max-Budget-Usd'], '2');
+});
+
 test('createClaudio: allowedTools and toolPreset together are refused before anything is sent', async () => {
   const fake = await claudio();
   try {
@@ -311,7 +317,7 @@ test('a workspace Claudio refuses fails the run before any chat, and leaves noth
     [429, 'workspace-limit', 'ai_rate_limited', true],
     [400, 'workspace-host-not-allowed', 'ai_refused', false],
     [400, 'workspace-address-blocked', 'ai_refused', false],
-    [422, 'workspace-bad-archive', 'ai_refused', false],
+    [400, 'workspace-bad-archive', 'ai_refused', false],
   ] as const) {
     const fake = await serve((req, res) => json(res, status, { error: { code, message: `refused ${req.path}` } }));
     const gh = await github();

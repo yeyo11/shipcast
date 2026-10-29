@@ -58,7 +58,10 @@ export function claudioHeaders(options: ClaudioCallOptions): Record<string, stri
   if (options.allowedTools !== undefined) headers[CLAUDIO_WIRE.allowedTools] = JSON.stringify(options.allowedTools);
   if (options.toolPreset !== undefined) headers[CLAUDIO_WIRE.toolPreset] = options.toolPreset;
   if (options.maxTurns !== undefined) headers[CLAUDIO_WIRE.maxTurns] = String(options.maxTurns);
-  if (options.maxBudgetUsd !== undefined) headers[CLAUDIO_WIRE.maxBudgetUsd] = String(options.maxBudgetUsd);
+  if (options.maxBudgetUsd !== undefined) {
+    // Claudio refuses a budget with more than 6 decimals; float arithmetic can produce one
+    headers[CLAUDIO_WIRE.maxBudgetUsd] = String(Number(options.maxBudgetUsd.toFixed(6)));
+  }
   return headers;
 }
 
