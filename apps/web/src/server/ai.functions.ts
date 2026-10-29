@@ -14,6 +14,7 @@ import {
   writeAiSettings,
   type AiProviderId,
 } from '@shipcast/engine';
+import { AI_BUDGET_TASKS, DEFAULT_AI_BUDGETS_USD, MAX_AI_BUDGET_USD } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { accountService, launchService } from './app-services';
 import { appContext } from './context.server';
@@ -39,6 +40,8 @@ export const getAiSettings = createServerFn({ method: 'GET' }).handler(async () 
     settings: await readAiSettings(ctx.registry),
     brandTone: brand.tone ?? null,
     tasks: [...AI_TASKS],
+    // Ceilings only: what a run may spend, never what one did
+    budgets: { tasks: [...AI_BUDGET_TASKS], defaults: { ...DEFAULT_AI_BUDGETS_USD }, max: MAX_AI_BUDGET_USD },
     providers,
     prompts: PROMPT_IDS.map((promptId) => ({
       id: promptId,

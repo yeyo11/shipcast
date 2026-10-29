@@ -26,6 +26,9 @@ type Data = Awaited<ReturnType<typeof getAiSettings>> & { runtime: Parameters<ty
 type Task = Data['tasks'][number];
 type ProviderId = Data['providers'][number]['id'];
 type PromptView = Data['prompts'][number];
+type BudgetTask = Data['budgets']['tasks'][number];
+/** The limits as typed: an empty field keeps the task's default */
+type BudgetFields = Partial<Record<BudgetTask, string>>;
 
 const TASKS: Record<Task, { label: string; text: string }> = {
   pack: { label: 'Launch content pack', text: 'Reads the released repo and writes every channel’s piece. claudio’s Claude Code explores the clone itself; the others get read-only tools over it.' },
@@ -34,6 +37,21 @@ const TASKS: Record<Task, { label: string; text: string }> = {
   replies: { label: 'Comment replies', text: 'Drafts a reply to each comment on your posts, grounded in the repo and the launch’s analysis; it reads the code when a comment asks about it.' },
   profile: { label: 'Profile review', text: 'Reviews an account’s profile against its numbers and the brand, and proposes each field’s new text; nothing changes until you apply a proposal.' },
 };
+
+/** Which limits sit beside each task's model: the assistant's check against the code has its own */
+const BUDGETS_OF: Record<Task, Array<{ task: BudgetTask; label: string }>> = {
+  pack: [{ task: 'pack', label: 'Spend limit, USD' }],
+  article: [{ task: 'article', label: 'Spend limit, USD' }],
+  assistant: [
+    { task: 'assistant', label: 'Spend limit per suggestion, USD' },
+    { task: 'assistant-check', label: 'Spend limit per check against the code, USD' },
+  ],
+  replies: [{ task: 'replies', label: 'Spend limit, USD' }],
+  profile: [{ task: 'profile', label: 'Spend limit, USD' }],
+};
+
+const budgetFields = (budgets: Data['settings']['budgets']): BudgetFields =>
+  Object.fromEntries(Object.entries(budgets ?? {}).map(([task, usd]) => [task, String(usd)]));
 
 function promptLabel(id: string): string {
   if (id === 'article') return 'Article: the translation';
@@ -62,15 +80,25 @@ function Tasks({ data }: { data: Data }) {
   const toast = useToast();
   const [tasks, setTasks] = useState(data.settings.tasks);
   const [tone, setTone] = useState(data.settings.tone ?? '');
+  const [budgets, setBudgets] = useState<BudgetFields>(budgetFields(data.settings.budgets));
   const [busy, setBusy] = useState(false);
   const set = (task: Task, change: { provider?: ProviderId; model?: string }) => setTasks((all) => ({ ...all, [task]: { ...all[task], ...change } }));
   // What was saved comes back from the server: the form starts again from it, so the save bar closes.
   // Keyed on the saved values, not the object: saving a prompt reloads the page's data too
-  const saved = JSON.stringify([data.settings.tasks, data.settings.tone ?? '']);
+  const saved = JSON.stringify([data.settings.tasks, data.settings.tone ?? '', data.settings.budgets ?? {}]);
   useEffect(() => {
     setTasks(data.settings.tasks);
     setTone(data.settings.tone ?? '');
+    setBudgets(budgetFields(data.settings.budgets));
   }, [saved]);
+  // Only the limits that were set: the server validates them and an empty one keeps the default
+  const typedBudgets = Object.fromEntries(
+    data.budgets.tasks.flatMap((task) => {
+      const typed = budgets[task]?.trim();
+      return typed ? [[task, Number(typed)]] : [];
+    }),
+  );
+  const budgetsDirty = JSON.stringify(typedBudgets) !== JSON.stringify(data.settings.budgets ?? {});
 
   const save = async () => {
     setBusy(true);
@@ -81,7 +109,7 @@ function Tasks({ data }: { data: Data }) {
           return [task, model ? { provider: tasks[task].provider, model } : { provider: tasks[task].provider }];
         }),
       );
-      await saveAiSettings({ data: tone.trim() ? { tasks: clean, tone: tone.trim() } : { tasks: clean } });
+      await saveAiSettings({ data: { tasks: clean, ...(tone.trim() && { tone: tone.trim() }), budgets: typedBudgets } });
       toast.done('AI settings saved', 'The next draft uses them.');
       await router.invalidate();
     } catch (error) {
@@ -105,12 +133,13 @@ function Tasks({ data }: { data: Data }) {
       <PageToolbar label="AI" />
       <SaveBar
         form="ai-tasks-form"
-        dirty={JSON.stringify(tasks) !== JSON.stringify(data.settings.tasks) || tone !== (data.settings.tone ?? '')}
+        dirty={JSON.stringify(tasks) !== JSON.stringify(data.settings.tasks) || tone !== (data.settings.tone ?? '') || budgetsDirty}
         busy={busy}
         save="Save AI settings"
         onDiscard={() => {
           setTasks(data.settings.tasks);
           setTone(data.settings.tone ?? '');
+          setBudgets(budgetFields(data.settings.budgets));
         }}
       />
       {data.tasks.map((task) => {
@@ -132,9 +161,27 @@ function Tasks({ data }: { data: Data }) {
                 onChange={(e) => set(task, { model: e.target.value })}
                 aria-label={`${TASKS[task].label}: model`}
               />
+              {BUDGETS_OF[task].map((budget) => (
+                <input
+                  key={budget.task}
+                  className="input mono"
+                  type="number"
+                  inputMode="decimal"
+                  min={0.01}
+                  max={data.budgets.max}
+                  step={0.01}
+                  placeholder={`limit ${data.budgets.defaults[budget.task]} (default)`}
+                  value={budgets[budget.task] ?? ''}
+                  onChange={(e) => setBudgets((all) => ({ ...all, [budget.task]: e.target.value }))}
+                  aria-label={`${TASKS[task].label}: ${budget.label}`}
+                  title={budget.label}
+                  style={{ maxWidth: 200 }}
+                />
+              ))}
             </div>
             <small>
               {TASKS[task].text}
+              {task === 'assistant' ? ' The first limit caps a suggestion, the second a check against the code.' : ''}
               {chosen && !chosen.connected ? ' Connect it on the Channels page first, or this task fails.' : ''}
             </small>
           </fieldset>
@@ -258,11 +305,15 @@ function AiSettingsPage() {
       <h2 className="ph">claudio</h2>
       <p className="muted">
         claudio is a provider of its own: its REST API is what lets Claude Code explore the repo for the content pack, and its OpenAI-compatible surface streams the writing assistant.
-        The budget caps what one generation may spend.
+        The budget caps what one pack, article or check against the code may spend, unless that task has a limit of its own below.
       </p>
       <SettingsForm settings={data.runtime} submit="Save claudio settings" />
 
       <h2 className="ph">Providers</h2>
+      <p className="muted">
+        Each task’s limit caps what one run may spend, up to {data.budgets.max} USD; empty keeps the default shown in the field, and it overrides the budget above for that task.
+        Only claudio takes a limit today: the providers billed per token have no spend ceiling of their own, so their runs are bounded by steps and time instead.
+      </p>
       <Tasks data={data} />
 
       <h2 className="ph">Prompts</h2>
