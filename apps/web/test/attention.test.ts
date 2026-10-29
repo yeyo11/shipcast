@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseFailureKey } from '@shipcast/schema/failures';
+import { canonicalKey } from '@shipcast/engine';
+import { aPublishedLaunch, memoryRegistry } from '@shipcast/engine/testing';
 import { ATTENTION_KEY, attentionItems, attentionLabel, buildAttention } from '../src/server/attention.ts';
+import { attentionFor } from '../src/server/attention.server.ts';
 
 const now = new Date('2026-10-26T12:00:00Z');
 const launches = [
@@ -124,4 +127,16 @@ test('a page Google files under another canonical is a line on its launch, new a
   const other = attentionItems({ ...base, launches: [launches[2]!], canonicals: [{ launchId: 3, pages: [{ url: 'https://josegarrido.dev/en/gamma/', googleCanonical: 'https://hashnode.dev/gamma' }] }] });
   assert.notEqual(other[0]?.key, line?.key);
   assert.deepEqual(attentionItems({ ...base, launches: [launches[2]!], canonicals: [{ launchId: 99, pages: canonicals[0]!.pages }] }), [], 'a launch no longer listed has no line');
+});
+
+test('a canonical cursor that is not a list of pages is skipped, and the bell still opens', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await aPublishedLaunch(registry, []);
+  const other = await aPublishedLaunch(registry, [], { ref: 'v2.0.0' });
+  await registry.cursors.setCursor(canonicalKey(launch.id), 'not json');
+  await registry.cursors.setCursor(canonicalKey(other.launch.id), JSON.stringify([{ url: 'https://josegarrido.dev/en/a/', googleCanonical: 'https://dev.to/me/a' }]));
+  const attention = await attentionFor(registry);
+  const canonical = attention.items.filter((i) => i.kind === 'canonical');
+  assert.equal(canonical.length, 1);
+  assert.match(canonical[0]!.text, /dev\.to/);
 });

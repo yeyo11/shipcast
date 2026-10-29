@@ -3,6 +3,19 @@ import { attentionItems, buildAttention, type Attention, type AttentionInput } f
 
 type AttentionRegistry = Pick<Repositories, 'launches' | 'cursors' | 'accounts' | 'comments' | 'posts' | 'attention'>;
 
+/**
+ * A canonical cursor's pages; none for a value that does not parse as a list. One bad row (written by
+ * hand, or by an older version) must not take the whole bell down with it.
+ */
+function pagesOf(value: string): CanonicalMismatch[] {
+  try {
+    const pages: unknown = JSON.parse(value);
+    return Array.isArray(pages) ? pages.filter((p): p is CanonicalMismatch => typeof p?.url === 'string' && typeof p?.googleCanonical === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
   const [launches, failures, metricProblems, accounts, facets, newest, scheduled, canonicals] = await Promise.all([
     registry.launches.recent(60),
@@ -22,7 +35,7 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
     newestWaitingComment: newest,
     scheduled: scheduled.map((p) => ({ launchId: p.launchId, scheduledAt: p.scheduledAt })),
     metricProblems,
-    canonicals: canonicals.map(({ key, value }) => ({ launchId: Number(key.slice(CANONICAL_PREFIX.length)), pages: JSON.parse(value) as CanonicalMismatch[] })),
+    canonicals: canonicals.map(({ key, value }) => ({ launchId: Number(key.slice(CANONICAL_PREFIX.length)), pages: pagesOf(value) })),
     now: new Date(),
   };
 }
