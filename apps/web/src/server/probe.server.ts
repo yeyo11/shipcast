@@ -9,6 +9,8 @@ export const PROBE_HEADER = 'x-shipcast-probe';
 /** The pages timed when SHIPCAST_PROBE_PAGES does not name them */
 const DEFAULT_PAGES = ['/', '/launches', '/stats'];
 const SETTLE_MS = 10_000;
+/** Quiet means no request in flight for this long, the event stream aside (it stays open by design) */
+const QUIET_MS = 500;
 /** How long a loaded page is left open, untouched, to count what an idle tab asks for */
 const IDLE_MS = 30_000;
 
@@ -41,14 +43,39 @@ export async function probePages(ctx: AppContext, job: JobContext): Promise<void
   try {
     const context = await browser.newContext({ extraHTTPHeaders: { [PROBE_HEADER]: '1' } });
     await context.addCookies([{ name: SESSION_COOKIE, value: session.value, url: origin, httpOnly: true, secure: origin.startsWith('https:'), sameSite: 'Lax' }]);
-    // The public address answered by this process: what the browser sees is the owner's origin
+    // The public address answered by the target process: what the browser sees is the owner's origin.
+    // A route can only answer with a whole body, and the live event stream never ends, so it is held
+    // open, unanswered, while its page lives: what an open stream with nothing to say looks like. A
+    // failure here is the page's, never the process's: an error thrown from a route handler is not
+    // caught by anyone and would stop the process mid-job.
     await context.route(`${origin}/**`, async (route) => {
-      const url = route.request().url().replace(origin, inside);
-      await route.fulfill({ response: await route.fetch({ url }) });
+      const request = route.request();
+      try {
+        if (isEventStream(request)) {
+          await new Promise<void>((done) => request.frame().page().once('close', () => done()));
+          await route.abort().catch(() => undefined);
+          return;
+        }
+        await route.fulfill({ response: await route.fetch({ url: request.url().replace(origin, inside) }) });
+      } catch {
+        await route.abort().catch(() => undefined);
+      }
     });
     for (const path of pages) {
       const page = await context.newPage();
       const started = performance.now();
+      const inFlight = new Set<unknown>();
+      let lastChange = performance.now();
+      page.on('request', (r) => {
+        if (isEventStream(r)) return;
+        inFlight.add(r);
+        lastChange = performance.now();
+      });
+      const ended = (r: unknown) => {
+        if (inFlight.delete(r)) lastChange = performance.now();
+      };
+      page.on('requestfinished', ended);
+      page.on('requestfailed', ended);
       try {
         const response = await page.goto(`${origin}${path}`, { waitUntil: 'load', timeout: 30_000 });
         const loaded = await page.evaluate(() => {
@@ -58,20 +85,21 @@ export async function probePages(ctx: AppContext, job: JobContext): Promise<void
         const load = loaded && loaded > 0 ? loaded : performance.now() - started;
         const ok = response?.ok() === true;
         ctx.telemetry.timing({ kind: 'browser', name: path, outcome: ok ? 'ok' : 'error', ms: load });
-        const settled = await page.waitForLoadState('networkidle', { timeout: SETTLE_MS }).then(
-          () => true,
-          () => false,
-        );
+        // Playwright's networkidle never comes with the event stream open, so quiet is counted here
+        const settled = await quiet(() => inFlight.size === 0 && performance.now() - lastChange >= QUIET_MS);
         const settledMs = performance.now() - started;
         ctx.telemetry.timing({ kind: 'browser', name: `${path} settled`, outcome: settled ? 'ok' : 'error', ms: settledMs });
         let requests = 0;
-        page.on('request', () => void requests++);
+        page.on('request', (r) => {
+          if (!isEventStream(r)) requests++;
+        });
         await page.waitForTimeout(IDLE_MS);
         idle[path] = Math.round((requests * 60_000) / IDLE_MS);
         job.log(`${path}: ${response?.status() ?? 'no answer'}, loaded in ${Math.round(load)} ms, ${settled ? `quiet after ${Math.round(settledMs)} ms` : `still busy after ${SETTLE_MS / 1000} s`}, ${idle[path]} requests a minute idle`);
       } catch (error) {
         ctx.telemetry.timing({ kind: 'browser', name: path, outcome: 'error', ms: performance.now() - started });
-        job.log(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+        // The first line only: Playwright appends the request's headers, the session cookie among them
+        job.log(`${path}: ${(error instanceof Error ? error.message : String(error)).split('\n')[0]}`);
       } finally {
         await page.close();
       }
@@ -81,4 +109,19 @@ export async function probePages(ctx: AppContext, job: JobContext): Promise<void
   }
   const worst = Math.max(0, ...Object.values(idle));
   await new TelemetryStore(ctx.registry.database).recordCheck({ name: 'idle-tab-requests', ok: worst < 1, value: worst, detail: { perPage: idle } });
+}
+
+/** The live updates' stream (components/live), the one request that stays open on every page */
+function isEventStream(request: { url(): string; headers(): Record<string, string> }): boolean {
+  return new URL(request.url()).pathname === '/api/events' || (request.headers().accept ?? '').includes('text/event-stream');
+}
+
+/** Waits until `done` holds, up to SETTLE_MS; true if it did */
+async function quiet(done: () => boolean): Promise<boolean> {
+  const until = performance.now() + SETTLE_MS;
+  while (performance.now() < until) {
+    if (done()) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
 }
