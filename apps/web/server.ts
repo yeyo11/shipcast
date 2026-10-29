@@ -113,6 +113,8 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
   const entry = (await import(join(here, 'dist/server/server.js'))) as { default: { fetch(request: Request): Promise<Response> } };
   let warmth: ReturnType<typeof warm> | undefined;
   const handler = async (request: IncomingMessage, response: ServerResponse) => {
+    // Outside the try, so the catch can tell a client that left from a failure
+    const left = new AbortController();
     try {
       const pathname = new URL(request.url ?? '/', 'http://x').pathname;
       // Not ready until the pages' chunks are loaded (see warm.ts): the proxy keeps visitors on a process that has them
@@ -129,13 +131,15 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
       if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && serveStatic(pathname, response)) return;
       // The request's signal aborts when the client goes, so a handler that waits on it (an event stream) lets go.
       // A response that already finished closes too: aborting then only throws into nobody (a healthcheck's fetch)
-      const left = new AbortController();
       response.once('close', () => {
         if (!response.writableFinished) left.abort();
       });
       await send(response, await entry.default.fetch(toRequest(request, options.origin, options.trustedProxies, left.signal)), options.plainHttp === true && !options.tls);
     } catch (error) {
-      console.error(error);
+      // A client closing an event stream aborts its request's signal, and the stream's read throws
+      // that AbortError here: the client left, nothing went wrong. Any other error is still logged
+      const clientLeft = left.signal.aborted && error instanceof Error && error.name === 'AbortError';
+      if (!clientLeft) console.error(error);
       if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' });
       response.end('Something went wrong; the details are in the app’s log.');
     }
