@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, counts, json, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, ConnectorError, counts, json, secretTag, statsOf, type Check, type IdentityCache, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface BrevoCampaign {
   /** The campaign's name in Brevo's dashboard, also its UTM campaign */
@@ -51,9 +51,12 @@ export class Brevo {
   readonly #key: string;
   readonly #fetch: typeof fetch;
   readonly #base: string;
+  readonly #cache: IdentityCache | undefined;
 
-  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string }) {
+  /** `cache` keeps what is read once a day (the clicks per link, a campaign the list has no statistics for) */
+  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string; cache?: IdentityCache }) {
     this.#key = options.apiKey;
+    this.#cache = options.cache;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = options.baseUrl ?? 'https://api.brevo.com/v3';
   }
@@ -130,18 +133,30 @@ export class Brevo {
    * with their clicks per link, since Brevo gives one kind a call. The list leaves the campaigns' HTML
    * out, which it would otherwise send a hundred at a time. It keeps statistics for six months only:
    * a campaign it has none for is read on its own. An id of several (`12,13`, one issue per language)
-   * adds its campaigns up.
+   * adds its campaigns up. Brevo allows a key about 100 calls an hour: where there is a cache, the
+   * clicks per link and the campaigns read on their own (two calls each, numbers that barely move
+   * after six months) are read once a day, the list's global statistics on every call.
    */
   async metricsMany(externalIds: readonly string[]): Promise<Map<string, Metrics>> {
     const wanted = new Set(externalIds.flatMap((id) => id.split(',')));
     const global = await this.#listed(wanted, 'globalStats');
-    const links = global.size > 0 ? await this.#listed(new Set(global.keys()), 'linksStats') : new Map<string, unknown>();
+    const listedIds = [...global.keys()].sort();
+    const links =
+      listedIds.length > 0
+        ? new Map(await this.#daily(`brevo-links:${secretTag(this.#key)}:${secretTag(listedIds.join(','))}`, async () => [...(await this.#listed(new Set(listedIds), 'linksStats'))]))
+        : new Map<string, unknown>();
     const found = new Map<string, Metrics>();
     for (const [id, stats] of global) found.set(id, { ...statsOfCampaign(stats as GlobalStats), ...linkClicks(links.get(id) as LinksStats | undefined) });
-    for (const id of wanted) if (!found.has(id)) found.set(id, await this.metrics(id));
+    for (const id of wanted) if (!found.has(id)) found.set(id, await this.#daily(`brevo-campaign:${secretTag(this.#key)}:${id}`, () => this.metrics(id)));
     const out = new Map<string, Metrics>();
     for (const externalId of externalIds) out.set(externalId, added(externalId.split(',').map((id) => found.get(id) ?? {})));
     return out;
+  }
+
+  /** What `load` reads, kept a day where there is a cache; read on every call where there is none */
+  async #daily<T>(key: string, load: () => Promise<T>): Promise<T> {
+    if (!this.#cache) return load();
+    return JSON.parse(await this.#cache.remember(key, 86_400, async () => JSON.stringify(await load()))) as T;
   }
 
   /** One kind of statistics of the campaigns asked for, from the list of sent campaigns */

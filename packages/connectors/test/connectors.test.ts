@@ -355,6 +355,49 @@ test('Brevo keeps every open, MPP’s and the trackable ones apart from unique o
   assert.ok(calls.filter((c) => c.url.includes('/emailCampaigns?')).every((c) => c.url.includes('excludeHtmlContent=true')), 'the list never brings the campaigns’ HTML');
 });
 
+test('Brevo reads the clicks per link, and a campaign the list has no statistics for, once a day; the global ones hourly', async () => {
+  const calls: Call[] = [];
+  const kept = new Map<string, { value: string; ttl: number }>();
+  const cache = {
+    async remember<V extends string>(key: string, ttl: number, load: () => Promise<V>): Promise<V> {
+      const seen = kept.get(key);
+      if (seen) return seen.value as V;
+      const value = await load();
+      kept.set(key, { value, ttl });
+      return value;
+    },
+    async delete(key: string) {
+      kept.delete(key);
+    },
+  };
+  const global = { sent: 10, delivered: 9, uniqueViews: 4, uniqueClicks: 2, unsubscriptions: 0, hardBounces: 0, softBounces: 0, complaints: 0 };
+  const brevo = new Brevo({
+    apiKey: 'k',
+    cache,
+    fetch: fakeFetch(
+      [
+        // Campaign 9 was sent over six months ago: the list keeps no statistics for it
+        ['GET https://api.brevo.com/v3/emailCampaigns?status=sent&statistics=globalStats', () => Response.json({ campaigns: [{ id: 7, statistics: { globalStats: global } }, { id: 9, statistics: {} }] })],
+        ['GET https://api.brevo.com/v3/emailCampaigns?status=sent&statistics=linksStats', () => Response.json({ campaigns: [{ id: 7, statistics: { linksStats: { 'https://site.dev/en/a/': 3 } } }] })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/9?statistics=globalStats', () => Response.json({ statistics: { globalStats: global } })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/9?statistics=linksStats', () => Response.json({ statistics: { linksStats: { 'https://site.dev/en/b/': 1 } } })],
+      ],
+      calls,
+    ),
+  });
+  for (let hour = 0; hour < 3; hour++) {
+    const read = await brevo.metricsMany(['7', '9']);
+    assert.equal(read.get('7')?.['link:https://site.dev/en/a/'], 3, 'the day’s clicks per link are in every reading');
+    assert.equal(read.get('9')?.['link:https://site.dev/en/b/'], 1);
+    assert.equal(read.get('9')?.opens, 4);
+  }
+  const count = (match: string) => calls.filter((c) => c.url.includes(match)).length;
+  assert.equal(count('statistics=globalStats&limit'), 3, 'the list’s global statistics stay hourly');
+  assert.equal(count('statistics=linksStats&limit'), 1);
+  assert.equal(count('/emailCampaigns/9?'), 2, 'the old campaign’s two calls, once');
+  assert.ok([...kept.values()].every(({ ttl }) => ttl <= 86_400));
+});
+
 test('Brevo refusing to send leaves a draft and says not to retry, so no second campaign is made', async () => {
   const brevo = new Brevo({
     apiKey: 'k',

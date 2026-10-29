@@ -16,8 +16,8 @@ export const newsletterAdapter = channelAdapter({
       permissions: ['Creates and sends one campaign per language', 'Reads sends, opens, clicks and unsubscribes'],
       howTo: 'Brevo → Settings → SMTP & API → API keys → Generate a new API key. The sender and lists live in brand.yml.',
       env: [{ name: 'BREVO_API_KEY', key: 'apiKey', secret: true }],
-      build: ({ need, fetch, brand }) => {
-        const connector = new Brevo({ apiKey: need('apiKey'), fetch });
+      build: ({ need, fetch, brand, cache }) => {
+        const connector = new Brevo({ apiKey: need('apiKey'), fetch, ...(cache && { cache }) });
         // The newsletter's readers are those of brand.yml's lists, not every list the account has
         return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(Object.values(brand.newsletter?.lists ?? {})) };
       },
