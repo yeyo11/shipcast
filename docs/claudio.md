@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:00:40.756364133Z
-updated_at: 2026-10-29T01:57:33.767353882Z
+updated_at: 2026-10-29T11:05:48.37363703Z
 tags:
     - claudio
     - ai-provider
@@ -14,16 +14,24 @@ tags:
 
 [claudio](https://github.com/yeyo11/claudio) runs Claude Code as a service, on the owner's Claude
 subscription. It is one of Shipcast's AI providers, listed in the AI settings as "Claude Code — your
-subscription (via Claudio)". A local install runs **an instance of its own**, from
-[`docker-compose.yml`](../docker-compose.yml) in this repo, instead of sharing the owner's desktop
-app or another project's container: its data, sign-in and workspaces stay separate, and the version
-it runs is the one the engine was written against. Decided on 2026-10-24 by the owner, who configures
-the instance. The server's install does not run claudio ([server.md](server.md)).
+subscription (via Claudio)". Shipcast always talks to **an instance of its own**, never the owner's
+desktop app or another project's container: its data, sign-in and workspaces stay separate, and the
+version it runs is the one the engine was written against. Decided on 2026-10-24 by the owner, who
+configures the instance.
+
+- **A local install** runs it from [`docker-compose.yml`](../docker-compose.yml) in this repo.
+- **Production** (`apps-1`, since 2026-10-29) runs Shipcast's own headless claudio,
+  `ghcr.io/yeyo11/claudio:0.11.0-headless`, in Shipcast's stack (yeyo11/infra#18): its own volumes, a
+  daily spend cap of 100 USD (`CLAUDIO_DAILY_SPEND_CAP_USD`), its token in a file of its own on the
+  server, reached inside the stack at `http://claudio:8797`. Shipcast's `claudio-url` setting and its
+  `app:claudio-token` secret point at it ([server.md](server.md#what-production-runs-2026-10-29)).
 
 Since 2026-10-25 claudio is one of several providers chosen per task in the AI settings
 ([decisions/ai-providers.md](decisions/ai-providers.md)). Since 2026-10-28 there are two ways
 Shipcast talks to it, chosen by the `ai-runner` flag ([decisions/ai-layer.md](decisions/ai-layer.md)):
-the AI task runner (flag on) and the first AI layer (flag off, what production runs today).
+the AI task runner (flag on, what production runs since 2026-10-29) and the first AI layer (flag off,
+the legacy path). The first real article through the runner on production's claudio, the Sluice
+article (yeyo11/launches#13), took two `/v1` chat completions and about 3.5 minutes.
 
 ## Setting it up
 
@@ -36,8 +44,12 @@ the AI task runner (flag on) and the first AI layer (flag off, what production r
    docker compose up -d
    ```
 
-3. Open <http://localhost:8798>, sign in with that token, and sign in to Claude in the setup
-   assistant (a Claude account, or a pay-per-use API key).
+3. Sign in to Claude once, from the command line, since the headless image has no web UI:
+
+   ```bash
+   docker compose exec claudio claudio login
+   ```
+
 4. In Shipcast's Settings, set claudio's URL (`http://localhost:8798`) and token. Both are settings
    (`claudio-url`, the token in the secret store as `app:claudio-token`); `SHIPCAST_CLAUDIO_URL` and
    `SHIPCAST_CLAUDIO_TOKEN` in `.env` are copied into them once and stay a fallback.
@@ -56,7 +68,8 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   applies its own 1 USD default otherwise. The budget is the owner's spend limit for the task in the
   AI settings, else the global AI budget (for the pack, the article and the check), else the task's
   default (`DEFAULT_AI_BUDGETS_USD`: pack 5, article 3, assistant-check 2, assistant 1, replies 1,
-  profile 0.5 USD). Claudio is the only provider given one.
+  profile 0.5 USD). Claudio is the only provider given one. The instance's daily spend cap sits above
+  all of them.
 - **Workspaces, no shared folder** (`workspaces.ts`). For a task that reads the repo (`repoAccess:
   'remote-workspace'`), the runner resolves GitHub's tarball redirect for the release tag with
   Shipcast's own token and gives claudio only the short-lived `codeload` URL; claudio downloads and
@@ -64,7 +77,8 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   the run, whatever the end (`DELETE /api/workspaces/<id>`). A GitHub token never reaches claudio.
 - **What Claude Code may run** there is `ANALYSIS_RULES` (`packages/schema/src/ai/tasks.ts`): Read,
   Grep, Glob and read-only forms of `ls`, `find`, `cat`, `head`, `tail`, `sed -n`, `grep`, `wc`,
-  `cut`. claudio's guard lets a Bash call through only when every subcommand matches one.
+  `cut`, `sort`, `uniq`, `tr` and `rg`. claudio's guard lets a Bash call through only when every
+  subcommand matches one.
 - **The answer** comes in the response format; claudio refuses client tools beside one, so the runner
   passes none.
 - **Errors** are one table (`errors.ts`), mapped to `AiError`: a usage limit (`rate_limit_exceeded`)
@@ -95,14 +109,16 @@ once the runner is verified in production.
 
 ## How the compose file is built, and why
 
-- **Image pinned to `ghcr.io/yeyo11/claudio:0.8.1`.** The engine depends on claudio's API; moving the
-  version is a deliberate change. The pin predates both paths above in part: `/api/v1` arrived in
-  claudio 0.10.0, and the workspaces API and `/api/ready` that the `ai-runner` path needs are not in a
-  claudio release as of 2026-10-29. The pin moves when that release is out.
+- **Image pinned to `ghcr.io/yeyo11/claudio:0.11.0-headless`** (since 2026-10-29, `0.8.1` before).
+  The engine depends on claudio's API; moving the version is a deliberate change. 0.11.0 is the first
+  release with what the runner needs: the workspaces API, the `/v1` policy headers and `/api/ready`
+  (`/api/v1` itself arrived in 0.10.0). The headless image has no web UI.
+- **`CLAUDIO_DAILY_SPEND_CAP_USD`**, 100 by default: the headless profile refuses to start without a
+  daily ceiling.
 - **Port `127.0.0.1:8798`**, not claudio's usual 8797, so it can run beside the desktop app or a dev
   server. Loopback only. `CLAUDIO_PORT` changes it.
 - **`environment:` instead of `env_file: .env`.** Shipcast's `.env` also holds the GitHub and network
-  tokens; claudio receives only its auth mode and token.
+  tokens; claudio receives only its auth mode, token and spend cap.
 - **`name: shipcast`** fixes the Compose project name, so the volumes are `shipcast_claude-config` and
   `shipcast_claudio-data` whatever folder the command runs from.
 - **`./workspace` is shared**, for the legacy path only: the engine clones the repository into
