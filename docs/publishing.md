@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T20:57:37.972313567Z
+updated_at: 2026-10-29T22:02:59.5753498Z
 tags:
     - publishing
     - connectors
@@ -368,8 +368,10 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
 **An Instagram story's last read.** Meta keeps a story's insights for its 24 hours only, and the
 hourly reads land anywhere in its last hour, so each publish queues a `metrics` job for the story
 alone 23 h 30 min after it went out (`armLastReads`, keyed `last-read:<post>`), which reads it
-whether due or not and nothing else. A story fewer than five accounts saw answers Meta's `#10`:
-it has no numbers yet, which is neither a failure nor stale. A secondary call that fails (a
+whether due or not and nothing else. A story fewer than five accounts saw answers Meta's `#10` with
+"not enough viewers": it has no numbers yet, which is neither a failure nor stale. Meta gives the same
+`#10` to a token without `instagram_business_manage_insights`, so only the message tells them apart,
+and that refusal is a problem of the run. A secondary call that fails (a
 Reel's Facebook views when it was not shared there, a breakdown) leaves the rest of the reading;
 Threads' link clicks failing is said in the run's problems while the posts' own numbers count.
 
@@ -382,15 +384,29 @@ its days ([stats.md](stats.md#dated-values), [decisions/dated-metrics.md](decisi
 **Analytics on their own cadence** (2026-10-29, `collectHourly` only). A channel whose network has a
 slower API apart from its counters declares `metrics.analytics` (a cadence) on its definition, and its
 adapter's metric reader an `analytics(pieces, until)`: YouTube (the YouTube Analytics API, whose
-numbers lag 48 to 72 hours) and dev.to (Forem's analytics, two calls an article under a limit of three
-a second), both daily. Every live piece of the channel is read at once, from its launch's day to
-today, and kept on the piece beside its counters. The `metrics-read:analytics:<channel>` cursor
-records when they were asked for, answered or not, so a refusal is said once a day, never hourly:
-a YouTube connection made before `yt-analytics.readonly` was asked for is one problem of the run
-("connect YouTube again"), and the hourly counters are read as before. Averages (`avgViewSeconds`,
-`avgViewPercent`, `avgReadSeconds`, a Reel's `avg_watch_ms` and `skip_rate`, and the search
-`position` and `ctr`) are not counters: they are listed in each definition's `metrics.averaged`, and
-a launch's pieces are averaged, never added up ([stats.md](stats.md)).
+numbers lag 48 to 72 hours) and dev.to (Forem's analytics, two calls an article, paced 1.6 s apart
+under Forem's 40 requests a minute for an API key), both daily. Every live piece of the channel is
+read at once, from its launch's day to today, and kept on the piece beside its counters. The
+`metrics-read:analytics:<channel>` cursor records when they were asked for, answered or not, so a
+refusal is said once a day, never hourly: a YouTube connection made before `yt-analytics.readonly`
+was asked for is one problem of the run ("connect YouTube again"), and the hourly counters are read
+as before. One piece failing is said in the answer's `problems` and the others are kept (one bad
+YouTube video costs only its own report). A read a network stops part way (dev.to waits out a 429's
+`Retry-After` once, and a second ends the read) keeps what it read and names the rest `unread`,
+which `metrics-read:analytics-pending:<channel>` keeps and the next hour asks for alone. Averages
+(`avgViewSeconds`, `avgViewPercent`, `avgReadSeconds`, a Reel's `avg_watch_ms` and `skip_rate`, and
+the search `position` and `ctr`) are not counters: they are listed in each definition's
+`metrics.averaged`, and a launch's pieces are averaged, never added up ([stats.md](stats.md)).
+
+**Calls an hour.** What changes slowly is read once a day where the connector has the identity
+cache, so the hourly reads stay well under each network's limit: Instagram's `profile_activity` and a
+Reel's `facebook_views` (a Reel Meta refuses them for is kept as none for the day), and Brevo's clicks
+per link and the campaigns older than six months, which its list keeps no statistics for and cost two
+calls each on their own (Brevo allows a key about 100 calls an hour). GitHub's releases are paged
+past the first hundred, and a referrer or page out of GitHub's top ten is dropped from the latest
+numbers once a read no longer lists it. Threads' profile views of the day before are asked for over
+Meta's insights day, midnight to midnight Pacific, so its one daily value is neither split nor added
+twice.
 
 **Where a visit came from.** The blog's and dev.to's sources are named by `sourceOfReferrer` in
 `packages/schema/src/tracking.ts`: each channel by its hosts (LinkedIn, Threads, YouTube, Hashnode,
@@ -407,18 +423,26 @@ agrees again ([search-indexing.md](search-indexing.md#google)).
 
 - **Discord** reads each message back through the webhook that sent it (`GET
   /webhooks/{id}/{token}/messages/{id}`): the message object carries its `reactions`, so no new
-  credential is needed. A message deleted on Discord is left out and keeps its last numbers. Discord
-  counts no views; the replies in a thread need a bot.
+  credential is needed. A 404 is told by Discord's code: 10008 Unknown Message is a message deleted
+  on Discord, left out with its last numbers; 10015 Unknown Webhook is the webhook deleted, said as a
+  problem with the connection, and the read stops there. A 429 is waited out once (its
+  `retry_after`), then the read stops with what it has. A message older than 30 days (its id, a
+  snowflake, says when it was sent) is no longer read: its reactions have settled, and its last
+  numbers stand. Discord counts no views; the replies in a thread need a bot.
 - **Telegram** has no way to read a message back, but a bot that is an admin of the channel is told
   when a post's reactions change (a channel's reactions are anonymous): a `message_reaction_count`
   update, which Telegram sends only to a bot that asks for it (`allowed_updates`) and keeps 24 hours.
-  The hourly read collects them with `getUpdates`, which confirms them, and keeps each post's latest
-  total. It works with the bot as it is set up: an admin of the channel, with no webhook (Telegram
-  refuses `getUpdates` to a bot that has one, which is said in words). Its reader is **push-only**:
-  a post Telegram said nothing about kept its reactions, which are read again as they were (moving
-  their `checked_at`), and a post never told about has none, since every change since it went out
-  would have been told. So a post published before 2026-10-29 shows 0 until its reactions next
-  change, and a gap of more than 24 hours in the hourly reads loses the changes of that gap. Views
+  The hourly read collects them with `getUpdates` and keeps each post's latest total. Asking for the
+  next page of updates confirms the one before, and a confirmed update is gone: so each page is
+  stored before the next is asked for, and a write that fails leaves its page for the next read. The
+  changes are matched against every Telegram post Shipcast can read, of any launch whatever its
+  status and whether its numbers are due or not, since a change of a post left out would be lost. It
+  works with the bot as it is set up: an admin of the channel, with no webhook (Telegram refuses
+  `getUpdates` to a bot that has one, which is said in words). Its reader is **push-only**
+  (`pushed`): a post Telegram said nothing about kept its reactions, which are read again as they
+  were (moving their `checked_at`), and a post never told about has no reading at all, not a made-up
+  0: a post published before 2026-10-29 shows nothing until its reactions next change, and then its
+  lifetime total. A gap of more than 24 hours in the hourly reads loses the changes of that gap. Views
   and forwards stay out of reach: only a user session (MTProto) reads them.
 - **The newsletter** keeps Brevo's parts apart rather than guessing Brevo's dashboard. Since 2025
   Brevo's report counts Apple Mail Privacy Protection's automatic opens and bots' in its "Opens" by
@@ -433,9 +457,10 @@ agrees again ([search-indexing.md](search-indexing.md#google)).
 - **GitHub repo**: the traffic read covers the clones, referrers and pages beside the views, day by
   day where GitHub gives days, and a daily history read adds the stars by day and the releases'
   downloads. A traffic read GitHub refuses is no longer swallowed: it is a problem of the run, a
-  `403` or `404` raises a **permission** line in the bell (its cursor
+  `403` raises a **permission** line in the bell (its cursor
   `metrics-problem:github-traffic:<repo>`), and the traffic's cursor stays, so the next hour asks
-  again; the first answer clears the line ([decisions/github-app.md](decisions/github-app.md)).
+  again; the first answer clears the line ([decisions/github-app.md](decisions/github-app.md)). A
+  `404` is said as itself and asked again on the traffic's daily cadence.
 
 LinkedIn gives no numbers back. The per-post numbers, scored per network ([stats.md](stats.md)),
 are also what the recommended publishing times learn from
@@ -445,7 +470,9 @@ One limit: **Cloudflare Web Analytics does not keep the query string**, so visit
 the referrer (Mastodon's many hosts count as `other`, and an app that strips the referrer as
 `direct`), and the UTM tags the links carry ([tracking.md](tracking.md)) wait for a source that reads
 them (zone HTTP analytics or the blog's Worker, an owner decision). GitHub's traffic needs the App's
-Administration: read, which `shipcast init` asks for; an App without it is said in the bell.
+Administration: read, which `shipcast init` asks for; an App without it (a 403) is said in the bell.
+Any other failure of the traffic read is said as itself in the run's problems, and a 404 waits for
+the traffic's daily cadence rather than being asked again every hour.
 
 ## The rounds and the shipcast command
 

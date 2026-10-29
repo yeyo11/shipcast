@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T20:53:14.65712517Z
-updated_at: 2026-10-29T20:53:14.65712517Z
+updated_at: 2026-10-29T22:00:58.593351809Z
 tags:
     - decision
     - stats
@@ -52,13 +52,14 @@ days are kept for a later chart.
 position weighted by each day's impressions), so one call per URL replaces the since-launch query,
 and the totals include Google's fresh, not yet final, days as its report does.
 
-**The backfill.** The migration moves the one stored reading that already said its day: a repo's
-traffic and stars kept as `views:<day>`, `visitors:<day>`, `clones:<day>`, `cloners:<day>` and
-`stars:<day>` by the hourly reads of the same release, the newest reading of each day. Nothing else
-stored can be dated: a since-launch total says nothing of the day its clicks happened. The real
-backfill is the first dated read, which asks each source for every day from the launch's: Search
-Console keeps 16 months, Cloudflare's dataset its own window (the dashboard shows six months), GitHub
-its 14 days of traffic and 30 weeks of stars.
+**The backfill.** The migration moves the one kind of stored reading that would already say its
+day: a repo's traffic and stars kept as `views:<day>`, `visitors:<day>`, `clones:<day>`,
+`cloners:<day>` and `stars:<day>`, the newest reading of each day. No released writer ever stored
+those names, so today it finds nothing in production and moves nothing; the migration is kept as it
+is, stable, for a database that has them. Nothing else stored can be dated: a since-launch total says
+nothing of the day its clicks happened. The real backfill is the first dated read, which asks each
+source for every day from the launch's: Search Console keeps 16 months, Cloudflare's dataset its own
+window (the dashboard shows six months), GitHub its 14 days of traffic and 30 weeks of stars.
 
 ## What was rejected
 
