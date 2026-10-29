@@ -3,20 +3,22 @@
 #
 #   docker compose up -d
 #
-# Then open http://localhost:8798, sign in with CLAUDIO_AUTH_TOKEN and sign in to Claude in the setup
-# assistant (docs/claudio.md). The engine runs on the host and reaches claudio at SHIPCAST_CLAUDIO_URL
+# Then sign in to Claude once: `docker compose exec claudio claudio login` (docs/claudio.md); the
+# headless image has no web UI. The engine runs on the host and reaches claudio at SHIPCAST_CLAUDIO_URL
 # and Postgres at SHIPCAST_DATABASE_URL.
 name: shipcast # volumes are shipcast_*, whatever folder this is started from
 
 services:
   claudio:
     # Pinned: the engine is written against this API. Move it on purpose, and check docs/claudio.md
-    image: ghcr.io/yeyo11/claudio:0.8.1
+    image: ghcr.io/yeyo11/claudio:0.11.0-headless
     init: true # reaps the claude child processes
     # Only what claudio needs: an env_file would hand it every Shipcast secret (GitHub, networks)
     environment:
       CLAUDIO_AUTH_MODE: token
       CLAUDIO_AUTH_TOKEN: ${SHIPCAST_CLAUDIO_TOKEN:?set SHIPCAST_CLAUDIO_TOKEN in .env (openssl rand -hex 32)}
+      # Required by the headless profile: claudio refuses to start without a daily ceiling
+      CLAUDIO_DAILY_SPEND_CAP_USD: ${CLAUDIO_DAILY_SPEND_CAP_USD:-100}
     ports:
       # Loopback only. 8798, not claudio's 8797, so it can run beside a desktop or dev claudio
       - "127.0.0.1:${CLAUDIO_PORT:-8798}:8797"
