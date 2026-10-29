@@ -141,26 +141,22 @@ export class Telegram implements Editable<TelegramEdit>, Deletable, ProfileReade
   }
 
   /**
-   * One post's reactions, when they changed since the last read: see `metricsMany`, which this reads
-   * through, so it takes every other post's changes with it.
+   * The reactions of the posts whose reactions changed since the last read, every emoji's added up,
+   * handed to `store` a page (up to a hundred changes) at a time. The Bot API has no way to read a
+   * message or its counts back: a bot that is an admin of the channel is pushed a
+   * `message_reaction_count` update when a post's reactions change (a channel's reactions are
+   * anonymous), which it collects with `getUpdates` and Telegram keeps for 24 hours. Asking for the
+   * next page confirms the one before, and a confirmed change is gone for good: so the next page is
+   * only asked for once `store` has kept this one, and a `store` that throws leaves its page for the
+   * next read. A post with no change is left out, and keeps the numbers it had; a change of a post not
+   * in `externalIds` is confirmed and dropped, so pass every post that could have one. Views are not
+   * there: the Bot API gives bots no views or forwards of a post.
    */
-  async metrics(externalId: string): Promise<Metrics> {
-    return (await this.metricsMany([externalId])).get(externalId) ?? {};
-  }
-
-  /**
-   * The reactions of the posts whose reactions changed since the last read, every emoji's added up.
-   * The Bot API has no way to read a message or its counts back: a bot that is an admin of the channel
-   * is pushed a `message_reaction_count` update when a post's reactions change (a channel's reactions
-   * are anonymous), which it collects with `getUpdates` and Telegram keeps for 24 hours. Reading them
-   * confirms them, so each is read once; a post with no change since is left out, and keeps the
-   * numbers it had. Views are not there: the Bot API gives bots no views or forwards of a post.
-   */
-  async metricsMany(externalIds: readonly string[]): Promise<Map<string, Metrics>> {
+  async reactions(externalIds: readonly string[], store: (page: Map<string, Metrics>) => Promise<void>): Promise<void> {
     const wanted = externalIds.map((id) => ({ id, ...messageOf(id) }));
-    const out = new Map<string, Metrics>();
     let offset: number | undefined;
-    // A hundred a call; the call after the last confirms what was read, and an empty answer ends it
+    // A hundred a call; the call after the last page confirms it, and an empty answer ends it. A page
+    // left unconfirmed by the cap is read again next time, which is harmless: it holds counts, not deltas
     for (let page = 0; page < 20; page++) {
       let updates: ReactionUpdate[];
       try {
@@ -172,16 +168,17 @@ export class Telegram implements Editable<TelegramEdit>, Deletable, ProfileReade
         throw error;
       }
       if (updates.length === 0) break;
+      const out = new Map<string, Metrics>();
       for (const update of updates) {
-        offset = update.update_id + 1;
         const changed = update.message_reaction_count;
         if (!changed) continue;
         const post = wanted.find((w) => w.message_id === changed.message_id && (w.chat_id === String(changed.chat.id) || w.chat_id === `@${changed.chat.username}`));
         // In order, so a later change of the same post replaces an earlier one
         if (post) out.set(post.id, { reactions: changed.reactions.reduce((n, r) => n + r.total_count, 0) });
       }
+      await store(out);
+      offset = Math.max(...updates.map((u) => u.update_id)) + 1;
     }
-    return out;
   }
 
   async check(): Promise<Check> {

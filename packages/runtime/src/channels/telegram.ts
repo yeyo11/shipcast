@@ -1,4 +1,4 @@
-import { Telegram } from '@shipcast/connectors';
+import { ConnectorError, Telegram } from '@shipcast/connectors';
 import { telegram, trackWithinLimit } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
@@ -31,9 +31,15 @@ export const telegramAdapter = channelAdapter({
   // Telegram counts a link's every character: a text the tags would push over the limit keeps its ?ref=
   publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('telegram', post.text, tracking) }) }),
   editor: (c) => c,
-  // Every post at once, from the changes Telegram pushed: a post with none kept its reactions, and
-  // one never told about has none, since every change since it went out is told
-  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), metricsMany: (ids: string[]) => c.metricsMany(ids), pushOnly: { initial: { reactions: 0 } } }),
+  // Only from the changes Telegram pushed, every post at once, each page kept before it is confirmed:
+  // a post with none kept its reactions, and one never told about has no reading. There is no read of
+  // one post, since reading the changes for one would confirm, and lose, every other post's
+  metrics: (c) => ({
+    metrics: async () => {
+      throw new ConnectorError('Telegram', 'a post’s reactions are only read from the changes Telegram pushed, for every post at once', 400, false);
+    },
+    pushed: (ids: string[], store) => c.reactions(ids, store),
+  }),
   // The owner's notices go only to their own chat with the bot; with none set there is no notifier,
   // never the channel a launch publishes to, which is public
   notifier: (_connection, credentials, http) => {

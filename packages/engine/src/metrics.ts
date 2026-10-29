@@ -4,6 +4,7 @@ import { channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, reads
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
+import type { Launch } from './repositories/launches.ts';
 
 /** A piece whose numbers are asked for: the registry's id, the network's, and its kind (a story's are not a post's) */
 export interface MetricTarget {
@@ -57,17 +58,53 @@ export interface PostMetricReader extends Partial<MetricReader> {
    */
   analytics?(pieces: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<Map<string, Metrics>>;
   /**
-   * A network that only tells what changed (Telegram pushes a post's reactions when they move): a
-   * piece missing from its answer kept its numbers, which are read again as they were, and a piece
-   * never read has `initial`, since every change since it was published would have been told.
+   * A network that only tells what changed (Telegram pushes a post's reactions when they move), and
+   * forgets a change once it is confirmed read. It is handed every piece that could have a change,
+   * due or not, and hands back a page at a time to `store`, confirming a page only once `store` has
+   * kept it. A piece missing from every page kept its numbers; a piece never told about has none.
    */
-  pushOnly?: { initial: Metrics };
+  pushed?(externalIds: string[], store: (page: Map<string, Metrics>) => Promise<void>): Promise<void>;
 }
 
-/** The numbers a push-only network said nothing new about: the piece's last ones, or its first */
-async function keptMetrics(registry: MetricStore, postId: number, initial: Metrics): Promise<Metrics> {
+/** A pushed piece's last numbers, to read again as they were; undefined for a piece never told about */
+async function keptMetrics(registry: MetricStore, postId: number): Promise<Metrics | undefined> {
   const last = await registry.metrics.postMetrics(postId);
-  return last.length > 0 ? Object.fromEntries(last.map((m) => [m.name, m.value])) : initial;
+  return last.length > 0 ? Object.fromEntries(last.map((m) => [m.name, m.value])) : undefined;
+}
+
+type PushedTarget = MetricTarget & { launchId: number };
+
+/**
+ * The pieces a push-only network could tell about: every readable one of the channel, of every
+ * launch whatever its status (a launch that failed on another channel still has this one's post
+ * out), since a change of a piece left out would be confirmed and lost.
+ */
+async function pushedTargets(registry: MetricStore, launches: readonly Launch[], piecesOf: ReadonlyMap<number, Post[]>, channel: string, readable: (post: Post) => boolean): Promise<PushedTarget[]> {
+  const out: PushedTarget[] = [];
+  for (const launch of launches) {
+    const pieces = piecesOf.get(launch.id) ?? (await registry.posts.posts(launch.id, { channel: channel as Channel }));
+    for (const p of pieces) if (p.channel === channel && readable(p)) out.push({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id });
+  }
+  return out;
+}
+
+/** Reads a push-only channel's changes and keeps each page as it comes; the pieces told about */
+async function readPushed(
+  pushed: NonNullable<PostMetricReader['pushed']>,
+  targets: readonly PushedTarget[],
+  record: (launchId: number, values: Metrics, postId: number) => Promise<void>,
+): Promise<Set<number>> {
+  const byId = new Map(targets.map((t) => [t.externalId, t]));
+  const told = new Set<number>();
+  await pushed([...byId.keys()], async (page) => {
+    for (const [externalId, values] of page) {
+      const t = byId.get(externalId);
+      if (!t) continue;
+      await record(t.launchId, values, t.postId);
+      told.add(t.postId);
+    }
+  });
+  return told;
 }
 
 /** Each source the engine can read numbers from; a source left out is not read. */
@@ -257,17 +294,34 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   };
 
   let unindexed = false;
-  const launches = (await registry.launches.recent(500)).filter((l) => l.status === 'published');
+  const recent = await registry.launches.recent(500);
+  const launches = recent.filter((l) => l.status === 'published');
   const piecesOf = new Map<number, Post[]>();
   for (const launch of launches) piecesOf.set(launch.id, await registry.posts.posts(launch.id));
   // Which pieces have numbers is the channel's (readsMetrics), a story's only while it lasts. A
   // deleted piece answers nothing but not found; its last numbers stay as they were
   const readable = (post: Post) => readsMetrics(post.channel, post.kind, { publishedAt: post.publishedAt, now }) && post.externalId !== null && post.status !== 'deleted';
 
+  // The push-only channels first: every change they tell is kept, and a piece they said nothing
+  // about has its last numbers read again
+  for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
+    if (!reader?.pushed) continue;
+    const pushed = reader.pushed.bind(reader);
+    const targets = await pushedTargets(registry, recent, piecesOf, channel, readable);
+    if (targets.length === 0) continue;
+    await attempt(channel, async () => {
+      const told = await readPushed(pushed, targets, (launchId, values, postId) => record(launchId, channel, values, postId));
+      for (const t of targets) {
+        const kept = told.has(t.postId) ? undefined : await keptMetrics(registry, t.postId);
+        if (kept) await record(t.launchId, channel, kept, t.postId);
+      }
+    });
+  }
+
   // The channels that read in batches are read first, all their pieces at once
   const batched = new Map<string, Map<string, Metrics>>();
   for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
-    if (!reader?.metricsMany) continue;
+    if (!reader?.metricsMany || reader.pushed) continue;
     const ids = [...piecesOf.values()].flat().filter((p) => p.channel === channel && readable(p)).map((p) => p.externalId!);
     if (ids.length === 0) continue;
     const many = reader.metricsMany.bind(reader);
@@ -285,12 +339,10 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
     const pieces = piecesOf.get(launch.id) ?? [];
     for (const post of pieces) {
       const reader = sources.posts?.[post.channel];
-      if (!reader || !readable(post)) continue;
+      if (!reader || !readable(post) || reader.pushed) continue;
       if (reader.metricsMany) {
-        // Read in the batch above; a piece the answer left out is gone (or, from a push-only network,
-        // unchanged), and a failed batch was said once
-        const answer = batched.get(post.channel);
-        const values = answer?.get(post.externalId!) ?? (answer && reader.pushOnly ? await keptMetrics(registry, post.id, reader.pushOnly.initial) : undefined);
+        // Read in the batch above; a piece the answer left out is gone, and a failed batch was said once
+        const values = batched.get(post.channel)?.get(post.externalId!);
         if (values) await record(launch.id, post.channel, values, post.id);
         continue;
       }
@@ -444,7 +496,8 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   };
   const due = (last: string | undefined, hours: number) => last === undefined || now.getTime() - Date.parse(last) >= hours * HOUR_MS - DUE_SLACK_MS;
 
-  const launches = (await registry.launches.recent(500)).filter((l) => l.status === 'published');
+  const recent = await registry.launches.recent(500);
+  const launches = recent.filter((l) => l.status === 'published');
   const piecesOf = new Map<number, Post[]>();
   for (const launch of launches) piecesOf.set(launch.id, await registry.posts.posts(launch.id));
   const checked = new Map<string, string>();
@@ -465,6 +518,22 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
     if (!reader) continue;
     const hours = channelCadence(channel)?.hours ?? 1;
+    if (reader.pushed) {
+      // Every piece, due or not: a change read is confirmed, so one not kept now is lost. Silence
+      // moves the check of a due piece that has numbers; a piece never told about stays unread
+      const pushed = reader.pushed.bind(reader);
+      const targets = await pushedTargets(registry, recent, piecesOf, channel, readable);
+      if (targets.length === 0) continue;
+      await attempt(channel, async () => {
+        const told = await readPushed(pushed, targets, (launchId, values, postId) => record(launchId, channel, values, postId));
+        for (const t of targets) {
+          if (told.has(t.postId) || !due(checked.get(`p:${t.postId}`), hours)) continue;
+          const kept = await keptMetrics(registry, t.postId);
+          if (kept) await record(t.launchId, channel, kept, t.postId);
+        }
+      });
+      continue;
+    }
     const targets: Array<MetricTarget & { launchId: number }> = [];
     for (const launch of launches) {
       const pieces = (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p));
@@ -476,7 +545,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       await attempt(channel, async () => {
         const answer = await read(targets);
         for (const t of targets) {
-          const values = answer.get(t.postId) ?? (reader.pushOnly ? await keptMetrics(registry, t.postId, reader.pushOnly.initial) : undefined);
+          const values = answer.get(t.postId);
           if (values) await record(t.launchId, channel, values, t.postId);
         }
         for (const problem of answer.problems ?? []) problems.push(`${channel}: ${problem}`);

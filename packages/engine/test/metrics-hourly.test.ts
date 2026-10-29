@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sql } from 'drizzle-orm';
-import { Bluesky, Brevo, CloudflareAnalytics, ConnectorError, Devto, GitHubDiscussions, GitHubRepoStats, Hashnode, Mastodon, MemoryEtagCache } from '@shipcast/connectors';
+import { Bluesky, Brevo, CloudflareAnalytics, ConnectorError, Devto, GitHubDiscussions, GitHubRepoStats, Hashnode, Mastodon, MemoryEtagCache, Telegram } from '@shipcast/connectors';
 import { Brand, channelCadence, type Channel } from '@shipcast/schema';
 import { batchReader, canonicalKey, collectHourly, collectMetrics, inspectionDue, runChecks, TelemetryStore, trafficProblemKey, trafficReadKey, type MetricSources } from '../src/index.ts';
-import { aPublishedLaunch, memoryRegistry } from '../src/testing/index.ts';
+import { aLaunch, aPublishedLaunch, memoryRegistry, withPosts } from '../src/testing/index.ts';
 
 /*
  * Phase 8's hourly reads against the real connectors over a fake network: a run over 30 pieces on
@@ -242,23 +242,73 @@ test('a refused traffic read is said, kept for the bell, and asked again next ho
   );
 });
 
-test('a push-only network’s silence keeps a piece’s numbers, and a piece it never told about starts at its initial ones', async () => {
+/** A Telegram over a fake getUpdates that hands out `pages` in turn, recording each call's offset */
+function pushedTelegram(pages: Array<Array<[number, number, number]>>) {
+  const offsets: Array<number | undefined> = [];
+  let next = 0;
+  const fetch: typeof globalThis.fetch = async (_input, init) => {
+    offsets.push((JSON.parse(String(init?.body)) as { offset?: number }).offset);
+    // Telegram hands the unconfirmed changes again until a call's offset passes them
+    const offset = offsets.at(-1);
+    while (next < pages.length && offset !== undefined && pages[next]!.every(([update]) => update < offset)) next++;
+    const page = pages[next] ?? [];
+    const result = page.map(([update_id, message_id, total_count]) => ({ update_id, message_reaction_count: { chat: { id: -1, username: 'c' }, message_id, date: 1, reactions: [{ total_count }] } }));
+    return Response.json({ ok: true, result });
+  };
+  const telegram = new Telegram({ botToken: 'T', chatId: '@c', fetch });
+  const reader = { metrics: async () => ({}), pushed: (ids: string[], store: (page: Map<string, Record<string, number>>) => Promise<void>) => telegram.reactions(ids, store) };
+  return { reader, offsets, push: (page: Array<[number, number, number]>) => pages.push(page) };
+}
+
+test('a push-only network’s changes are kept for every piece it tells about, due or not, of any launch, and none is made up', async () => {
   const registry = await memoryRegistry();
   const first = await aPublishedLaunch(registry, [{ channel: 'telegram', externalId: '@c:1' }], { repo: 'yeyo11/claudio', ref: 'v1.0.0' });
   const second = await aPublishedLaunch(registry, [{ channel: 'telegram', externalId: '@c:2' }], { repo: 'yeyo11/claudio', ref: 'v1.1.0' });
-  const posts = [...first.posts, ...second.posts];
-  const launch = first.launch;
-  let told = new Map<string, Record<string, number>>([['@c:1', { reactions: 4 }]]);
-  const source: MetricSources = { posts: { telegram: { metrics: async () => ({}), metricsMany: async () => told, pushOnly: { initial: { reactions: 0 } } } } };
+  // A launch that failed on another channel still has its Telegram post out
+  const failed = await aLaunch(registry, { repo: 'yeyo11/claudio', ref: 'v1.2.0', status: 'failed' });
+  const [partial] = await withPosts(registry, failed.id, [{ channel: 'telegram', externalId: '@c:3' }]);
+  const net = pushedTelegram([[[10, 1, 4]]]);
+  const source: MetricSources = { posts: { telegram: net.reader } };
   const t0 = new Date('2026-10-29T10:00:00Z');
   await collectHourly(registry, brand, source, t0);
-  told = new Map();
-  await collectHourly(registry, brand, source, new Date(t0.getTime() + HOUR));
+  const values = async (postId: number) => (await registry.metrics.postMetrics(postId)).map((m) => [m.name, m.value]);
+  assert.deepEqual(await values(first.posts[0]!.id), [['reactions', 4]]);
+  assert.deepEqual(await values(second.posts[0]!.id), [], 'a piece never told about has no reading, not a made-up 0');
+
+  // Half an hour on, no piece is due, but what Telegram pushed is read and kept all the same
+  net.push([[11, 2, 7], [12, 3, 2]]);
+  await collectHourly(registry, brand, source, new Date(t0.getTime() + HOUR / 2));
+  assert.deepEqual(await values(second.posts[0]!.id), [['reactions', 7]]);
+  assert.deepEqual(await values(partial!.id), [['reactions', 2]], 'a piece of a launch that is not published counts too');
+
+  // An hour on, silence: a piece with numbers keeps them, its check moved; the rest stay unread
+  const t1 = new Date(t0.getTime() + HOUR);
+  await collectHourly(registry, brand, source, t1);
   assert.deepEqual(
-    await Promise.all(posts.map(async (p) => (await registry.metrics.postMetrics(p.id)).map((m) => [m.name, m.value, m.checkedAt]))),
-    [[['reactions', 4, new Date(t0.getTime() + HOUR).toISOString()]], [['reactions', 0, new Date(t0.getTime() + HOUR).toISOString()]]],
+    (await registry.metrics.postMetrics(first.posts[0]!.id)).map((m) => [m.name, m.value, m.checkedAt]),
+    [['reactions', 4, t1.toISOString()]],
   );
-  assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.source === 'telegram')?.value, 4, 'the piece is still in its launch’s sum');
+  assert.equal((await registry.metrics.latestMetrics(first.launch.id)).find((m) => m.source === 'telegram')?.value, 4, 'the piece is still in its launch’s sum');
+});
+
+test('a push-only network’s changes are confirmed only once they are kept', async () => {
+  const registry = await memoryRegistry();
+  const { posts } = await aPublishedLaunch(registry, [{ channel: 'telegram', externalId: '@c:1' }]);
+  const net = pushedTelegram([[[10, 1, 4]]]);
+  const record = registry.metrics.recordMetrics.bind(registry.metrics);
+  let down = true;
+  registry.metrics.recordMetrics = async (...args) => {
+    if (down) throw new Error('the database is down');
+    return record(...args);
+  };
+  const result = await collectHourly(registry, brand, { posts: { telegram: net.reader } }, new Date('2026-10-29T10:00:00Z'));
+  assert.match(result.problems.join('\n'), /database/);
+  assert.deepEqual(net.offsets, [undefined], 'nothing confirmed');
+
+  down = false;
+  await collectHourly(registry, brand, { posts: { telegram: net.reader } }, new Date('2026-10-29T11:00:00Z'));
+  assert.deepEqual((await registry.metrics.postMetrics(posts[0]!.id)).map((m) => [m.name, m.value]), [['reactions', 4]], 'handed again, and kept this time');
+  assert.deepEqual(net.offsets, [undefined, undefined, 11]);
 });
 
 test('a traffic read GitHub fails for a while is said but not kept for the bell', async () => {

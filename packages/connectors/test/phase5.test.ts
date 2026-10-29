@@ -86,38 +86,50 @@ test('Telegram sends a photo with caption and links a private chat by its intern
   assert.deepEqual(JSON.parse(String(calls[0]!.body)), { chat_id: '-1001234', photo: 'https://x.dev/i.jpg', caption: 'cap' });
 });
 
-test('Telegram reads the reaction changes it was pushed, confirms them, and leaves out the posts with none', async () => {
+test('Telegram reads the reaction changes it was pushed a page at a time, and confirms a page only once it is kept', async () => {
   const calls: Call[] = [];
   const change = (update_id: number, message_id: number, counts: number[], chat = { id: -1001234, username: 'shipcast' }) => ({
     update_id,
     message_reaction_count: { chat, message_id, date: 1, reactions: counts.map((total_count) => ({ type: { type: 'emoji', emoji: '🔥' }, total_count })) },
   });
-  const telegram = new Telegram({
-    botToken: 'T',
-    chatId: '@shipcast',
-    fetch: fakeFetch(
-      [
-        [
-          'POST https://api.telegram.org/botT/getUpdates',
-          sequence(
-            // Another chat's post with the same id, and a later change of post 5 replacing the first
-            () => Response.json({ ok: true, result: [change(10, 5, [1]), change(11, 6, [2, 1]), change(12, 5, [9], { id: -100999, username: 'other' }), change(13, 5, [3, 1])] }),
-            () => Response.json({ ok: true, result: [] }),
-          ),
-        ],
-      ],
-      calls,
-    ),
+  const pages = () =>
+    sequence(
+      // Another chat's post with the same id, and a later change of post 5 replacing the first
+      () => Response.json({ ok: true, result: [change(10, 5, [1]), change(11, 6, [2, 1]), change(12, 5, [9], { id: -100999, username: 'other' }), change(13, 5, [3, 1])] }),
+      () => Response.json({ ok: true, result: [change(14, 6, [5])] }),
+      () => Response.json({ ok: true, result: [] }),
+    );
+  const telegram = new Telegram({ botToken: 'T', chatId: '@shipcast', fetch: fakeFetch([['POST https://api.telegram.org/botT/getUpdates', pages()]], calls) });
+  const kept: Array<Array<[string, unknown]>> = [];
+  const offsets = () => calls.map((c) => (JSON.parse(String(c.body)) as { offset?: number }).offset);
+  await telegram.reactions(['@shipcast:5', '@shipcast:6', '@shipcast:7'], async (page) => {
+    // Nothing read is confirmed before it is kept: the call that confirms a page comes after its store
+    kept.push([...page]);
+    assert.equal(offsets().length, kept.length, 'a page is kept before the next call confirms it');
   });
-  const read = await telegram.metricsMany(['@shipcast:5', '@shipcast:6', '@shipcast:7']);
-  assert.deepEqual([...read], [['@shipcast:5', { reactions: 4 }], ['@shipcast:6', { reactions: 3 }]]);
-  const bodies = calls.map((c) => JSON.parse(String(c.body)) as { offset?: number; allowed_updates: string[] });
-  assert.deepEqual(bodies[0]!.allowed_updates, ['message_reaction_count'], 'only reaction counts, which Telegram leaves out unless asked');
-  assert.equal(bodies[0]!.offset, undefined);
-  assert.equal(bodies[1]!.offset, 14, 'the next call confirms what was read');
+  assert.deepEqual(kept, [
+    [
+      ['@shipcast:5', { reactions: 4 }],
+      ['@shipcast:6', { reactions: 3 }],
+    ],
+    [['@shipcast:6', { reactions: 5 }]],
+  ]);
+  assert.deepEqual(JSON.parse(String(calls[0]!.body)).allowed_updates, ['message_reaction_count'], 'only reaction counts, which Telegram leaves out unless asked');
+  assert.deepEqual(offsets(), [undefined, 14, 15], 'each call confirms the page before it');
+
+  // A page that cannot be kept is never confirmed: Telegram hands it again on the next read
+  const failing: Call[] = [];
+  const again = new Telegram({ botToken: 'T', chatId: '@shipcast', fetch: fakeFetch([['POST https://api.telegram.org/botT/getUpdates', pages()]], failing) });
+  await assert.rejects(
+    again.reactions(['@shipcast:5'], async () => {
+      throw new Error('the database is down');
+    }),
+    /database/,
+  );
+  assert.equal(failing.length, 1, 'no call with an offset after a page that was not kept');
 
   const hooked = new Telegram({ botToken: 'T', chatId: '@shipcast', fetch: fakeFetch([['POST', () => Response.json({ ok: false, description: 'Conflict: can\'t use getUpdates method while webhook is active' }, { status: 409 })]], []) });
-  await assert.rejects(hooked.metricsMany(['@shipcast:5']), (e) => e instanceof ConnectorError && e.status === 409 && !e.retryable && /webhook/.test(e.message));
+  await assert.rejects(hooked.reactions(['@shipcast:5'], async () => undefined), (e) => e instanceof ConnectorError && e.status === 409 && !e.retryable && /webhook/.test(e.message));
 });
 
 test('Telegram notify turns the link preview off; errors map to retryable or not', async () => {
