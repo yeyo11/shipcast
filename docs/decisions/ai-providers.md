@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T15:51:20.192968783Z
-updated_at: 2026-10-25T15:51:20.192968783Z
+created_at: 2026-10-25T16:02:37.786397876Z
+updated_at: 2026-10-29T00:58:52.906982893Z
 tags:
     - decision
     - ai
@@ -8,11 +8,34 @@ tags:
     - claudio
     - prompts
     - phase-8
+    - superseded
 ---
 # AI providers on the Vercel AI SDK, and editable prompts
 
 Decided on 2026-10-25, as the first piece of milestone 4 ([plans/goal-after-mvp.md](../plans/goal-after-mvp.md),
 phase 8 of [plans/after-mvp.md](../plans/after-mvp.md)).
+
+## Status (2026-10-29)
+
+**The provider layer below is superseded by [ai-layer.md](ai-layer.md)** (2026-10-28/29), built behind
+the flag `ai-runner`. With the flag off, which is what production runs today, this document still
+describes what runs; it is kept as the history of the first layer. With the flag on:
+
+| Here (first layer) | Superseded by ([ai-layer.md](ai-layer.md)) |
+| --- | --- |
+| `AiProvider` with `generateObject` and `streamText`, one implementation per provider | `AiTaskRunner` (`packages/engine/src/ai/runner.ts`) runs every task on the AI SDK; a provider is only a model, defined by one module in `packages/engine/src/ai/providers/` and listed in its registry |
+| claudio's `generateObject` on `POST /api/chats` in a clone under its `/workspace` | claudio as an AI SDK provider over its `/api/v1`, with ephemeral workspaces it downloads itself from a `codeload` URL ([claudio.md](../claudio.md)) |
+| Four repo tools (`list_files`, `read_file`, `search`, `git_log`), 40 steps | Five (`repo_overview`, `read_files`, `search`, `list_files`, `git`) and a strict `submit_answer` tool; each task's limits in its definition (`packages/schema/src/ai/tasks.ts`) |
+| Limits scattered per call site | One definition per task: output schema, whether it reads the repo, steps, output tokens, time, turns, budget |
+
+The old layer is reachable only through `@shipcast/engine/legacy-ai`, kept there by a dependency
+rule, and is deleted once the runner is verified in production. What stays valid either way: the AI
+settings and the editable/locked prompts (below), and "AI cost is never shown".
+
+Since this decision the AI settings gained two tasks, `replies` (the comment assistant) and `profile`
+(account reviews): `pack`, `article`, `assistant`, `replies`, `profile`, each falling back on claudio.
+The runner also has an `openai` provider (the OpenAI API's own SDK), not listed in the settings and
+chosen only by Action mode.
 
 ## What was decided
 
@@ -23,53 +46,54 @@ has two methods, used everywhere:
   article's distribution use it; the pack's JSON Schema (`contentPackJsonSchema()`) is the contract
   whatever the provider, and the answer is still validated by the pack's Zod schema and
   `missingPieces` before anything is drafted.
-- `streamText(request)`: streamed text, for the writing assistant (exposed now, used by the assistant
-  later). A failed stream throws; the AI SDK would otherwise end it empty.
+- `streamText(request)`: streamed text, for the writing assistant. A failed stream throws; the AI SDK
+  would otherwise end it empty.
 
 Three providers:
 
 | Provider | How | Credentials |
 | --- | --- | --- |
-| `claudio` | claudio's REST API for `generateObject`; `@ai-sdk/openai-compatible` against claudio's `/api/v1` for `streamText` | `SHIPCAST_CLAUDIO_URL` and `SHIPCAST_CLAUDIO_TOKEN` in `.env`, for now |
-| `anthropic` | `@ai-sdk/anthropic`; default model `claude-opus-5-5` | an **Anthropic API** account on the Channels page (keychain) |
+| `claudio` | claudio's REST API for `generateObject`; `@ai-sdk/openai-compatible` against claudio's `/api/v1` for `streamText` | claudio's URL and token in Settings (`.env`'s `SHIPCAST_CLAUDIO_URL` and `SHIPCAST_CLAUDIO_TOKEN` as a fallback) |
+| `anthropic` | `@ai-sdk/anthropic`; default model `claude-opus-5-5` | an **Anthropic API** account on the Channels page (secret store) |
 | `openaiCompatible` | `@ai-sdk/openai-compatible`, with `response_format` JSON Schema (`supportsStructuredOutputs`) | an **OpenAI-compatible server** account: base URL, model, optional key |
 
 The AI SDK is `ai` 7, `@ai-sdk/anthropic` 4, `@ai-sdk/openai-compatible` 3. `generateObject` from the
 SDK is deprecated in v7, so `SdkProvider` calls `generateText` with `output: Output.object({ schema:
 jsonSchema(...) })`.
 
-### What stays on claudio's REST API, and why
+### What stays on claudio's REST API, and why (superseded)
 
 The content pack is written by an agent that **reads the released code**: claudio starts a chat in the
 clone under its `/workspace`, with read-only Claude Code tools (`ANALYSIS_TOOLS`) and `jsonSchema`, and
-the answer is the input of Claude Code's `StructuredOutput` tool. claudio's OpenAI-compatible surface
-cannot do that today: on 2026-10-25 it is designed but **not built** (claudio's
-`docs/plans/openai-compatible-api.md`; the running instance answers 404 on `/api/v1/chat/completions`),
-and even when built it selects the workspace through `X-Claudio-Cwd` headers and returns client tool
-calls instead of running Claude Code's own tools for a schema-bound answer. So **`generateObject` on
-claudio stays on `POST /api/chats`**, for the pack and the article alike. Only `streamText`, which needs
-no workspace, goes through `/api/v1`; it works once claudio ships that surface.
+the answer is the input of Claude Code's `StructuredOutput` tool. On 2026-10-25 claudio's
+OpenAI-compatible surface was designed but **not built**, and it selected the workspace through a
+`cwd` header claudio had to see on its own disk. So **`generateObject` on claudio stayed on
+`POST /api/chats`**. claudio shipped `/api/v1` in 0.10.0 (2026-10-27); [ai-layer.md](ai-layer.md)
+moves every task onto it, with workspaces claudio downloads itself, because the shared-disk `cwd`
+failed silently where Shipcast and claudio did not share a volume.
 
 ### SDK providers read the repo through read-only tools
 
 The Anthropic API and an OpenAI-compatible model have no agent of their own. When a task has a repo,
 `SdkProvider` gives the model four tools over the checkout on this machine (`repoTools`): `list_files`,
 `read_file`, `search` and `git_log`. They never write or run code, and every path is resolved through
-symlinks and refused when it leaves the checkout. A run is capped at 40 steps.
+symlinks and refused when it leaves the checkout. A run is capped at 40 steps. (On the runner: five
+tools, see the Status above.)
 
 ## AI settings
 
 Stored in the registry's `settings` table, so no migration ([`packages/engine/src/ai-settings.ts`](../../packages/engine/src/ai-settings.ts)):
 
-- **`ai`**: per task (`pack`, `article`, `assistant`) a provider and an optional model; and the brand's
-  **tone override**, which replaces `brand.yml`'s tone in every prompt. Until set, claudio does every task.
+- **`ai`**: per task a provider and an optional model; and the brand's **tone override**, which
+  replaces `brand.yml`'s tone in every prompt. Until set, claudio does every task.
 - **`prompts`**: the versions of each edited prompt, oldest first, the last in use. The first save
   records the default as the first version, so it is always in the list; restoring a version (or the
   default) appends it as a new version, so the history only grows (50 kept per prompt).
 
-The runtime reads both before every AI call (`aiSetup` in [`packages/runtime/src/ai.ts`](../../packages/runtime/src/ai.ts),
-passed to the pipeline as `PipelineDeps.aiSetup`), so an edit applies to the next draft. A task whose
-provider has no connected account fails with what to do, never silently on another provider.
+The runtime reads both before every AI call (`aiSetup`, or `aiRunSetup` for the runner, in
+[`packages/runtime/src/ai.ts`](../../packages/runtime/src/ai.ts)), so an edit applies to the next
+draft. A task whose provider has no connected account fails with what to do, never silently on
+another provider.
 
 ### Editable and locked
 
@@ -92,25 +116,24 @@ and tone, without calling an AI: a release reads its `launch.yml` at the ref; an
 ## AI cost is never shown
 
 The CLI's "AI cost" line is gone, and `DraftResult` no longer carries a cost. A provider may still
-report `costUsd` in its result for the records; nothing in the UI or the CLI prints it.
+report its cost for the records; nothing in the UI or the CLI prints it.
 
 ## Rejected
 
-- **Pack generation through claudio's OpenAI-compatible API.** Not built, and it would not give
-  Claude Code the workspace with a schema-bound answer (above).
+- **Pack generation through claudio's OpenAI-compatible API** (on 2026-10-25: not built, and no way
+  to hand Claude Code the workspace). Taken up once claudio offered both, in [ai-layer.md](ai-layer.md).
 - **Giving the SDK providers a shell.** Read-only tools over the checkout are what the analysis needs;
-  Bash would be code execution on the owner's machine.
-- **AI keys in `.env`.** They are connected accounts in the keychain, like every network's. claudio's
-  URL and token stay in `.env` until the configuration split.
+  Bash would be code execution on the owner's machine. Still the rule on the runner.
+- **AI keys in `.env`.** They are connected accounts in the secret store, like every network's.
 - **A migration for the settings.** The `settings` table already holds what the owner chooses.
 
-## Risks
+## Risks (2026-10-25)
 
-- The Anthropic and OpenAI-compatible paths are tested with the AI SDK's `MockLanguageModelV4` only;
-  no Anthropic key was configured on 2026-10-25, so they have not run live. Anthropic's structured
-  outputs accept a subset of JSON Schema: the pack's schema may need adjusting the first time it runs there.
+- The Anthropic and OpenAI-compatible paths were tested with the AI SDK's mock models only; no
+  Anthropic key was configured on 2026-10-25. Anthropic's structured outputs accept a subset of JSON
+  Schema: the pack's schema may need adjusting the first time it runs there.
 - A local model's quality with tools and a large schema varies a lot.
 
 ## Related
 
-[[claudio.md]] · [[engine.md]] · [[web-app.md]] · [[content-pack.md]] · [[accounts.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[decisions/app-design-direction.md]]
+[[decisions/ai-layer.md]] · [[claudio.md]] · [[engine.md]] · [[web-app.md]] · [[content-pack.md]] · [[accounts.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[decisions/app-design-direction.md]]
