@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T12:02:45.424748487Z
-updated_at: 2026-10-28T12:02:45.424748487Z
+updated_at: 2026-10-29T09:01:37.065287314Z
 tags:
     - measurement
     - telemetry
@@ -83,9 +83,26 @@ Deployed on 2026-10-28 at 11:26 UTC (`sha-1be7c0062c01`). The undeployed stop-ga
 (up to `7ed9732`, and the two plan documents) had gone out at 10:59 UTC with the owner's new
 continuous deployment, before it.
 
-The baseline window runs **from 2026-10-28T12:00Z to 2026-10-30T12:00Z** (Wednesday to Friday).
-Nothing that alters it is deployed until then, and since every push to `main` deploys, the refactor's
-work waits on branches.
+The window was planned for 48 hours, from 2026-10-28T12:00Z to 2026-10-30T12:00Z. The owner ended it
+early: it ran **from 2026-10-28T12:00Z to 2026-10-29T08:00Z**, 20 hours with data in every one, and
+nothing reached `main` during it. The after-window compares the same 20 hours of the day (12:00Z to
+08:00Z the next day, starting on a weekday) once the refactor's flags are on.
+
+What it measured, per day unless said:
+
+| KPI | Baseline |
+| --- | --- |
+| Outbound calls | 3,919 (GitHub 2,251, of which 10.6 % answered 304) |
+| `getLaunch` p95 | 1,972 ms, 8.2 provider calls per run |
+| Page load p95, settled: `/`, `/launches/6`, `/stats` | 3,852 ms, 4,815 ms, 1,972 ms |
+| Rounds | 288 a day, 7.1 calls each |
+| Metric reads | 4.8 runs a day, 38 calls each, 34 s on average |
+| Comment polls | 52.8 runs a day, 20.5 calls each, 4 failures |
+| Missed schedules, late posts, duplicate pieces | 0 in all 20 hourly checks |
+| Freshness (share of live pieces read within the cadence) | 0.55 at worst and at the end |
+
+The full report is the JSON of `node scripts/measure.ts 2026-10-28T12:00Z..2026-10-29T08:00Z`, read
+again from the stored hours whenever it is needed.
 
 ## Related
 
