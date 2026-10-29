@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:02:37.786397876Z
-updated_at: 2026-10-29T01:57:08.78282847Z
+updated_at: 2026-10-29T15:31:04.168813039Z
 tags:
     - decision
     - ai
@@ -17,36 +17,37 @@ phase 8 of [plans/after-mvp.md](../plans/after-mvp.md)).
 
 ## Status (2026-10-29)
 
-**The provider layer below is superseded by [ai-layer.md](ai-layer.md)** (2026-10-28/29), built behind
-the flag `ai-runner`. With the flag off, which is what production runs today, this document still
-describes what runs; it is kept as the history of the first layer. With the flag on:
+**The provider layer below is superseded by [ai-layer.md](ai-layer.md)** (2026-10-28/29) and no
+longer exists in the code: it was built behind the flag `ai-runner`, the flag was turned on in
+production on 2026-10-29, and once the runner was verified there the first layer was deleted and the
+flag retired the same day. The provider sections below are kept as the history of the first layer
+only:
 
-| Here (first layer) | Superseded by ([ai-layer.md](ai-layer.md)) |
+| Here (first layer, removed) | What runs ([ai-layer.md](ai-layer.md)) |
 | --- | --- |
 | `AiProvider` with `generateObject` and `streamText`, one implementation per provider | `AiTaskRunner` (`packages/engine/src/ai/runner.ts`) runs every task on the AI SDK; a provider is only a model, defined by one module in `packages/engine/src/ai/providers/` and listed in its registry |
 | claudio's `generateObject` on `POST /api/chats` in a clone under its `/workspace` | claudio as an AI SDK provider over its `/api/v1`, with ephemeral workspaces it downloads itself from a `codeload` URL ([claudio.md](../claudio.md)) |
 | Four repo tools (`list_files`, `read_file`, `search`, `git_log`), 40 steps | Five (`repo_overview`, `read_files`, `search`, `list_files`, `git`) and a strict `submit_answer` tool; each task's limits in its definition (`packages/schema/src/ai/tasks.ts`) |
 | Limits scattered per call site | One definition per task: output schema, whether it reads the repo, steps, output tokens, time, turns, budget; each task's spend limit defaulted there and overridable per task in the AI settings (reaching Claudio only) |
 
-The old layer is reachable only through `@shipcast/engine/legacy-ai`, kept there by a dependency
-rule, and is deleted once the runner is verified in production. What stays valid either way: the AI
-settings and the editable/locked prompts (below), and "AI cost is never shown".
+What is still valid: the AI settings and the editable/locked prompts (below), and "AI cost is never
+shown".
 
 Since this decision the AI settings gained two tasks, `replies` (the comment assistant) and `profile`
 (account reviews): `pack`, `article`, `assistant`, `replies`, `profile`, each falling back on claudio.
 The runner also has an `openai` provider (the OpenAI API's own SDK), not listed in the settings and
 chosen only by Action mode.
 
-## What was decided
+## What was decided (history: the first layer)
 
-**One interface, several providers.** `AiProvider` ([`packages/engine/src/ai.ts`](../../packages/engine/src/ai.ts))
-has two methods, used everywhere:
+**One interface, several providers.** `AiProvider` (`packages/engine/src/ai.ts`, deleted on
+2026-10-29) had two methods, used everywhere:
 
 - `generateObject(request)`: a prompt answered with JSON of a schema. The content pack and an
-  article's distribution use it; the pack's JSON Schema (`contentPackJsonSchema()`) is the contract
-  whatever the provider, and the answer is still validated by the pack's Zod schema and
-  `missingPieces` before anything is drafted.
-- `streamText(request)`: streamed text, for the writing assistant. A failed stream throws; the AI SDK
+  article's distribution used it; the pack's JSON Schema (`contentPackJsonSchema()`) was the contract
+  whatever the provider, and the answer was still validated by the pack's Zod schema and
+  `missingPieces` before anything was drafted.
+- `streamText(request)`: streamed text, for the writing assistant. A failed stream threw; the AI SDK
   would otherwise end it empty.
 
 Three providers:
@@ -58,39 +59,40 @@ Three providers:
 | `openaiCompatible` | `@ai-sdk/openai-compatible`, with `response_format` JSON Schema (`supportsStructuredOutputs`) | an **OpenAI-compatible server** account: base URL, model, optional key |
 
 The AI SDK is `ai` 7, `@ai-sdk/anthropic` 4, `@ai-sdk/openai-compatible` 3. `generateObject` from the
-SDK is deprecated in v7, so `SdkProvider` calls `generateText` with `output: Output.object({ schema:
+SDK is deprecated in v7, so `SdkProvider` called `generateText` with `output: Output.object({ schema:
 jsonSchema(...) })`.
 
-### What stays on claudio's REST API, and why (superseded)
+### What stayed on claudio's REST API, and why (superseded)
 
-The content pack is written by an agent that **reads the released code**: claudio starts a chat in the
-clone under its `/workspace`, with read-only Claude Code tools (`ANALYSIS_TOOLS`) and `jsonSchema`, and
-the answer is the input of Claude Code's `StructuredOutput` tool. On 2026-10-25 claudio's
-OpenAI-compatible surface was designed but **not built**, and it selected the workspace through a
-`cwd` header claudio had to see on its own disk. So **`generateObject` on claudio stayed on
+The content pack is written by an agent that **reads the released code**: claudio started a chat in
+the clone under its `/workspace`, with read-only Claude Code tools (`ANALYSIS_TOOLS`) and
+`jsonSchema`, and the answer was the input of Claude Code's `StructuredOutput` tool. On 2026-10-25
+claudio's OpenAI-compatible surface was designed but **not built**, and it selected the workspace
+through a `cwd` header claudio had to see on its own disk. So **`generateObject` on claudio stayed on
 `POST /api/chats`**. claudio shipped `/api/v1` in 0.10.0 (2026-10-27); [ai-layer.md](ai-layer.md)
-moves every task onto it, with workspaces claudio downloads itself, because the shared-disk `cwd`
+moved every task onto it, with workspaces claudio downloads itself, because the shared-disk `cwd`
 failed silently where Shipcast and claudio did not share a volume.
 
 ### SDK providers read the repo through read-only tools
 
-The Anthropic API and an OpenAI-compatible model have no agent of their own. When a task has a repo,
-`SdkProvider` gives the model four tools over the checkout on this machine (`repoTools`): `list_files`,
-`read_file`, `search` and `git_log`. They never write or run code, and every path is resolved through
-symlinks and refused when it leaves the checkout. A run is capped at 40 steps. (On the runner: five
-tools, see the Status above.)
+The Anthropic API and an OpenAI-compatible model have no agent of their own. When a task had a repo,
+`SdkProvider` gave the model four tools over the checkout on this machine (`repoTools`): `list_files`,
+`read_file`, `search` and `git_log`. They never wrote or ran code, and every path was resolved
+through symlinks and refused when it left the checkout. A run was capped at 40 steps. (On the
+runner: five tools, see the Status above.)
 
 ## AI settings
 
 Stored in the registry's `settings` table, so no migration ([`packages/engine/src/ai-settings.ts`](../../packages/engine/src/ai-settings.ts)):
 
-- **`ai`**: per task a provider and an optional model; and the brand's **tone override**, which
-  replaces `brand.yml`'s tone in every prompt. Until set, claudio does every task.
+- **`ai`**: per task a provider and an optional model, the owner's spend limit per task (`budgets`);
+  and the brand's **tone override**, which replaces `brand.yml`'s tone in every prompt. Until set,
+  claudio does every task.
 - **`prompts`**: the versions of each edited prompt, oldest first, the last in use. The first save
   records the default as the first version, so it is always in the list; restoring a version (or the
   default) appends it as a new version, so the history only grows (50 kept per prompt).
 
-The runtime reads both before every AI call (`aiSetup`, or `aiRunSetup` for the runner, in
+The runtime reads both before every AI call (`aiRunSetup` in
 [`packages/runtime/src/ai.ts`](../../packages/runtime/src/ai.ts)), so an edit applies to the next
 draft. A task whose provider has no connected account fails with what to do, never silently on
 another provider.

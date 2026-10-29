@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T17:11:23.179876019Z
-updated_at: 2026-10-28T17:11:23.179876019Z
+updated_at: 2026-10-29T15:42:42.590371908Z
 tags:
     - plan
     - youtube
@@ -11,10 +11,14 @@ tags:
 ---
 # YouTube API audit: what to send Google
 
-Prepared on 2026-10-28 for the owner to send, from [decisions/youtube.md](../decisions/youtube.md). Until
-Google audits the project, every video Shipcast uploads through the API stays **private**. The form is
-Google's "YouTube API Services – Audit and Quota Extension Form". Each answer below is written to be
-pasted, in English.
+Prepared on 2026-10-28 for the owner to send, from [decisions/youtube.md](../decisions/youtube.md). It
+was written expecting Google to keep every video an unaudited project uploads through the API
+**private**. That did not happen: the first two uploads (the Sluice article's videos, 2026-10-29) came
+out **public**, as Shipcast asks, with the project unaudited. So the audit is no longer what stands
+between Shipcast and public videos; it stays ready in case Google starts holding uploads private (the
+code then records "private until Google audits the project" as a fallback, not a failure) or a quota
+extension is ever needed. The form is Google's "YouTube API Services – Audit and Quota Extension
+Form". Each answer below is written to be pasted, in English.
 
 ## The application
 
@@ -81,10 +85,11 @@ the owner's site and its text is the owner's.
 
 ## After sending
 
-Google answers by email, usually within weeks. Until then the videos stay private, which Shipcast shows
-as "private until Google audits the project". Once audited, new uploads can be public; the ones
-already up can be made public from YouTube Studio.
+Google answers by email, usually within weeks. Should Google hold uploads private in the meantime,
+Shipcast keeps a `youtube-privacy:<postId>` note on the video ("private until Google audits the
+project"); once audited, new uploads can be public and the ones held back can be made public from
+YouTube Studio.
 
 ## Related
 
-[[decisions/youtube.md]] · [[plans/goal-refactor.md]] · [[plans/goal-v0.2.md]]
+[[decisions/youtube.md]] · [[plans/goal-refactor.md]] · [[plans/goal-v0.2.md]] · [[status.md]]

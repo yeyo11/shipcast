@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:07:05.847023162Z
-updated_at: 2026-10-29T02:00:32.333356058Z
+updated_at: 2026-10-29T15:36:58.968755675Z
 tags:
     - web-app
     - dashboard
@@ -137,11 +137,10 @@ that does TLS, and the same entry point can run as a `web`, `worker` or `heavy` 
   The text has the **writing assistant** ([decisions/writing-assistant.md](decisions/writing-assistant.md)),
   here and in each draft's editor: quick actions on the selected text (improve, shorten, translate,
   titles, adapt to a network, check against the code), a side chat, and every proposal a word-by-word
-  diff to accept or reject. Its chats are saved as they stream and listed from a History button. With
-  `ai-runner` the actions and the chat stream from the AI task runner, and **check against the code**
-  is a `heavy` job (a clone and an AI run) that the page follows until its result, never work inside
-  the request. On a phone (760 px and under) the chat is a floating bubble that opens a full-screen
-  sheet.
+  diff to accept or reject. Its chats are saved as they stream and listed from a History button. The
+  actions and the chat stream from the AI task runner, and **check against the code** is a `heavy`
+  job (a clone and an AI run) that the page follows until its result, never work inside the request.
+  On a phone (760 px and under) the chat is a floating bubble that opens a full-screen sheet.
 - **Channels** (`/channels`): see [accounts.md](accounts.md#the-channels-page). Four tabs by kind of
   network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
   card. The **Anthropic API** and an **OpenAI-compatible server** are connected here too, under AI
@@ -180,10 +179,11 @@ component, in `components/live/Live.tsx`): the launches list, a launch (its own 
 attention bell and a profile review. Only the loader an event concerns reloads. An idle tab makes
 about 0.2 requests a minute.
 
-Without the flag (production today) the pages poll as before: a launch page every 5 s while a job
-runs (never a second read while one is on its way), Automation every 4 s while work runs, the bell
-every three minutes, a followed job every 3 s. With processes split by role, `realtime-ui` needs
-`redis-state`, whose bus carries a job's events from the worker to the web replicas.
+Without the flag (production runs with it since 2026-10-29) the pages poll as before: a launch page
+every 5 s while a job runs (never a second read while one is on its way), Automation every 4 s while
+work runs, the bell every three minutes, a followed job every 3 s. With processes split by role,
+`realtime-ui` needs `redis-state`, whose bus carries a job's events from the worker to the web
+replicas.
 
 ## The interface
 
@@ -229,7 +229,7 @@ on the [approved design direction](decisions/app-design-direction.md).
   filters the sections and the main actions.
 - **The first-run onboarding and the tour** ([decisions/onboarding.md](decisions/onboarding.md)): a
   centred wizard on the first sign-in (its provider test runs through the provider module's own
-  readiness or one cheap call with `ai-runner`), then an optional tour (NextStep) driven by one
+  readiness or one cheap call on the AI task runner), then an optional tour (NextStep) driven by one
   controller, `components/tour/TourRuntime.tsx`, which waits for each target to settle before moving.
 - **The components** are Base UI wearing Cartel only, typed wrappers in `src/components/ui/`, styled in
   `src/styles/components.css`: Dialog, an AlertDialog behind `ConfirmButton` (nothing in the app calls
@@ -282,8 +282,8 @@ a round is a singleton across processes.
   jobs repository's `jobs` and `jobCounts`). See [api.md](api.md#paging-the-work-list).
 - **What happened**: the last round and the last delivery; and **Run a round now**, which moves the
   queued round to now (refused while one is running, in any process).
-- GitHub can only deliver once the app is reachable from it, which the server does not offer yet
-  ([server.md](server.md#webhooks)).
+- GitHub can only deliver once the app is reachable from it: since 2026-10-29 production's webhook
+  route is public on a hostname of its own, and only that route ([server.md](server.md#webhooks)).
 
 ## AI
 
@@ -291,17 +291,18 @@ Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md), sup
 [decisions/ai-layer.md](decisions/ai-layer.md)); a section of Settings (`/settings/ai`,
 `src/server/ai.functions.ts`), and **all** AI configuration lives there:
 
-- **claudio**: its URL and token and the global AI budget, what one pack, article or check against
-  the code may spend unless that task has a limit of its own ([claudio.md](claudio.md)).
+- **claudio**: its URL and token ([claudio.md](claudio.md)). The global AI budget that used to sit
+  here (`ai-budget-usd`, `SHIPCAST_MAX_BUDGET_USD`) was removed on 2026-10-29: each task's spend
+  limit, below, is the only one.
 - **Providers**: per task (the launch content pack, an article's distribution, the writing
   assistant, comment replies, profile reviews) a provider (claudio, the Anthropic API, an
   OpenAI-compatible server; the ones without a connected account say so) and a model, empty for the
   provider's default; the list comes from the provider registry. Beside each model, the task's
   **spend limit** ("Spend limit, USD"; the writing assistant has two, per suggestion and per check
   against the code), empty for the task's default, shown as its placeholder; saved under the AI
-  settings' `budgets`, at most 50 USD, applied with `ai-runner` and only by claudio
-  ([engine.md](engine.md#the-ai)). It is a limit: no spent amount is shown. And the **tone**, which
-  replaces `brand.yml`'s in every prompt when set.
+  settings' `budgets`, at most 50 USD, applied only by claudio ([engine.md](engine.md#the-ai)). It
+  is a limit: no spent amount is shown. And the **tone**, which replaces `brand.yml`'s in every
+  prompt when set.
 - **Prompts**: each channel's brief, each kind of pack's brief and the article's translation, as
   templates with `{{variables}}`. A save is a new version; any version, or the default, can be
   restored.
@@ -338,18 +339,30 @@ same frame. A setting is configured in exactly one place. General:
 - **The engine is not bundled.** The workspace packages are external to the server build and run
   through Node's own TypeScript support, so the native and wasm renderers of `@shipcast/assets` and
   Playwright never go through Vite. A change to an engine package needs a restart of `pnpm app:dev`.
+- **Some npm libraries are bundled** (since 2026-10-29, `BUNDLED` in `apps/web/vite.config.ts`):
+  react-day-picker, date-fns, date-fns-jalali, `@date-fns/tz`, Base UI, Floating UI, motion and their
+  ESM dependencies. Left external, Node loaded them file by file on the first request that rendered
+  them: react-day-picker's locale entry re-exports every locale of date-fns and date-fns-jalali and
+  Base UI is hundreds of small modules, so a launch page after a restart imported about 2,900 modules
+  (11 to 15 s in production). Bundled, only what the pages use is in the chunks: the launch page's
+  cold import went from about 6 s to about 35 ms locally. React stays external, one copy shared with
+  the router.
+- **The route chunks are warmed at boot** (`src/server/warm.ts`): a process that serves pages imports
+  the entry's and the router's lazy chunks before it says it is ready, and `/readyz` answers 503
+  `warming` until they are loaded, for at most 60 s; a worker warms nothing
+  ([server.md](server.md#health-and-shutdown)).
 - **Production runs Node's own server** (`apps/web/server.ts`): the built Start handler is a `fetch`
   function; the server converts requests, serves `dist/client`, terminates TLS when it is not behind
   a proxy, reads the client address from trusted proxies, and on a stop closes idle connections and
-  gives requests in flight time to finish. No Nitro.
+  gives requests in flight time to finish. No Nitro. A browser that leaves an event stream aborts its
+  request, and the `AbortError` that follows is not logged; every other error is.
 - **One context per process** (`src/server/context.server.ts`), built by the runtime the CLI shares
   (`createRuntime`): the bootstrap, the repositories (pool sized per process), the secret store, the
   settings, the GitHub client (with its ETag cache under `github-events`), the brand (read from the
-  launches repo every five minutes, and dropped on `brand.changed`), the AI runner or the legacy
-  providers, the flags, the role, the process's Redis connections and shared state, the job queue
-  (pg-boss, or BullMQ with `bullmq`), the live hub with `realtime-ui`, and the stop's steps in order
-  (HTTP, queue, telemetry, Redis, database). A `web` process only sends work; the others work their
-  role's queues.
+  launches repo every five minutes, and dropped on `brand.changed`), the AI task runner, the flags,
+  the role, the process's Redis connections and shared state, the job queue (pg-boss, or BullMQ with
+  `bullmq`), the live hub with `realtime-ui`, and the stop's steps in order (HTTP, queue, telemetry,
+  Redis, database). A `web` process only sends work; the others work their role's queues.
 - **Jobs are durable** ([decisions/job-queue.md](decisions/job-queue.md)): drafting, publishing, an
   article, a delivery, an assistant check are jobs (`src/server/work.server.ts` sends them,
   `@shipcast/runtime` runs them). A job sent before a restart runs after it. The pages and the REST

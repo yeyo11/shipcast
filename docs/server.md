@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-10-29T11:05:11.520799638Z
+updated_at: 2026-10-29T15:35:18.257427073Z
 tags:
     - server
     - deploy
@@ -37,7 +37,13 @@ minutes. In order:
    first run on a restored copy of production's registry.
 3. The flags, one at a time, each added to `SHIPCAST_FLAGS` in the server's `.env` once the one before
    it was verified there: `publishing-service`, `batched-metrics`, `realtime-ui`, `redis-state`,
-   `bullmq`, `secrets-table`, `ai-runner`, `github-events`. **All eight are on.**
+   `bullmq`, `secrets-table`, `ai-runner`, `github-events`. **All eight are on.** `ai-runner` was
+   then retired the same day, its runner the only AI path (below, [The flags](#the-flags)).
+4. `9d68d49`, pushed on 2026-10-29 and going through CI's deploy as this was written: the cold-start
+   fix (`e40d8be`: npm libraries bundled into the server build and the route chunks warmed at boot,
+   [Health and shutdown](#health-and-shutdown)), after a launch page's first visit after a restart
+   took 11 to 15 s in production; the freshness check's fix ([measurement.md](measurement.md)); the
+   first AI layer's removal and the end of the global AI budget ([claudio.md](claudio.md)).
 
 What the stack holds now (the infra side is yeyo11/infra's pull requests, named by number):
 
@@ -62,7 +68,9 @@ Seen while turning them on:
   approval.
 - **The healthchecks** made `worker` and `heavy` log an `AbortError` on every probe, because a
   finished response also closes and was aborted then. Since `f4050bf` (`apps/web/server.ts`) a
-  request is aborted only when its client leaves before the response ends.
+  request is aborted only when its client leaves before the response ends. Since `74dfa29` the
+  `AbortError` a browser's event stream throws when it leaves `/api/events` (every page change) is
+  not logged either; any other error still is.
 - **The reflow check** (`apps/web/scripts/reflow-check.ts`) against production at 320, 390 and
   1280 px found no horizontal overflow. Its small-target and two axe findings were fixed in `a2e31b0`:
   44 px targets at 860 px and below, the chat and the diff scrollable from the keyboard, readable
@@ -167,6 +175,18 @@ transaction mode:
 - `/readyz` answers 200 when the registry answers, Redis answers (when the process uses it) and the
   process is not draining; otherwise 503, with each check's state (`ok`, `draining`, `failing`) and
   the role, never an address or a message.
+- **A process that serves pages is not ready until it is warm** (since 2026-10-29,
+  `apps/web/src/server/warm.ts`). The server build loads its routes and server functions on demand,
+  so the first visit to a page after a restart used to import that page's chunk, and every module it
+  needs, while the visitor waited (11 to 15 s for a launch page in production). At boot the server
+  now imports the entry's lazy chunks and the router's (one per route) and, until they are loaded,
+  `/readyz` answers 503 with `{"ready":false,"checks":{"process":"warming"}}`, so the proxy keeps
+  visitors on a process that has them. The wait is capped at 60 s: a stuck or slow warm-up is logged
+  and stops holding readiness, so it never keeps the process out of rotation for good. A chunk that
+  fails to load is logged and skipped. A `worker` or `heavy` process serves no page, so it warms
+  nothing and is ready as soon as its checks are. The other half of the fix is in the build
+  ([web-app.md](web-app.md#how-it-is-built)): the date, Base UI and motion libraries are bundled
+  instead of loaded file by file.
 - On SIGTERM or SIGINT (`packages/runtime/src/lifecycle.ts`) the process marks itself draining
   (`/readyz` turns 503), waits `SHIPCAST_DRAIN_SECONDS` (0 by default) for the proxy to notice, stops
   taking HTTP and lets requests in flight finish, stops the queue (running jobs are handed back:
@@ -188,9 +208,14 @@ unless named, and an unknown name stops the start. Production names all of them:
 | `github-events` | pages read the drafts snapshot; GitHub is read on events and hourly |
 | `batched-metrics` | hourly, batched metrics and comment feeds |
 | `realtime-ui` | pages updated over server-sent events instead of polling |
-| `ai-runner` | every AI task through the AI task runner ([decisions/ai-layer.md](decisions/ai-layer.md)) |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
+
+A flag whose path became the only one is **retired**: its switch is removed from the code, and its
+name moves to `RETIRED` in `flags.ts`, so an environment that still lists it starts as before (the
+name is accepted and ignored instead of stopping the start as unknown) and retiring a flag never
+needs an environment change first. Retired so far: `ai-runner` (2026-10-29), once the AI task runner
+was verified in production and the first AI layer was deleted ([decisions/ai-layer.md](decisions/ai-layer.md)).
 
 ## Webhooks
 

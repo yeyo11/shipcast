@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:54:56.185308972Z
-updated_at: 2026-10-29T01:58:00.134735146Z
+updated_at: 2026-10-29T15:37:38.152592912Z
 tags:
     - decision
     - github-app
@@ -98,24 +98,25 @@ Polling stays while GitHub cannot reach the app.
   the host, port, public URL and Tailscale flag, the GitHub App (id, slug, client id and secret,
   webhook secret, private key file), the allowed logins and the Cloudflare token for the certificate.
   A start asks for nothing else; half an App stops it with what is missing.
-- **The settings**, read when needed: the launches repo, claudio's URL, the AI budget and the
-  Instagram app id are rows of the `settings` table; claudio's token and the Instagram app secret are
-  keychain entries (`app:claudio-token`, `app:instagram-app-secret`). `RuntimeSettings` reads them at
-  start, after each save in the **Settings** page and before every round, so a change reaches the app
-  at once and `shipcast watch` within a round. The engine's `launchesRepo` and `maxBudgetUsd` are
-  getters over them. The AI budget here is the single global one (`ai-budget-usd`); since 2026-10-29
-  a spend limit set per task in the AI settings wins over it, with `ai-runner`
-  ([engine.md](../engine.md#the-ai)). A page or job that needs a missing one fails with what is
-  missing and where to set it ("The launches repo is not set: set it in Settings"); a round without a
-  launches repo logs that and goes on.
+- **The settings**, read when needed: the launches repo, claudio's URL and the Instagram app id are
+  rows of the `settings` table; claudio's token and the Instagram app secret are keychain entries
+  (`app:claudio-token`, `app:instagram-app-secret`). `RuntimeSettings` reads them at start, after
+  each save in the **Settings** page and before every round, so a change reaches the app at once and
+  `shipcast watch` within a round. The engine's `launchesRepo` is a getter over them. The single
+  global AI budget that used to be one of them (`ai-budget-usd`, `SHIPCAST_MAX_BUDGET_USD`) was
+  removed on 2026-10-29: the spend limit per task in the AI settings, else the task's default, is the
+  only AI budget ([engine.md](../engine.md#the-ai)); a stored row and the variable left in `.env` are
+  ignored. A page or job that needs a missing one fails with what is missing and where to set it
+  ("The launches repo is not set: set it in Settings"); a round without a launches repo logs that and
+  goes on.
 - **The one-time import.** At every start, each of `SHIPCAST_LAUNCHES_REPO`, `SHIPCAST_CLAUDIO_URL`,
-  `SHIPCAST_CLAUDIO_TOKEN`, `SHIPCAST_MAX_BUDGET_USD`, `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`
-  still in `.env` and not yet stored is copied in, and its name recorded
-  (`settings-imported-from-env`), so it is imported once: a second start does nothing, and an edit or
-  a clear made in the app is never undone. A value the Settings page would refuse is left in `.env`.
-  The log names what was imported, never a value. `.env` stays a fallback for each of them until the
-  owner removes it. claudio's token is the exception worth knowing: `docker-compose.yml` starts claudio
-  with `SHIPCAST_CLAUDIO_TOKEN` from `.env`, so it stays there while compose runs claudio.
+  `SHIPCAST_CLAUDIO_TOKEN`, `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` still in `.env` and not yet
+  stored is copied in, and its name recorded (`settings-imported-from-env`), so it is imported once:
+  a second start does nothing, and an edit or a clear made in the app is never undone. A value the
+  Settings page would refuse is left in `.env`. The log names what was imported, never a value.
+  `.env` stays a fallback for each of them until the owner removes it. claudio's token is the
+  exception worth knowing: `docker-compose.yml` starts claudio with `SHIPCAST_CLAUDIO_TOKEN` from
+  `.env`, so it stays there while compose runs claudio.
 - The networks' credentials were already connected accounts ([accounts.md](../accounts.md)); `.env`
   stays their fallback for the brand it speaks for.
 
