@@ -328,6 +328,28 @@ test('a traffic read GitHub fails for a while is said but not kept for the bell'
   assert.equal(await registry.cursors.cursor(trafficProblemKey('yeyo11/claudio')), undefined);
 });
 
+test('a traffic read GitHub answers 404 is said as itself, not as a permission, and not asked again every hour', async () => {
+  const registry = await memoryRegistry();
+  await aPublishedLaunch(registry, [], { repo: 'yeyo11/claudio', ref: 'v1.0.0' });
+  let reads = 0;
+  const source: MetricSources = {
+    githubRepo: {
+      counts: async () => ({ stars: 3, forks: 0, watchers: 1 }),
+      traffic: async () => {
+        reads++;
+        throw new ConnectorError('GitHub', "read yeyo11/claudio's traffic: 404 Not Found", 404, false);
+      },
+      history: async () => ({ starsByDay: {}, downloadsByTag: {} }),
+    },
+  };
+  const t0 = new Date('2026-10-29T10:00:00Z');
+  const result = await collectHourly(registry, brand, source, t0);
+  assert.match(result.problems.join('\n'), /404 Not Found/);
+  assert.equal(await registry.cursors.cursor(trafficProblemKey('yeyo11/claudio')), undefined, 'the bell is for the permission only');
+  await collectHourly(registry, brand, source, new Date(t0.getTime() + HOUR));
+  assert.equal(reads, 1, 'a 404 waits for the traffic’s own cadence');
+});
+
 test('a page Google files under another canonical is kept for the bell, and forgotten once Google agrees', async () => {
   const registry = await memoryRegistry();
   const { launch } = await aPublishedLaunch(registry, [

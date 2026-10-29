@@ -407,13 +407,13 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
 const HOUR_MS = 3_600_000;
 /** A run starts on the cron's minute and takes a while: a check this much short of the cadence is due */
 const DUE_SLACK_MS = 10 * 60_000;
-/** When a repo's traffic was last read; a refused read leaves it, so the next hour asks again */
+/** When a repo's traffic was last read (or answered 404); a refused read leaves it, so the next hour asks again */
 export const trafficReadKey = (repo: string) => `metrics-read:github-traffic:${repo}`;
 /** When a repo's stars by day and releases' downloads were last read */
 export const historyReadKey = (repo: string) => `metrics-read:github-history:${repo}`;
 /** The problems of a source the owner has to fix (a permission), by source and what it was about; the bell lists them */
 export const METRIC_PROBLEM_PREFIX = 'metrics-problem:';
-/** Why GitHub refused a repo's traffic, kept until it is read again */
+/** Why GitHub refused a repo's traffic with a 403 (a permission), kept until it is read again */
 export const trafficProblemKey = (repo: string) => `${METRIC_PROBLEM_PREFIX}github-traffic:${repo}`;
 
 /**
@@ -707,14 +707,17 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
         for (const id of ids) await record(id, 'github', counts);
       });
       if (due(await registry.cursors.cursor(trafficReadKey(repo)), SITE_CADENCES.githubTraffic.hours)) {
-        // A refusal is said, kept for the bell when it needs the owner (a missing permission rather
-        // than GitHub having a bad hour), and leaves the cursor, so the next hour asks again
+        // A failure is said as itself. Only a 403 (the App without Administration: read on the repo)
+        // is kept for the bell, which words it as that permission, and leaves the cursor, so the next
+        // hour asks again once the owner grants it. A 404 (the repo renamed, deleted or out of the
+        // App's reach) moves the cursor, so it is asked again on the traffic's cadence, not hourly
         await attempt(`${repo} GitHub traffic`, async () => {
           let traffic: RepoTraffic;
           try {
             traffic = await split.traffic(repo);
           } catch (error) {
-            if (error instanceof ConnectorError && !error.retryable) await registry.cursors.setCursor(trafficProblemKey(repo), error.message);
+            if (error instanceof ConnectorError && error.status === 403) await registry.cursors.setCursor(trafficProblemKey(repo), error.message);
+            if (error instanceof ConnectorError && error.status === 404) await registry.cursors.setCursor(trafficReadKey(repo), now.toISOString());
             throw error;
           }
           await registry.cursors.setCursor(trafficReadKey(repo), now.toISOString());
