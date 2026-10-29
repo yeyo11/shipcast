@@ -1,21 +1,37 @@
 ---
-created_at: 2026-10-25T19:02:51.559002284Z
-updated_at: 2026-10-26T20:51:03.908955017Z
+created_at: 2026-10-26T21:05:17.808588978Z
+updated_at: 2026-10-29T01:11:15.526322057Z
 tags:
     - schema
     - content-pack
     - ai
     - decision
     - seo
+    - channels
+    - youtube
 ---
 # The content pack
 
 Everything one launch publishes, as one JSON object that the AI returns: the analysis of the code and
 a piece per channel. The schema is `ContentPack` in
 [`packages/schema/src/content-pack.ts`](../packages/schema/src/content-pack.ts), written on
-2026-10-24. `contentPackJsonSchema()` exports it as JSON Schema to hand to Claude, so the pack comes
-back in shape; the field descriptions travel with it and act as part of the prompt. It is draft-07:
-Claude Code's `--json-schema` refused draft 2020-12 on the first launch.
+2026-10-24. `contentPackJsonSchema()` exports it as JSON Schema (draft-07: Claude Code's
+`--json-schema` refused draft 2020-12 on the first launch) to hand to the AI, so the pack comes back in
+shape; the field descriptions travel with it and act as part of the prompt.
+
+## Built from the channel definitions
+
+Since 2026-10-28 the pack is assembled from the channels ([decisions/architecture.md](decisions/architecture.md)):
+each channel's definition (`packages/schema/src/channels/<id>.ts`) holds its piece of the pack
+(`pack.key` and `pack.piece`, a Zod schema built from a shared kit), its prompt brief and its limits.
+`ContentPack` is the fixed fields below plus every definition's piece; `LIMITS` and `PIECE_LIMITS`
+are the definitions' limits gathered; `PACK_KEYS` maps a channel to its key. `contentPackFor(definitions)`
+builds the schema for another list of definitions, which is how the contract tests show that a new
+channel's piece reaches the pack, the prompt and the drafts from its module alone.
+
+The AI tasks that answer with a pack (`pack`, `article`; `packages/schema/src/ai/tasks.ts`) name
+`ContentPack` as their output: with `ai-runner` the runner validates the answer against it and asks
+for one repair before giving up ([decisions/ai-layer.md](decisions/ai-layer.md)).
 
 ## Shape
 
@@ -38,12 +54,15 @@ Claude Code's `--json-schema` refused draft 2020-12 on the first launch.
 | `linkedin` | `text` (≤ 1,300); the post shares the article as its link card |
 | `reddit` | One post per subreddit: `subreddit` (required, without `r/`), `title` (≤ 300), a Markdown `body` that links the article |
 | `newsletter` | An `en` and/or `es` issue: `subject` (≤ 90), `previewText` (≤ 140), `markdown` ([publishing.md](publishing.md#the-newsletter)) |
+| `youtube` | A `short` (6 to 59 s of scenes) and a `video` (60 to 180 s), each with a `title` (≤ 100), a `description` (the article link and the chapters are added around it, within YouTube's 5,000), up to 15 `tags`, a `lang`, and its `scenes`: at least two, each a `kind` (`card`, `demo`, `screenshot`, `cover`), a `subtitle` (≤ 120, the narration, since there is no voice), `seconds` (2 to 30), an optional card `title` and `text`, and for the horizontal video an optional `chapter` |
 | `releaseNotes` | Improved release notes, for the minor pack |
 
-Hashnode, Telegram and Discord were added on 2026-10-25 (phase 5); GitHub Discussions, Threads and
-LinkedIn on 2026-10-26 ([decisions/new-networks.md](decisions/new-networks.md)). Every piece is
-published by Shipcast: the Show HN draft and the Product Hunt kit were removed on 2026-10-26, and
-Reddit's drafts became posts ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
+Hashnode, Telegram and Discord were added on 2026-10-25; GitHub Discussions, Threads and LinkedIn on
+2026-10-26 ([decisions/new-networks.md](decisions/new-networks.md)); YouTube on 2026-10-28, the first
+channel added as a module ([decisions/youtube.md](decisions/youtube.md)). Every piece is published by
+Shipcast ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)). A YouTube
+script that cannot fit its format is refused by the schema, before anything is rendered; its draft
+shows the title, tags, description and the script scene by scene for the owner to read.
 
 ## One slug per language
 
@@ -67,18 +86,17 @@ blog's SEO and AI-readiness review ([launches-repo.md](launches-repo.md)):
 - **An opening that answers**: the article's first paragraph says in one or two plain sentences what
   the project is and does: the passage a search engine shows and an assistant quotes.
 - **Headings as questions** where that reads naturally ("How do I install it?").
-- **The launch image's alt text** per language (`imageAlt`), written by the AI and set in the
-  article's front matter, where the blog uses it for `og:image:alt` and the image's `alt`; without one
-  from the AI, the project's name and the title.
+- **The launch image's alt text** per language (`imageAlt`), set in the article's front matter, where
+  the blog uses it for `og:image:alt` and the image's `alt`; without one, the project's name and the
+  title.
 - **The project inside the article**: when `launch.yml` names the deployed project
-  ([launch-yml.md](launch-yml.md)), its first desktop screenshot (the home page first) goes after the
-  opening paragraph, with alt text in the article's language, so the article shows what it talks about.
+  ([launch-yml.md](launch-yml.md)), its first desktop screenshot goes after the opening paragraph,
+  with alt text in the article's language.
 - **`updatedDate`** is set when an article is edited after publishing
   ([decisions/edit-delete.md](decisions/edit-delete.md)).
 
 The first three are part of the blog's brief, an editable prompt in the AI settings
-([decisions/ai-providers.md](decisions/ai-providers.md)), and of the schema's field descriptions,
-which travel with the pack's schema.
+([decisions/ai-providers.md](decisions/ai-providers.md)), and of the schema's field descriptions.
 
 ## The analysis comes first
 
@@ -95,7 +113,8 @@ analysis is a one-line summary and the article is the source of truth
 Every piece is optional, so one schema serves every `launch.yml`. Whether a pack has what *this*
 launch needs is `missingPieces(pack, config, brand)`, which lists, in plain sentences:
 
-- a channel turned on in `launch.yml` whose piece is missing;
+- a channel turned on in `launch.yml` whose piece is missing (by `PACK_KEYS`, so a new channel is
+  covered by its definition);
 - an article missing one of the languages of the brand's blog;
 - dev.to or Hashnode turned on without the English article they republish, and LinkedIn without the
   article it shares;
@@ -105,11 +124,13 @@ launch needs is `missingPieces(pack, config, brand)`, which lists, in plain sent
 
 ## Limits come from the networks
 
-The limits in `LIMITS` are the networks' own, checked here so a pack that would be rejected never
-reaches review. Bluesky counts graphemes (`Intl.Segmenter`), so `👩‍💻` is one, as a reader sees it.
-Instagram captions carry no URL because links there are not clickable. Telegram's text is kept under
-a photo caption's 1,024 characters; Discord's under a message's 2,000; a Reddit title under its 300.
+The limits are the networks' own, on each channel's definition, checked here so a pack that would be
+rejected never reaches review; each definition also says how its text is counted. Bluesky counts
+graphemes (`Intl.Segmenter`), so `👩‍💻` is one, as a reader sees it. Instagram captions carry no URL
+because links there are not clickable. Telegram's text is kept under a photo caption's 1,024
+characters; Discord's under a message's 2,000; a Reddit title under its 300; a YouTube title under
+its 100.
 
 ## Related
 
-[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]]
+[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/architecture.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]]

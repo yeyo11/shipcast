@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-27T08:35:19.764965645Z
-updated_at: 2026-10-27T17:44:55.760943883Z
+created_at: 2026-10-27T18:21:54.106414194Z
+updated_at: 2026-10-29T01:10:30.108049487Z
 tags:
     - accounts
     - channels
@@ -13,23 +13,27 @@ tags:
     - github-app
     - reddit
     - profiles
+    - secrets
+    - youtube
 ---
 # Accounts and channels
 
 Built on 2026-10-25 in `@shipcast/runtime` (shared by the CLI and the [web app](web-app.md)) and the
 app's Channels page. Before it, every credential lived in `.env`; now accounts are connected per
-brand, checked, and kept in the operating system's keychain.
+brand, checked, and kept in the secret store: the operating system's keychain on a desktop, an
+encrypted file or the registry's encrypted `secrets` table on a server ([server.md](server.md)).
 
 ## The catalog
 
-`NETWORKS` in `packages/runtime/src/catalog.ts` lists every network Shipcast knows: its name, the
-channel it publishes (if any), whether it reads numbers, how an account is connected (`oauth` or a
-`form`), the fields a form asks (public ones go to the registry, secret ones to the keychain), what
-Shipcast does with the account in words, and where the credential comes from. A new network is a
-connector in `packages/connectors` plus one entry here and its builder in `buildConnector`. Since
-2026-10-26 every network that is a channel publishes through its connector: Hacker News and Product
-Hunt, which were drafts only (`none`), are gone
-([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
+Since 2026-10-28 every channel's network comes from its adapter
+(`packages/runtime/src/channels/<id>.ts`, [decisions/architecture.md](decisions/architecture.md)): how
+an account is connected (`oauth` or a `form`), the fields a form asks (public ones go to the registry,
+secret ones to the secret store), the `.env` variables it falls back on, the OAuth spec and token
+refresh, what Shipcast does with the account in words, where the credential comes from, and the
+connector it builds. `NETWORKS` in `packages/runtime/src/catalog.ts` adds the networks that are not
+channels (the sources of numbers and the AI providers). A new network is its definition, its adapter,
+its connector and its icon, plus a line in each registry. Every network that is a channel publishes
+through its connector ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 
 | Network | Connected with | Publishes | Reads |
 | --- | --- | --- | --- |
@@ -40,144 +44,151 @@ Hunt, which were drafts only (`none`), are gone
 | Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts |
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
 | Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | followers, karma |
+| YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; the channel's numbers |
 | Newsletter (Brevo) | API key | one campaign per language | sends, opens, clicks |
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
 | Telegram | bot token, channel, owner's chat | a post with the launch image | — (the Bot API gives bots no counts) |
 | Discord | webhook URL | a message with an embed | — (webhooks cannot read) |
 | Blog analytics (Cloudflare) | API token, account id, site tag | — | visits by source |
-| Google Search Console | service account JSON key | — | clicks, impressions |
+| Google Search Console | service account JSON key | — | clicks, impressions, URL inspection |
+| Bing Webmaster | API key | — | clicks, impressions, crawl state |
+| Anthropic API, OpenAI-compatible server | API key; base URL and model | — | — (AI providers) |
 
 **GitHub is not an account.** The engine reaches GitHub through the GitHub App
-([decisions/github-app.md](decisions/github-app.md)), which also reads each repo's stars, forks,
-watchers and, since 2026-10-26, its traffic (Administration: read). The GitHub "network" that held a
-fine-grained token for the traffic, or `GITHUB_TOKEN_PERSONAL` from `.env`, was removed that day.
+([decisions/github-app.md](decisions/github-app.md)), which reads each repo's stars, forks, watchers
+and traffic (Administration: read). **GitHub Discussions** is a channel published with that same
+access (its adapter connects `kind: 'engine'`), so it has no account of its own.
 
 ## Accounts
 
-The registry's `accounts` table (migration 3) holds, per account: network, brand, label, public
+The registry's `accounts` table (migration `0000`) holds, per account: network, brand, label, public
 settings, whether it is the brand's **primary** account on that network, the last check's status,
 the identity the network reported, the problem if it failed, and its profile picture
-(`avatar_url`, migration `0004_account_snapshots`). Secrets are one keychain entry per account,
-`account:<id>`, a JSON object.
+(`avatar_url`, migration `0004_account_snapshots`). Secrets are one entry per account in the secret
+store, `account:<id>`, a JSON object. The accounts repository and `AccountService` (rename, make
+primary) are the only ways in.
 
 - **Several accounts per network, one primary per brand.** A launch posts once per channel, so it
   uses the brand's primary account; the first connected becomes primary, and another can take over.
+  Adding, making primary and removing run in a transaction locked per network and brand.
 - **Brands never mix.** A launch only builds connectors from its own brand's accounts. `.env` is a
-  fallback only for the brand it speaks for (`SHIPCAST_ENV_BRAND`, `personal` by default); another
-  brand gets nothing from it.
+  fallback only for the brand it speaks for (`SHIPCAST_ENV_BRAND`, `personal` by default).
 - **Checked before kept.** Connecting runs the connector's `check()`, a cheap read that proves the
   credential and its permissions; a failing credential is not saved, and the problem is said in words
   ("the token belongs to another account", "rejected: wrong, revoked or expired", "lacks a
   permission"), not as a status code. Connecting the same account again replaces its credential.
-- **Import from .env.** One button checks every credential `.env` holds and moves it into the
-  keychain as a connected account. Run on 2026-10-25: six networks moved; Mastodon's token in `.env`
-  turned out to be invalid and needs connecting again through OAuth. The app-level settings that
-  were in `.env` (the launches repo, claudio, the Instagram app) are imported on their own at start,
-  into the Settings page ([decisions/github-app.md](decisions/github-app.md)).
+- **Import from .env.** One button checks every credential `.env` holds and moves it into the secret
+  store as a connected account. The app-level settings that were in `.env` (the launches repo,
+  claudio, the networks' OAuth apps) are imported on their own at start, into the Settings page
+  ([decisions/github-app.md](decisions/github-app.md)).
+- **`shipcast youtube import <file>`** connects YouTube once from a file with the OAuth client and a
+  refresh token, through the same path as the callback, printing no value
+  ([decisions/youtube.md](decisions/youtube.md)).
 
 ## The Channels page
 
 Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
 
 - **Tabs by kind of network**, kept in the address (`/channels?tab=social|blog|measurement|ai`):
-  Social networks, Blog & newsletter, Measurement, AI providers. A network does not declare its tab:
-  `groupOf` (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives it from
-  what the catalog says, so a new connector lands in the right tab by itself: an AI provider (the
-  Anthropic API, an OpenAI-compatible server) is under AI providers; a network with no channel to
-  publish to (Cloudflare, Search Console, Bing) is Measurement; dev.to, Hashnode and the
-  newsletter are Blog & newsletter; every other channel is Social. Each tab shows how many accounts it
-  holds. Without a tab in the address the page opens on the first tab with an account, and an account
-  that was just connected opens its own tab.
-- **A card per account, in the launch card's skin** (`.lcard`, as on the Launches page): the same
-  raised black surface and stamp shadow, a glyph tile with a state dot (green for a passed check, red
-  for a failed one, a dotted ring while unchecked), the network's name and a state pill, the account's
-  avatar, name and handle with its brand, the key number (followers, big, a dash where the network
-  counts none) with following and posts and the last sync under it, and the last problem explained.
-  A network with no account yet is a quieter dashed card with what it does and **Connect an account**.
+  Social networks, Blog & newsletter, Measurement, AI providers. `groupOf`
+  (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives the tab from what
+  the catalog says: an AI provider is under AI providers; a network with no channel (Cloudflare,
+  Search Console, Bing) is Measurement; dev.to, Hashnode and the newsletter are Blog & newsletter;
+  every other channel is Social. Without a tab in the address the page opens on the first tab with an
+  account, and an account just connected opens its own tab.
+- **A card per account, in the launch card's skin**: a glyph tile with a state dot (green for a passed
+  check, red for a failed one, a dotted ring while unchecked), the network's name and a state pill,
+  the account's avatar, name and handle with its brand, the key number (followers) with following and
+  posts and the last sync under it, and the last problem explained. A network with no account yet is
+  a quieter dashed card with **Connect an account**.
 - **Every action is kept**: Sync now is a button on the card; the rest are in its Menu: Check the
-  credential, Publish with this one, Rename (in place), Connect another account (to the network's
-  page) and Disconnect, which asks first (a `ConfirmDialog`, since a menu item cannot hold a dialog's
-  trigger). The `#add` link of the command palette still lands on the heading of the networks to add.
+  credential, Publish with this one, Rename, Connect another account and Disconnect, which asks first.
+- **Live**: with `realtime-ui` the page reloads on `account` events ([web-app.md](web-app.md#live-pages)).
 
 ## Pictures, numbers and freshness
 
 Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshots.md)).
 
-- **Avatars.** A working `check()` also returns the profile's picture (`avatarUrl`) and name
-  (`displayName`) where the same answer has them: Bluesky (the public profile, read after the
-  sign-in), Mastodon, Instagram, dev.to, Hashnode, Reddit and a Discord webhook's own picture.
-  Every check stores the picture; a check that finds none, or fails, leaves the last one. Only plain
-  `https` addresses are kept, never one that carries a credential, so a Telegram channel has none
-  (its photo is only downloadable at an address with the bot token in it). The signed-in user's
-  GitHub name and picture ride in the signed session cookie, read once at sign-in; a session from a
-  console link shows GitHub's public picture for the login. Pictures are plain `<img>` elements,
-  lazy, of a fixed size and with `referrerpolicy="no-referrer"`, in the header and the Channels pages.
+- **Avatars.** A working `check()` also returns the profile's picture and name where the same answer
+  has them: Bluesky, Mastodon, Instagram, dev.to, Hashnode, Reddit and a Discord webhook's own
+  picture. A check that finds none, or fails, leaves the last one. Only plain `https` addresses are
+  kept, never one that carries a credential, so a Telegram channel has none. Pictures are plain
+  `<img>` elements, lazy, with `referrerpolicy="no-referrer"`.
 - **Snapshots.** Each connector whose API counts them has `profileStats()`, returning followers,
-  following and posts (each left out where the network does not give it) and an `extra` map; a
-  `Built` exposes it. The daily `snapshots` job (04:00 UTC) runs `takeSnapshots`: every account of a
-  known brand is checked again and, where its network counts, gets the day's row in
-  `account_snapshots`. One account failing never stops the others. `shipcast sync [<account id>]`
-  runs the same job from the terminal.
-- **Freshness.** Each account on the Channels page shows its latest numbers and when it was last
-  synced, its last snapshot or its last check, whichever is newer (`lastSynced`), with a warning once
-  that is more than 36 hours old (`isStale`).
-- **Sync now.** A button per account sends a `snapshots` job for that account alone (`syncNow`, keyed
-  `account:<id>`, so a second click while it waits is the same job), which checks it and records
-  today's numbers; the page waits up to 20 seconds for it and says what it found.
-- **Not built yet:** updates pushed by the networks (Instagram webhooks, Mastodon's streaming API).
+  following and posts and an `extra` map. The daily `snapshots` job (04:00 UTC) runs
+  `takeSnapshots`: every account of a known brand is checked again and, where its network counts,
+  gets the day's row in `account_snapshots`. One account failing never stops the others.
+  `shipcast sync [<account id>]` runs the same job from the terminal.
+- **Freshness.** Each account shows its latest numbers and when it was last synced (`lastSynced`),
+  with a warning once that is more than 36 hours old (`isStale`).
+- **Sync now.** A button per account sends a `snapshots` job for that account alone (keyed
+  `account:<id>`, so a second click while it waits is the same job); the page waits up to 20 seconds
+  for it and says what it found.
 
 ## Profile review and edits
 
 Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.md)).
 
-- **A review per account.** On a network's page (`/channels/<network>`), under **Profile review**,
-  each connected account has a panel: **Review this profile** sends a `profile-review` job, which reads
-  the profile (name, bio, links, whether there is a picture), the account's growth from its snapshots
-  and the brand, and asks the AI settings' `profile` task for proposals, in the brand's language and
-  within the network's limits. The latest review is kept per account.
+- **A review per account.** On a network's page (`/channels/<network>`), **Review this profile** sends
+  a `profile-review` job (a `heavy` one in a split deployment), which reads the profile, the account's
+  growth and the brand, and asks the AI settings' `profile` task for proposals within the network's
+  limits (its definition's `profile` block). The latest review is kept per account; the page follows
+  the job on its events with `realtime-ui`, every few seconds without.
 - **Each proposal** is a word diff against the field as it is, with an editable text, **Copy**, and,
-  where the network and the credential allow it, **Apply**, which asks in an alert dialog before it
-  changes the real profile.
-- **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description; the
-  profile record is written back whole, guarded by `swapRecord`) and a Telegram channel (title and
-  description; the bot needs the "Change channel info" admin right). dev.to and Hashnode are read but
-  not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their profile
-  for a review and copies the proposals.
+  where the network and the credential allow it, **Apply**, which asks before it changes the real
+  profile.
+- **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description,
+  guarded by `swapRecord`) and a Telegram channel (title and description). dev.to and Hashnode are
+  read but not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their
+  profile for a review and copies the proposals.
 
-## The keychain
+## The secret store
 
-`KeychainStore` (`packages/runtime/src/secrets.ts`) uses the desktop keyring through its own
-command-line tools, so there is no native module: `secret-tool` (libsecret: GNOME Keyring, KWallet)
-on Linux, with the value on stdin, and `security` on macOS. On Linux it needs `libsecret-tools` and
-an unlocked session keyring, which is why the app runs in the owner's desktop session. Besides the
-accounts it keeps the app's session key, the TLS and ACME keys, each Mastodon instance's client, the
-owner's GitHub user token (`app:github-user`), claudio's token and the Instagram, Threads, LinkedIn
-and Reddit app secrets. Entries are under the service `shipcast`, or `SHIPCAST_KEYCHAIN_SERVICE`, so
-a second install or a test copy keeps its own.
+`secretStoreFor` (`packages/runtime/src/secrets.ts`) picks it by `SHIPCAST_SECRET_STORE`:
+
+- **The keychain** (desktop default). `KeychainStore` uses the desktop keyring through its own
+  command-line tools, so there is no native module: `secret-tool` (libsecret) on Linux, with the value
+  on stdin, and `security` on macOS. It needs an unlocked session keyring. Entries are under the
+  service `shipcast`, or `SHIPCAST_KEYCHAIN_SERVICE`, so a second install or a test copy keeps its own.
+- **An encrypted file** (`file`): `<data dir>/secrets.enc`, AES-256-GCM with `SHIPCAST_SECRETS_KEY`.
+- **The encrypted table** (`table`, with the `secrets-table` flag): one sealed row per secret in
+  Postgres, every replica's, written atomically with a version for compare-and-set
+  ([server.md](server.md#the-encrypted-secrets-table-secrets-table)). `shipcast secrets migrate` copies
+  a store into it, each key read back.
+
+Besides the accounts, the store keeps the app's session key and API-token pepper (each created once,
+under a lock across processes), the TLS and ACME keys (never in the table), each Mastodon instance's
+client, the owner's GitHub user token (`app:github-user`), claudio's token, the webhook secret and
+the networks' OAuth app secrets.
 
 ## OAuth flows
 
-`packages/connectors/src/oauth.ts` has the networks' flows as plain functions; the app holds the
-state (ten minutes, in memory) and the client credentials.
+`packages/connectors/src/oauth.ts` has the networks' flows as plain functions; each adapter's OAuth
+spec says its URLs, scopes and app, and the routes under `/auth/<network>` run them. A flow's
+`state` is a one-time value for ten minutes in the process's one-time store: memory, or Redis with
+`redis-state`, so a callback reaching another replica still finds it.
 
 - **Mastodon** has no central developer portal: Shipcast registers itself on the instance the owner
   names (`POST /api/v1/apps`, scopes `read:accounts read:statuses write:statuses write:media
-  write:accounts`) the first time, keeps that client in the keychain with its scopes, and sends the
-  owner to authorise. `write:accounts`, for profile edits, joined on 2026-10-27: a client registered
-  with other scopes is registered again on the next connection, and the scopes granted are kept in
-  the account's public settings (`scopes`). A token from before keeps working for everything else;
-  connecting the account again allows profile edits. The token does not expire.
+  write:accounts`) the first time, keeps that client in the secret store with its scopes, and sends the
+  owner to authorise. A client registered with other scopes is registered again on the next
+  connection. The token does not expire.
 - **Instagram Login** needs the Instagram app id and secret of the owner's Meta app, set in the
-  Settings page (imported from `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` in `.env` on an older
-  install), and the callback listed exactly in its business login settings. The code becomes a
-  short-lived token, swapped at once for a 60-day one, refreshed every 30 days into the keychain.
-- **Reddit** needs the owner's Reddit app (a "web app" whose API access Reddit approved), its client
-  id and secret in Settings and its redirect uri set to `/auth/reddit/callback`. It asks for
-  `identity submit read` with `duration=permanent`; the refresh token and the app's client are kept
-  with the account, and each run trades the token for an access token of an hour
+  Settings page, and the callback listed exactly in its business login settings. The code becomes a
+  short-lived token, swapped at once for a 60-day one, refreshed every 30 days by the
+  `instagram-tokens` job.
+- **Threads** and **LinkedIn** use the owner's own app, its id and secret in Settings.
+- **Reddit** needs the owner's Reddit app, its client id and secret in Settings and its redirect uri
+  set to `/auth/reddit/callback`. It asks for `identity submit read` with `duration=permanent`
   ([publishing.md](publishing.md#reddit)).
+- **YouTube** needs the owner's Google OAuth client in Settings; scopes `youtube.upload`,
+  `youtube.readonly`, `youtube.force-ssl`. With the consent screen in *Testing*, a refresh token lasts
+  7 days, and an expired one asks to connect YouTube again ([decisions/youtube.md](decisions/youtube.md)).
+- **The owner's GitHub user token** is refreshed under a lock shared by every process; inside it the
+  token is read again and refreshed only if still due, so two replicas never spend the same refresh
+  token and never delete the good one.
 - Callbacks are behind the session: the `SameSite=Lax` cookie comes along on the redirect back.
 
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[server.md]] · [[decisions/architecture.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]]

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-28T07:09:52.970356924Z
-updated_at: 2026-10-29T00:57:23.500022344Z
+created_at: 2026-10-29T00:57:43.940170813Z
+updated_at: 2026-10-29T01:11:52.740345328Z
 tags:
     - server
     - deploy
@@ -84,7 +84,8 @@ One image and one entry point (`apps/web/main.ts`); the role decides what a proc
 `QUEUE_ROLES` is the one table that defines the split. A `worker` or `heavy` process serves no page:
 it listens in plain HTTP for its orchestrator's `/livez` and `/readyz` only. In a split no process
 reconciles at boot; the worker does it under a lock. `realtime-ui` on split processes requires
-`redis-state`, whose bus carries a job's events from the worker to the web replicas.
+`redis-state`, whose bus carries a job's events from the worker to the web replicas. YouTube's videos
+are rendered inside the `publish` job, so on the `worker` role.
 
 ## Redis (`redis-state`, `bullmq`)
 
@@ -145,10 +146,11 @@ A flag is turned off again by an environment change and a restart, with no deplo
 
 ## Webhooks
 
-`/api/github/webhook` verifies `X-Hub-Signature-256` before reading anything (the GitHub App's
-secret, or the older per-repo one). It needs a public route to the server, which the server does not
-have today, so the engine polls; with `github-events` the poll becomes hourly and conditional, and
-`push`/`pull_request` deliveries refresh the drafts snapshot.
+`/api/github/webhook` acts on a delivery only when `X-Hub-Signature-256` matches the GitHub App's
+secret (or the older per-repo one); with `github-events` it also refuses a body over 5 MB before
+reading it and drops a redelivery it already handled. It needs a public route to the server, which
+the server does not have today, so the engine polls; with `github-events` the poll becomes hourly and
+conditional, and `push`/`pull_request` deliveries refresh the drafts snapshot.
 
 ## Not on a server
 
