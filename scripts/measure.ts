@@ -1,4 +1,4 @@
-import { Registry } from '../packages/engine/src/registry.ts';
+import { connectRepositories } from '../packages/engine/src/repositories/index.ts';
 import { compareReport, readWindow } from '../packages/engine/src/telemetry/report.ts';
 import { TelemetryStore } from '../packages/engine/src/telemetry/store.ts';
 
@@ -25,7 +25,7 @@ function range(arg: string | undefined): { from: string; to: string } {
 const url = process.env.SHIPCAST_DATABASE_URL;
 if (!url) throw new Error('SHIPCAST_DATABASE_URL is not set');
 const [first, second] = process.argv.slice(2);
-const registry = await Registry.connect(url);
+const registry = await connectRepositories(url);
 try {
   const store = new TelemetryStore(registry.database);
   const before = await readWindow(store, range(first));

@@ -1,6 +1,6 @@
 import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
-import { channelCadence, channelDefinition, INSPECTION_MAX_AGE_DAYS, isMainPiece, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
+import { channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
@@ -148,12 +148,9 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   const launches = (await registry.launches.recent(500)).filter((l) => l.status === 'published');
   const piecesOf = new Map<number, Post[]>();
   for (const launch of launches) piecesOf.set(launch.id, await registry.posts.posts(launch.id));
-  // A story or a comment has none of its post's numbers; each newsletter issue is a campaign of its
-  // own, and a post's own pieces are read like its post where the channel has numbers (each of
-  // YouTube's videos; a subreddit's post has none).
-  // A deleted piece answers nothing but not found; its last numbers stay as they were
-  const readable = (post: Post) =>
-    (post.kind === 'post' || post.kind.startsWith('issue:') || (isMainPiece(post.channel, post.kind) && channelDefinition(post.channel)?.metrics !== undefined)) && post.externalId !== null && post.channel !== 'blog' && post.status !== 'deleted';
+  // Which pieces have numbers is the channel's (readsMetrics). A deleted piece answers nothing but
+  // not found; its last numbers stay as they were
+  const readable = (post: Post) => readsMetrics(post.channel, post.kind) && post.externalId !== null && post.status !== 'deleted';
 
   // The channels that read in batches are read first, all their pieces at once
   const batched = new Map<string, Map<string, Metrics>>();
@@ -302,8 +299,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     if (c.postId !== null) keep(`p:${c.postId}`, c.at);
     else keep(`l:${c.launchId}:${c.source}:${c.name}`, c.at);
   }
-  const readable = (post: Post) =>
-    (post.kind === 'post' || post.kind.startsWith('issue:') || (isMainPiece(post.channel, post.kind) && channelDefinition(post.channel)?.metrics !== undefined)) && post.externalId !== null && post.channel !== 'blog' && post.status !== 'deleted';
+  const readable = (post: Post) => readsMetrics(post.channel, post.kind) && post.externalId !== null && post.status !== 'deleted';
 
   // Each channel: its due pieces, all at once. A launch's pieces of a channel are read together, so
   // its sum (latestMetrics) always adds up readings of one moment

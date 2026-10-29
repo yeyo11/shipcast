@@ -7,6 +7,16 @@ import { consoleLinks, signInPath } from './src/server/console-links.ts';
 // The engine and its packages run as they are, through Node's own TypeScript support, as they do for
 // the CLI: bundling them would mean bundling native and wasm renderers too
 const WORKSPACE = ['@shipcast/engine', '@shipcast/runtime', '@shipcast/connectors', '@shipcast/schema', '@shipcast/assets', '@shipcast/mcp'];
+/**
+ * Bundled into the server build although they are npm packages. Left external, Node loads them file
+ * by file on the first request that renders them: react-day-picker's locale entry re-exports every
+ * locale of date-fns and date-fns-jalali, and Base UI is hundreds of small modules, so a launch page
+ * after a restart imported ~2,900 modules (11-15 s in production). Bundled, only what the pages use
+ * is in the chunks, a few files (the launch page's chunk: ~6 s to import locally, then ~35 ms). Their
+ * ESM dependencies are listed too, so none is left to load file by file. React stays external: one
+ * copy, shared with the router.
+ */
+const BUNDLED = ['react-day-picker', 'date-fns', 'date-fns-jalali', '@date-fns/tz', '@base-ui/react', '@base-ui/utils', '@floating-ui/react-dom', '@floating-ui/dom', '@floating-ui/core', '@floating-ui/utils', 'reselect', 'tabbable', 'motion', 'framer-motion', 'motion-dom', 'motion-utils'];
 /** Never pre-bundled for the browser: native renderers the engine loads on the server */
 const NATIVE = ['@resvg/resvg-js', 'satori'];
 /**
@@ -43,7 +53,7 @@ const printSignInLink = (): Plugin => ({
   },
 });
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   server: { port: 3000, host: '127.0.0.1' },
   // The design system's folder is the app's public folder: tokens, fonts, logo and icons, one copy
   publicDir: '../../design',
@@ -51,10 +61,11 @@ export default defineConfig({
   resolve: { alias: { 'next/navigation': fileURLToPath(new URL('./src/components/tour/next-navigation.ts', import.meta.url)) } },
   environments: {
     ssr: {
-      resolve: { external: WORKSPACE },
+      // Only the build, where the cold start was measured: development keeps loading them as it always has
+      resolve: { external: WORKSPACE, ...(command === 'build' && { noExternal: BUNDLED }) },
       optimizeDeps: { exclude: [...WORKSPACE, ...NATIVE], noDiscovery: true },
       build: { rollupOptions: { external: (id: string) => WORKSPACE.some((p) => id === p || id.startsWith(`${p}/`)) } },
     },
   },
   plugins: [tanstackStart(), viteReact(), serverOnlyDeps(), printSignInLink()],
-});
+}));

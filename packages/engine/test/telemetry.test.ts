@@ -59,10 +59,11 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v0.2.0', trigger: 'release', kind: 'major', brand: 'personal' });
   // Still waiting an hour after its time: missed
   await registry.posts.schedulePost(launch.id, 'mastodon', new Date(now.getTime() - 3_600_000));
-  // A live piece read two hours ago, and one never read
+  // A live piece read two hours ago, and one never read (another launch's, so it is no duplicate)
   const { post: read } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
   await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 3 }, new Date(now.getTime() - 2 * 3_600_000), read.id);
-  await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'comment', externalId: 'at://2', url: 'https://bsky.app/2' });
+  const other = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v0.1.0', trigger: 'release', kind: 'major', brand: 'personal' });
+  await registry.posts.recordPost({ launchId: other.launch.id, channel: 'bluesky', externalId: 'at://2', url: 'https://bsky.app/2' });
 
   const results = await runChecks(registry, store, { now, cadenceHours: 6 });
   const byName = Object.fromEntries(results.map((r) => [r.name, r]));
@@ -76,6 +77,59 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
 
   const stored = await store.checks({ from: new Date(now.getTime() - 60_000).toISOString(), to: new Date(now.getTime() + 60_000).toISOString() });
   assert.equal(stored.length, 4);
+});
+
+interface Freshness {
+  within1hShare: number;
+  posts: number;
+  channels: Record<string, { posts: number; neverRead: number; within1h: number }>;
+}
+
+test('characterisation: freshness counts every read piece, and a readable one never read against it', async () => {
+  const registry = await memory();
+  const store = new TelemetryStore(registry.database);
+  const now = new Date();
+  const a = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v1', trigger: 'release', kind: 'major', brand: 'personal' });
+  const b = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v2', trigger: 'release', kind: 'major', brand: 'personal' });
+  const { post: read } = await registry.posts.recordPost({ launchId: a.launch.id, channel: 'bluesky', externalId: 'at://1', url: 'https://bsky.app/1' });
+  await registry.metrics.recordMetrics(a.launch.id, 'bluesky', { likes: 3 }, new Date(now.getTime() - 10 * 60_000), read.id);
+  await registry.posts.recordPost({ launchId: b.launch.id, channel: 'bluesky', externalId: 'at://2', url: 'https://bsky.app/2' });
+  // A channel nothing was ever read on is left out, not stale
+  await registry.posts.recordPost({ launchId: a.launch.id, channel: 'devto', externalId: '7', url: 'https://dev.to/7' });
+
+  const fresh = (await runChecks(registry, store, { now, cadenceHours: 1 })).find((r) => r.name === 'freshness')!;
+  const detail = fresh.detail as unknown as Freshness;
+  assert.equal(fresh.value, 0.5);
+  assert.equal(fresh.ok, false);
+  assert.equal(detail.posts, 2);
+  assert.equal(detail.within1hShare, 0.5);
+  assert.deepEqual(Object.keys(detail.channels), ['bluesky']);
+  assert.equal(detail.channels.bluesky?.neverRead, 1);
+});
+
+test('freshness leaves out the pieces their channel reads no numbers for (a story, a comment)', async () => {
+  const registry = await memory();
+  const store = new TelemetryStore(registry.database);
+  const now = new Date();
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v1', trigger: 'release', kind: 'major', brand: 'personal' });
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', externalId: 'ig-1', url: 'https://instagram.com/p/1' });
+  await registry.metrics.recordMetrics(launch.id, 'instagram', { views: 40, likes: 3 }, new Date(now.getTime() - 10 * 60_000), post.id);
+  // Instagram's story and the comment that carries the link: never read, as the metrics rounds never read them
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', externalId: 'ig-2', url: 'https://instagram.com/stories/2' });
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'comment', externalId: 'ig-3', url: 'https://instagram.com/p/1#c3' });
+  // A post's own pieces count where the channel has numbers: each of YouTube's videos
+  const { post: video } = await registry.posts.recordPost({ launchId: launch.id, channel: 'youtube', kind: 'post:short', externalId: 'yt-1', url: 'https://youtube.com/shorts/1' });
+  await registry.metrics.recordMetrics(launch.id, 'youtube', { views: 9 }, new Date(now.getTime() - 5 * 60_000), video.id);
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'youtube', kind: 'post:long', externalId: 'yt-2', url: 'https://youtube.com/watch?v=2' });
+
+  const fresh = (await runChecks(registry, store, { now, cadenceHours: 1 })).find((r) => r.name === 'freshness')!;
+  const detail = fresh.detail as unknown as Freshness;
+  assert.equal(detail.channels.instagram?.posts, 1);
+  assert.equal(detail.channels.instagram?.neverRead, 0);
+  assert.equal(detail.channels.youtube?.posts, 2);
+  assert.equal(detail.channels.youtube?.neverRead, 1, 'a video never read is still stale');
+  assert.equal(detail.posts, 3);
+  assert.equal(fresh.value, 2 / 3);
 });
 
 test('two rows with one network id are a duplicate', async () => {

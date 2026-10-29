@@ -193,3 +193,14 @@ export function isMainPiece(channel: string, kind: string): boolean {
   const main = channelDefinition(channel)?.edit.main ?? 'post';
   return main.endsWith('*') ? kind.startsWith(main.slice(0, -1)) : kind === main;
 }
+
+/**
+ * Whether a piece of this kind has numbers of its own to read: a post, each newsletter issue (a
+ * campaign of its own), and a post's own pieces where the channel's definition has metrics (each of
+ * YouTube's videos; a subreddit's post has none). A story or a comment has none of its post's
+ * numbers, and the blog is read per article URL for the launch, never per piece.
+ */
+export function readsMetrics(channel: string, kind: string): boolean {
+  if (channel === 'blog') return false;
+  return kind === 'post' || kind.startsWith('issue:') || (isMainPiece(channel, kind) && channelDefinition(channel)?.metrics !== undefined);
+}
