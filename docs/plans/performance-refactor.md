@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T09:26:08.212715688Z
-updated_at: 2026-10-28T09:26:08.212715688Z
+updated_at: 2026-10-29T16:36:58.095592249Z
 tags:
     - plan
     - performance
@@ -20,9 +20,10 @@ tags:
 Written on 2026-10-28 with the owner, after the REA article's launch page took 5 s to load, re-read
 GitHub every 5 s and ended in "Failed to fetch". It was widened the same day: the code must follow
 SOLID and reuse one implementation of each piece of logic through services, and Shipcast must run as
-several replicas and workers without failing. This is the **plan only**: nothing here is built yet.
-It replaces the stop-gaps of that day (`0e2189b`, `f48c96a`, and `7ed9732`, which copied
-`draftBody` into the web app), and it is measured before and after.
+several replicas and workers without failing. This was written as the **plan only**, before anything
+was built; what was built and measured is in the [Outcome](#outcome-2026-10-29). It replaces the
+stop-gaps of that day (`0e2189b`, `f48c96a`, and `7ed9732`, which copied `draftBody` into the web
+app), and it is measured before and after.
 
 ## Goals and the rule above them
 
@@ -473,6 +474,40 @@ reversible. Each refactor phase starts with characterisation tests of the curren
 - The tunnel for the public webhook: Cloudflare Tunnel or a Traefik route (infra repo, server agent).
 - Who deploys each phase, since the agent does not deploy Shipcast on the server.
 
+## Outcome (2026-10-29)
+
+Built, deployed and measured in the run of [goal-refactor.md](goal-refactor.md). The numbers are in
+[refactor-report.md](refactor-report.md), and what is left in
+[handoff-2026-10-29.md](handoff-2026-10-29.md).
+
+- **Phases 0 to 9 are in production.** The baseline ran from 2026-10-28T12:00Z to 2026-10-29T08:00Z,
+  20 hours, ended early by the owner ([../measurement.md](../measurement.md#the-baseline)). The
+  refactor was deployed with every flag off (`8bab777`), then its eight flags were turned on one at a
+  time on 2026-10-29, each verified in production first. `ai-runner` was retired the same day, with the
+  first AI layer and the global AI budget removed ([../server.md](../server.md#the-flags)).
+- **Phase 10 in part.** The after-window ran 2 hours, 2026-10-29T13:00Z to 15:00Z, before the owner
+  stopped the measurement, and it held the Sluice article's publish. The scale and chaos tests were
+  not run: their driver is written and the preview stack waits in
+  [yeyo11/infra#25](https://github.com/yeyo11/infra/pull/25). The docs are written:
+  `decisions/redis.md`, `decisions/architecture.md`, `decisions/publishing-state.md`,
+  `decisions/ai-layer.md`, [decisions/migration-lock.md](../decisions/migration-lock.md), and the
+  updates to `server.md`, `engine.md`, `web-app.md`, `stats.md`, `publishing.md`, `accounts.md` and
+  `content-pack.md`.
+- **Targets met**: GitHub's GETs answered 304 (61.7 %), `getLaunch` with no external call, an idle tab
+  at 0 requests a minute, 0 duplicates and 0 missed schedules, peak quota use at 20 % at most, and one
+  channel registry with no duplicated helpers.
+- **Targets missed or not shown**: provider calls −29 % a day (target −70 %) and GitHub's −54.7 %
+  (−80 %), both weighed down by a publish inside a 2-hour window; `getLaunch` at 265 ms (150 ms); the
+  launch page at 1.6 s (1 s); freshness, which the check miscounted until `085974f`; the registry
+  against network comparison, never built as a check; and a new network costs 4 files and 2 registry
+  lines rather than 1 module and 1 line, since the domain stays free of I/O.
+- **The questions to settle were settled**: an unchanged metric value moves `checked_at` on the last
+  reading (the owner, 2026-10-28); the webhook is public through the Cloudflare Tunnel on a hostname
+  of its own, `shipcast-hooks.josegarrido.dev`; and a push to `main` deploys through CI.
+- **Seen in production**: the cold start of a page's first visit after a deploy, fixed by bundling and
+  warm-up (`e40d8be`); and the migration lock left on a PgBouncer connection, which stopped processes
+  from starting, fixed in `3797ae7` ([../decisions/migration-lock.md](../decisions/migration-lock.md)).
+
 ## Related
 
-[[decisions/job-queue.md]] · [[web-app.md]] · [[engine.md]] · [[stats.md]] · [[publishing.md]] · [[accounts.md]] · [[decisions/github-app.md]] · [[decisions/comment-assistant.md]] · [[plans/after-mvp.md]] · [[status.md]]
+[[decisions/job-queue.md]] · [[web-app.md]] · [[engine.md]] · [[stats.md]] · [[publishing.md]] · [[accounts.md]] · [[decisions/github-app.md]] · [[decisions/comment-assistant.md]] · [[plans/after-mvp.md]] · [[status.md]] · [[plans/refactor-report.md]] · [[plans/goal-refactor.md]] · [[plans/handoff-2026-10-29.md]] · [[decisions/migration-lock.md]]

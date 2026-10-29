@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-10-29T15:39:55.478520912Z
+updated_at: 2026-10-29T16:38:12.813094315Z
 tags:
     - status
     - roadmap
@@ -34,7 +34,8 @@ accounts per brand, the phase 5 channels and what the MVP had left
   refactor with every flag off; migrations 0013 to 0016, tried first on a restored copy of
   production), then the flags one at a time: `publishing-service`, `batched-metrics`, `realtime-ui`,
   `redis-state`, `bullmq`, `secrets-table`, `ai-runner`, `github-events`.
-- **After the flags** (2026-10-29, up to `9d68d49`, going through CI's deploy as this was written):
+- **After the flags** (2026-10-29, up to `b72cf0b`, deployed by CI at 16:13 UTC; the deploy of
+  `9d68d49` before it had failed):
   - **The first AI layer is gone**: the AI task runner is the only AI path; `ai-runner` is retired
     (an environment that still lists it starts as before, the name ignored), and compose no longer
     mounts `./workspace` into claudio ([claudio.md](claudio.md)).
@@ -48,6 +49,9 @@ accounts per brand, the phase 5 channels and what the MVP had left
   - **Freshness** counts only the pieces whose channel reads numbers for them (`readsMetrics`), so
     Instagram's story and comment no longer count as never read; production had shown 0.76 with
     every readable piece read within the hour ([measurement.md](measurement.md#the-checks)).
+  - **The migration lock** never goes through PgBouncer and is released by hand (`3797ae7`), after a
+    lock left on a pooled connection kept `worker` and `heavy` from starting on 2026-10-29
+    ([decisions/migration-lock.md](decisions/migration-lock.md)).
   - A browser leaving its event stream no longer logs an `AbortError`, and `scripts/measure.ts`
     opens the registry through `connectRepositories`, so the before/after report runs on the server.
 - **The stack**: `web` (rolled out with docker-rollout), `worker` and `heavy`; Postgres behind
@@ -57,8 +61,9 @@ accounts per brand, the phase 5 channels and what the MVP had left
   public host `shipcast-hooks.josegarrido.dev`, which forwards that one route only; `heavy`'s probe
   timing `web`'s pages.
 - **Measurement** ([measurement.md](measurement.md)): the baseline ran from 2026-10-28T12:00Z to
-  2026-10-29T08:00Z, 20 hours, ended early by the owner. The after-window compares the same 20 hours
-  of the day now that the flags are on.
+  2026-10-29T08:00Z, 20 hours, and the after-window from 2026-10-29T13:00Z to 15:00Z, 2 hours with
+  every flag on, when the owner stopped the measurement. The before/after report, with its caveats,
+  is [plans/refactor-report.md](plans/refactor-report.md).
 - **Checked on production**: the reflow check at 320, 390 and 1280 px found no horizontal overflow;
   its small-target and accessibility findings were fixed in `a2e31b0`. The date picker's days stay
   about 38 px at 320 px by the owner's choice, to be revisited.
@@ -160,11 +165,13 @@ accounts per brand, the phase 5 channels and what the MVP had left
 
 ## Next
 
-The rest of the [refactor's goal](plans/goal-refactor.md): the after-window with every flag on and
-the before/after report ([measurement.md](measurement.md)), the scale test and the chaos tests,
-what is left of YouTube's step (its first uploads already went out, public, with the Sluice article),
-and the v0.2 run's leftovers. The roadmap after that is [plans/after-mvp.md](plans/after-mvp.md).
+The refactor is closed ([plans/refactor-report.md](plans/refactor-report.md), and its goal's
+[outcome](plans/goal-refactor.md#outcome-2026-10-29)). What comes next is in
+[plans/handoff-2026-10-29.md](plans/handoff-2026-10-29.md#pending): launches owned by Shipcast
+rather than by the launches repo, then v0.2.0's YouTube videos, which wait for it; UTM tracking on
+every channel's links; the scale and chaos tests on a preview stack; and the design items waiting for
+the owner. The roadmap after that is [plans/after-mvp.md](plans/after-mvp.md).
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[plans/refactor-report.md]] · [[plans/handoff-2026-10-29.md]] · [[decisions/migration-lock.md]]
