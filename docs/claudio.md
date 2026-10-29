@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:00:40.756364133Z
-updated_at: 2026-10-29T00:58:15.197334569Z
+updated_at: 2026-10-29T01:57:33.767353882Z
 tags:
     - claudio
     - ai-provider
@@ -53,7 +53,10 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   `maxBudgetUsd`), and sent as its headers (`X-Claudio-Workspace`, `X-Claudio-Allowed-Tools`,
   `X-Claudio-Max-Turns`, `X-Claudio-Max-Budget-Usd`). The chat id and the turn's cost come back as
   `providerMetadata.claudio`. Every call carries the task's turn and budget ceilings, since claudio
-  applies its own 1 USD default otherwise.
+  applies its own 1 USD default otherwise. The budget is the owner's spend limit for the task in the
+  AI settings, else the global AI budget (for the pack, the article and the check), else the task's
+  default (`DEFAULT_AI_BUDGETS_USD`: pack 5, article 3, assistant-check 2, assistant 1, replies 1,
+  profile 0.5 USD). Claudio is the only provider given one.
 - **Workspaces, no shared folder** (`workspaces.ts`). For a task that reads the repo (`repoAccess:
   'remote-workspace'`), the runner resolves GitHub's tarball redirect for the release tag with
   Shipcast's own token and gives claudio only the short-lived `codeload` URL; claudio downloads and

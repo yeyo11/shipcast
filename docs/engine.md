@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-29T01:01:58.117983211Z
+updated_at: 2026-10-29T01:58:53.400106912Z
 tags:
     - engine
     - registry
@@ -114,7 +114,8 @@ launch happens once" hold:
   reading has `checked_at`: with `batched-metrics` an unchanged value moves `checked_at` on the last
   row instead of adding one ([stats.md](stats.md)).
 - **Settings** (`key`, `jsonb` value): the automation mode, the AI settings and prompts, the
-  launches repo, claudio's URL, the AI budget, the Instagram app id, the time zone, the onboarding.
+  launches repo, claudio's URL, the global AI budget (`ai-budget-usd`), the Instagram app id, the
+  time zone, the onboarding.
 - **Cursors** keep positions and state only: polling, a channel's permanent failure (its key built
   and parsed only in `@shipcast/schema/failures`), a cancelled schedule, Instagram audience hours,
   index status, the last round and delivery.
@@ -188,6 +189,18 @@ Either way, the **AI settings** (`ai-settings.ts`) choose a provider and model p
 `article`, `assistant`, `replies`, `profile`; claudio until set), the tone override and the edited
 prompts (`savePrompt`, `restorePrompt`, `promptHistory`, `currentPrompts`, `previewPrompt`,
 `lockedPrompts`).
+
+They also keep the owner's **spend limit per task** under `budgets`, by task id (`pack`, `article`,
+`assistant`, `assistant-check`, `replies`, `profile`), validated with Zod (above 0, at most
+`MAX_AI_BUDGET_USD`, 50 USD); a stored value that no longer parses falls back on the task's default
+alone. `aiBudgetUsd(settings, task)` gives the override or the default from
+`DEFAULT_AI_BUDGETS_USD` (`packages/schema/src/ai/tasks.ts`: pack 5, article 3, assistant-check 2,
+assistant 1, replies 1, profile 0.5 USD). They take effect only with `ai-runner`: the runtime's
+`aiRunSetup` hands them to the runner, where the task's own limit wins over the single global AI
+budget the pack, the article and the check pass (`maxBudgetUsd`), which wins over the definition's
+default. The runner sends the result only to a provider that takes a ceiling, claudio's
+`maxBudgetUsd`; the Anthropic API, OpenAI and OpenAI-compatible servers get none and are bounded by
+steps, output tokens and the timeout.
 
 ## From a claimed launch to its drafts
 

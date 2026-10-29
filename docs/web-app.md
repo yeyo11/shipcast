@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:07:05.847023162Z
-updated_at: 2026-10-29T01:07:36.578694918Z
+updated_at: 2026-10-29T02:00:32.333356058Z
 tags:
     - web-app
     - dashboard
@@ -291,12 +291,17 @@ Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md), sup
 [decisions/ai-layer.md](decisions/ai-layer.md)); a section of Settings (`/settings/ai`,
 `src/server/ai.functions.ts`), and **all** AI configuration lives there:
 
-- **claudio**: its URL and token and the AI budget per generation ([claudio.md](claudio.md)).
+- **claudio**: its URL and token and the global AI budget, what one pack, article or check against
+  the code may spend unless that task has a limit of its own ([claudio.md](claudio.md)).
 - **Providers**: per task (the launch content pack, an article's distribution, the writing
   assistant, comment replies, profile reviews) a provider (claudio, the Anthropic API, an
   OpenAI-compatible server; the ones without a connected account say so) and a model, empty for the
-  provider's default; the list comes from the provider registry. And the **tone**, which replaces
-  `brand.yml`'s in every prompt when set.
+  provider's default; the list comes from the provider registry. Beside each model, the task's
+  **spend limit** ("Spend limit, USD"; the writing assistant has two, per suggestion and per check
+  against the code), empty for the task's default, shown as its placeholder; saved under the AI
+  settings' `budgets`, at most 50 USD, applied with `ai-runner` and only by claudio
+  ([engine.md](engine.md#the-ai)). It is a limit: no spent amount is shown. And the **tone**, which
+  replaces `brand.yml`'s in every prompt when set.
 - **Prompts**: each channel's brief, each kind of pack's brief and the article's translation, as
   templates with `{{variables}}`. A save is a new version; any version, or the default, can be
   restored.

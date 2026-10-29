@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:07:08.379927468Z
-updated_at: 2026-10-29T00:07:08.379927468Z
+updated_at: 2026-10-29T01:56:29.880217091Z
 tags:
     - decision
     - ai
@@ -47,6 +47,15 @@ server:
     downloads itself.
 - **One definition per task** (packages/schema/src/ai/tasks.ts): its output schema, whether it reads
   the repo, and its limits (steps, output tokens, time, turns, budget).
+- **A spend limit per task** (2026-10-29): the defaults sit beside the definitions, in one place
+  (`DEFAULT_AI_BUDGETS_USD`: pack 5, article 3, assistant-check 2, assistant 1, replies 1, profile
+  0.5 USD), and the owner may override any of them by task id in the AI settings (`budgets`, above
+  0 and at most 50 USD). The owner's limit for the task wins over the single global AI budget
+  (`SHIPCAST_MAX_BUDGET_USD`, the `ai-budget-usd` setting, which the pack, the article and the check
+  against the code pass), which wins over the default. Only Claudio is given it, as `maxBudgetUsd`;
+  the Anthropic API, OpenAI and OpenAI-compatible servers bill per token and take no spend ceiling
+  on a call, so they get nothing and are bounded by the steps, output tokens and timeout Shipcast
+  enforces. The settings show it as a limit; no spent amount is shown.
 - Adding a provider is one module and one registry line.
 
 ## Claudio, kept as a first-class provider

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:54:56.185308972Z
-updated_at: 2026-10-26T21:24:41.319685138Z
+updated_at: 2026-10-29T01:58:00.134735146Z
 tags:
     - decision
     - github-app
@@ -103,9 +103,11 @@ Polling stays while GitHub cannot reach the app.
   keychain entries (`app:claudio-token`, `app:instagram-app-secret`). `RuntimeSettings` reads them at
   start, after each save in the **Settings** page and before every round, so a change reaches the app
   at once and `shipcast watch` within a round. The engine's `launchesRepo` and `maxBudgetUsd` are
-  getters over them. A page or job that needs a missing one fails with what is missing and where to
-  set it ("The launches repo is not set: set it in Settings"); a round without a launches repo logs
-  that and goes on.
+  getters over them. The AI budget here is the single global one (`ai-budget-usd`); since 2026-10-29
+  a spend limit set per task in the AI settings wins over it, with `ai-runner`
+  ([engine.md](../engine.md#the-ai)). A page or job that needs a missing one fails with what is
+  missing and where to set it ("The launches repo is not set: set it in Settings"); a round without a
+  launches repo logs that and goes on.
 - **The one-time import.** At every start, each of `SHIPCAST_LAUNCHES_REPO`, `SHIPCAST_CLAUDIO_URL`,
   `SHIPCAST_CLAUDIO_TOKEN`, `SHIPCAST_MAX_BUDGET_USD`, `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`
   still in `.env` and not yet stored is copied in, and its name recorded

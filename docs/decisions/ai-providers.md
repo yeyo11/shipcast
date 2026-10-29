@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:02:37.786397876Z
-updated_at: 2026-10-29T00:58:52.906982893Z
+updated_at: 2026-10-29T01:57:08.78282847Z
 tags:
     - decision
     - ai
@@ -26,7 +26,7 @@ describes what runs; it is kept as the history of the first layer. With the flag
 | `AiProvider` with `generateObject` and `streamText`, one implementation per provider | `AiTaskRunner` (`packages/engine/src/ai/runner.ts`) runs every task on the AI SDK; a provider is only a model, defined by one module in `packages/engine/src/ai/providers/` and listed in its registry |
 | claudio's `generateObject` on `POST /api/chats` in a clone under its `/workspace` | claudio as an AI SDK provider over its `/api/v1`, with ephemeral workspaces it downloads itself from a `codeload` URL ([claudio.md](../claudio.md)) |
 | Four repo tools (`list_files`, `read_file`, `search`, `git_log`), 40 steps | Five (`repo_overview`, `read_files`, `search`, `list_files`, `git`) and a strict `submit_answer` tool; each task's limits in its definition (`packages/schema/src/ai/tasks.ts`) |
-| Limits scattered per call site | One definition per task: output schema, whether it reads the repo, steps, output tokens, time, turns, budget |
+| Limits scattered per call site | One definition per task: output schema, whether it reads the repo, steps, output tokens, time, turns, budget; each task's spend limit defaulted there and overridable per task in the AI settings (reaching Claudio only) |
 
 The old layer is reachable only through `@shipcast/engine/legacy-ai`, kept there by a dependency
 rule, and is deleted once the runner is verified in production. What stays valid either way: the AI
@@ -116,7 +116,9 @@ and tone, without calling an AI: a release reads its `launch.yml` at the ref; an
 ## AI cost is never shown
 
 The CLI's "AI cost" line is gone, and `DraftResult` no longer carries a cost. A provider may still
-report its cost for the records; nothing in the UI or the CLI prints it.
+report its cost for the records; nothing in the UI or the CLI prints it. The per-task spend limits
+the AI settings gained with the runner ([ai-layer.md](ai-layer.md)) keep to this: Settings > AI
+labels them "Spend limit, USD" and shows the ceiling, never what was spent.
 
 ## Rejected
 
