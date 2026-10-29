@@ -209,6 +209,51 @@ test('Discord reads a message’s reactions back through the webhook; a deleted 
   assert.ok(calls.every((c) => c.method === 'GET'));
 });
 
+/** A Discord message id (a snowflake) made at `at`: its top bits are the milliseconds since 2015 */
+const snowflake = (at: Date) => String((BigInt(at.getTime() - 1_420_070_400_000) << 22n) + 1n);
+
+test('Discord tells a deleted webhook from a deleted message, waits out a 429 once, and leaves old messages alone', async () => {
+  const now = new Date('2026-10-29T10:00:00Z');
+  const fresh = snowflake(new Date('2026-10-28T10:00:00Z'));
+  const other = snowflake(new Date('2026-10-27T10:00:00Z'));
+  const third = snowflake(new Date('2026-10-26T10:00:00Z'));
+  const old = snowflake(new Date('2026-08-01T10:00:00Z'));
+  const waits: number[] = [];
+  const calls: Call[] = [];
+  const limited = () => Response.json({ message: 'You are being rate limited.', retry_after: 1.5, global: false }, { status: 429 });
+  const discord = new Discord({
+    webhookUrl: hook,
+    now: () => now,
+    sleep: async (ms) => void waits.push(ms),
+    fetch: fakeFetch(
+      [
+        [`GET ${hook}/messages/${fresh}`, sequence(limited, () => Response.json({ id: fresh, reactions: [{ count: 2 }] }))],
+        [`GET ${hook}/messages/${other}`, limited],
+        [`GET ${hook}/messages/${old}`, () => Response.json({ id: old, reactions: [{ count: 9 }] })],
+      ],
+      calls,
+    ),
+  });
+  const many = await discord.metricsMany([fresh, old, other, third]);
+  assert.deepEqual([...many], [[fresh, { reactions: 2 }]], 'a message past 30 days keeps its last numbers, unread');
+  assert.deepEqual(waits, [1500, 1500], 'retry_after is waited out before the one retry');
+  assert.match(many.problems?.[0] ?? '', /429|rate limited/);
+  assert.equal(calls.filter((c) => c.url.endsWith(old) || c.url.endsWith(third)).length, 0, 'nothing more asked once Discord keeps refusing, nor an old message');
+
+  // A deleted webhook is said, and no more of its messages are asked for
+  const gone: Call[] = [];
+  const unhooked = new Discord({
+    webhookUrl: hook,
+    now: () => now,
+    fetch: fakeFetch([[`GET ${hook}/messages/`, () => Response.json({ code: 10015, message: 'Unknown Webhook' }, { status: 404 })]], gone),
+  });
+  const none = await unhooked.metricsMany([fresh, other]);
+  assert.equal(none.size, 0);
+  assert.match(none.problems?.[0] ?? '', /webhook/i);
+  assert.equal(gone.length, 1);
+  await assert.rejects(unhooked.metrics(fresh), (e) => e instanceof ConnectorError && !(e instanceof PostGone) && /webhook/i.test(e.message));
+});
+
 test('Discord counts the server’s members through its invite, from a code or a link', async () => {
   const calls: Call[] = [];
   const discord = new Discord({
