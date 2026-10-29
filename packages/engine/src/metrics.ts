@@ -1,5 +1,5 @@
 import type { MetricStore } from './ports.ts';
-import { ConnectorError, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
+import { ConnectorError, type AnalyticsMany, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
 import { channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
@@ -54,9 +54,10 @@ export interface PostMetricReader extends Partial<MetricReader> {
   /**
    * The network's analytics of each piece, lifetime to date from `since` to `until` (YYYY-MM-DD), read
    * on the channel's own analytics cadence (YouTube Analytics, daily); a piece missing from the answer
-   * keeps its last numbers
+   * keeps its last numbers. `problems` are said while the rest counts, and the pieces in `unread` (not
+   * reached, a rate limit) are asked for again the next hour
    */
-  analytics?(pieces: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<Map<string, Metrics>>;
+  analytics?(pieces: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<AnalyticsMany>;
   /**
    * A network that only tells what changed (Telegram pushes a post's reactions when they move), and
    * forgets a change once it is confirmed read. It is handed every piece that could have a change,
@@ -448,6 +449,19 @@ export function historyReadings(h: RepoHistory, ref: string): Record<string, num
 
 /** When a channel's analytics were last asked for, answered or not (a connection without the permission answers nothing) */
 export const analyticsReadKey = (channel: string) => `metrics-read:analytics:${channel}`;
+/** The pieces a channel's last analytics read did not reach (a rate limit), as a JSON list of network ids */
+export const analyticsPendingKey = (channel: string) => `metrics-read:analytics-pending:${channel}`;
+
+/** The pending ids a cursor keeps; undefined for none, or for a value that is not a list of ids */
+function pendingIds(value: string | undefined): Set<string> | undefined {
+  if (!value) return undefined;
+  try {
+    const ids: unknown = JSON.parse(value);
+    return Array.isArray(ids) && ids.length > 0 ? new Set(ids.filter((id): id is string => typeof id === 'string')) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Whether a Google URL inspection is due for an article (docs/plans/performance-refactor.md, "5.
@@ -560,22 +574,41 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   const until = day(now);
 
   // Each channel's analytics, on their own cadence: every live piece at once. Asked for once a cadence
-  // whether answered or not, so a connection without the permission is said once a day, not hourly
+  // whether answered or not, so a connection without the permission is said once a day, not hourly.
+  // The pieces a network did not reach (a rate limit) are asked for again the next hour, alone
   for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
     const cadence = channelAnalyticsCadence(channel);
-    if (!reader?.analytics || !cadence || !due(await registry.cursors.cursor(analyticsReadKey(channel)), cadence.hours)) continue;
-    const targets = launches.flatMap((launch) =>
-      (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p)).map((p) => ({ postId: p.id, launchId: launch.id, id: p.externalId!, since: launch.createdAt.slice(0, 10) })),
-    );
-    if (targets.length === 0) continue;
+    if (!reader?.analytics || !cadence) continue;
+    const isDue = due(await registry.cursors.cursor(analyticsReadKey(channel)), cadence.hours);
+    const pending = isDue ? undefined : pendingIds(await registry.cursors.cursor(analyticsPendingKey(channel)));
+    if (!isDue && !pending) continue;
+    const targets = launches
+      .flatMap((launch) =>
+        (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p)).map((p) => ({ postId: p.id, launchId: launch.id, id: p.externalId!, since: launch.createdAt.slice(0, 10) })),
+      )
+      .filter((t) => !pending || pending.has(t.id));
+    if (targets.length === 0) {
+      if (pending) await registry.cursors.deleteCursor(analyticsPendingKey(channel));
+      continue;
+    }
     const analytics = reader.analytics.bind(reader);
     await attempt(`${channel} analytics`, async () => {
-      await registry.cursors.setCursor(analyticsReadKey(channel), now.toISOString());
-      const answer = await analytics(targets.map(({ id, since }) => ({ id, since })), until);
+      if (isDue) await registry.cursors.setCursor(analyticsReadKey(channel), now.toISOString());
+      let answer: AnalyticsMany;
+      try {
+        answer = await analytics(targets.map(({ id, since }) => ({ id, since })), until);
+      } catch (error) {
+        // Nothing read: the whole set waits for the next cadence, not for an hourly retry of a refusal
+        await registry.cursors.deleteCursor(analyticsPendingKey(channel));
+        throw error;
+      }
       for (const t of targets) {
         const values = answer.get(t.id);
         if (values) await record(t.launchId, channel, values, t.postId);
       }
+      for (const problem of answer.problems ?? []) problems.push(`${channel} analytics: ${problem}`);
+      if (answer.unread && answer.unread.length > 0) await registry.cursors.setCursor(analyticsPendingKey(channel), JSON.stringify(answer.unread));
+      else if (pending || isDue) await registry.cursors.deleteCursor(analyticsPendingKey(channel));
     });
   }
 

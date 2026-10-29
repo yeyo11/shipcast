@@ -392,3 +392,40 @@ test('dev.to analytics: saves, read time and views by referrer per article; an a
   assert.equal(calls[0]!.headers['api-key'], 'k');
   assert.equal(calls.length, 3, 'no referrers asked for an article without stats');
 });
+
+test('dev.to analytics are paced under Forem’s 40 a minute for API keys', async () => {
+  const waits: number[] = [];
+  const devto = new Devto({
+    apiKey: 'k',
+    sleep: async (ms) => void waits.push(ms),
+    fetch: fakeFetch([['GET https://dev.to/api/analytics/', () => Response.json({})]], []),
+  });
+  await devto.analytics([{ id: '7' }, { id: '8' }]);
+  assert.equal(waits.length, 3, 'a wait between every two calls');
+  assert.ok(waits.every((ms) => ms >= 1500), `at least 1.5 s apart: ${waits.join(', ')}`);
+});
+
+test('dev.to analytics wait out a 429’s Retry-After once, then keep what was read and say what was not', async () => {
+  const calls: Call[] = [];
+  const waits: number[] = [];
+  const limited = () => new Response('{"error":"Rate limit reached"}', { status: 429, headers: { 'retry-after': '30' } });
+  const devto = new Devto({
+    apiKey: 'k',
+    paceMs: 0,
+    sleep: async (ms) => void waits.push(ms),
+    fetch: fakeFetch(
+      [
+        ['GET https://dev.to/api/analytics/totals?article_id=7', () => Response.json({ reactions: { readinglist: 2 } })],
+        ['GET https://dev.to/api/analytics/referrers?article_id=7', sequence(limited, () => Response.json({ domains: [{ domain: 't.co', count: 3 }] }))],
+        ['GET https://dev.to/api/analytics/totals?article_id=8', limited],
+      ],
+      calls,
+    ),
+  });
+  const out = await devto.analytics([{ id: '7' }, { id: '8' }, { id: '9' }]);
+  assert.deepEqual([...out], [['7', { saves: 2, views_x: 3 }]], 'the article read before the limit counts');
+  assert.deepEqual(out.unread, ['8', '9'], 'the rest is left for the next read');
+  assert.match(out.problems?.[0] ?? '', /429|rate/i);
+  assert.deepEqual(waits, [30_000, 30_000], 'Retry-After is waited out before each retry');
+  assert.equal(calls.filter((c) => c.url.includes('article_id=9')).length, 0, 'nothing more is asked once Forem keeps refusing');
+});

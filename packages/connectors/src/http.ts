@@ -49,6 +49,13 @@ export type Metrics = Record<string, number>;
  */
 export type MetricsMany = Map<string, Metrics> & { problems?: string[] };
 
+/**
+ * Many pieces' analytics by their network ids, read until the network said stop: `unread` are the
+ * pieces not reached (a rate limit), to ask for again soon; a piece in neither the map nor `unread`
+ * was asked for and has none.
+ */
+export type AnalyticsMany = MetricsMany & { unread?: string[] };
+
 /** Reads a JSON answer, turning a non-2xx into a ConnectorError with what the network said. */
 export async function json<T>(network: string, response: Response, what: string): Promise<T> {
   const text = await response.text();

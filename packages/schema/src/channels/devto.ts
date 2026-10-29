@@ -67,8 +67,8 @@ export const devto = {
     primary: ['views', 'reactions'],
     averaged: { avgReadSeconds: 'avgReadSeconds' },
     cadence: HOURLY_BATCHED,
-    // Forem's analytics (saves, read time, referrers): two calls an article under a 3-a-second limit
-    analytics: { hours: 24, read: 'single', why: 'two calls an article, 3 a second' },
+    // Forem's analytics (saves, read time, referrers): two calls an article under an API key's 40 a minute
+    analytics: { hours: 24, read: 'single', why: 'two calls an article, 40 a minute' },
   },
   // dev.to's brand is black, which fails on the night page: it takes the text colour
   chartSlot: 'ink',

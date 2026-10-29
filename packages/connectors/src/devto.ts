@@ -1,5 +1,5 @@
 import { sourceOfReferrer } from '@shipcast/schema';
-import { checkProblem, expectOk, secretTag, type IdentityCache, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
+import { ConnectorError, checkProblem, expectOk, type AnalyticsMany, secretTag, type IdentityCache, htmlToText, imageUrl, json, okCheck, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Editable, type Metrics, type Profile, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 /** What an edit may change; whatever is left out stays as it is */
 export type DevtoEdit = Partial<DevtoArticle>;
@@ -10,8 +10,13 @@ interface ForemTotals {
   page_views?: { total?: number; average_read_time_in_seconds?: number; total_read_time_in_seconds?: number };
 }
 
-/** Forem's rate limit is 3 GETs a second per IP: the analytics calls are spaced at least this far apart */
-const ANALYTICS_PACE_MS = 400;
+/**
+ * Forem allows a request with an API key 40 a minute (its Rack::Attack `api_key_throttle`, besides
+ * 3 GETs a second per IP): the analytics calls are spaced a little over 1.5 s, to stay under it
+ */
+const ANALYTICS_PACE_MS = 1_600;
+/** The longest Retry-After waited out within a read; a longer one ends the read, the rest left for later */
+const MAX_RETRY_AFTER_MS = 60_000;
 
 export interface DevtoArticle {
   title: string;
@@ -37,11 +42,13 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
   readonly #cache: IdentityCache | undefined;
 
   readonly #paceMs: number;
+  readonly #sleep: (ms: number) => Promise<void>;
 
-  /** `paceMs` spaces the analytics calls (Forem allows 3 GETs a second); a test gives 0 */
-  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string; cache?: IdentityCache; paceMs?: number }) {
+  /** `paceMs` spaces the analytics calls (Forem allows an API key 40 a minute); a test gives 0, or its own `sleep` */
+  constructor(options: { apiKey: string; fetch?: typeof fetch; baseUrl?: string; cache?: IdentityCache; paceMs?: number; sleep?: (ms: number) => Promise<void> }) {
     this.#cache = options.cache;
     this.#paceMs = options.paceMs ?? ANALYTICS_PACE_MS;
+    this.#sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.#key = options.apiKey;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#base = options.baseUrl ?? 'https://dev.to/api';
@@ -216,33 +223,51 @@ export class Devto implements Editable<DevtoEdit>, Deletable, CommentReader, Pro
    * What dev.to's own dashboard shows per article and its list does not, from Forem's analytics API
    * with the same key: `saves` (reading-list bookmarks, which the public reactions leave out),
    * `avgReadSeconds` (logged-in readers only), and the views by referrer (its top 20 domains, as
-   * `views_<source>`, the blog's names). Two calls an article, spaced for Forem's rate limit: read on
-   * the channel's analytics cadence, not hourly. The `follows` of the totals are the account's, not
-   * the article's, and are left to the profile's numbers. An article Forem has no stats for (not
-   * published, or not the key's) is left out.
+   * `views_<source>`, the blog's names). Two calls an article, spaced for Forem's 40 a minute: read on
+   * the channel's analytics cadence, not hourly. A 429 is waited out once (its Retry-After, up to a
+   * minute); a second ends the read, keeping what was read and naming the rest in `unread`, so one
+   * refusal costs the rest of this read, not what came before it. The `follows` of the totals are the
+   * account's, not the article's, and are left to the profile's numbers. An article Forem has no stats
+   * for (not published, or not the key's) is left out.
    */
-  async analytics(articles: ReadonlyArray<{ id: string }>): Promise<Map<string, Metrics>> {
-    const out = new Map<string, Metrics>();
+  async analytics(articles: ReadonlyArray<{ id: string }>): Promise<AnalyticsMany> {
+    const out: AnalyticsMany = new Map();
     let calls = 0;
     const get = async <T>(path: string, what: string): Promise<T | undefined> => {
-      if (calls++ > 0 && this.#paceMs > 0) await new Promise((resolve) => setTimeout(resolve, this.#paceMs));
-      const response = await this.#fetch(`${this.#base}${path}`, { headers: this.#headers() });
-      if (response.status === 422 || response.status === 404) return undefined;
-      return json<T>('dev.to', response, what);
-    };
-    for (const { id } of articles) {
-      const query = `article_id=${encodeURIComponent(id)}`;
-      const totals = await get<ForemTotals>(`/analytics/totals?${query}`, 'read the analytics');
-      if (!totals) continue;
-      const values: Metrics = {};
-      if (totals.reactions?.readinglist !== undefined) values.saves = totals.reactions.readinglist;
-      if (totals.page_views?.average_read_time_in_seconds !== undefined) values.avgReadSeconds = totals.page_views.average_read_time_in_seconds;
-      const referrers = await get<{ domains?: Array<{ domain: string | null; count: number }> }>(`/analytics/referrers?${query}`, 'read the referrers');
-      for (const { domain, count } of referrers?.domains ?? []) {
-        const name = `views_${sourceOfReferrer(domain)}`;
-        values[name] = (values[name] ?? 0) + count;
+      for (let attempt = 0; ; attempt++) {
+        if (calls++ > 0 && this.#paceMs > 0) await this.#sleep(this.#paceMs);
+        const response = await this.#fetch(`${this.#base}${path}`, { headers: this.#headers() });
+        if (response.status === 422 || response.status === 404) return undefined;
+        if (response.status === 429) {
+          const wait = Number(response.headers.get('retry-after') ?? 60) * 1000;
+          if (attempt === 0 && Number.isFinite(wait) && wait <= MAX_RETRY_AFTER_MS) {
+            await this.#sleep(Math.max(wait, 0));
+            continue;
+          }
+        }
+        return json<T>('dev.to', response, what);
       }
-      out.set(id, values);
+    };
+    for (const [i, { id }] of articles.entries()) {
+      const query = `article_id=${encodeURIComponent(id)}`;
+      try {
+        const totals = await get<ForemTotals>(`/analytics/totals?${query}`, 'read the analytics');
+        if (!totals) continue;
+        const values: Metrics = {};
+        if (totals.reactions?.readinglist !== undefined) values.saves = totals.reactions.readinglist;
+        if (totals.page_views?.average_read_time_in_seconds !== undefined) values.avgReadSeconds = totals.page_views.average_read_time_in_seconds;
+        const referrers = await get<{ domains?: Array<{ domain: string | null; count: number }> }>(`/analytics/referrers?${query}`, 'read the referrers');
+        for (const { domain, count } of referrers?.domains ?? []) {
+          const name = `views_${sourceOfReferrer(domain)}`;
+          values[name] = (values[name] ?? 0) + count;
+        }
+        out.set(id, values);
+      } catch (error) {
+        if (!(error instanceof ConnectorError) || error.status !== 429) throw error;
+        out.unread = articles.slice(i).map((a) => a.id);
+        out.problems = [`${error.message} (${out.unread.length} left for the next read)`];
+        break;
+      }
     }
     return out;
   }
