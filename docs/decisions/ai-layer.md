@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:07:08.379927468Z
-updated_at: 2026-10-29T01:56:29.880217091Z
+updated_at: 2026-10-29T15:30:32.035483639Z
 tags:
     - decision
     - ai
@@ -12,8 +12,11 @@ tags:
 ---
 # The AI layer: one runner on the Vercel AI SDK, one module per provider, Claudio as a remote agent
 
-Decided with the owner on 2026-10-28 and 2026-10-29, built behind the flag `ai-runner`. It replaces
-the first AI layer of [ai-providers.md](ai-providers.md) once verified in production.
+Decided with the owner on 2026-10-28 and 2026-10-29, built behind the flag `ai-runner`, turned on in
+production on 2026-10-29 and, once verified there the same day, made the only path: the first AI
+layer of [ai-providers.md](ai-providers.md) was deleted and the flag retired (`RETIRED` in
+`packages/runtime/src/flags.ts`: an old `SHIPCAST_FLAGS` that still lists `ai-runner` is accepted and
+ignored, so retiring it needed no environment change).
 
 ## Why
 
@@ -50,12 +53,14 @@ server:
 - **A spend limit per task** (2026-10-29): the defaults sit beside the definitions, in one place
   (`DEFAULT_AI_BUDGETS_USD`: pack 5, article 3, assistant-check 2, assistant 1, replies 1, profile
   0.5 USD), and the owner may override any of them by task id in the AI settings (`budgets`, above
-  0 and at most 50 USD). The owner's limit for the task wins over the single global AI budget
-  (`SHIPCAST_MAX_BUDGET_USD`, the `ai-budget-usd` setting, which the pack, the article and the check
-  against the code pass), which wins over the default. Only Claudio is given it, as `maxBudgetUsd`;
-  the Anthropic API, OpenAI and OpenAI-compatible servers bill per token and take no spend ceiling
-  on a call, so they get nothing and are bounded by the steps, output tokens and timeout Shipcast
-  enforces. The settings show it as a limit; no spent amount is shown.
+  0 and at most 50 USD). The owner's limit for the task wins, else the default; nothing sits in
+  between. A single global AI budget (`SHIPCAST_MAX_BUDGET_USD`, the `ai-budget-usd` setting) used to
+  sit between the two for the pack, the article and the check against the code; it was removed on
+  2026-10-29 so one number per task is the whole rule, and a stored `ai-budget-usd` row or the
+  variable left in an env is ignored (neither read nor deleted). Only Claudio is given it, as
+  `maxBudgetUsd`; the Anthropic API, OpenAI and OpenAI-compatible servers bill per token and take no
+  spend ceiling on a call, so they get nothing and are bounded by the steps, output tokens and
+  timeout Shipcast enforces. The settings show it as a limit; no spent amount is shown.
 - Adding a provider is one module and one registry line.
 
 ## Claudio, kept as a first-class provider
@@ -79,8 +84,11 @@ headers. Agreed with Claudio's team for its first headless release, with no inte
 
 - The assistant's check against the code runs as a `heavy` job, no longer inside a web request.
 - The GitHub Action mode drafts on the same runner, configured from the environment alone.
-- The old layer is reachable only through `@shipcast/engine/legacy-ai`, guarded by a dependency rule,
-  and is deleted once the runner is verified in production.
+- The old layer (`packages/engine/src/claudio.ts`, `ai.ts`, `legacy-ai.ts` behind
+  `@shipcast/engine/legacy-ai`, and the dependency rule in `.dependency-cruiser.cjs` that fenced it)
+  was deleted on 2026-10-29, once the runner was verified in production. With it went compose's
+  `./workspace` mount into claudio: the engine still clones a release for the runner's own tools, but
+  no provider shares that folder.
 
 ## Related
 

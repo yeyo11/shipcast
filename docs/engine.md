@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-29T01:58:53.400106912Z
+updated_at: 2026-10-29T15:32:44.591250786Z
 tags:
     - engine
     - registry
@@ -44,8 +44,8 @@ depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md), [content-pack.md]
 | Adapters | `src/repositories`, `github.ts`, `src/ai`, connectors, runtime's channel adapters | Postgres, GitHub, AI providers, networks |
 
 dependency-cruiser checks the direction in `pnpm typecheck`: entry points never import a connector
-or a repository, the domain imports no I/O, and the old AI layer is reachable only from the files
-listed for it.
+or a repository, and the domain imports no I/O. (The rule that fenced the old AI layer went with it
+on 2026-10-29.)
 
 ### Application services
 
@@ -70,10 +70,10 @@ mapped to HTTP in one place in the web app.
 The registry lives in **PostgreSQL**, reached through Drizzle ORM
 ([decisions/postgres.md](decisions/postgres.md)). Since 2026-10-28 it is **one repository per
 aggregate** in `src/repositories/`, bundled as `Repositories`; the `Registry` class is gone. A
-composition root (the app's context, the CLI, the runtime, Action mode) opens them once with
-`connectRepositories(SHIPCAST_DATABASE_URL, pool)`, which applies the migrations; the tests use
-`memoryRepositories()`, an in-process PGlite. A consumer takes only the repositories it uses;
-`inTransaction` runs a use case over several in one transaction.
+composition root (the app's context, the CLI, the runtime, Action mode, `scripts/measure.ts`) opens
+them once with `connectRepositories(SHIPCAST_DATABASE_URL, pool)`, which applies the migrations; the
+tests use `memoryRepositories()`, an in-process PGlite. A consumer takes only the repositories it
+uses; `inTransaction` runs a use case over several in one transaction.
 
 | Repository | Holds |
 | --- | --- |
@@ -114,8 +114,8 @@ launch happens once" hold:
   reading has `checked_at`: with `batched-metrics` an unchanged value moves `checked_at` on the last
   row instead of adding one ([stats.md](stats.md)).
 - **Settings** (`key`, `jsonb` value): the automation mode, the AI settings and prompts, the
-  launches repo, claudio's URL, the global AI budget (`ai-budget-usd`), the Instagram app id, the
-  time zone, the onboarding.
+  launches repo, claudio's URL, the Instagram app id, the time zone, the onboarding. (A stored
+  `ai-budget-usd`, the global AI budget removed on 2026-10-29, is left in place and never read.)
 - **Cursors** keep positions and state only: polling, a channel's permanent failure (its key built
   and parsed only in `@shipcast/schema/failures`), a cancelled schedule, Instagram audience hours,
   index status, the last round and delivery.
@@ -166,28 +166,29 @@ a repo page run it first.
 
 ## The AI
 
-Two layers, chosen by the `ai-runner` flag ([decisions/ai-layer.md](decisions/ai-layer.md)):
+One layer: the AI task runner ([decisions/ai-layer.md](decisions/ai-layer.md)). It was built behind
+the `ai-runner` flag; since 2026-10-29 it is the only path, the first layer
+([decisions/ai-providers.md](decisions/ai-providers.md)) is deleted and the flag retired (a
+`SHIPCAST_FLAGS` that still lists it is accepted and ignored).
 
-- **With `ai-runner`: the AI task runner** (`src/ai/runner.ts`). Every task (`AI_TASK_DEFINITIONS` in
+- **The AI task runner** (`src/ai/runner.ts`). Every task (`AI_TASK_DEFINITIONS` in
   `@shipcast/schema`: `pack`, `article`, `assistant`, `assistant-check`, `replies`, `profile`,
   `provider-check`) runs on the AI SDK the same way: always streamed, no SDK retries (the job queue
   retries a retryable `AiError`), the task's timeout and the caller's abort, Zod validation with one
   repair, usage and timing recorded. A task's definition holds its output schema, whether it reads
-  the repo and its limits. A provider is one module in `src/ai/providers/` (`claudio`, `anthropic`,
-  `openaiCompatible`, and `openai` for Action mode), listed in `registry.ts`, with its settings
-  fields, capabilities and how it builds its model. For a `local-tools` provider the runner gives the
-  model read-only tools over the job's clone (`repo_overview`, `read_files`, `search`, `list_files`,
-  `git`, in `repo-tools.ts`) and takes the answer through a strict `submit_answer` tool; a
-  `remote-workspace` provider (claudio) reads the repo in a workspace it downloads itself
-  ([claudio.md](claudio.md)). The runtime builds one runner per process (`aiRunnerFor`), resolving the
-  task's provider and model from the AI settings when the task runs.
-- **Without it: the first layer**, `AiProvider` with `generateObject` and `streamText`
-  ([decisions/ai-providers.md](decisions/ai-providers.md)), reachable only through
-  `@shipcast/engine/legacy-ai` and deleted once the runner is verified in production.
+  the repo and its limits.
+- **A provider** is one module in `src/ai/providers/` (`claudio`, `anthropic`, `openaiCompatible`,
+  and `openai` for Action mode), listed in `registry.ts`, with its settings fields, capabilities and
+  how it builds its model. For a `local-tools` provider the runner gives the model read-only tools
+  over the job's clone (`repo_overview`, `read_files`, `search`, `list_files`, `git`, in
+  `repo-tools.ts`) and takes the answer through a strict `submit_answer` tool; a `remote-workspace`
+  provider (claudio) reads the repo in a workspace it downloads itself ([claudio.md](claudio.md)).
+  The runtime builds one runner per process (`aiRunnerFor`), resolving the task's provider and model
+  from the AI settings when the task runs.
 
-Either way, the **AI settings** (`ai-settings.ts`) choose a provider and model per task (`pack`,
-`article`, `assistant`, `replies`, `profile`; claudio until set), the tone override and the edited
-prompts (`savePrompt`, `restorePrompt`, `promptHistory`, `currentPrompts`, `previewPrompt`,
+The **AI settings** (`ai-settings.ts`) choose a provider and model per task (`pack`, `article`,
+`assistant`, `replies`, `profile`; claudio until set), the tone override and the edited prompts
+(`savePrompt`, `restorePrompt`, `promptHistory`, `currentPrompts`, `previewPrompt`,
 `lockedPrompts`).
 
 They also keep the owner's **spend limit per task** under `budgets`, by task id (`pack`, `article`,
@@ -195,10 +196,11 @@ They also keep the owner's **spend limit per task** under `budgets`, by task id 
 `MAX_AI_BUDGET_USD`, 50 USD); a stored value that no longer parses falls back on the task's default
 alone. `aiBudgetUsd(settings, task)` gives the override or the default from
 `DEFAULT_AI_BUDGETS_USD` (`packages/schema/src/ai/tasks.ts`: pack 5, article 3, assistant-check 2,
-assistant 1, replies 1, profile 0.5 USD). They take effect only with `ai-runner`: the runtime's
-`aiRunSetup` hands them to the runner, where the task's own limit wins over the single global AI
-budget the pack, the article and the check pass (`maxBudgetUsd`), which wins over the definition's
-default. The runner sends the result only to a provider that takes a ceiling, claudio's
+assistant 1, replies 1, profile 0.5 USD). The runtime's `aiRunSetup` hands them to the runner, where
+the owner's limit for the task wins, else the definition's default; nothing sits in between. The
+single global AI budget (`SHIPCAST_MAX_BUDGET_USD`, the `ai-budget-usd` setting) that the pack, the
+article and the check used to pass was removed on 2026-10-29; a stored row or the variable left in
+an env is ignored. The runner sends the result only to a provider that takes a ceiling, claudio's
 `maxBudgetUsd`; the Anthropic API, OpenAI and OpenAI-compatible servers get none and are bounded by
 steps, output tokens and the timeout.
 
@@ -209,8 +211,10 @@ steps, output tokens and the timeout.
 1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's.
 2. **A fresh shallow clone** of the release (`workspace.ts`). In a split deployment
    (`SHIPCAST_ROLE`) each job's clone has a unique name and is removed when the job ends
-   (`withJobWorkspace`), so no two jobs share one; a single process keeps the
-   `workspace/<owner>__<repo>@<ref>` name the legacy claudio path reads through its mount.
+   (`withJobWorkspace`), so no two jobs share one; a single process keeps one
+   `workspace/<owner>__<repo>@<ref>` folder per release. The clone is what the runner's `local-tools`
+   providers and the launch's media read; no AI provider shares the folder (claudio downloads a
+   workspace of its own).
 3. **The content pack** (`generate.ts`, `prompt.ts`), on the `pack` task: a system prompt with the
    brand's name and tone closed by the **locked** truth rules (only what the code implements is
    presented as working; no invented commands or numbers; a different text per channel), and a

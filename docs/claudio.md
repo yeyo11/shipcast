@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:00:40.756364133Z
-updated_at: 2026-10-29T11:05:48.37363703Z
+updated_at: 2026-10-29T15:29:29.037092787Z
 tags:
     - claudio
     - ai-provider
@@ -27,11 +27,13 @@ configures the instance.
   `app:claudio-token` secret point at it ([server.md](server.md#what-production-runs-2026-10-29)).
 
 Since 2026-10-25 claudio is one of several providers chosen per task in the AI settings
-([decisions/ai-providers.md](decisions/ai-providers.md)). Since 2026-10-28 there are two ways
-Shipcast talks to it, chosen by the `ai-runner` flag ([decisions/ai-layer.md](decisions/ai-layer.md)):
-the AI task runner (flag on, what production runs since 2026-10-29) and the first AI layer (flag off,
-the legacy path). The first real article through the runner on production's claudio, the Sluice
-article (yeyo11/launches#13), took two `/v1` chat completions and about 3.5 minutes.
+([decisions/ai-providers.md](decisions/ai-providers.md)). Shipcast talks to it one way: the AI task
+runner ([decisions/ai-layer.md](decisions/ai-layer.md)). Until 2026-10-29 a first AI layer on
+claudio's REST chats API sat beside it behind the `ai-runner` flag; once the runner was verified in
+production that layer was removed, and the flag with it (an environment that still lists `ai-runner`
+starts as before: the name is accepted and ignored). The first real article through the runner on
+production's claudio, the Sluice article (yeyo11/launches#13), took two `/v1` chat completions and
+about 3.5 minutes.
 
 ## Setting it up
 
@@ -54,7 +56,7 @@ article (yeyo11/launches#13), took two `/v1` chat completions and about 3.5 minu
    (`claudio-url`, the token in the secret store as `app:claudio-token`); `SHIPCAST_CLAUDIO_URL` and
    `SHIPCAST_CLAUDIO_TOKEN` in `.env` are copied into them once and stay a fallback.
 
-## With `ai-runner`: an AI SDK provider over `/api/v1`
+## An AI SDK provider over `/api/v1`
 
 The provider module is `packages/engine/src/ai/providers/claudio/`. Shipcast's `AiTaskRunner` runs
 every task; claudio only answers model calls, and is itself an agent for the tasks that read code.
@@ -64,12 +66,15 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   `providerOptions.claudio` (`workspace`, `allowedTools` or `toolPreset`, `maxTurns`,
   `maxBudgetUsd`), and sent as its headers (`X-Claudio-Workspace`, `X-Claudio-Allowed-Tools`,
   `X-Claudio-Max-Turns`, `X-Claudio-Max-Budget-Usd`). The chat id and the turn's cost come back as
-  `providerMetadata.claudio`. Every call carries the task's turn and budget ceilings, since claudio
-  applies its own 1 USD default otherwise. The budget is the owner's spend limit for the task in the
-  AI settings, else the global AI budget (for the pack, the article and the check), else the task's
-  default (`DEFAULT_AI_BUDGETS_USD`: pack 5, article 3, assistant-check 2, assistant 1, replies 1,
-  profile 0.5 USD). Claudio is the only provider given one. The instance's daily spend cap sits above
-  all of them.
+  `providerMetadata.claudio`. A model chosen in the AI settings is passed as claudio's own value
+  (`default`, `opus`, `sonnet`…); without one, claudio's `default`.
+- **Budgets.** Every call carries the task's turn and budget ceilings, since claudio applies its own
+  1 USD default otherwise. The budget is the owner's spend limit for the task in the AI settings,
+  else the task's default (`DEFAULT_AI_BUDGETS_USD` in `packages/schema/src/ai/tasks.ts`: pack 5,
+  article 3, assistant-check 2, assistant 1, replies 1, profile 0.5 USD); there is nothing in between.
+  The single global budget (`SHIPCAST_MAX_BUDGET_USD`, the `ai-budget-usd` setting) was removed on
+  2026-10-29: a stored row and the variable left in an env are ignored. Claudio is the only provider
+  given a budget. The instance's daily spend cap sits above all of them.
 - **Workspaces, no shared folder** (`workspaces.ts`). For a task that reads the repo (`repoAccess:
   'remote-workspace'`), the runner resolves GitHub's tarball redirect for the release tag with
   Shipcast's own token and gives claudio only the short-lived `codeload` URL; claudio downloads and
@@ -81,31 +86,13 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   subcommand matches one.
 - **The answer** comes in the response format; claudio refuses client tools beside one, so the runner
   passes none.
-- **Errors** are one table (`errors.ts`), mapped to `AiError`: a usage limit (`rate_limit_exceeded`)
-  is retryable after `Retry-After`; `max_turns`, `max_budget` and `no_structured_output` say the task
-  stopped without an answer; `tool_blocked` and the workspace refusals (host not allowed, too large,
-  bad archive) are refused; a gone or expired workspace is retried with a new one.
+- **Errors** are one table (`errors.ts`), mapped to `AiError`: a usage limit (`rate_limit_exceeded`,
+  the subscription's limit or the spend cap) is retryable after `Retry-After`; `max_turns`,
+  `max_budget` and `no_structured_output` say the task stopped without an answer; `tool_blocked` and
+  the workspace refusals (host not allowed, too large, bad archive) are refused; a gone or expired
+  workspace is retried with a new one.
 - **Readiness**: `/api/ready` (no token) says "not signed in to Claude" or "still starting" before a
   launch fails; onboarding and the AI settings' test use it.
-
-## Without `ai-runner`: the first layer (legacy)
-
-Reachable only through `@shipcast/engine/legacy-ai` (`packages/engine/src/claudio.ts`), and removed
-once the runner is verified in production.
-
-- **Structured work on claudio's REST API.** The content pack and an article (`generateObject`) start
-  a chat with `POST /api/chats`: the prompt, the `cwd` of the clone under `/workspace`, `jsonSchema`,
-  read-only `allowedTools` and `permissionMode: 'dontAsk'`; the answer is the input of Claude Code's
-  `StructuredOutput` tool, and the chat is stopped after it. This path needs claudio to see the
-  engine's clones on its own disk: compose mounts `./workspace` for it.
-- **Streamed text** for the writing assistant through `@ai-sdk/openai-compatible` on `<claudio>/api/v1`.
-- **A chat that ends without an answer** says why, in words the owner can act on (`noAnswer`): a
-  usage limit ("You've hit your session limit · resets 7:30pm (UTC)") is read from Claude Code's
-  synthetic line, and the launch fails with "Claude's usage limit was reached (…): launch it again
-  once it resets", offering **Launch it again**. Added on 2026-10-28, after Shipcast v0.2.0's
-  drafting failed that way and only said "ended without a structured answer".
-- **Models.** A model chosen in the AI settings is passed as claudio's own value (`default`, `opus`,
-  `sonnet`…); without one, claudio's default.
 
 ## How the compose file is built, and why
 
@@ -121,9 +108,9 @@ once the runner is verified in production.
   tokens; claudio receives only its auth mode, token and spend cap.
 - **`name: shipcast`** fixes the Compose project name, so the volumes are `shipcast_claude-config` and
   `shipcast_claudio-data` whatever folder the command runs from.
-- **`./workspace` is shared**, for the legacy path only: the engine clones the repository into
-  `workspace/` on the host and claudio reads it under `/workspace`. The folder is gitignored. The
-  runner's workspaces make the mount unnecessary.
+- **No shared `./workspace`** (since 2026-10-29). The engine still clones a release into `workspace/`
+  on the host (gitignored) for the runner's own tools, but claudio no longer sees it: it downloads each
+  release into a workspace of its own. The mount served only the removed legacy layer.
 
 ## Related
 

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:17.808588978Z
-updated_at: 2026-10-29T01:11:15.526322057Z
+updated_at: 2026-10-29T15:33:48.857481167Z
 tags:
     - schema
     - content-pack
@@ -30,8 +30,8 @@ builds the schema for another list of definitions, which is how the contract tes
 channel's piece reaches the pack, the prompt and the drafts from its module alone.
 
 The AI tasks that answer with a pack (`pack`, `article`; `packages/schema/src/ai/tasks.ts`) name
-`ContentPack` as their output: with `ai-runner` the runner validates the answer against it and asks
-for one repair before giving up ([decisions/ai-layer.md](decisions/ai-layer.md)).
+`ContentPack` as their output: the AI task runner validates the answer against it and asks for one
+repair before giving up ([decisions/ai-layer.md](decisions/ai-layer.md)).
 
 ## Shape
 
