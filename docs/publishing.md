@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T15:42:18.538774469Z
+updated_at: 2026-10-29T16:45:26.218673085Z
 tags:
     - publishing
     - connectors
@@ -19,6 +19,7 @@ tags:
     - youtube
     - channels
     - correctness
+    - tracking
 ---
 # Publishing, media and metrics
 
@@ -111,8 +112,8 @@ the per-piece claims below.
    ([scheduling.md](scheduling.md)); a channel with a scheduled piece and no publisher keeps the launch
    drafted rather than leaving the piece scheduled for ever:
    - **dev.to**: the English article with `canonical_url` to the blog, `og.png` as the cover.
-   - **Bluesky**: app password session, link facets counted in UTF-8 bytes, an external card with
-     `og.jpg`.
+   - **Bluesky**: app password session, link facets counted in UTF-8 bytes (each link shown without
+     its query string, its facet keeping the whole URL), an external card with `og.jpg`.
    - **Mastodon**: `og.jpg` uploaded, and an `Idempotency-Key` of `shipcast-<launch>-mastodon`, so a
      retry after a timeout does not post twice.
    - **Instagram** (Graph API v25.0): the carousel (one container per piece, polled until `FINISHED`,
@@ -131,6 +132,14 @@ the per-piece claims below.
 
    Every channel is published by Shipcast: there are no drafts for the owner to post by hand
    ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
+
+   **Links.** The drafts link the article with `?ref=<channel>`, as Claude writes them. Since
+   2026-10-29 every link to the site in a post's text, link card or embed goes out with UTM tags
+   instead, naming the network and the launch's campaign (`utm_source`, `utm_medium`,
+   `utm_campaign`, and the subreddit or the issue's language as `utm_content`): the channel's adapter
+   tags them as the piece goes out, from the one table in `packages/schema/src/tracking.ts`. dev.to
+   and Hashnode keep a clean canonical URL, and a text the tags would push over its limit on Threads,
+   Telegram or Discord keeps its `?ref=`. See [tracking.md](tracking.md).
 5. A temporary failure (`ConnectorError.retryable`: 429, 5xx, no answer) is retried on the next run;
    a permanent one is recorded as the channel's failure cursor (its key built and read only in
    `@shipcast/schema/failures`) and not retried until the owner's **Try again** in the app or the API
@@ -177,7 +186,7 @@ Added on 2026-10-26 ([decisions/automatic-channels-only.md](decisions/automatic-
   the secret store with the app's client. Every request carries the `User-Agent` Reddit asks for.
 - **The drafts**: one `reddit-<subreddit>.md` per subreddit in `launch.yml`, a `Title:` line, `---` and
   the Markdown body. The body links the article with `?ref=reddit`; when an edit took the link out, it
-  is added back.
+  is added back. The link goes out with UTM tags naming the subreddit ([tracking.md](tracking.md)).
 - **Publishing**: `POST /api/submit` (`kind=self`) per subreddit, each its own piece,
   `post:<subreddit>`. A rule of the subreddit is final and waits for **Try again**; a rate limit is
   tried again. A refused subreddit never holds back the others.
@@ -288,6 +297,8 @@ Added on 2026-10-24 ([decisions/mvp-scope.md](decisions/mvp-scope.md#the-newslet
   above the body.
 - **The email** (`newsletter.ts`, `renderIssueHtml`): tables and inline styles, the brand's name, the
   headline on the project's colour, the note, a button to the article and Brevo's unsubscribe line.
+  Every link to the site in it (the button, the image, the note's) goes out with UTM tags naming the
+  issue's language ([tracking.md](tracking.md)).
 - **Sending:** for each language the list's size is read first; an empty list is skipped. Otherwise a
   campaign is created, untagged (Brevo's free plan refuses tags), and sent at once; it is recorded at
   once as that language's `issue:<lang>` piece, so a language is never sent twice. A refused `sendNow`
@@ -337,8 +348,9 @@ per-post numbers, scored per network ([stats.md](stats.md)), are also what the r
 publishing times learn from ([scheduling.md](scheduling.md#recommended-times)).
 
 Two limits: **Cloudflare Web Analytics does not keep the query string**, so visits are attributed by
-the referrer's host (Mastodon's many hosts count as `other`); **GitHub traffic needs push access**,
-so without a connected GitHub account only the public numbers are recorded.
+the referrer's host (Mastodon's many hosts count as `other`) and the UTM tags the links carry
+([tracking.md](tracking.md)) wait for an analytics tool that reads them; **GitHub traffic needs push
+access**, so without a connected GitHub account only the public numbers are recorded.
 
 ## The rounds and the shipcast command
 
@@ -362,4 +374,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]]
