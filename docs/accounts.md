@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-10-29T01:10:30.108049487Z
+updated_at: 2026-10-29T20:07:09.883173075Z
 tags:
     - accounts
     - channels
@@ -31,9 +31,10 @@ an account is connected (`oauth` or a `form`), the fields a form asks (public on
 secret ones to the secret store), the `.env` variables it falls back on, the OAuth spec and token
 refresh, what Shipcast does with the account in words, where the credential comes from, and the
 connector it builds. `NETWORKS` in `packages/runtime/src/catalog.ts` adds the networks that are not
-channels (the sources of numbers and the AI providers). A new network is its definition, its adapter,
-its connector and its icon, plus a line in each registry. Every network that is a channel publishes
-through its connector ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
+channels (the sources of numbers, the owner's GitHub profile and the AI providers). A new network is
+its definition, its adapter, its connector and its icon, plus a line in each registry. Every network
+that is a channel publishes through its connector
+([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 
 | Network | Connected with | Publishes | Reads |
 | --- | --- | --- | --- |
@@ -45,19 +46,23 @@ through its connector ([decisions/automatic-channels-only.md](decisions/automati
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
 | Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | followers, karma |
 | YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; the channel's numbers |
-| Newsletter (Brevo) | API key | one campaign per language | sends, opens, clicks |
+| Newsletter (Brevo) | API key | one campaign per language | sends, opens (unique, total, Apple MPP's, trackable), clicks (unique, total, per link); the subscribers of brand.yml's lists |
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
-| Telegram | bot token, channel, owner's chat | a post with the launch image | — (the Bot API gives bots no counts) |
-| Discord | webhook URL | a message with an embed | — (webhooks cannot read) |
+| Telegram | bot token, channel, owner's chat | a post with the launch image | each post's reactions, from the changes Telegram pushes to the bot; the channel's members |
+| Discord | webhook URL; optionally an invite link | a message with an embed | each message's reactions, read back through the webhook; the server's members, through the invite |
+| GitHub profile | a login, no credential | — | the owner's public profile; followers, following, public repos |
 | Blog analytics (Cloudflare) | API token, account id, site tag | — | visits by source |
 | Google Search Console | service account JSON key | — | clicks, impressions, URL inspection |
 | Bing Webmaster | API key | — | clicks, impressions, crawl state |
 | Anthropic API, OpenAI-compatible server | API key; base URL and model | — | — (AI providers) |
 
-**GitHub is not an account.** The engine reaches GitHub through the GitHub App
+**The repos are not an account.** The engine reaches GitHub through the GitHub App
 ([decisions/github-app.md](decisions/github-app.md)), which reads each repo's stars, forks, watchers
 and traffic (Administration: read). **GitHub Discussions** is a channel published with that same
-access (its adapter connects `kind: 'engine'`), so it has no account of its own.
+access (its adapter connects `kind: 'engine'`), so it has no account of its own. The **GitHub
+profile** account, added on 2026-10-29, is only the owner's public profile, read through GitHub's
+public API with no token, for the profile review and the daily snapshot; it never publishes and
+never reads a repo.
 
 ## Accounts
 
@@ -93,14 +98,15 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
   Social networks, Blog & newsletter, Measurement, AI providers. `groupOf`
   (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives the tab from what
   the catalog says: an AI provider is under AI providers; a network with no channel (Cloudflare,
-  Search Console, Bing) is Measurement; dev.to, Hashnode and the newsletter are Blog & newsletter;
-  every other channel is Social. Without a tab in the address the page opens on the first tab with an
-  account, and an account just connected opens its own tab.
+  Search Console, Bing, the GitHub profile) is Measurement; dev.to, Hashnode and the newsletter are
+  Blog & newsletter; every other channel is Social. Without a tab in the address the page opens on
+  the first tab with an account, and an account just connected opens its own tab.
 - **A card per account, in the launch card's skin**: a glyph tile with a state dot (green for a passed
   check, red for a failed one, a dotted ring while unchecked), the network's name and a state pill,
-  the account's avatar, name and handle with its brand, the key number (followers) with following and
-  posts and the last sync under it, and the last problem explained. A network with no account yet is
-  a quieter dashed card with **Connect an account**.
+  the account's avatar, name and handle with its brand, the key number (followers; a Discord server's
+  members, when its account has an invite) with following and posts and the last sync under it, and
+  the last problem explained. A network with no account yet is a quieter dashed card with **Connect
+  an account**.
 - **Every action is kept**: Sync now is a button on the card; the rest are in its Menu: Check the
   credential, Publish with this one, Rename, Connect another account and Disconnect, which asks first.
 - **Live**: with `realtime-ui` the page reloads on `account` events ([web-app.md](web-app.md#live-pages)).
@@ -110,15 +116,16 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
 Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshots.md)).
 
 - **Avatars.** A working `check()` also returns the profile's picture and name where the same answer
-  has them: Bluesky, Mastodon, Instagram, dev.to, Hashnode, Reddit and a Discord webhook's own
-  picture. A check that finds none, or fails, leaves the last one. Only plain `https` addresses are
-  kept, never one that carries a credential, so a Telegram channel has none. Pictures are plain
-  `<img>` elements, lazy, with `referrerpolicy="no-referrer"`.
+  has them: Bluesky, Mastodon, Instagram, dev.to, Hashnode, Reddit, the GitHub profile and a Discord
+  webhook's own picture. A check that finds none, or fails, leaves the last one. Only plain `https`
+  addresses are kept, never one that carries a credential, so a Telegram channel has none. Pictures
+  are plain `<img>` elements, lazy, with `referrerpolicy="no-referrer"`.
 - **Snapshots.** Each connector whose API counts them has `profileStats()`, returning followers,
   following and posts and an `extra` map. The daily `snapshots` job (04:00 UTC) runs
   `takeSnapshots`: every account of a known brand is checked again and, where its network counts,
   gets the day's row in `account_snapshots`. One account failing never stops the others.
-  `shipcast sync [<account id>]` runs the same job from the terminal.
+  `shipcast sync [<account id>]` runs the same job from the terminal. The newsletter counts the
+  subscribers of brand.yml's lists only, and Discord the members of the server its invite opens.
 - **Freshness.** Each account shows its latest numbers and when it was last synced (`lastSynced`),
   with a warning once that is more than 36 hours old (`isStale`).
 - **Sync now.** A button per account sends a `snapshots` job for that account alone (keyed
@@ -138,9 +145,14 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
   where the network and the credential allow it, **Apply**, which asks before it changes the real
   profile.
 - **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description,
-  guarded by `swapRecord`) and a Telegram channel (title and description). dev.to and Hashnode are
-  read but not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their
-  profile for a review and copies the proposals.
+  guarded by `swapRecord`), a Telegram channel (title and description) and a Discord webhook (its
+  name). dev.to, Hashnode and the GitHub profile are read but not edited; Instagram, Threads,
+  LinkedIn and Reddit are neither, so the owner pastes their profile for a review and copies the
+  proposals.
+- **The picture** is set only to brand.yml's `avatar`, never to a proposal: **Use brand.yml's
+  picture**, beside a review, asks first and then uploads it as a Telegram channel's photo
+  (`setChatPhoto`, the same "Change channel info" right) or a Discord webhook's picture (Modify
+  Webhook with Token, the URL already held). Added on 2026-10-29.
 
 ## The secret store
 

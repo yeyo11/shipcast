@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T16:39:48.121797373Z
-updated_at: 2026-10-29T01:08:43.450692641Z
+updated_at: 2026-10-29T20:07:52.707474592Z
 tags:
     - stats
     - metrics
@@ -46,14 +46,26 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Threads | views | likes | replies | reposts + quotes + shares | | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
 | YouTube | views | likes | comments | | | |
+| Telegram, Discord | | reactions | | | | |
 | Newsletter | opens | | | | clicks | delivered |
 | Blog | views | | | | | |
 | Search Console, Bing | | | | | clicks | impressions |
 | GitHub | | stars | | forks | | |
 
-Left out: Instagram's `saved`, the newsletter's bounces and unsubscribes, the blog's per-source and
-per-language split, and GitHub's views, which are a rolling 14-day count rather than a counter.
-Telegram, Discord, LinkedIn and Reddit read no per-post numbers.
+GitHub Discussions' `comments` are everyone's comments and their replies but the owner's and
+Shipcast's own (since 2026-10-29; before, the top-level comments only, Shipcast's replies included).
+The newsletter's `opens` are Brevo's unique opens (`uniqueViews`) as before; Brevo's report counts
+Apple Mail Privacy Protection's automatic opens and bots' by default, and its API does not say
+whether `uniqueViews` does, so the parts are stored beside it rather than added to it.
+
+Left out of the families, stored and kept: Instagram's `saved`; the newsletter's bounces,
+unsubscribes, every open (`opens_total`), the opens of readers without privacy protection
+(`opens_trackable`), MPP's opens (`opens_mpp`, a count of events, not of readers), every click
+(`clicks_total`) and the clicks per link (`link:<url>`); the blog's per-source and per-language split;
+and GitHub's views, clones, referrers and pages, which are rolling 14-day counts rather than counters,
+the same per day (`views:<day>`, `clones:<day>`, their unique visitors and cloners), the stars given
+each day (`stars:<day>`) and the releases' downloads (`downloads`, `downloads_total`). LinkedIn and
+Reddit read no per-post numbers.
 
 **Counters.** A counter is listed from the posts and launches, not from the readings, and is one of:
 
