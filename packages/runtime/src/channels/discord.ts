@@ -1,5 +1,5 @@
 import { Discord } from '@shipcast/connectors';
-import { discord } from '@shipcast/schema';
+import { discord, trackUrl, trackWithinLimit } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** Discord: one channel's webhook; posts, edits and deletes through it */
@@ -20,6 +20,10 @@ export const discordAdapter = channelAdapter({
       },
     },
   },
-  publisher: (c) => c,
+  // The message keeps its ?ref= when the tags would push it over the limit; the embed's link has none
+  publisher: (c) => ({
+    publish: (post, tracking) =>
+      c.publish({ ...post, content: trackWithinLimit('discord', post.content, tracking), ...(post.embed && { embed: { ...post.embed, url: trackUrl('discord', post.embed.url, tracking) } }) }),
+  }),
   editor: (c) => c,
 });

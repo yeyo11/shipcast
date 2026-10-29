@@ -1,7 +1,7 @@
 import { blueskyFeed } from './feeds.ts';
 import { batchReader } from '@shipcast/engine';
 import { Bluesky } from '@shipcast/connectors';
-import { bluesky } from '@shipcast/schema';
+import { bluesky, track, trackUrl } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** `https://bsky.app/profile/yeyo11.bsky.social` → `yeyo11.bsky.social` */
@@ -34,7 +34,10 @@ export const blueskyAdapter = channelAdapter({
       },
     },
   },
-  publisher: (c) => c,
+  // The text's links and the card's are tagged; the connector shows the text's without the tags
+  publisher: (c) => ({
+    publish: (post, tracking) => c.publish({ ...post, text: track('bluesky', post.text, tracking), ...(post.link && { link: { ...post.link, url: trackUrl('bluesky', post.link.url, tracking) } }) }),
+  }),
   editor: (c) => c,
   // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),

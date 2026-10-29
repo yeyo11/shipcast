@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleLink, CHANNEL_DEFINITIONS, ContentPack, contentPackFor, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type ChannelDefinition, type EngineChannelId, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig } from '@shipcast/schema';
+import { articleLink, campaignOf, CHANNEL_DEFINITIONS, ContentPack, contentPackFor, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type ChannelDefinition, type EngineChannelId, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig, type LinkTracking } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -15,7 +15,9 @@ import type { Launch, Post, Repositories } from './repositories/index.ts';
 
 /**
  * What the engine needs from each network's connector: the connectors in `@shipcast/connectors`
- * fit, and a test hands in fakes. A network left out is simply not published to.
+ * fit, and a test hands in fakes. A network left out is simply not published to. A channel whose
+ * links are tagged (docs/tracking.md) is handed the launch's `tracking` with each piece: its adapter
+ * tags the links, the connector never sees it.
  */
 export interface Publishers {
   devto?: { publish(a: { title: string; markdown: string; tags: string[]; canonicalUrl: string; mainImage?: string }): Promise<Published> };
@@ -24,7 +26,7 @@ export interface Publishers {
       text: string;
       lang: string;
       link?: { url: string; title: string; description: string; thumb?: { bytes: Uint8Array; mimeType: string } };
-    }): Promise<Published>;
+    }, tracking?: LinkTracking): Promise<Published>;
   };
   mastodon?: {
     publish(p: {
@@ -32,26 +34,27 @@ export interface Publishers {
       lang: string;
       image?: { bytes: Uint8Array; mimeType: string; filename: string; description: string };
       idempotencyKey: string;
-    }): Promise<Published>;
+    }, tracking?: LinkTracking): Promise<Published>;
   };
   instagram?: {
     publish(p: { caption: string; media: Array<{ kind: 'image' | 'video'; url: string }> }): Promise<Published>;
     publishStory?(m: { kind: 'image' | 'video'; url: string }): Promise<Published>;
     comment?(mediaId: string, message: string): Promise<{ id: string }>;
   };
-  newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign): Promise<Published> };
+  /** `tracking` names the issue's language, which its links carry */
+  newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign, tracking?: LinkTracking & { lang: 'en' | 'es' }): Promise<Published> };
   hashnode?: { publish(a: { title: string; markdown: string; tags: string[]; canonicalUrl: string; coverImageUrl?: string }): Promise<Published> };
-  telegram?: { publish(p: { text: string; imageUrl?: string }): Promise<Published> };
-  discord?: { publish(p: { content: string; embed?: { title: string; url: string; description: string; imageUrl?: string } }): Promise<Published> };
+  telegram?: { publish(p: { text: string; imageUrl?: string }, tracking?: LinkTracking): Promise<Published> };
+  discord?: { publish(p: { content: string; embed?: { title: string; url: string; description: string; imageUrl?: string } }, tracking?: LinkTracking): Promise<Published> };
   /** Posts in the launched repo, whichever it is, so it takes the repo with each post */
-  githubDiscussions?: { publish(p: { repo: string; title: string; body: string }): Promise<Published> };
-  threads?: { publish(p: { text: string; imageUrl?: string }): Promise<Published> };
+  githubDiscussions?: { publish(p: { repo: string; title: string; body: string }, tracking?: LinkTracking): Promise<Published> };
+  threads?: { publish(p: { text: string; imageUrl?: string }, tracking?: LinkTracking): Promise<Published> };
   linkedin?: {
-    publish(p: { text: string; article: { url: string; title: string; description: string; thumbnail?: { bytes: Uint8Array; mimeType: string } } }): Promise<Published>;
+    publish(p: { text: string; article: { url: string; title: string; description: string; thumbnail?: { bytes: Uint8Array; mimeType: string } } }, tracking?: LinkTracking): Promise<Published>;
   };
   /** One post per subreddit; `find` answers whether a post whose answer was lost is up after all */
   reddit?: {
-    publish(p: { subreddit: string; title: string; text: string }): Promise<Published>;
+    publish(p: { subreddit: string; title: string; text: string }, tracking?: LinkTracking): Promise<Published>;
     find(p: { subreddit: string; title: string }, since: Date): Promise<Published | undefined>;
   };
 }
@@ -340,6 +343,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     };
   };
 
+  // Every link to the site carries the network and the launch it came from; the adapters tag them
+  const tracking: LinkTracking = { site: brand.site, campaign: campaignOf(launch) };
   const accountOf = (channel: Channel) => deps.accounts?.[channel] ?? null;
   const now = deps.now?.() ?? new Date();
   // The languages with a list and an issue in the pack: the newsletter is out once each has its issue
@@ -429,7 +434,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             deps.publishers.telegram!.publish({
               text: draftBody((await read(`${dir}/${draftFile('telegram').name}`)) ?? pack.telegram!.text),
               imageUrl: ogJpegUrl,
-            })
+            }, tracking)
         : undefined,
     discord:
       deps.publishers.discord && pack.discord
@@ -437,7 +442,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             deps.publishers.discord!.publish({
               content: draftBody((await read(`${dir}/${draftFile('discord').name}`)) ?? pack.discord!.text),
               embed: { title, url: articleUrl, description, imageUrl: `${brand.site}${mediaPath(launch, 'og.png')}` },
-            })
+            }, tracking)
         : undefined,
     // An article written in the app belongs to no project: there is no repo whose community it is news to
     githubDiscussions:
@@ -446,7 +451,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             deps.publishers.githubDiscussions!.publish({
               repo: launch.repo,
               ...parseDiscussionDraft(draftBody((await read(`${dir}/${draftFile('githubDiscussions').name}`)) ?? ''), pack.githubDiscussions!),
-            })
+            }, tracking)
         : undefined,
     threads:
       deps.publishers.threads && pack.threads
@@ -454,7 +459,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             deps.publishers.threads!.publish({
               text: draftBody((await read(`${dir}/${draftFile('threads').name}`)) ?? pack.threads!.text),
               imageUrl: ogJpegUrl,
-            })
+            }, tracking)
         : undefined,
     linkedin:
       deps.publishers.linkedin && pack.linkedin
@@ -464,7 +469,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               text: draftBody((await read(`${dir}/${draftFile('linkedin').name}`)) ?? pack.linkedin!.text),
               // The thumbnail is uploaded to LinkedIn: it does not read the article's page
               article: { ...card, url: `${card.url}?ref=linkedin`, thumbnail: { bytes: await image(), mimeType: 'image/jpeg' } },
-            });
+            }, tracking);
           }
         : undefined,
     bluesky:
@@ -474,7 +479,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               text: draftBody((await read(`${dir}/${draftFile('bluesky').name}`)) ?? pack.bluesky!.text),
               lang: pack.bluesky!.lang,
               link: { url: articleUrl, title, description, thumb: { bytes: await image(), mimeType: 'image/jpeg' } },
-            })
+            }, tracking)
         : undefined,
     mastodon:
       deps.publishers.mastodon && pack.mastodon
@@ -485,7 +490,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
               lang: pack.mastodon!.lang,
               image: { bytes: await image(), mimeType: 'image/jpeg', filename: 'og.jpg', description: `${projectLabel(pack, launch) ?? title}: ${description}` },
               idempotencyKey: `shipcast-${launch.id}-mastodon`,
-            })
+            }, tracking)
         : undefined,
     // One post per subreddit, each recorded as it goes out; a refusal in one never holds back the others
     reddit:
@@ -505,7 +510,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 let result = attempted ? await reddit.find({ subreddit: piece.subreddit, title }, new Date(attempted)) : undefined;
                 if (!result) {
                   await registry.cursors.setCursor(redditAttemptKey(launch.id, piece.subreddit), new Date().toISOString());
-                  result = await reddit.publish({ subreddit: piece.subreddit, title, text });
+                  result = await reddit.publish({ subreddit: piece.subreddit, title, text }, tracking);
                 }
                 await registry.posts.recordPost({ launchId: launch.id, channel: 'reddit', kind, accountId: accountOf('reddit'), externalId: result.externalId, url: result.url });
                 posted.push({ channel: 'reddit', url: result.url });
@@ -596,7 +601,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
                 sender: settings.sender,
                 listId,
                 // No tag: Brevo's free plan refuses a campaign that carries one
-              });
+              }, { ...tracking, lang });
               // Recorded at once: the next language failing must not get this one sent twice
               await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: `issue:${lang}`, accountId: accountOf('newsletter'), externalId: result.externalId, url: result.url });
               posted.push({ channel: 'newsletter', url: result.url });

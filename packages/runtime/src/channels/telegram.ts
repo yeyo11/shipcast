@@ -1,5 +1,5 @@
 import { Telegram } from '@shipcast/connectors';
-import { telegram } from '@shipcast/schema';
+import { telegram, trackWithinLimit } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** Telegram: a bot that is an admin of the channel; posts, edits and deletes there, and tells the owner what is waiting */
@@ -28,7 +28,8 @@ export const telegramAdapter = channelAdapter({
       },
     },
   },
-  publisher: (c) => c,
+  // Telegram counts a link's every character: a text the tags would push over the limit keeps its ?ref=
+  publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('telegram', post.text, tracking) }) }),
   editor: (c) => c,
   // The owner's notices go only to their own chat with the bot; with none set there is no notifier,
   // never the channel a launch publishes to, which is public

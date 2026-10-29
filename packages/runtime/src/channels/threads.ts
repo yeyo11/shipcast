@@ -1,5 +1,5 @@
 import { exchangeThreadsCode, Threads, threadsAuthorizeUrl } from '@shipcast/connectors';
-import { threads } from '@shipcast/schema';
+import { threads, trackWithinLimit } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** Meta's long-lived tokens last 60 days: each is refreshed at 30 */
@@ -39,7 +39,8 @@ export const threadsAdapter = channelAdapter({
       },
     },
   },
-  publisher: (c) => c,
+  // Threads counts a link's every character: a text the tags would push over the limit keeps its ?ref=
+  publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('threads', post.text, tracking) }) }),
   editor: (c) => c,
   metrics: (c) => c,
   // No feed: Threads lists no replies since a cursor nor a reply count per post, so each post is read

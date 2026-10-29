@@ -1,5 +1,5 @@
 import { exchangeRedditCode, Reddit, redditAuthorizeUrl } from '@shipcast/connectors';
-import { reddit } from '@shipcast/schema';
+import { reddit, track } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** Reddit: the owner's approved Reddit app; one text post per subreddit, found again when an answer was lost */
@@ -37,6 +37,10 @@ export const redditAdapter = channelAdapter({
       },
     },
   },
-  publisher: (c) => c,
+  // Each subreddit's post says which community the visit came from
+  publisher: (c) => ({
+    publish: (post, tracking) => c.publish({ ...post, text: track('reddit', post.text, tracking, post.subreddit) }),
+    find: (post, since) => c.find(post, since),
+  }),
   editor: (c) => c,
 });
