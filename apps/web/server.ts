@@ -117,9 +117,12 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
         return;
       }
       if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && serveStatic(pathname, response)) return;
-      // The request's signal aborts when the client goes, so a handler that waits on it (an event stream) lets go
+      // The request's signal aborts when the client goes, so a handler that waits on it (an event stream) lets go.
+      // A response that already finished closes too: aborting then only throws into nobody (a healthcheck's fetch)
       const left = new AbortController();
-      response.once('close', () => left.abort());
+      response.once('close', () => {
+        if (!response.writableFinished) left.abort();
+      });
       await send(response, await entry.default.fetch(toRequest(request, options.origin, options.trustedProxies, left.signal)), options.plainHttp === true && !options.tls);
     } catch (error) {
       console.error(error);
