@@ -1,7 +1,7 @@
 import { isAveragedMetric } from '@shipcast/schema';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/connect.ts';
-import { metrics } from '../db/schema.ts';
+import { metricDays, metrics } from '../db/schema.ts';
 
 /**
  * One number read from one source for one launch, at one moment. A launch's readings add up its
@@ -26,6 +26,19 @@ export interface Recorded {
   inserted: number;
   /** Values equal to the newest reading: its `checked_at` moved, no row added */
   checked: number;
+}
+
+/** One day of a source's numbers, under the day it happened (`metric_days`) */
+export interface MetricDay {
+  launchId: number;
+  postId: number | null;
+  source: string;
+  name: string;
+  /** YYYY-MM-DD, in the source's own calendar */
+  day: string;
+  value: number;
+  /** When the day was last read */
+  readAt: string;
 }
 
 /** The moment a row was last seen holding its value */
@@ -85,6 +98,33 @@ export class MetricRepository {
     }
     if (fresh.length > 0) await this.#db.insert(metrics).values(fresh.map(([name, value]) => ({ launchId, postId, source, name, value, takenAt: at })));
     return { inserted: fresh.length, checked };
+  }
+
+  /**
+   * A source's numbers per day (`{ '2026-10-28': { clicks: 3 } }`), each under the day it happened
+   * rather than the time it was read. A day read again takes the new value: a source's later word on
+   * a day (Search Console's final data, a repo's traffic once the day is over) is the better one.
+   */
+  async recordDays(launchId: number, source: string, days: Readonly<Record<string, Readonly<Record<string, number>>>>, readAt: Date, postId: number | null = null): Promise<number> {
+    const at = readAt.toISOString();
+    const rows = Object.entries(days).flatMap(([day, values]) =>
+      Object.entries(values).flatMap(([name, value]) => (Number.isFinite(value) ? [{ launchId, postId, source, name, day, value, readAt: at }] : [])),
+    );
+    if (rows.length === 0) return 0;
+    await this.#db
+      .insert(metricDays)
+      .values(rows)
+      .onConflictDoUpdate({ target: [metricDays.launchId, metricDays.postId, metricDays.source, metricDays.name, metricDays.day], set: { value: sql`excluded.value`, readAt: sql`excluded.read_at` } });
+    return rows.length;
+  }
+
+  /** A launch's numbers per day, oldest first: of one source, or every source's */
+  async metricDays(launchId: number, source?: string): Promise<MetricDay[]> {
+    return this.#db
+      .select({ launchId: metricDays.launchId, postId: metricDays.postId, source: metricDays.source, name: metricDays.name, day: metricDays.day, value: metricDays.value, readAt: metricDays.readAt })
+      .from(metricDays)
+      .where(source === undefined ? eq(metricDays.launchId, launchId) : and(eq(metricDays.launchId, launchId), eq(metricDays.source, source)))
+      .orderBy(asc(metricDays.day), asc(metricDays.source), asc(metricDays.name));
   }
 
   /**

@@ -1,5 +1,5 @@
 import type { MetricStore } from './ports.ts';
-import { ConnectorError, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic } from '@shipcast/connectors';
+import { ConnectorError, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
 import { channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
@@ -78,10 +78,14 @@ export interface MetricSources {
   blog?: {
     pageVisits(path: string, since: string, until: string): Promise<PageVisits>;
     pageVisitsMany?(paths: readonly string[], since: string, until: string): Promise<Map<string, PageVisits>>;
+    /** The same paths' page views and visits per day, kept under each day (`metric_days`) */
+    pageVisitsByDay?(paths: readonly string[], since: string, until: string): Promise<Map<string, Record<string, { views: number; visits: number }>>>;
   };
   /** Google search numbers per article URL, whether Google indexed it, and resubmitting the sitemap */
   search?: {
     pageMetrics(url: string, since: string, until: string): Promise<Metrics>;
+    /** The same per day, under the day the searches happened; where it exists the launch's totals are its days' */
+    pageMetricsByDay?(url: string, since: string, until: string): Promise<SearchDay[]>;
     inspect?(url: string): Promise<IndexStatus>;
     submitSitemap?(sitemapUrl: string): Promise<void>;
   };
@@ -196,6 +200,24 @@ export function searchValues(pages: readonly Metrics[]): Record<string, number> 
     ...(impressions > 0 && { ctr: clicks / impressions }),
     ...(rankedImpressions > 0 && { position: ranked.reduce((n, m) => n + m.position! * m.impressions!, 0) / rankedImpressions }),
   };
+}
+
+/** One page's search numbers over its days: clicks and impressions added up, the CTR of the sum, the position weighted by impressions */
+export function daysTotal(days: readonly SearchDay[]): Metrics {
+  const total = searchValues(days.map((d) => ({ clicks: d.clicks, impressions: d.impressions, position: d.position })));
+  return { clicks: total.clicks ?? 0, impressions: total.impressions ?? 0, ...(total.ctr !== undefined && { ctr: total.ctr }), ...(total.position !== undefined && { position: total.position }) };
+}
+
+/** Each day's counts of a launch's pages added up (the languages' clicks, or views), for `metric_days` */
+export function sumDays(pages: ReadonlyArray<Readonly<Record<string, Readonly<Record<string, number>>>>>): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const page of pages) {
+    for (const [day, values] of Object.entries(page)) {
+      const into = (out[day] ??= {});
+      for (const [name, value] of Object.entries(values)) into[name] = (into[name] ?? 0) + value;
+    }
+  }
+  return out;
 }
 
 /**
@@ -342,24 +364,30 @@ export const METRIC_PROBLEM_PREFIX = 'metrics-problem:';
 export const trafficProblemKey = (repo: string) => `${METRIC_PROBLEM_PREFIX}github-traffic:${repo}`;
 
 /**
- * A repo's traffic as readings: the 14-day totals as before, each day's views and clones under the
- * day (`views:2026-10-28`), and the top referring sites and pages with their unique visitors.
+ * A repo's traffic as readings: the 14-day totals as before, and the top referring sites and pages
+ * with their unique visitors. Its days are kept apart, under each day (trafficDays).
  */
 export function trafficReadings(t: RepoTraffic): Record<string, number> {
   const out: Record<string, number> = { views: t.views, uniqueVisitors: t.uniqueVisitors, clones: t.clones, uniqueCloners: t.uniqueCloners };
-  for (const d of t.days) Object.assign(out, { [`views:${d.day}`]: d.views, [`visitors:${d.day}`]: d.uniqueVisitors, [`clones:${d.day}`]: d.clones, [`cloners:${d.day}`]: d.uniqueCloners });
   for (const r of t.referrers) Object.assign(out, { [`referrer:${r.name}`]: r.count, [`referrer_visitors:${r.name}`]: r.uniques });
   for (const p of t.paths) Object.assign(out, { [`path:${p.name}`]: p.count, [`path_visitors:${p.name}`]: p.uniques });
   return out;
 }
 
+/** A repo's traffic per day, for `metric_days`: views and clones, and each day's unique visitors and cloners */
+export function trafficDays(t: RepoTraffic): Record<string, Record<string, number>> {
+  return Object.fromEntries(t.days.map((d) => [d.day, { views: d.views, visitors: d.uniqueVisitors, clones: d.clones, cloners: d.uniqueCloners }]));
+}
+
+/** The stars given each day, for `metric_days` */
+export const starDays = (h: RepoHistory): Record<string, Record<string, number>> => Object.fromEntries(Object.entries(h.starsByDay).map(([day, stars]) => [day, { stars }]));
+
 /**
- * A repo's history as one launch's readings: the stars given each day (`stars:2026-10-28`), the
- * downloads of the launch's own release when its ref is one, and of every release together.
+ * A repo's history as one launch's readings: the downloads of the launch's own release when its ref
+ * is one, and of every release together. Its stars by day are kept apart (starDays).
  */
 export function historyReadings(h: RepoHistory, ref: string): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const [day, stars] of Object.entries(h.starsByDay)) out[`stars:${day}`] = stars;
   const own = h.downloadsByTag[ref];
   if (own !== undefined) out.downloads = own;
   out.downloads_total = Object.values(h.downloadsByTag).reduce((n, d) => n + d, 0);
@@ -405,6 +433,8 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const stored = await registry.metrics.recordMetrics(launchId, source, clean, now, postId, { unchangedMovesCheck: true });
     readings += stored.inserted + stored.checked;
   };
+  // A source's days, each under the day it happened (docs/decisions/dated-metrics.md)
+  const recordDays = (launchId: number, source: string, days: Record<string, Record<string, number>>) => registry.metrics.recordDays(launchId, source, days, now);
   const attempt = async (what: string, fn: () => Promise<void>) => {
     try {
       await fn();
@@ -504,6 +534,16 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     } else {
       for (const site of blogDue) await attempt(`${site.launch.repo} ${site.launch.ref} blog visits`, () => visitsOf(site, undefined));
     }
+    // The same paths day by day, from each launch's day: every day read again, so an older day the
+    // source rescaled takes its newest estimate
+    if (blog.pageVisitsByDay) {
+      const paths = [...new Set(blogDue.flatMap((s) => s.urls.map(({ url }) => new URL(url).pathname)))];
+      const since = blogDue.map((s) => s.since).reduce((a, b) => (b < a ? b : a));
+      await attempt('blog visits by day', async () => {
+        const byDay = await blog.pageVisitsByDay!(paths, since, until);
+        for (const site of blogDue) await recordDays(site.launch.id, 'blog', sumDays(site.urls.map(({ url }) => byDay.get(new URL(url).pathname) ?? {})));
+      });
+    }
   }
 
   let unindexed = false;
@@ -511,8 +551,16 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const search = sources.search;
     if (search && siteDue(launch.id, 'search', 'clicks', SITE_CADENCES.searchAnalytics.hours)) {
       await attempt(`${launch.repo} ${launch.ref} search`, async () => {
-        const found = await Promise.all(urls.map(({ url }) => search.pageMetrics(url, since, until)));
-        await record(launch.id, 'search', searchValues(found));
+        const byDay = search.pageMetricsByDay?.bind(search);
+        if (!byDay) {
+          const found = await Promise.all(urls.map(({ url }) => search.pageMetrics(url, since, until)));
+          await record(launch.id, 'search', searchValues(found));
+          return;
+        }
+        // Day by day: the launch's totals are its days', and each day is kept under the day searched
+        const pages = await Promise.all(urls.map(({ url }) => byDay(url, since, until)));
+        await record(launch.id, 'search', searchValues(pages.map(daysTotal)));
+        await recordDays(launch.id, 'search', sumDays(pages.map((days) => Object.fromEntries(days.map((d) => [d.day, { clicks: d.clicks, impressions: d.impressions }])))));
       });
     }
     const inspect = search?.inspect?.bind(search);
@@ -569,14 +617,20 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
           }
           await registry.cursors.setCursor(trafficReadKey(repo), now.toISOString());
           await registry.cursors.deleteCursor(trafficProblemKey(repo));
-          for (const id of ids) await record(id, 'github', trafficReadings(traffic));
+          for (const id of ids) {
+            await record(id, 'github', trafficReadings(traffic));
+            await recordDays(id, 'github', trafficDays(traffic));
+          }
         });
       }
       if (due(await registry.cursors.cursor(historyReadKey(repo)), SITE_CADENCES.githubHistory.hours)) {
         await attempt(`${repo} GitHub stars and downloads`, async () => {
           const history = await split.history(repo);
           await registry.cursors.setCursor(historyReadKey(repo), now.toISOString());
-          for (const l of of) await record(l.id, 'github', historyReadings(history, l.ref));
+          for (const l of of) {
+            await record(l.id, 'github', historyReadings(history, l.ref));
+            await recordDays(l.id, 'github', starDays(history));
+          }
         });
       }
     } else if (sources.github && countsDue) {

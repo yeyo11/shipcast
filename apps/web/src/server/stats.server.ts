@@ -1,6 +1,7 @@
 import {
   accountGrowth,
   articleUrls,
+  DETAIL_METRICS,
   indexStatus,
   METRIC_FAMILIES,
   previousWindow,
@@ -8,6 +9,8 @@ import {
   statsRanking,
   statsSeries,
   statsWindow,
+  type AverageMetric,
+  type DetailMetric,
   type MetricTotals,
   type Repositories,
   type SeriesGroup,
@@ -56,7 +59,14 @@ export interface StatsView {
   search: StatsSearch;
   period: { from: string; to: string; days: number; bucket: 'day' | 'week' };
   comparePeriod: { from: string; to: string } | null;
-  totals: { metrics: MetricTotals; previous: MetricTotals | null };
+  totals: { metrics: MetricTotals; previous: MetricTotals | null; lifetime: MetricTotals };
+  /**
+   * The second tier, each family the sources picked count: what grew in the period, against the
+   * previous one when comparing, and its lifetime, with each channel's part
+   */
+  details: Array<{ metric: DetailMetric; value: number; previous: number | null; lifetime: number; channels: Array<{ channel: string; label: string; value: number; lifetime: number }> }>;
+  /** The averages and ratios as the period ends, by source: never added up */
+  averages: Array<{ source: string; label: string; metric: AverageMetric; value: number; pieces: number }>;
   chart: { buckets: string[]; groups: ChartGroup[] };
   ranking: {
     total: number;
@@ -66,6 +76,7 @@ export interface StatsView {
       rank: number;
       score: number;
       metrics: MetricTotals;
+      lifetime: MetricTotals;
       pieces: number;
       channel: string | null;
       launchId: number | null;
@@ -148,7 +159,16 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
     search,
     period: { ...period, bucket },
     comparePeriod: previous ? { from: previous.from.slice(0, 10), to: lastDay(previous.to) } : null,
-    totals: { metrics: overview.metrics, previous: overview.previous ?? null },
+    totals: { metrics: overview.metrics, previous: overview.previous ?? null, lifetime: overview.lifetime },
+    details: DETAIL_METRICS.flatMap((metric) => {
+      const value = overview.metrics[metric];
+      if (value === undefined) return [];
+      const channels = overview.channels.flatMap((c) =>
+        c.metrics[metric] === undefined ? [] : [{ channel: c.channel, label: CHANNEL_NAMES[c.channel] ?? c.channel, value: c.metrics[metric] ?? 0, lifetime: c.lifetime[metric] ?? 0 }],
+      );
+      return [{ metric, value, previous: overview.previous?.[metric] ?? null, lifetime: overview.lifetime[metric] ?? 0, channels }];
+    }),
+    averages: overview.averages.map((a) => ({ ...a, label: CHANNEL_NAMES[a.source] ?? a.source })),
     chart: { buckets: series.buckets, groups },
     ranking: {
       total: sorted.length,
@@ -238,15 +258,22 @@ export interface IndexView {
   checkedAt: string;
 }
 
+/** One engine's numbers of a launch: the period's growth, and the lifetime the engine's own report shows */
+export interface EngineNumbers {
+  impressions: number;
+  clicks: number;
+  lifetime: { impressions: number; clicks: number };
+}
+
 export interface SearchView {
   from: string;
   to: string;
   launches: Array<{
     id: number;
     label: string;
-    /** What grew in the period, per engine; null when the engine has no reading for the launch */
-    google: { impressions: number; clicks: number } | null;
-    bing: { impressions: number; clicks: number } | null;
+    /** What grew in the period per engine, and where it stood at the period's end; null when the engine has no reading for the launch */
+    google: EngineNumbers | null;
+    bing: EngineNumbers | null;
     pages: Array<{ lang: string; url: string; google: IndexView | null; bing: IndexView | null }>;
   }>;
 }
@@ -277,7 +304,9 @@ export async function loadSearch(registry: Pick<Repositories, 'launches' | 'post
       ]);
       const engine = (source: string) => {
         const found = overview.channels.find((c) => c.channel === source);
-        return found ? { impressions: found.metrics.impressions ?? 0, clicks: found.metrics.clicks ?? 0 } : null;
+        return found
+          ? { impressions: found.metrics.impressions ?? 0, clicks: found.metrics.clicks ?? 0, lifetime: { impressions: found.lifetime.impressions ?? 0, clicks: found.lifetime.clicks ?? 0 } }
+          : null;
       };
       return { id: l.id, label: `${l.repo} ${l.ref}`, google: engine('search'), bing: engine('bing'), pages };
     }),

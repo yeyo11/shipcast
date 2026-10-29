@@ -9,6 +9,8 @@ export interface RankingEntryView {
   rank: number;
   score: number;
   metrics: Partial<Record<Exclude<Sort, 'score'>, number>>;
+  /** Where the same numbers stood at the period's end, as the network's own screen shows them */
+  lifetime: Partial<Record<Exclude<Sort, 'score'>, number>>;
   pieces: number;
   channel: string | null;
   launchId: number | null;
@@ -67,7 +69,7 @@ export function RankingTable({ by, sort, order, entries, page, pages, total, onC
         </div>
       </div>
       <p className="muted section-lead">
-        A score of 1 is what a typical piece on its network got in the period, 2 twice that, so a like on Bluesky and a visit on dev.to compare.
+        A score of 1 is what a typical piece on its network got in the period, 2 twice that, so a like on Bluesky and a visit on dev.to compare. Under each number, its lifetime as the period ends.
       </p>
       {entries.length === 0 ? (
         <p className="muted">Nothing to rank in this period with these filters.</p>
@@ -101,7 +103,14 @@ export function RankingTable({ by, sort, order, entries, page, pages, total, onC
                   </td>
                   {COLUMNS.map((c) => (
                     <td key={c} className="num" data-label={METRIC_NAMES[c]}>
-                      {e.metrics[c] === undefined ? <span aria-label="not counted">—</span> : full(e.metrics[c] ?? 0)}
+                      {e.metrics[c] === undefined ? (
+                        <span aria-label="not counted">—</span>
+                      ) : (
+                        <>
+                          {full(e.metrics[c] ?? 0)}
+                          <span className="stats-life">{full(e.lifetime[c] ?? 0)} lifetime</span>
+                        </>
+                      )}
                     </td>
                   ))}
                 </tr>

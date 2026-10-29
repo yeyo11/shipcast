@@ -152,8 +152,9 @@ export const youtube = {
     ],
   },
   metrics: {
-    families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'] },
+    families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'], watchMinutes: ['watchMinutes'], engagedViews: ['engagedViews'], follows: ['subscribersGained'] },
     primary: ['views', 'likes'],
+    averaged: { avgViewSeconds: 'avgViewSeconds', avgViewPercent: 'avgViewPercent' },
     cadence: HOURLY_BATCHED,
     // YouTube Analytics (watch time, engaged views, shares): Google's numbers lag 48 to 72 hours
     analytics: { hours: 24, read: 'single', why: 'YouTube Analytics lags 48–72 hours' },

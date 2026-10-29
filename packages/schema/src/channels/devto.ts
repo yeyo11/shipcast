@@ -63,8 +63,9 @@ export const devto = {
     ],
   },
   metrics: {
-    families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] },
+    families: { views: ['views'], reactions: ['reactions'], comments: ['comments'], saves: ['saves'] },
     primary: ['views', 'reactions'],
+    averaged: { avgReadSeconds: 'avgReadSeconds' },
     cadence: HOURLY_BATCHED,
     // Forem's analytics (saves, read time, referrers): two calls an article under a 3-a-second limit
     analytics: { hours: 24, read: 'single', why: 'two calls an article, 3 a second' },

@@ -55,6 +55,6 @@ export const newsletter = {
       { days: MIDWEEK, from: 17, to: 19, weight: 0.5 },
     ],
   },
-  metrics: { families: { views: ['opens'], clicks: ['clicks'], impressions: ['delivered'] }, primary: ['opens', 'clicks'], cadence: HOURLY_BATCHED },
+  metrics: { families: { views: ['opens'], clicks: ['clicks'], impressions: ['delivered'], unsubscribes: ['unsubscribes'] }, primary: ['opens', 'clicks'], cadence: HOURLY_BATCHED },
   chartSlot: 6,
 } as const satisfies ChannelDefinition<'newsletter'>;

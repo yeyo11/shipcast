@@ -82,6 +82,44 @@ export class CloudflareAnalytics {
     return out;
   }
 
+  /**
+   * Many paths' page views and visits day by day (UTC days), each under the day it happened, in one
+   * query grouped by day and path. Past seven days Cloudflare keeps about a tenth of the events and
+   * scales them back up, so an older day read again may move a little: the newest read is kept.
+   */
+  async pageVisitsByDay(paths: readonly string[], since: string, until: string): Promise<Map<string, Record<string, { views: number; visits: number }>>> {
+    const out = new Map<string, Record<string, { views: number; visits: number }>>(paths.map((p) => [p, {}]));
+    if (paths.length === 0) return out;
+    const query = `query($account: String!, $filter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject!) {
+      viewer { accounts(filter: { accountTag: $account }) {
+        rumPageloadEventsAdaptiveGroups(limit: 10000, filter: $filter) {
+          count
+          sum { visits }
+          dimensions { date requestPath }
+        }
+      } }
+    }`;
+    const response = await this.#fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.#token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ query, variables: { account: this.#account, filter: { siteTag: this.#siteTag, requestPath_in: [...paths], date_geq: since, date_leq: until } } }),
+    });
+    const body = await json<{
+      data?: { viewer: { accounts: Array<{ rumPageloadEventsAdaptiveGroups: Array<{ count: number; sum?: { visits?: number }; dimensions: { date?: string; requestPath?: string } }> }> } };
+      errors?: Array<{ message: string }> | null;
+    }>('Cloudflare', response, 'page visits by day');
+    if (body.errors?.length) throw new ConnectorError('Cloudflare', body.errors.map((e) => e.message).join('; '));
+    for (const group of body.data?.viewer.accounts[0]?.rumPageloadEventsAdaptiveGroups ?? []) {
+      const { date, requestPath } = group.dimensions;
+      const days = requestPath === undefined ? undefined : out.get(requestPath);
+      if (!days || !date) continue;
+      const day = (days[date] ??= { views: 0, visits: 0 });
+      day.views += group.count;
+      day.visits += group.sum?.visits ?? 0;
+    }
+    return out;
+  }
+
   /** Views of `path` (e.g. `/en/claudio/`), or of the whole site without one, between two dates (YYYY-MM-DD, inclusive). */
   async pageVisits(path: string | undefined, since: string, until: string): Promise<PageVisits> {
     const query = `query($account: String!, $filter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject!) {

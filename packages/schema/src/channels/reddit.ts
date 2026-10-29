@@ -63,7 +63,7 @@ export const reddit = {
   metrics: {
     families: { reactions: ['score'], comments: ['comments'], shares: ['crossposts'] },
     primary: ['score', 'comments'],
-    averaged: ['upvoteRatio'],
+    averaged: { upvoteRatio: 'upvoteRatio' },
     cadence: HOURLY_BATCHED,
   },
 } as const satisfies ChannelDefinition<'reddit'>;

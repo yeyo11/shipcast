@@ -57,6 +57,6 @@ export const bluesky = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.3 },
     ],
   },
-  metrics: { families: { reactions: ['likes'], comments: ['replies'], shares: ['reposts', 'quotes'] }, primary: ['likes', 'reposts'], cadence: HOURLY_BATCHED },
+  metrics: { families: { reactions: ['likes'], comments: ['replies'], shares: ['reposts', 'quotes'], saves: ['saves'] }, primary: ['likes', 'reposts'], cadence: HOURLY_BATCHED },
   chartSlot: 0,
 } as const satisfies ChannelDefinition<'bluesky'>;

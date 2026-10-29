@@ -14,6 +14,7 @@ async function seed(registry: Repositories) {
   await registry.launches.setStatus(launch.id, 'published');
   const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'bluesky', kind: 'post', accountId: account.id, externalId: 'b1', url: 'https://bsky.example/1' });
   for (const [day, likes] of [['10', 2], ['15', 10], ['20', 30]] as const) await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes, reposts: 1 }, at(day), post.id);
+  await registry.metrics.recordMetrics(launch.id, 'bluesky', { saves: 2 }, at('20'), post.id);
   await registry.accounts.recordSnapshot(account.id, { followers: 100, following: 10, posts: 3 }, at('18', 4));
   await registry.accounts.recordSnapshot(account.id, { followers: 112, following: 10, posts: 4 }, at('24', 4));
   return { account, launch };
@@ -33,7 +34,11 @@ test('the page reads its chart, totals, ranking and options from the registry', 
   assert.equal(view.chart.groups[0]?.values.length, view.chart.buckets.length);
   assert.equal(view.chart.groups[0]?.comparison, null, 'no comparison unless asked');
   assert.equal(view.totals.previous, null);
+  assert.equal(view.totals.lifetime.reactions, 30, 'where the likes stood at the period’s end');
+  assert.deepEqual(view.details, [{ metric: 'saves', value: 2, previous: null, lifetime: 2, channels: [{ channel: 'bluesky', label: 'Bluesky', value: 2, lifetime: 2 }] }], 'the second tier, with each channel’s part');
+  assert.deepEqual(view.averages, []);
   assert.equal(view.ranking.total, 1);
+  assert.equal(view.ranking.entries[0]?.lifetime.reactions, 30);
   assert.equal(view.ranking.entries[0]?.launchId, launch.id);
   assert.deepEqual(view.options.accounts, [{ value: String(account.id), label: '@me', hint: 'Bluesky', group: 'Bluesky' }]);
   assert.ok(view.options.channels.some((c) => c.value === 'bluesky'));
@@ -114,6 +119,7 @@ test('the search tab lists each article page with what each engine said, and the
   assert.equal(entry?.label, 'yeyo11/claudio v1.0.0');
   assert.deepEqual(entry?.pages, [{ lang: 'en', url, google: { indexed: true, coverage: 'Submitted and indexed', checkedAt: '2026-10-24T06:00:00.000Z' }, bing: null }]);
   assert.equal(entry?.google?.impressions, 40, 'what grew in the period');
+  assert.deepEqual(entry?.google?.lifetime, { impressions: 40, clicks: 1 }, 'and where it stood at the period’s end');
   assert.equal(entry?.bing, null, 'Bing never read');
   assert.deepEqual((await loadSearch(registry, { from: '2026-09-26', to: TODAY, launches: [launch.id + 1] })).launches, []);
 });

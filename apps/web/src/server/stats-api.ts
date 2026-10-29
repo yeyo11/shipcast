@@ -1,5 +1,7 @@
 import {
   accountGrowth,
+  AVERAGE_METRICS,
+  DETAIL_METRICS,
   STATS_METRICS,
   statsOverview,
   statsRanking,
@@ -209,9 +211,10 @@ export const STATS_ROUTES: ApiRoute[] = [
 ];
 
 const windowSchema = { type: 'object', properties: { from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' } } };
-const totals = { type: 'object', description: 'Per family, only those the sources count', properties: Object.fromEntries(STATS_METRICS.map((m) => [m, { type: 'number' }])) };
+const totals = { type: 'object', description: 'Per family of either tier, only those the sources count', properties: Object.fromEntries([...STATS_METRICS, ...DETAIL_METRICS].map((m) => [m, { type: 'number' }])) };
+const lifetime = { ...totals, description: 'Where the same counters stood at the period’s end: their last reading by then, or their days added up' };
 const delta = { type: 'object', additionalProperties: { type: 'object', properties: { absolute: { type: 'number' }, relative: { type: ['number', 'null'] } } } };
-const breakdown = { metrics: totals, previous: totals, delta };
+const breakdown = { metrics: totals, lifetime, previous: totals, delta };
 const point = { type: 'object', properties: { bucket: { type: 'string', format: 'date' }, increase: { type: 'number' }, cumulative: { type: 'number' } } };
 const group = {
   type: 'object',
@@ -231,6 +234,11 @@ export const STATS_SCHEMAS: Record<string, JsonSchema> = {
       accounts: {
         type: 'array',
         items: { type: 'object', properties: { accountId: { type: 'integer' }, network: { type: ['string', 'null'] }, label: { type: ['string', 'null'] }, ...breakdown } },
+      },
+      averages: {
+        type: 'array',
+        description: 'Averages and ratios, never added up: the mean of each piece’s last reading by the period’s end',
+        items: { type: 'object', properties: { source: { type: 'string' }, metric: { type: 'string', enum: AVERAGE_METRICS }, value: { type: 'number' }, pieces: { type: 'integer' } } },
       },
     },
   },
@@ -262,6 +270,7 @@ export const STATS_SCHEMAS: Record<string, JsonSchema> = {
             rank: { type: 'integer' },
             score: { type: 'number', description: '1 is the network’s typical piece in the period, 2 twice that' },
             metrics: totals,
+            lifetime,
             pieces: { type: 'integer' },
             channel: { type: ['string', 'null'] },
             launchId: { type: ['integer', 'null'] },

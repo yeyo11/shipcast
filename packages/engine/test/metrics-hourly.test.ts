@@ -115,10 +115,10 @@ test('30 pieces on 6 networks: one call per batch and per repo, against one per 
     githubTraffic: n.count('/traffic/views'),
   });
   assert.deepEqual(perNetwork(before), { bluesky: 5, mastodon: 5, devto: 5, hashnode: 5, discussions: 5, brevo: 5, cloudflare: 5, githubCounts: 5, githubTraffic: 5 });
-  assert.deepEqual(perNetwork(after), { bluesky: 1, mastodon: 1, devto: 1, hashnode: 1, discussions: 1, brevo: 2, cloudflare: 1, githubCounts: 2, githubTraffic: 2 });
+  assert.deepEqual(perNetwork(after), { bluesky: 1, mastodon: 1, devto: 1, hashnode: 1, discussions: 1, brevo: 2, cloudflare: 2, githubCounts: 2, githubTraffic: 2 });
   assert.equal(before.calls.length, 60);
-  // Brevo's clicks per link are a second call; each repo's traffic is four, its stars and releases two
-  assert.equal(after.calls.length, 22);
+  // Brevo's clicks per link are a second call, the blog's days another; each repo's traffic is four, its stars and releases two
+  assert.equal(after.calls.length, 23);
 });
 
 test('an hour later unchanged values move checked_at and add no row; a changed one adds one; daily sources wait', async () => {
@@ -222,18 +222,24 @@ test('a refused traffic read is said, kept for the bell, and asked again next ho
     uniqueVisitors: 3,
     clones: 2,
     uniqueCloners: 1,
-    'views:2026-10-28': 5,
-    'visitors:2026-10-28': 2,
-    'clones:2026-10-28': 2,
-    'cloners:2026-10-28': 1,
     'referrer:news.ycombinator.com': 4,
     'referrer_visitors:news.ycombinator.com': 2,
     'path:/yeyo11/claudio': 6,
     'path_visitors:/yeyo11/claudio': 3,
-    'stars:2026-10-27': 2,
     downloads: 12,
     downloads_total: 15,
   });
+  // Each day under the day it happened, on every launch of the repo
+  assert.deepEqual(
+    (await registry.metrics.metricDays(launch!.id, 'github')).map((d) => [d.day, d.name, d.value]),
+    [
+      ['2026-10-27', 'stars', 2],
+      ['2026-10-28', 'cloners', 1],
+      ['2026-10-28', 'clones', 2],
+      ['2026-10-28', 'views', 5],
+      ['2026-10-28', 'visitors', 2],
+    ],
+  );
 });
 
 test('a push-only network’s silence keeps a piece’s numbers, and a piece it never told about starts at its initial ones', async () => {
@@ -290,4 +296,44 @@ test('a page Google files under another canonical is kept for the bell, and forg
   canonical = 'https://josegarrido.dev/en/a/';
   await collectHourly(registry, brand, { search }, new Date(t0.getTime() + 8 * 24 * HOUR));
   assert.equal(await registry.cursors.cursor(canonicalKey(launch.id)), undefined);
+});
+
+test('a source that counts per day keeps each day under it: Search Console’s days make the launch’s totals, the blog’s paths add up per day', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await aPublishedLaunch(registry, [
+    { channel: 'blog', kind: 'article:en', externalId: 'a', url: 'https://josegarrido.dev/en/a/' },
+    { channel: 'blog', kind: 'article:es', externalId: 'b', url: 'https://josegarrido.dev/es/b/' },
+  ]);
+  const search: MetricSources['search'] = {
+    pageMetrics: async () => assert.fail('the days replace the since-launch total'),
+    pageMetricsByDay: async (url) =>
+      url.includes('/en/')
+        ? [
+            { day: '2026-11-01', clicks: 2, impressions: 100, ctr: 0.02, position: 4 },
+            { day: '2026-11-02', clicks: 1, impressions: 50, ctr: 0.02, position: 10 },
+          ]
+        : [{ day: '2026-11-02', clicks: 1, impressions: 50, ctr: 0.02, position: 7 }],
+  };
+  const blog: MetricSources['blog'] = {
+    pageVisits: async () => assert.fail('read many at once'),
+    pageVisitsMany: async (paths) => new Map(paths.map((p) => [p, { views: 9, visits: 6, bySource: { direct: 9 } }])),
+    pageVisitsByDay: async (paths) => new Map(paths.map((p) => [p, { '2026-11-01': { views: 4, visits: 3 }, '2026-11-02': { views: 5, visits: 3 } }])),
+  };
+  const result = await collectHourly(registry, brand, { search, blog }, new Date('2026-11-03T09:00:00.000Z'));
+  assert.deepEqual(result.problems, []);
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).filter((m) => m.source === 'search').map((m) => [m.name, m.value]));
+  assert.deepEqual(latest, { clicks: 4, ctr: 0.02, impressions: 200, position: 6.25 }, 'the position weighted by each day’s impressions');
+  assert.deepEqual(
+    (await registry.metrics.metricDays(launch.id)).map((d) => [d.source, d.day, d.name, d.value]),
+    [
+      ['blog', '2026-11-01', 'views', 8],
+      ['blog', '2026-11-01', 'visits', 6],
+      ['search', '2026-11-01', 'clicks', 2],
+      ['search', '2026-11-01', 'impressions', 100],
+      ['blog', '2026-11-02', 'views', 10],
+      ['blog', '2026-11-02', 'visits', 6],
+      ['search', '2026-11-02', 'clicks', 2],
+      ['search', '2026-11-02', 'impressions', 100],
+    ],
+  );
 });

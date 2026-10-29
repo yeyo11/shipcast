@@ -29,7 +29,7 @@ export function Search({ data }: { data: SearchData }) {
           Articles in search engines
         </h2>
       </div>
-      <p className="muted section-lead">Whether each article is indexed is what the engine said at its last check; impressions and clicks are what each engine counted in the period, for all of a launch's pages.</p>
+      <p className="muted section-lead">Whether each article is indexed is what the engine said at its last check; impressions and clicks are what each engine counted in the period, for all of a launch's pages, with their lifetime as the period ends under them.</p>
       <div className="stats-scroll" role="region" aria-labelledby="search-title" tabIndex={0}>
         <table className="table stats-table search-table">
           <thead>
@@ -78,10 +78,10 @@ export function Search({ data }: { data: SearchData }) {
                     </td>
                     {i === 0 && (
                       <>
-                        <Count rows={l.pages.length} value={l.google?.impressions} />
-                        <Count rows={l.pages.length} value={l.google?.clicks} />
-                        <Count rows={l.pages.length} value={l.bing?.impressions} />
-                        <Count rows={l.pages.length} value={l.bing?.clicks} />
+                        <Count rows={l.pages.length} value={l.google?.impressions} lifetime={l.google?.lifetime.impressions} />
+                        <Count rows={l.pages.length} value={l.google?.clicks} lifetime={l.google?.lifetime.clicks} />
+                        <Count rows={l.pages.length} value={l.bing?.impressions} lifetime={l.bing?.lifetime.impressions} />
+                        <Count rows={l.pages.length} value={l.bing?.clicks} lifetime={l.bing?.lifetime.clicks} />
                       </>
                     )}
                   </tr>
@@ -105,10 +105,17 @@ function IndexState({ engine, yes, no }: { engine: Engine; yes: string; no: stri
   );
 }
 
-function Count({ rows, value }: { rows: number; value: number | undefined }) {
+function Count({ rows, value, lifetime }: { rows: number; value: number | undefined; lifetime: number | undefined }) {
   return (
     <td className="num" rowSpan={rows}>
-      {value === undefined ? <span aria-label="not read">—</span> : full(value)}
+      {value === undefined ? (
+        <span aria-label="not read">—</span>
+      ) : (
+        <>
+          {full(value)}
+          <span className="stats-life">{full(lifetime ?? 0)} lifetime</span>
+        </>
+      )}
     </td>
   );
 }

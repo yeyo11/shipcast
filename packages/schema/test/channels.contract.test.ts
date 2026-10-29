@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { z } from 'zod';
-import { channelTables, CHANNEL_DEFINITIONS, Language, STATS_METRICS, type ChannelDefinition } from '../src/index.ts';
+import { AVERAGE_METRICS, channelTables, CHANNEL_DEFINITIONS, DETAIL_METRICS, Language, STATS_METRICS, type ChannelDefinition } from '../src/index.ts';
 
 /*
  * Every registered channel goes through the same checks: what one channel's module must hold for the
@@ -63,8 +63,13 @@ for (const d of definitions) {
     if (d.profile) for (const f of d.profile.editable) assert.ok(d.profile.fields.includes(f));
     if (d.schedulable || d.idempotent) assert.equal(d.publishedBy, 'engine', 'only what the engine publishes is scheduled or retried');
     if (d.metrics) {
-      for (const family of Object.keys(d.metrics.families)) assert.ok((STATS_METRICS as readonly string[]).includes(family));
+      for (const family of Object.keys(d.metrics.families)) assert.ok(([...STATS_METRICS, ...DETAIL_METRICS] as readonly string[]).includes(family), `${family} is a family of either tier`);
       const readings = Object.values(d.metrics.families).flat();
+      // An average is never added up: no family takes it
+      for (const [average, name] of Object.entries(d.metrics.averaged ?? {})) {
+        assert.ok((AVERAGE_METRICS as readonly string[]).includes(average));
+        assert.ok(!readings.includes(name ?? ''), `${name} is averaged, so no family's`);
+      }
       for (const name of d.metrics.primary) assert.ok(readings.includes(name), `${name} is one of its readings`);
       // Never read faster than hourly: the owner's rule for every source
       assert.ok(d.metrics.cadence.hours >= 1, `${d.id} is read at most hourly`);

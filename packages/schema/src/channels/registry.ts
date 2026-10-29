@@ -1,6 +1,6 @@
 import { blog } from './blog.ts';
 import { bluesky } from './bluesky.ts';
-import type { ChannelDefinition, EditField, PostingWindow, ProfileCapability, StatsMetric } from './definition.ts';
+import type { AverageMetric, ChannelDefinition, EditField, MetricFamily, PostingWindow, ProfileCapability } from './definition.ts';
 import { devto } from './devto.ts';
 import { discord } from './discord.ts';
 import { githubDiscussions } from './github-discussions.ts';
@@ -107,9 +107,9 @@ export function channelTables(definitions: readonly ChannelDefinition[]) {
     replyLimits: by((d) => (d.comments?.read ? d.comments.replyLimit : undefined)),
     profiles: by<ProfileCapability>((d) => d.profile),
     posting: by<{ note: string; windows: readonly PostingWindow[] }>((d) => d.posting),
-    metricFamilies: by<Partial<Record<StatsMetric, readonly string[]>>>((d) => d.metrics?.families),
+    metricFamilies: by<Partial<Record<MetricFamily, readonly string[]>>>((d) => d.metrics?.families),
     primaryMetric: by<readonly string[]>((d) => (d.metrics && d.metrics.primary.length > 0 ? d.metrics.primary : undefined)),
-    averagedMetrics: by<readonly string[]>((d) => (d.metrics?.averaged && d.metrics.averaged.length > 0 ? d.metrics.averaged : undefined)),
+    averages: by<Partial<Record<AverageMetric, string>>>((d) => (d.metrics?.averaged && Object.keys(d.metrics.averaged).length > 0 ? d.metrics.averaged : undefined)),
     chartSlots: by<number | 'ink'>((d) => d.chartSlot),
     limits: Object.assign({}, ...definitions.map((d) => d.limits)) as Record<string, number>,
     pieceLimits: by<PieceLimit>((d) => d.text && { max: d.text.max, length: d.text.length, network: d.name, counting: d.text.counting }),
@@ -179,12 +179,14 @@ const GITHUB_PROFILE: ProfileCapability = {
 export const PROFILE_CAPABILITIES: Readonly<Record<string, ProfileCapability>> = { ...TABLES.profiles, github: GITHUB_PROFILE };
 /** When to publish on each channel by default (packages/engine/src/recommend.ts) */
 export const POSTING_DEFAULTS: Readonly<Partial<Record<ChannelId, { note: string; windows: readonly PostingWindow[] }>>> = TABLES.posting;
-/** Which readings of each channel make up each stats family */
-export const CHANNEL_METRIC_FAMILIES: Readonly<Record<string, Partial<Record<StatsMetric, readonly string[]>>>> = TABLES.metricFamilies;
+/** Which readings of each channel make up each stats family, of either tier */
+export const CHANNEL_METRIC_FAMILIES: Readonly<Record<string, Partial<Record<MetricFamily, readonly string[]>>>> = TABLES.metricFamilies;
 /** The readings a piece's row leads with: the first of these the piece has */
 export const PRIMARY_METRIC: Readonly<Record<string, readonly string[]>> = TABLES.primaryMetric;
-/** The readings of each channel that are averaged across its pieces, never added up (see ChannelDefinition.metrics) */
-export const AVERAGED_METRICS: Readonly<Record<string, readonly string[]>> = TABLES.averagedMetrics;
+/** Each channel's averages and the reading each one is (see ChannelDefinition.metrics) */
+export const CHANNEL_AVERAGES: Readonly<Record<string, Partial<Record<AverageMetric, string>>>> = TABLES.averages;
+/** The readings of each channel that are averaged across its pieces, never added up */
+export const AVERAGED_METRICS: Readonly<Record<string, readonly string[]>> = Object.fromEntries(Object.entries(CHANNEL_AVERAGES).map(([id, averages]) => [id, Object.values(averages)]));
 /** Whether a channel's reading is a ratio, averaged across pieces rather than summed */
 export function isAveragedMetric(source: string, name: string): boolean {
   return AVERAGED_METRICS[source]?.includes(name) ?? false;

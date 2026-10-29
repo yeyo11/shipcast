@@ -86,7 +86,7 @@ test('popularity is normalised per network: two networks with very different sca
   assert.ok(Math.abs((top?.score ?? 0) - 7 / 3) < 1e-9);
   // dev.to: the mean of views (1001 / 751) and reactions (21 / 16)
   assert.ok(Math.abs((second?.score ?? 0) - (1001 / 751 + 21 / 16) / 2) < 1e-9);
-  assert.deepEqual(second?.metrics, { views: 1000, reactions: 20, comments: 0 }, 'the raw numbers come beside the score');
+  assert.deepEqual(second?.metrics, { views: 1000, reactions: 20, comments: 0, saves: 0 }, 'the raw numbers come beside the score');
   assert.deepEqual(ranking.medians, { devto: { views: 750, reactions: 15 }, bluesky: { reactions: 2 } });
   assert.equal(ranking.entries.find((e) => e.postId === sky2.id)?.score, 1, 'the typical piece scores 1');
   assert.equal(top?.label, 'yeyo11/claudio v1.0.0');
@@ -138,11 +138,11 @@ test('the overview compares with the previous period, per channel and per accoun
   const overview = await statsOverview(registry, { from: '2026-10-15', to: '2026-10-19', compareTo: 'previous' });
   assert.deepEqual(overview.compareTo, { from: '2026-10-10T00:00:00.000Z', to: '2026-10-15T00:00:00.000Z' });
   const devtoStats = overview.channels.find((c) => c.channel === 'devto');
-  assert.deepEqual(devtoStats?.metrics, { views: 300, reactions: 3, comments: 1 });
-  assert.deepEqual(devtoStats?.previous, { views: 100, reactions: 2, comments: 0 });
+  assert.deepEqual(devtoStats?.metrics, { views: 300, reactions: 3, comments: 1, saves: 0 });
+  assert.deepEqual(devtoStats?.previous, { views: 100, reactions: 2, comments: 0, saves: 0 });
   assert.deepEqual(devtoStats?.delta?.views, { absolute: 200, relative: 2 });
   assert.deepEqual(devtoStats?.delta?.comments, { absolute: 1, relative: null }, 'from zero there is no ratio');
-  assert.deepEqual(overview.channels.find((c) => c.channel === 'blog')?.metrics, { views: 50 });
+  assert.deepEqual(overview.channels.find((c) => c.channel === 'blog')?.metrics, { views: 50, visits: 0 });
   assert.equal(overview.metrics.views, 350, 'dev.to and the blog');
   assert.deepEqual(
     overview.accounts.map((a) => [a.network, a.label, a.metrics.reactions]),
@@ -170,7 +170,7 @@ test('GitHub counts once per repo and starts at its first reading; old launch-wi
     await registry.metrics.recordMetrics(l.id, 'github', { stars: 130, forks: 9 }, at('21'));
   }
   const overview = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-21' });
-  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 10, shares: 0 }, 'the stars it had before are not growth');
+  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 10, shares: 0, views: 0, clones: 0 }, 'the stars it had before are not growth');
   const series = await statsSeries(registry, { metric: 'reactions', groupBy: 'launch', from: '2026-10-20', to: '2026-10-21', bucket: 'day' });
   assert.deepEqual(series.groups.map((g) => [g.label, g.baseline, g.total]), [['yeyo11/claudio v2.0.0', 120, 10]], 'attributed to the newest launch of the repo');
 
@@ -179,7 +179,7 @@ test('GitHub counts once per repo and starts at its first reading; old launch-wi
   await registry.metrics.recordMetrics(v1.id, 'newsletter', { opens: 7 }, at('20'));
   await registry.metrics.recordMetrics(v1.id, 'newsletter', { opens: 8 }, at('21'), issueEn.id);
   const news = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-21', channels: ['newsletter'] });
-  assert.deepEqual(news.channels[0]?.metrics, { views: 8, clicks: 0, impressions: 0 });
+  assert.deepEqual(news.channels[0]?.metrics, { views: 8, clicks: 0, impressions: 0, unsubscribes: 0 });
 });
 
 test('a series groups by account and launch with labels, and folds what passes the limit into other', async () => {

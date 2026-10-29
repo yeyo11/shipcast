@@ -1,5 +1,17 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { CHANNEL_METRIC_FAMILIES, EXPIRING_PIECES, STATS_METRICS, type StatsMetric } from '@shipcast/schema';
+import {
+  AVERAGE_METRICS,
+  CHANNEL_AVERAGES,
+  CHANNEL_DEFINITIONS,
+  CHANNEL_METRIC_FAMILIES,
+  DETAIL_METRICS,
+  EXPIRING_PIECES,
+  STATS_METRICS,
+  type AverageMetric,
+  type DetailMetric,
+  type MetricFamily,
+  type StatsMetric,
+} from '@shipcast/schema';
 import type { Repositories } from './repositories/index.ts';
 import { InvalidRequest } from '@shipcast/schema';
 
@@ -11,25 +23,52 @@ import { InvalidRequest } from '@shipcast/schema';
  * Readings are cumulative counters (a post's likes so far, a blog article's visits since the
  * launch), read every round. What happened in a period is therefore a difference of readings, never
  * a sum of them, and every query here reads the history up to the end of its period to find where
- * each counter stood when the period began.
+ * each counter stood when the period began. A source that counts per day (DATED_METRICS) is the
+ * exception: its days are kept under the day they happened (`metric_days`), and a period is the sum
+ * of its days (docs/decisions/dated-metrics.md).
  */
 
 /** The families every network's numbers are folded into, so a chart can put networks side by side */
-export { STATS_METRICS, type StatsMetric };
-export type MetricTotals = Partial<Record<StatsMetric, number>>;
+export { AVERAGE_METRICS, DETAIL_METRICS, STATS_METRICS, type AverageMetric, type DetailMetric, type MetricFamily, type StatsMetric };
+export type MetricTotals = Partial<Record<MetricFamily, number>>;
+
+/** Both tiers, in the order they are shown */
+const FAMILIES: readonly MetricFamily[] = [...STATS_METRICS, ...DETAIL_METRICS];
 
 /**
- * Which readings of each source make up each family; a reading left out (Instagram's `saved`, the
- * newsletter's bounces, the blog's per-source split) is not a stat. GitHub's views are left out on
- * purpose: they are a rolling 14-day count, not a counter, and the high-water mark would misread them.
+ * Which readings of each source make up each family, of either tier; a reading left out (the
+ * newsletter's bounces, the blog's per-source split) is not a stat. GitHub's views and clones are
+ * read from their days only: the readings of the same names are a rolling 14-day count, not a
+ * counter, and the high-water mark would misread them.
  */
-export const METRIC_FAMILIES: Readonly<Record<string, Partial<Record<StatsMetric, readonly string[]>>>> = {
+export const METRIC_FAMILIES: Readonly<Record<string, Partial<Record<MetricFamily, readonly string[]>>>> = {
   // Each channel's, from its definition
   ...CHANNEL_METRIC_FAMILIES,
   search: { clicks: ['clicks'], impressions: ['impressions'] },
   bing: { clicks: ['clicks'], impressions: ['impressions'] },
-  github: { reactions: ['stars'], shares: ['forks'] },
+  github: { reactions: ['stars'], shares: ['forks'], views: ['views'], clones: ['clones'] },
 };
+
+/** Each source's averages and the reading each one is: the channels' (their definitions') and the search engines' */
+export const METRIC_AVERAGES: Readonly<Record<string, Partial<Record<AverageMetric, string>>>> = {
+  ...CHANNEL_AVERAGES,
+  search: { ctr: 'ctr', position: 'position' },
+  bing: { ctr: 'ctr' },
+};
+
+/**
+ * The readings a source also keeps per day, under the day it happened: a period of them is the sum
+ * of its days, which is what the source's own screen shows for the same dates. A counter with no day
+ * kept yet (a launch read before its source kept days) is read as a counter.
+ */
+export const DATED_METRICS: Readonly<Record<string, readonly string[]>> = {
+  search: ['clicks', 'impressions'],
+  blog: ['views', 'visits'],
+  github: ['views', 'clones'],
+};
+/** Of those, the ones whose readings are no counter at all (GitHub's rolling 14 days): their days or nothing */
+const DAYS_ONLY = new Set(['github.views', 'github.clones']);
+const datedPairs = Object.entries(DATED_METRICS).flatMap(([source, names]) => names.map((name) => `${source}.${name}`));
 
 /** The families popularity is scored on; impressions say how often something was shown, not that anyone cared */
 export const POPULARITY_METRICS: readonly StatsMetric[] = ['views', 'reactions', 'comments', 'shares', 'clicks'];
@@ -82,9 +121,9 @@ const values = (items: readonly (string | number)[]) => sql.join(
 /** `column IN (…)`, or false for an empty list, which SQL cannot write */
 const inList = (column: SQL, items: readonly (string | number)[]) => (items.length === 0 ? sql`false` : sql`${column} IN (${values(items)})`);
 
-const familyPairs = (only?: StatsMetric) =>
+const familyPairs = (only?: MetricFamily) =>
   Object.entries(METRIC_FAMILIES).flatMap(([source, families]) =>
-    Object.entries(families).flatMap(([family, names]) => (only === undefined || family === only ? names.map((name) => ({ source, name, family: family as StatsMetric })) : [])),
+    Object.entries(families).flatMap(([family, names]) => (only === undefined || family === only ? names.map((name) => ({ source, name, family: family as MetricFamily })) : [])),
   );
 
 const familyOf = new Map(familyPairs().map((p) => [`${p.source}.${p.name}`, p.family]));
@@ -103,11 +142,13 @@ const familyOf = new Map(familyPairs().map((p) => [`${p.source}.${p.name}`, p.fa
  * readings pointed at their piece, each the sum of both issues, and every such launch has its issues
  * as pieces since the post model. Counting both would count the issues twice.
  */
-function counterSet(filter: StatsFilter, only?: StatsMetric): SQL {
+function counterSet(filter: StatsFilter, pairs: ReadonlyArray<{ source: string; name: string }> = familyPairs()): SQL {
   const site = values(SITE_SOURCES);
-  // A post, a newsletter issue, and a piece whose numbers expire (an Instagram story): what has numbers of its own
+  // A post, a newsletter issue, a channel's own pieces (each YouTube video, each subreddit's post) and a
+  // piece whose numbers expire (an Instagram story): what has numbers of its own, as readsMetrics says
   const expiring = EXPIRING_PIECES.map((e) => sql` OR (p.channel = ${e.channel} AND p.kind = ${e.kind})`);
-  const pieces: SQL[] = [sql`p.channel NOT IN (${site})`, sql`(p.kind = 'post' OR p.kind LIKE 'issue:%'${sql.join(expiring, sql``)})`];
+  const prefixed = PREFIXED_MAIN.map((m) => sql` OR (p.channel = ${m.channel} AND p.kind LIKE ${`${m.prefix}%`})`);
+  const pieces: SQL[] = [sql`p.channel NOT IN (${site})`, sql`(p.kind = 'post' OR p.kind LIKE 'issue:%'${sql.join(expiring, sql``)}${sql.join(prefixed, sql``)})`];
   const launchWide: SQL[] = [sql`f.source IN (${site})`];
   if (filter.channels) {
     pieces.push(inList(sql`p.channel`, filter.channels));
@@ -124,7 +165,7 @@ function counterSet(filter: StatsFilter, only?: StatsMetric): SQL {
   }
   return sql`
     fam(source, name) AS (VALUES ${sql.join(
-      familyPairs(only).map((p) => sql`(${p.source}::text, ${p.name}::text)`),
+      pairs.map((p) => sql`(${p.source}::text, ${p.name}::text)`),
       sql`, `,
     )}),
     c AS (
@@ -138,8 +179,26 @@ function counterSet(filter: StatsFilter, only?: StatsMetric): SQL {
     )`;
 }
 
+/** The channels whose own pieces are a kind with a prefix (`post:*`: YouTube's videos, Reddit's subreddits) and have numbers */
+const PREFIXED_MAIN = CHANNEL_DEFINITIONS.flatMap((d) => ('metrics' in d && d.metrics && d.edit.main.endsWith('*') ? [{ channel: d.id, prefix: d.edit.main.slice(0, -1) }] : []));
+
 /** A counter's readings, for a LATERAL join from `c` that the (launch, source, name, taken_at) index answers */
 const ofCounter = sql`m.launch_id = c.launch_id AND m.source = c.source AND m.name = c.name AND m.post_id IS NOT DISTINCT FROM c.post_id`;
+
+/**
+ * The `dd` CTE: each dated counter's days, one value a day per unit (a repo's launches all keep the
+ * repo's days: the same day once), read through `metric_days_by_launch`
+ */
+const datedDays = sql`
+    dd AS (
+      SELECT c.unit, c.name, d.day, max(d.value) AS value
+      FROM c JOIN metric_days d ON d.launch_id = c.launch_id AND d.source = c.source AND d.name = c.name AND d.post_id IS NOT DISTINCT FROM c.post_id
+      WHERE (c.source || '.' || c.name) IN (${values(datedPairs)})
+      GROUP BY c.unit, c.name, d.day
+    )`;
+
+/** The days a period covers, both included: `to` is excluded, so its last day is the one before it */
+const daysOf = (window: StatsWindow) => ({ first: dayOf(window.from), last: dayOf(new Date(Date.parse(window.to) - 1).toISOString()) });
 
 interface CounterRow {
   unit: string;
@@ -150,6 +209,8 @@ interface CounterRow {
   accountId: number | null;
   /** The increase in each window asked, in order */
   increase: number[];
+  /** Where it stood at the end of the first window: its last reading by then, or its days added up */
+  lifetime: number;
   /**
    * Readings inside each window: rows taken in it, and a row from before it read again unchanged
    * in it (its `checked_at`), which is a reading of the window that added no row
@@ -168,6 +229,12 @@ const numOrNull = (value: unknown): number | null => (value === null || value ==
  * network recounting) takes nothing away, and a reading missed is caught up by the next one.
  */
 async function counters(registry: Pick<Repositories, 'queries'>, windows: readonly StatsWindow[], filter: StatsFilter): Promise<CounterRow[]> {
+  const end = windows[0]!.to;
+  const days = windows.map(daysOf);
+  const dated = sql.join(
+    days.map((d, i) => sql`, sum(value) FILTER (WHERE day >= ${d.first} AND day <= ${d.last}) AS ${sql.raw(`ds${i}`)}, count(*) FILTER (WHERE day >= ${d.first} AND day <= ${d.last}) AS ${sql.raw(`dn${i}`)}`),
+    sql``,
+  );
   const joins = windows.map((w, i) => {
     const [b, x, f] = [`b${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL];
     return sql`
@@ -192,26 +259,39 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
       (array_agg(f#.value ORDER BY f#.taken_at NULLS LAST))[1]::float8 AS first#`.replaceAll('#', String(i)),
     ),
   );
+  const datedColumns = sql.raw(windows.map((_, i) => `, max(dz.ds${i})::float8 AS ds${i}, max(dz.dn${i})::int AS dn${i}`).join(''));
   const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`
-    WITH ${counterSet(filter)}
+    WITH ${counterSet(filter)}, ${datedDays}
     SELECT c.unit, c.source, c.name, max(c.launch_id)::int AS launch_id, max(c.post_id)::int AS post_id, max(c.account_id)::int AS account_id
-      ${sql.join(columns, sql``)}
+      ${sql.join(columns, sql``)},
+      (array_agg(lt.value ORDER BY lt.taken_at DESC NULLS LAST))[1]::float8 AS life,
+      max(dz.dall)::int AS dall, max(dz.dlife)::float8 AS dlife ${datedColumns}
     FROM c ${sql.join(joins, sql``)}
+    LEFT JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${end} ORDER BY m.taken_at DESC LIMIT 1) lt ON true
+    LEFT JOIN (
+      SELECT unit, name, count(*) AS dall, sum(value) FILTER (WHERE day <= ${days[0]!.last}) AS dlife ${dated}
+      FROM dd GROUP BY unit, name
+    ) dz ON dz.unit = c.unit AND dz.name = c.name
     GROUP BY c.unit, c.source, c.name`);
   return rows.flatMap((row) => {
+    const source = String(row.source);
+    const name = String(row.name);
+    const base = { unit: String(row.unit), source, name, launchId: num(row.launch_id), postId: numOrNull(row.post_id), accountId: numOrNull(row.account_id) };
+    // A counter with days kept is its days: a period is the days in it, its lifetime every day up to its end
+    if (num(row.dall) > 0) {
+      const readings = windows.map((_, i) => num(row[`dn${i}`]));
+      if (num(row.dlife) === 0 && readings.every((n) => n === 0)) return [];
+      return [{ ...base, increase: windows.map((_, i) => num(row[`ds${i}`])), readings, lifetime: num(row.dlife) }];
+    }
+    if (DAYS_ONLY.has(`${source}.${name}`)) return [];
     const readings = windows.map((_, i) => num(row[`n${i}`]));
     const started = windows.some((_, i) => numOrNull(row[`base${i}`]) !== null);
     // A counter never read up to the end of the windows is not there at all
     if (!started && readings.every((n) => n === 0)) return [];
-    const source = String(row.source);
     return [
       {
-        unit: String(row.unit),
-        source,
-        name: String(row.name),
-        launchId: num(row.launch_id),
-        postId: numOrNull(row.post_id),
-        accountId: numOrNull(row.account_id),
+        ...base,
+        lifetime: num(row.life),
         increase: windows.map((_, i) => {
           const hi = numOrNull(row[`hi${i}`]);
           if (hi === null) return 0;
@@ -225,9 +305,9 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
 }
 
 /** The families a source counts, so a channel shows a zero where it counts and nothing where it does not */
-const familiesOf = (source: string) => Object.keys(METRIC_FAMILIES[source] ?? {}) as StatsMetric[];
+const familiesOf = (source: string) => Object.keys(METRIC_FAMILIES[source] ?? {}) as MetricFamily[];
 
-function add(totals: MetricTotals, family: StatsMetric, value: number) {
+function add(totals: MetricTotals, family: MetricFamily, value: number) {
   totals[family] = (totals[family] ?? 0) + value;
 }
 
@@ -243,9 +323,9 @@ export interface Delta {
   relative: number | null;
 }
 
-function deltas(current: MetricTotals, previous: MetricTotals): Partial<Record<StatsMetric, Delta>> {
-  const out: Partial<Record<StatsMetric, Delta>> = {};
-  for (const family of STATS_METRICS) {
+function deltas(current: MetricTotals, previous: MetricTotals): Partial<Record<MetricFamily, Delta>> {
+  const out: Partial<Record<MetricFamily, Delta>> = {};
+  for (const family of FAMILIES) {
     const now = current[family];
     if (now === undefined) continue;
     const before = previous[family] ?? 0;
@@ -255,9 +335,24 @@ function deltas(current: MetricTotals, previous: MetricTotals): Partial<Record<S
 }
 
 export interface StatsBreakdown {
+  /** What grew in the period, per family of either tier */
   metrics: MetricTotals;
+  /**
+   * Where the same counters stood at the period's end, what a network's own screen of a post shows:
+   * each one's last reading by then (or its days added up), whenever it was published
+   */
+  lifetime: MetricTotals;
   previous?: MetricTotals;
-  delta?: Partial<Record<StatsMetric, Delta>>;
+  delta?: Partial<Record<MetricFamily, Delta>>;
+}
+
+/** One source's average as the period ends: the mean of its pieces' (or launches') last readings by then */
+export interface AverageStat {
+  source: string;
+  metric: AverageMetric;
+  value: number;
+  /** How many pieces or launches it is the mean of */
+  pieces: number;
 }
 
 export interface ChannelStats extends StatsBreakdown {
@@ -276,6 +371,8 @@ export interface StatsOverview extends StatsBreakdown {
   channels: ChannelStats[];
   /** Only what an account published; the blog and the site-level sources have no account */
   accounts: AccountStats[];
+  /** The averages and ratios, never added up: where they stood at the period's end, by source */
+  averages: AverageStat[];
 }
 
 export interface OverviewOptions extends StatsFilter {
@@ -290,10 +387,10 @@ export async function statsOverview(registry: Pick<Repositories, 'accounts' | 'q
   const window = statsWindow(options.from, options.to);
   const compareTo = options.compareTo === 'previous' ? previousWindow(window) : options.compareTo;
   const windows = compareTo ? [window, compareTo] : [window];
-  const rows = await counters(registry, windows, options);
+  const [rows, averages] = await Promise.all([counters(registry, windows, options), statsAverages(registry, window, options)]);
 
-  type Acc = { sources: Set<string>; current: MetricTotals; previous: MetricTotals };
-  const fresh = (): Acc => ({ sources: new Set(), current: {}, previous: {} });
+  type Acc = { sources: Set<string>; current: MetricTotals; previous: MetricTotals; lifetime: MetricTotals };
+  const fresh = (): Acc => ({ sources: new Set(), current: {}, previous: {}, lifetime: {} });
   const all = fresh();
   const byChannel = new Map<string, Acc>();
   const byAccount = new Map<number, Acc>();
@@ -305,15 +402,17 @@ export async function statsOverview(registry: Pick<Repositories, 'accounts' | 'q
     for (const acc of targets) {
       acc.sources.add(row.source);
       add(acc.current, family, row.increase[0] ?? 0);
+      add(acc.lifetime, family, row.lifetime);
       if (compareTo) add(acc.previous, family, row.increase[1] ?? 0);
     }
   }
 
   const breakdown = (acc: Acc): StatsBreakdown => {
     const metrics = { ...emptyFor(acc.sources), ...acc.current };
-    if (!compareTo) return { metrics };
+    const lifetime = { ...emptyFor(acc.sources), ...acc.lifetime };
+    if (!compareTo) return { metrics, lifetime };
     const previous = { ...emptyFor(acc.sources), ...acc.previous };
-    return { metrics, previous, delta: deltas(metrics, previous) };
+    return { metrics, lifetime, previous, delta: deltas(metrics, previous) };
   };
   const accounts = new Map((await registry.accounts.accounts()).map((a) => [a.id, a]));
   return {
@@ -324,7 +423,29 @@ export async function statsOverview(registry: Pick<Repositories, 'accounts' | 'q
     accounts: [...byAccount]
       .map(([accountId, acc]) => ({ accountId, network: accounts.get(accountId)?.network ?? null, label: accounts.get(accountId)?.label ?? null, ...breakdown(acc) }))
       .sort((a, b) => (a.network ?? '').localeCompare(b.network ?? '') || a.accountId - b.accountId),
+    averages,
   };
+}
+
+const averagePairs = Object.entries(METRIC_AVERAGES).flatMap(([source, averages]) => Object.entries(averages).map(([metric, name]) => ({ source, name, metric: metric as AverageMetric })));
+const averageOf = new Map(averagePairs.map((p) => [`${p.source}.${p.name}`, p.metric]));
+
+/**
+ * Each source's averages as a period ends: every piece's (or launch's) last reading by then, and
+ * their mean. An average is never differenced: what "grew" in a period means nothing for a CTR.
+ */
+export async function statsAverages(registry: Pick<Repositories, 'queries'>, window: StatsWindow, filter: StatsFilter): Promise<AverageStat[]> {
+  const rows = await registry.queries.selectRows<{ source: string; name: string; value: number; pieces: number }>(sql`
+    WITH ${counterSet(filter, averagePairs)}
+    SELECT c.source, c.name, avg(lt.value)::float8 AS value, count(*)::int AS pieces
+    FROM c JOIN LATERAL (SELECT m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${window.to} ORDER BY m.taken_at DESC LIMIT 1) lt ON true
+    GROUP BY c.source, c.name`);
+  return rows
+    .flatMap((r) => {
+      const metric = averageOf.get(`${r.source}.${r.name}`);
+      return metric ? [{ source: r.source, metric, value: Number(r.value), pieces: Number(r.pieces) }] : [];
+    })
+    .sort((a, b) => AVERAGE_METRICS.indexOf(a.metric) - AVERAGE_METRICS.indexOf(b.metric) || a.source.localeCompare(b.source));
 }
 
 /** `launchChannel` keys a series `<launch id>:<channel>`: each launch's channels apart, in one query for a list of launches */
@@ -352,7 +473,7 @@ export interface SeriesGroup {
 }
 
 export interface StatsSeries {
-  metric: StatsMetric;
+  metric: MetricFamily;
   groupBy: SeriesGroupBy;
   bucket: SeriesBucket;
   window: StatsWindow;
@@ -363,7 +484,7 @@ export interface StatsSeries {
 }
 
 export interface SeriesOptions extends StatsFilter {
-  metric: StatsMetric;
+  metric: MetricFamily;
   groupBy: SeriesGroupBy;
   from: string;
   to: string;
@@ -408,8 +529,9 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
   const window = statsWindow(options.from, options.to);
   const buckets = bucketsOf(window, options.bucket);
   const limit = options.limit ?? 10;
-  const day = sql`left(taken_at, 10)`;
-  const bucketOf = options.bucket === 'day' ? day : sql`to_char(${day}::date - (extract(isodow FROM ${day}::date)::int - 1), 'YYYY-MM-DD')`;
+  const bucketOfDay = (day: SQL) => (options.bucket === 'day' ? day : sql`to_char(${day}::date - (extract(isodow FROM ${day}::date)::int - 1), 'YYYY-MM-DD')`);
+  const bucketOf = bucketOfDay(sql`left(taken_at, 10)`);
+  const { first, last } = daysOf(window);
   const key =
     options.groupBy === 'channel'
       ? sql`u.source`
@@ -419,13 +541,18 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
           ? sql`u.launch_id::text || ':' || u.source`
           : sql`u.launch_id::text`;
   const rows = await registry.queries.selectRows<{ key: string; bucket: string | null; increase: number }>(sql`
-    WITH ${counterSet(options, options.metric)},
+    WITH ${counterSet(options, familyPairs(options.metric))}, ${datedDays},
+    -- The counters read as counters: not those with days kept, nor those that are their days or nothing
+    cc AS (
+      SELECT c.* FROM c
+      WHERE NOT EXISTS (SELECT 1 FROM dd WHERE dd.unit = c.unit AND dd.name = c.name) AND (c.source || '.' || c.name) NOT IN (${values([...DAYS_ONLY])})
+    ),
     w AS (
-      SELECT c.unit, c.name, m.taken_at, m.value FROM c
+      SELECT c.unit, c.name, m.taken_at, m.value FROM cc c
       JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${window.from} AND m.taken_at < ${window.to}) m ON true
     ),
     base AS (
-      SELECT c.unit, c.name, m.taken_at, m.value FROM c
+      SELECT c.unit, c.name, m.taken_at, m.value FROM cc c
       JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${window.from} ORDER BY m.taken_at DESC LIMIT 1) m ON true
     ),
     start AS (
@@ -445,7 +572,12 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
     ),
     b AS (SELECT unit, name, bucket, max(value) AS hi FROM readings GROUP BY unit, name, bucket),
     hw AS (SELECT unit, name, bucket, max(hi) OVER (PARTITION BY unit, name ORDER BY bucket NULLS FIRST ROWS UNBOUNDED PRECEDING) AS hw FROM b),
-    inc AS (SELECT unit, bucket, hw - coalesce(lag(hw) OVER (PARTITION BY unit, name ORDER BY bucket NULLS FIRST), 0) AS increase FROM hw),
+    inc AS (
+      SELECT unit, bucket, hw - coalesce(lag(hw) OVER (PARTITION BY unit, name ORDER BY bucket NULLS FIRST), 0) AS increase FROM hw
+      UNION ALL
+      -- A dated counter's days go to the bucket of the day they happened; those before the period are its start
+      SELECT unit, CASE WHEN day < ${first} THEN NULL ELSE ${bucketOfDay(sql`day`)} END, value FROM dd WHERE day <= ${last}
+    ),
     u AS (SELECT unit, max(source) AS source, max(launch_id) AS launch_id, max(account_id) AS account_id FROM c GROUP BY unit)
     SELECT ${key} AS key, i.bucket, sum(i.increase)::float8 AS increase
     FROM inc i JOIN u ON u.unit = i.unit
@@ -516,6 +648,8 @@ export interface RankingEntry {
   score: number;
   /** The raw increases in the period, beside the score */
   metrics: MetricTotals;
+  /** Where the same counters stood at the period's end: a piece's numbers as its network shows them */
+  lifetime: MetricTotals;
   /** How many counted pieces it is made of */
   pieces: number;
   /** The piece's network; for an account, its network */
@@ -592,14 +726,16 @@ export async function statsRanking(registry: Pick<Repositories, 'accounts' | 'qu
     postId: number | null;
     accountId: number | null;
     metrics: MetricTotals;
+    lifetime: MetricTotals;
     read: boolean;
   }
   const units = new Map<string, Unit>();
   for (const row of rows) {
     const family = familyOf.get(`${row.source}.${row.name}`);
     if (!family) continue;
-    const unit = units.get(row.unit) ?? units.set(row.unit, { unit: row.unit, source: row.source, launchId: row.launchId, postId: row.postId, accountId: row.accountId, metrics: {}, read: false }).get(row.unit)!;
+    const unit = units.get(row.unit) ?? units.set(row.unit, { unit: row.unit, source: row.source, launchId: row.launchId, postId: row.postId, accountId: row.accountId, metrics: {}, lifetime: {}, read: false }).get(row.unit)!;
     add(unit.metrics, family, row.increase[0] ?? 0);
+    add(unit.lifetime, family, row.lifetime);
     // Only what was read in the period is ranked: a piece with no reading there says nothing of it
     unit.read ||= (row.readings[0] ?? 0) > 0;
   }
@@ -610,7 +746,7 @@ export async function statsRanking(registry: Pick<Repositories, 'accounts' | 'qu
     const m: MetricTotals = {};
     for (const family of familiesOf(source)) {
       const increases = members.map((u) => u.metrics[family] ?? 0);
-      if (POPULARITY_METRICS.includes(family) && increases.some((x) => x > 0)) m[family] = median(increases);
+      if ((POPULARITY_METRICS as readonly MetricFamily[]).includes(family) && increases.some((x) => x > 0)) m[family] = median(increases);
     }
     if (Object.keys(m).length > 0) medians[source] = m;
   }
@@ -630,6 +766,7 @@ export async function statsRanking(registry: Pick<Repositories, 'accounts' | 'qu
       key: u.unit,
       score: scoreOf(u),
       metrics: { ...emptyFor([u.source]), ...u.metrics },
+      lifetime: { ...emptyFor([u.source]), ...u.lifetime },
       pieces: 1,
       channel: u.source,
       launchId: u.launchId,
@@ -644,12 +781,15 @@ export async function statsRanking(registry: Pick<Repositories, 'accounts' | 'qu
     );
     drafts = [...groups].map(([id, members]) => {
       const metrics: MetricTotals = emptyFor(members.map((m) => m.source));
-      for (const member of members) for (const [family, value] of Object.entries(member.metrics)) add(metrics, family as StatsMetric, value);
+      const lifetime: MetricTotals = emptyFor(members.map((m) => m.source));
+      for (const member of members) for (const [family, value] of Object.entries(member.metrics)) add(metrics, family as MetricFamily, value);
+      for (const member of members) for (const [family, value] of Object.entries(member.lifetime)) add(lifetime, family as MetricFamily, value);
       const channels = [...new Set(members.map((m) => m.source))];
       return {
         key: String(id),
         score: members.reduce((n, m) => n + scoreOf(m), 0) / members.length,
         metrics,
+        lifetime,
         pieces: members.length,
         channel: options.by === 'account' && channels.length === 1 ? channels[0]! : null,
         launchId: options.by === 'launch' ? id : null,

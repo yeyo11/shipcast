@@ -62,6 +62,6 @@ export const blog = {
   },
   // Read for the launch as a whole (a site source), not per piece: no row leads with it
   // Cloudflare Web Analytics' page views of the article's paths, one grouped query for every path
-  metrics: { families: { views: ['views'] }, primary: [], cadence: HOURLY_BATCHED },
+  metrics: { families: { views: ['views'], visits: ['visits'] }, primary: [], cadence: HOURLY_BATCHED },
   chartSlot: 5,
 } as const satisfies ChannelDefinition<'blog'>;

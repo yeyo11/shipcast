@@ -7,12 +7,13 @@ type Totals = Partial<Record<Metric, number>>;
 
 /**
  * The period's totals, one per family the sources count, with the change against the previous
- * period when comparing. The strip is also the chart's metric switch, so it is a radio group: one
+ * period when comparing, and the lifetime beside it: where the same numbers stood at the period's
+ * end, what a network's own screen shows. The strip is also the chart's metric switch, so it is a radio group: one
  * family is charted at a time, arrows move between them as in any radio group. The change is a word
  * and an arrow, never a colour: green and red would read as good and bad, and in Cartel red only
  * means failure.
  */
-export function Kpis({ totals, previous, metric, onPick }: { totals: Totals; previous: Totals | null; metric: Metric; onPick: (m: Metric) => void }) {
+export function Kpis({ totals, previous, lifetime, metric, onPick }: { totals: Totals; previous: Totals | null; lifetime: Totals; metric: Metric; onPick: (m: Metric) => void }) {
   const list = useRef<HTMLDivElement>(null);
   const shown = METRICS.filter((m) => totals[m] !== undefined);
   if (shown.length === 0) return null;
@@ -37,6 +38,7 @@ export function Kpis({ totals, previous, metric, onPick }: { totals: Totals; pre
           <button key={m} type="button" role="radio" className="kpi" aria-checked={metric === m} tabIndex={m === focusable ? 0 : -1} onClick={() => onPick(m)} onKeyDown={(e) => onKeyDown(e, i)}>
             <span className="kpi-label">{METRIC_NAMES[m]}</span>
             <span className="kpi-value">{full(value)}</span>
+            <span className="stats-life">{full(lifetime[m] ?? 0)} lifetime</span>
             {delta && (
               <span className={`kpi-delta ${delta.direction}`}>
                 <span aria-hidden="true">{delta.direction === 'up' ? '▲' : delta.direction === 'down' ? '▼' : '■'}</span> {delta.text}

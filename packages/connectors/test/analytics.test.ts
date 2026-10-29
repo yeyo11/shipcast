@@ -48,6 +48,31 @@ test('Cloudflare page views and visits are summed by source for one path', async
   assert.deepEqual(body.variables, { account: 'acc', filter: { siteTag: 'site', requestPath: '/en/claudio/', date_geq: '2026-10-25', date_leq: '2026-10-31' } });
 });
 
+test('Cloudflare reads many paths day by day in one query, each day under its date', async () => {
+  const calls: Call[] = [];
+  const groups = [
+    { count: 4, sum: { visits: 3 }, dimensions: { date: '2026-10-25', requestPath: '/en/claudio/' } },
+    { count: 6, sum: { visits: 5 }, dimensions: { date: '2026-10-26', requestPath: '/en/claudio/' } },
+    { count: 2, sum: { visits: 2 }, dimensions: { date: '2026-10-26', requestPath: '/es/claudio/' } },
+    { count: 9, sum: { visits: 9 }, dimensions: { date: '2026-10-26', requestPath: '/elsewhere/' } },
+  ];
+  const cf = new CloudflareAnalytics({
+    apiToken: 'cf',
+    accountId: 'acc',
+    siteTag: 'site',
+    fetch: fakeFetch([['POST https://api.cloudflare.com/client/v4/graphql', () => Response.json({ data: { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: groups }] } }, errors: null })]], calls),
+  });
+  const days = await cf.pageVisitsByDay(['/en/claudio/', '/es/claudio/', '/en/other/'], '2026-10-25', '2026-10-31');
+  assert.deepEqual(Object.fromEntries(days), {
+    '/en/claudio/': { '2026-10-25': { views: 4, visits: 3 }, '2026-10-26': { views: 6, visits: 5 } },
+    '/es/claudio/': { '2026-10-26': { views: 2, visits: 2 } },
+    '/en/other/': {},
+  });
+  assert.match(JSON.parse(String(calls[0]!.body)).query as string, /dimensions \{ date requestPath \}/);
+  assert.equal((await cf.pageVisitsByDay([], '2026-10-25', '2026-10-31')).size, 0);
+  assert.equal(calls.length, 1, 'no paths, no query');
+});
+
 test('a GraphQL error from Cloudflare is raised, not read as zero visits', async () => {
   const cf = new CloudflareAnalytics({
     apiToken: 'cf',
@@ -88,6 +113,45 @@ test('Search Console signs a service-account JWT, exchanges it once, and reads o
   assert.equal(claims.iss, 'shipcast@project.iam.gserviceaccount.com');
   assert.equal(claims.scope, 'https://www.googleapis.com/auth/webmasters', 'resubmitting the sitemap is a write');
   assert.equal(calls[1]!.headers.authorization, 'Bearer goog');
+});
+
+test('Search Console reads one page day by day, fresh days included, each under the day searched', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const calls: Call[] = [];
+  const sc = new SearchConsole({
+    serviceAccount: { client_email: 'shipcast@project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() },
+    property: 'sc-domain:josegarrido.dev',
+    fetch: fakeFetch(
+      [
+        ['POST https://oauth2.googleapis.com/token', () => Response.json({ access_token: 'goog', expires_in: 3600 })],
+        [
+          'POST https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Ajosegarrido.dev/searchAnalytics/query',
+          () =>
+            Response.json({
+              rows: [
+                { keys: ['2026-10-26'], clicks: 2, impressions: 40, ctr: 0.05, position: 9 },
+                { keys: ['2026-10-28'], clicks: 0, impressions: 12, ctr: 0, position: 14.5 },
+              ],
+              metadata: { first_incomplete_date: '2026-10-28' },
+            }),
+        ],
+      ],
+      calls,
+    ),
+  });
+  assert.deepEqual(await sc.pageMetricsByDay('https://josegarrido.dev/en/claudio/', '2026-10-25', '2026-10-31'), [
+    { day: '2026-10-26', clicks: 2, impressions: 40, ctr: 0.05, position: 9 },
+    { day: '2026-10-28', clicks: 0, impressions: 12, ctr: 0, position: 14.5 },
+  ]);
+  const body = JSON.parse(String(calls[1]!.body)) as Record<string, unknown>;
+  assert.deepEqual(body, {
+    startDate: '2026-10-25',
+    endDate: '2026-10-31',
+    dimensions: ['date'],
+    dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'equals', expression: 'https://josegarrido.dev/en/claudio/' }] }],
+    dataState: 'all',
+    rowLimit: 25_000,
+  });
 });
 
 test('Search Console tells whether a URL is indexed and resubmits the sitemap', async () => {

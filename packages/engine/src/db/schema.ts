@@ -89,6 +89,27 @@ export const metrics = pgTable(
   (t) => [index('metrics_by_launch').on(t.launchId, t.source, t.name, t.takenAt), index('metrics_by_post').on(t.postId)],
 );
 
+// What a source counts per day, under the day it happened rather than the time it was read: Search
+// Console's clicks, the blog's views, a repo's traffic (docs/decisions/dated-metrics.md). A day read
+// again replaces its value: the source's later word on a day is the better one
+export const metricDays = pgTable(
+  'metric_days',
+  {
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id),
+    // The piece the day is of; null for a site-level source, as in `metrics`
+    postId: integer('post_id').references(() => posts.id),
+    source: text('source').notNull(),
+    name: text('name').notNull(),
+    // YYYY-MM-DD, in the source's own calendar (Search Console's is Pacific time)
+    day: text('day').notNull(),
+    value: doublePrecision('value').notNull(),
+    readAt: text('read_at').notNull(),
+  },
+  (t) => [unique('metric_days_unique').on(t.launchId, t.postId, t.source, t.name, t.day).nullsNotDistinct(), index('metric_days_by_launch').on(t.launchId, t.source, t.name, t.day)],
+);
+
 // Accounts connected from the app: public settings here, secrets in the keychain under `account:<id>`
 export const accounts = pgTable(
   'accounts',

@@ -8,6 +8,7 @@ import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
 import { Empty, PageHead } from '../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../components/PageToolbar';
 import { Accounts } from '../../components/stats/Accounts';
+import { Details } from '../../components/stats/Details';
 import { FilterBar, METRIC_NAMES } from '../../components/stats/FilterBar';
 import { Kpis } from '../../components/stats/Kpis';
 import { RankingTable } from '../../components/stats/RankingTable';
@@ -139,7 +140,7 @@ function Stats() {
     empty
   ) : (
     <>
-      <Kpis totals={stats.totals.metrics} previous={stats.totals.previous} metric={search.metric} onPick={(metric) => change({ metric })} />
+      <Kpis totals={stats.totals.metrics} previous={stats.totals.previous} lifetime={stats.totals.lifetime} metric={search.metric} onPick={(metric) => change({ metric })} />
       <section className="chart-card" aria-labelledby="chart-title">
         <h2 id="chart-title" className="chart-title">
           {title}
@@ -151,6 +152,7 @@ function Stats() {
         )}
         <p className="chart-note muted">Drag across the chart, or hold Shift with the arrow keys, to zoom in. Each point is what grew that {per}.</p>
       </section>
+      <Details details={stats.details} averages={stats.averages} comparing={stats.comparePeriod !== null} />
     </>
   );
 

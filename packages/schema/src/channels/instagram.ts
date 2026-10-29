@@ -83,11 +83,25 @@ export const instagram = {
       { days: WEEKEND, from: 19, to: 21, weight: 0.6 },
     ],
   },
-  // `reach` is unique accounts, not impressions (Meta retired those in 2025): it is read, but no family's.
-  // A story's views and shares count with the post's; its insights last 24 hours
+  // `reach` is unique accounts, not impressions (Meta retired those in 2025): a family of the second
+  // tier, never `impressions`. A story's views and shares count with the post's; its insights last 24
+  // hours, and its taps and swipes are its `navigation`, as Instagram adds them up
   metrics: {
-    families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares', 'reposts'], clicks: ['bio_link_clicks'] },
+    families: {
+      views: ['views'],
+      reactions: ['likes'],
+      comments: ['comments'],
+      shares: ['shares', 'reposts'],
+      clicks: ['bio_link_clicks'],
+      saves: ['saved'],
+      reach: ['reach'],
+      interactions: ['total_interactions'],
+      follows: ['follows'],
+      profileVisits: ['profile_visits'],
+      navigation: ['taps_forward', 'taps_back', 'exits', 'swipes_forward'],
+    },
     primary: ['views', 'likes'],
+    averaged: { avgWatchMs: 'avg_watch_ms', skipRate: 'skip_rate' },
     cadence: HOURLY_BATCHED,
     expiring: { kind: 'story', hours: 24, lastReadHours: 23.5 },
   },

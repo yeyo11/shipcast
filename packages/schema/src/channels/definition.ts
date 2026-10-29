@@ -23,6 +23,25 @@ export type EditField = 'text' | 'title' | 'tags' | 'link' | 'image';
 export const STATS_METRICS = ['views', 'reactions', 'comments', 'shares', 'clicks', 'impressions'] as const;
 export type StatsMetric = (typeof STATS_METRICS)[number];
 
+/**
+ * The second tier: counters only some networks give, added up across them like the six but shown in
+ * a table of their own, never charted or scored (docs/stats.md). `navigation` is a story's taps and
+ * swipes, as Instagram adds them up; `watchMinutes` is minutes watched.
+ */
+export const DETAIL_METRICS = ['saves', 'reach', 'interactions', 'follows', 'profileVisits', 'navigation', 'watchMinutes', 'engagedViews', 'visits', 'clones', 'unsubscribes'] as const;
+export type DetailMetric = (typeof DETAIL_METRICS)[number];
+/** Either tier: what a channel's readings are folded into */
+export type MetricFamily = StatsMetric | DetailMetric;
+
+/**
+ * Readings that are an average or a ratio of one piece, never added up or differenced: across pieces
+ * they are averaged, and a period shows where they stood at its end. Each has one unit: seconds,
+ * milliseconds (`avgWatchMs`), a percentage (`avgViewPercent`, `skipRate`), a fraction (`ctr`,
+ * `upvoteRatio`) or a rank (`position`).
+ */
+export const AVERAGE_METRICS = ['avgViewSeconds', 'avgViewPercent', 'avgReadSeconds', 'avgWatchMs', 'skipRate', 'upvoteRatio', 'ctr', 'position'] as const;
+export type AverageMetric = (typeof AVERAGE_METRICS)[number];
+
 export type ProfileFieldId = 'displayName' | 'bio' | 'links' | 'avatar';
 /** The fields Shipcast can write; the picture is advice only */
 export type EditableField = Exclude<ProfileFieldId, 'avatar'>;
@@ -193,14 +212,14 @@ export interface ChannelDefinition<Id extends string = string> {
   posting?: { note: string; windows: readonly PostingWindow[] };
   /** Its readings, folded into the stats' families, and the ones a piece's row leads with */
   metrics?: {
-    families: Partial<Record<StatsMetric, readonly string[]>>;
+    families: Partial<Record<MetricFamily, readonly string[]>>;
     /** The first of these a piece has is its row's number */
     primary: readonly string[];
     /**
-     * Readings that are a ratio or an average of one piece (Reddit's upvote ratio): across pieces they
-     * are averaged, never added up, and no family takes them
+     * Readings that are a ratio or an average of one piece (Reddit's upvote ratio), by the average
+     * they are: across pieces they are averaged, never added up, and no family takes them
      */
-    averaged?: readonly string[];
+    averaged?: Partial<Record<AverageMetric, string>>;
     /** How often its numbers are worth reading (phase 8 of docs/plans/performance-refactor.md) */
     cadence: MetricCadence;
     /**

@@ -26,6 +26,15 @@ export interface IndexStatus {
   userCanonical?: string;
 }
 
+/** One day of a page's search numbers: `day` is YYYY-MM-DD in Pacific time, as Google counts */
+export interface SearchDay {
+  day: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 /**
  * Google Search Console: clicks, impressions, CTR and average position of one page (Search
  * Analytics), whether a page is indexed (URL Inspection), and resubmitting the sitemap. Authenticated as a service account added as a user of the property,
@@ -121,6 +130,32 @@ export class SearchConsole {
     return row
       ? { clicks: row.clicks, impressions: row.impressions, ctr: row.ctr, position: row.position }
       : { clicks: 0, impressions: 0 };
+  }
+
+  /**
+   * The same numbers of one page day by day, each under the day the searches happened (Google's
+   * days are Pacific time), fresh data included (`dataState: all`): the last two or three days are
+   * still being counted and change when read again. A day with no impression is left out.
+   */
+  async pageMetricsByDay(url: string, since: string, until: string): Promise<SearchDay[]> {
+    const response = await this.#fetch(
+      `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(this.#property)}/searchAnalytics/query`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${await this.#accessToken()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          startDate: since,
+          endDate: until,
+          dimensions: ['date'],
+          dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'equals', expression: url }] }],
+          dataState: 'all',
+          // 16 months of days at most, well under one page of rows
+          rowLimit: 25_000,
+        }),
+      },
+    );
+    const { rows } = await json<{ rows?: Array<{ keys: string[]; clicks: number; impressions: number; ctr: number; position: number }> }>('Search Console', response, 'page metrics by day');
+    return (rows ?? []).flatMap((r) => (r.keys[0] ? [{ day: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position }] : []));
   }
 
   /** Whether Google has indexed one URL of the property; the API allows 2,000 inspections a day */
