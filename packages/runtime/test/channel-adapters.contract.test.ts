@@ -134,6 +134,7 @@ for (const adapter of CHANNEL_ADAPTERS) {
     assert.equal(comments?.reader !== undefined, d.comments?.read ?? false, 'comments read');
     assert.equal(comments?.replier !== undefined, d.comments?.reply ?? false, 'comments answered');
     assert.equal(adapter.metrics !== undefined, d.metrics !== undefined, 'numbers read');
+    assert.equal(has(adapter.metrics?.(connector), 'analytics'), d.metrics?.analytics !== undefined, 'analytics read on their own cadence');
     const spec = networkOf(adapter);
     if (spec) {
       const values: Record<string, string> = {};

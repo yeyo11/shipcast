@@ -1,6 +1,6 @@
 import type { MetricStore } from './ports.ts';
 import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
-import { channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
+import { channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
@@ -44,6 +44,12 @@ export interface PostMetricReader extends Partial<MetricReader> {
   metrics(externalId: string): Promise<Metrics>;
   /** The numbers of many pieces in as few calls as the network allows; a piece missing from the answer is gone */
   metricsMany?(externalIds: string[]): Promise<Map<string, Metrics>>;
+  /**
+   * The network's analytics of each piece, lifetime to date from `since` to `until` (YYYY-MM-DD), read
+   * on the channel's own analytics cadence (YouTube Analytics, daily); a piece missing from the answer
+   * keeps its last numbers
+   */
+  analytics?(pieces: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<Map<string, Metrics>>;
 }
 
 /** Each source the engine can read numbers from; a source left out is not read. */
@@ -96,6 +102,35 @@ const SITEMAP_EVERY_MS = 24 * 3600 * 1000;
 
 export const sitemapUrl = (site: string) => `${site}/sitemap-index.xml`;
 
+/** Where a launch's article pages whose Google canonical is another URL are kept, while they are */
+export const CANONICAL_PREFIX = 'search-canonical:';
+export const canonicalKey = (launchId: number) => `${CANONICAL_PREFIX}${launchId}`;
+
+/** An article page Google files under another URL: its clicks and impressions go to that one */
+export interface CanonicalMismatch {
+  url: string;
+  googleCanonical: string;
+}
+
+const sameUrl = (a: string, b: string) => {
+  try {
+    return new URL(a).href === new URL(b).href;
+  } catch {
+    return a === b;
+  }
+};
+
+/**
+ * Keeps a launch's pages whose Google-selected canonical is not their own URL, for the bell to say
+ * so, and forgets them once Google agrees again. A page not indexed has no canonical yet: not one.
+ */
+export async function noteCanonicals(registry: { cursors: Pick<CursorRepository, 'setCursor' | 'deleteCursor'> }, launchId: number, statuses: ReadonlyArray<{ url: string; status: IndexStatus }>): Promise<CanonicalMismatch[]> {
+  const mismatches = statuses.flatMap(({ url, status }) => (status.googleCanonical && !sameUrl(status.googleCanonical, url) ? [{ url, googleCanonical: status.googleCanonical }] : []));
+  if (mismatches.length > 0) await registry.cursors.setCursor(canonicalKey(launchId), JSON.stringify(mismatches));
+  else await registry.cursors.deleteCursor(canonicalKey(launchId));
+  return mismatches;
+}
+
 /** A search engine's view of an article URL, as of the last reading; undefined until it is first read */
 export async function indexStatus(registry: { cursors: Pick<CursorRepository, 'cursor'> }, url: string, engine: SearchEngine = 'google'): Promise<(IndexStatus & { checkedAt: string }) | undefined> {
   const raw = await registry.cursors.cursor(indexStatusKey(url, engine));
@@ -122,6 +157,40 @@ export function articleUrls(pieces: Post[]): Array<{ lang: Language; url: string
     const lang = p.channel === 'blog' && p.kind.startsWith('article:') && p.status !== 'deleted' ? kindLanguage(p.kind) : undefined;
     return lang && p.url ? [{ lang, url: p.url }] : [];
   });
+}
+
+/**
+ * A launch's search numbers from each language's page: clicks and impressions summed, the CTR of
+ * the sum, and the average position weighted by each page's impressions (Search Console's own way
+ * of averaging it), where the engine gives one. Averages are not counters: never summed again.
+ */
+export function searchValues(pages: readonly Metrics[]): Record<string, number> {
+  const clicks = pages.reduce((n, m) => n + (m.clicks ?? 0), 0);
+  const impressions = pages.reduce((n, m) => n + (m.impressions ?? 0), 0);
+  const ranked = pages.filter((m) => m.position !== undefined && (m.impressions ?? 0) > 0);
+  const rankedImpressions = ranked.reduce((n, m) => n + m.impressions!, 0);
+  return {
+    clicks,
+    impressions,
+    ...(impressions > 0 && { ctr: clicks / impressions }),
+    ...(rankedImpressions > 0 && { position: ranked.reduce((n, m) => n + m.position! * m.impressions!, 0) / rankedImpressions }),
+  };
+}
+
+/**
+ * A launch's blog numbers from each language's page: its page views and visits, the views per
+ * language (`views_<lang>`) and per source (`views_<source>`, sourceOfReferrer's names)
+ */
+export function blogValues(pages: ReadonlyArray<PageVisits & { lang: Language }>): Record<string, number> {
+  const values: Record<string, number> = { views: 0, visits: 0 };
+  const add = (name: string, n: number) => (values[name] = (values[name] ?? 0) + n);
+  for (const page of pages) {
+    add('views', page.views);
+    add('visits', page.visits);
+    add(`views_${page.lang}`, page.views);
+    for (const [source, count] of Object.entries(page.bySource)) add(`views_${source}`, count);
+  }
+  return values;
 }
 
 /**
@@ -186,28 +255,20 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
       if (sources.blog) {
         await attempt(`${launch.repo} ${launch.ref} blog visits`, async () => {
           const visits = await Promise.all(urls.map(async ({ lang, url }) => ({ lang, ...(await sources.blog!.pageVisits(new URL(url).pathname, since, until)) })));
-          const values: Record<string, number> = { views: 0 };
-          for (const v of visits) {
-            values.views! += v.views;
-            values[`views_${v.lang}`] = (values[`views_${v.lang}`] ?? 0) + v.views;
-            for (const [source, count] of Object.entries(v.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
-          }
-          await record(launch.id, 'blog', values);
+          await record(launch.id, 'blog', blogValues(visits));
         });
       }
       if (sources.search) {
         await attempt(`${launch.repo} ${launch.ref} search`, async () => {
           const found = await Promise.all(urls.map(({ url }) => sources.search!.pageMetrics(url, since, until)));
-          await record(launch.id, 'search', {
-            clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
-            impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
-          });
+          await record(launch.id, 'search', searchValues(found));
         });
         const inspect = sources.search.inspect?.bind(sources.search);
         if (inspect) {
           await attempt(`${launch.repo} ${launch.ref} index status`, async () => {
             const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await inspect(url) })));
             for (const { url, status } of statuses) await registry.cursors.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
+            await noteCanonicals(registry, launch.id, statuses);
             await record(launch.id, 'search', { indexed: statuses.filter((s) => s.status.indexed).length });
             unindexed ||= statuses.some((s) => !s.status.indexed);
           });
@@ -217,10 +278,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
         const bing = sources.bing;
         await attempt(`${launch.repo} ${launch.ref} Bing`, async () => {
           const found = await Promise.all(urls.map(({ url }) => bing.pageMetrics(url)));
-          const values: Record<string, number> = {
-            clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0),
-            impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0),
-          };
+          const values = searchValues(found);
           if (bing.inspect) {
             const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await bing.inspect!(url) })));
             for (const { url, status } of statuses) await registry.cursors.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
@@ -249,6 +307,8 @@ const HOUR_MS = 3_600_000;
 const DUE_SLACK_MS = 10 * 60_000;
 /** When a repo's traffic was last asked for, answered or not (a repo without access answers nothing) */
 export const trafficReadKey = (repo: string) => `metrics-read:github-traffic:${repo}`;
+/** When a channel's analytics were last asked for, answered or not (a connection without the permission answers nothing) */
+export const analyticsReadKey = (channel: string) => `metrics-read:analytics:${channel}`;
 
 /**
  * Whether a Google URL inspection is due for an article (docs/plans/performance-refactor.md, "5.
@@ -328,6 +388,27 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   }
 
   const until = day(now);
+
+  // Each channel's analytics, on their own cadence: every live piece at once. Asked for once a cadence
+  // whether answered or not, so a connection without the permission is said once a day, not hourly
+  for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
+    const cadence = channelAnalyticsCadence(channel);
+    if (!reader?.analytics || !cadence || !due(await registry.cursors.cursor(analyticsReadKey(channel)), cadence.hours)) continue;
+    const targets = launches.flatMap((launch) =>
+      (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p)).map((p) => ({ postId: p.id, launchId: launch.id, id: p.externalId!, since: launch.createdAt.slice(0, 10) })),
+    );
+    if (targets.length === 0) continue;
+    const analytics = reader.analytics.bind(reader);
+    await attempt(`${channel} analytics`, async () => {
+      await registry.cursors.setCursor(analyticsReadKey(channel), now.toISOString());
+      const answer = await analytics(targets.map(({ id, since }) => ({ id, since })), until);
+      for (const t of targets) {
+        const values = answer.get(t.id);
+        if (values) await record(t.launchId, channel, values, t.postId);
+      }
+    });
+  }
+
   const sites = launches.flatMap((launch) => {
     const urls = articleUrls(piecesOf.get(launch.id) ?? []);
     return urls.length > 0 ? [{ launch, urls, since: launch.createdAt.slice(0, 10) }] : [];
@@ -340,13 +421,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   if (blog && blogDue.length > 0) {
     const visitsOf = async (site: (typeof blogDue)[number], many: Map<string, PageVisits> | undefined) => {
       const visits = await Promise.all(site.urls.map(async ({ lang, url }) => ({ lang, ...(many?.get(new URL(url).pathname) ?? (await blog.pageVisits(new URL(url).pathname, site.since, until))) })));
-      const values: Record<string, number> = { views: 0 };
-      for (const v of visits) {
-        values.views! += v.views;
-        values[`views_${v.lang}`] = (values[`views_${v.lang}`] ?? 0) + v.views;
-        for (const [source, count] of Object.entries(v.bySource)) values[`views_${source}`] = (values[`views_${source}`] ?? 0) + count;
-      }
-      await record(site.launch.id, 'blog', values);
+      await record(site.launch.id, 'blog', blogValues(visits));
     };
     if (blog.pageVisitsMany) {
       const paths = [...new Set(blogDue.flatMap((s) => s.urls.map(({ url }) => new URL(url).pathname)))];
@@ -366,7 +441,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     if (search && siteDue(launch.id, 'search', 'clicks', SITE_CADENCES.searchAnalytics.hours)) {
       await attempt(`${launch.repo} ${launch.ref} search`, async () => {
         const found = await Promise.all(urls.map(({ url }) => search.pageMetrics(url, since, until)));
-        await record(launch.id, 'search', { clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0), impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0) });
+        await record(launch.id, 'search', searchValues(found));
       });
     }
     const inspect = search?.inspect?.bind(search);
@@ -377,8 +452,9 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
         if (toInspect.length === 0) return;
         const fresh = await Promise.all(toInspect.map(async ({ url }) => ({ url, status: await inspect(url) })));
         for (const { url, status } of fresh) await registry.cursors.setCursor(indexStatusKey(url), JSON.stringify({ ...status, checkedAt: now.toISOString() }));
-        const statusOf = new Map([...known.flatMap((k) => (k.status ? [[k.url, k.status.indexed] as const] : [])), ...fresh.map((f) => [f.url, f.status.indexed] as const)]);
-        await record(launch.id, 'search', { indexed: [...statusOf.values()].filter(Boolean).length });
+        const statusOf = new Map<string, IndexStatus>([...known.flatMap((k) => (k.status ? [[k.url, k.status] as const] : [])), ...fresh.map((f) => [f.url, f.status] as const)]);
+        await noteCanonicals(registry, launch.id, [...statusOf].map(([url, status]) => ({ url, status })));
+        await record(launch.id, 'search', { indexed: [...statusOf.values()].filter((s) => s.indexed).length });
         unindexed ||= fresh.some((f) => !f.status.indexed);
       });
     }
@@ -386,7 +462,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     if (bing && siteDue(launch.id, 'bing', 'clicks', SITE_CADENCES.bing.hours)) {
       await attempt(`${launch.repo} ${launch.ref} Bing`, async () => {
         const found = await Promise.all(urls.map(({ url }) => bing.pageMetrics(url)));
-        const values: Record<string, number> = { clicks: found.reduce((n, m) => n + (m.clicks ?? 0), 0), impressions: found.reduce((n, m) => n + (m.impressions ?? 0), 0) };
+        const values = searchValues(found);
         if (bing.inspect) {
           const statuses = await Promise.all(urls.map(async ({ url }) => ({ url, status: await bing.inspect!(url) })));
           for (const { url, status } of statuses) await registry.cursors.setCursor(indexStatusKey(url, 'bing'), JSON.stringify({ ...status, checkedAt: now.toISOString() }));

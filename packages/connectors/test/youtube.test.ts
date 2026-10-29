@@ -125,3 +125,69 @@ test('comments: threads and replies as plain text, the owner’s own marked, dis
   const sent = await yt.reply({ postExternalId: 'vid1', commentExternalId: 'c1', authorHandle: '@ana' }, 'Thank you!');
   assert.equal(sent.externalId, 'c1.r2');
 });
+
+const REPORTS = 'GET https://youtubeanalytics.googleapis.com/v2/reports';
+
+test('analytics: one report per video, lifetime from the launch day, its columns kept under their names', async () => {
+  const calls: Call[] = [];
+  const units: string[] = [];
+  const report = (views: number) => () =>
+    Response.json({
+      columnHeaders: ['engagedViews', 'estimatedMinutesWatched', 'averageViewDuration', 'averageViewPercentage', 'shares', 'subscribersGained'].map((name) => ({ name })),
+      rows: [[views, 42, 37, 61.5, 3, 2]],
+    });
+  const yt = youtube([[REPORTS, sequence(report(120), report(80))]], calls, units);
+  const out = await yt.analytics([{ id: 'v1', since: '2026-10-29' }, { id: 'v2', since: '2026-10-29' }], '2026-11-03');
+  assert.deepEqual(out.get('v1'), { engagedViews: 120, watchMinutes: 42, avgViewSeconds: 37, avgViewPercent: 61.5, shares: 3, subscribersGained: 2 });
+  assert.equal(out.get('v2')?.engagedViews, 80);
+  const first = new URL(calls.find((c) => c.url.startsWith('https://youtubeanalytics'))!.url);
+  assert.deepEqual([first.searchParams.get('ids'), first.searchParams.get('startDate'), first.searchParams.get('endDate'), first.searchParams.get('filters')], ['channel==MINE', '2026-10-29', '2026-11-03', 'video==v1']);
+  assert.deepEqual(units, [], 'the Analytics API has its own quota: no Data API units');
+});
+
+test('analytics refused for a token without yt-analytics.readonly: why, as a failure not worth retrying', async () => {
+  const yt = youtube([[REPORTS, () => Response.json({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'Request had insufficient authentication scopes.', details: [{ reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }] } }, { status: 403 })]]);
+  await assert.rejects(yt.analytics([{ id: 'v1', since: '2026-10-29' }], '2026-11-03'), (error: unknown) => error instanceof ConnectorError && error.retryable === false && /yt-analytics\.readonly.*connect YouTube again/.test(error.message));
+});
+
+test('the channel as a profile: description as the bio, keywords, country and trailer as links', async () => {
+  const yt = youtube([
+    [
+      'GET https://www.googleapis.com/youtube/v3/channels?part=snippet,brandingSettings',
+      () => Response.json({ items: [{ id: 'UC1', snippet: { title: 'José', thumbnails: { default: { url: 'https://yt3.example/a.jpg' } } }, brandingSettings: { channel: { title: 'José', description: 'Dev tools', keywords: 'rust "claude code"', country: 'ES', unsubscribedTrailer: 'tr1' }, image: { bannerExternalUrl: 'https://yt3.example/b' } } }] }),
+    ],
+  ]);
+  assert.deepEqual(await yt.profile(), {
+    displayName: 'José',
+    bio: 'Dev tools',
+    links: [
+      { name: 'Keywords', value: 'rust "claude code"' },
+      { name: 'Country', value: 'ES' },
+      { name: 'Trailer', value: 'https://www.youtube.com/watch?v=tr1' },
+    ],
+    hasAvatar: true,
+    hasBanner: true,
+  });
+});
+
+test('a channel edit reads brandingSettings and writes it whole, changing only what was given', async () => {
+  const calls: Call[] = [];
+  const units: string[] = [];
+  const yt = youtube(
+    [
+      ['GET https://www.googleapis.com/youtube/v3/channels?part=snippet,brandingSettings', () => Response.json({ items: [{ id: 'UC1', brandingSettings: { channel: { description: 'old', keywords: 'rust', country: 'ES', defaultLanguage: 'es' }, image: { bannerExternalUrl: 'https://yt3.example/b' } } }] })],
+      ['PUT https://www.googleapis.com/youtube/v3/channels?part=brandingSettings', () => Response.json({ id: 'UC1' })],
+    ],
+    calls,
+    units,
+  );
+  await yt.editProfile({ bio: 'new', links: [{ name: 'Keywords', value: 'rust cli' }, { name: 'Trailer', value: 'https://youtu.be/tr2' }] });
+  const sent = JSON.parse(String(calls.find((c) => c.method === 'PUT')!.body)) as { id: string; brandingSettings: { channel: Record<string, string>; image: Record<string, string> } };
+  assert.equal(sent.id, 'UC1');
+  assert.deepEqual(sent.brandingSettings.channel, { description: 'new', keywords: 'rust cli', country: '', defaultLanguage: 'es', unsubscribedTrailer: 'tr2' }, 'a setting left out of the links is cleared, the rest kept');
+  assert.deepEqual(sent.brandingSettings.image, { bannerExternalUrl: 'https://yt3.example/b' }, 'the banner kept: an update deletes what it leaves out');
+  assert.deepEqual(units, ['list', 'channelsUpdate']);
+
+  await assert.rejects(yt.editProfile({ displayName: 'x' }), /YouTube Studio only/);
+  await assert.rejects(yt.editProfile({ links: [{ name: 'Website', value: 'https://x' }] }), /has no "Website"/);
+});

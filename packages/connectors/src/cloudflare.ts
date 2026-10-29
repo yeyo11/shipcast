@@ -1,34 +1,20 @@
+import { sourceOfReferrer } from '@shipcast/schema';
 import { checkProblem, ConnectorError, json, statsOf, type Check, type Metrics, type ProfileStats } from './http.ts';
 
 export interface PageVisits {
   /** Page views of the path in the period */
   views: number;
+  /** Visits: page views that came from another site or a direct link, not from the site's own pages */
+  visits: number;
   /** Views by where they came from: a channel, `search`, `direct` or `other` */
   bySource: Record<string, number>;
 }
 
 /**
- * The channel a visit came from, by its referrer host. Web Analytics keeps the referrer host but not
- * the page's query string, so the `?ref=` marker on Shipcast's links is not visible here. Mastodon
- * readers arrive from their own instance, which can be any host: those count as `other`.
- */
-export function sourceOfReferrer(host: string | null | undefined): string {
-  const h = (host ?? '').toLowerCase().replace(/^www\./, '');
-  if (!h) return 'direct';
-  if (h === 'bsky.app' || h.endsWith('.bsky.app')) return 'bluesky';
-  if (h === 'dev.to') return 'devto';
-  if (h === 'instagram.com' || h.endsWith('.instagram.com')) return 'instagram';
-  if (h === 'reddit.com' || h.endsWith('.reddit.com')) return 'reddit';
-  if (h === 'github.com') return 'github';
-  if (/(^|\.)(google|bing|duckduckgo|ecosia)\./.test(h)) return 'search';
-  if (h === 'mastodon.social' || h.endsWith('.mastodon.social')) return 'mastodon';
-  return 'other';
-}
-
-/**
- * Cloudflare Web Analytics through the GraphQL Analytics API: page views of one path of the site,
- * grouped by referrer host, so the blog's numbers say which channel sent each visit. Needs an API
- * token with Account Analytics read; the site tag identifies the site.
+ * Cloudflare Web Analytics through the GraphQL Analytics API: page views and visits of one path of
+ * the site, grouped by referrer host and path, so the blog's numbers say which channel sent each
+ * visit (sourceOfReferrer; RUM keeps no query string, so neither `?ref=` nor the UTM tags are seen).
+ * Needs an API token with Account Analytics read; the site tag identifies the site.
  */
 export class CloudflareAnalytics {
   readonly #token: string;
@@ -68,13 +54,14 @@ export class CloudflareAnalytics {
    * article's path had no visits before it existed, so a wider window adds nothing to it.
    */
   async pageVisitsMany(paths: readonly string[], since: string, until: string): Promise<Map<string, PageVisits>> {
-    const out = new Map<string, PageVisits>(paths.map((p) => [p, { views: 0, bySource: {} }]));
+    const out = new Map<string, PageVisits>(paths.map((p) => [p, { views: 0, visits: 0, bySource: {} }]));
     if (paths.length === 0) return out;
     const query = `query($account: String!, $filter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject!) {
       viewer { accounts(filter: { accountTag: $account }) {
         rumPageloadEventsAdaptiveGroups(limit: 10000, filter: $filter) {
           count
-          dimensions { requestPath refererHost }
+          sum { visits }
+          dimensions { requestPath refererHost refererPath }
         }
       } }
     }`;
@@ -84,16 +71,13 @@ export class CloudflareAnalytics {
       body: JSON.stringify({ query, variables: { account: this.#account, filter: { siteTag: this.#siteTag, requestPath_in: [...paths], date_geq: since, date_leq: until } } }),
     });
     const body = await json<{
-      data?: { viewer: { accounts: Array<{ rumPageloadEventsAdaptiveGroups: Array<{ count: number; dimensions: { requestPath?: string; refererHost?: string } }> }> } };
+      data?: { viewer: { accounts: Array<{ rumPageloadEventsAdaptiveGroups: Array<Group & { dimensions: { requestPath?: string } }> }> } };
       errors?: Array<{ message: string }> | null;
     }>('Cloudflare', response, 'page visits');
     if (body.errors?.length) throw new ConnectorError('Cloudflare', body.errors.map((e) => e.message).join('; '));
     for (const group of body.data?.viewer.accounts[0]?.rumPageloadEventsAdaptiveGroups ?? []) {
       const visits = group.dimensions.requestPath === undefined ? undefined : out.get(group.dimensions.requestPath);
-      if (!visits) continue;
-      visits.views += group.count;
-      const source = sourceOfReferrer(group.dimensions.refererHost);
-      visits.bySource[source] = (visits.bySource[source] ?? 0) + group.count;
+      if (visits) add(visits, group);
     }
     return out;
   }
@@ -104,7 +88,8 @@ export class CloudflareAnalytics {
       viewer { accounts(filter: { accountTag: $account }) {
         rumPageloadEventsAdaptiveGroups(limit: 1000, filter: $filter) {
           count
-          dimensions { refererHost }
+          sum { visits }
+          dimensions { refererHost refererPath }
         }
       } }
     }`;
@@ -120,26 +105,35 @@ export class CloudflareAnalytics {
       }),
     });
     const body = await json<{
-      data?: { viewer: { accounts: Array<{ rumPageloadEventsAdaptiveGroups: Array<{ count: number; dimensions: { refererHost?: string } }> }> } };
+      data?: { viewer: { accounts: Array<{ rumPageloadEventsAdaptiveGroups: Group[] }> } };
       errors?: Array<{ message: string }> | null;
     }>('Cloudflare', response, 'page visits');
     if (body.errors?.length) throw new ConnectorError('Cloudflare', body.errors.map((e) => e.message).join('; '));
 
-    const groups = body.data?.viewer.accounts[0]?.rumPageloadEventsAdaptiveGroups ?? [];
-    const bySource: Record<string, number> = {};
-    let views = 0;
-    for (const group of groups) {
-      views += group.count;
-      const source = sourceOfReferrer(group.dimensions.refererHost);
-      bySource[source] = (bySource[source] ?? 0) + group.count;
-    }
-    return { views, bySource };
+    const visits: PageVisits = { views: 0, visits: 0, bySource: {} };
+    for (const group of body.data?.viewer.accounts[0]?.rumPageloadEventsAdaptiveGroups ?? []) add(visits, group);
+    return visits;
   }
 }
 
-/** Flattens page visits into metrics: `views`, and `views_<source>` per source. */
+/** One group of Web Analytics' answer: page views and visits from one referrer */
+interface Group {
+  count: number;
+  sum?: { visits?: number };
+  dimensions: { refererHost?: string; refererPath?: string };
+}
+
+/** A group's page views and visits added to a path's, under the source its referrer names */
+function add(visits: PageVisits, group: Group): void {
+  visits.views += group.count;
+  visits.visits += group.sum?.visits ?? 0;
+  const source = sourceOfReferrer(group.dimensions.refererHost, group.dimensions.refererPath);
+  visits.bySource[source] = (visits.bySource[source] ?? 0) + group.count;
+}
+
+/** Flattens page visits into metrics: `views`, `visits`, and `views_<source>` per source. */
 export function visitsToMetrics(visits: PageVisits): Metrics {
-  const metrics: Metrics = { views: visits.views };
+  const metrics: Metrics = { views: visits.views, visits: visits.visits };
   for (const [source, count] of Object.entries(visits.bySource)) metrics[`views_${source}`] = count;
   return metrics;
 }

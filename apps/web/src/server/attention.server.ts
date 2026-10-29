@@ -1,16 +1,17 @@
-import { failurePrefix, type Repositories } from '@shipcast/engine';
+import { CANONICAL_PREFIX, failurePrefix, type CanonicalMismatch, type Repositories } from '@shipcast/engine';
 import { attentionItems, buildAttention, type Attention, type AttentionInput } from './attention.ts';
 
 type AttentionRegistry = Pick<Repositories, 'launches' | 'cursors' | 'accounts' | 'comments' | 'posts' | 'attention'>;
 
 async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
-  const [launches, failures, accounts, facets, newest, scheduled] = await Promise.all([
+  const [launches, failures, accounts, facets, newest, scheduled, canonicals] = await Promise.all([
     registry.launches.recent(60),
     registry.cursors.cursorsWithPrefix(failurePrefix()),
     registry.accounts.accounts(),
     registry.comments.commentFacets(false),
     registry.comments.newestWaitingCommentId(false),
     registry.posts.scheduledPosts(),
+    registry.cursors.cursorsWithPrefix(CANONICAL_PREFIX),
   ]);
   return {
     launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt })),
@@ -19,6 +20,7 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
     commentsWaiting: facets.buckets.waiting,
     newestWaitingComment: newest,
     scheduled: scheduled.map((p) => ({ launchId: p.launchId, scheduledAt: p.scheduledAt })),
+    canonicals: canonicals.map(({ key, value }) => ({ launchId: Number(key.slice(CANONICAL_PREFIX.length)), pages: JSON.parse(value) as CanonicalMismatch[] })),
     now: new Date(),
   };
 }

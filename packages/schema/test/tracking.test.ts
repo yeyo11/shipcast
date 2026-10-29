@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { campaignOf, tagHtmlLinks, tagLinks, track, trackedUrl, trackUrl, trackWithinLimit, UTM_CHANNELS, utmFor } from '../src/index.ts';
+import { campaignOf, sourceOfReferrer, tagHtmlLinks, tagLinks, track, trackedUrl, trackUrl, trackWithinLimit, UTM_CHANNELS, utmFor } from '../src/index.ts';
 
 const SITE = 'https://josegarrido.dev';
 const utm = utmFor('bluesky', 'claudio-v1-0-0');
@@ -71,4 +71,48 @@ test('a text the tags would push over its network’s limit keeps its ?ref=', ()
   const full = `${'a'.repeat(500 - link.length - 1)} ${link}`;
   assert.equal(full.length, 500);
   assert.equal(trackWithinLimit('threads', full, tracking), full, 'tagged it would be over 500');
+});
+
+test('a referrer host maps to the channel that sent the visit', () => {
+  assert.equal(sourceOfReferrer(null), 'direct');
+  assert.equal(sourceOfReferrer('bsky.app'), 'bluesky');
+  assert.equal(sourceOfReferrer('go.bsky.app'), 'bluesky');
+  assert.equal(sourceOfReferrer('dev.to'), 'devto');
+  assert.equal(sourceOfReferrer('l.instagram.com'), 'instagram');
+  assert.equal(sourceOfReferrer('out.reddit.com'), 'reddit');
+  assert.equal(sourceOfReferrer('www.google.es'), 'search');
+  assert.equal(sourceOfReferrer('github.com'), 'github');
+  assert.equal(sourceOfReferrer('fosstodon.org'), 'other', 'a Mastodon instance cannot be told apart from any site');
+});
+
+test('the channels that used to count as `other` are told apart, and a discussion on GitHub by its path', () => {
+  const cases: Array<[string, string]> = [
+    ['www.linkedin.com', 'linkedin'],
+    ['lnkd.in', 'linkedin'],
+    ['l.threads.com', 'threads'],
+    ['threads.net', 'threads'],
+    ['m.youtube.com', 'youtube'],
+    ['youtu.be', 'youtube'],
+    ['hashnode.com', 'hashnode'],
+    ['me.hashnode.dev', 'hashnode'],
+    ['t.me', 'telegram'],
+    ['web.telegram.org', 'telegram'],
+    ['discord.com', 'discord'],
+    ['t.co', 'x'],
+    ['x.com', 'x'],
+    ['news.ycombinator.com', 'hackernews'],
+    ['l.facebook.com', 'facebook'],
+    ['duckduckgo.com', 'search'],
+    ['notyoutube.com', 'other'],
+  ];
+  for (const [host, source] of cases) assert.equal(sourceOfReferrer(host), source, host);
+  assert.equal(sourceOfReferrer('github.com', '/yeyo11/shipcast/discussions/12'), 'githubDiscussions');
+  assert.equal(sourceOfReferrer('github.com', '/yeyo11/shipcast'), 'github');
+});
+
+test('a source named after a tagged channel is its utm_source: one name for a visit, whichever way it is attributed', () => {
+  for (const [channel, tags] of Object.entries(UTM_CHANNELS)) {
+    if (channel === 'newsletter' || channel === 'githubDiscussions') continue;
+    assert.equal(tags.source, channel, channel);
+  }
 });

@@ -45,7 +45,7 @@ test('one run over several launches: each readable piece is asked once, the rest
         pageVisits: async (path): Promise<PageVisits> => {
           visited.push(path);
           if (path === '/en/hello/') throw new Error('Cloudflare: 500');
-          return path.startsWith('/en/') ? { views: 4, bySource: { direct: 4 } } : { views: 2, bySource: {} };
+          return path.startsWith('/en/') ? { views: 4, visits: 3, bySource: { direct: 4 } } : { views: 2, visits: 1, bySource: {} };
         },
       },
       github,
@@ -59,7 +59,7 @@ test('one run over several launches: each readable piece is asked once, the rest
   assert.deepEqual(github.called('repoStats'), [['yeyo11/claudio']], 'an article has no repo to count stars on');
   assert.deepEqual(visited.sort(), ['/en/claudio/', '/en/hello/', '/es/claudio-es/']);
   assert.deepEqual(result.problems, ['yeyo11/launches article:hello blog visits: Cloudflare: 500']);
-  assert.equal(result.readings, 10, 'three pieces, four blog numbers, three of GitHub');
+  assert.equal(result.readings, 11, 'three pieces, five blog numbers, three of GitHub');
 
   const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [`${m.source}.${m.name}`, m.value]));
   assert.deepEqual(latest, {
@@ -67,6 +67,7 @@ test('one run over several launches: each readable piece is asked once, the rest
     'blog.views_direct': 4,
     'blog.views_en': 4,
     'blog.views_es': 2,
+    'blog.visits': 4,
     'devto.views': 10,
     'github.forks': 1,
     'github.stars': 7,

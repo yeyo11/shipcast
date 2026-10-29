@@ -13,7 +13,7 @@ import { parseFailureKey } from '@shipcast/schema/failures';
  * (an account that breaks again, the same failure after a retry) is shown again.
  */
 
-export type AttentionKind = 'approve' | 'retry' | 'reply' | 'reconnect' | 'scheduled';
+export type AttentionKind = 'approve' | 'retry' | 'reply' | 'reconnect' | 'scheduled' | 'canonical';
 
 /** Where a line goes: typed per route, so the bell's links stay checked by the router */
 export type AttentionTarget =
@@ -42,6 +42,8 @@ export interface AttentionInput {
   /** The newest waiting comment's id: a comment arriving makes the line new again */
   newestWaitingComment?: number | null;
   scheduled: ReadonlyArray<{ launchId: number; scheduledAt: string | null }>;
+  /** Article pages Google files under another canonical URL, by launch (the engine's `search-canonical:` cursors) */
+  canonicals?: ReadonlyArray<{ launchId: number; pages: ReadonlyArray<{ url: string; googleCanonical: string }> }>;
   now: Date;
   /** How far ahead a scheduled post is worth a line; a day by default */
   soonMs?: number;
@@ -112,6 +114,14 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   if (input.commentsWaiting > 0) {
     const n = input.commentsWaiting;
     items.push({ key: `comments:waiting:${input.newestWaitingComment ?? n}`, kind: 'reply', text: n === 1 ? '1 comment waits for a reply' : `${n} comments wait for a reply`, action: 'Answer', target: { to: '/comments', search: { state: 'waiting' } } });
+  }
+  for (const c of input.canonicals ?? []) {
+    const l = byId.get(c.launchId);
+    if (!l || c.pages.length === 0) continue;
+    const first = c.pages[0]!;
+    const more = c.pages.length > 1 ? ` and ${c.pages.length - 1} more` : '';
+    // The pair of URLs is the condition: Google choosing yet another one is a new line
+    items.push({ key: `launch:${c.launchId}:canonical:${digest(c.pages.map((p) => `${p.url} ${p.googleCanonical}`).join('\n'))}`, kind: 'canonical', text: `Google files ${first.url} under ${first.googleCanonical}${more}: its search numbers go there`, action: 'See it', target: { to: '/launches/$id', params: { id: String(c.launchId) } } });
   }
   for (const a of input.brokenAccounts) {
     items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${a.network}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } } });

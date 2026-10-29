@@ -1,21 +1,10 @@
 import assert from 'node:assert/strict';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
-import { BingWebmaster, CloudflareAnalytics, SearchConsole, sourceOfReferrer, visitsToMetrics, wcfDate } from '../src/index.ts';
+import { BingWebmaster, CloudflareAnalytics, SearchConsole, visitsToMetrics, wcfDate } from '../src/index.ts';
 import { fakeFetch, type Call } from './fake.ts';
 
-test('a referrer host maps to the channel that sent the visit', () => {
-  assert.equal(sourceOfReferrer(null), 'direct');
-  assert.equal(sourceOfReferrer('bsky.app'), 'bluesky');
-  assert.equal(sourceOfReferrer('go.bsky.app'), 'bluesky');
-  assert.equal(sourceOfReferrer('dev.to'), 'devto');
-  assert.equal(sourceOfReferrer('l.instagram.com'), 'instagram');
-  assert.equal(sourceOfReferrer('out.reddit.com'), 'reddit');
-  assert.equal(sourceOfReferrer('www.google.es'), 'search');
-  assert.equal(sourceOfReferrer('fosstodon.org'), 'other', 'a Mastodon instance cannot be told apart from any site');
-});
-
-test('Cloudflare page visits are summed by source for one path', async () => {
+test('Cloudflare page views and visits are summed by source for one path', async () => {
   const calls: Call[] = [];
   const cf = new CloudflareAnalytics({
     apiToken: 'cf',
@@ -32,10 +21,12 @@ test('Cloudflare page visits are summed by source for one path', async () => {
                   accounts: [
                     {
                       rumPageloadEventsAdaptiveGroups: [
-                        { count: 30, dimensions: { refererHost: 'bsky.app' } },
-                        { count: 12, dimensions: { refererHost: '' } },
-                        { count: 5, dimensions: { refererHost: 'dev.to' } },
-                        { count: 3, dimensions: { refererHost: 'go.bsky.app' } },
+                        { count: 30, sum: { visits: 20 }, dimensions: { refererHost: 'bsky.app', refererPath: '/profile/me/post/1' } },
+                        { count: 12, sum: { visits: 9 }, dimensions: { refererHost: '' } },
+                        { count: 5, sum: { visits: 5 }, dimensions: { refererHost: 'dev.to' } },
+                        { count: 3, sum: { visits: 3 }, dimensions: { refererHost: 'go.bsky.app' } },
+                        { count: 4, sum: { visits: 4 }, dimensions: { refererHost: 'github.com', refererPath: '/yeyo11/claudio/discussions/7' } },
+                        { count: 2, sum: { visits: 2 }, dimensions: { refererHost: 'www.linkedin.com', refererPath: '/feed/' } },
                       ],
                     },
                   ],
@@ -49,8 +40,9 @@ test('Cloudflare page visits are summed by source for one path', async () => {
     ),
   });
   const visits = await cf.pageVisits('/en/claudio/', '2026-10-25', '2026-10-31');
-  assert.deepEqual(visits, { views: 50, bySource: { bluesky: 33, direct: 12, devto: 5 } });
-  assert.deepEqual(visitsToMetrics(visits), { views: 50, views_bluesky: 33, views_direct: 12, views_devto: 5 });
+  assert.deepEqual(visits, { views: 56, visits: 43, bySource: { bluesky: 33, direct: 12, devto: 5, githubDiscussions: 4, linkedin: 2 } });
+  assert.deepEqual(visitsToMetrics(visits), { views: 56, visits: 43, views_bluesky: 33, views_direct: 12, views_devto: 5, views_githubDiscussions: 4, views_linkedin: 2 });
+  assert.match(JSON.parse(String(calls[0]!.body)).query as string, /sum \{ visits \}[\s\S]*refererPath/);
   const body = JSON.parse(String(calls[0]!.body)) as { variables: { account: string; filter: Record<string, string> } };
   assert.equal(calls[0]!.headers.authorization, 'Bearer cf');
   assert.deepEqual(body.variables, { account: 'acc', filter: { siteTag: 'site', requestPath: '/en/claudio/', date_geq: '2026-10-25', date_leq: '2026-10-31' } });
@@ -112,7 +104,7 @@ test('Search Console tells whether a URL is indexed and resubmits the sitemap', 
           () =>
             Response.json(
               (JSON.parse(String(calls.at(-1)!.body)) as { inspectionUrl: string }).inspectionUrl.includes('/en/')
-                ? { inspectionResult: { indexStatusResult: { verdict: 'PASS', coverageState: 'Submitted and indexed', lastCrawlTime: '2026-10-25T10:32:27Z' } } }
+                ? { inspectionResult: { indexStatusResult: { verdict: 'PASS', coverageState: 'Submitted and indexed', lastCrawlTime: '2026-10-25T10:32:27Z', googleCanonical: 'https://josegarrido.dev/en/claudio/', userCanonical: 'https://josegarrido.dev/en/claudio/' } } }
                 : { inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: 'URL is unknown to Google' } } },
             ),
         ],
@@ -122,7 +114,13 @@ test('Search Console tells whether a URL is indexed and resubmits the sitemap', 
     ),
   });
 
-  assert.deepEqual(await sc.inspect('https://josegarrido.dev/en/claudio/'), { indexed: true, coverage: 'Submitted and indexed', lastCrawl: '2026-10-25T10:32:27Z' });
+  assert.deepEqual(await sc.inspect('https://josegarrido.dev/en/claudio/'), {
+    indexed: true,
+    coverage: 'Submitted and indexed',
+    lastCrawl: '2026-10-25T10:32:27Z',
+    googleCanonical: 'https://josegarrido.dev/en/claudio/',
+    userCanonical: 'https://josegarrido.dev/en/claudio/',
+  });
   assert.deepEqual(await sc.inspect('https://josegarrido.dev/es/claudio/'), { indexed: false, coverage: 'URL is unknown to Google' });
   assert.deepEqual(JSON.parse(String(calls[1]!.body)), { inspectionUrl: 'https://josegarrido.dev/en/claudio/', siteUrl: 'sc-domain:josegarrido.dev' });
   await sc.submitSitemap('https://josegarrido.dev/sitemap-index.xml');

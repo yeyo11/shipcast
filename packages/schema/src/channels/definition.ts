@@ -186,6 +186,8 @@ export interface ChannelDefinition<Id extends string = string> {
     primary: readonly string[];
     /** How often its numbers are worth reading (phase 8 of docs/plans/performance-refactor.md) */
     cadence: MetricCadence;
+    /** How often its analytics are, where the network has a slower API apart from its counters (YouTube Analytics) */
+    analytics?: MetricCadence;
   };
   /** Its series' slot in the charts' palette (`ink` for the text colour), when one is its own */
   chartSlot?: number | 'ink';

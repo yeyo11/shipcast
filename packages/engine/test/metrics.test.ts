@@ -29,10 +29,10 @@ test('every source of a published launch is read and recorded under its name', a
     blog: {
       pageVisits: async (path): Promise<PageVisits> => {
         asked.push(`blog ${path}`);
-        return path.startsWith('/en/') ? { views: 40, bySource: { bluesky: 30, direct: 10 } } : { views: 8, bySource: { direct: 8 } };
+        return path.startsWith('/en/') ? { views: 40, visits: 31, bySource: { bluesky: 30, direct: 10 } } : { views: 8, visits: 6, bySource: { direct: 8 } };
       },
     },
-    search: { pageMetrics: async (url) => (url.includes('/en/') ? { clicks: 3, impressions: 90 } : { clicks: 1, impressions: 10 }) },
+    search: { pageMetrics: async (url) => (url.includes('/en/') ? { clicks: 3, impressions: 90, ctr: 0.033, position: 10 } : { clicks: 1, impressions: 10, ctr: 0.1, position: 20 }) },
     github: { repoStats: async () => ({ stars: 120, forks: 9, watchers: 4 }) },
   };
 
@@ -47,6 +47,7 @@ test('every source of a published launch is read and recorded under its name', a
     'blog.views_direct': 18,
     'blog.views_en': 40,
     'blog.views_es': 8,
+    'blog.visits': 37,
     'bluesky.likes': 9,
     'devto.reactions': 12,
     'devto.views': 310,
@@ -54,7 +55,10 @@ test('every source of a published launch is read and recorded under its name', a
     'github.stars': 120,
     'github.watchers': 4,
     'search.clicks': 4,
+    'search.ctr': 0.04,
     'search.impressions': 100,
+    // Weighted by impressions, as Search Console averages it: (10 × 90 + 20 × 10) / 100
+    'search.position': 11,
   });
 });
 

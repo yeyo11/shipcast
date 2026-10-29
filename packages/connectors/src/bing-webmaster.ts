@@ -58,7 +58,13 @@ export class BingWebmaster {
     return statsOf({}, { clicks28d: recent.reduce((s, d) => s + (d.Clicks ?? 0), 0), impressions28d: recent.reduce((s, d) => s + (d.Impressions ?? 0), 0) });
   }
 
-  /** Bing's clicks and impressions of one page, over the period Bing keeps (about six months) */
+  /**
+   * Bing's clicks and impressions of one page. Over what period is not documented: Microsoft's
+   * reference for GetUrlTrafficInfo names no window and takes no date, and its answer carries none.
+   * The Search Performance report it mirrors keeps 16 months since 2024-10-16 (six before), so the
+   * total may be a rolling window that drops old days rather than one since the launch
+   * (docs/search-indexing.md); the dated, weekly GetPageStats/GetPageQueryStats are the way to tell.
+   */
   async pageMetrics(url: string): Promise<Metrics> {
     const info = await this.#get<{ Clicks?: number; Impressions?: number }>('GetUrlTrafficInfo', { siteUrl: this.#site, url }, 'page traffic');
     return { clicks: info.Clicks ?? 0, impressions: info.Impressions ?? 0 };

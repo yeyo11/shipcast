@@ -103,3 +103,15 @@ test('every key a line can have is one a dismissal accepts, and nothing else is'
   for (const item of items) assert.match(item.key, ATTENTION_KEY);
   for (const bad of ['', 'launch:', 'other:1', 'launch:1 waiting', `launch:${'x'.repeat(200)}`]) assert.doesNotMatch(bad, ATTENTION_KEY);
 });
+
+test('a page Google files under another canonical is a line on its launch, new again when Google picks yet another', () => {
+  const canonicals = [{ launchId: 3, pages: [{ url: 'https://josegarrido.dev/en/gamma/', googleCanonical: 'https://dev.to/me/gamma-1' }] }];
+  const [line] = attentionItems({ ...base, launches: [launches[2]!], canonicals });
+  assert.equal(line?.kind, 'canonical');
+  assert.match(line!.text, /Google files https:\/\/josegarrido\.dev\/en\/gamma\/ under https:\/\/dev\.to\/me\/gamma-1/);
+  assert.deepEqual(line?.target, { to: '/launches/$id', params: { id: '3' } });
+  assert.match(line!.key, ATTENTION_KEY);
+  const other = attentionItems({ ...base, launches: [launches[2]!], canonicals: [{ launchId: 3, pages: [{ url: 'https://josegarrido.dev/en/gamma/', googleCanonical: 'https://hashnode.dev/gamma' }] }] });
+  assert.notEqual(other[0]?.key, line?.key);
+  assert.deepEqual(attentionItems({ ...base, launches: [launches[2]!], canonicals: [{ launchId: 99, pages: canonicals[0]!.pages }] }), [], 'a launch no longer listed has no line');
+});
