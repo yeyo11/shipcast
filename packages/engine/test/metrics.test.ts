@@ -164,7 +164,8 @@ test('each piece is read on its own and its readings point at it; the launch add
   const en = (await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:en', url: 'https://brevo/8', externalId: '8' })).post;
   const es = (await registry.posts.recordPost({ launchId: launch.id, channel: 'newsletter', kind: 'issue:es', url: 'https://brevo/9', externalId: '9' })).post;
   await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'post', url: 'https://ig/p/1', externalId: 'p1' });
-  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' });
+  const story = (await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'story', url: null, externalId: 's1' })).post;
+  await registry.posts.recordPost({ launchId: launch.id, channel: 'instagram', kind: 'comment', url: null, externalId: 'c1' });
   const asked: string[] = [];
   await collectMetrics(
     registry,
@@ -172,12 +173,13 @@ test('each piece is read on its own and its readings point at it; the launch add
     {
       posts: {
         newsletter: { metrics: async (id) => (asked.push(`newsletter ${id}`), { clicks: id === '8' ? 5 : 2 }) },
-        instagram: { metrics: async (id) => (asked.push(`instagram ${id}`), { likes: 7 }) },
+        instagram: { metrics: async (id, kind) => (asked.push(`instagram ${id} ${kind}`), { likes: 7 }) },
       },
     },
-    new Date('2026-10-30T12:00:00Z'),
+    // Within the story's 24 hours, while Meta keeps its numbers
+    new Date(Date.parse(story.publishedAt) + 3_600_000),
   );
-  assert.deepEqual(asked.sort(), ['instagram p1', 'newsletter 8', 'newsletter 9'], 'one campaign per issue; a story has no post numbers');
+  assert.deepEqual(asked.sort(), ['instagram p1 post', 'instagram s1 story', 'newsletter 8', 'newsletter 9'], 'one campaign per issue; a story is read as a story, a comment never');
   assert.deepEqual((await registry.metrics.postMetrics(en.id)).map((m) => `${m.name}=${m.value}`), ['clicks=5']);
   assert.deepEqual((await registry.metrics.postMetrics(es.id)).map((m) => `${m.name}=${m.value}`), ['clicks=2']);
   assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.source === 'newsletter')?.value, 7, 'both issues together');

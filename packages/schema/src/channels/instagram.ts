@@ -65,12 +65,14 @@ export const instagram = {
   },
   comments: { read: true, reply: true, note: 'Needs the instagram_business_manage_comments permission on the connected account', replyLimit: 300 },
   profile: {
-    read: false,
+    read: true,
     edit: 'no',
     fields: ['displayName', 'bio', 'links', 'avatar'],
     editable: [],
     limits: { displayName: 30, bio: 150, links: { count: 5, name: 30, value: 2000 } },
-    note: 'Instagram’s API gives neither the bio nor a way to change it: paste the bio to review it, then copy a proposal into the app',
+    note: 'Instagram’s API reads the name, the bio, the picture and one link (the website), but changes none of them: copy a proposal into the app',
+    // The API gives the profile's website alone, of up to five links
+    paste: ['links'],
   },
   posting: {
     note: 'weekday evenings and lunchtime, the hours the studies find for Instagram',
@@ -81,10 +83,13 @@ export const instagram = {
       { days: WEEKEND, from: 19, to: 21, weight: 0.6 },
     ],
   },
+  // `reach` is unique accounts, not impressions (Meta retired those in 2025): it is read, but no family's.
+  // A story's views and shares count with the post's; its insights last 24 hours
   metrics: {
-    families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'], impressions: ['reach'] },
+    families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares', 'reposts'], clicks: ['bio_link_clicks'] },
     primary: ['views', 'likes'],
     cadence: HOURLY_BATCHED,
+    expiring: { kind: 'story', hours: 24, lastReadHours: 23.5 },
   },
   chartSlot: 2,
 } as const satisfies ChannelDefinition<'instagram'>;

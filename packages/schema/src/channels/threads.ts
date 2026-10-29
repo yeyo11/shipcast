@@ -40,12 +40,13 @@ export const threads = {
     replyLength: threadsLength,
   },
   profile: {
-    read: false,
+    read: true,
     edit: 'no',
     fields: ['bio', 'links', 'avatar'],
     editable: [],
     limits: { bio: 150, links: { count: 5, name: 30, value: 2000 } },
-    note: 'The Threads API cannot change a profile: paste the bio to review it, then copy a proposal into the app',
+    note: 'The Threads API reads the name, the bio and the picture but not the links, and changes none of them: copy a proposal into the app',
+    paste: ['links'],
   },
   posting: {
     note: 'weekday lunchtime and early evening, the hours the studies find for Threads, which share Instagram’s audience',
@@ -55,9 +56,9 @@ export const threads = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.4 },
     ],
   },
-  // Views, likes, replies, reposts, quotes and shares, from the post's insights
+  // Views, likes, replies, reposts, quotes and shares, from the post's insights; clicks on its link, from the account's
   metrics: {
-    families: { views: ['views'], reactions: ['likes'], comments: ['replies'], shares: ['reposts', 'quotes', 'shares'] },
+    families: { views: ['views'], reactions: ['likes'], comments: ['replies'], shares: ['reposts', 'quotes', 'shares'], clicks: ['clicks'] },
     primary: ['views', 'likes'],
     cadence: HOURLY_BATCHED,
   },

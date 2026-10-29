@@ -47,6 +47,11 @@ export interface ProfileCapability {
   limits: ProfileLimits;
   /** What the network allows or refuses, in words the app shows */
   note: string;
+  /**
+   * Fields a read profile leaves out or gives in part (Instagram's API gives one of its links,
+   * Threads' none): the owner may paste them beside the read, and a pasted value replaces the read one
+   */
+  paste?: readonly ProfileFieldId[];
 }
 
 /** Monday is 0, as the posting windows are written */
@@ -186,6 +191,12 @@ export interface ChannelDefinition<Id extends string = string> {
     primary: readonly string[];
     /** How often its numbers are worth reading (phase 8 of docs/plans/performance-refactor.md) */
     cadence: MetricCadence;
+    /**
+     * A kind of piece beside the post with numbers of its own that the network keeps only for a
+     * while (an Instagram story's, 24 hours): read at the cadence while they last, and once more
+     * `lastReadHours` after it went out, just before they go
+     */
+    expiring?: { kind: string; hours: number; lastReadHours: number };
   };
   /** Its series' slot in the charts' palette (`ink` for the text colour), when one is its own */
   chartSlot?: number | 'ink';

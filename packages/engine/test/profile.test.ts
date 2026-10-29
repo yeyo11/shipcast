@@ -180,11 +180,25 @@ test('applying a proposal edits through the connector and marks it applied', asy
 
 test('a network that cannot read the profile reviews what the owner pasted, and asks for it otherwise', async () => {
   const registry = await memoryRegistry();
-  const account = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const account = await registry.accounts.addAccount({ network: 'linkedin', brand: 'personal', label: 'Me', settings: {} });
   const network: FakeNetwork = { profile: { links: [], hasAvatar: false }, edits: [] };
   const d = deps(registry, network, { summary: 's', proposals: [{ field: 'bio', current: '', proposed: 'Builder of tools', why: 'w' }] });
   await assert.rejects(reviewProfile(d, account.id), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');
   const review = await reviewProfile(d, account.id, { pasted: { bio: 'I make things' }, language: 'en' });
   assert.equal(review.language, 'en');
   assert.deepEqual(review.proposals.map((p) => [p.current, p.proposed]), [['I make things', 'Builder of tools']]);
+});
+
+test('Instagram’s profile is read, and the links its API leaves out may be pasted beside it; a pasted bio is not', async () => {
+  const registry = await memoryRegistry();
+  const account = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const network: FakeNetwork = { profile: { displayName: 'José', bio: 'Read from Instagram', links: [{ name: 'Website', value: 'https://josegarrido.dev' }], hasAvatar: true }, edits: [] };
+  const d = deps(registry, network, { summary: 's', proposals: [{ field: 'bio', current: '', proposed: 'Builder of tools', why: 'w' }] });
+  const read = await reviewProfile(d, account.id);
+  assert.equal(read.profile.bio, 'Read from Instagram', 'nothing to paste');
+  assert.deepEqual(read.proposals.map((p) => p.current), ['Read from Instagram']);
+  const pasted = await reviewProfile(d, account.id, { pasted: { bio: 'ignored', links: 'Website: https://josegarrido.dev\nGitHub: https://github.com/yeyo11' } });
+  assert.equal(pasted.profile.bio, 'Read from Instagram');
+  assert.deepEqual(pasted.profile.links.map((l) => l.name), ['Website', 'GitHub']);
+  await assert.rejects(reviewProfile(d, account.id, { pasted: { links: 'not a link line' } }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');
 });

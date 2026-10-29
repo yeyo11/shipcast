@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { readsMetrics } from '@shipcast/schema';
+import { EXPIRING_PIECES, readsMetrics } from '@shipcast/schema';
 import type { Repositories } from '../repositories/index.ts';
 import type { CheckResult, TelemetryStore } from './store.ts';
 
@@ -22,7 +22,8 @@ const HOUR = 3_600_000;
  *   own (the channel definitions' `metrics.cadence`), else `cadenceHours` for every channel. A
  *   reading's age is from its last check (`coalesce(checked_at, taken_at)`): a value read again
  *   unchanged is as fresh as one that moved. Only the pieces the metrics rounds read count
- *   (`readsMetrics`): an Instagram story or comment is never read, so it is never stale.
+ *   (`readsMetrics`): a comment is never read, so it is never stale, and an Instagram story only
+ *   while Meta keeps its numbers (24 hours).
  */
 export async function runChecks(
   registry: Pick<Repositories, 'queries'>,
@@ -89,14 +90,16 @@ interface ChannelFreshness {
 
 async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cadenceHours: number, cadenceOf: (channel: string) => number): Promise<CheckResult> {
   // Only the channels that have ever been read: a channel Shipcast reads no numbers for is not stale
-  const all = await registry.queries.selectRows<{ channel: string; kind: string; newest: string | null }>(
-    sql`SELECT p.channel, p.kind, max(coalesce(m.checked_at, m.taken_at)) AS newest FROM posts p LEFT JOIN metrics m ON m.post_id = p.id
+  const all = await registry.queries.selectRows<{ channel: string; kind: string; published_at: string; newest: string | null }>(
+    sql`SELECT p.channel, p.kind, p.published_at, max(coalesce(m.checked_at, m.taken_at)) AS newest FROM posts p LEFT JOIN metrics m ON m.post_id = p.id
         WHERE p.status IN ('live', 'edited') AND p.external_id IS NOT NULL
           AND p.channel IN (SELECT DISTINCT p2.channel FROM metrics m2 JOIN posts p2 ON p2.id = m2.post_id)
-        GROUP BY p.id, p.channel, p.kind`,
+        GROUP BY p.id, p.channel, p.kind, p.published_at`,
   );
-  // A piece with no numbers of its own (a story, a comment) would only ever count as never read
-  const rows = all.filter((row) => readsMetrics(row.channel, row.kind));
+  // A piece with no numbers of its own (a comment), or a story past its 24 hours, would only ever
+  // count as never read; a story fewer than five accounts saw has none to read yet, so it is left
+  // out until it has some
+  const rows = all.filter((row) => readsMetrics(row.channel, row.kind, { publishedAt: row.published_at, now }) && !(row.newest === null && EXPIRING_PIECES.some((e) => e.channel === row.channel && e.kind === row.kind)));
   const byChannel: Record<string, ChannelFreshness> = {};
   let fresh = 0;
   let fresh1h = 0;

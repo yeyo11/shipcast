@@ -32,7 +32,7 @@ function optionalText(value: unknown, name: string, max: number): string | undef
   return value;
 }
 
-/** A review's body: what the owner pasted where the network cannot read the profile, and the language */
+/** A review's body: what the owner pasted where the network cannot read the profile (or a field of it), and the language */
 export function reviewInput(value: unknown): ReviewInput {
   const body = value === undefined ? {} : object(value, 'the body');
   const pastedBody = body.pasted === undefined ? undefined : object(body.pasted, 'pasted');
@@ -140,7 +140,7 @@ export const PROFILE_ROUTES: ApiRoute[] = [
       properties: {
         pasted: {
           type: 'object',
-          description: 'The profile as it is, for a network whose API cannot read it (Instagram, Threads, LinkedIn, Reddit)',
+          description: 'The profile as it is, for a network whose API cannot read it (LinkedIn, Reddit), or the fields a read leaves out (Instagram’s and Threads’ links)',
           properties: { displayName: { type: 'string' }, bio: { type: 'string' }, links: { type: 'string', description: 'One per line, as `Label: value`' } },
         },
         language: { type: 'string', description: 'One of the brand’s languages; its first when left out' },

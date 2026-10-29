@@ -186,6 +186,16 @@ export async function reviewProfile(
     const connector = await deps.connector(account);
     if (!connector?.profile) throw new ProfileRefused('unsupported', `the ${account.network} account cannot be read: check it on the Channels page`);
     profile = await connector.profile();
+    // What the API leaves out (Instagram's other links, Threads' links), where the owner pasted it
+    const pasted = options.pasted ?? {};
+    const paste = capability.paste ?? [];
+    if (paste.includes('links') && pasted.links?.trim()) {
+      const links = parseLinks(pasted.links);
+      if (!links) throw new ProfileRefused('invalid', 'write each link on its own line as `Label: value`');
+      profile = { ...profile, links };
+    }
+    if (paste.includes('bio') && pasted.bio?.trim()) profile = { ...profile, bio: pasted.bio.trim() };
+    if (paste.includes('displayName') && pasted.displayName?.trim()) profile = { ...profile, displayName: pasted.displayName.trim() };
   } else {
     const pasted = options.pasted ?? {};
     const links = pasted.links ? parseLinks(pasted.links) : [];

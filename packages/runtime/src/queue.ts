@@ -20,7 +20,8 @@ export interface JobData {
   publish: { launchId: number; retryChannel?: Channel };
   delivery: { action: Extract<WebhookAction, { kind: 'claim' | 'publish' }>; delivery: string };
   round: { reason: string };
-  metrics: { reason: string };
+  /** Every due source, or one piece read a last time before its numbers expire (an Instagram story) */
+  metrics: { reason: string; postId?: number };
   'instagram-tokens': { reason: string };
   /** Every account's numbers, or one account's when it is synced by hand */
   snapshots: { reason: string; accountId?: number };

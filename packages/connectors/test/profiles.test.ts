@@ -67,7 +67,9 @@ test('Instagram asks /me for the picture on the check and for the counts on the 
     ),
   });
   assert.deepEqual(await instagram.check(), { ok: true, account: '@me', avatarUrl: 'https://scontent.cdninstagram.com/p.jpg?oe=1', displayName: 'José' });
-  assert.deepEqual(await instagram.profileStats(), { followers: 500, following: 50, posts: 33 });
+  const { followers, following, posts, unread } = await instagram.profileStats();
+  assert.deepEqual({ followers, following, posts }, { followers: 500, following: 50, posts: 33 });
+  assert.equal(unread?.length, 2, 'insights that fail are said, and never fail the counts');
 });
 
 test('dev.to takes the picture from /users/me and counts followers and articles a thousand at a time', async () => {

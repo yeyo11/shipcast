@@ -194,13 +194,37 @@ export function isMainPiece(channel: string, kind: string): boolean {
   return main.endsWith('*') ? kind.startsWith(main.slice(0, -1)) : kind === main;
 }
 
+/** A piece's age, for the kinds whose numbers the network keeps only a while */
+export interface PieceAge {
+  publishedAt: string;
+  now: Date;
+}
+
+const HOUR_MS = 3_600_000;
+
+/** The kinds of piece beside the post whose numbers the network keeps only a while: an Instagram story */
+export const EXPIRING_PIECES: ReadonlyArray<{ channel: string; kind: string; hours: number; lastReadHours: number }> = CHANNEL_DEFINITIONS.flatMap((d) =>
+  'metrics' in d && d.metrics && 'expiring' in d.metrics && d.metrics.expiring ? [{ channel: d.id, ...d.metrics.expiring }] : [],
+);
+
+const expiringOf = (channel: string, kind: string) => EXPIRING_PIECES.find((e) => e.channel === channel && e.kind === kind);
+
 /**
  * Whether a piece of this kind has numbers of its own to read: a post, each newsletter issue (a
- * campaign of its own), and a post's own pieces where the channel's definition has metrics (each of
- * YouTube's videos; a subreddit's post has none). A story or a comment has none of its post's
- * numbers, and the blog is read per article URL for the launch, never per piece.
+ * campaign of its own), a post's own pieces where the channel's definition has metrics (each of
+ * YouTube's videos; a subreddit's post has none), and a piece whose numbers the network keeps only a
+ * while (an Instagram story), while it keeps them: without its age, never. A comment has none of its
+ * post's numbers, and the blog is read per article URL for the launch, never per piece.
  */
-export function readsMetrics(channel: string, kind: string): boolean {
+export function readsMetrics(channel: string, kind: string, age?: PieceAge): boolean {
   if (channel === 'blog') return false;
+  const expiring = expiringOf(channel, kind);
+  if (expiring) return age !== undefined && age.now.getTime() - Date.parse(age.publishedAt) < expiring.hours * HOUR_MS;
   return kind === 'post' || kind.startsWith('issue:') || (isMainPiece(channel, kind) && channelDefinition(channel)?.metrics !== undefined);
+}
+
+/** When a piece whose numbers expire is read one last time, just before they go; undefined for any other piece */
+export function lastMetricsRead(channel: string, kind: string, publishedAt: string): Date | undefined {
+  const expiring = expiringOf(channel, kind);
+  return expiring ? new Date(Date.parse(publishedAt) + expiring.lastReadHours * HOUR_MS) : undefined;
 }

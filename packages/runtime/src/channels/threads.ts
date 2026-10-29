@@ -1,5 +1,6 @@
 import { exchangeThreadsCode, Threads, threadsAuthorizeUrl } from '@shipcast/connectors';
 import { threads, trackWithinLimit } from '@shipcast/schema';
+import { batchReader } from '@shipcast/engine';
 import { channelAdapter } from './adapter.ts';
 
 /** Meta's long-lived tokens last 60 days: each is refreshed at 30 */
@@ -17,7 +18,8 @@ export const threadsAdapter = channelAdapter({
       permissions: [
         'Publishes a post with the launch image (threads_content_publish) and deletes it when you ask (threads_delete)',
         'Reads the replies and answers them when you approve (threads_read_replies, threads_manage_replies)',
-        'Reads views, likes, replies and reposts (threads_manage_insights)',
+        'Reads views, likes, replies and reposts, the clicks on its links and the profile’s views (threads_manage_insights)',
+        'Reads the profile’s name, bio and picture for a review (threads_basic)',
       ],
       howTo: 'Needs your Meta app’s Threads use case, its app id and secret set in Settings. Shipcast sends you to Threads to authorise it; the token is renewed every 30 days.',
       oauth: {
@@ -35,14 +37,15 @@ export const threadsAdapter = channelAdapter({
       },
       build: ({ need, fetch, cache }) => {
         const connector = new Threads({ userId: need('userId'), accessToken: need('accessToken'), fetch, ...(cache && { cache }) });
-        return { connector, check: () => connector.check(), profileStats: () => connector.profileStats() };
+        return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), profile: () => connector.profile() };
       },
     },
   },
   // Threads counts a link's every character: a text the tags would push over the limit keeps its ?ref=
   publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('threads', post.text, tracking) }) }),
   editor: (c) => c,
-  metrics: (c) => c,
+  // Every due post at once, so the account's link clicks are asked once for all of them
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   // No feed: Threads lists no replies since a cursor nor a reply count per post, so each post is read
   comments: (c) => ({ reader: c, replier: c }),
 });

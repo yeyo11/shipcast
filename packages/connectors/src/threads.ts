@@ -1,5 +1,6 @@
 import {
   checkProblem,
+  imageUrl,
   secretTag,
   type IdentityCache,
   ConnectorError,
@@ -11,6 +12,8 @@ import {
   type CommentReader,
   type Deletable,
   type Metrics,
+  type MetricsMany,
+  type Profile,
   type ProfileStats,
   type Published,
   type Replier,
@@ -40,6 +43,22 @@ export interface ThreadsOptions {
 
 /** Meta moved Threads to threads.com in 2025; its API docs use this host now */
 export const THREADS_GRAPH = 'https://graph.threads.com';
+
+/** Threads' user insights read nothing from before this moment (2024-04-13) */
+const INSIGHTS_FLOOR_SECONDS = 1_712_991_600;
+const DAY_SECONDS = 86_400;
+
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const URL_IN_TEXT = /https?:\/\/[^\s<>"']+/g;
+/** An address without its query and fragment, the way two links to one article match */
+const bare = (url: string) => {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return url;
+  }
+};
 
 interface ThreadsReply {
   id: string;
@@ -140,6 +159,70 @@ export class Threads implements Deletable, CommentReader, Replier {
     return out;
   }
 
+  /**
+   * Each post's insights, and the clicks on the links in it. Threads counts link clicks for the
+   * account, per link address (`clicks`, since 2025-07), not per post: each address clicked since the
+   * oldest of these posts went out is given to the newest post that carries it, the same address
+   * first, else the same page without its query. A post with a link that nobody clicked has 0. A
+   * post whose insights fail is left out, and the clicks failing leaves the posts' own numbers; both
+   * are said in `problems`.
+   */
+  async metricsMany(externalIds: string[]): Promise<MetricsMany> {
+    const out: MetricsMany = new Map();
+    const problems: string[] = [];
+    for (const id of externalIds) {
+      try {
+        out.set(id, await this.metrics(id));
+      } catch (error) {
+        problems.push(`${id}: ${message(error)}`);
+      }
+    }
+    try {
+      const posts = await this.#ownPosts(new Set(out.keys()));
+      const withLinks = posts.filter((p) => p.links.length > 0).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      if (withLinks.length > 0) {
+        const oldest = Math.floor(Date.parse(withLinks.at(-1)!.timestamp) / 1000);
+        const now = Math.floor(Date.now() / 1000);
+        const since = Math.max(INSIGHTS_FLOOR_SECONDS, oldest - DAY_SECONDS);
+        const { data } = await this.#get<{ data: Array<{ name: string; link_total_values?: Array<{ value: number; link_url: string }> }> }>(
+          `/${this.#user}/threads_insights`,
+          { metric: 'clicks', since: String(since), until: String(now) },
+          'read the link clicks',
+        );
+        for (const post of withLinks) out.get(post.id)!.clicks = 0;
+        for (const link of data.find((m) => m.name === 'clicks')?.link_total_values ?? []) {
+          const post = withLinks.find((p) => p.links.includes(link.link_url)) ?? withLinks.find((p) => p.links.some((l) => bare(l) === bare(link.link_url)));
+          if (post) out.get(post.id)!.clicks! += link.value;
+        }
+      }
+    } catch (error) {
+      problems.push(`link clicks: ${message(error)}`);
+    }
+    if (problems.length > 0) out.problems = problems;
+    return out;
+  }
+
+  /** Of the account's own posts, the ones asked for, with when they went out and the links in them (five pages of 100 at most) */
+  async #ownPosts(ids: ReadonlySet<string>): Promise<Array<{ id: string; timestamp: string; links: string[] }>> {
+    const found: Array<{ id: string; timestamp: string; links: string[] }> = [];
+    let after: string | undefined;
+    for (let page = 0; page < 5 && found.length < ids.size; page++) {
+      const answer = await this.#get<{ data: Array<{ id: string; text?: string; timestamp: string; link_attachment_url?: string }>; paging?: { cursors?: { after?: string }; next?: string } }>(
+        `/${this.#user}/threads`,
+        { fields: 'id,text,timestamp,link_attachment_url', limit: '100', ...(after && { after }) },
+        'read the posts',
+      );
+      for (const post of answer.data) {
+        if (!ids.has(post.id)) continue;
+        const links = [...new Set([...(post.text?.match(URL_IN_TEXT) ?? []), ...(post.link_attachment_url ? [post.link_attachment_url] : [])])];
+        found.push({ id: post.id, timestamp: post.timestamp, links });
+      }
+      after = answer.paging?.next ? answer.paging.cursors?.after : undefined;
+      if (!after) break;
+    }
+    return found;
+  }
+
   async #ownName(): Promise<string> {
     const load = () => this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then((me) => me.username);
     // Kept a day between runs, so /me is not asked hourly
@@ -204,10 +287,36 @@ export class Threads implements Deletable, CommentReader, Replier {
     }
   }
 
-  /** Followers only: the Threads API counts neither the accounts followed nor the posts */
+  /**
+   * Followers, and how often the profile was viewed the day before (UTC). The Threads API counts
+   * neither the accounts followed nor the posts. The views failing is said, never fails the count.
+   */
   async profileStats(): Promise<ProfileStats> {
     const { data } = await this.#get<{ data: Array<{ name: string; total_value?: { value: number } }> }>(`/${this.#user}/threads_insights`, { metric: 'followers_count' }, 'read the profile');
-    return statsOf({ followers: data.find((m) => m.name === 'followers_count')?.total_value?.value });
+    const followers = data.find((m) => m.name === 'followers_count')?.total_value?.value;
+    const today = Math.floor(Date.now() / 1000 / DAY_SECONDS) * DAY_SECONDS;
+    try {
+      const views = await this.#get<{ data: Array<{ name: string; values?: Array<{ value: number }> }> }>(
+        `/${this.#user}/threads_insights`,
+        { metric: 'views', since: String(today - DAY_SECONDS), until: String(today) },
+        'read the profile views',
+      );
+      const values = views.data.find((m) => m.name === 'views')?.values ?? [];
+      return statsOf({ followers }, { profileViews1d: values.reduce((n, v) => n + v.value, 0) });
+    } catch (error) {
+      return { ...statsOf({ followers }), unread: [`profile views: ${message(error)}`] };
+    }
+  }
+
+  /** The name, the bio and the picture (`threads_basic`); the API gives no links and changes nothing */
+  async profile(): Promise<Profile> {
+    const me = await this.#get<{ name?: string; threads_biography?: string; threads_profile_picture_url?: string }>('/me', { fields: 'name,threads_biography,threads_profile_picture_url' }, 'read the profile');
+    return {
+      ...(me.name?.trim() && { displayName: me.name }),
+      ...(me.threads_biography?.trim() && { bio: me.threads_biography }),
+      links: [],
+      hasAvatar: imageUrl(me.threads_profile_picture_url) !== undefined,
+    };
   }
 
   /** Swaps the long-lived token for a fresh one (60 more days); allowed once it is 24 h old */

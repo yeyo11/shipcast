@@ -36,11 +36,14 @@ export async function syncAccount(deps: AccountDeps, account: Account, now = new
   const stats = checked.built?.profileStats;
   if (!stats) return { account: checked.account, outcome: 'checked', line: `${name}: checked; its network gives no follower counts` };
   try {
-    const snapshot = await deps.registry.accounts.recordSnapshot(account.id, await stats(), now);
+    const read = await stats();
+    const snapshot = await deps.registry.accounts.recordSnapshot(account.id, read, now);
     const parts = [
       snapshot.followers !== null ? `${snapshot.followers} followers` : null,
       snapshot.following !== null ? `${snapshot.following} following` : null,
       snapshot.posts !== null ? `${snapshot.posts} posts` : null,
+      // An insight the network refused this time (a permission, a minimum of followers) is said here
+      ...(read.unread ?? []).map((why) => `not read: ${why}`),
     ].filter(Boolean);
     const hours = checked.built?.audienceHours;
     const audience = hours ? await readAudience(deps, account, { audienceHours: hours }, snapshot.followers, now) : undefined;

@@ -1,5 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { CHANNEL_METRIC_FAMILIES, STATS_METRICS, type StatsMetric } from '@shipcast/schema';
+import { CHANNEL_METRIC_FAMILIES, EXPIRING_PIECES, STATS_METRICS, type StatsMetric } from '@shipcast/schema';
 import type { Repositories } from './repositories/index.ts';
 import { InvalidRequest } from '@shipcast/schema';
 
@@ -105,7 +105,9 @@ const familyOf = new Map(familyPairs().map((p) => [`${p.source}.${p.name}`, p.fa
  */
 function counterSet(filter: StatsFilter, only?: StatsMetric): SQL {
   const site = values(SITE_SOURCES);
-  const pieces: SQL[] = [sql`p.channel NOT IN (${site})`, sql`(p.kind = 'post' OR p.kind LIKE 'issue:%')`];
+  // A post, a newsletter issue, and a piece whose numbers expire (an Instagram story): what has numbers of its own
+  const expiring = EXPIRING_PIECES.map((e) => sql` OR (p.channel = ${e.channel} AND p.kind = ${e.kind})`);
+  const pieces: SQL[] = [sql`p.channel NOT IN (${site})`, sql`(p.kind = 'post' OR p.kind LIKE 'issue:%'${sql.join(expiring, sql``)})`];
   const launchWide: SQL[] = [sql`f.source IN (${site})`];
   if (filter.channels) {
     pieces.push(inList(sql`p.channel`, filter.channels));

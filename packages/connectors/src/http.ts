@@ -43,6 +43,12 @@ export interface Published {
 /** Numbers a network reports for one piece, by name (views, likes, reposts…). */
 export type Metrics = Record<string, number>;
 
+/**
+ * Many pieces' numbers by their network ids. `problems` says what part could not be read and why
+ * (a secondary call refused), while what was read still counts.
+ */
+export type MetricsMany = Map<string, Metrics> & { problems?: string[] };
+
 /** Reads a JSON answer, turning a non-2xx into a ConnectorError with what the network said. */
 export async function json<T>(network: string, response: Response, what: string): Promise<T> {
   const text = await response.text();
@@ -69,6 +75,8 @@ export interface ProfileStats {
   following?: number;
   posts?: number;
   extra?: Record<string, number>;
+  /** What could not be read this time and why, where the counts still were: the sync says it */
+  unread?: string[];
 }
 
 // The check lives in the domain, where the app's pages use it too

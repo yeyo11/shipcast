@@ -63,9 +63,12 @@ export function ProfileReview({ account, network, initial, focused }: { account:
   const capability = view?.capability;
   if (!capability) return null;
   const review = view.review;
+  const pastable = capability.read ? (capability.paste ?? []) : capability.fields;
 
   const start = async () => {
-    const request = capability.read ? {} : { pasted: Object.fromEntries(Object.entries(pasted).filter(([, v]) => v.trim())) };
+    // A read profile takes only the fields its API leaves out
+    const fields = Object.entries(pasted).filter(([field, v]) => v.trim() && (!capability.read || pastable.includes(field as keyof typeof pasted)));
+    const request = fields.length > 0 ? { pasted: Object.fromEntries(fields) } : {};
     const started = await reviewProfileNow({ data: { id: account.id, request } }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
     if (started.ok) setJob(started.job);
     else toast.fail(started.problem);
@@ -90,20 +93,22 @@ export function ProfileReview({ account, network, initial, focused }: { account:
           Reconnect to allow profile edits: <a href={`/channels/${network}`}>connect this account again</a> and Shipcast will ask for the permission. Reviews and Copy work meanwhile.
         </Notice>
       )}
-      {!capability.read && (
+      {pastable.some((f) => f !== 'avatar') && (
         <div className="profile-paste">
-          <p className="muted">This network’s API does not give the profile: paste what it says now.</p>
-          {capability.fields.includes('displayName') && (
+          <p className="muted">{capability.read ? 'Optional: this network’s API leaves these out, so paste them to have them reviewed too.' : 'This network’s API does not give the profile: paste what it says now.'}</p>
+          {pastable.includes('displayName') && (
             <div className="field">
               <label htmlFor={`paste-name-${account.id}`}>Name</label>
               <input id={`paste-name-${account.id}`} className="input" value={pasted.displayName} onChange={(e) => setPasted({ ...pasted, displayName: e.target.value })} />
             </div>
           )}
-          <div className="field">
-            <label htmlFor={`paste-bio-${account.id}`}>Bio</label>
-            <textarea id={`paste-bio-${account.id}`} className="textarea" rows={3} value={pasted.bio} onChange={(e) => setPasted({ ...pasted, bio: e.target.value })} />
-          </div>
-          {capability.fields.includes('links') && (
+          {(!capability.read || pastable.includes('bio')) && (
+            <div className="field">
+              <label htmlFor={`paste-bio-${account.id}`}>Bio</label>
+              <textarea id={`paste-bio-${account.id}`} className="textarea" rows={3} value={pasted.bio} onChange={(e) => setPasted({ ...pasted, bio: e.target.value })} />
+            </div>
+          )}
+          {pastable.includes('links') && (
             <div className="field">
               <label htmlFor={`paste-links-${account.id}`}>
                 Links <span className="muted">(one per line, as Label: address)</span>

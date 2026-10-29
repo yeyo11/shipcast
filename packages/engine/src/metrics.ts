@@ -1,15 +1,19 @@
 import type { MetricStore } from './ports.ts';
-import type { IndexStatus, Metrics, PageVisits } from '@shipcast/connectors';
+import type { IndexStatus, Metrics, MetricsMany, PageVisits } from '@shipcast/connectors';
 import { channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
 
-/** A piece whose numbers are asked for: the registry's id, and the network's */
+/** A piece whose numbers are asked for: the registry's id, the network's, and its kind (a story's are not a post's) */
 export interface MetricTarget {
   postId: number;
   externalId: string;
+  kind?: string;
 }
+
+/** Many pieces' numbers by their registry ids; `problems` says what part could not be read, while the rest counts */
+export type MetricAnswer = Map<number, Metrics> & { problems?: string[] };
 
 /**
  * The batch-first capability of docs/plans/performance-refactor.md ("One definition per channel"):
@@ -17,19 +21,20 @@ export interface MetricTarget {
  * piece missing from the answer is gone (or hidden), and keeps its last numbers.
  */
 export interface MetricReader {
-  read(posts: readonly MetricTarget[]): Promise<Map<number, Metrics>>;
+  read(posts: readonly MetricTarget[]): Promise<MetricAnswer>;
 }
 
 /** A MetricReader over a network's read of many ids at once */
-export function batchReader(many: (externalIds: string[]) => Promise<Map<string, Metrics>>): MetricReader {
+export function batchReader(many: (externalIds: string[]) => Promise<MetricsMany>): MetricReader {
   return {
     async read(posts) {
       const answer = await many([...new Set(posts.map((p) => p.externalId))]);
-      const out = new Map<number, Metrics>();
+      const out: MetricAnswer = new Map();
       for (const post of posts) {
         const values = answer.get(post.externalId);
         if (values) out.set(post.postId, values);
       }
+      if (answer.problems) out.problems = answer.problems;
       return out;
     },
   };
@@ -41,9 +46,10 @@ export function batchReader(many: (externalIds: string[]) => Promise<Map<string,
  * reads use `read`, the batch-first MetricReader, wherever the adapter gives one.
  */
 export interface PostMetricReader extends Partial<MetricReader> {
-  metrics(externalId: string): Promise<Metrics>;
+  /** One piece's numbers; `kind` tells a piece whose numbers are not a post's (an Instagram story) */
+  metrics(externalId: string, kind?: string): Promise<Metrics>;
   /** The numbers of many pieces in as few calls as the network allows; a piece missing from the answer is gone */
-  metricsMany?(externalIds: string[]): Promise<Map<string, Metrics>>;
+  metricsMany?(externalIds: string[]): Promise<MetricsMany>;
 }
 
 /** Each source the engine can read numbers from; a source left out is not read. */
@@ -148,9 +154,9 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
   const launches = (await registry.launches.recent(500)).filter((l) => l.status === 'published');
   const piecesOf = new Map<number, Post[]>();
   for (const launch of launches) piecesOf.set(launch.id, await registry.posts.posts(launch.id));
-  // Which pieces have numbers is the channel's (readsMetrics). A deleted piece answers nothing but
-  // not found; its last numbers stay as they were
-  const readable = (post: Post) => readsMetrics(post.channel, post.kind) && post.externalId !== null && post.status !== 'deleted';
+  // Which pieces have numbers is the channel's (readsMetrics), a story's only while it lasts. A
+  // deleted piece answers nothing but not found; its last numbers stay as they were
+  const readable = (post: Post) => readsMetrics(post.channel, post.kind, { publishedAt: post.publishedAt, now }) && post.externalId !== null && post.status !== 'deleted';
 
   // The channels that read in batches are read first, all their pieces at once
   const batched = new Map<string, Map<string, Metrics>>();
@@ -159,7 +165,11 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
     const ids = [...piecesOf.values()].flat().filter((p) => p.channel === channel && readable(p)).map((p) => p.externalId!);
     if (ids.length === 0) continue;
     const many = reader.metricsMany.bind(reader);
-    await attempt(channel, async () => void batched.set(channel, await many(ids)));
+    await attempt(channel, async () => {
+      const answer = await many(ids);
+      batched.set(channel, answer);
+      for (const problem of answer.problems ?? []) problems.push(`${channel}: ${problem}`);
+    });
   }
 
   for (const launch of launches) {
@@ -177,7 +187,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
         continue;
       }
       const what = post.kind === 'post' ? post.channel : `${post.channel} ${post.kind}`;
-      await attempt(`${launch.repo} ${launch.ref} ${what}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!), post.id));
+      await attempt(`${launch.repo} ${launch.ref} ${what}`, async () => record(launch.id, post.channel, await reader.metrics(post.externalId!, post.kind), post.id));
     }
 
     // The blog's sources are the site's, read per article URL and kept for the launch
@@ -262,6 +272,14 @@ export function inspectionDue(status: { indexed: boolean; checkedAt: string } | 
   return now.getTime() - Date.parse(status.checkedAt) >= hours * HOUR_MS - DUE_SLACK_MS;
 }
 
+export interface HourlyOptions {
+  /**
+   * Only these pieces, read whether due or not, and nothing of the site: the last read of a piece
+   * whose numbers expire (an Instagram story), just before they go
+   */
+  posts?: readonly number[];
+}
+
 /**
  * The hourly reads of phase 8 (behind the `batched-metrics` flag): every live piece of every
  * published launch, each source only when its last check is older than its cadence (the channel
@@ -270,7 +288,7 @@ export function inspectionDue(status: { indexed: boolean; checkedAt: string } | 
  * launches it has. A value read again unchanged moves its reading's `checked_at` instead of adding a
  * row. One source failing never stops the others.
  */
-export async function collectHourly(registry: MetricStore, brand: Brand, sources: MetricSources, now = new Date()): Promise<CollectResult> {
+export async function collectHourly(registry: MetricStore, brand: Brand, sources: MetricSources, now = new Date(), options: HourlyOptions = {}): Promise<CollectResult> {
   let readings = 0;
   const problems: string[] = [];
   const record = async (launchId: number, source: string, values: Record<string, number | undefined>, postId: number | null = null) => {
@@ -299,7 +317,9 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     if (c.postId !== null) keep(`p:${c.postId}`, c.at);
     else keep(`l:${c.launchId}:${c.source}:${c.name}`, c.at);
   }
-  const readable = (post: Post) => readsMetrics(post.channel, post.kind) && post.externalId !== null && post.status !== 'deleted';
+  const only = options.posts ? new Set(options.posts) : undefined;
+  const readable = (post: Post) =>
+    readsMetrics(post.channel, post.kind, { publishedAt: post.publishedAt, now }) && post.externalId !== null && post.status !== 'deleted' && (!only || only.has(post.id));
 
   // Each channel: its due pieces, all at once. A launch's pieces of a channel are read together, so
   // its sum (latestMetrics) always adds up readings of one moment
@@ -309,7 +329,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const targets: Array<MetricTarget & { launchId: number }> = [];
     for (const launch of launches) {
       const pieces = (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p));
-      if (pieces.some((p) => due(checked.get(`p:${p.id}`), hours))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, launchId: launch.id })));
+      if (only || pieces.some((p) => due(checked.get(`p:${p.id}`), hours))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
     }
     if (targets.length === 0) continue;
     if (reader.read || reader.metricsMany) {
@@ -320,12 +340,14 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
           const values = answer.get(t.postId);
           if (values) await record(t.launchId, channel, values, t.postId);
         }
+        for (const problem of answer.problems ?? []) problems.push(`${channel}: ${problem}`);
       });
       continue;
     }
     // A network with no read of many: one call a piece, as the six-hourly reads do
-    for (const t of targets) await attempt(`${channel} ${t.externalId}`, async () => record(t.launchId, channel, await reader.metrics(t.externalId), t.postId));
+    for (const t of targets) await attempt(`${channel} ${t.externalId}`, async () => record(t.launchId, channel, await reader.metrics(t.externalId, t.kind), t.postId));
   }
+  if (only) return { readings, problems };
 
   const until = day(now);
   const sites = launches.flatMap((launch) => {

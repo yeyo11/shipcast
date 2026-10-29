@@ -1,6 +1,6 @@
 import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
 import { MemoryEtagCache, type EtagCache } from '@shipcast/connectors';
-import { channelCadence, pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
+import { channelCadence, lastMetricsRead, pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
 import { Flags } from './flags.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, RECONCILE_GRACE_MS, type Handlers, type JobQueue } from './queue.ts';
@@ -81,6 +81,25 @@ export async function armScheduled(queue: JobQueue, post: Post, launch?: Launch)
   const at = new Date(Math.max(Date.parse(post.scheduledAt), Date.now()));
   const of = launch ? ` of ${nameOf(launch)}` : '';
   return queue.upsert('scheduled', { postId: post.id, launchId: post.launchId }, { singletonKey: scheduledKey(post.id), startAfter: at, title: `${post.channel}${of} at ${post.scheduledAt.slice(0, 16).replace('T', ' ')} UTC`, launchId: post.launchId });
+}
+
+/** The key of a piece's last read before its numbers expire: one queued per piece */
+const lastReadKey = (postId: number) => `last-read:${postId}`;
+
+/**
+ * Queues the last read of each of a launch's pieces whose numbers the network keeps only a while
+ * (an Instagram story: 24 hours), just before they go: the hourly reads land anywhere in its last
+ * hour. Idempotent: arming twice leaves one job per piece, and a time already past arms nothing.
+ */
+export async function armLastReads(queue: JobQueue, registry: Pick<Repositories, 'posts'>, launchId: number, now = new Date()): Promise<number> {
+  let armed = 0;
+  for (const post of await registry.posts.posts(launchId)) {
+    const at = lastMetricsRead(post.channel, post.kind, post.publishedAt);
+    if (!at || at <= now || post.externalId === null || (post.status !== 'live' && post.status !== 'edited')) continue;
+    await queue.upsert('metrics', { reason: 'last read', postId: post.id }, { singletonKey: lastReadKey(post.id), startAfter: at, title: `Last read of the ${post.channel} ${post.kind}`, launchId });
+    armed += 1;
+  }
+  return armed;
 }
 
 export async function startDrafting(queue: JobQueue, launch: Launch, direct = false): Promise<string | null> {
@@ -186,6 +205,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       }
       for (const p of result.posted) job.log(`${p.channel}: ${p.url}`);
       for (const p of result.problems) job.log(p);
+      // A story's numbers last 24 hours: its last read is queued for just before they go
+      await armLastReads(queue, registry, launchId).catch((error: unknown) => job.log(`The last reads were not queued: ${error instanceof Error ? error.message : String(error)}`));
       for (const p of result.scheduled) job.log(`${p.channel}: scheduled for ${p.at}`);
       // One rule for what the owner is told, the round's too: quiet while only retryable failures wait for the next attempt
       await notifications(services).published(current, result, { final: job.lastAttempt });
@@ -330,12 +351,16 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       }
     },
 
-    async metrics({ reason }, job) {
+    async metrics({ reason, postId }, job) {
       if (await off(reason)) {
         job.log('Automation is off: the numbers are read by hand');
         return;
       }
       const brand = await d.brand();
+      if (postId !== undefined) {
+        for (const line of await readMetricsHourly({ registry, brand }, await hourlyServicesFor(brand), new Date(), { posts: [postId] })) job.log(line);
+        return;
+      }
       const lines = batched ? await readMetricsHourly({ registry, brand }, await hourlyServicesFor(brand)) : await readMetrics({ registry, brand }, await servicesFor(brand));
       for (const line of lines) job.log(line);
     },

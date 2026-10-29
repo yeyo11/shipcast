@@ -1,5 +1,6 @@
 import {
   checkProblem,
+  imageUrl,
   secretTag,
   type IdentityCache,
   ConnectorError,
@@ -10,12 +11,51 @@ import {
   type Comment,
   type CommentReader,
   type Metrics,
+  type Profile,
   type ProfileStats,
   type Published,
   type Replier,
   type ReplyTarget,
   type SentReply,
 } from './http.ts';
+
+/** One insight as the Graph API answers it: a lifetime total, or a value per breakdown */
+interface Insight {
+  name: string;
+  values?: Array<{ value: number }>;
+  total_value?: { value: number; breakdowns?: Array<{ results?: Array<{ dimension_values?: string[]; value: number }> }> };
+}
+
+const valueOf = (m: Insight) => m.total_value?.value ?? m.values?.[0]?.value ?? 0;
+
+/*
+ * Each piece's insights by type (Meta's media insights reference): a metric a type does not have
+ * fails the whole call, so each type asks for its own set, and what may be missing (a breakdown, a
+ * Reel's Facebook views) is asked for in a call of its own whose refusal costs nothing else.
+ */
+const BOTH = 'views,reach,likes,comments,saved,shares,reposts,total_interactions';
+const FEED_METRICS = `${BOTH},follows,profile_visits`;
+const REELS_METRICS = `${BOTH},ig_reels_avg_watch_time,reels_skip_rate`;
+const STORY_METRICS = 'views,reach,shares,reposts,total_interactions,follows,profile_visits';
+/** Meta's names that read badly as words on a page; the average watch time is in milliseconds */
+const RENAMED: Readonly<Record<string, string>> = { ig_reels_avg_watch_time: 'avg_watch_ms', reels_skip_rate: 'skip_rate' };
+/** A story's navigation, by Meta's action */
+const NAVIGATION: Readonly<Record<string, string>> = { TAP_FORWARD: 'taps_forward', TAP_BACK: 'taps_back', TAP_EXIT: 'exits', SWIPE_FORWARD: 'swipes_forward' };
+/** The account's insights over the last 24 hours, as the daily snapshot keeps them */
+const ACCOUNT_METRICS: Readonly<Record<string, string>> = {
+  views: 'views1d',
+  reach: 'reach1d',
+  accounts_engaged: 'accountsEngaged1d',
+  total_interactions: 'interactions1d',
+  profile_links_taps: 'linkTaps1d',
+};
+/** Meta gives follows and unfollows only from 100 followers up */
+const FOLLOWS_MIN_FOLLOWERS = 100;
+
+/** Graph API's (#10) on a story's insights: fewer than five accounts saw it, and Meta keeps its numbers back */
+const NOT_ENOUGH_VIEWERS = /"code"\s*:\s*10\b|not enough viewers/i;
+
+const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
 export type InstagramMedia = { kind: 'image' | 'video'; url: string };
@@ -235,15 +275,93 @@ export class Instagram implements CommentReader, Replier {
     }
   }
 
-  /** The metrics Meta offers on a post; `views` replaced impressions in 2025. */
-  async metrics(externalId: string): Promise<Metrics> {
-    const { data } = await this.#get<{ data: Array<{ name: string; values?: Array<{ value: number }>; total_value?: { value: number } }> }>(
-      `/${externalId}/insights`,
-      { metric: 'views,reach,likes,comments,saved,shares' },
-      'metrics',
-    );
+  async #insights(id: string, params: Record<string, string>, what: string): Promise<Insight[]> {
+    return (await this.#get<{ data?: Insight[] }>(`/${id}/insights`, params, what)).data ?? [];
+  }
+
+  /** One metric's total, and its values by its breakdown's dimension (`BIO_LINK_CLICKED`, `TAP_FORWARD`…) */
+  async #breakdown(id: string, params: Record<string, string>, what: string): Promise<{ total: number; by: Record<string, number> }> {
+    const [metric] = await this.#insights(id, params, what);
+    const by: Record<string, number> = {};
+    for (const r of metric?.total_value?.breakdowns?.[0]?.results ?? []) {
+      const key = r.dimension_values?.[0];
+      if (key) by[key] = (by[key] ?? 0) + r.value;
+    }
+    return { total: metric ? valueOf(metric) : 0, by };
+  }
+
+  #numbers(data: Insight[]): Metrics {
     const out: Metrics = {};
-    for (const metric of data) out[metric.name] = metric.total_value?.value ?? metric.values?.[0]?.value ?? 0;
+    for (const metric of data) out[RENAMED[metric.name] ?? metric.name] = valueOf(metric);
+    return out;
+  }
+
+  /**
+   * A published piece's type (IMAGE, VIDEO, CAROUSEL_ALBUM), which never changes: kept a month where
+   * there is a cache. A single video is a Reel, as `publish` makes it. Undefined when it cannot be read.
+   */
+  async #mediaType(id: string): Promise<string | undefined> {
+    const load = () => this.#get<{ media_type?: string }>(`/${id}`, { fields: 'media_type' }, 'read the media type').then((m) => m.media_type ?? '');
+    try {
+      return (await (this.#cache ? this.#cache.remember(`instagram-media-type:${id}`, 30 * 86_400, load) : load())) || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * A post's insights, by its type. Every post: views (every time on screen; `views` replaced
+   * impressions and plays in 2025), reach (unique accounts), likes, comments, saves, shares, reposts
+   * and total interactions. A feed post or carousel also: follows, profile visits, and the profile
+   * actions it brought (`profile_activity`, with its bio-link clicks, in a call of its own). A Reel:
+   * its average watch time (`avg_watch_ms`) and skip rate (`skip_rate`, a percentage), and the views
+   * it got on Facebook when it was shared there (`facebook_views`, which Meta refuses for a Reel that
+   * was not). A post whose type cannot be read gets what every type has.
+   */
+  async metrics(externalId: string): Promise<Metrics> {
+    const type = await this.#mediaType(externalId);
+    const reel = type === 'VIDEO';
+    const feed = type === 'IMAGE' || type === 'CAROUSEL_ALBUM';
+    const out = this.#numbers(await this.#insights(externalId, { metric: reel ? REELS_METRICS : feed ? FEED_METRICS : BOTH }, 'metrics'));
+    if (feed) {
+      await this.#breakdown(externalId, { metric: 'profile_activity', breakdown: 'action_type' }, 'read the profile activity').then(
+        (activity) => {
+          out.profile_activity = activity.total;
+          out.bio_link_clicks = activity.by.BIO_LINK_CLICKED ?? 0;
+        },
+        () => undefined,
+      );
+    }
+    if (reel) {
+      await this.#insights(externalId, { metric: 'facebook_views' }, 'read the Facebook views').then(
+        (data) => Object.assign(out, this.#numbers(data)),
+        () => undefined,
+      );
+    }
+    return out;
+  }
+
+  /**
+   * A story's insights, which Meta keeps for its 24 hours only: views, reach, shares, reposts, total
+   * interactions, follows and profile visits, and how people moved through it (taps forward and back,
+   * exits, swipes on to the next account's), asked apart since `navigation` takes a breakdown no
+   * other metric has. A story fewer than five accounts saw has no numbers yet: Meta answers #10,
+   * which is not a failure.
+   */
+  async storyMetrics(externalId: string): Promise<Metrics> {
+    let out: Metrics;
+    try {
+      out = this.#numbers(await this.#insights(externalId, { metric: STORY_METRICS }, 'story metrics'));
+    } catch (error) {
+      if (NOT_ENOUGH_VIEWERS.test(message(error))) return {};
+      throw error;
+    }
+    await this.#breakdown(externalId, { metric: 'navigation', breakdown: 'story_navigation_action_type' }, 'read the story navigation').then(
+      (navigation) => {
+        for (const [action, name] of Object.entries(NAVIGATION)) out[name] = navigation.by[action] ?? 0;
+      },
+      () => undefined,
+    );
     return out;
   }
 
@@ -294,13 +412,52 @@ export class Instagram implements CommentReader, Replier {
     }
   }
 
+  /**
+   * The counts, and the account's insights over the last 24 hours (Meta's default for them): views,
+   * reach, accounts engaged, interactions, taps on the profile's links, and from 100 followers up the
+   * follows and unfollows. An insight Meta refuses is said, and never fails the counts.
+   */
   async profileStats(): Promise<ProfileStats> {
     const me = await this.#get<{ followers_count?: number; follows_count?: number; media_count?: number }>(
       '/me',
       { fields: 'followers_count,follows_count,media_count' },
       'read the profile',
     );
-    return statsOf({ followers: me.followers_count, following: me.follows_count, posts: me.media_count });
+    const extra: Record<string, number> = {};
+    const unread: string[] = [];
+    try {
+      const data = await this.#insights(this.#user, { metric: Object.keys(ACCOUNT_METRICS).join(','), period: 'day', metric_type: 'total_value' }, 'read the account insights');
+      for (const metric of data) {
+        const name = ACCOUNT_METRICS[metric.name];
+        if (name) extra[name] = valueOf(metric);
+      }
+    } catch (error) {
+      unread.push(`account insights: ${message(error)}`);
+    }
+    if ((me.followers_count ?? 0) >= FOLLOWS_MIN_FOLLOWERS) {
+      try {
+        const follows = await this.#breakdown(this.#user, { metric: 'follows_and_unfollows', period: 'day', metric_type: 'total_value', breakdown: 'follow_type' }, 'read the follows');
+        extra.follows1d = follows.by.FOLLOWER ?? 0;
+        extra.unfollows1d = follows.by.NON_FOLLOWER ?? 0;
+      } catch (error) {
+        unread.push(`follows and unfollows: ${message(error)}`);
+      }
+    }
+    return { ...statsOf({ followers: me.followers_count, following: me.follows_count, posts: me.media_count }, extra), ...(unread.length > 0 && { unread }) };
+  }
+
+  /**
+   * The profile as Instagram shows it: the name, the bio, the picture, and the website, which is the
+   * one link the API gives of up to five. Instagram's API changes none of them.
+   */
+  async profile(): Promise<Profile> {
+    const me = await this.#get<{ name?: string; biography?: string; website?: string; profile_picture_url?: string }>('/me', { fields: 'name,biography,website,profile_picture_url' }, 'read the profile');
+    return {
+      ...(me.name?.trim() && { displayName: me.name }),
+      ...(me.biography?.trim() && { bio: me.biography }),
+      links: me.website?.trim() ? [{ name: 'Website', value: me.website.trim() }] : [],
+      hasAvatar: imageUrl(me.profile_picture_url) !== undefined,
+    };
   }
 
   /** Swaps the long-lived token for a fresh one (valid 60 more days); allowed once it is 24 h old. */

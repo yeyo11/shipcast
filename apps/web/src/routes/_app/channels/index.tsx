@@ -56,6 +56,11 @@ export function keyMetric(network: string, snapshot: AccountView['snapshot']): {
     case 'searchConsole':
     case 'bingWebmaster':
       return { value: extra.clicks28d ?? null, label: 'Clicks, last 28 days', others: line(n(extra.impressions28d, 'impressions')), followers: false };
+    // The account's own insights of the last day, from the daily snapshot
+    case 'instagram':
+      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(snapshot?.posts, 'posts'), n(extra.views1d, 'views, last day'), n(extra.reach1d, 'accounts reached, last day')), followers: true };
+    case 'threads':
+      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(extra.profileViews1d, 'profile views, last day')), followers: true };
     case 'devto':
     case 'hashnode':
       return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.posts, 'articles')), followers: true };

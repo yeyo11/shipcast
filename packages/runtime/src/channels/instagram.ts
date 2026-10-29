@@ -10,7 +10,7 @@ export const INSTAGRAM_REFRESHED_KEY = 'instagram-token-refreshed-at';
 /** Meta's long-lived tokens last 60 days: each is refreshed at 30 */
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
 
-/** Instagram: Instagram Login with the owner's Meta app; the carousel, the story, its comments and its reach */
+/** Instagram: Instagram Login with the owner's Meta app; the carousel, the story, its comments, their numbers and the profile */
 export const instagramAdapter = channelAdapter({
   definition: instagram,
   connect: {
@@ -22,7 +22,8 @@ export const instagramAdapter = channelAdapter({
       permissions: [
         'Publishes the carousel and the story (instagram_business_content_publish)',
         'Comments on its own post (instagram_business_manage_comments)',
-        'Reads reach and interactions (instagram_business_manage_insights)',
+        'Reads its posts’ and stories’ views, reach and interactions, and the account’s (instagram_business_manage_insights)',
+        'Reads the profile’s name, bio, website and picture for a review (instagram_business_basic)',
       ],
       howTo: 'A professional (Creator or Business) account. Shipcast sends you to Instagram to authorise it; the token is renewed every 30 days.',
       env: [
@@ -45,11 +46,12 @@ export const instagramAdapter = channelAdapter({
       },
       build: ({ need, fetch, cache }) => {
         const connector = new Instagram({ userId: need('userId'), accessToken: need('accessToken'), fetch, ...(cache && { cache }) });
-        return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), audienceHours: () => connector.audienceHours() };
+        return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), profile: () => connector.profile(), audienceHours: () => connector.audienceHours() };
       },
     },
   },
   publisher: (c) => c,
-  metrics: (c) => c,
+  // A story's numbers are not a post's: its own set, read while Meta keeps them (24 hours)
+  metrics: (c) => ({ metrics: (id: string, kind?: string) => (kind === instagram.metrics.expiring.kind ? c.storyMetrics(id) : c.metrics(id)) }),
   comments: (c) => ({ reader: c, replier: c, feed: countFeed(() => c.commentCounts()) }),
 });
