@@ -42,9 +42,13 @@ export function keyMetric(network: string, snapshot: AccountView['snapshot']): {
   const n = (v: number | null | undefined, word: string) => (v === null || v === undefined ? null : `${number(v)} ${word}`);
   const line = (...parts: Array<string | null>) => parts.filter(Boolean).join(' · ') || null;
   switch (network) {
-    case 'discord':
     case 'linkedin':
       return null;
+    // Counted only when the account has the server's invite
+    case 'discord':
+      return snapshot?.followers == null ? null : { value: snapshot.followers, label: 'Members', others: line(n(extra.online, 'online')), followers: true };
+    case 'github':
+      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(extra.repos, 'public repos')), followers: true };
     case 'telegram':
       return { value: snapshot?.followers ?? null, label: 'Members', others: null, followers: true };
     case 'reddit':

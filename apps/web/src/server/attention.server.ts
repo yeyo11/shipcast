@@ -1,12 +1,13 @@
-import { failurePrefix, type Repositories } from '@shipcast/engine';
+import { failurePrefix, METRIC_PROBLEM_PREFIX, type Repositories } from '@shipcast/engine';
 import { attentionItems, buildAttention, type Attention, type AttentionInput } from './attention.ts';
 
 type AttentionRegistry = Pick<Repositories, 'launches' | 'cursors' | 'accounts' | 'comments' | 'posts' | 'attention'>;
 
 async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
-  const [launches, failures, accounts, facets, newest, scheduled] = await Promise.all([
+  const [launches, failures, metricProblems, accounts, facets, newest, scheduled] = await Promise.all([
     registry.launches.recent(60),
     registry.cursors.cursorsWithPrefix(failurePrefix()),
+    registry.cursors.cursorsWithPrefix(METRIC_PROBLEM_PREFIX),
     registry.accounts.accounts(),
     registry.comments.commentFacets(false),
     registry.comments.newestWaitingCommentId(false),
@@ -19,6 +20,7 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
     commentsWaiting: facets.buckets.waiting,
     newestWaitingComment: newest,
     scheduled: scheduled.map((p) => ({ launchId: p.launchId, scheduledAt: p.scheduledAt })),
+    metricProblems,
     now: new Date(),
   };
 }

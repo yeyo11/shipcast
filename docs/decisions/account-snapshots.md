@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T15:45:36.169960691Z
-updated_at: 2026-10-29T19:15:38.175864578Z
+updated_at: 2026-10-29T20:05:28.560891148Z
 tags:
     - decision
     - accounts
@@ -41,17 +41,18 @@ the number down every day from the day the account is connected. A day missed is
 
 ## What each network gives
 
-| Network | Picture | Followers | Following | Posts |
-| --- | --- | --- | --- | --- |
-| Bluesky | `getProfile.avatar` (public AppView) | `followersCount` | `followsCount` | `postsCount` |
-| Mastodon | `verify_credentials.avatar` | `followers_count` | `following_count` | `statuses_count` |
-| Instagram | `/me profile_picture_url` | `followers_count` | `follows_count` | `media_count` |
-| dev.to | `/users/me profile_image` | counted from `/followers/users`, 1000 a page | — | counted from `/articles/me/published` |
-| Hashnode | `me.profilePicture` | `followersCount` | `followingsCount` | `posts.totalDocuments` |
-| Telegram | none (see below) | `getChatMemberCount` | — | — |
-| Discord webhook | the webhook's avatar on `cdn.discordapp.com` | — | — | — |
-| GitHub | `avatar_url` | `followers` | `following` | `public_repos` |
-| Brevo, Cloudflare, Search Console, Bing | none | — | — | — |
+| Network | Picture | Followers | Following | Posts | Extra |
+| --- | --- | --- | --- | --- | --- |
+| Bluesky | `getProfile.avatar` (public AppView) | `followersCount` | `followsCount` | `postsCount` | |
+| Mastodon | `verify_credentials.avatar` | `followers_count` | `following_count` | `statuses_count` | |
+| Instagram | `/me profile_picture_url` | `followers_count` | `follows_count` | `media_count` | |
+| dev.to | `/users/me profile_image` | counted from `/followers/users`, 1000 a page | — | counted from `/articles/me/published` | |
+| Hashnode | `me.profilePicture` | `followersCount` | `followingsCount` | `posts.totalDocuments` | |
+| Telegram | none (see below) | `getChatMemberCount` | — | — | |
+| Discord webhook | the webhook's avatar on `cdn.discordapp.com` | the server's `approximate_member_count`, through the account's invite | — | — | `online`: `approximate_presence_count` |
+| Newsletter (Brevo) | none | contacts who can still receive it, in brand.yml's lists only | — | — | |
+| GitHub profile | `avatar_url` | `followers` | `following` | — | `repos`: `public_repos` |
+| Cloudflare, Search Console, Bing | none | — | — | — | the site's own numbers |
 
 The networks without counts are still checked every day; they get no snapshot row.
 
@@ -61,6 +62,18 @@ interactions, link taps, and from 100 followers follows and unfollows), Threads'
 the day before. They are what a launch's sum cannot show: everything the account got, its
 stories and hand-made posts included. An insight the network refuses is named in the sync's line
 and never fails the counts.
+
+**Discord** counts its members only when the account has an **invite link** (an optional field of
+its form): a webhook does not see its server, and `GET /invites/{code}?with_counts=true` is public,
+so no bot is needed. A temporary invite stops counting when it expires; a permanent one does not.
+
+**The newsletter's** subscribers are the brand's lists' (brand.yml's `newsletter.lists`), not every
+list of the Brevo account; a contact in both languages' lists still counts twice, since Brevo counts
+each list on its own. Changed on 2026-10-29: it used to add up every list of the account.
+
+**GitHub** is an account again, but only as the owner's public profile (the `github` network: a
+login, no credential), added on 2026-10-29. The repos' own numbers still come through the GitHub App
+([github-app.md](github-app.md)), never through this account.
 
 ## No address that carries a credential
 
@@ -79,4 +92,4 @@ the moment it changes; not built yet, the daily job and Sync now cover it.
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[decisions/job-queue.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[accounts.md]] · [[engine.md]] · [[decisions/job-queue.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[decisions/github-app.md]] · [[decisions/account-analysis.md]]

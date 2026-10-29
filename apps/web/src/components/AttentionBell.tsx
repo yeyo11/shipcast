@@ -38,6 +38,12 @@ function ItemLink({ item, onGo, onKeyDown }: ItemLinkProps) {
         {body}
       </Link>
     );
+  if (t.to === '/settings')
+    return (
+      <Link {...shared} to={t.to}>
+        {body}
+      </Link>
+    );
   return (
     <Link {...shared} to={t.to} search={t.search}>
       {body}

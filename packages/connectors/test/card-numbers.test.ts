@@ -6,12 +6,21 @@ import { fakeFetch, type Call } from './fake.ts';
 
 /* The numbers each measurement or newsletter account's card leads with, read with the daily sync */
 
-test('Brevo counts every list’s contacts who can still receive it, added up', async () => {
+test('Brevo counts the contacts who can still receive it in the brand’s own lists only, added up', async () => {
+  const calls: Call[] = [];
   const brevo = new Brevo({
     apiKey: 'k',
-    fetch: fakeFetch([['GET https://api.brevo.com/v3/contacts/lists', () => Response.json({ lists: [{ uniqueSubscribers: 5, totalBlacklisted: 1 }, { uniqueSubscribers: 4, totalBlacklisted: 0 }] })]], []),
+    fetch: fakeFetch(
+      [
+        ['GET https://api.brevo.com/v3/contacts/lists/3', () => Response.json({ uniqueSubscribers: 5, totalBlacklisted: 1 })],
+        ['GET https://api.brevo.com/v3/contacts/lists/4', () => Response.json({ uniqueSubscribers: 4, totalBlacklisted: 0 })],
+      ],
+      calls,
+    ),
   });
-  assert.deepEqual(await brevo.profileStats(), { followers: 8 });
+  assert.deepEqual(await brevo.profileStats([3, 4, 3]), { followers: 8 });
+  assert.deepEqual(calls.map((c) => c.url), ['https://api.brevo.com/v3/contacts/lists/3', 'https://api.brevo.com/v3/contacts/lists/4'], 'each list once, and no other list of the account');
+  assert.deepEqual(await brevo.profileStats([]), {}, 'without lists in brand.yml there are no readers to count');
 });
 
 test('Cloudflare counts the whole site’s visits of the last seven days, with no path filter', async () => {

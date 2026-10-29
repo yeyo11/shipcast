@@ -6,6 +6,8 @@ import {
   exchangeLinkedInCode,
   exchangeThreadsCode,
   GitHubDiscussions,
+  GITHUB_API_VERSION,
+  GitHubRepoStats,
   LinkedIn,
   linkedinAuthorizeUrl,
   Threads,
@@ -93,7 +95,31 @@ test('GitHub Discussions: metrics, comments with their replies, and a reply unde
       [
         GQL,
         sequence(
-          gql({ node: { upvoteCount: 3, reactions: { totalCount: 5 }, comments: { totalCount: 2 } } }),
+          gql({
+            node: {
+              upvoteCount: 3,
+              reactions: { totalCount: 5 },
+              // A reader's comment with the owner's and Shipcast's replies and a reader's, and Shipcast's own comment
+              comments: {
+                totalCount: 2,
+                nodes: [
+                  {
+                    viewerDidAuthor: false,
+                    authorAssociation: 'NONE',
+                    replies: {
+                      totalCount: 4,
+                      nodes: [
+                        { viewerDidAuthor: false, authorAssociation: 'OWNER' },
+                        { viewerDidAuthor: true, authorAssociation: 'NONE' },
+                        { viewerDidAuthor: false, authorAssociation: 'CONTRIBUTOR' },
+                      ],
+                    },
+                  },
+                  { viewerDidAuthor: true, authorAssociation: 'NONE', replies: { totalCount: 0, nodes: [] } },
+                ],
+              },
+            },
+          }),
           gql({ node: { comments: { nodes: [{ ...comment('DC_1', 'ana'), replies: { nodes: [comment('DC_2', 'yeyo11', { authorAssociation: 'OWNER' }), comment('DC_3', 'bot', { viewerDidAuthor: true })] } }] } } }),
           gql({ node: { replyTo: { id: 'DC_1' } } }),
           gql({ addDiscussionComment: { comment: { id: 'DC_9', url: 'https://github.com/x/y/discussions/1#DC_9' } } }),
@@ -103,7 +129,9 @@ test('GitHub Discussions: metrics, comments with their replies, and a reply unde
     calls,
   );
   const discussions = new GitHubDiscussions({ auth: { token: async () => 't' }, fetch: http });
-  assert.deepEqual(await discussions.metrics('D_1'), { reactions: 5, upvotes: 3, comments: 2 });
+  // The reader's comment and reply, and one reply past those read (its author unknown, so it counts);
+  // neither the owner's nor Shipcast's
+  assert.deepEqual(await discussions.metrics('D_1'), { reactions: 5, upvotes: 3, comments: 3 });
   const list = await discussions.comments('D_1');
   assert.deepEqual(
     list.map((c) => [c.externalId, c.author.handle, c.inReplyTo ?? null, c.own]),
@@ -292,4 +320,41 @@ test('LinkedIn reads the name and whether there is a photo from userinfo, with t
   assert.deepEqual(await new LinkedIn({ personId: 'p', accessToken: 't', fetch: userinfo({ sub: 'p' }) }).profile(), { links: [], hasAvatar: false });
   const expired = new LinkedIn({ personId: 'p', accessToken: 't', expiresAt: '2026-01-01T00:00:00Z', fetch: fakeFetch([], []), now: () => Date.parse('2026-10-25T00:00:00Z') });
   await assert.rejects(expired.profile(), (e: unknown) => e instanceof ConnectorError && !e.retryable && /expired/.test(e.message));
+});
+
+test('GitHub repo: daily views and clones, referrers and pages, stars by day and downloads, each call naming the API version', async () => {
+  const calls: Call[] = [];
+  const API = 'GET https://api.github.com/repos/me/app';
+  const http = fakeFetch(
+    [
+      [`${API}/traffic/views?per=day`, () => Response.json({ count: 9, uniques: 4, views: [{ timestamp: '2026-10-27T00:00:00Z', count: 4, uniques: 2 }, { timestamp: '2026-10-28T00:00:00Z', count: 5, uniques: 3 }] })],
+      [`${API}/traffic/clones?per=day`, () => Response.json({ count: 2, uniques: 1, clones: [{ timestamp: '2026-10-28T00:00:00Z', count: 2, uniques: 1 }] })],
+      [`${API}/traffic/popular/referrers`, () => Response.json([{ referrer: 'github.com', count: 6, uniques: 3 }])],
+      [`${API}/traffic/popular/paths`, () => Response.json([{ path: '/me/app', title: 'app', count: 7, uniques: 4 }])],
+      // The week of Sunday 2026-10-25, the newest first
+      [`${API}/stargazers/history`, () => Response.json([{ week: Date.parse('2026-10-25T00:00:00Z') / 1000, total: 3, days: [0, 2, 0, 1, 0, 0, 0] }])],
+      [`${API}/releases`, () => Response.json([{ tag_name: 'v1.0.0', assets: [{ download_count: 5 }, { download_count: 2 }] }, { tag_name: 'v0.9.0' }])],
+    ],
+    calls,
+  );
+  const repo = new GitHubRepoStats({ auth: { token: async () => 't' }, fetch: http });
+  assert.deepEqual(await repo.traffic('me/app'), {
+    views: 9,
+    uniqueVisitors: 4,
+    clones: 2,
+    uniqueCloners: 1,
+    days: [
+      { day: '2026-10-27', views: 4, uniqueVisitors: 2, clones: 0, uniqueCloners: 0 },
+      { day: '2026-10-28', views: 5, uniqueVisitors: 3, clones: 2, uniqueCloners: 1 },
+    ],
+    referrers: [{ name: 'github.com', count: 6, uniques: 3 }],
+    paths: [{ name: '/me/app', count: 7, uniques: 4 }],
+  });
+  assert.deepEqual(await repo.history('me/app'), { starsByDay: { '2026-10-26': 2, '2026-10-28': 1 }, downloadsByTag: { 'v1.0.0': 7, 'v0.9.0': 0 } });
+  assert.ok(calls.every((c) => new Headers(c.headers).get('x-github-api-version') === GITHUB_API_VERSION));
+});
+
+test('GitHub repo: a refused traffic read throws with GitHub’s status instead of reading nothing', async () => {
+  const http = fakeFetch([['GET https://api.github.com/repos/me/app/traffic/views', () => Response.json({ message: 'Resource not accessible by integration' }, { status: 403 })]], []);
+  await assert.rejects(new GitHubRepoStats({ auth: { token: async () => 't' }, fetch: http }).traffic('me/app'), (e) => e instanceof ConnectorError && e.status === 403 && !e.retryable);
 });

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T17:44:13.484856655Z
-updated_at: 2026-10-29T19:45:32.727249514Z
+updated_at: 2026-10-29T20:10:09.360646832Z
 tags:
     - decision
     - accounts
@@ -54,7 +54,9 @@ Bluesky's links, Reddit's profile and LinkedIn's name and photo.
 | --- | --- | --- | --- | --- |
 | Mastodon | `verify_credentials` (the plain `source` of the note and fields) | `PATCH /api/v1/accounts/update_credentials`, needs `write:accounts` | name, bio, fields (the whole list) | name 30, bio 500, 4 fields of 255 (instance defaults) |
 | Bluesky | the public `getProfile` (links, pronouns and the pinned post too) | `com.atproto.repo.putRecord` on `app.bsky.actor.profile/self`; links as `app.bsky.actor.link` records | name, description, links | 64 and 256 graphemes; 10 links, titles of 40 |
-| Telegram | `getChat`, and the bot's `getChatMember` (`can_change_info`) | `setChatTitle`, `setChatDescription` | title, description | 128 and 255 characters |
+| Telegram | `getChat`, and the bot's `getChatMember` (`can_change_info`) | `setChatTitle`, `setChatDescription`; `setChatPhoto` for brand.yml's picture | title, description; the photo | 128 and 255 characters |
+| Discord | the webhook (`GET /webhooks/{id}/{token}`) | Modify Webhook with Token, the URL Shipcast already holds | the webhook's name; its picture, brand.yml's | name 80 |
+| GitHub profile | the public `GET /users/{login}` | no ("Profile: write" is not asked for) | — | bio 160 |
 | dev.to | `/users/me` | no (Forem's API cannot) | — | bio 200 |
 | Hashnode | `me { name bio tagline socialMediaLinks }` | no mutation | — | — |
 | Instagram | yes: name, bio, website and picture (`instagram_business_basic`); the other links pasted | no | — | name 30, bio 150, five links |
@@ -62,8 +64,7 @@ Bluesky's links, Reddit's profile and LinkedIn's name and photo.
 | Reddit | `/api/v1/me`: the account's page (`u_<name>`), its title, public description, icon and banner | no (`modconfig`, undocumented for a user's page) | — | 30 and 200 |
 | LinkedIn | the name and photo from OpenID Connect's `userinfo`; the owner pastes the About section | no (the Profile Edit API's `w_compliance` is closed) | — | About 2600 |
 
-Networks that are no profile (Brevo, Discord's webhook, the measurement sources, the AI providers)
-have no review.
+Networks that are no profile (Brevo, the measurement sources, the AI providers) have no review.
 
 - **Bluesky's record holds more than the fields Shipcast edits**: the avatar and banner blobs, the
   pronouns, the pinned post, labels. The record is read first (`getRecord`) and written back whole
@@ -81,13 +82,33 @@ have no review.
 - **A profile read in part.** `readable` on a definition's profile names what the credential reads
   where the rest is pasted: LinkedIn's name and photo fill what the paste leaves out; a name the owner
   pastes wins, and a read that fails costs the review nothing.
-- **Telegram** needs the bot to hold the "Change channel info" admin right. The review reads the
-  bot's membership, and the page shows the channel as not editable, with what to do, when the bot
-  lacks it; the edit says the same if Telegram refuses. A channel's link is its username, which a
-  bot cannot change.
+- **Telegram** needs the bot to hold the "Change channel info" admin right, which covers the photo
+  too. The review reads the bot's membership, and the page shows the channel as not editable, with
+  what to do, when the bot lacks it; the edit says the same if Telegram refuses. A channel's link is
+  its username, which a bot cannot change.
 - **A field the API leaves out** of a profile it reads (`profile.paste` on the channel's definition:
   Instagram's links past the website, Threads' links) may be pasted beside the read; a pasted value
   replaces the read one, and any other pasted field is ignored.
+- **Discord's profile is the webhook's** (added on 2026-10-29): its name and picture are what every
+  message it posts shows as its author, and the webhook's own URL may change them. Discord refuses a
+  name with "discord" or "clyde" in it, which is said as Discord says it. The server's own name, icon
+  and description need a bot with Manage Server, which Shipcast does not have.
+- **The GitHub profile** (added on 2026-10-29) is the owner's public profile, read with no
+  credential through the `github` account ([accounts.md](../accounts.md)): name, bio, the website and
+  the X account as links, so a review no longer needs it pasted. Editing it needs the App's user
+  permission "Profile: write" and the owner signing in again ([decisions/github-app.md](github-app.md)).
+
+## The picture: brand.yml's, never a proposal
+
+Added on 2026-10-29. Where a network takes a picture through the credential Shipcast already holds,
+**Use brand.yml's picture** (beside the review, behind the same alert dialog) sets brand.yml's
+`avatar` as the account's picture: a Telegram channel's photo (`setChatPhoto`, uploaded, since the
+Bot API takes no address for it) and a Discord webhook's picture (a data URI in Modify Webhook). The
+capability says so with `brandPicture`. The image is downloaded from its https address and checked
+first (a PNG, JPEG, GIF or WebP image under 10 MB, `pictureBytes` in
+`packages/connectors/src/http.ts`), so nothing else ever reaches the network. `setBrandPicture` in
+`packages/engine/src/profile.ts` refuses without an `avatar` in brand.yml, and a plain edit never
+carries a picture. A review's proposal for the picture stays advice: it is text, not an image.
 
 ## Mastodon's `write:accounts`, without breaking anyone
 
@@ -110,8 +131,8 @@ does not have.
 
 | Part | Where |
 | --- | --- |
-| Connectors | `ProfileReader` and `ProfileEditor` in `packages/connectors/src/http.ts`; `profile()` and `editProfile()` in `mastodon.ts`, `bluesky.ts`, `telegram.ts`; `profile()` in `devto.ts`, `hashnode.ts`, `instagram.ts`, `threads.ts`, `reddit.ts`, `linkedin.ts`; `Built.profile` and `Built.editProfile` in the runtime's catalog |
-| Engine | `packages/engine/src/profile.ts` (capabilities, limits, `reviewProfile`, `editProfile`, the stored review); the prompt and its locked rules in `prompt.ts` |
+| Connectors | `ProfileReader` and `ProfileEditor` in `packages/connectors/src/http.ts`; `profile()` and `editProfile()` in `mastodon.ts`, `bluesky.ts`, `telegram.ts`, `discord.ts`; `profile()` in `devto.ts`, `hashnode.ts`, `instagram.ts`, `threads.ts`, `reddit.ts`, `linkedin.ts`, `github-profile.ts`; `Built.profile` and `Built.editProfile` in the runtime's catalog |
+| Engine | `packages/engine/src/profile.ts` (capabilities, limits, `reviewProfile`, `editProfile`, `setBrandPicture`, the stored review); the prompt and its locked rules in `prompt.ts` |
 | Runtime | `packages/runtime/src/profiles.ts`: the account's connector built with its own keychain credential, the `profile` task, the job |
 | App | a **Profile review** section on the network's page (`/channels/<network>`), a panel per account (`components/ProfileReview.tsx`); a review's job links back to `/channels/<network>?review=<id>` |
 | API | `GET /profile-capabilities`, `GET` and `POST /accounts/{id}/profile-review`, `PATCH /accounts/{id}/profile` ([api.md](../api.md)) |
@@ -129,16 +150,17 @@ reflows at 320 px.
 - **The engine checks before the network**: the capability, the field and the limits, so the API
   refuses (400, 409) what the network would, and each connector is built with the account's own
   credential.
-- **Previews never write**: with `SHIPCAST_PREVIEW_FAKE_NETWORKS`, an edit runs every check and is
-  logged instead of sent.
+- **Previews never write**: with `SHIPCAST_PREVIEW_FAKE_NETWORKS`, an edit or a picture runs every
+  check and is logged instead of sent.
 - Tests fake every network (`packages/connectors/test/profile-edit.test.ts`,
   `packages/engine/test/profile.test.ts`, `packages/runtime/test/profiles.test.ts`,
   `apps/web/test/profile-api.test.ts`); no real profile was read or changed while building this.
 
 ## Rejected
 
-- **Editing pictures.** A review can advise on the picture, never change it: images are the owner's
-  to choose, and each network uploads them differently.
+- **Pictures from a proposal.** A review can advise on the picture, never change it: images are the
+  owner's to choose. The one picture Shipcast sets is the one the owner already chose, brand.yml's
+  `avatar`, and only on the networks above.
 - **Reviews on a schedule.** A profile changes rarely and an AI run costs; the owner asks.
 - **A table for reviews.** One latest review per account is a setting-shaped value; the cursors
   hold it without a migration. If reviews ever need a history, that becomes a table.
@@ -151,10 +173,12 @@ reflows at 320 px.
   wrongly thought unreadable), but never edited: their APIs have no profile update. Their links
   are not all readable (Instagram gives the website alone, Threads none), so those may be pasted.
 - LinkedIn's About section cannot be read with Shipcast's scopes: the owner pastes it and copies the
-  proposals. Hashnode, dev.to and Reddit are read but not edited.
+  proposals. Hashnode, dev.to, Reddit and GitHub are read but not edited.
 - Bluesky's pronouns and pinned post are read but not proposed; its avatar and banner are not edited.
 - A Mastodon account connected before 2026-10-27 must be connected again to allow Apply.
+- The brand's picture on the networks whose credential could take it but whose edit is not built
+  (Mastodon, Bluesky).
 
 ## Related
 
-[[accounts.md]] · [[api.md]] · [[stats.md]] · [[decisions/account-snapshots.md]] · [[decisions/ai-providers.md]] · [[decisions/comment-assistant.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[plans/goal-after-mvp.md]]
+[[accounts.md]] · [[api.md]] · [[stats.md]] · [[decisions/account-snapshots.md]] · [[decisions/ai-providers.md]] · [[decisions/comment-assistant.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[plans/goal-after-mvp.md]] · [[decisions/github-app.md]]

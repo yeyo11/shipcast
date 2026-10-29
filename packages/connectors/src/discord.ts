@@ -1,4 +1,4 @@
-import { json, checkProblem, expectOk, okCheck, type Check, type Deletable, type Editable, type Metrics, type Published } from './http.ts';
+import { json, checkProblem, ConnectorError, expectOk, okCheck, pictureBytes, PostGone, statsOf, type Check, type Deletable, type Editable, type Metrics, type Profile, type ProfileEdit, type ProfileEditor, type ProfileReader, type ProfileStats, type Published } from './http.ts';
 
 export interface DiscordPost {
   /** 2000 characters at most */
@@ -27,7 +27,7 @@ interface WebhookInfo {
  * Discord through a channel webhook: posts a message, with an optional link card. The webhook's URL
  * holds its id and token, which is all Discord asks to edit or delete a message the webhook sent.
  */
-export class Discord implements Editable<DiscordEdit>, Deletable {
+export class Discord implements Editable<DiscordEdit>, Deletable, ProfileReader, ProfileEditor {
   readonly #webhook: string;
   readonly #fetch: typeof fetch;
   #info: WebhookInfo | undefined;
@@ -77,9 +77,71 @@ export class Discord implements Editable<DiscordEdit>, Deletable {
     await expectOk('Discord', await this.#fetch(this.#message(externalId), { method: 'DELETE' }), 'delete');
   }
 
-  /** A webhook cannot read a message back, so there are no reactions or views to report. */
-  async metrics(): Promise<Metrics> {
-    return {};
+  /**
+   * A message's reactions, every emoji's added up, read back with the webhook that sent it (Get
+   * Webhook Message). Discord counts no views. A message deleted on Discord throws PostGone.
+   */
+  async metrics(externalId: string): Promise<Metrics> {
+    const response = await this.#fetch(this.#message(externalId));
+    if (response.status === 404) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new PostGone('Discord', `the message ${externalId} is not in the channel any more`, 404);
+    }
+    const message = await json<{ reactions?: Array<{ count?: number }> }>('Discord', response, 'metrics');
+    return { reactions: (message.reactions ?? []).reduce((n, r) => n + (r.count ?? 0), 0) };
+  }
+
+  /** Each message's numbers, one call each (Discord reads one message a call); a deleted one is left out */
+  async metricsMany(externalIds: readonly string[]): Promise<Map<string, Metrics>> {
+    const out = new Map<string, Metrics>();
+    for (const id of externalIds) {
+      try {
+        out.set(id, await this.metrics(id));
+      } catch (error) {
+        if (!(error instanceof PostGone)) throw error;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The server's members, through one of its invites (`approximate_member_count`, and how many are
+   * online): a webhook does not see its server, and an invite is public, so it needs no bot.
+   */
+  async profileStats(inviteCode: string): Promise<ProfileStats> {
+    const code = inviteCode.trim().replace(/^https?:\/\/(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\//, '').replace(/[/?#].*$/, '');
+    const url = `${new URL(this.#webhook).origin}/api/v10/invites/${encodeURIComponent(code)}?with_counts=true`;
+    const invite = await json<{ approximate_member_count?: number; approximate_presence_count?: number }>('Discord', await this.#fetch(url), 'read the invite');
+    return statsOf({ followers: invite.approximate_member_count }, { online: invite.approximate_presence_count });
+  }
+
+  /**
+   * The webhook's own name and picture, which every message it posts shows as its author: the one
+   * profile a webhook has. The server's own needs a bot with Manage Server.
+   */
+  async profile(): Promise<Profile> {
+    const info = await this.#webhookInfo();
+    return { displayName: info.name, links: [], hasAvatar: Boolean(info.avatar), editable: { ok: true } };
+  }
+
+  /** The webhook's name and picture, with the URL it already is (Modify Webhook with Token) */
+  async editProfile(edit: ProfileEdit): Promise<void> {
+    if (edit.bio !== undefined || edit.links !== undefined) throw new ConnectorError('Discord', 'a webhook has a name and a picture only', 400, false);
+    const body: { name?: string; avatar?: string } = {};
+    if (edit.displayName !== undefined) {
+      if (!edit.displayName.trim()) throw new ConnectorError('Discord', 'a webhook’s name cannot be empty', 400, false);
+      body.name = edit.displayName;
+    }
+    if (edit.picture !== undefined) {
+      const { bytes, type } = await pictureBytes('Discord', edit.picture, this.#fetch);
+      body.avatar = `data:${type};base64,${Buffer.from(bytes).toString('base64')}`;
+    }
+    if (Object.keys(body).length === 0) return;
+    // The webhook itself, without a thread the URL may name for its messages
+    const webhook = new URL(this.#webhook);
+    webhook.search = '';
+    const response = await this.#fetch(String(webhook), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    this.#info = await json<WebhookInfo>('Discord', response, 'edit the webhook');
   }
 
   async check(): Promise<Check> {

@@ -15,7 +15,7 @@ export const telegramAdapter = channelAdapter({
         { key: 'chatId', label: 'Chat or channel', secret: false, placeholder: '@channel or -100…', help: 'Where posts go; notifications go there too unless a notification chat is set' },
         { key: 'notifyChatId', label: 'Notification chat', secret: false, optional: true, help: 'Your private chat with the bot, for “drafts are waiting” messages' },
       ],
-      permissions: ['Posts to the channel', 'Tells you when drafts are waiting, published or failed', 'Changes the channel’s title and description when you apply a review’s proposal (the “Change channel info” admin right)'],
+      permissions: ['Posts to the channel', 'Reads its posts’ reactions from the changes Telegram tells the bot (an admin of the channel)', 'Tells you when drafts are waiting, published or failed', 'Changes the channel’s title and description when you apply a review’s proposal, and its photo to brand.yml’s avatar when you ask (the “Change channel info” admin right)'],
       howTo: 'Talk to @BotFather, send /newbot and copy the token; add the bot as an admin of the channel.',
       env: [
         { name: 'TELEGRAM_BOT_TOKEN', key: 'botToken', secret: true, how: 'https://t.me/BotFather (/newbot), then add the bot to your channel as an admin' },
@@ -31,6 +31,9 @@ export const telegramAdapter = channelAdapter({
   // Telegram counts a link's every character: a text the tags would push over the limit keeps its ?ref=
   publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('telegram', post.text, tracking) }) }),
   editor: (c) => c,
+  // Every post at once, from the changes Telegram pushed: a post with none kept its reactions, and
+  // one never told about has none, since every change since it went out is told
+  metrics: (c) => ({ metrics: (id: string) => c.metrics(id), metricsMany: (ids: string[]) => c.metricsMany(ids), pushOnly: { initial: { reactions: 0 } } }),
   // The owner's notices go only to their own chat with the bot; with none set there is no notifier,
   // never the channel a launch publishes to, which is public
   notifier: (_connection, credentials, http) => {

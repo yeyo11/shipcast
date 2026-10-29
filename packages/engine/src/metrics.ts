@@ -1,5 +1,5 @@
 import type { MetricStore } from './ports.ts';
-import type { IndexStatus, Metrics, MetricsMany, PageVisits } from '@shipcast/connectors';
+import { ConnectorError, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic } from '@shipcast/connectors';
 import { channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
@@ -50,6 +50,18 @@ export interface PostMetricReader extends Partial<MetricReader> {
   metrics(externalId: string, kind?: string): Promise<Metrics>;
   /** The numbers of many pieces in as few calls as the network allows; a piece missing from the answer is gone */
   metricsMany?(externalIds: string[]): Promise<MetricsMany>;
+  /**
+   * A network that only tells what changed (Telegram pushes a post's reactions when they move): a
+   * piece missing from its answer kept its numbers, which are read again as they were, and a piece
+   * never read has `initial`, since every change since it was published would have been told.
+   */
+  pushOnly?: { initial: Metrics };
+}
+
+/** The numbers a push-only network said nothing new about: the piece's last ones, or its first */
+async function keptMetrics(registry: MetricStore, postId: number, initial: Metrics): Promise<Metrics> {
+  const last = await registry.metrics.postMetrics(postId);
+  return last.length > 0 ? Object.fromEntries(last.map((m) => [m.name, m.value])) : initial;
 }
 
 /** Each source the engine can read numbers from; a source left out is not read. */
@@ -76,11 +88,14 @@ export interface MetricSources {
   github?: { repoStats(repo: string): Promise<RepoStats> };
   /**
    * The same, apart, for the hourly reads: the counts through a conditional request each hour, the
-   * traffic once a day (GitHub buckets it by day). Without it, `github` is read hourly whole.
+   * traffic and the history once a day (GitHub buckets them by day). Without it, `github` is read
+   * hourly whole.
    */
   githubRepo?: {
     counts(repo: string): Promise<{ stars: number; forks: number; watchers: number }>;
-    traffic(repo: string): Promise<{ views: number; uniqueVisitors: number } | undefined>;
+    /** Throws when GitHub refuses it (403 without the App's Administration: read) */
+    traffic(repo: string): Promise<RepoTraffic>;
+    history(repo: string): Promise<RepoHistory>;
   };
 }
 
@@ -181,8 +196,10 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
       const reader = sources.posts?.[post.channel];
       if (!reader || !readable(post)) continue;
       if (reader.metricsMany) {
-        // Read in the batch above; a piece the answer left out is gone, and a failed batch was said once
-        const values = batched.get(post.channel)?.get(post.externalId!);
+        // Read in the batch above; a piece the answer left out is gone (or, from a push-only network,
+        // unchanged), and a failed batch was said once
+        const answer = batched.get(post.channel);
+        const values = answer?.get(post.externalId!) ?? (answer && reader.pushOnly ? await keptMetrics(registry, post.id, reader.pushOnly.initial) : undefined);
         if (values) await record(launch.id, post.channel, values, post.id);
         continue;
       }
@@ -257,8 +274,39 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
 const HOUR_MS = 3_600_000;
 /** A run starts on the cron's minute and takes a while: a check this much short of the cadence is due */
 const DUE_SLACK_MS = 10 * 60_000;
-/** When a repo's traffic was last asked for, answered or not (a repo without access answers nothing) */
+/** When a repo's traffic was last read; a refused read leaves it, so the next hour asks again */
 export const trafficReadKey = (repo: string) => `metrics-read:github-traffic:${repo}`;
+/** When a repo's stars by day and releases' downloads were last read */
+export const historyReadKey = (repo: string) => `metrics-read:github-history:${repo}`;
+/** The problems of a source the owner has to fix (a permission), by source and what it was about; the bell lists them */
+export const METRIC_PROBLEM_PREFIX = 'metrics-problem:';
+/** Why GitHub refused a repo's traffic, kept until it is read again */
+export const trafficProblemKey = (repo: string) => `${METRIC_PROBLEM_PREFIX}github-traffic:${repo}`;
+
+/**
+ * A repo's traffic as readings: the 14-day totals as before, each day's views and clones under the
+ * day (`views:2026-10-28`), and the top referring sites and pages with their unique visitors.
+ */
+export function trafficReadings(t: RepoTraffic): Record<string, number> {
+  const out: Record<string, number> = { views: t.views, uniqueVisitors: t.uniqueVisitors, clones: t.clones, uniqueCloners: t.uniqueCloners };
+  for (const d of t.days) Object.assign(out, { [`views:${d.day}`]: d.views, [`visitors:${d.day}`]: d.uniqueVisitors, [`clones:${d.day}`]: d.clones, [`cloners:${d.day}`]: d.uniqueCloners });
+  for (const r of t.referrers) Object.assign(out, { [`referrer:${r.name}`]: r.count, [`referrer_visitors:${r.name}`]: r.uniques });
+  for (const p of t.paths) Object.assign(out, { [`path:${p.name}`]: p.count, [`path_visitors:${p.name}`]: p.uniques });
+  return out;
+}
+
+/**
+ * A repo's history as one launch's readings: the stars given each day (`stars:2026-10-28`), the
+ * downloads of the launch's own release when its ref is one, and of every release together.
+ */
+export function historyReadings(h: RepoHistory, ref: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [day, stars] of Object.entries(h.starsByDay)) out[`stars:${day}`] = stars;
+  const own = h.downloadsByTag[ref];
+  if (own !== undefined) out.downloads = own;
+  out.downloads_total = Object.values(h.downloadsByTag).reduce((n, d) => n + d, 0);
+  return out;
+}
 
 /**
  * Whether a Google URL inspection is due for an article (docs/plans/performance-refactor.md, "5.
@@ -337,7 +385,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       await attempt(channel, async () => {
         const answer = await read(targets);
         for (const t of targets) {
-          const values = answer.get(t.postId);
+          const values = answer.get(t.postId) ?? (reader.pushOnly ? await keptMetrics(registry, t.postId, reader.pushOnly.initial) : undefined);
           if (values) await record(t.launchId, channel, values, t.postId);
         }
         for (const problem of answer.problems ?? []) problems.push(`${channel}: ${problem}`);
@@ -420,9 +468,10 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   }
 
   // Each repo once, its numbers recorded on every launch of it (the stats count a repo once anyway)
-  const repos = new Map<string, number[]>();
-  for (const launch of launches) if (!launch.ref.startsWith('article:')) repos.set(launch.repo, [...(repos.get(launch.repo) ?? []), launch.id]);
-  for (const [repo, ids] of repos) {
+  const repos = new Map<string, Array<{ id: number; ref: string }>>();
+  for (const launch of launches) if (!launch.ref.startsWith('article:')) repos.set(launch.repo, [...(repos.get(launch.repo) ?? []), { id: launch.id, ref: launch.ref }]);
+  for (const [repo, of] of repos) {
+    const ids = of.map((l) => l.id);
     const split = sources.githubRepo;
     const countsDue = ids.some((id) => siteDue(id, 'github', 'stars', SITE_CADENCES.githubCounts.hours));
     if (split) {
@@ -431,10 +480,26 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
         for (const id of ids) await record(id, 'github', counts);
       });
       if (due(await registry.cursors.cursor(trafficReadKey(repo)), SITE_CADENCES.githubTraffic.hours)) {
+        // A refusal is said, kept for the bell when it needs the owner (a missing permission rather
+        // than GitHub having a bad hour), and leaves the cursor, so the next hour asks again
         await attempt(`${repo} GitHub traffic`, async () => {
-          const traffic = await split.traffic(repo);
+          let traffic: RepoTraffic;
+          try {
+            traffic = await split.traffic(repo);
+          } catch (error) {
+            if (error instanceof ConnectorError && !error.retryable) await registry.cursors.setCursor(trafficProblemKey(repo), error.message);
+            throw error;
+          }
           await registry.cursors.setCursor(trafficReadKey(repo), now.toISOString());
-          if (traffic) for (const id of ids) await record(id, 'github', traffic);
+          await registry.cursors.deleteCursor(trafficProblemKey(repo));
+          for (const id of ids) await record(id, 'github', trafficReadings(traffic));
+        });
+      }
+      if (due(await registry.cursors.cursor(historyReadKey(repo)), SITE_CADENCES.githubHistory.hours)) {
+        await attempt(`${repo} GitHub stars and downloads`, async () => {
+          const history = await split.history(repo);
+          await registry.cursors.setCursor(historyReadKey(repo), now.toISOString());
+          for (const l of of) await record(l.id, 'github', historyReadings(history, l.ref));
         });
       }
     } else if (sources.github && countsDue) {

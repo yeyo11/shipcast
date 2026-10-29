@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Bluesky, Devto, Discord, Hashnode, imageUrl, Instagram, Mastodon, Telegram } from '../src/index.ts';
+import { Bluesky, Devto, Discord, GitHubProfile, Hashnode, imageUrl, Instagram, Mastodon, Telegram } from '../src/index.ts';
 import { fakeFetch, type Call } from './fake.ts';
 
 test('only a plain https address is kept as a picture', () => {
@@ -134,6 +134,22 @@ test('Telegram counts the channel’s members, and never keeps its photo, whose 
   assert.equal(check.ok && check.avatarUrl, undefined);
   assert.doesNotMatch(JSON.stringify(check), /botT/);
   assert.deepEqual(await telegram.profileStats(), { followers: 42 });
+});
+
+test('GitHub reads the public profile and its counts with no credential, and says it cannot edit it', async () => {
+  const calls: Call[] = [];
+  const github = new GitHubProfile({
+    login: '@yeyo11',
+    fetch: fakeFetch(
+      [['GET https://api.github.com/users/yeyo11', () => Response.json({ login: 'yeyo11', name: 'José', bio: 'Builds tools', blog: 'https://josegarrido.dev', twitter_username: null, avatar_url: 'https://avatars.githubusercontent.com/u/1', followers: 16, following: 20, public_repos: 16 })]],
+      calls,
+    ),
+  });
+  assert.deepEqual(await github.check(), { ok: true, account: '@yeyo11', avatarUrl: 'https://avatars.githubusercontent.com/u/1', displayName: 'José' });
+  assert.deepEqual(await github.profileStats(), { followers: 16, following: 20, extra: { repos: 16 } });
+  const profile = await github.profile();
+  assert.deepEqual({ ...profile, editable: profile.editable?.ok }, { displayName: 'José', bio: 'Builds tools', links: [{ name: 'Website', value: 'https://josegarrido.dev' }], hasAvatar: true, editable: false });
+  assert.ok(calls.every((c) => !('authorization' in c.headers)), 'public: no token is sent');
 });
 
 test('Discord builds the webhook’s picture on its CDN, and none for a webhook without one', async () => {

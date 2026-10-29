@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sql } from 'drizzle-orm';
-import { Bluesky, Brevo, CloudflareAnalytics, Devto, GitHubDiscussions, GitHubRepoStats, Hashnode, Mastodon, MemoryEtagCache } from '@shipcast/connectors';
+import { Bluesky, Brevo, CloudflareAnalytics, ConnectorError, Devto, GitHubDiscussions, GitHubRepoStats, Hashnode, Mastodon, MemoryEtagCache } from '@shipcast/connectors';
 import { Brand, channelCadence, type Channel } from '@shipcast/schema';
-import { batchReader, collectHourly, collectMetrics, inspectionDue, runChecks, TelemetryStore, type MetricSources } from '../src/index.ts';
+import { batchReader, collectHourly, collectMetrics, inspectionDue, runChecks, TelemetryStore, trafficProblemKey, trafficReadKey, type MetricSources } from '../src/index.ts';
 import { aPublishedLaunch, memoryRegistry } from '../src/testing/index.ts';
 
 /*
@@ -30,7 +30,7 @@ function network() {
     if (url.pathname === '/api/articles/me/all') return reply([1, 2, 3, 4, 5].map((n) => ({ id: n, page_views_count: 30, public_reactions_count: 1, comments_count: 0 })));
     if (url.host === 'gql.hashnode.com') return reply({ data: Object.fromEntries(Object.keys(body?.variables ?? {}).map((k) => [`p${k.slice(2)}`, { views: 5, reactionCount: 0, responseCount: 0 }])) });
     if (url.host === 'api.github.com' && url.pathname === '/graphql') {
-      const discussion = (id: unknown) => ({ id, upvoteCount: 1, reactions: { totalCount: 0 }, comments: { totalCount: 0 } });
+      const discussion = (id: unknown) => ({ id, upvoteCount: 1, reactions: { totalCount: 0 }, comments: { totalCount: 0, nodes: [] } });
       const ids = body?.variables?.ids as string[] | undefined;
       return reply({ data: ids ? { nodes: ids.map(discussion) } : { node: discussion(body?.variables?.id) } });
     }
@@ -40,6 +40,8 @@ function network() {
       return reply({ data: { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: paths.map((p) => ({ count: 4, dimensions: { requestPath: p, refererHost: 'bsky.app' } })) }] } } });
     }
     if (url.pathname.endsWith('/traffic/views')) return reply({ count: 7, uniques: 3 });
+    if (url.pathname.endsWith('/traffic/clones')) return reply({ count: 0, uniques: 0 });
+    if (url.pathname.includes('/traffic/popular/') || url.pathname.endsWith('/stargazers/history') || url.pathname.endsWith('/releases')) return reply([]);
     if (url.pathname.startsWith('/repos/')) {
       const etag = `"stars-${state.stars}"`;
       if (new Headers(init?.headers).get('if-none-match') === etag) return new Response(null, { status: 304, headers: { etag } });
@@ -113,9 +115,10 @@ test('30 pieces on 6 networks: one call per batch and per repo, against one per 
     githubTraffic: n.count('/traffic/views'),
   });
   assert.deepEqual(perNetwork(before), { bluesky: 5, mastodon: 5, devto: 5, hashnode: 5, discussions: 5, brevo: 5, cloudflare: 5, githubCounts: 5, githubTraffic: 5 });
-  assert.deepEqual(perNetwork(after), { bluesky: 1, mastodon: 1, devto: 1, hashnode: 1, discussions: 1, brevo: 1, cloudflare: 1, githubCounts: 2, githubTraffic: 2 });
-  assert.equal(before.calls.length, 45);
-  assert.equal(after.calls.length, 11);
+  assert.deepEqual(perNetwork(after), { bluesky: 1, mastodon: 1, devto: 1, hashnode: 1, discussions: 1, brevo: 2, cloudflare: 1, githubCounts: 2, githubTraffic: 2 });
+  assert.equal(before.calls.length, 60);
+  // Brevo's clicks per link are a second call; each repo's traffic is four, its stars and releases two
+  assert.equal(after.calls.length, 22);
 });
 
 test('an hour later unchanged values move checked_at and add no row; a changed one adds one; daily sources wait', async () => {
@@ -137,7 +140,7 @@ test('an hour later unchanged values move checked_at and add no row; a changed o
   assert.equal(await rowCount(registry), rows, 'no row added');
   assert.equal(net.count('/traffic/views'), 2, 'the traffic is daily: not read again');
   const moved = await registry.queries.selectRows<{ n: number }>(sql`SELECT count(*)::int AS n FROM metrics WHERE checked_at = ${t1.toISOString()}`);
-  assert.equal(moved[0]!.n, rows - 2 * 5, 'every hourly reading checked (the traffic\'s two values on five launches were not read)');
+  assert.equal(moved[0]!.n, rows - 5 * 5, 'every hourly reading checked (the traffic\'s four values and the history\'s one on five launches were not read)');
 
   // A like on Bluesky: one row per piece whose value moved, nothing else
   net.state.likes = 2;
@@ -172,4 +175,99 @@ test('index status: daily until indexed, weekly after, never past 90 days', () =
   assert.equal(inspectionDue({ indexed: true, checkedAt: ago(24) }, launched, now), false);
   assert.equal(inspectionDue({ indexed: true, checkedAt: ago(7 * 24) }, launched, now), true, 'weekly once indexed');
   assert.equal(inspectionDue(undefined, '2026-08-01T00:00:00Z', now), false, 'a launch past 90 days is not inspected again');
+});
+
+test('a refused traffic read is said, kept for the bell, and asked again next hour; a later answer clears it', async () => {
+  const registry = await memoryRegistry();
+  await aPublishedLaunch(registry, [], { repo: 'yeyo11/claudio', ref: 'v1.0.0' });
+  let refuse = true;
+  let trafficReads = 0;
+  const traffic = {
+    views: 7,
+    uniqueVisitors: 3,
+    clones: 2,
+    uniqueCloners: 1,
+    days: [{ day: '2026-10-28', views: 5, uniqueVisitors: 2, clones: 2, uniqueCloners: 1 }],
+    referrers: [{ name: 'news.ycombinator.com', count: 4, uniques: 2 }],
+    paths: [{ name: '/yeyo11/claudio', count: 6, uniques: 3 }],
+  };
+  const source: MetricSources = {
+    githubRepo: {
+      counts: async () => ({ stars: 3, forks: 0, watchers: 1 }),
+      traffic: async () => {
+        trafficReads++;
+        if (refuse) throw new ConnectorError('GitHub', "read yeyo11/claudio's traffic: 403 Resource not accessible by integration", 403);
+        return traffic;
+      },
+      history: async () => ({ starsByDay: { '2026-10-27': 2 }, downloadsByTag: { 'v1.0.0': 12, 'v0.9.0': 3 } }),
+    },
+  };
+  const t0 = new Date('2026-10-29T10:00:00Z');
+  const first = await collectHourly(registry, brand, source, t0);
+  assert.deepEqual(first.problems, ["yeyo11/claudio GitHub traffic: GitHub: read yeyo11/claudio's traffic: 403 Resource not accessible by integration"]);
+  assert.match((await registry.cursors.cursor(trafficProblemKey('yeyo11/claudio'))) ?? '', /403/);
+  assert.equal(await registry.cursors.cursor(trafficReadKey('yeyo11/claudio')), undefined, 'the cursor does not move');
+
+  refuse = false;
+  await collectHourly(registry, brand, source, new Date(t0.getTime() + HOUR));
+  assert.equal(trafficReads, 2, 'asked again an hour later, not a day');
+  assert.equal(await registry.cursors.cursor(trafficProblemKey('yeyo11/claudio')), undefined);
+  const [launch] = await registry.launches.recent(1);
+  const read = Object.fromEntries((await registry.metrics.latestMetrics(launch!.id)).filter((m) => m.source === 'github').map((m) => [m.name, m.value]));
+  assert.deepEqual(read, {
+    stars: 3,
+    forks: 0,
+    watchers: 1,
+    views: 7,
+    uniqueVisitors: 3,
+    clones: 2,
+    uniqueCloners: 1,
+    'views:2026-10-28': 5,
+    'visitors:2026-10-28': 2,
+    'clones:2026-10-28': 2,
+    'cloners:2026-10-28': 1,
+    'referrer:news.ycombinator.com': 4,
+    'referrer_visitors:news.ycombinator.com': 2,
+    'path:/yeyo11/claudio': 6,
+    'path_visitors:/yeyo11/claudio': 3,
+    'stars:2026-10-27': 2,
+    downloads: 12,
+    downloads_total: 15,
+  });
+});
+
+test('a push-only network’s silence keeps a piece’s numbers, and a piece it never told about starts at its initial ones', async () => {
+  const registry = await memoryRegistry();
+  const first = await aPublishedLaunch(registry, [{ channel: 'telegram', externalId: '@c:1' }], { repo: 'yeyo11/claudio', ref: 'v1.0.0' });
+  const second = await aPublishedLaunch(registry, [{ channel: 'telegram', externalId: '@c:2' }], { repo: 'yeyo11/claudio', ref: 'v1.1.0' });
+  const posts = [...first.posts, ...second.posts];
+  const launch = first.launch;
+  let told = new Map<string, Record<string, number>>([['@c:1', { reactions: 4 }]]);
+  const source: MetricSources = { posts: { telegram: { metrics: async () => ({}), metricsMany: async () => told, pushOnly: { initial: { reactions: 0 } } } } };
+  const t0 = new Date('2026-10-29T10:00:00Z');
+  await collectHourly(registry, brand, source, t0);
+  told = new Map();
+  await collectHourly(registry, brand, source, new Date(t0.getTime() + HOUR));
+  assert.deepEqual(
+    await Promise.all(posts.map(async (p) => (await registry.metrics.postMetrics(p.id)).map((m) => [m.name, m.value, m.checkedAt]))),
+    [[['reactions', 4, new Date(t0.getTime() + HOUR).toISOString()]], [['reactions', 0, new Date(t0.getTime() + HOUR).toISOString()]]],
+  );
+  assert.equal((await registry.metrics.latestMetrics(launch.id)).find((m) => m.source === 'telegram')?.value, 4, 'the piece is still in its launch’s sum');
+});
+
+test('a traffic read GitHub fails for a while is said but not kept for the bell', async () => {
+  const registry = await memoryRegistry();
+  await aPublishedLaunch(registry, [], { repo: 'yeyo11/claudio', ref: 'v1.0.0' });
+  const source: MetricSources = {
+    githubRepo: {
+      counts: async () => ({ stars: 3, forks: 0, watchers: 1 }),
+      traffic: async () => {
+        throw new ConnectorError('GitHub', 'read the traffic: 502', 502);
+      },
+      history: async () => ({ starsByDay: {}, downloadsByTag: {} }),
+    },
+  };
+  const result = await collectHourly(registry, brand, source, new Date('2026-10-29T10:00:00Z'));
+  assert.equal(result.problems.length, 1);
+  assert.equal(await registry.cursors.cursor(trafficProblemKey('yeyo11/claudio')), undefined);
 });

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T16:39:48.121797373Z
-updated_at: 2026-10-29T19:44:02.760738647Z
+updated_at: 2026-10-29T20:07:52.707474592Z
 tags:
     - stats
     - metrics
@@ -47,6 +47,7 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Threads | views | likes | replies | reposts + quotes + shares | link clicks | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
 | YouTube | views | likes | comments | | | |
+| Telegram, Discord | | reactions | | | | |
 | Newsletter | opens | | | | clicks | delivered |
 | Blog | views | | | | | |
 | Search Console, Bing | | | | | clicks | impressions |
@@ -55,12 +56,22 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 Instagram's views and shares include its story's while Meta keeps them (24 hours). Its `reach` is
 unique accounts, not impressions (Meta retired those in 2025), so it is no family's.
 
-Left out: Instagram's `saved`, `reach`, total interactions, follows, profile visits, a Reel's watch
-time, skip rate and Facebook views, and a story's navigation; Bluesky's `saves` (its bookmarks), the
-newsletter's bounces and unsubscribes, the blog's per-source and per-language split, GitHub's views,
-which are a rolling 14-day count rather than a counter, and Reddit's `upvoteRatio`. Mastodon's
-`quotes` are read where the instance counts them (4.5 and later). Telegram, Discord and LinkedIn
-read no per-post numbers.
+GitHub Discussions' `comments` are everyone's comments and their replies but the owner's and
+Shipcast's own (since 2026-10-29; before, the top-level comments only, Shipcast's replies included).
+The newsletter's `opens` are Brevo's unique opens (`uniqueViews`) as before; Brevo's report counts
+Apple Mail Privacy Protection's automatic opens and bots' by default, and its API does not say
+whether `uniqueViews` does, so the parts are stored beside it rather than added to it.
+
+Left out of the families, stored and kept: Instagram's `saved`, `reach`, total interactions,
+follows, profile visits, a Reel's watch time, skip rate and Facebook views, and a story's
+navigation; Bluesky's `saves` (its bookmarks) and Reddit's `upvoteRatio`; the newsletter's bounces,
+unsubscribes, every open (`opens_total`), the opens of readers without privacy protection
+(`opens_trackable`), MPP's opens (`opens_mpp`, a count of events, not of readers), every click
+(`clicks_total`) and the clicks per link (`link:<url>`); the blog's per-source and per-language split;
+and GitHub's views, clones, referrers and pages, which are rolling 14-day counts rather than counters,
+the same per day (`views:<day>`, `clones:<day>`, their unique visitors and cloners), the stars given
+each day (`stars:<day>`) and the releases' downloads (`downloads`, `downloads_total`). Mastodon's
+`quotes` are read where the instance counts them (4.5 and later). LinkedIn reads no per-post numbers.
 
 **Ratios.** A reading that is a ratio of one piece, not a count, is listed in its definition's
 `metrics.averaged` (gathered as `AVERAGED_METRICS`; today Reddit's `upvoteRatio`). No family takes

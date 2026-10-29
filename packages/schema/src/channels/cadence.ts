@@ -11,8 +11,10 @@ import { channelDefinition } from './registry.ts';
 export const SITE_CADENCES = {
   /** The repo's stars, forks and watchers: live, and a 304 when nothing moved costs no quota */
   githubCounts: { hours: 1, read: 'conditional', why: 'live' },
-  /** The repo's views: GitHub buckets them by day */
+  /** The repo's views, clones, referrers and pages: GitHub buckets them by day */
   githubTraffic: { hours: 24, read: 'single', why: 'bucketed by day' },
+  /** The repo's stars by day and its releases' downloads */
+  githubHistory: { hours: 24, read: 'single', why: 'stars counted by day' },
   /** Search Console's clicks and impressions: its data lags two to three days */
   searchAnalytics: { hours: 24, read: 'single', why: '2–3 days of lag' },
   /** Google's URL inspection of an article not indexed yet */

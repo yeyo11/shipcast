@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:54:56.185308972Z
-updated_at: 2026-10-29T15:37:38.152592912Z
+updated_at: 2026-10-29T20:06:20.088020415Z
 tags:
     - decision
     - github-app
@@ -44,7 +44,9 @@ App** instead of an OAuth App plus a personal token, and its configuration is sp
   goes through it: the user's events and repos, releases, `launch.yml`, the pre-flight reads,
   committing drafts and opening their pull requests in the launches repo, editing a draft, merging,
   Discussions, and the repo's numbers. One installation is used: the repos launched and the launches
-  repo are expected on the same account.
+  repo are expected on the same account. Every REST call names its version
+  (`X-GitHub-Api-Version: 2022-11-28`), the repo's numbers' reader (`GitHubRepoStats`) included since
+  2026-10-29, so an answer keeps its shape when GitHub changes its default.
 - **The owner: a user token** (`packages/runtime/src/github-user.ts`, `GitHubUserTokens`). Signing in
   through the App's client id and secret is GitHub's usual web flow on the same callback
   (`/auth/github/callback`); the answer carries an access token (8 hours) and a refresh token
@@ -77,8 +79,27 @@ read with the installation token like the rest. The GitHub "network" in Channels
 metrics source, is gone, and so is `GITHUB_TOKEN_PERSONAL` for an install with the App; the import
 from `.env` used to skip it on purpose, which left the Channels page saying one network still worked
 from `.env` forever. `shipcast init`'s manifest asks for it, so a new App has it from the start; an
-App created before needs the permission added in its settings and accepted on the installation. Until
-then the public numbers are read and traffic is left out.
+App created before needs the permission added in its settings and accepted on the installation.
+
+**A refusal is said** (2026-10-29). Until then a traffic read GitHub refused returned nothing and the
+daily cursor moved, so an App without the permission looked like a repo nobody visited. Now the
+refusal is a problem of the metrics run, a non-retryable one (a `403`, a `404`) is kept as the cursor
+`metrics-problem:github-traffic:<repo>`, which the bell shows as a **permission** line ("GitHub
+refuses <repo>'s traffic: the App needs Administration: read on it", linking to Settings), and the
+read's cursor stays where it was, so the next hourly run asks again instead of the next day. The first
+answer clears the line. A `5xx` or a rate limit is said in the run's problems only.
+
+The traffic read covers what GitHub's Insights → Traffic shows: views and clones of the last 14
+days, day by day, and the top ten referring sites and pages (`traffic/views?per=day`,
+`traffic/clones?per=day`, `traffic/popular/referrers`, `traffic/popular/paths`, all Administration:
+read). A daily history read beside it takes the stars given each day (`/stargazers/history`, weeks
+from Sunday, the newest 30) and the releases' asset downloads (`/releases`), which need only Metadata
+and Contents. See [publishing.md](../publishing.md#metrics) for the readings they become.
+
+**The owner's profile is not the App's.** Reading the owner's public GitHub profile (name, bio,
+website, followers) needs no permission at all: it is the `github` account of the Channels page,
+a login read through GitHub's public API ([accounts.md](../accounts.md)). Editing it would need the
+App's user permission "Profile: write" and the owner signing in again; it is not asked for.
 
 ## Webhooks
 
@@ -129,4 +150,4 @@ signed in through the App.
 
 ## Related
 
-[[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[publishing.md]]
+[[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[decisions/job-queue.md]] · [[decisions/ai-providers.md]] · [[publishing.md]] · [[decisions/account-snapshots.md]]

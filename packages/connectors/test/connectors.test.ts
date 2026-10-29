@@ -300,8 +300,10 @@ test('Brevo creates the campaign for the list and sends it now; its numbers add 
         ['GET https://api.brevo.com/v3/contacts/lists/3', () => Response.json({ uniqueSubscribers: 10, totalBlacklisted: 2 })],
         ['POST https://api.brevo.com/v3/emailCampaigns/77/sendNow', () => new Response(null, { status: 204 })],
         ['POST https://api.brevo.com/v3/emailCampaigns', () => Response.json({ id: 77 }, { status: 201 })],
-        ['GET https://api.brevo.com/v3/emailCampaigns/77?statistics=globalStats', () => Response.json({ statistics: { globalStats: { sent: 8, delivered: 8, uniqueViews: 5, uniqueClicks: 2, unsubscriptions: 0, hardBounces: 0, softBounces: 1, complaints: 0 } } })],
-        ['GET https://api.brevo.com/v3/emailCampaigns/78?statistics=globalStats', () => Response.json({ statistics: { globalStats: { sent: 4, delivered: 4, uniqueViews: 1, uniqueClicks: 1, unsubscriptions: 1, hardBounces: 0, softBounces: 0, complaints: 0 } } })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/77?statistics=globalStats&excludeHtmlContent=true', () => Response.json({ statistics: { globalStats: { sent: 8, delivered: 8, uniqueViews: 5, uniqueClicks: 2, unsubscriptions: 0, hardBounces: 0, softBounces: 1, complaints: 0 } } })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/78?statistics=globalStats&excludeHtmlContent=true', () => Response.json({ statistics: { globalStats: { sent: 4, delivered: 4, uniqueViews: 1, uniqueClicks: 1, unsubscriptions: 1, hardBounces: 0, softBounces: 0, complaints: 0 } } })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/77?statistics=linksStats', () => Response.json({ statistics: {} })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/78?statistics=linksStats', () => Response.json({ statistics: {} })],
       ],
       calls,
     ),
@@ -315,6 +317,42 @@ test('Brevo creates the campaign for the list and sends it now; its numbers add 
   assert.equal(created.replyTo, 'hola@josegarrido.dev', 'replies go to the sender, not to the account default');
   assert.equal(calls[0]!.headers['api-key'], 'k');
   assert.deepEqual(await brevo.metrics('77,78'), { sent: 12, delivered: 12, opens: 6, clicks: 3, unsubscribes: 1, bounces: 1, complaints: 0 });
+});
+
+test('Brevo keeps every open, MPP’s and the trackable ones apart from unique opens, and the clicks per link', async () => {
+  const calls: Call[] = [];
+  const global = { sent: 10, delivered: 9, uniqueViews: 4, viewed: 11, trackableViews: 2, appleMppOpens: 3, uniqueClicks: 2, clickers: 5, unsubscriptions: 0, hardBounces: 0, softBounces: 0, complaints: 0 };
+  const brevo = new Brevo({
+    apiKey: 'k',
+    fetch: fakeFetch(
+      [
+        ['GET https://api.brevo.com/v3/emailCampaigns?status=sent&statistics=globalStats', () => Response.json({ campaigns: [{ id: 7, statistics: { globalStats: global } }, { id: 9, statistics: {} }] })],
+        // Brevo's schema says a number per link and its example `{ nbClick }`: both are read
+        ['GET https://api.brevo.com/v3/emailCampaigns?status=sent&statistics=linksStats', () => Response.json({ campaigns: [{ id: 7, statistics: { linksStats: { 'https://site.dev/en/a/?utm_source=newsletter': { nbClick: 3 }, 'https://site.dev/en/a/?utm_content=button': 1, 'https://brevo.com/unsubscribe': 1 } } }] })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/9?statistics=globalStats', () => Response.json({ statistics: { globalStats: { ...global, viewed: undefined, appleMppOpens: undefined } } })],
+        ['GET https://api.brevo.com/v3/emailCampaigns/9?statistics=linksStats', () => Response.json({ statistics: { linksStats: {} } })],
+      ],
+      calls,
+    ),
+  });
+  const read = await brevo.metricsMany(['7', '9']);
+  assert.deepEqual(read.get('7'), {
+    sent: 10,
+    delivered: 9,
+    opens: 4,
+    opens_total: 11,
+    opens_trackable: 2,
+    opens_mpp: 3,
+    clicks: 2,
+    clicks_total: 5,
+    unsubscribes: 0,
+    bounces: 0,
+    complaints: 0,
+    'link:https://site.dev/en/a/': 4,
+    'link:https://brevo.com/unsubscribe': 1,
+  });
+  assert.equal(read.get('9')?.opens_mpp, undefined, 'a count Brevo leaves out is not a zero');
+  assert.ok(calls.filter((c) => c.url.includes('/emailCampaigns?')).every((c) => c.url.includes('excludeHtmlContent=true')), 'the list never brings the campaigns’ HTML');
 });
 
 test('Brevo refusing to send leaves a draft and says not to retry, so no second campaign is made', async () => {

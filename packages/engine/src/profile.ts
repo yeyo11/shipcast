@@ -268,7 +268,7 @@ export async function editProfile(deps: Pick<ProfileDeps, 'registry' | 'connecto
   const named = (Object.keys(edit) as Array<keyof ProfileEdit>).filter((k) => edit[k] !== undefined);
   if (named.length === 0) throw new ProfileRefused('invalid', 'send at least one of displayName, bio, links');
   for (const field of named) {
-    if (!capability.editable.includes(field)) throw new ProfileRefused('invalid', `${account.network} cannot change the ${field} through its API`);
+    if (!(capability.editable as readonly string[]).includes(field)) throw new ProfileRefused('invalid', `${account.network} cannot change the ${field} through its API`);
   }
   const values: Array<[EditableField, string]> = [];
   if (edit.displayName !== undefined) values.push(['displayName', edit.displayName]);
@@ -295,6 +295,22 @@ export async function editProfile(deps: Pick<ProfileDeps, 'registry' | 'connecto
     }
     if (changed) await deps.registry.cursors.setCursor(reviewKey(account.id), JSON.stringify(review));
   }
+  return connector.profile ? connector.profile().catch(() => undefined) : undefined;
+}
+
+/**
+ * Sets brand.yml's avatar as an account's picture, on the networks that take one through the
+ * credential Shipcast holds (a Telegram channel's photo, a Discord webhook's picture). The picture is
+ * only ever the brand's own: a review's proposal for it is advice, never an address to set.
+ */
+export async function setBrandPicture(deps: Pick<ProfileDeps, 'registry' | 'connector' | 'brand'>, accountId: number): Promise<Profile | undefined> {
+  const { account, capability } = await existing(deps.registry, accountId);
+  if (capability.edit === 'reconnect') throw new ProfileRefused('reconnect', capability.note);
+  if (capability.edit === 'no' || !capability.brandPicture) throw new ProfileRefused('unsupported', `${account.network} cannot change the picture through its API`);
+  if (!deps.brand.avatar) throw new ProfileRefused('invalid', 'brand.yml has no avatar to set: add its https address there first');
+  const connector = await deps.connector(account);
+  if (!connector?.editProfile) throw new ProfileRefused('unsupported', `the ${account.network} account cannot be edited: check it on the Channels page`);
+  await connector.editProfile({ picture: deps.brand.avatar });
   return connector.profile ? connector.profile().catch(() => undefined) : undefined;
 }
 

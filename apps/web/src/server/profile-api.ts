@@ -194,6 +194,7 @@ export const PROFILE_SCHEMAS: Record<string, JsonSchema> = {
       fields: { type: 'array', items: fieldEnum },
       editable: { type: 'array', items: fieldEnum },
       limits: { type: 'object', properties: { displayName: { type: 'integer' }, bio: { type: 'integer' }, graphemes: { type: 'boolean' }, links: { type: 'object' } } },
+      brandPicture: { type: 'boolean', description: 'Whether Shipcast can set brand.yml’s avatar as the picture' },
       note: { type: 'string' },
     },
   },

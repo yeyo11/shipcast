@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConnectorError, Discord, Hashnode, Telegram } from '../src/index.ts';
+import { ConnectorError, Discord, Hashnode, PostGone, Telegram } from '../src/index.ts';
 import { fakeFetch, sequence, type Call } from './fake.ts';
 
 const gql = (data: unknown) => () => Response.json({ data });
@@ -86,12 +86,45 @@ test('Telegram sends a photo with caption and links a private chat by its intern
   assert.deepEqual(JSON.parse(String(calls[0]!.body)), { chat_id: '-1001234', photo: 'https://x.dev/i.jpg', caption: 'cap' });
 });
 
+test('Telegram reads the reaction changes it was pushed, confirms them, and leaves out the posts with none', async () => {
+  const calls: Call[] = [];
+  const change = (update_id: number, message_id: number, counts: number[], chat = { id: -1001234, username: 'shipcast' }) => ({
+    update_id,
+    message_reaction_count: { chat, message_id, date: 1, reactions: counts.map((total_count) => ({ type: { type: 'emoji', emoji: '🔥' }, total_count })) },
+  });
+  const telegram = new Telegram({
+    botToken: 'T',
+    chatId: '@shipcast',
+    fetch: fakeFetch(
+      [
+        [
+          'POST https://api.telegram.org/botT/getUpdates',
+          sequence(
+            // Another chat's post with the same id, and a later change of post 5 replacing the first
+            () => Response.json({ ok: true, result: [change(10, 5, [1]), change(11, 6, [2, 1]), change(12, 5, [9], { id: -100999, username: 'other' }), change(13, 5, [3, 1])] }),
+            () => Response.json({ ok: true, result: [] }),
+          ),
+        ],
+      ],
+      calls,
+    ),
+  });
+  const read = await telegram.metricsMany(['@shipcast:5', '@shipcast:6', '@shipcast:7']);
+  assert.deepEqual([...read], [['@shipcast:5', { reactions: 4 }], ['@shipcast:6', { reactions: 3 }]]);
+  const bodies = calls.map((c) => JSON.parse(String(c.body)) as { offset?: number; allowed_updates: string[] });
+  assert.deepEqual(bodies[0]!.allowed_updates, ['message_reaction_count'], 'only reaction counts, which Telegram leaves out unless asked');
+  assert.equal(bodies[0]!.offset, undefined);
+  assert.equal(bodies[1]!.offset, 14, 'the next call confirms what was read');
+
+  const hooked = new Telegram({ botToken: 'T', chatId: '@shipcast', fetch: fakeFetch([['POST', () => Response.json({ ok: false, description: 'Conflict: can\'t use getUpdates method while webhook is active' }, { status: 409 })]], []) });
+  await assert.rejects(hooked.metricsMany(['@shipcast:5']), (e) => e instanceof ConnectorError && e.status === 409 && !e.retryable && /webhook/.test(e.message));
+});
+
 test('Telegram notify turns the link preview off; errors map to retryable or not', async () => {
   const calls: Call[] = [];
   const telegram = new Telegram({ botToken: 'T', chatId: '1', fetch: fakeFetch([['POST', () => Response.json({ ok: true, result: {} })]], calls) });
   await telegram.notify('review https://x.dev');
   assert.deepEqual(JSON.parse(String(calls[0]!.body)).link_preview_options, { is_disabled: true });
-  assert.deepEqual(await telegram.metrics(), {});
 
   const rejected = new Telegram({ botToken: 'T', chatId: '1', fetch: fakeFetch([['POST', () => Response.json({ ok: false, description: 'Unauthorized' }, { status: 401 })]], []) });
   await assert.rejects(rejected.publish({ text: 'x' }), (e) => e instanceof ConnectorError && !e.retryable);
@@ -142,7 +175,36 @@ test('Discord posts with wait=true, an embed, and links the message through the 
     content: 'Released',
     embeds: [{ title: 't', url: 'https://x.dev', description: 'd', image: { url: 'https://x.dev/i.jpg' } }],
   });
-  assert.deepEqual(await discord.metrics(), {});
+});
+
+test('Discord reads a message’s reactions back through the webhook; a deleted message is left out', async () => {
+  const calls: Call[] = [];
+  const discord = new Discord({
+    webhookUrl: hook,
+    fetch: fakeFetch(
+      [
+        [`GET ${hook}/messages/M`, () => Response.json({ id: 'M', reactions: [{ count: 3, emoji: { name: '🎉' } }, { count: 2, emoji: { name: '👀' } }] })],
+        [`GET ${hook}/messages/N`, () => Response.json({ id: 'N' })],
+        [`GET ${hook}/messages/X`, () => Response.json({ code: 10008, message: 'Unknown Message' }, { status: 404 })],
+      ],
+      calls,
+    ),
+  });
+  assert.deepEqual(await discord.metrics('M'), { reactions: 5 });
+  const many = await discord.metricsMany(['M', 'N', 'X']);
+  assert.deepEqual([...many], [['M', { reactions: 5 }], ['N', { reactions: 0 }]]);
+  await assert.rejects(discord.metrics('X'), (e) => e instanceof PostGone);
+  assert.ok(calls.every((c) => c.method === 'GET'));
+});
+
+test('Discord counts the server’s members through its invite, from a code or a link', async () => {
+  const calls: Call[] = [];
+  const discord = new Discord({
+    webhookUrl: hook,
+    fetch: fakeFetch([['GET https://discord.com/api/v10/invites/sh1pcast?with_counts=true', () => Response.json({ code: 'sh1pcast', approximate_member_count: 41, approximate_presence_count: 7 })]], calls),
+  });
+  assert.deepEqual(await discord.profileStats('https://discord.gg/sh1pcast'), { followers: 41, extra: { online: 7 } });
+  assert.deepEqual(await discord.profileStats('sh1pcast'), { followers: 41, extra: { online: 7 } });
 });
 
 test('Discord errors: 404 is final, 429 and 500 are retryable; check names the webhook', async () => {

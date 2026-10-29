@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T19:46:46.870869312Z
+updated_at: 2026-10-29T20:09:23.995548238Z
 tags:
     - publishing
     - connectors
@@ -330,14 +330,16 @@ longer read.
 
 | Source | What | From |
 | --- | --- | --- |
-| `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue, added up | Brevo's campaign statistics |
+| `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue, added up; every open (`opens_total`), the trackable opens (`opens_trackable`), Apple MPP's (`opens_mpp`), every click (`clicks_total`), the clicks per link (`link:<url>`, the query left out) | Brevo's campaign statistics: `globalStats`, then `linksStats`, from the list of sent campaigns without its HTML (`excludeHtmlContent=true`) |
 | `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram`, `threads`, `reddit`, `githubDiscussions`, `youtube` | views, reactions, comments, likes, reposts, quotes, saves, score, reach… per post | each adapter's metric reader; batch-first (Bluesky 25 posts a call, YouTube 50, Reddit 100) |
 | `instagram` | per type: every post views, reach, likes, comments, saved, shares, reposts, total interactions; a feed post or carousel also follows, profile visits, `profile_activity` and `bio_link_clicks`; a Reel `avg_watch_ms`, `skip_rate` and, when shared to Facebook, `facebook_views`; a story views, reach, shares, reposts, total interactions, follows, profile visits and its navigation (`taps_forward`, `taps_back`, `exits`, `swipes_forward`) | Instagram's media insights; the type from `media_type`, kept a month |
 | `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
+| `discord` | reactions per message, every emoji's added up | Get Webhook Message, with the webhook that sent it; one call a message |
+| `telegram` | reactions per post, every emoji's added up | `message_reaction_count` updates, collected with `getUpdates` |
 | `blog` | each language's article visits and their sum, and by referrer | Cloudflare Web Analytics' GraphQL API, the paths in one query |
 | `search` | clicks and impressions; Google's URL inspection | Search Console (service account JWT) |
 | `bing` | clicks, impressions, crawl state | Bing Webmaster |
-| `github` | stars, forks, watchers; views and unique visitors of the last 14 days | GitHub REST (`repoStats`), once per repo |
+| `github` | stars, forks, watchers; views, unique visitors, clones and unique cloners of the last 14 days, the same per day (`views:<day>`, `visitors:<day>`, `clones:<day>`, `cloners:<day>`), the top referrers and pages (`referrer:<site>`, `path:<page>`, with their unique visitors); the stars given each day (`stars:<day>`); the launch's release downloads (`downloads`) and every release's (`downloads_total`) | GitHub REST through the App, once per repo: the counts (`/repos/{repo}`, conditional), the traffic (`traffic/*`, Administration: read) and the history (`/stargazers/history`, `/releases`) |
 
 Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind, age)` in
 `packages/schema/src/channels/registry.ts`: a post, each newsletter issue, a channel's own pieces
@@ -354,9 +356,10 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
 - **On** (production since 2026-10-29): `collectHourly` runs every hour (`3 * * * *`) and reads a
   source only when its last check is older than its cadence: each channel's from its definition
   (hourly, batched), the site's from `SITE_CADENCES` (GitHub counts hourly and conditional; traffic,
-  Search Console analytics and Bing daily; URL inspection daily until indexed, then weekly, and never
-  past 90 days). A value read again unchanged moves its reading's `checked_at` instead of adding a
-  row. Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).
+  the stars by day and downloads, Search Console analytics and Bing daily; URL inspection daily until
+  indexed, then weekly, and never past 90 days). A value read again unchanged moves its reading's
+  `checked_at` instead of adding a row. Accounts' sessions and identities are kept between runs (in
+  Redis with `redis-state`).
 
 **An Instagram story's last read.** Meta keeps a story's insights for its 24 hours only, and the
 hourly reads land anywhere in its last hour, so each publish queues a `metrics` job for the story
@@ -366,14 +369,48 @@ it has no numbers yet, which is neither a failure nor stale. A secondary call th
 Reel's Facebook views when it was not shared there, a breakdown) leaves the rest of the reading;
 Threads' link clicks failing is said in the run's problems while the posts' own numbers count.
 
-Telegram, Discord and LinkedIn give no numbers back. The per-post numbers, scored per network
-([stats.md](stats.md)), are also what the recommended publishing times learn from
+**Added on 2026-10-29**, from the metrics coverage audit:
+
+- **Discord** reads each message back through the webhook that sent it (`GET
+  /webhooks/{id}/{token}/messages/{id}`): the message object carries its `reactions`, so no new
+  credential is needed. A message deleted on Discord is left out and keeps its last numbers. Discord
+  counts no views; the replies in a thread need a bot.
+- **Telegram** has no way to read a message back, but a bot that is an admin of the channel is told
+  when a post's reactions change (a channel's reactions are anonymous): a `message_reaction_count`
+  update, which Telegram sends only to a bot that asks for it (`allowed_updates`) and keeps 24 hours.
+  The hourly read collects them with `getUpdates`, which confirms them, and keeps each post's latest
+  total. It works with the bot as it is set up: an admin of the channel, with no webhook (Telegram
+  refuses `getUpdates` to a bot that has one, which is said in words). Its reader is **push-only**:
+  a post Telegram said nothing about kept its reactions, which are read again as they were (moving
+  their `checked_at`), and a post never told about has none, since every change since it went out
+  would have been told. So a post published before 2026-10-29 shows 0 until its reactions next
+  change, and a gap of more than 24 hours in the hourly reads loses the changes of that gap. Views
+  and forwards stay out of reach: only a user session (MTProto) reads them.
+- **The newsletter** keeps Brevo's parts apart rather than guessing Brevo's dashboard. Since 2025
+  Brevo's report counts Apple Mail Privacy Protection's automatic opens and bots' in its "Opens" by
+  default; the API's `uniqueViews` stays `opens`, because Brevo does not document whether it includes
+  them, and its `appleMppOpens` counts opens (events), not readers, so it cannot be added to readers
+  without double counting. The owner compares a campaign's report with `opens`, `opens_mpp` and
+  `opens_total` to settle it. The subscribers are counted on brand.yml's lists only.
+- **GitHub Discussions** counts everyone's comments and replies but the owner's (`OWNER`) and
+  Shipcast's (`viewerDidAuthor`), the way `threadOf` already tells them apart for the comments; past
+  the first hundred of a list, whose authors are not read, each counts. Twenty discussions a query,
+  as the comments are read.
+- **GitHub repo**: the traffic read covers the clones, referrers and pages beside the views, day by
+  day where GitHub gives days, and a daily history read adds the stars by day and the releases'
+  downloads. A traffic read GitHub refuses is no longer swallowed: it is a problem of the run, a
+  `403` or `404` raises a **permission** line in the bell (its cursor
+  `metrics-problem:github-traffic:<repo>`), and the traffic's cursor stays, so the next hour asks
+  again; the first answer clears the line ([decisions/github-app.md](decisions/github-app.md)).
+
+LinkedIn gives no numbers back. The per-post numbers, scored
+per network ([stats.md](stats.md)), are also what the recommended publishing times learn from
 ([scheduling.md](scheduling.md#recommended-times)).
 
-Two limits: **Cloudflare Web Analytics does not keep the query string**, so visits are attributed by
+One limit: **Cloudflare Web Analytics does not keep the query string**, so visits are attributed by
 the referrer's host (Mastodon's many hosts count as `other`) and the UTM tags the links carry
-([tracking.md](tracking.md)) wait for an analytics tool that reads them; **GitHub traffic needs push
-access**, so without a connected GitHub account only the public numbers are recorded.
+([tracking.md](tracking.md)) wait for an analytics tool that reads them. GitHub's traffic needs the
+App's Administration: read, which `shipcast init` asks for; an App without it is said in the bell.
 
 ## The rounds and the shipcast command
 
@@ -397,4 +434,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]]
