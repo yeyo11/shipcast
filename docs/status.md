@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-10-29T11:06:32.131036651Z
+updated_at: 2026-10-29T15:39:55.478520912Z
 tags:
     - status
     - roadmap
@@ -13,8 +13,9 @@ tags:
 performance and architecture refactor**: three processes (`web`, `worker`, `heavy`), BullMQ on Redis,
 PgBouncer, the encrypted secrets table, GitHub by events through a public webhook host, and every AI
 task on the AI task runner with Shipcast's own headless claudio. Every flag of the refactor is on
-([server.md](server.md#what-production-runs-2026-10-29)). Shipcast v0.2.0 was released on
-2026-10-27.
+([server.md](server.md#what-production-runs-2026-10-29)); the same day `ai-runner` was retired, its
+runner the only AI path, and the global AI budget went with the first AI layer
+([decisions/ai-layer.md](decisions/ai-layer.md)). Shipcast v0.2.0 was released on 2026-10-27.
 
 **The MVP closed on 2026-10-25: phases 0 to 5 done, and Shipcast v0.1.0 was launched with Shipcast,
 from its app.** The same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app,
@@ -33,6 +34,22 @@ accounts per brand, the phase 5 channels and what the MVP had left
   refactor with every flag off; migrations 0013 to 0016, tried first on a restored copy of
   production), then the flags one at a time: `publishing-service`, `batched-metrics`, `realtime-ui`,
   `redis-state`, `bullmq`, `secrets-table`, `ai-runner`, `github-events`.
+- **After the flags** (2026-10-29, up to `9d68d49`, going through CI's deploy as this was written):
+  - **The first AI layer is gone**: the AI task runner is the only AI path; `ai-runner` is retired
+    (an environment that still lists it starts as before, the name ignored), and compose no longer
+    mounts `./workspace` into claudio ([claudio.md](claudio.md)).
+  - **No global AI budget**: `SHIPCAST_MAX_BUDGET_USD` and the `ai-budget-usd` setting are gone; a
+    task's limit is the owner's in the AI settings, else the task's default. A stored row and the
+    variable left in an env are ignored ([engine.md](engine.md#the-ai)).
+  - **Cold start**: the date, Base UI and motion libraries are bundled into the server build, and a
+    page-serving process warms its route chunks at boot, answering `/readyz` 503 `warming` until
+    done (60 s at most); workers warm nothing. A launch page's first visit after a restart took 11 to
+    15 s before ([server.md](server.md#health-and-shutdown), [web-app.md](web-app.md#how-it-is-built)).
+  - **Freshness** counts only the pieces whose channel reads numbers for them (`readsMetrics`), so
+    Instagram's story and comment no longer count as never read; production had shown 0.76 with
+    every readable piece read within the hour ([measurement.md](measurement.md#the-checks)).
+  - A browser leaving its event stream no longer logs an `AbortError`, and `scripts/measure.ts`
+    opens the registry through `connectRepositories`, so the before/after report runs on the server.
 - **The stack**: `web` (rolled out with docker-rollout), `worker` and `heavy`; Postgres behind
   PgBouncer in transaction pooling; `redis-queue` (AOF, `noeviction`) and `redis-cache` (LRU); the
   secrets in the encrypted `secrets` table (22 keys moved from the encrypted file); Shipcast's own
@@ -127,24 +144,27 @@ accounts per brand, the phase 5 channels and what the MVP had left
 - **The first reply**: a question on Mastodon about how claudio's parallel agents handle merge
   conflicts, answered from claudio's code (2026-10-25).
 - **Shipcast v0.2.0** (released 2026-10-27): its drafting stopped at a Claude usage limit, which is
-  why a chat that ends that way now says so ([claudio.md](claudio.md)).
+  why that limit is now a retryable error with its reset time rather than a silent end
+  ([claudio.md](claudio.md)).
 - **The REA article** (launch 6, 2026-10-28): its scheduled pieces went out once each, on time.
 - **The Sluice article** (2026-10-29), the first written by the AI task runner on production's
-  claudio: staged as yeyo11/launches#13, waiting for the owner's approval.
+  claudio: staged as yeyo11/launches#13, approved by the owner and merged the same day. Its two
+  YouTube videos are the first Shipcast uploaded, and they came out **public**: Shipcast asks for
+  `public`, and Google did not hold this project's uploads private although it is not audited
+  ([decisions/youtube.md](decisions/youtube.md#privacy-and-googles-audit)).
 
 ## Waiting on the owner
 
 - **Hashnode is out for now** (the owner's decision, 2026-10-25): its API needs a paid Pro plan since
   2026-05-13; the connector stays ready.
-- Approving the Sluice article (launches#13).
 
 ## Next
 
 The rest of the [refactor's goal](plans/goal-refactor.md): the after-window with every flag on and
 the before/after report ([measurement.md](measurement.md)), the scale test and the chaos tests,
-YouTube's private uploads, and the v0.2 run's leftovers. The roadmap after that is
-[plans/after-mvp.md](plans/after-mvp.md).
+what is left of YouTube's step (its first uploads already went out, public, with the Sluice article),
+and the v0.2 run's leftovers. The roadmap after that is [plans/after-mvp.md](plans/after-mvp.md).
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]]

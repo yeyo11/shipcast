@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T12:02:45.424748487Z
-updated_at: 2026-10-29T09:01:37.065287314Z
+updated_at: 2026-10-29T15:38:21.54308372Z
 tags:
     - measurement
     - telemetry
@@ -52,8 +52,15 @@ handles, file paths and Telegram's bot token in the path become placeholders
 | `missed-schedules` | no scheduled piece is still waiting 10 minutes after its time |
 | `late-posts` | no piece that went out in the last day did so more than 5 minutes after its time |
 | `duplicate-pieces` | no launch has two live rows of one channel and kind, and no two rows share a network id |
-| `freshness` | 99 % of live pieces of the channels Shipcast reads have a reading within the metrics cadence plus an hour (6 h until phase 8 makes it hourly); the share within 1 h is in its detail |
+| `freshness` | 99 % of the live pieces that have numbers to read have a reading within their cadence plus an hour (with `batched-metrics`, each channel's own cadence; without, the 6-hour rounds); the share within 1 h is in its detail |
 | `idle-tab-requests` | an idle open page asks for less than one request a minute |
+
+**Which pieces `freshness` counts** (since 2026-10-29): only those whose channel reads numbers for
+that kind, by `readsMetrics(channel, kind)` in `packages/schema/src/channels/registry.ts`, the same
+rule the metrics rounds use: a post, each newsletter issue, and a channel's own pieces where its
+definition has metrics (each of YouTube's videos). Instagram's story and link comment have no numbers
+of their own and the blog is read per article URL, so none of them counts. Before, they counted as
+never read, and production showed 0.76 while every readable piece had been read within the hour.
 
 They read the registry only, so they cost no provider call. A full registry-against-network
 comparison needs each network's list of the account's own posts; it comes with the channel modules
@@ -67,7 +74,9 @@ node scripts/measure.ts <from>..<to> <from>..<to>    # before/after, one Markdow
 ```
 
 On the server: `sudo docker exec shipcast-web-1 node scripts/measure.ts …` (it reads
-`SHIPCAST_DATABASE_URL`).
+`SHIPCAST_DATABASE_URL` and opens the registry with `connectRepositories`, like every other entry
+point; until `ea107a5` on 2026-10-29 it still imported the removed `Registry` facade and could not
+start there).
 
 ## Settings
 
@@ -75,7 +84,8 @@ On the server: `sudo docker exec shipcast-web-1 node scripts/measure.ts …` (it
   `off`. By default `/`, `/launches`, `/stats`.
 - `SHIPCAST_FLAGS`: the refactor's switches, one per phase that changes behaviour, off unless named
   (`packages/runtime/src/flags.ts`); a name that is not a flag stops the start, rather than being
-  ignored.
+  ignored. A retired flag, whose path became the only one (`ai-runner`, 2026-10-29), is the
+  exception: still listed, it is accepted and ignored ([server.md](server.md#the-flags)).
 
 ## The baseline
 
@@ -99,7 +109,7 @@ What it measured, per day unless said:
 | Metric reads | 4.8 runs a day, 38 calls each, 34 s on average |
 | Comment polls | 52.8 runs a day, 20.5 calls each, 4 failures |
 | Missed schedules, late posts, duplicate pieces | 0 in all 20 hourly checks |
-| Freshness (share of live pieces read within the cadence) | 0.55 at worst and at the end |
+| Freshness (share of live pieces read within the cadence) | 0.55 at worst and at the end; counted before the fix above, with the pieces that have no numbers of their own in it, so an after-window compares against it with care |
 
 The full report is the JSON of `node scripts/measure.ts 2026-10-28T12:00Z..2026-10-29T08:00Z`, read
 again from the stored hours whenever it is needed.
