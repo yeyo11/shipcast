@@ -161,8 +161,21 @@ export const REPLY_CAPABILITIES: Readonly<Record<string, ReplyCapability>> = TAB
 export const COMMENT_CHANNELS = TABLES.commentChannels as readonly CommentChannelId[];
 /** How long a reply may be on each network: short on purpose, under what the network itself allows */
 export const REPLY_LIMITS: Readonly<Record<CommentChannelId, number>> = TABLES.replyLimits as Record<CommentChannelId, number>;
-/** Each network's profile; a network not listed has no profile to review (a webhook, a search console) */
-export const PROFILE_CAPABILITIES: Readonly<Record<string, ProfileCapability>> = TABLES.profiles;
+/**
+ * The owner's GitHub profile, which is not a channel: read through GitHub's public API by the
+ * `github` account (a login, no credential), never edited (that needs the App's "Profile: write")
+ */
+const GITHUB_PROFILE: ProfileCapability = {
+  read: true,
+  edit: 'no',
+  fields: ['displayName', 'bio', 'links', 'avatar'],
+  editable: [],
+  limits: { bio: 160 },
+  note: 'Your public GitHub profile, read; change it on GitHub',
+};
+
+/** Each network's profile; a network not listed has no profile to review (a search console) */
+export const PROFILE_CAPABILITIES: Readonly<Record<string, ProfileCapability>> = { ...TABLES.profiles, github: GITHUB_PROFILE };
 /** When to publish on each channel by default (packages/engine/src/recommend.ts) */
 export const POSTING_DEFAULTS: Readonly<Partial<Record<ChannelId, { note: string; windows: readonly PostingWindow[] }>>> = TABLES.posting;
 /** Which readings of each channel make up each stats family */

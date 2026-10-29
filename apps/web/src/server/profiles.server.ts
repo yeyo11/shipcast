@@ -1,5 +1,5 @@
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
-import { editProfile, type ProfileDeps } from '@shipcast/engine';
+import { editProfile, setBrandPicture, type ProfileDeps } from '@shipcast/engine';
 import { profileDeps, startProfileReview, type ProfileReviewRequest } from '@shipcast/runtime';
 import type { ProfileApi } from './profile-api';
 import { appContext } from './context.server';
@@ -40,6 +40,15 @@ export async function applyEdit(accountId: number, edit: ProfileEdit): Promise<P
     );
   }
   return editProfile(d, accountId, edit);
+}
+
+/** Sets brand.yml's avatar as the account's picture, after the page asked the owner to confirm it */
+export async function applyBrandPicture(accountId: number): Promise<Profile | undefined> {
+  const d = await deps();
+  if (fakeNetworks()) {
+    return setBrandPicture({ ...d, connector: async () => ({ editProfile: async (e) => console.log(`[preview, fake network] would set the picture of account ${accountId}: ${JSON.stringify(e)}`) }) }, accountId);
+  }
+  return setBrandPicture(d, accountId);
 }
 
 /** What the REST API runs for profiles in this process */

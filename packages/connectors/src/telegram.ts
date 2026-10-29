@@ -3,6 +3,7 @@ import {
   json,
   checkProblem,
   okCheck,
+  pictureBytes,
   statsOf,
   type Check,
   type Deletable,
@@ -45,6 +46,12 @@ export interface TelegramPost {
 interface Answer<T> {
   ok: boolean;
   result: T;
+}
+
+/** An update `getUpdates` answers; only reaction counts are asked for */
+interface ReactionUpdate {
+  update_id: number;
+  message_reaction_count?: { chat: { id: number; username?: string }; message_id: number; date: number; reactions: Array<{ total_count: number }> };
 }
 
 interface SentMessage {
@@ -133,9 +140,48 @@ export class Telegram implements Editable<TelegramEdit>, Deletable, ProfileReade
     await this.#call('sendMessage', 'notify', { chat_id: this.#chatId, text, link_preview_options: { is_disabled: true } });
   }
 
-  /** The Bot API gives bots no per-message views or reactions (only channel admins see them, in the app). */
-  async metrics(): Promise<Metrics> {
-    return {};
+  /**
+   * One post's reactions, when they changed since the last read: see `metricsMany`, which this reads
+   * through, so it takes every other post's changes with it.
+   */
+  async metrics(externalId: string): Promise<Metrics> {
+    return (await this.metricsMany([externalId])).get(externalId) ?? {};
+  }
+
+  /**
+   * The reactions of the posts whose reactions changed since the last read, every emoji's added up.
+   * The Bot API has no way to read a message or its counts back: a bot that is an admin of the channel
+   * is pushed a `message_reaction_count` update when a post's reactions change (a channel's reactions
+   * are anonymous), which it collects with `getUpdates` and Telegram keeps for 24 hours. Reading them
+   * confirms them, so each is read once; a post with no change since is left out, and keeps the
+   * numbers it had. Views are not there: the Bot API gives bots no views or forwards of a post.
+   */
+  async metricsMany(externalIds: readonly string[]): Promise<Map<string, Metrics>> {
+    const wanted = externalIds.map((id) => ({ id, ...messageOf(id) }));
+    const out = new Map<string, Metrics>();
+    let offset: number | undefined;
+    // A hundred a call; the call after the last confirms what was read, and an empty answer ends it
+    for (let page = 0; page < 20; page++) {
+      let updates: ReactionUpdate[];
+      try {
+        updates = await this.#call<ReactionUpdate[]>('getUpdates', 'read the reactions', { ...(offset !== undefined && { offset }), limit: 100, timeout: 0, allowed_updates: ['message_reaction_count'] });
+      } catch (error) {
+        if (error instanceof ConnectorError && error.status === 409) {
+          throw new ConnectorError('Telegram', 'the bot has a webhook set, or another program reads its updates: Shipcast reads reactions with getUpdates, which Telegram then refuses', 409, false);
+        }
+        throw error;
+      }
+      if (updates.length === 0) break;
+      for (const update of updates) {
+        offset = update.update_id + 1;
+        const changed = update.message_reaction_count;
+        if (!changed) continue;
+        const post = wanted.find((w) => w.message_id === changed.message_id && (w.chat_id === String(changed.chat.id) || w.chat_id === `@${changed.chat.username}`));
+        // In order, so a later change of the same post replaces an earlier one
+        if (post) out.set(post.id, { reactions: changed.reactions.reduce((n, r) => n + r.total_count, 0) });
+      }
+    }
+    return out;
   }
 
   async check(): Promise<Check> {
@@ -187,6 +233,24 @@ export class Telegram implements Editable<TelegramEdit>, Deletable, ProfileReade
       await run('setChatTitle', { title: edit.displayName });
     }
     if (edit.bio !== undefined) await run('setChatDescription', { description: edit.bio });
+    if (edit.picture !== undefined) await this.#setPhoto(edit.picture);
+  }
+
+  /** The channel's photo, uploaded (setChatPhoto takes a file, never an address); the same admin right as the title */
+  async #setPhoto(url: string): Promise<void> {
+    const { bytes, type } = await pictureBytes('Telegram', url, this.#fetch);
+    const form = new FormData();
+    form.set('chat_id', this.#chatId);
+    form.set('photo', new Blob([bytes], { type }), `photo.${type.split('/')[1]}`);
+    const response = await this.#fetch(`${this.#base}/bot${this.#token}/setChatPhoto`, { method: 'POST', body: form });
+    try {
+      await json<Answer<true>>('Telegram', response, 'set the channel’s photo');
+    } catch (error) {
+      if (said(error, /not enough rights|CHAT_ADMIN_REQUIRED/i)) {
+        throw new ConnectorError('Telegram', 'the bot is not allowed to change the channel’s info: give it the “Change channel info” admin right', 400, false);
+      }
+      throw error;
+    }
   }
 
   /** A channel's or group's members: the one count the Bot API gives */

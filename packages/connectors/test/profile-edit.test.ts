@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Bluesky, ConnectorError, Devto, MASTODON_SCOPES, Mastodon, Telegram } from '../src/index.ts';
+import { Bluesky, ConnectorError, Devto, Discord, MASTODON_SCOPES, Mastodon, Telegram } from '../src/index.ts';
 import { fakeFetch, type Call } from './fake.ts';
 
 /*
@@ -196,6 +196,54 @@ test('Telegram sets the title and the description; one already so is not a failu
   assert.deepEqual(JSON.parse(String(calls[1]!.body)), { chat_id: '@shipnews', description: 'Releases' });
   await assert.rejects(telegram.editProfile({ displayName: ' ' }), /cannot be empty/);
   await assert.rejects(telegram.editProfile({ links: [] }), /username/);
+});
+
+test('Telegram uploads the brand’s picture as the channel’s photo; something that is not an image never leaves', async () => {
+  const calls: Call[] = [];
+  const png = new Uint8Array([137, 80, 78, 71]);
+  const telegram = new Telegram({
+    botToken: 'T',
+    chatId: '@shipnews',
+    fetch: fakeFetch(
+      [
+        ['GET https://cdn.example/me.png', () => new Response(png, { headers: { 'content-type': 'image/png' } })],
+        ['GET https://cdn.example/page.html', () => new Response('<html>', { headers: { 'content-type': 'text/html' } })],
+        ['POST https://api.telegram.org/botT/setChatPhoto', () => Response.json({ ok: true, result: true })],
+      ],
+      calls,
+    ),
+  });
+  await telegram.editProfile({ picture: 'https://cdn.example/me.png' });
+  const form = calls[1]!.body as FormData;
+  assert.equal(form.get('chat_id'), '@shipnews');
+  const photo = form.get('photo') as File;
+  assert.equal(photo.type, 'image/png');
+  assert.deepEqual(new Uint8Array(await photo.arrayBuffer()), png);
+  await assert.rejects(telegram.editProfile({ picture: 'https://cdn.example/page.html' }), (e) => e instanceof ConnectorError && /not a PNG/.test(e.message));
+  assert.equal(calls.filter((c) => c.url.endsWith('setChatPhoto')).length, 1);
+});
+
+test('Discord reads and changes the webhook’s name and picture with its own URL', async () => {
+  const calls: Call[] = [];
+  const hook = 'https://discord.com/api/webhooks/1/abc';
+  const discord = new Discord({
+    webhookUrl: `${hook}?thread_id=9`,
+    fetch: fakeFetch(
+      [
+        ['GET https://cdn.example/me.jpg', () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'image/jpeg' } })],
+        [`PATCH ${hook}`, () => Response.json({ id: '1', name: 'Jose', avatar: 'n3w', channel_id: 'C' })],
+        [`GET ${hook}`, () => Response.json({ id: '1', name: 'Shipcast', avatar: null, channel_id: 'C' })],
+      ],
+      calls,
+    ),
+  });
+  assert.deepEqual(await discord.profile(), { displayName: 'Shipcast', links: [], hasAvatar: false, editable: { ok: true } });
+  await discord.editProfile({ displayName: 'Jose', picture: 'https://cdn.example/me.jpg' });
+  const patch = calls.find((c) => c.method === 'PATCH')!;
+  assert.equal(patch.url, hook, 'the webhook itself, not the thread its messages go to');
+  assert.deepEqual(JSON.parse(String(patch.body)), { name: 'Jose', avatar: 'data:image/jpeg;base64,AQID' });
+  assert.deepEqual(await discord.profile(), { displayName: 'Jose', links: [], hasAvatar: true, editable: { ok: true } });
+  await assert.rejects(discord.editProfile({ bio: 'x' }), /name and a picture only/);
 });
 
 test('Telegram says which admin right the bot is missing', async () => {

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
-import { buildProfileReviewPrompt, capabilityWithReview, editProfile, fieldProblem, LOCKED_PROFILE_RULES, parseLinks, profileCapability, ProfileRefused, proposalEdit, readProfileReview, reviewProfile, type Account, type ProfileDeps, type Repositories } from '../src/index.ts';
+import { buildProfileReviewPrompt, capabilityWithReview, editProfile, fieldProblem, LOCKED_PROFILE_RULES, parseLinks, profileCapability, ProfileRefused, proposalEdit, readProfileReview, reviewProfile, setBrandPicture, type Account, type ProfileDeps, type Repositories } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 import { mockRunner, textParts } from '../src/testing/index.ts';
 
@@ -163,6 +163,20 @@ test('an edit is refused without the capability, over a limit, or for a field th
   await assert.rejects(editProfile(deps(registry, network, {}), bsky.id, { bio: 'x'.repeat(300) }), /at most 256/);
   await assert.rejects(editProfile(deps(registry, network, {}), 999, { bio: 'x' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'not_found');
   assert.deepEqual(network.edits, [], 'nothing reached the network');
+});
+
+test('brand.yml’s avatar is set as the picture where the network takes one, and refused elsewhere or without one', async () => {
+  const registry = await memoryRegistry();
+  const network: FakeNetwork = { profile: { displayName: 'Shipcast', links: [], hasAvatar: false }, edits: [] };
+  const withAvatar = { ...deps(registry, network, {}), brand: { ...brand, avatar: 'https://cdn.example/me.png' } };
+  const discord = await registry.accounts.addAccount({ network: 'discord', brand: 'personal', label: '#releases', settings: {} });
+  await setBrandPicture(withAvatar, discord.id);
+  assert.deepEqual(network.edits, [{ picture: 'https://cdn.example/me.png' }]);
+  await assert.rejects(setBrandPicture(deps(registry, network, {}), discord.id), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid' && /avatar/.test(e.message));
+  const mastodon = await mastodonAccount(registry);
+  await assert.rejects(setBrandPicture(withAvatar, mastodon.id), (e: unknown) => e instanceof ProfileRefused && e.reason === 'unsupported');
+  await assert.rejects(editProfile(withAvatar, discord.id, { picture: 'https://cdn.example/me.png' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid', 'never through a plain edit');
+  assert.equal(network.edits.length, 1);
 });
 
 test('applying a proposal edits through the connector and marks it applied', async () => {

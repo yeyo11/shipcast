@@ -228,6 +228,26 @@ export interface ProfileEdit {
   bio?: string;
   /** The whole list, replacing the one there */
   links?: ProfileLink[];
+  /** The image at this https address as the profile's picture (brand.yml's avatar), where the network takes one */
+  picture?: string;
+}
+
+/** The largest picture a profile edit downloads: more than any network takes for an avatar */
+const MAX_PICTURE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * An image to upload as a profile's picture, downloaded from its https address: its bytes and type.
+ * Refuses what is not an image, or is larger than a profile picture can be, before any network sees it.
+ */
+export async function pictureBytes(network: string, url: string, http: typeof fetch): Promise<{ bytes: Uint8Array<ArrayBuffer>; type: string }> {
+  if (!imageUrl(url)) throw new ConnectorError(network, 'a picture is a plain https address', 400, false);
+  const response = await http(url);
+  if (!response.ok) throw new ConnectorError(network, `read the picture at ${url}: ${response.status}`, response.status);
+  const type = response.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
+  if (!/^image\/(png|jpeg|gif|webp)$/.test(type)) throw new ConnectorError(network, `the picture at ${url} is not a PNG, JPEG, GIF or WebP image (${type || 'no type'})`, 400, false);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MAX_PICTURE_BYTES) throw new ConnectorError(network, `the picture at ${url} is larger than 10 MB`, 400, false);
+  return { bytes, type };
 }
 
 /** A connector that reads the account's own profile */

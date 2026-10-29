@@ -44,6 +44,8 @@ export interface ProfileCapability {
   fields: readonly ProfileFieldId[];
   /** What Shipcast can change there */
   editable: readonly EditableField[];
+  /** Whether Shipcast can set brand.yml's avatar as the picture: a picture is never proposed text, only the brand's own */
+  brandPicture?: boolean;
   limits: ProfileLimits;
   /** What the network allows or refuses, in words the app shows */
   note: string;

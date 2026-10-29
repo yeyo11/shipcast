@@ -36,6 +36,15 @@ export const discord = {
     fieldNames: { text: 'the message' },
   },
   comments: { read: false, reply: false, note: 'A webhook cannot read the replies to its message' },
+  profile: {
+    read: true,
+    edit: 'yes',
+    fields: ['displayName', 'avatar'],
+    editable: ['displayName'],
+    brandPicture: true,
+    limits: { displayName: 80 },
+    note: 'The webhook’s name and picture, which every message shows as its author; the server’s own profile needs a bot',
+  },
   posting: {
     note: 'weekday late afternoons, when the servers are busiest, and late mornings',
     windows: [
@@ -44,4 +53,6 @@ export const discord = {
       { days: WEEKEND, from: 11, to: 13, weight: 0.4 },
     ],
   },
+  // Reactions only: Discord counts no views, and the replies need a bot
+  metrics: { families: { reactions: ['reactions'] }, primary: ['reactions'], cadence: { hours: 1, read: 'single', why: 'changes within the hour; one message a call' } },
 } as const satisfies ChannelDefinition<'discord'>;

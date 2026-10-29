@@ -13,13 +13,14 @@ import { parseFailureKey } from '@shipcast/schema/failures';
  * (an account that breaks again, the same failure after a retry) is shown again.
  */
 
-export type AttentionKind = 'approve' | 'retry' | 'reply' | 'reconnect' | 'scheduled';
+export type AttentionKind = 'approve' | 'retry' | 'reply' | 'reconnect' | 'permission' | 'scheduled';
 
 /** Where a line goes: typed per route, so the bell's links stay checked by the router */
 export type AttentionTarget =
   | { to: '/launches/$id'; params: { id: string } }
   | { to: '/comments'; search: { state: 'waiting' } }
-  | { to: '/channels'; search: { focus: string } };
+  | { to: '/channels'; search: { focus: string } }
+  | { to: '/settings' };
 
 export interface AttentionItem {
   key: string;
@@ -42,6 +43,11 @@ export interface AttentionInput {
   /** The newest waiting comment's id: a comment arriving makes the line new again */
   newestWaitingComment?: number | null;
   scheduled: ReadonlyArray<{ launchId: number; scheduledAt: string | null }>;
+  /**
+   * The `metrics-problem:<source>:<subject>` cursors, with why the source refused as their value: a
+   * reading the owner has to grant (the GitHub App's Administration: read for a repo's traffic)
+   */
+  metricProblems?: ReadonlyArray<{ key: string; value: string }>;
   now: Date;
   /** How far ahead a scheduled post is worth a line; a day by default */
   soonMs?: number;
@@ -71,7 +77,7 @@ export function digest(text: string): string {
 }
 
 /** What a dismissal may name: the shape of the keys below, and short, since a request can carry anything */
-export const ATTENTION_KEY = /^(launch|comments|account):[\w.:-]{1,120}$/;
+export const ATTENTION_KEY = /^(launch|comments|account|metrics):[\w.:-]{1,120}$/;
 
 const DAY = 86_400_000;
 
@@ -115,6 +121,17 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   }
   for (const a of input.brokenAccounts) {
     items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${a.network}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } } });
+  }
+  for (const { key, value } of input.metricProblems ?? []) {
+    const [, source = '', ...rest] = key.split(':');
+    const subject = rest.join(':');
+    // The key names the subject and why, so the same refusal stays dismissed and a new one is shown
+    const id = `metrics:${source.replace(/[^\w-]/g, '')}:${digest(`${subject}\n${value}`)}`;
+    if (source === 'github-traffic') {
+      items.push({ key: id, kind: 'permission', text: `GitHub refuses ${subject}’s traffic: the App needs Administration: read on it`, action: 'Check the GitHub App', target: { to: '/settings' } });
+    } else {
+      items.push({ key: id, kind: 'permission', text: `${source} numbers of ${subject} cannot be read: ${value}`, action: 'See Settings', target: { to: '/settings' } });
+    }
   }
 
   const horizon = input.now.getTime() + (input.soonMs ?? DAY);

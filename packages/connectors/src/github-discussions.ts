@@ -64,6 +64,34 @@ interface DiscussionComment {
 
 const COMMENT_FIELDS = 'id body createdAt url viewerDidAuthor authorAssociation author { login avatarUrl }';
 
+/** The App's own comments are Shipcast's replies; the repo owner's are the owner's own words */
+const isOwn = (c: Authored) => c.viewerDidAuthor || c.authorAssociation === 'OWNER';
+
+type Authored = Pick<DiscussionComment, 'viewerDidAuthor' | 'authorAssociation'>;
+interface MetricNode {
+  upvoteCount: number;
+  reactions: { totalCount: number };
+  comments: { totalCount: number; nodes: Array<Authored & { replies: { totalCount: number; nodes: Authored[] } }> };
+}
+
+const AUTHORED = 'viewerDidAuthor authorAssociation';
+const METRIC_FIELDS = `upvoteCount reactions { totalCount } comments(first: 100) { totalCount nodes { ${AUTHORED} replies(first: 100) { totalCount nodes { ${AUTHORED} } } } }`;
+
+/**
+ * A discussion's numbers. Its `comments` count is the top-level ones only, the owner's and Shipcast's
+ * replies among them; the comments here are everyone else's, replies included, as GitHub's page shows
+ * "N comments · M replies". Past the first hundred of a list, whose authors are not read, each counts.
+ */
+function metricsOf(node: MetricNode): Metrics {
+  let comments = node.comments.totalCount - node.comments.nodes.length;
+  for (const comment of node.comments.nodes) {
+    if (!isOwn(comment)) comments++;
+    comments += comment.replies.totalCount - comment.replies.nodes.length;
+    for (const reply of comment.replies.nodes) if (!isOwn(reply)) comments++;
+  }
+  return { reactions: node.reactions.totalCount, upvotes: node.upvoteCount, comments };
+}
+
 /**
  * GitHub Discussions over the GraphQL API, with the engine's own GitHub access (the GitHub App's
  * installation token, which has Discussions: write), so there is no account to connect. A discussion
@@ -166,32 +194,27 @@ export class GitHubDiscussions implements Editable<DiscussionEdit>, Deletable, C
     await this.#query('mutation($input: DeleteDiscussionInput!) { deleteDiscussion(input: $input) { discussion { id } } }', { input: { id: externalId } }, 'delete the discussion');
   }
 
-  /** Reactions, upvotes and comments, which the discussion itself counts */
+  /** Reactions, upvotes, and the comments and replies of everyone but the owner and Shipcast */
   async metrics(externalId: string): Promise<Metrics> {
-    type Answer = { node: { upvoteCount: number; reactions: { totalCount: number }; comments: { totalCount: number } } | null };
-    const { node } = await this.#query<Answer>(
-      'query($id: ID!) { node(id: $id) { ... on Discussion { upvoteCount reactions { totalCount } comments { totalCount } } } }',
-      { id: externalId },
-      'metrics',
-    );
+    const { node } = await this.#query<{ node: MetricNode | null }>(`query($id: ID!) { node(id: $id) { ... on Discussion { ${METRIC_FIELDS} } } }`, { id: externalId }, 'metrics');
     if (!node) throw new ConnectorError(NETWORK, 'metrics: the discussion is gone', 404);
-    return { reactions: node.reactions.totalCount, upvotes: node.upvoteCount, comments: node.comments.totalCount };
+    return metricsOf(node);
   }
 
   /**
-   * The numbers of many discussions, a hundred per query through `nodes(ids:)`. A node that is null
-   * (deleted, or out of the App's reach) is left out.
+   * The numbers of many discussions, twenty per query through `nodes(ids:)`, as the comments are
+   * read: each brings its first hundred comments and their replies, to tell whose they are. A node
+   * that is null (deleted, or out of the App's reach) is left out.
    */
   async metricsMany(ids: readonly string[]): Promise<Map<string, Metrics>> {
-    type Node = { id: string; upvoteCount: number; reactions: { totalCount: number }; comments: { totalCount: number } } | null;
     const out = new Map<string, Metrics>();
-    for (const batch of chunks(ids, 100)) {
-      const { nodes } = await this.#query<{ nodes: Node[] }>(
-        'query($ids: [ID!]!) { nodes(ids: $ids) { ... on Discussion { id upvoteCount reactions { totalCount } comments { totalCount } } } }',
+    for (const batch of chunks(ids, 20)) {
+      const { nodes } = await this.#query<{ nodes: Array<(MetricNode & { id: string }) | null> }>(
+        `query($ids: [ID!]!) { nodes(ids: $ids) { ... on Discussion { id ${METRIC_FIELDS} } } }`,
         { ids: batch },
         'metrics',
       );
-      for (const node of nodes) if (node?.id) out.set(node.id, { reactions: node.reactions.totalCount, upvotes: node.upvoteCount, comments: node.comments.totalCount });
+      for (const node of nodes) if (node?.id) out.set(node.id, metricsOf(node));
     }
     return out;
   }
@@ -261,7 +284,7 @@ function threadOf(comments: ReadonlyArray<DiscussionComment & { replies: { nodes
       createdAt: c.createdAt,
       url: c.url,
       ...(parent && { inReplyTo: parent }),
-      own: c.viewerDidAuthor || c.authorAssociation === 'OWNER',
+      own: isOwn(c),
     });
   };
   for (const comment of comments) {

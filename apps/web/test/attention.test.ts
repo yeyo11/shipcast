@@ -90,6 +90,15 @@ test('a dismissal holds while the condition lasts and a changed condition is a n
   assert.notEqual(key(broken('token revoked'), 'reconnect'), key(broken('instance down'), 'reconnect'));
 });
 
+test('a repo whose traffic GitHub refuses needs the App’s permission, and counts', () => {
+  const problem = { key: 'metrics-problem:github-traffic:me/alpha', value: "GitHub: read me/alpha's traffic: 403 Resource not accessible by integration" };
+  const a = buildAttention({ ...base, launches: [], metricProblems: [problem] });
+  assert.equal(a.count, 1);
+  assert.deepEqual(a.items.map((i) => [i.kind, i.text, i.action, i.target]), [['permission', 'GitHub refuses me/alpha’s traffic: the App needs Administration: read on it', 'Check the GitHub App', { to: '/settings' }]]);
+  const again = buildAttention({ ...base, launches: [], metricProblems: [problem], dismissed: new Set([a.items[0]!.key]) });
+  assert.equal(again.count, 0, 'dismissed while the same refusal lasts');
+});
+
 test('every key a line can have is one a dismissal accepts, and nothing else is', () => {
   const items = attentionItems({
     ...base,
@@ -98,8 +107,9 @@ test('every key a line can have is one a dismissal accepts, and nothing else is'
     newestWaitingComment: 9,
     brokenAccounts: [{ id: 3, label: 'x', network: 'bluesky', problem: null }],
     scheduled: [{ launchId: 2, scheduledAt: '2026-10-26T13:00:00Z' }],
+    metricProblems: [{ key: 'metrics-problem:github-traffic:me/alpha.js', value: '403' }],
   });
-  assert.equal(items.length, 5);
+  assert.equal(items.length, 6);
   for (const item of items) assert.match(item.key, ATTENTION_KEY);
   for (const bad of ['', 'launch:', 'other:1', 'launch:1 waiting', `launch:${'x'.repeat(200)}`]) assert.doesNotMatch(bad, ATTENTION_KEY);
 });

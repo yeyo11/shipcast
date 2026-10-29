@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { applyProfileProposal, getProfileReview, profileReviewJob, reviewProfileNow } from '../server/profiles.functions';
+import { applyBrandPictureNow, applyProfileProposal, getProfileReview, profileReviewJob, reviewProfileNow } from '../server/profiles.functions';
 import { DiffView } from './assistant/DiffView';
 import { useLiveEnabled, useLiveInterest } from './live/Live';
 import { useToast } from './Toasts';
@@ -85,6 +85,24 @@ export function ProfileReview({ account, network, initial, focused }: { account:
         {capability.edit === 'yes' ? 'Proposals can be applied here, after you confirm each one. ' : ''}
         {capability.note}.
       </p>
+      {capability.edit === 'yes' && capability.brandPicture && (
+        <div className="row">
+          <ConfirmButton
+            className="btn"
+            title="Change the picture on the network?"
+            description={<>This sets the avatar in brand.yml as this account’s picture now, in public; you can change it back by hand.</>}
+            confirm="Change the picture"
+            tone="primary"
+            onConfirm={async () => {
+              const result = await applyBrandPictureNow({ data: account.id }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
+              if (result.ok) toast.done('Picture changed', 'The picture is brand.yml’s avatar now.');
+              else toast.fail(result.problem);
+            }}
+          >
+            Use brand.yml’s picture
+          </ConfirmButton>
+        </div>
+      )}
       {capability.edit === 'reconnect' && (
         <Notice tone="wait">
           Reconnect to allow profile edits: <a href={`/channels/${network}`}>connect this account again</a> and Shipcast will ask for the permission. Reviews and Copy work meanwhile.

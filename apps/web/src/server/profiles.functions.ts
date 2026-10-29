@@ -4,7 +4,7 @@ import { appContext } from './context.server';
 import { apiErrorOf } from './errors';
 import { id, InvalidInput, object, text } from './input';
 import { profileView, reviewInput } from './profile-api';
-import { applyEdit, startReview } from './profiles.server';
+import { applyBrandPicture, applyEdit, startReview } from './profiles.server';
 
 /** An account's profile capability and latest review, for its panel on the network's page */
 export const getProfileReview = createServerFn({ method: 'GET' })
@@ -47,6 +47,19 @@ export const applyProfileProposal = createServerFn({ method: 'POST' })
       return { ok: true as const, profile: profile ?? null };
     } catch (error) {
       // A refusal or the network's answer is the page's to show; a bug is the log's
+      const answer = apiErrorOf(error);
+      if (!answer.internal) return { ok: false as const, problem: answer.message };
+      throw error;
+    }
+  });
+
+/** Sets brand.yml's avatar as the account's picture, after the page asked the owner to confirm it */
+export const applyBrandPictureNow = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => id(input))
+  .handler(async ({ data }) => {
+    try {
+      return { ok: true as const, profile: (await applyBrandPicture(data)) ?? null };
+    } catch (error) {
       const answer = apiErrorOf(error);
       if (!answer.internal) return { ok: false as const, problem: answer.message };
       throw error;

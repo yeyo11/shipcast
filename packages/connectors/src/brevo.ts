@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, json, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
+import { checkProblem, ConnectorError, counts, json, statsOf, type Check, type Metrics, type ProfileStats, type Published } from './http.ts';
 
 export interface BrevoCampaign {
   /** The campaign's name in Brevo's dashboard, also its UTM campaign */
@@ -18,12 +18,29 @@ interface GlobalStats {
   sent: number;
   delivered: number;
   uniqueViews: number;
+  /** Every open, a reader's repeats included */
+  viewed?: number;
+  /** Opens of readers with no privacy protection, the ones a tracking pixel really measures */
+  trackableViews?: number;
+  /** Times Apple's Mail Privacy Protection opened it on its own: events, not readers */
+  appleMppOpens?: number;
   uniqueClicks: number;
+  /** Every click, a reader's repeats included */
+  clickers?: number;
   unsubscriptions: number;
   hardBounces: number;
   softBounces: number;
   complaints: number;
 }
+
+/** Clicks per link URL. Brevo's schema says a number per URL, its example `{ nbClick }`: both are read */
+type LinksStats = Record<string, number | { nbClick?: number }>;
+
+/** Which statistics a read asks for: Brevo gives one kind a call */
+type Statistics = 'globalStats' | 'linksStats';
+
+/** A link's clicks among a campaign's numbers are `link:<the link without its query>` */
+export const BREVO_LINK_PREFIX = 'link:';
 
 /**
  * Brevo's marketing API for the newsletter: a campaign created for one list and sent at once, its
@@ -65,10 +82,15 @@ export class Brevo {
     return Math.max(0, list.uniqueSubscribers - list.totalBlacklisted);
   }
 
-  /** The newsletter's readers: every list's contacts who can still receive it, added up */
-  async profileStats(): Promise<ProfileStats> {
-    const { lists } = await json<{ lists?: Array<{ uniqueSubscribers?: number; totalBlacklisted?: number }> }>('Brevo', await this.#request('GET', '/contacts/lists?limit=50'), 'read the lists');
-    const subscribers = (lists ?? []).reduce((sum, l) => sum + Math.max(0, (l.uniqueSubscribers ?? 0) - (l.totalBlacklisted ?? 0)), 0);
+  /**
+   * The newsletter's readers: the contacts who can still receive it in the brand's own lists, added
+   * up. The account's other lists (an import, another project's) are not this newsletter's readers.
+   * A contact in two of the brand's lists counts twice: Brevo counts each list on its own.
+   */
+  async profileStats(listIds: readonly number[]): Promise<ProfileStats> {
+    if (listIds.length === 0) return statsOf({});
+    let subscribers = 0;
+    for (const id of new Set(listIds)) subscribers += await this.subscribers(id);
     return statsOf({ followers: subscribers });
   }
 
@@ -103,69 +125,104 @@ export class Brevo {
   }
 
   /**
-   * The numbers of many campaigns from Brevo's list of sent campaigns with their global statistics,
-   * a hundred a call, newest first, until every one asked for is found (five pages at most). Brevo's
-   * list keeps statistics for six months only: a campaign the list has no statistics for is read on
-   * its own. An id of several (`12,13`, one issue per language) adds its campaigns up.
+   * The numbers of many campaigns from Brevo's list of sent campaigns, a hundred a call, newest first,
+   * until every one asked for is found (five pages at most): once with their global statistics, once
+   * with their clicks per link, since Brevo gives one kind a call. The list leaves the campaigns' HTML
+   * out, which it would otherwise send a hundred at a time. It keeps statistics for six months only:
+   * a campaign it has none for is read on its own. An id of several (`12,13`, one issue per language)
+   * adds its campaigns up.
    */
   async metricsMany(externalIds: readonly string[]): Promise<Map<string, Metrics>> {
     const wanted = new Set(externalIds.flatMap((id) => id.split(',')));
+    const global = await this.#listed(wanted, 'globalStats');
+    const links = global.size > 0 ? await this.#listed(new Set(global.keys()), 'linksStats') : new Map<string, unknown>();
     const found = new Map<string, Metrics>();
+    for (const [id, stats] of global) found.set(id, { ...statsOfCampaign(stats as GlobalStats), ...linkClicks(links.get(id) as LinksStats | undefined) });
+    for (const id of wanted) if (!found.has(id)) found.set(id, await this.metrics(id));
+    const out = new Map<string, Metrics>();
+    for (const externalId of externalIds) out.set(externalId, added(externalId.split(',').map((id) => found.get(id) ?? {})));
+    return out;
+  }
+
+  /** One kind of statistics of the campaigns asked for, from the list of sent campaigns */
+  async #listed(wanted: ReadonlySet<string>, statistics: Statistics): Promise<Map<string, unknown>> {
+    const found = new Map<string, unknown>();
     for (let page = 0; page < 5 && [...wanted].some((id) => !found.has(id)); page++) {
-      const answer = await json<{ campaigns?: Array<{ id: number; statistics?: { globalStats?: GlobalStats } }> }>(
+      const answer = await json<{ campaigns?: Array<{ id: number; statistics?: Partial<Record<Statistics, unknown>> }> }>(
         'Brevo',
-        await this.#request('GET', `/emailCampaigns?status=sent&statistics=globalStats&limit=100&offset=${page * 100}&sort=desc`),
+        await this.#request('GET', `/emailCampaigns?status=sent&statistics=${statistics}&limit=100&offset=${page * 100}&sort=desc&excludeHtmlContent=true`),
         'metrics',
       );
       const campaigns = answer.campaigns ?? [];
       for (const c of campaigns) {
-        const s = c.statistics?.globalStats;
-        if (s && wanted.has(String(c.id))) found.set(String(c.id), statsOfCampaign(s));
+        const s = c.statistics?.[statistics];
+        if (s && wanted.has(String(c.id))) found.set(String(c.id), s);
       }
       if (campaigns.length < 100) break;
     }
-    for (const id of wanted) if (!found.has(id)) found.set(id, await this.metrics(id));
-    const out = new Map<string, Metrics>();
-    for (const externalId of externalIds) {
-      const total: Metrics = {};
-      for (const id of externalId.split(',')) for (const [name, value] of Object.entries(found.get(id) ?? {})) total[name] = (total[name] ?? 0) + value;
-      out.set(externalId, total);
-    }
-    return out;
+    return found;
   }
 
-  /**
-   * A campaign's numbers. Opens are unique opens, which Apple's privacy protection inflates; clicks
-   * are the number to trust.
-   */
+  /** A campaign's numbers and its clicks per link */
   async metrics(externalId: string): Promise<Metrics> {
     // One issue per language is one campaign each, recorded as `12,13`: their numbers add up
     if (externalId.includes(',')) {
-      const total: Metrics = {};
-      for (const id of externalId.split(',')) {
-        for (const [name, value] of Object.entries(await this.metrics(id))) total[name] = (total[name] ?? 0) + value;
-      }
-      return total;
+      const each: Metrics[] = [];
+      for (const id of externalId.split(',')) each.push(await this.metrics(id));
+      return added(each);
     }
-    const campaign = await json<{ statistics?: { globalStats?: GlobalStats } }>(
-      'Brevo',
-      await this.#request('GET', `/emailCampaigns/${externalId}?statistics=globalStats`),
-      'metrics',
-    );
-    const s = campaign.statistics?.globalStats;
-    return s ? statsOfCampaign(s) : {};
+    const read = async (statistics: Statistics): Promise<unknown> => {
+      const path = `/emailCampaigns/${externalId}?statistics=${statistics}&excludeHtmlContent=true`;
+      return (await json<{ statistics?: Partial<Record<Statistics, unknown>> }>('Brevo', await this.#request('GET', path), 'metrics')).statistics?.[statistics];
+    };
+    const s = (await read('globalStats')) as GlobalStats | undefined;
+    if (!s) return {};
+    return { ...statsOfCampaign(s), ...linkClicks((await read('linksStats')) as LinksStats | undefined) };
   }
 }
 
-/** A campaign's numbers. Opens are unique opens, which Apple's privacy protection inflates; clicks are the number to trust */
+/** Several campaigns' numbers, added up name by name */
+function added(each: readonly Metrics[]): Metrics {
+  const total: Metrics = {};
+  for (const metrics of each) for (const [name, value] of Object.entries(metrics)) total[name] = (total[name] ?? 0) + value;
+  return total;
+}
+
+/**
+ * Clicks per link, as `link:<url>`: the article's link apart from the unsubscribe one. The query is
+ * left out, so the same page tagged for each language's list is one link.
+ */
+function linkClicks(stats: LinksStats | undefined): Metrics {
+  const out: Metrics = {};
+  for (const [url, value] of Object.entries(stats ?? {})) {
+    const clicks = typeof value === 'number' ? value : value?.nbClick;
+    if (typeof clicks !== 'number' || !Number.isFinite(clicks)) continue;
+    const key = `${BREVO_LINK_PREFIX}${url.split(/[?#]/)[0]}`;
+    out[key] = (out[key] ?? 0) + clicks;
+  }
+  return out;
+}
+
+/**
+ * A campaign's numbers. `opens` stays the API's unique opens (`uniqueViews`). Brevo's report has
+ * counted Apple Mail Privacy Protection's automatic opens and bots' by default since 2025, and its API
+ * does not say whether `uniqueViews` does; MPP's opens are counted as events, not readers, so they
+ * cannot be added to readers either. The parts are kept apart instead: every open, the opens of
+ * readers without privacy protection, MPP's, and every click.
+ */
 function statsOfCampaign(s: GlobalStats): Metrics {
-  return {
+  return counts({
     sent: s.sent,
     delivered: s.delivered,
     opens: s.uniqueViews,
+    opens_total: s.viewed,
+    opens_trackable: s.trackableViews,
+    opens_mpp: s.appleMppOpens,
     clicks: s.uniqueClicks,
+    clicks_total: s.clickers,
     unsubscribes: s.unsubscriptions,
     bounces: s.hardBounces + s.softBounces,
     complaints: s.complaints,
-  };
+  });
 }
+

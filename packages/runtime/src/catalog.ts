@@ -1,4 +1,4 @@
-import { BingWebmaster, checkProblem, CloudflareAnalytics, json, SearchConsole, type Check, type IdentityCache, type ServiceAccount } from '@shipcast/connectors';
+import { BingWebmaster, checkProblem, CloudflareAnalytics, GitHubProfile, json, SearchConsole, type Check, type IdentityCache, type ServiceAccount } from '@shipcast/connectors';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildContext, envCredentials, MissingField, networkOf, type AnyChannelAdapter, type Connection, type Credentials, type Field, type NetworkSpec, type SourceSpec } from './channels/adapter.ts';
 import { CHANNEL_ADAPTERS } from './channels/registry.ts';
@@ -120,6 +120,20 @@ export const SOURCES: readonly SourceSpec[] = [
     build: ({ need, brand, fetch }) => {
       const connector = new BingWebmaster({ apiKey: need('apiKey'), site: `${new URL(brand.site).origin}/`, fetch });
       return { connector, check: () => connector.check(), profileStats: () => connector.profileStats() };
+    },
+  },
+  // The owner's own GitHub profile, public: the repos' numbers come through the GitHub App instead
+  {
+    id: 'github',
+    name: 'GitHub profile',
+    metrics: false,
+    auth: 'form',
+    fields: [{ key: 'login', label: 'GitHub login', secret: false, placeholder: 'yeyo11', help: 'Whose public profile to read: brand.yml’s github, usually' }],
+    permissions: ['Reads your public profile for a review and counts your followers once a day; nothing is written, and no credential is kept'],
+    howTo: 'Nothing to create: give your GitHub login, which GitHub’s public API reads without a token.',
+    build: ({ need, fetch }) => {
+      const connector = new GitHubProfile({ login: need('login'), ...(fetch && { fetch }) });
+      return { connector, check: () => connector.check(), profileStats: () => connector.profileStats(), profile: () => connector.profile() };
     },
   },
   // The AI providers are built by the AI settings (ai.ts); here they are only checked

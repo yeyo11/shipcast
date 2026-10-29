@@ -43,8 +43,9 @@ export const telegram = {
     edit: 'yes',
     fields: ['displayName', 'bio', 'avatar'],
     editable: ['displayName', 'bio'],
+    brandPicture: true,
     limits: { displayName: 128, bio: 255 },
-    note: 'The channel’s title and description; the bot needs the “Change channel info” admin right',
+    note: 'The channel’s title, description and photo; the bot needs the “Change channel info” admin right',
   },
   posting: {
     note: 'weekday late afternoons, after work, and late mornings',
@@ -54,4 +55,6 @@ export const telegram = {
       { days: WEEKEND, from: 11, to: 13, weight: 0.4 },
     ],
   },
+  // Reactions only: the Bot API gives bots no views or forwards, and pushes reaction changes, kept 24 hours
+  metrics: { families: { reactions: ['reactions'] }, primary: ['reactions'], cadence: { hours: 1, read: 'batched', why: 'pushed changes are kept 24 hours' } },
 } as const satisfies ChannelDefinition<'telegram'>;
