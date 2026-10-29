@@ -127,9 +127,14 @@ export class GitHubRepoStats {
         if (stars > 0) starsByDay[new Date((week + i * 86_400) * 1000).toISOString().slice(0, 10)] = stars;
       });
     }
-    const releases = await this.#json<Array<{ tag_name: string; assets?: Array<{ download_count: number }> }>>(`/repos/${repo}/releases?per_page=100`, `read ${repo}'s releases`);
+    // Every release, a hundred a page, newest first: a repo past a hundred releases would otherwise
+    // drop its oldest from `downloads_total`, which then reads as downloads lost. Ten pages at most
     const downloadsByTag: Record<string, number> = {};
-    for (const r of releases) downloadsByTag[r.tag_name] = (r.assets ?? []).reduce((n, a) => n + a.download_count, 0);
+    for (let page = 1; page <= 10; page++) {
+      const releases = await this.#json<Array<{ tag_name: string; assets?: Array<{ download_count: number }> }>>(`/repos/${repo}/releases?per_page=100&page=${page}`, `read ${repo}'s releases`);
+      for (const r of releases) downloadsByTag[r.tag_name] = (r.assets ?? []).reduce((n, a) => n + a.download_count, 0);
+      if (releases.length < 100) break;
+    }
     return { starsByDay, downloadsByTag };
   }
 }

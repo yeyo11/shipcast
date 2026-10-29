@@ -354,6 +354,24 @@ test('GitHub repo: daily views and clones, referrers and pages, stars by day and
   assert.ok(calls.every((c) => new Headers(c.headers).get('x-github-api-version') === GITHUB_API_VERSION));
 });
 
+test('GitHub repo: the downloads of every release, past the first hundred', async () => {
+  const calls: Call[] = [];
+  const API = 'GET https://api.github.com/repos/me/app';
+  const first = Array.from({ length: 100 }, (_, i) => ({ tag_name: `v1.${i}.0`, assets: [{ download_count: 1 }] }));
+  const http = fakeFetch(
+    [
+      [`${API}/stargazers/history`, () => Response.json([])],
+      [`${API}/releases?per_page=100&page=1`, () => Response.json(first)],
+      [`${API}/releases?per_page=100&page=2`, () => Response.json([{ tag_name: 'v0.1.0', assets: [{ download_count: 4 }] }])],
+    ],
+    calls,
+  );
+  const { downloadsByTag } = await new GitHubRepoStats({ auth: { token: async () => 't' }, fetch: http }).history('me/app');
+  assert.equal(Object.keys(downloadsByTag).length, 101);
+  assert.equal(downloadsByTag['v0.1.0'], 4, 'the oldest release, on the second page');
+  assert.equal(calls.filter((c) => c.url.includes('/releases')).length, 2, 'a short page is the last');
+});
+
 test('GitHub repo: a refused traffic read throws with GitHub’s status instead of reading nothing', async () => {
   const http = fakeFetch([['GET https://api.github.com/repos/me/app/traffic/views', () => Response.json({ message: 'Resource not accessible by integration' }, { status: 403 })]], []);
   await assert.rejects(new GitHubRepoStats({ auth: { token: async () => 't' }, fetch: http }).traffic('me/app'), (e) => e instanceof ConnectorError && e.status === 403 && !e.retryable);
