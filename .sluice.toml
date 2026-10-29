@@ -20,7 +20,9 @@ hooks = ["pre-commit"]
 key_inputs = ["node --version", "pnpm --version"]
 
 [gates.test]
-cmd = "pnpm test"
+# Each package's own test command with at most six test files at once: the suite grew to a 15 GiB peak
+# with node's default (a worker per core), which no longer fit beside a working desktop
+cmd = "pnpm -r --workspace-concurrency=1 exec node --test --test-concurrency=6 \"test/**/*.test.ts\""
 weight = "auto"
 timeout = "30m"
 hooks = ["pre-push"]
