@@ -74,6 +74,58 @@ test('an Instagram Reel reads its watch time and skip rate, and Facebook views o
   assert.deepEqual(await alone.instagram.metrics('r1'), { views: 900, avg_watch_ms: 4200, skip_rate: 35.5 });
 });
 
+/** A cache that keeps every value it is given, with the time it was given for */
+function memoryCache() {
+  const kept = new Map<string, { value: string; ttl: number }>();
+  return {
+    kept,
+    async remember<V extends string>(key: string, ttl: number, load: () => Promise<V>): Promise<V> {
+      const seen = kept.get(key);
+      if (seen !== undefined) return seen.value as V;
+      const value = await load();
+      kept.set(key, { value, ttl });
+      return value;
+    },
+    async delete(key: string) {
+      kept.delete(key);
+    },
+  };
+}
+
+test('an Instagram post’s profile activity and a Reel’s Facebook views are read once a day, a refusal included', async () => {
+  const calls: Call[] = [];
+  const cache = memoryCache();
+  const instagram = new Instagram({
+    userId: '1784',
+    accessToken: 't',
+    cache,
+    fetch: fakeFetch(
+      [
+        [`GET ${G}/m1?fields=media_type`, () => Response.json({ media_type: 'IMAGE' })],
+        [`GET ${G}/r1?fields=media_type`, () => Response.json({ media_type: 'VIDEO' })],
+        [
+          `GET ${G}/m1/insights`,
+          () => (metric(calls.at(-1)!.url) === 'profile_activity' ? Response.json({ data: [broken('profile_activity', { BIO_LINK_CLICKED: 3 })] }) : Response.json({ data: [insight('views', 40)] })),
+        ],
+        [
+          `GET ${G}/r1/insights`,
+          () => (metric(calls.at(-1)!.url) === 'facebook_views' ? Response.json({ error: { message: 'The media is not shared to Facebook', code: 100 } }, { status: 400 }) : Response.json({ data: [insight('views', 90)] })),
+        ],
+      ],
+      calls,
+    ),
+  });
+  for (let hour = 0; hour < 3; hour++) {
+    assert.deepEqual(await instagram.metrics('m1'), { views: 40, profile_activity: 3, bio_link_clicks: 3 }, 'the day’s activity is still in every reading');
+    assert.deepEqual(await instagram.metrics('r1'), { views: 90 });
+  }
+  const asked = (name: string) => calls.filter((c) => c.url.includes('/insights') && metric(c.url) === name).length;
+  assert.equal(asked('profile_activity'), 1);
+  assert.equal(asked('facebook_views'), 1, 'a Reel Meta refuses is not asked again within the day');
+  assert.equal(asked('views,reach,likes,comments,saved,shares,reposts,total_interactions,follows,profile_visits'), 3, 'the counters stay hourly');
+  assert.ok([...cache.kept].filter(([key]) => !key.startsWith('instagram-media-type:')).every(([, { ttl }]) => ttl <= 86_400), 'kept a day at most');
+});
+
 test('an Instagram piece whose type cannot be read gets what every type has; a cache keeps the type', async () => {
   const calls: Call[] = [];
   const kept = new Map<string, string>();

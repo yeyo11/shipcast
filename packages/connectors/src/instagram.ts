@@ -49,6 +49,8 @@ const ACCOUNT_METRICS: Readonly<Record<string, string>> = {
   total_interactions: 'interactions1d',
   profile_links_taps: 'linkTaps1d',
 };
+/** How long a piece's once-a-day numbers are kept before they are asked for again */
+const DAY_SECONDS = 86_400;
 /** Meta gives follows and unfollows only from 100 followers up */
 const FOLLOWS_MIN_FOLLOWERS = 100;
 
@@ -320,7 +322,8 @@ export class Instagram implements CommentReader, Replier {
    * actions it brought (`profile_activity`, with its bio-link clicks, in a call of its own). A Reel:
    * its average watch time (`avg_watch_ms`) and skip rate (`skip_rate`, a percentage), and the views
    * it got on Facebook when it was shared there (`facebook_views`, which Meta refuses for a Reel that
-   * was not). A post whose type cannot be read gets what every type has.
+   * was not). The profile activity and the Facebook views are read once a day (`#daily`), the rest on
+   * every call. A post whose type cannot be read gets what every type has.
    */
   async metrics(externalId: string): Promise<Metrics> {
     const type = await this.#mediaType(externalId);
@@ -328,21 +331,33 @@ export class Instagram implements CommentReader, Replier {
     const feed = type === 'IMAGE' || type === 'CAROUSEL_ALBUM';
     const out = this.#numbers(await this.#insights(externalId, { metric: reel ? REELS_METRICS : feed ? FEED_METRICS : BOTH }, 'metrics'));
     if (feed) {
-      await this.#breakdown(externalId, { metric: 'profile_activity', breakdown: 'action_type' }, 'read the profile activity').then(
-        (activity) => {
-          out.profile_activity = activity.total;
-          out.bio_link_clicks = activity.by.BIO_LINK_CLICKED ?? 0;
-        },
-        () => undefined,
+      Object.assign(
+        out,
+        await this.#daily(`instagram-profile-activity:${externalId}`, async () => {
+          const activity = await this.#breakdown(externalId, { metric: 'profile_activity', breakdown: 'action_type' }, 'read the profile activity');
+          return { profile_activity: activity.total, bio_link_clicks: activity.by.BIO_LINK_CLICKED ?? 0 };
+        }),
       );
     }
     if (reel) {
-      await this.#insights(externalId, { metric: 'facebook_views' }, 'read the Facebook views').then(
-        (data) => Object.assign(out, this.#numbers(data)),
-        () => undefined,
-      );
+      Object.assign(out, await this.#daily(`instagram-facebook-views:${externalId}`, async () => this.#numbers(await this.#insights(externalId, { metric: 'facebook_views' }, 'read the Facebook views'))));
     }
     return out;
+  }
+
+  /**
+   * A piece's secondary numbers, read at most once a day where there is a cache: each is a call of its
+   * own, and asking for them hourly doubled the calls an hour against Meta's per-account limit. A
+   * refusal (a Reel not shared to Facebook) is kept the same day as no numbers, so it is not asked for
+   * again every hour either.
+   */
+  async #daily(key: string, load: () => Promise<Metrics>): Promise<Metrics> {
+    const read = () => load().then((m) => JSON.stringify(m), () => '{}');
+    try {
+      return JSON.parse(await (this.#cache ? this.#cache.remember(key, DAY_SECONDS, read) : read())) as Metrics;
+    } catch {
+      return {};
+    }
   }
 
   /**
