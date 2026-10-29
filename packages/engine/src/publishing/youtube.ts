@@ -22,7 +22,10 @@ export interface YouTubePublisher {
   publish(video: YouTubeVideo): Promise<YouTubePublished>;
 }
 
-/** What Google does with an unaudited project's uploads, said as the launch page says it: not a failure */
+/**
+ * What the launch page says when Google keeps an upload private, as it may for an unaudited
+ * project's: not a failure. A fallback, not the rule: the first real uploads came out public.
+ */
 export const PRIVATE_UNTIL_AUDIT = 'private until Google audits the project';
 
 /** Where a video's privacy after its upload is kept, when it is not what was asked */
