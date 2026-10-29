@@ -159,7 +159,8 @@ test('an edit is refused without the capability, over a limit, or for a field th
   const ig = await registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
   await assert.rejects(editProfile(deps(registry, network, {}), ig.id, { bio: 'x' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'unsupported');
   const bsky = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
-  await assert.rejects(editProfile(deps(registry, network, {}), bsky.id, { links: [] }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');
+  const telegram = await registry.accounts.addAccount({ network: 'telegram', brand: 'personal', label: '@shipnews', settings: {} });
+  await assert.rejects(editProfile(deps(registry, network, {}), telegram.id, { links: [] }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');
   await assert.rejects(editProfile(deps(registry, network, {}), bsky.id, { bio: 'x'.repeat(300) }), /at most 256/);
   await assert.rejects(editProfile(deps(registry, network, {}), 999, { bio: 'x' }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'not_found');
   assert.deepEqual(network.edits, [], 'nothing reached the network');
@@ -201,4 +202,20 @@ test('Instagram’s profile is read, and the links its API leaves out may be pas
   assert.equal(pasted.profile.bio, 'Read from Instagram');
   assert.deepEqual(pasted.profile.links.map((l) => l.name), ['Website', 'GitHub']);
   await assert.rejects(reviewProfile(d, account.id, { pasted: { links: 'not a link line' } }), (e: unknown) => e instanceof ProfileRefused && e.reason === 'invalid');
+});
+
+test('a profile read only in part (LinkedIn’s name and photo) fills what the paste leaves out; a read that fails costs nothing', async () => {
+  const registry = await memoryRegistry();
+  const account = await registry.accounts.addAccount({ network: 'linkedin', brand: 'personal', label: 'José', settings: {} });
+  const network: FakeNetwork = { profile: { displayName: 'José Antonio Garrido', links: [], hasAvatar: true }, edits: [] };
+  const d = deps(registry, network, { summary: 's', proposals: [] });
+  const review = await reviewProfile(d, account.id, { pasted: { bio: 'I build developer tools' }, language: 'en' });
+  assert.deepEqual(review.profile, { displayName: 'José Antonio Garrido', bio: 'I build developer tools', links: [], hasAvatar: true });
+
+  const named = await reviewProfile(d, account.id, { pasted: { displayName: 'José', bio: 'Tools' }, language: 'en' });
+  assert.equal(named.profile.displayName, 'José', 'what the owner pasted wins');
+
+  const failing: ProfileDeps = { ...d, connector: async () => ({ profile: async () => Promise.reject(new Error('LinkedIn: 401')) }) };
+  const fallback = await reviewProfile(failing, account.id, { pasted: { bio: 'Tools' }, language: 'en' });
+  assert.deepEqual(fallback.profile, { bio: 'Tools', links: [], hasAvatar: false });
 });

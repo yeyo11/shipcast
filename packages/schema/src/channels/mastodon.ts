@@ -57,6 +57,6 @@ export const mastodon = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.35 },
     ],
   },
-  metrics: { families: { reactions: ['favourites'], comments: ['replies'], shares: ['boosts'] }, primary: ['favourites', 'boosts'], cadence: HOURLY_BATCHED },
+  metrics: { families: { reactions: ['favourites'], comments: ['replies'], shares: ['boosts', 'quotes'] }, primary: ['favourites', 'boosts'], cadence: HOURLY_BATCHED },
   chartSlot: 1,
 } as const satisfies ChannelDefinition<'mastodon'>;

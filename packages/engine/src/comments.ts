@@ -294,9 +294,11 @@ export async function fetchCommentsByFeed(deps: CommentDeps, cursors: Pick<Curso
           { postOfComment: async (id) => postOf.get((await registry.comments.commentByExternalId(channel, id))?.postId ?? -1) },
         );
       } catch (error) {
-        // A feed that fails is said; the posts wait for the next run rather than all being read now
+        // A feed that fails is said; the posts wait for the next run rather than all being read now,
+        // unless the daily sweep is due: a feed that keeps failing (a token without the scope its
+        // notifications need) must not stop the account's comments from being read at all
         problems.add(`${name} feed: ${message(error)}`);
-        continue;
+        if (!sweep) continue;
       }
     }
     let failed = false;

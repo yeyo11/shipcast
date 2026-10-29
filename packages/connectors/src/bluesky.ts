@@ -56,9 +56,50 @@ interface BlueskyProfile {
   banner?: string;
   description?: string;
   displayName?: string;
+  pronouns?: string;
+  /** Deprecated for `links` since 2026-10-23; an account that set only this still has it */
+  website?: string;
+  /** The profile's links in display order (the 2026-10-12 lexicon), each an `app.bsky.actor.link` record */
+  links?: Array<{ uri: string; cid: string; url: string; title?: string }>;
+  pinnedPost?: StrongRef;
   followersCount?: number;
   followsCount?: number;
   postsCount?: number;
+}
+
+/** A strong reference to a record, as the profile record keeps its links and its pinned post */
+interface StrongRef {
+  uri: string;
+  cid: string;
+}
+
+/** A post's counts on the AppView; one it does not count (none yet) is left out */
+interface PostCounts {
+  likeCount?: number;
+  repostCount?: number;
+  replyCount?: number;
+  quoteCount?: number;
+  bookmarkCount?: number;
+}
+
+/** A post's numbers; a bookmark is what the app calls saving a post */
+function postMetrics(post: PostCounts): Metrics {
+  return { likes: post.likeCount ?? 0, reposts: post.repostCount ?? 0, replies: post.replyCount ?? 0, quotes: post.quoteCount ?? 0, saves: post.bookmarkCount ?? 0 };
+}
+
+/** The address a person opens for a post's at:// URI */
+function postUrl(uri: string): string | undefined {
+  const match = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/.exec(uri);
+  return match ? `https://bsky.app/profile/${match[1]}/post/${match[2]}` : undefined;
+}
+
+/** A link's site, the name the app shows for a link with no title */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 const URL_RE =/https?:\/\/[^\s)]+/g;
@@ -293,26 +334,42 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
     return okCheck(`@${session.handle}`, { avatarUrl: profile?.avatar, displayName: profile?.displayName });
   }
 
-  /** The public profile: name, description, and whether it has a picture and a banner. Bluesky has no links */
+  /**
+   * The public profile: name, description, links, pronouns, the pinned post, and whether it has a
+   * picture and a banner. A link with no title is named by its site, as the app shows it; an account
+   * that set only the deprecated `website` has that as its one link.
+   */
   async profile(): Promise<Profile> {
     const profile = await this.#profile(this.#session?.did ?? this.#identifier);
+    const links = (profile.links ?? []).map((l) => ({ name: l.title?.trim() || hostOf(l.url), value: l.url }));
+    if (links.length === 0 && profile.website) links.push({ name: 'Website', value: profile.website });
+    const pinned = profile.pinnedPost && postUrl(profile.pinnedPost.uri);
     return {
       ...(profile.displayName?.trim() && { displayName: profile.displayName }),
       ...(profile.description?.trim() && { bio: profile.description }),
-      links: [],
+      links,
+      ...(profile.pronouns?.trim() && { pronouns: profile.pronouns.trim() }),
+      ...(pinned && { pinnedPost: pinned }),
       hasAvatar: imageUrl(profile.avatar) !== undefined,
       hasBanner: imageUrl(profile.banner) !== undefined,
     };
   }
 
   /**
-   * Rewrites the `app.bsky.actor.profile/self` record. The record holds more than the name and the
-   * description (the avatar and banner blobs, pinned post, labels…), so it is read first and written
-   * back with only those two changed; `swapRecord` makes the write fail rather than overwrite a
-   * change made in between. An empty value removes the field.
+   * Rewrites the `app.bsky.actor.profile/self` record. The record holds more than the name, the
+   * description and the links (the avatar and banner blobs, pinned post, labels…), so it is read
+   * first and written back with only those changed; `swapRecord` makes the write fail rather than
+   * overwrite a change made in between. An empty value removes the field.
+   *
+   * Links are records of their own (`app.bsky.actor.link`) that the profile lists by strong
+   * reference, in order: a link it lists already with the same address and title is kept (its icon
+   * too), a new one is created first, and the ones the edit drops are deleted once the profile no
+   * longer lists them.
    */
   async editProfile(edit: ProfileEdit): Promise<void> {
-    if (edit.links !== undefined) throw new ConnectorError('Bluesky', 'a Bluesky profile has no links to edit', 400, false);
+    for (const link of edit.links ?? []) {
+      if (!/^https:\/\//i.test(link.value) || !URL.canParse(link.value)) throw new ConnectorError('Bluesky', `the link “${link.name}” is not an https address`, 400, false);
+    }
     const session = await this.#login();
     const auth = { authorization: `Bearer ${session.accessJwt}` };
     const query = new URLSearchParams({ repo: session.did, collection: 'app.bsky.actor.profile', rkey: 'self' });
@@ -336,17 +393,91 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
       if (value === '') delete record[key];
       else record[key] = value;
     }
+    let created: StrongRef[] = [];
+    let dropped: StrongRef[] = [];
+    if (edit.links !== undefined) {
+      const before = Array.isArray(current.value.links) ? (current.value.links as StrongRef[]) : [];
+      const placed = await this.#placeLinks(session, edit.links, before);
+      created = placed.created;
+      const kept = new Set(placed.refs.map((r) => r.uri));
+      dropped = before.filter((r) => !kept.has(r.uri));
+      if (placed.refs.length > 0) record.links = placed.refs;
+      else delete record.links;
+    }
     const response = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.putRecord`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
       body: JSON.stringify({ repo: session.did, collection: 'app.bsky.actor.profile', rkey: 'self', record, ...(current.cid && { swapRecord: current.cid }) }),
     });
+    // The profile kept the links it had: the ones made for this edit belong to nothing, and go
+    if (!response.ok) await this.#deleteRecords(session, created);
     if (response.status === 400) {
       const text = await response.text();
       if (text.includes('InvalidSwap')) throw new ConnectorError('Bluesky', 'the profile changed while it was being edited: read it again and retry', 409, false);
       throw new ConnectorError('Bluesky', `edit the profile: 400 ${text.slice(0, 300)}`, 400);
     }
     await expectOk('Bluesky', response, 'edit the profile');
+    // Only once the profile no longer lists them; a link record left behind shows nowhere
+    await this.#deleteRecords(session, dropped);
+  }
+
+  /**
+   * The strong references the edit's links become, in order: a link the profile lists already with
+   * the same address and title is kept, any other is created as an `app.bsky.actor.link` record.
+   */
+  async #placeLinks(session: Session, links: NonNullable<ProfileEdit['links']>, before: readonly StrongRef[]): Promise<{ refs: StrongRef[]; created: StrongRef[] }> {
+    const auth = { authorization: `Bearer ${session.accessJwt}` };
+    const existing: Array<StrongRef & { url?: string; title?: string }> = [];
+    for (const ref of before) {
+      const query = new URLSearchParams({ repo: session.did, collection: 'app.bsky.actor.link', rkey: ref.uri.split('/').at(-1) ?? '' });
+      const response = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.getRecord?${query}`, { headers: auth });
+      // A link record gone already is simply not kept
+      if (!response.ok) continue;
+      const found = (await response.json()) as { uri: string; cid: string; value: { url?: string; title?: string } };
+      existing.push({ uri: found.uri, cid: found.cid, url: found.value.url, title: found.value.title });
+    }
+    const refs: StrongRef[] = [];
+    const created: StrongRef[] = [];
+    for (const link of links) {
+      const title = link.name.trim() || undefined;
+      const same = existing.find((e) => e.url === link.value && e.title === title && !refs.some((r) => r.uri === e.uri));
+      if (same) {
+        refs.push({ uri: same.uri, cid: same.cid });
+        continue;
+      }
+      const response = await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.createRecord`, {
+        method: 'POST',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          repo: session.did,
+          collection: 'app.bsky.actor.link',
+          record: { $type: 'app.bsky.actor.link', url: link.value, ...(title && { title }), createdAt: new Date().toISOString() },
+        }),
+      });
+      let ref: StrongRef;
+      try {
+        ref = await json<StrongRef>('Bluesky', response, 'add a profile link');
+      } catch (error) {
+        await this.#deleteRecords(session, created);
+        throw error;
+      }
+      refs.push({ uri: ref.uri, cid: ref.cid });
+      created.push({ uri: ref.uri, cid: ref.cid });
+    }
+    return { refs, created };
+  }
+
+  /** Best effort: a link record that cannot be deleted costs nothing anyone sees */
+  async #deleteRecords(session: Session, refs: readonly StrongRef[]): Promise<void> {
+    for (const ref of refs) {
+      const match = /^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(ref.uri);
+      if (!match) continue;
+      await this.#fetch(`${this.#service}/xrpc/com.atproto.repo.deleteRecord`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${session.accessJwt}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ repo: session.did, collection: match[2], rkey: match[3] }),
+      }).catch(() => undefined);
+    }
   }
 
   async profileStats(): Promise<ProfileStats> {
@@ -363,12 +494,8 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
     for (const batch of chunks(uris, 25)) {
       const query = new URLSearchParams();
       for (const uri of batch) query.append('uris', uri);
-      const { posts } = await json<{ posts: Array<{ uri: string; likeCount?: number; repostCount?: number; replyCount?: number; quoteCount?: number }> }>(
-        'Bluesky',
-        await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?${query}`),
-        'metrics',
-      );
-      for (const post of posts) out.set(post.uri, { likes: post.likeCount ?? 0, reposts: post.repostCount ?? 0, replies: post.replyCount ?? 0, quotes: post.quoteCount ?? 0 });
+      const { posts } = await json<{ posts: Array<PostCounts & { uri: string }> }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?${query}`), 'metrics');
+      for (const post of posts) out.set(post.uri, postMetrics(post));
     }
     return out;
   }
@@ -434,13 +561,8 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
 
   async metrics(externalId: string): Promise<Metrics> {
     const response = await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(externalId)}`);
-    const { posts } = await json<{ posts: Array<{ likeCount?: number; repostCount?: number; replyCount?: number; quoteCount?: number }> }>(
-      'Bluesky',
-      response,
-      'metrics',
-    );
+    const { posts } = await json<{ posts: PostCounts[] }>('Bluesky', response, 'metrics');
     const post = posts[0];
-    if (!post) return {};
-    return { likes: post.likeCount ?? 0, reposts: post.repostCount ?? 0, replies: post.replyCount ?? 0, quotes: post.quoteCount ?? 0 };
+    return post ? postMetrics(post) : {};
   }
 }

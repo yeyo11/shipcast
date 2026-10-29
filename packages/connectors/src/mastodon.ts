@@ -50,6 +50,27 @@ const placeholder = (url: string | undefined) => !url || /\/missing\.png(\?|$)/.
 /** The scope `update_credentials` needs, which tokens from before 2026-10-27 were not granted */
 export const MASTODON_PROFILE_SCOPE = 'write:accounts';
 
+/** The scope the comment feed's notifications need, which tokens from before 2026-10-29 were not granted */
+export const MASTODON_NOTIFICATIONS_SCOPE = 'read:notifications';
+
+/** A status's counts; `quotes_count` only from Mastodon 4.5, so an older instance leaves it out */
+interface StatusCounts {
+  favourites_count: number;
+  reblogs_count: number;
+  replies_count: number;
+  quotes_count?: number;
+}
+
+/** A status's numbers: quotes are shares as boosts are, read where the instance counts them */
+function statusMetrics(status: StatusCounts): Metrics {
+  return {
+    favourites: status.favourites_count,
+    boosts: status.reblogs_count,
+    replies: status.replies_count,
+    ...(typeof status.quotes_count === 'number' && { quotes: status.quotes_count }),
+  };
+}
+
 interface MastodonStatus {
   id: string;
   in_reply_to_id: string | null;
@@ -301,8 +322,8 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
         for (const id of batch) out.set(id, await this.metrics(id));
         continue;
       }
-      const statuses = await json<Array<{ id: string; favourites_count: number; reblogs_count: number; replies_count: number }>>('Mastodon', response, 'metrics');
-      for (const status of statuses) out.set(status.id, { favourites: status.favourites_count, boosts: status.reblogs_count, replies: status.replies_count });
+      const statuses = await json<Array<StatusCounts & { id: string }>>('Mastodon', response, 'metrics');
+      for (const status of statuses) out.set(status.id, statusMetrics(status));
     }
     return out;
   }
@@ -310,7 +331,8 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
   /**
    * The mentions newer than `sinceId` (the newest notification seen last run), oldest first, five
    * pages of 80 at most: one call in a quiet hour. A reply to the owner mentions them, so every
-   * comment under their posts, and every reply to those, arrives here.
+   * comment under their posts, and every reply to those, arrives here. A token granted before
+   * Shipcast asked for `read:notifications` is refused (403): said as what to do, never retried.
    */
   async mentionsSince(sinceId: string | undefined): Promise<{ items: Array<{ id: string; inReplyTo: string | null; visibility: string }>; newest: string | undefined }> {
     type Notification = { id: string; status?: { id: string; in_reply_to_id: string | null; visibility: string } };
@@ -318,7 +340,11 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
     let newest = sinceId;
     for (let page = 0; page < 5; page++) {
       const query = new URLSearchParams({ 'types[]': 'mention', limit: '80', ...(newest && { min_id: newest }) });
-      const list = await json<Notification[]>('Mastodon', await this.#fetch(`${this.#instance}/api/v1/notifications?${query}`, { headers: { authorization: `Bearer ${this.#token}` } }), 'read the notifications');
+      const response = await this.#fetch(`${this.#instance}/api/v1/notifications?${query}`, { headers: { authorization: `Bearer ${this.#token}` } });
+      if (response.status === 403) {
+        throw new ConnectorError('Mastodon', `the token was not granted ${MASTODON_NOTIFICATIONS_SCOPE}: connect the account again; until then its comments are read once a day`, 403, false);
+      }
+      const list = await json<Notification[]>('Mastodon', response, 'read the notifications');
       // min_id pages forward from the cursor; each page comes newest first
       const sorted = [...list].sort((a, b) => compareIds(a.id, b.id));
       for (const n of sorted) if (n.status) items.push({ id: n.status.id, inReplyTo: n.status.in_reply_to_id, visibility: n.status.visibility });
@@ -334,8 +360,7 @@ export class Mastodon implements Editable<MastodonEdit>, Deletable, CommentReade
     const response = await this.#fetch(`${this.#instance}/api/v1/statuses/${externalId}`, {
       headers: { authorization: `Bearer ${this.#token}` },
     });
-    const status = await json<{ favourites_count: number; reblogs_count: number; replies_count: number }>('Mastodon', response, 'metrics');
-    return { favourites: status.favourites_count, boosts: status.reblogs_count, replies: status.replies_count };
+    return statusMetrics(await json<StatusCounts>('Mastodon', response, 'metrics'));
   }
 }
 

@@ -8,12 +8,13 @@ import { REDDIT_SCOPES } from './reddit.ts';
  */
 
 /**
- * What publishing, the metrics and profile edits need on Mastodon, and nothing more. `write:accounts`
- * (for `update_credentials`) joined on 2026-10-27: a token granted before lacks it and keeps working
- * for the rest, and an instance's client registered before is registered again, since an
+ * What publishing, the metrics, the comment feed and profile edits need on Mastodon, and nothing
+ * more. `write:accounts` (for `update_credentials`) joined on 2026-10-27 and `read:notifications`
+ * (the hourly comment feed's mentions) on 2026-10-29: a token granted before lacks them and keeps
+ * working for the rest, and an instance's client registered before is registered again, since an
  * authorisation may only ask for the scopes its client was registered with.
  */
-export const MASTODON_SCOPES = 'read:accounts read:statuses write:statuses write:media write:accounts';
+export const MASTODON_SCOPES = 'read:accounts read:statuses read:notifications write:statuses write:media write:accounts';
 
 /**
  * Mastodon has no central developer portal: each instance registers its own apps, so Shipcast

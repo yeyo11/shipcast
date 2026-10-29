@@ -203,11 +203,22 @@ export async function reviewProfile(
     if (!pasted.displayName?.trim() && !pasted.bio?.trim() && links.length === 0) {
       throw new ProfileRefused('invalid', `${account.network}’s API does not give the profile: paste at least its bio to review it`);
     }
+    // What the credential can read of a profile it cannot read whole (LinkedIn's name and photo)
+    // fills what the paste leaves out; a read that fails costs the review nothing
+    const readable = capability.readable ?? [];
+    const read =
+      readable.length > 0
+        ? await deps
+            .connector(account)
+            .then((c) => c?.profile?.())
+            .catch(() => undefined)
+        : undefined;
+    const displayName = pasted.displayName?.trim() || (readable.includes('displayName') ? read?.displayName : undefined);
     profile = {
-      ...(pasted.displayName?.trim() && { displayName: pasted.displayName.trim() }),
+      ...(displayName && { displayName }),
       ...(pasted.bio?.trim() && { bio: pasted.bio.trim() }),
       links,
-      hasAvatar: account.avatarUrl !== null,
+      hasAvatar: (readable.includes('avatar') ? read?.hasAvatar : undefined) ?? account.avatarUrl !== null,
     };
   }
   const languages = brand.languages.blog;

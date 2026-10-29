@@ -38,6 +38,11 @@ export interface ProfileLimits {
 export interface ProfileCapability {
   /** Whether Shipcast reads the profile itself; without, the owner pastes it for a review */
   read: boolean;
+  /**
+   * Where the profile is pasted (`read: false`), the fields the credential still reads: they fill
+   * what the paste leaves out (LinkedIn's name and photo, from OpenID Connect)
+   */
+  readable?: readonly ProfileFieldId[];
   /** `reconnect`: the network can, but this account's credential was not granted it */
   edit: 'yes' | 'no' | 'reconnect';
   /** What the network's profile has, which is what a review may propose */
@@ -189,6 +194,11 @@ export interface ChannelDefinition<Id extends string = string> {
     families: Partial<Record<StatsMetric, readonly string[]>>;
     /** The first of these a piece has is its row's number */
     primary: readonly string[];
+    /**
+     * Readings that are a ratio or an average of one piece (Reddit's upvote ratio): across pieces they
+     * are averaged, never added up, and no family takes them
+     */
+    averaged?: readonly string[];
     /** How often its numbers are worth reading (phase 8 of docs/plans/performance-refactor.md) */
     cadence: MetricCadence;
     /**

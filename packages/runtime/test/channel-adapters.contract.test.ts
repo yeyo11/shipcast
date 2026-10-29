@@ -63,7 +63,7 @@ test('the catalog lists the networks it did before the adapters, in the same ord
       ['instagram', 'Instagram', 'instagram', true, 'oauth'],
       ['threads', 'Threads', 'threads', true, 'oauth'],
       ['linkedin', 'LinkedIn', 'linkedin', false, 'oauth'],
-      ['reddit', 'Reddit', 'reddit', false, 'oauth'],
+      ['reddit', 'Reddit', 'reddit', true, 'oauth'],
       ['brevo', 'Newsletter (Brevo)', 'newsletter', true, 'form'],
       ['hashnode', 'Hashnode', 'hashnode', true, 'form'],
       ['telegram', 'Telegram', 'telegram', false, 'form'],
@@ -141,7 +141,7 @@ for (const adapter of CHANNEL_ADAPTERS) {
       for (let i = 0; i < 20; i++) {
         try {
           const connection = buildConnector(spec.id, { settings: values, secrets: {} }, brand, noNetwork, { adapters: [adapter] });
-          assert.equal(connection.profile !== undefined, d.profile?.read ?? false, 'profile read');
+          assert.equal(connection.profile !== undefined, (d.profile?.read ?? false) || (d.profile?.readable?.length ?? 0) > 0, 'profile read');
           assert.equal(connection.editProfile !== undefined, d.profile?.edit === 'yes', 'profile edited');
           break;
         } catch (error) {

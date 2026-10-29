@@ -284,3 +284,12 @@ test('LinkedIn: a thumbnail that fails costs the card its picture, not the post;
   await assert.rejects(expired.publish({ text: 't', article: { url: 'https://example.dev/x', title: 'X', description: 'd' } }), (e) => e instanceof ConnectorError && !e.retryable);
   assert.equal((await expired.check()).ok, false);
 });
+
+test('LinkedIn reads the name and whether there is a photo from userinfo, with the token it already has', async () => {
+  const userinfo = (body: object) => fakeFetch([['GET https://api.linkedin.com/v2/userinfo', () => Response.json(body)]], []);
+  const linkedin = new LinkedIn({ personId: 'p', accessToken: 't', fetch: userinfo({ sub: 'p', name: 'José Antonio Garrido', picture: 'https://media.licdn.com/dms/image/x.jpg' }) });
+  assert.deepEqual(await linkedin.profile(), { displayName: 'José Antonio Garrido', links: [], hasAvatar: true });
+  assert.deepEqual(await new LinkedIn({ personId: 'p', accessToken: 't', fetch: userinfo({ sub: 'p' }) }).profile(), { links: [], hasAvatar: false });
+  const expired = new LinkedIn({ personId: 'p', accessToken: 't', expiresAt: '2026-01-01T00:00:00Z', fetch: fakeFetch([], []), now: () => Date.parse('2026-10-25T00:00:00Z') });
+  await assert.rejects(expired.profile(), (e: unknown) => e instanceof ConnectorError && !e.retryable && /expired/.test(e.message));
+});

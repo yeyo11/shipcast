@@ -13,8 +13,8 @@ export const linkedinAdapter = channelAdapter({
       fields: [],
       permissions: [
         'Publishes a post on your personal profile sharing the article, and deletes it when you ask (w_member_social)',
-        'Reads your name and picture to show the account (openid, profile)',
-        'No numbers and no comments: LinkedIn keeps them behind its Community Management API, for approved companies only',
+        'Reads your name and picture to show the account and to review the profile (openid, profile)',
+        'No numbers and no comments: LinkedIn keeps them behind its Community Management API, granted to registered organisations after a review',
       ],
       howTo: 'Needs your LinkedIn app with Sign In with LinkedIn using OpenID Connect and Share on LinkedIn, its client id and secret set in Settings. The token lasts 60 days; connect again when it runs out.',
       oauth: {
@@ -32,7 +32,7 @@ export const linkedinAdapter = channelAdapter({
       },
       build: ({ need, get, fetch }) => {
         const connector = new LinkedIn({ personId: need('personId'), accessToken: need('accessToken'), expiresAt: get('expiresAt'), fetch });
-        return { connector, check: () => connector.check() };
+        return { connector, check: () => connector.check(), profile: () => connector.profile() };
       },
     },
   },

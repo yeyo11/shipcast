@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Bluesky, Devto, Mastodon } from '@shipcast/connectors';
+import { Bluesky, ConnectorError, Devto, Mastodon } from '@shipcast/connectors';
 import { blueskyFeed, countFeed, mastodonFeed } from '../src/channels/feeds.ts';
 import { MemoryCache } from '../src/redis/memory.ts';
 
@@ -34,6 +34,15 @@ test('Mastodon: mentions place each reply under its post, through earlier replie
   assert.deepEqual([...changes.touched].sort(), ['101', '102']);
   assert.equal(changes.cursor, '13');
   assert.deepEqual(calls, ['/api/v1/notifications?types%5B%5D=mention&limit=80&min_id=8']);
+});
+
+test('Mastodon: a token granted before read:notifications is refused as what to do, never retried', async () => {
+  const fetch: typeof globalThis.fetch = async () => new Response(JSON.stringify({ error: 'This action is outside the authorized scopes' }), { status: 403 });
+  const feed = mastodonFeed(new Mastodon({ instance: 'https://m.example', accessToken: 't', fetch }));
+  await assert.rejects(
+    feed.changes(posts, '8', { postOfComment: async () => undefined }),
+    (error: unknown) => error instanceof ConnectorError && !error.retryable && /not granted read:notifications: connect the account again/.test(error.message),
+  );
 });
 
 test('Bluesky: one notifications call; the read session is kept between runs', async () => {

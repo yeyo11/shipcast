@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T19:18:30.125539798Z
+updated_at: 2026-10-29T19:46:46.870869312Z
 tags:
     - publishing
     - connectors
@@ -182,8 +182,11 @@ Added on 2026-10-26 ([decisions/automatic-channels-only.md](decisions/automatic-
 
 - **The account**: the owner's Reddit "web app" (API access granted by request since November 2025),
   its client id and secret in Settings, and its redirect uri set to the app's `/auth/reddit/callback`.
-  Connecting asks for `identity submit read` with `duration=permanent`; the refresh token is kept in
-  the secret store with the app's client. Every request carries the `User-Agent` Reddit asks for.
+  Connecting asks for `identity submit read history edit` with `duration=permanent`; the refresh
+  token is kept in the secret store with the app's client. Every request carries the `User-Agent`
+  Reddit asks for. `history` (listing the account's own submissions) and `edit` (deleting them)
+  joined on 2026-10-29: Reddit's token answer says the scopes granted, and a token from before is
+  refused what it lacks before any request, with "connect the account again".
 - **The drafts**: one `reddit-<subreddit>.md` per subreddit in `launch.yml`, a `Title:` line, `---` and
   the Markdown body. The body links the article with `?ref=reddit`; when an edit took the link out, it
   is added back. The link goes out with UTM tags naming the subreddit ([tracking.md](tracking.md)).
@@ -191,10 +194,16 @@ Added on 2026-10-26 ([decisions/automatic-channels-only.md](decisions/automatic-
   `post:<subreddit>`. A rule of the subreddit is final and waits for **Try again**; a rate limit is
   tried again. A refused subreddit never holds back the others.
 - **Never twice**: before a submit the attempt is recorded; a retry first looks for a post with that
-  title among the account's newest submissions since the attempt, and records it instead of
-  submitting again. That is why Reddit's definition is `idempotent`.
-- **After**: a post can be deleted; a title can never change and editing the body is not built. No
-  per-post numbers and no comments yet. Reddit is not schedulable.
+  title among the account's newest submissions since the attempt (`/user/<name>/submitted`, which
+  needs `history`), and records it instead of submitting again. That is why Reddit's definition is
+  `idempotent`. Without `history` the lookup is refused and the retry stops there, never posting a
+  second time: Reddit waits for the account to be connected again.
+- **After**: a post can be deleted (`/api/del`, which needs `edit`); a title can never change and
+  editing the body is not built. Reddit is not schedulable.
+- **Numbers**: each subreddit's post is read through `/api/info` (`read`), up to 100 a call, hourly:
+  `score`, `comments`, `crossposts` and `upvoteRatio`, the share of votes that are upvotes, from 0
+  to 1. The ratio is averaged across a launch's posts, never added up (`metrics.averaged` on the
+  definition). Views and shares are not in Reddit's API. No comments yet.
 
 ### YouTube
 
@@ -276,7 +285,9 @@ channel set to auto.
   and never read again. With `batched-metrics`, each account's notification feed is asked once
   (`fetchCommentsByFeed`, `packages/runtime/src/channels/feeds.ts`) and only the posts it names are
   read, with a full sweep once a day for what feeds miss (the owner's own replies); a network with no
-  feed is read post by post.
+  feed is read post by post. A feed that fails is reported and its posts wait, but the daily sweep
+  still runs when it is due: a Mastodon token granted before `read:notifications` (2026-10-29) fails
+  its feed every run, and its comments are read once a day until it is connected again.
 - **Drafting:** the `replies` AI task and the editable `reply` prompt, closed by locked rules: the code
   and the launch's analysis are the truth, the comment's language, short, and no reply to spam.
 - **Modes:** each channel is `off`, `approval` (the default) or `auto`; a reply is sent once, claimed
@@ -320,7 +331,7 @@ longer read.
 | Source | What | From |
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue, added up | Brevo's campaign statistics |
-| `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram`, `threads`, `githubDiscussions`, `youtube` | views, reactions, comments, likes, reposts, reach… per post | each adapter's metric reader; batch-first (Bluesky 25 posts a call, YouTube 50) |
+| `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram`, `threads`, `reddit`, `githubDiscussions`, `youtube` | views, reactions, comments, likes, reposts, quotes, saves, score, reach… per post | each adapter's metric reader; batch-first (Bluesky 25 posts a call, YouTube 50, Reddit 100) |
 | `instagram` | per type: every post views, reach, likes, comments, saved, shares, reposts, total interactions; a feed post or carousel also follows, profile visits, `profile_activity` and `bio_link_clicks`; a Reel `avg_watch_ms`, `skip_rate` and, when shared to Facebook, `facebook_views`; a story views, reach, shares, reposts, total interactions, follows, profile visits and its navigation (`taps_forward`, `taps_back`, `exits`, `swipes_forward`) | Instagram's media insights; the type from `media_type`, kept a month |
 | `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
 | `blog` | each language's article visits and their sum, and by referrer | Cloudflare Web Analytics' GraphQL API, the paths in one query |
@@ -330,9 +341,10 @@ longer read.
 
 Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind, age)` in
 `packages/schema/src/channels/registry.ts`: a post, each newsletter issue, a channel's own pieces
-where its definition has metrics (each of YouTube's videos), and a piece whose numbers the network
-keeps only a while (`metrics.expiring` on its definition: Instagram's story, 24 hours) while it
-keeps them; never a comment, and the blog per article URL rather than per piece. The metrics rounds
+where its definition has metrics (each of YouTube's videos, each subreddit's Reddit post), and a
+piece whose numbers the network keeps only a while (`metrics.expiring` on its definition:
+Instagram's story, 24 hours) while it keeps them; never a comment, and the blog per article URL
+rather than per piece. The metrics rounds
 and the freshness check ([measurement.md](measurement.md#the-checks)) both use it.
 
 **Two schedules**, by the `batched-metrics` flag:
@@ -354,9 +366,9 @@ it has no numbers yet, which is neither a failure nor stale. A secondary call th
 Reel's Facebook views when it was not shared there, a breakdown) leaves the rest of the reading;
 Threads' link clicks failing is said in the run's problems while the posts' own numbers count.
 
-Telegram, Discord and LinkedIn give no numbers back; Reddit's per-post numbers are not read. The
-per-post numbers, scored per network ([stats.md](stats.md)), are also what the recommended
-publishing times learn from ([scheduling.md](scheduling.md#recommended-times)).
+Telegram, Discord and LinkedIn give no numbers back. The per-post numbers, scored per network
+([stats.md](stats.md)), are also what the recommended publishing times learn from
+([scheduling.md](scheduling.md#recommended-times)).
 
 Two limits: **Cloudflare Web Analytics does not keep the query string**, so visits are attributed by
 the referrer's host (Mastodon's many hosts count as `other`) and the UTM tags the links carry

@@ -1,4 +1,4 @@
-import type { ChannelDefinition, PieceKit } from './definition.ts';
+import { HOURLY_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { parseDiscussionDraft } from './text.ts';
 
 const limits = { redditTitle: 300 } as const;
@@ -51,11 +51,19 @@ export const reddit = {
     main: 'post:*',
   },
   profile: {
-    read: false,
+    read: true,
     edit: 'no',
     fields: ['displayName', 'bio', 'avatar'],
     editable: [],
     limits: { displayName: 30, bio: 200 },
-    note: 'Shipcast’s Reddit scopes do not reach the profile: paste it to review it, then copy a proposal into Reddit',
+    note: 'Read from your Reddit page (its display name, About and picture); changing them needs a moderator scope Shipcast does not ask for, so copy a proposal into Reddit',
+  },
+  // Score, comments and crossposts of each subreddit's post (`/api/info`); views and shares are not
+  // in Reddit's API. The upvote ratio is a share of the votes, averaged across posts, never added up
+  metrics: {
+    families: { reactions: ['score'], comments: ['comments'], shares: ['crossposts'] },
+    primary: ['score', 'comments'],
+    averaged: ['upvoteRatio'],
+    cadence: HOURLY_BATCHED,
   },
 } as const satisfies ChannelDefinition<'reddit'>;

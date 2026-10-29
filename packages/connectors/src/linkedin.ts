@@ -1,4 +1,4 @@
-import { checkProblem, ConnectorError, expectOk, json, okCheck, type Check, type Deletable, type Published } from './http.ts';
+import { checkProblem, ConnectorError, expectOk, imageUrl, json, okCheck, type Check, type Deletable, type Profile, type ProfileReader, type Published } from './http.ts';
 
 export interface LinkedInPost {
   /** The post's own text (LinkedIn calls it commentary), at most 3000 characters */
@@ -26,10 +26,11 @@ export const LINKEDIN_VERSION = '202610';
  * LinkedIn on the owner's personal profile, with `w_member_social` ("Share on LinkedIn"): an article
  * post through the Posts API (`/rest/posts`, which replaced ugcPosts), its thumbnail uploaded through
  * the Images API first, and its delete. Reading a member's posts, comments or numbers needs the
- * Community Management API (`r_member_social`), which LinkedIn grants only to approved companies, so
- * there are no metrics and no comments here.
+ * Community Management API (`r_member_postAnalytics`, `r_member_social_feed`), which LinkedIn grants
+ * only to registered organisations after a review, so there are no metrics and no comments here. The
+ * member's name and photo come from OpenID Connect's userinfo, which `openid profile` grants.
  */
-export class LinkedIn implements Deletable {
+export class LinkedIn implements Deletable, ProfileReader {
   readonly #person: string;
   readonly #token: string;
   readonly #expiresAt: string | undefined;
@@ -105,19 +106,29 @@ export class LinkedIn implements Deletable {
   }
 
   /** The member behind the token, from OpenID Connect's userinfo, which `openid profile` grants */
+  async #me(what: string): Promise<{ sub: string; name?: string; picture?: string }> {
+    return json('LinkedIn', await this.#fetch('https://api.linkedin.com/v2/userinfo', { headers: { authorization: `Bearer ${this.#token}` } }), what);
+  }
+
   async check(): Promise<Check> {
     if (this.#expired()) return { ok: false, problem: 'LinkedIn’s token has expired (they last 60 days): connect the account again' };
     try {
-      const me = await json<{ sub: string; name?: string; picture?: string }>(
-        'LinkedIn',
-        await this.#fetch('https://api.linkedin.com/v2/userinfo', { headers: { authorization: `Bearer ${this.#token}` } }),
-        'check',
-      );
+      const me = await this.#me('check');
       if (me.sub !== this.#person) return { ok: false, problem: `the token belongs to ${me.name ?? me.sub}, not to the account ${this.#person}` };
       return okCheck(me.name ?? me.sub, { avatarUrl: me.picture, displayName: me.name });
     } catch (error) {
       return checkProblem(error);
     }
+  }
+
+  /**
+   * What the token can read of the profile: the name and whether there is a photo. The headline,
+   * the About section and the links are behind products LinkedIn reviews, so the owner pastes those.
+   */
+  async profile(): Promise<Profile> {
+    if (this.#expired()) throw new ConnectorError('LinkedIn', 'the token has expired: connect the account again from Channels', 401, false);
+    const me = await this.#me('read the profile');
+    return { ...(me.name?.trim() && { displayName: me.name.trim() }), links: [], hasAvatar: imageUrl(me.picture) !== undefined };
   }
 }
 

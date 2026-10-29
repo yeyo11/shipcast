@@ -4,7 +4,9 @@ import { ConnectorError, exchangeRedditCode, Reddit, redditAuthorizeUrl } from '
 import { fakeFetch, sequence, type Call } from './fake.ts';
 
 const TOKEN = 'POST https://www.reddit.com/api/v1/access_token';
-const token = () => Response.json({ access_token: 'at', token_type: 'bearer', expires_in: 3600, scope: 'identity submit read' });
+const token = () => Response.json({ access_token: 'at', token_type: 'bearer', expires_in: 3600, scope: 'identity submit read history edit' });
+/** A token connected before Shipcast asked for `history` and `edit` */
+const oldToken = () => Response.json({ access_token: 'at', token_type: 'bearer', expires_in: 3600, scope: 'identity submit read' });
 const form = (call: Call | undefined) => Object.fromEntries(new URLSearchParams(String(call?.body)));
 
 function reddit(rules: Array<[string, () => Response]>, calls: Call[] = []) {
@@ -114,7 +116,7 @@ test('Reddit’s OAuth asks for a permanent token, and the code becomes the refr
     state: 'st',
     redirect_uri: 'https://app.example/auth/reddit/callback',
     duration: 'permanent',
-    scope: 'identity submit read',
+    scope: 'identity submit read history edit',
   });
 
   const calls: Call[] = [];
@@ -130,4 +132,68 @@ test('Reddit’s OAuth asks for a permanent token, and the code becomes the refr
 
   const refused = fakeFetch([[TOKEN, () => Response.json({ error: 'invalid_grant' })]], []);
   await assert.rejects(exchangeRedditCode({ clientId: 'c', clientSecret: 's' }, 'https://x/cb', 'bad', refused), /the code was refused \(invalid_grant\)/);
+});
+
+test('a token granted before history and edit is refused before asking: finding a lost post and deleting say to connect again, never retried', async () => {
+  const calls: Call[] = [];
+  const r = new Reddit({ clientId: 'c', clientSecret: 's', refreshToken: 'rt', username: 'josegarridodev', fetch: fakeFetch([[TOKEN, oldToken]], calls) });
+  await assert.rejects(
+    r.find({ subreddit: 'selfhosted', title: 't' }, new Date()),
+    (e: unknown) => e instanceof ConnectorError && !e.retryable && /not granted history.*connect the account again/.test(e.message),
+  );
+  await assert.rejects(r.delete('t3_abc'), (e: unknown) => e instanceof ConnectorError && !e.retryable && /not granted edit.*connect the account again/.test(e.message));
+  assert.ok(calls.every((c) => c.url.endsWith('/access_token')), 'nothing asked of the API');
+});
+
+test('an answer that does not say its scopes is let through, and Reddit’s 403 says the same', async () => {
+  const bare = () => Response.json({ access_token: 'at' });
+  const forbidden = () => Response.json({ message: 'Forbidden', error: 403 }, { status: 403 });
+  const r = new Reddit({
+    clientId: 'c',
+    clientSecret: 's',
+    refreshToken: 'rt',
+    username: 'josegarridodev',
+    fetch: fakeFetch([[TOKEN, bare], ['GET https://oauth.reddit.com/user/josegarridodev/submitted', forbidden], ['POST https://oauth.reddit.com/api/del', forbidden]], []),
+  });
+  await assert.rejects(r.find({ subreddit: 'selfhosted', title: 't' }, new Date()), /not granted history/);
+  await assert.rejects(r.delete('t3_abc'), /not granted edit/);
+});
+
+test('Reddit reads many posts’ numbers in one /api/info call: score, comments, crossposts and the upvote ratio', async () => {
+  const calls: Call[] = [];
+  const post = (name: string, extra: object) => ({ kind: 't3', data: { name, view_count: null, ...extra } });
+  const r = reddit(
+    [
+      [
+        'GET https://oauth.reddit.com/api/info',
+        () =>
+          Response.json({
+            kind: 'Listing',
+            data: { children: [post('t3_a', { score: 12, num_comments: 3, num_crossposts: 1, upvote_ratio: 0.93 }), post('t3_b', { score: 1, num_comments: 0, num_crossposts: 0, upvote_ratio: 1 })] },
+          }),
+      ],
+    ],
+    calls,
+  );
+  const many = await r.metricsMany(['t3_a', 't3_b', 't3_gone']);
+  assert.deepEqual(many.get('t3_a'), { score: 12, comments: 3, crossposts: 1, upvoteRatio: 0.93 });
+  assert.deepEqual(many.get('t3_b'), { score: 1, comments: 0, crossposts: 0, upvoteRatio: 1 });
+  assert.equal(many.has('t3_gone'), false, 'a post missing from the answer is left out');
+  const info = calls.filter((c) => c.url.includes('/api/info'));
+  assert.equal(info.length, 1);
+  assert.equal(new URL(info[0]!.url).searchParams.get('id'), 't3_a,t3_b,t3_gone');
+  assert.deepEqual(await r.metrics('t3_a'), { score: 12, comments: 3, crossposts: 1, upvoteRatio: 0.93 });
+});
+
+test('Reddit reads the profile from the account’s own page: title, About, picture and banner; a default Snoo is no picture', async () => {
+  const me = (subreddit: object, icon = 'https://styles.redditmedia.com/me.png?width=256&amp;s=1') => () => Response.json({ name: 'josegarridodev', icon_img: icon, subreddit });
+  const read = (answer: () => Response) => reddit([['GET https://oauth.reddit.com/api/v1/me', answer]]).profile();
+  assert.deepEqual(await read(me({ title: 'José Antonio Garrido', public_description: 'I build developer tools', icon_img: '', banner_img: 'https://styles.redditmedia.com/b.png?a=1&amp;b=2' })), {
+    displayName: 'José Antonio Garrido',
+    bio: 'I build developer tools',
+    links: [],
+    hasAvatar: true,
+    hasBanner: true,
+  });
+  assert.deepEqual(await read(me({ title: '', public_description: '', banner_img: '' }, 'https://www.redditstatic.com/avatars/defaults/v2/avatar_default_3.png')), { links: [], hasAvatar: false, hasBanner: false });
 });

@@ -41,10 +41,12 @@ export const bluesky = {
   profile: {
     read: true,
     edit: 'yes',
-    fields: ['displayName', 'bio', 'avatar'],
-    editable: ['displayName', 'bio'],
-    limits: { displayName: 64, bio: 256, graphemes: true },
-    note: 'The profile record is written back whole, its picture, banner and the rest kept as they are',
+    fields: ['displayName', 'bio', 'links', 'avatar'],
+    editable: ['displayName', 'bio', 'links'],
+    // Links since the 2026-10-12 lexicon: up to 10, each an https address with a title of at most 40
+    // graphemes; the lexicon caps no address, so the value's limit is the longest URL a browser keeps
+    limits: { displayName: 64, bio: 256, links: { count: 10, name: 40, value: 2048 }, graphemes: true },
+    note: 'The profile record is written back whole, its picture, banner, pronouns and pinned post kept as they are; each link is an https address with a title',
   },
   posting: {
     note: 'weekday afternoons, when Europe’s afternoon meets the US east coast’s morning (Bluesky’s developers are mostly American)',
