@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T16:39:48.121797373Z
-updated_at: 2026-10-29T01:08:43.450692641Z
+updated_at: 2026-10-29T19:16:39.117310638Z
 tags:
     - stats
     - metrics
@@ -42,8 +42,8 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | dev.to, Hashnode | views | reactions | comments | | | |
 | Bluesky | | likes | replies | reposts + quotes | | |
 | Mastodon | | favourites | replies | boosts | | |
-| Instagram | views | likes | comments | shares | | reach |
-| Threads | views | likes | replies | reposts + quotes + shares | | |
+| Instagram | views | likes | comments | shares + reposts | bio-link clicks | |
+| Threads | views | likes | replies | reposts + quotes + shares | link clicks | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
 | YouTube | views | likes | comments | | | |
 | Newsletter | opens | | | | clicks | delivered |
@@ -51,13 +51,18 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Search Console, Bing | | | | | clicks | impressions |
 | GitHub | | stars | | forks | | |
 
-Left out: Instagram's `saved`, the newsletter's bounces and unsubscribes, the blog's per-source and
-per-language split, and GitHub's views, which are a rolling 14-day count rather than a counter.
-Telegram, Discord, LinkedIn and Reddit read no per-post numbers.
+Instagram's views and shares include its story's while Meta keeps them (24 hours). Its `reach` is
+unique accounts, not impressions (Meta retired those in 2025), so it is no family's.
+
+Left out: Instagram's `saved`, `reach`, total interactions, follows, profile visits, a Reel's watch
+time, skip rate and Facebook views, and a story's navigation; the newsletter's bounces and
+unsubscribes, the blog's per-source and per-language split, and GitHub's views, which are a rolling
+14-day count rather than a counter. Telegram, Discord, LinkedIn and Reddit read no per-post numbers.
 
 **Counters.** A counter is listed from the posts and launches, not from the readings, and is one of:
 
-- `p:<post>`: one piece (a post, a video or a newsletter issue), with its account;
+- `p:<post>`: one piece (a post, a video, a newsletter issue or an Instagram story), with its
+  account; a story is a row of its own in the ranking by post;
 - `l:<launch>:<source>`: a launch's site-level source (blog visits, Search Console, Bing), with no account;
 - `r:<repo>`: GitHub. Every launch of a repo reads the same repo, so its launches are one counter,
   attributed to the repo's newest launch.
@@ -173,10 +178,12 @@ day carried over, a dip that takes nothing away, a later period starting where t
 weeks from Monday, two networks of very different scales ranking sensibly, a network with no activity
 left unranked, comparison deltas, the filters, ascending order and paging, GitHub counted once per
 repo, old launch-wide newsletter readings not counted twice, series labels and `other`, and account
-growth across a missed day. `apps/web/test/stats-api.test.ts` covers the scopes, the parameters, the
-400s and 404, and the OpenAPI document. On 2026-10-25 the functions ran against a copy of the live
-registry restored into a throwaway Postgres 17. `apps/web/test/stats-search.test.ts` and
-`apps/web/test/stats-server.test.ts` cover the address, the search tab's input and what it lists.
+growth across a missed day. `packages/engine/test/story-metrics.test.ts` covers an Instagram story
+read while it lasts, counted with the post and ranked on its own. `apps/web/test/stats-api.test.ts`
+covers the scopes, the parameters, the 400s and 404, and the OpenAPI document. On 2026-10-25 the
+functions ran against a copy of the live registry restored into a throwaway Postgres 17.
+`apps/web/test/stats-search.test.ts` and `apps/web/test/stats-server.test.ts` cover the address, the
+search tab's input and what it lists.
 
 ## Related
 

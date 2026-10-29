@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T16:45:26.218673085Z
+updated_at: 2026-10-29T19:18:30.125539798Z
 tags:
     - publishing
     - connectors
@@ -321,16 +321,19 @@ longer read.
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue, added up | Brevo's campaign statistics |
 | `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram`, `threads`, `githubDiscussions`, `youtube` | views, reactions, comments, likes, reposts, reach… per post | each adapter's metric reader; batch-first (Bluesky 25 posts a call, YouTube 50) |
+| `instagram` | per type: every post views, reach, likes, comments, saved, shares, reposts, total interactions; a feed post or carousel also follows, profile visits, `profile_activity` and `bio_link_clicks`; a Reel `avg_watch_ms`, `skip_rate` and, when shared to Facebook, `facebook_views`; a story views, reach, shares, reposts, total interactions, follows, profile visits and its navigation (`taps_forward`, `taps_back`, `exits`, `swipes_forward`) | Instagram's media insights; the type from `media_type`, kept a month |
+| `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
 | `blog` | each language's article visits and their sum, and by referrer | Cloudflare Web Analytics' GraphQL API, the paths in one query |
 | `search` | clicks and impressions; Google's URL inspection | Search Console (service account JWT) |
 | `bing` | clicks, impressions, crawl state | Bing Webmaster |
 | `github` | stars, forks, watchers; views and unique visitors of the last 14 days | GitHub REST (`repoStats`), once per repo |
 
-Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind)` in
-`packages/schema/src/channels/registry.ts`: a post, each newsletter issue, and a channel's own pieces
-where its definition has metrics (each of YouTube's videos); never Instagram's story or comment, and
-the blog per article URL rather than per piece. The metrics rounds and the freshness check
-([measurement.md](measurement.md#the-checks)) both use it.
+Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind, age)` in
+`packages/schema/src/channels/registry.ts`: a post, each newsletter issue, a channel's own pieces
+where its definition has metrics (each of YouTube's videos), and a piece whose numbers the network
+keeps only a while (`metrics.expiring` on its definition: Instagram's story, 24 hours) while it
+keeps them; never a comment, and the blog per article URL rather than per piece. The metrics rounds
+and the freshness check ([measurement.md](measurement.md#the-checks)) both use it.
 
 **Two schedules**, by the `batched-metrics` flag:
 
@@ -342,6 +345,14 @@ the blog per article URL rather than per piece. The metrics rounds and the fresh
   Search Console analytics and Bing daily; URL inspection daily until indexed, then weekly, and never
   past 90 days). A value read again unchanged moves its reading's `checked_at` instead of adding a
   row. Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).
+
+**An Instagram story's last read.** Meta keeps a story's insights for its 24 hours only, and the
+hourly reads land anywhere in its last hour, so each publish queues a `metrics` job for the story
+alone 23 h 30 min after it went out (`armLastReads`, keyed `last-read:<post>`), which reads it
+whether due or not and nothing else. A story fewer than five accounts saw answers Meta's `#10`:
+it has no numbers yet, which is neither a failure nor stale. A secondary call that fails (a
+Reel's Facebook views when it was not shared there, a breakdown) leaves the rest of the reading;
+Threads' link clicks failing is said in the run's problems while the posts' own numbers count.
 
 Telegram, Discord and LinkedIn give no numbers back; Reddit's per-post numbers are not read. The
 per-post numbers, scored per network ([stats.md](stats.md)), are also what the recommended

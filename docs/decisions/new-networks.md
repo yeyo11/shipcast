@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T07:03:34.508871045Z
-updated_at: 2026-10-26T07:03:34.508871045Z
+updated_at: 2026-10-29T19:15:18.134030922Z
 tags:
     - decision
     - connectors
@@ -20,7 +20,7 @@ Discussions, Threads, and LinkedIn on the personal profile. YouTube waits until 
 | Network | Publishes | Edit | Delete | Numbers | Comments | Account |
 | --- | --- | --- | --- | --- | --- | --- |
 | GitHub Discussions | A discussion in the launched repo: title and Markdown body, in English, linking the article | Yes: title and body | Yes, with its comments | Reactions and comments | Read and answered on approval | None to connect: the [GitHub App](github-app.md)'s installation token, which has Discussions: write |
-| Threads | A post with the launch image and its text (at most 500 characters, an emoji counting as its UTF-8 bytes), linking the article | No: the Threads API has none | Yes (`threads_delete`, at most 100 a day) | Views, likes, replies and reposts (`threads_manage_insights`) | Read and answered on approval (`threads_read_replies`, `threads_manage_replies`) | OAuth through the owner's Meta app (its Threads use case); a 60-day token renewed every 30 days, as Instagram's |
+| Threads | A post with the launch image and its text (at most 500 characters, an emoji counting as its UTF-8 bytes), linking the article | No: the Threads API has none | Yes (`threads_delete`, at most 100 a day) | Views, likes, replies and reposts, link clicks per address and the profile's views (`threads_manage_insights`) | Read and answered on approval (`threads_read_replies`, `threads_manage_replies`) | OAuth through the owner's Meta app (its Threads use case); a 60-day token renewed every 30 days, as Instagram's |
 | LinkedIn | A post on the owner's personal profile sharing the article (at most 1,300 characters), its thumbnail uploaded first | No | Yes | None | None | OAuth with "Sign In with LinkedIn using OpenID Connect" and "Share on LinkedIn" (`openid profile w_member_social`); a 60-day token, connected again when it runs out |
 
 - **GitHub Discussions** posts in the repo's **Announcements** category (only maintainers can post

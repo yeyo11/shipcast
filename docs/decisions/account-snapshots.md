@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T15:45:36.169960691Z
-updated_at: 2026-10-25T15:45:36.169960691Z
+updated_at: 2026-10-29T19:15:38.175864578Z
 tags:
     - decision
     - accounts
@@ -54,6 +54,13 @@ the number down every day from the day the account is connected. A day missed is
 | Brevo, Cloudflare, Search Console, Bing | none | — | — | — |
 
 The networks without counts are still checked every day; they get no snapshot row.
+
+Since 2026-10-29 Instagram's and Threads' rows also keep the account's own insights in `extra`:
+Instagram's of the last 24 hours (`period=day`, `total_value`: views, reach, accounts engaged,
+interactions, link taps, and from 100 followers follows and unfollows), Threads' profile views of
+the day before. They are what a launch's sum cannot show: everything the account got, its
+stories and hand-made posts included. An insight the network refuses is named in the sync's line
+and never fails the counts.
 
 ## No address that carries a credential
 

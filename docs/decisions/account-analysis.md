@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T17:44:13.484856655Z
-updated_at: 2026-10-27T17:44:13.484856655Z
+updated_at: 2026-10-29T19:16:05.412863839Z
 tags:
     - decision
     - accounts
@@ -55,7 +55,9 @@ networks whose API allows it, and proposals to copy everywhere else.
 | Telegram | `getChat`, and the bot's `getChatMember` (`can_change_info`) | `setChatTitle`, `setChatDescription` | title, description | 128 and 255 characters |
 | dev.to | `/users/me` | no (Forem's API cannot) | — | bio 200 |
 | Hashnode | `me { name bio tagline socialMediaLinks }` | no mutation | — | — |
-| Instagram, Threads, LinkedIn, Reddit | no: the owner pastes the profile | no | — | Instagram name 30, bio 150; Threads bio 150; LinkedIn About 2600; Reddit 30 and 200 |
+| Instagram | yes: name, bio, website and picture (`instagram_business_basic`); the other links pasted | no | — | name 30, bio 150, five links |
+| Threads | yes: name, bio and picture (`threads_basic`); the links pasted | no | — | bio 150 |
+| LinkedIn, Reddit | no: the owner pastes the profile | no | — | LinkedIn About 2600; Reddit 30 and 200 |
 
 Networks that are no profile (Brevo, Discord's webhook, the measurement sources, the AI providers)
 have no review.
@@ -69,6 +71,9 @@ have no review.
   bot's membership, and the page shows the channel as not editable, with what to do, when the bot
   lacks it; the edit says the same if Telegram refuses. A channel's link is its username, which a
   bot cannot change.
+- **A field the API leaves out** of a profile it reads (`profile.paste` on the channel's definition:
+  Instagram's links past the website, Threads' links) may be pasted beside the read; a pasted value
+  replaces the read one, and any other pasted field is ignored.
 
 ## Mastodon's `write:accounts`, without breaking anyone
 
@@ -91,7 +96,7 @@ does not have.
 
 | Part | Where |
 | --- | --- |
-| Connectors | `ProfileReader` and `ProfileEditor` in `packages/connectors/src/http.ts`; `profile()` and `editProfile()` in `mastodon.ts`, `bluesky.ts`, `telegram.ts`; `profile()` in `devto.ts`, `hashnode.ts`; `Built.profile` and `Built.editProfile` in the runtime's catalog |
+| Connectors | `ProfileReader` and `ProfileEditor` in `packages/connectors/src/http.ts`; `profile()` and `editProfile()` in `mastodon.ts`, `bluesky.ts`, `telegram.ts`; `profile()` in `devto.ts`, `hashnode.ts`, `instagram.ts`, `threads.ts`; `Built.profile` and `Built.editProfile` in the runtime's catalog |
 | Engine | `packages/engine/src/profile.ts` (capabilities, limits, `reviewProfile`, `editProfile`, the stored review); the prompt and its locked rules in `prompt.ts` |
 | Runtime | `packages/runtime/src/profiles.ts`: the account's connector built with its own keychain credential, the `profile` task, the job |
 | App | a **Profile review** section on the network's page (`/channels/<network>`), a panel per account (`components/ProfileReview.tsx`); a review's job links back to `/channels/<network>?review=<id>` |
@@ -128,7 +133,10 @@ reflows at 320 px.
 
 ## What waits
 
-- Instagram, Threads, LinkedIn and Reddit cannot be read or edited with Shipcast's scopes: the owner
+- Instagram and Threads are read since 2026-10-29 (their user objects give the bio, which was
+  wrongly thought unreadable), but never edited: their APIs have no profile update. Their links
+  are not all readable (Instagram gives the website alone, Threads none), so those may be pasted.
+- LinkedIn and Reddit cannot be read or edited with Shipcast's scopes: the owner
   pastes the profile and copies the proposals. Hashnode and dev.to are read but not edited.
 - Bluesky's newer profile fields (pronouns, a website) are kept as they are but not reviewed.
 - A Mastodon account connected before 2026-10-27 must be connected again to allow Apply.

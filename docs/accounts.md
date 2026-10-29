@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-10-29T01:10:30.108049487Z
+updated_at: 2026-10-29T19:17:17.240382103Z
 tags:
     - accounts
     - channels
@@ -40,8 +40,8 @@ through its connector ([decisions/automatic-channels-only.md](decisions/automati
 | dev.to | API key | the English article, canonical to the blog | views, reactions, comments |
 | Bluesky | handle and app password | a post with a link card | likes, reposts, replies |
 | Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, replies |
-| Instagram | Instagram Login (OAuth) | carousel, story, comment | reach, interactions |
-| Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts |
+| Instagram | Instagram Login (OAuth) | carousel, story, comment | views, reach and interactions of posts and stories; the account's last day; the profile |
+| Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts, link clicks; the profile's views; the profile |
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
 | Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | followers, karma |
 | YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; the channel's numbers |
@@ -118,6 +118,10 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
   following and posts and an `extra` map. The daily `snapshots` job (04:00 UTC) runs
   `takeSnapshots`: every account of a known brand is checked again and, where its network counts,
   gets the day's row in `account_snapshots`. One account failing never stops the others.
+  Instagram's `extra` holds the account's insights of the last 24 hours (`views1d`, `reach1d`,
+  `accountsEngaged1d`, `interactions1d`, `linkTaps1d`, and from 100 followers `follows1d` and
+  `unfollows1d`); Threads' the profile's views of the day before (`profileViews1d`). An insight
+  the network refuses is named in the sync's line and never fails the counts.
   `shipcast sync [<account id>]` runs the same job from the terminal.
 - **Freshness.** Each account shows its latest numbers and when it was last synced (`lastSynced`),
   with a warning once that is more than 36 hours old (`isStale`).
@@ -138,9 +142,11 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
   where the network and the credential allow it, **Apply**, which asks before it changes the real
   profile.
 - **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description,
-  guarded by `swapRecord`) and a Telegram channel (title and description). dev.to and Hashnode are
-  read but not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their
-  profile for a review and copies the proposals.
+  guarded by `swapRecord`) and a Telegram channel (title and description). dev.to, Hashnode,
+  Instagram (name, bio, website, picture) and Threads (name, bio, picture) are read but not edited;
+  the links Instagram's and Threads' APIs leave out may be pasted beside the read (`profile.paste`).
+  LinkedIn and Reddit are neither, so the owner pastes their profile for a review and copies the
+  proposals.
 
 ## The secret store
 
