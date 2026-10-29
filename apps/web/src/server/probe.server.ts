@@ -21,6 +21,8 @@ const IDLE_MS = 30_000;
  * then left open, untouched, for half a minute, and the requests it makes meanwhile are recorded as
  * the `idle-tab-requests` check (per minute, the worst page).
  * `SHIPCAST_PROBE_PAGES=/,/launches/6` names the pages; `off` turns the probe off.
+ * `SHIPCAST_PROBE_TARGET` is the process that answers them, by default this one: in a split the probe
+ * runs on `heavy` (it needs Chromium) and the pages are the web process's (`http://web:8744`).
  */
 export async function probePages(ctx: AppContext, job: JobContext): Promise<void> {
   const setting = process.env.SHIPCAST_PROBE_PAGES?.trim();
@@ -30,7 +32,7 @@ export async function probePages(ctx: AppContext, job: JobContext): Promise<void
   }
   const pages = setting ? setting.split(',').map((p) => p.trim()).filter((p) => p.startsWith('/')) : DEFAULT_PAGES;
   const origin = new URL(ctx.app.publicUrl).origin;
-  const inside = `http://127.0.0.1:${ctx.app.port}`;
+  const inside = process.env.SHIPCAST_PROBE_TARGET?.trim().replace(/\/+$/, '') || `http://127.0.0.1:${ctx.app.port}`;
   const session = await createSession(ctx.secrets, 'shipcast-probe');
   const idle: Record<string, number> = {};
 
