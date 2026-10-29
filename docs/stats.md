@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T16:39:48.121797373Z
-updated_at: 2026-10-29T01:08:43.450692641Z
+updated_at: 2026-10-29T19:50:02.81958294Z
 tags:
     - stats
     - metrics
@@ -45,15 +45,24 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Instagram | views | likes | comments | shares | | reach |
 | Threads | views | likes | replies | reposts + quotes + shares | | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
-| YouTube | views | likes | comments | | | |
+| YouTube | views | likes | comments | shares (YouTube Analytics, daily) | | |
 | Newsletter | opens | | | | clicks | delivered |
 | Blog | views | | | | | |
 | Search Console, Bing | | | | | clicks | impressions |
 | GitHub | | stars | | forks | | |
 
-Left out: Instagram's `saved`, the newsletter's bounces and unsubscribes, the blog's per-source and
-per-language split, and GitHub's views, which are a rolling 14-day count rather than a counter.
-Telegram, Discord, LinkedIn and Reddit read no per-post numbers.
+Left out: Instagram's `saved`, the newsletter's bounces and unsubscribes, the blog's `visits` and its
+per-source and per-language split, GitHub's views (a rolling 14-day count rather than a counter),
+YouTube Analytics' `engagedViews`, `watchMinutes` and `subscribersGained`, dev.to's `saves` and
+per-referrer views, and the search engines' `ctr` and `position`. Telegram, Discord, LinkedIn and
+Reddit read no per-post numbers.
+
+**Readings that are not counters.** A few names are averages or ratios, kept as read and never to be
+summed or differenced: YouTube's `avgViewSeconds` and `avgViewPercent` (per video), dev.to's
+`avgReadSeconds` (per article), and the search engines' `ctr` and `position` (per launch, already
+combined over the languages: `position` weighted by impressions). A launch's `latestMetrics` adds a
+name up over its pieces, which is right for counters only; none of these is in a family, so no chart
+or score reads them yet.
 
 **Counters.** A counter is listed from the posts and launches, not from the readings, and is one of:
 
@@ -180,4 +189,4 @@ registry restored into a throwaway Postgres 17. `apps/web/test/stats-search.test
 
 ## Related
 
-[[api.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]]
+[[api.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[decisions/youtube.md]] · [[tracking.md]]

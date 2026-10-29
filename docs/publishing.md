@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T16:45:26.218673085Z
+updated_at: 2026-10-29T19:53:14.951580184Z
 tags:
     - publishing
     - connectors
@@ -205,10 +205,12 @@ Added on 2026-10-28 as the first network built on the channel modules
 `packages/assets/src/youtube.ts`) from the pack's `youtube` piece: scenes (`card`, `demo`,
 `screenshot`, `cover`) with subtitles burned in and uploaded as an SRT caption track; no voice. Each
 video is its own piece (`post:short`, `post:video`). The upload is resumable and its session's POST is
-never repeated; captions and the thumbnail are extras that never undo a video. The quota (10,000
-units a day; an upload costs 1,600) is checked before an upload starts. Each upload asks for
-`public`; the first two (the Sluice article's, 2026-10-29) came out public although the API project
-is not audited. Should Google keep one `private`, the video is still recorded as published and a
+never repeated; captions and the thumbnail are extras that never undo a video. The quota is checked
+before an upload starts: since 2026-06-01 an upload is one of **100 a day in a bucket of its own**,
+and its captions (400 units each) and thumbnail (50) come out of the project's 10,000 units a day
+(until 2026-10-29 the code charged an upload 1,600 of those units, Google's figure before
+2025-12-04). Each upload asks for `public`, and Google no longer forces an unverified project's uploads
+to private; should one come back `private` anyway, the video is still recorded as published and a
 `youtube-privacy:<postId>` cursor notes "private until Google audits the project": a fallback, not a
 failure ([decisions/youtube.md](decisions/youtube.md#privacy-and-googles-audit)). Not schedulable.
 
@@ -321,9 +323,11 @@ longer read.
 | --- | --- | --- |
 | `newsletter` | sent, delivered, opens, clicks, unsubscribes, bounces, complaints per issue, added up | Brevo's campaign statistics |
 | `devto`, `hashnode`, `bluesky`, `mastodon`, `instagram`, `threads`, `githubDiscussions`, `youtube` | views, reactions, comments, likes, reposts, reach… per post | each adapter's metric reader; batch-first (Bluesky 25 posts a call, YouTube 50) |
-| `blog` | each language's article visits and their sum, and by referrer | Cloudflare Web Analytics' GraphQL API, the paths in one query |
-| `search` | clicks and impressions; Google's URL inspection | Search Console (service account JWT) |
-| `bing` | clicks, impressions, crawl state | Bing Webmaster |
+| `youtube` (analytics, daily) | `engagedViews`, `watchMinutes`, `avgViewSeconds`, `avgViewPercent`, `shares`, `subscribersGained` per video | the YouTube Analytics API, one report per video |
+| `devto` (analytics, daily) | `saves`, `avgReadSeconds`, and views by referrer (`views_<source>`) per article | Forem's `/api/analytics/totals` and `/referrers`, with the same API key |
+| `blog` | each language's article page views and their sum, `visits`, and page views by source (`views_<source>`) | Cloudflare Web Analytics' GraphQL API, the paths in one query, grouped by referrer host and path |
+| `search` | clicks, impressions, `ctr`, `position`; Google's URL inspection with its canonical | Search Console (service account JWT) |
+| `bing` | clicks, impressions, `ctr`, crawl state | Bing Webmaster (over a window Bing does not document: [search-indexing.md](search-indexing.md#bing)) |
 | `github` | stars, forks, watchers; views and unique visitors of the last 14 days | GitHub REST (`repoStats`), once per repo |
 
 Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind)` in
@@ -343,13 +347,37 @@ the blog per article URL rather than per piece. The metrics rounds and the fresh
   past 90 days). A value read again unchanged moves its reading's `checked_at` instead of adding a
   row. Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).
 
+**Analytics on their own cadence** (2026-10-29, `collectHourly` only). A channel whose network has a
+slower API apart from its counters declares `metrics.analytics` (a cadence) on its definition, and its
+adapter's metric reader an `analytics(pieces, until)`: YouTube (the YouTube Analytics API, whose
+numbers lag 48 to 72 hours) and dev.to (Forem's analytics, two calls an article under a limit of three
+a second), both daily. Every live piece of the channel is read at once, from its launch's day to
+today, and kept on the piece beside its counters. The `metrics-read:analytics:<channel>` cursor
+records when they were asked for, answered or not, so a refusal is said once a day, never hourly:
+a YouTube connection made before `yt-analytics.readonly` was asked for is one problem of the run
+("connect YouTube again"), and the hourly counters are read as before. Averages (`avgViewSeconds`,
+`avgViewPercent`, `avgReadSeconds`, and the search `position` and `ctr`) are not counters: a launch's
+sum of them means nothing ([stats.md](stats.md)).
+
+**Where a visit came from.** The blog's and dev.to's sources are named by `sourceOfReferrer` in
+`packages/schema/src/tracking.ts`: each channel by its hosts (LinkedIn, Threads, YouTube, Hashnode,
+Telegram, Discord, Bluesky, dev.to, Instagram, Reddit, mastodon.social), GitHub, `x`, `hackernews`,
+`facebook`, `search`, `direct` and `other`; a GitHub referrer in a repo's `/discussions/` is
+`githubDiscussions` (Cloudflare's `refererPath`) ([tracking.md](tracking.md#the-other-half-where-a-visit-came-from)).
+
+**Search engines.** The languages' clicks and impressions are summed, the CTR is that of the sum, and
+the position is weighted by impressions (`searchValues`). Each article's Google-selected canonical is
+read with its inspection; a page Google files under another URL is a line in the bell until Google
+agrees again ([search-indexing.md](search-indexing.md#google)).
+
 Telegram, Discord and LinkedIn give no numbers back; Reddit's per-post numbers are not read. The
 per-post numbers, scored per network ([stats.md](stats.md)), are also what the recommended
 publishing times learn from ([scheduling.md](scheduling.md#recommended-times)).
 
 Two limits: **Cloudflare Web Analytics does not keep the query string**, so visits are attributed by
-the referrer's host (Mastodon's many hosts count as `other`) and the UTM tags the links carry
-([tracking.md](tracking.md)) wait for an analytics tool that reads them; **GitHub traffic needs push
+the referrer (Mastodon's many hosts count as `other`, and an app that strips the referrer as
+`direct`), and the UTM tags the links carry ([tracking.md](tracking.md)) wait for a source that reads
+them (zone HTTP analytics or the blog's Worker, an owner decision); **GitHub traffic needs push
 access**, so without a connected GitHub account only the public numbers are recorded.
 
 ## The rounds and the shipcast command
@@ -374,4 +402,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[search-indexing.md]]

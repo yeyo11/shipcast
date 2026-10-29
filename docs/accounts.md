@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-10-29T01:10:30.108049487Z
+updated_at: 2026-10-29T19:51:46.485139631Z
 tags:
     - accounts
     - channels
@@ -37,20 +37,20 @@ through its connector ([decisions/automatic-channels-only.md](decisions/automati
 
 | Network | Connected with | Publishes | Reads |
 | --- | --- | --- | --- |
-| dev.to | API key | the English article, canonical to the blog | views, reactions, comments |
+| dev.to | API key | the English article, canonical to the blog | views, reactions, comments; daily, saves, read time and referrers (Forem's analytics) |
 | Bluesky | handle and app password | a post with a link card | likes, reposts, replies |
 | Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, replies |
 | Instagram | Instagram Login (OAuth) | carousel, story, comment | reach, interactions |
 | Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts |
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
 | Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | followers, karma |
-| YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; the channel's numbers |
+| YouTube | OAuth with the owner's Google client | a Short and a horizontal video | views, likes, comments; daily, watch time, engaged views, shares (YouTube Analytics); the channel's numbers and profile |
 | Newsletter (Brevo) | API key | one campaign per language | sends, opens, clicks |
 | Hashnode | personal access token, publication host | the English article, canonical to the blog | views, reactions, comments |
 | Telegram | bot token, channel, owner's chat | a post with the launch image | — (the Bot API gives bots no counts) |
 | Discord | webhook URL | a message with an embed | — (webhooks cannot read) |
-| Blog analytics (Cloudflare) | API token, account id, site tag | — | visits by source |
-| Google Search Console | service account JSON key | — | clicks, impressions, URL inspection |
+| Blog analytics (Cloudflare) | API token, account id, site tag | — | page views and visits, by source |
+| Google Search Console | service account JSON key | — | clicks, impressions, CTR, position, URL inspection with the canonical |
 | Bing Webmaster | API key | — | clicks, impressions, crawl state |
 | Anthropic API, OpenAI-compatible server | API key; base URL and model | — | — (AI providers) |
 
@@ -118,7 +118,9 @@ Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshot
   following and posts and an `extra` map. The daily `snapshots` job (04:00 UTC) runs
   `takeSnapshots`: every account of a known brand is checked again and, where its network counts,
   gets the day's row in `account_snapshots`. One account failing never stops the others.
-  `shipcast sync [<account id>]` runs the same job from the terminal.
+  `shipcast sync [<account id>]` runs the same job from the terminal. dev.to's followers are
+  `/users/me`'s `followers_count` since 2026-10-29 (its articles are still counted by paging their
+  list; an instance without the field still pages its followers).
 - **Freshness.** Each account shows its latest numbers and when it was last synced (`lastSynced`),
   with a warning once that is more than 36 hours old (`isStale`).
 - **Sync now.** A button per account sends a `snapshots` job for that account alone (keyed
@@ -138,9 +140,13 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
   where the network and the credential allow it, **Apply**, which asks before it changes the real
   profile.
 - **Edits** reach Mastodon (name, bio, fields; `write:accounts`), Bluesky (name and description,
-  guarded by `swapRecord`) and a Telegram channel (title and description). dev.to and Hashnode are
-  read but not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their
-  profile for a review and copies the proposals.
+  guarded by `swapRecord`), a Telegram channel (title and description) and, since 2026-10-29, a
+  YouTube channel: its description as the bio, and its keywords, country and trailer as the links
+  `Keywords: …`, `Country: ES`, `Trailer: <video>`, through `brandingSettings` with the
+  `youtube.force-ssl` scope it already had (its name, picture and banner stay YouTube Studio's;
+  [decisions/youtube.md](decisions/youtube.md#the-channels-profile)). dev.to and Hashnode are read but
+  not edited; Instagram, Threads, LinkedIn and Reddit are neither, so the owner pastes their profile
+  for a review and copies the proposals.
 
 ## The secret store
 
@@ -182,8 +188,12 @@ spec says its URLs, scopes and app, and the routes under `/auth/<network>` run t
   set to `/auth/reddit/callback`. It asks for `identity submit read` with `duration=permanent`
   ([publishing.md](publishing.md#reddit)).
 - **YouTube** needs the owner's Google OAuth client in Settings; scopes `youtube.upload`,
-  `youtube.readonly`, `youtube.force-ssl`. With the consent screen in *Testing*, a refresh token lasts
-  7 days, and an expired one asks to connect YouTube again ([decisions/youtube.md](decisions/youtube.md)).
+  `youtube.readonly`, `youtube.force-ssl` and, since 2026-10-29, `yt-analytics.readonly` (with the
+  YouTube Analytics API on in the project). An account connected before that keeps publishing and
+  reading its counters; it is **connected again once** to read its analytics, which say so in the
+  metrics run until then. With the consent screen in *Testing*, a refresh token lasts 7 days, and an
+  expired one asks to connect YouTube again; the connection's instructions say to publish it
+  ([decisions/youtube.md](decisions/youtube.md)).
 - **The owner's GitHub user token** is refreshed under a lock shared by every process; inside it the
   token is read again and refreshed only if still due, so two replicas never spend the same refresh
   token and never delete the good one.
