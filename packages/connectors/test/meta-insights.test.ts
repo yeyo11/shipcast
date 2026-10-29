@@ -175,7 +175,7 @@ test('an Instagram story reads its set and its navigation apart; under five view
           () => {
             if (viewers < 5) return Response.json({ error: { message: '(#10) Not enough viewers for the media to show insights', type: 'OAuthException', code: 10 } }, { status: 400 });
             return metric(calls.at(-1)!.url) === 'navigation'
-              ? Response.json({ data: [broken('navigation', { TAP_FORWARD: 20, TAP_BACK: 2, TAP_EXIT: 5 })] })
+              ? Response.json({ data: [broken('navigation', { tap_forward: 20, TAP_BACK: 2, TAP_EXIT: 5 })] })
               : Response.json({ data: [insight('views', 60), insight('reach', 40), insight('shares', 1), insight('profile_visits', 3)] });
           },
         ],
@@ -312,6 +312,7 @@ test('the Threads snapshot adds yesterday’s profile views, and the profile is 
   const threads = new Threads({
     userId: '42',
     accessToken: 't',
+    now: () => new Date('2026-10-29T10:00:00Z'),
     fetch: fakeFetch(
       [
         [`GET ${T}/42/threads_insights?metric=followers_count`, () => Response.json({ data: [{ name: 'followers_count', total_value: { value: 80 } }] })],
@@ -323,8 +324,10 @@ test('the Threads snapshot adds yesterday’s profile views, and the profile is 
   });
   assert.deepEqual(await threads.profileStats(), { followers: 80, extra: { profileViews1d: 12 } });
   const asked = new URL(calls.at(-1)!.url).searchParams;
-  assert.equal(Number(asked.get('until')) - Number(asked.get('since')), 86_400);
-  assert.equal(Number(asked.get('until')) % 86_400, 0, 'a whole UTC day');
+  // Meta's insights day is Pacific: the window is yesterday there, 00:00 to 00:00 PDT (07:00 UTC),
+  // so its one daily value is neither split nor doubled
+  assert.equal(Number(asked.get('since')), Date.parse('2026-10-28T07:00:00Z') / 1000);
+  assert.equal(Number(asked.get('until')), Date.parse('2026-10-29T07:00:00Z') / 1000);
 
   views = () => new Response('{"error":{"message":"denied"}}', { status: 403 });
   const refused = await threads.profileStats();

@@ -39,6 +39,23 @@ export interface ThreadsOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Where the account's username is kept between runs */
   cache?: IdentityCache;
+  now?: () => Date;
+}
+
+/**
+ * The start of the Pacific day `at` falls in, in Unix seconds: Meta's insights day, which a daily
+ * value's `end_time` closes (07:00 or 08:00 UTC). Uses the offset at `at`, so on the two days a year
+ * the clocks change it is an hour off, which moves a few views between two days, never doubles them.
+ */
+function pacificMidnight(at: Date): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(at)
+      .map((p) => [p.type, Number(p.value)]),
+  ) as Record<string, number>;
+  const wall = Date.UTC(parts.year!, parts.month! - 1, parts.day!, parts.hour!, parts.minute!, parts.second!);
+  const offset = wall - Math.floor(at.getTime() / 1000) * 1000;
+  return (Date.UTC(parts.year!, parts.month! - 1, parts.day!) - offset) / 1000;
 }
 
 /** Meta moved Threads to threads.com in 2025; its API docs use this host now */
@@ -84,6 +101,7 @@ export class Threads implements Deletable, CommentReader, Replier {
   readonly #pollMs: number;
   readonly #timeoutMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
+  readonly #now: () => Date;
   #username: Promise<string> | undefined;
   readonly #cache: IdentityCache | undefined;
 
@@ -96,6 +114,7 @@ export class Threads implements Deletable, CommentReader, Replier {
     this.#pollMs = options.pollMs ?? 5_000;
     this.#timeoutMs = options.timeoutMs ?? 5 * 60_000;
     this.#sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.#now = options.now ?? (() => new Date());
   }
 
   async #post<T>(path: string, params: Record<string, string>, what: string): Promise<T> {
@@ -288,13 +307,14 @@ export class Threads implements Deletable, CommentReader, Replier {
   }
 
   /**
-   * Followers, and how often the profile was viewed the day before (UTC). The Threads API counts
-   * neither the accounts followed nor the posts. The views failing is said, never fails the count.
+   * Followers, and how often the profile was viewed the day before, as Meta's insights days go
+   * (Pacific time): a UTC day would straddle two of Meta's daily values and add both. The Threads API
+   * counts neither the accounts followed nor the posts. The views failing is said, never fails the count.
    */
   async profileStats(): Promise<ProfileStats> {
     const { data } = await this.#get<{ data: Array<{ name: string; total_value?: { value: number } }> }>(`/${this.#user}/threads_insights`, { metric: 'followers_count' }, 'read the profile');
     const followers = data.find((m) => m.name === 'followers_count')?.total_value?.value;
-    const today = Math.floor(Date.now() / 1000 / DAY_SECONDS) * DAY_SECONDS;
+    const today = pacificMidnight(this.#now());
     try {
       const views = await this.#get<{ data: Array<{ name: string; values?: Array<{ value: number }> }> }>(
         `/${this.#user}/threads_insights`,

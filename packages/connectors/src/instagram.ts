@@ -290,7 +290,8 @@ export class Instagram implements CommentReader, Replier {
     const [metric] = await this.#insights(id, params, what);
     const by: Record<string, number> = {};
     for (const r of metric?.total_value?.breakdowns?.[0]?.results ?? []) {
-      const key = r.dimension_values?.[0];
+      // Meta documents these values in capitals but has answered some in lower case: one case for every lookup
+      const key = r.dimension_values?.[0]?.toUpperCase();
       if (key) by[key] = (by[key] ?? 0) + r.value;
     }
     return { total: metric ? valueOf(metric) : 0, by };
