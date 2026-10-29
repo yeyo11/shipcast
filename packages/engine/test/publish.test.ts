@@ -167,10 +167,11 @@ test('the newsletter sends one campaign per language with the edited issue, and 
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const sends: Array<{ listId: number; subject: string; previewText: string; html: string }> = [];
+  const tracked: unknown[] = [];
   const publishers: Publishers = {
     newsletter: {
       subscribers: async (listId) => (listId === 3 ? 12 : 0),
-      send: async (c) => (sends.push(c), { externalId: '901', url: 'https://app.brevo.com/marketing-campaign/report/901' }),
+      send: async (c, tracking) => (sends.push(c), tracked.push(tracking), { externalId: '901', url: 'https://app.brevo.com/marketing-campaign/report/901' }),
     },
   };
   const result = await publishLaunch(launch, withNewsletter, { github: gh('merged', files), registry, launchesRepo: 'yeyo11/launches', publishers, fetch: site(true) });
@@ -180,7 +181,8 @@ test('the newsletter sends one campaign per language with the edited issue, and 
   assert.equal(sends[0]!.subject, 'Edited subject');
   assert.equal(sends[0]!.previewText, 'Edited preview');
   assert.match(sends[0]!.html, /Edited <strong>issue<\/strong>\./);
-  assert.match(sends[0]!.html, /https:\/\/josegarrido\.dev\/en\/claudio\/\?ref=newsletter/);
+  assert.match(sends[0]!.html, /https:\/\/josegarrido\.dev\/en\/claudio\/\?ref=newsletter/, 'the adapter tags it: the engine hands it the tracking');
+  assert.deepEqual(tracked, [{ site: 'https://josegarrido.dev', campaign: 'claudio-v0-8-2', lang: 'en' }], 'the release’s campaign and the issue’s language');
   assert.match(sends[0]!.html, /\{\{ unsubscribe \}\}/);
   assert.ok(result.state === 'partial' || result.state === 'published');
   assert.deepEqual(

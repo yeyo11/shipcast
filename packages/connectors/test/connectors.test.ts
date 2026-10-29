@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Bluesky, Brevo, ConnectorError, Devto, Instagram, linkFacets, Mastodon } from '../src/index.ts';
+import { Bluesky, Brevo, ConnectorError, Devto, Instagram, linkFacets, Mastodon, richText } from '../src/index.ts';
 import { fakeFetch, sequence, type Call } from './fake.ts';
 
 test('dev.to publishes the article as published, tagged, with the blog as canonical URL', async () => {
@@ -64,6 +64,19 @@ test('Bluesky link facets count UTF-8 bytes, so accents and emoji before a link 
   assert.deepEqual(facet!.features, [{ $type: 'app.bsky.richtext.facet#link', uri: linked }]);
 });
 
+test('Bluesky shows a link without its query while its facet keeps it whole: the tags cost no graphemes', () => {
+  const tagged = 'https://josegarrido.dev/es/claudio/?utm_source=bluesky&utm_medium=social&utm_campaign=claudio-v1-0-0';
+  const { text, facets } = richText(`Lanzado 🚀 claudio: ${tagged}. Y https://github.com/yeyo11/claudio`);
+  assert.equal(text, 'Lanzado 🚀 claudio: https://josegarrido.dev/es/claudio/. Y https://github.com/yeyo11/claudio');
+  const bytes = new TextEncoder().encode(text);
+  const shown = facets.map((f) => new TextDecoder().decode(bytes.slice(f.index.byteStart, f.index.byteEnd)));
+  assert.deepEqual(shown, ['https://josegarrido.dev/es/claudio/', 'https://github.com/yeyo11/claudio'], 'each facet covers the link as shown');
+  assert.deepEqual(
+    facets.map((f) => f.features),
+    [[{ $type: 'app.bsky.richtext.facet#link', uri: tagged }], [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://github.com/yeyo11/claudio' }]],
+  );
+});
+
 test('Bluesky logs in once, uploads the card image and posts with facets, language and card', async () => {
   const calls: Call[] = [];
   const bluesky = new Bluesky({
@@ -86,7 +99,8 @@ test('Bluesky logs in once, uploads the card image and posts with facets, langua
   assert.deepEqual(published, { externalId: 'at://did:plc:abc/app.bsky.feed.post/3kxyz', url: 'https://bsky.app/profile/yeyo11.bsky.social/post/3kxyz' });
   const record = JSON.parse(String(calls[2]!.body)) as { repo: string; record: { text: string; langs: string[]; facets: unknown[]; embed: { external: { uri: string; thumb: unknown } } } };
   assert.equal(record.repo, 'did:plc:abc');
-  assert.equal(record.record.text, 'claudio is out https://josegarrido.dev/en/claudio/?ref=bluesky', 'the text as written, its link whole');
+  assert.equal(record.record.text, 'claudio is out https://josegarrido.dev/en/claudio/', 'the link shown without its query');
+  assert.deepEqual((record.record.facets[0] as { features: Array<{ uri: string }> }).features[0]!.uri, 'https://josegarrido.dev/en/claudio/?ref=bluesky', 'the facet keeps the whole link');
   assert.equal(record.record.embed.external.uri, 'https://josegarrido.dev/en/claudio/');
   assert.deepEqual(record.record.langs, ['en']);
   assert.equal(record.record.facets.length, 1);

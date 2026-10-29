@@ -82,6 +82,31 @@ export function linkFacets(text: string): Array<{ index: { byteStart: number; by
 }
 
 /**
+ * A post's text as Bluesky shows it, with its link facets: each link is shown without its query
+ * string while its facet keeps the whole URL, so the UTM tags on a link (docs/tracking.md) cost the
+ * post no graphemes, and a reader sees the address, not the tags.
+ */
+export function richText(text: string): { text: string; facets: ReturnType<typeof linkFacets> } {
+  const encoder = new TextEncoder();
+  const facets: ReturnType<typeof linkFacets> = [];
+  let shown = '';
+  let from = 0;
+  for (const match of text.matchAll(URL_RE)) {
+    const url = match[0].replace(/[.,;:!?]+$/, '');
+    const display = url.split('?')[0]!;
+    shown += text.slice(from, match.index);
+    const byteStart = encoder.encode(shown).length;
+    shown += display;
+    facets.push({
+      index: { byteStart, byteEnd: byteStart + encoder.encode(display).length },
+      features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }],
+    });
+    from = match.index + url.length;
+  }
+  return { text: shown + text.slice(from), facets };
+}
+
+/**
  * Bluesky through the AT Protocol: a session from the handle and an app password, a post record with
  * link facets and a link card, and its counts read from the public AppView, which needs no login.
  */
@@ -144,10 +169,9 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
         collection: 'app.bsky.feed.post',
         record: {
           $type: 'app.bsky.feed.post',
-          text: post.text,
+          ...richText(post.text),
           createdAt: new Date().toISOString(),
           langs: [post.lang],
-          facets: linkFacets(post.text),
           ...(embed ? { embed } : {}),
         },
       }),
