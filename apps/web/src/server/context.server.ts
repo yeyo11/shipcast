@@ -60,7 +60,7 @@ export interface AppContext {
   /** The bootstrap, from `.env` */
   config: Config;
   app: AppConfig;
-  /** Everything else: the launches repo, claudio, the AI budget… read when needed */
+  /** Everything else: the launches repo, claudio, the networks’ apps… read when needed */
   settings: RuntimeSettings;
   registry: Repositories;
   github: GitHubRest;

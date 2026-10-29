@@ -69,9 +69,9 @@ export interface AiRunInput {
   repo?: { name: string; ref: string; hostDir?: string };
   abortSignal?: AbortSignal;
   /**
-   * This run's own ceilings over the task's: the runtime settings' single AI budget
-   * (SHIPCAST_MAX_BUDGET_USD) for the pack, the article and the check. A ceiling the owner set for
-   * the task in the AI settings wins over this one's budget, being the more specific choice.
+   * This run's own ceilings over the task's, for an evaluation or a test. A spend ceiling the owner
+   * set for the task in the AI settings still wins; there is no other budget (the single runtime
+   * one, SHIPCAST_MAX_BUDGET_USD, is gone).
    */
   limits?: Partial<AiTaskLimits>;
   /** Told of every tool call and every model call as they happen: how an evaluation sees a run */

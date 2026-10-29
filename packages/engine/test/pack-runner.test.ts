@@ -43,7 +43,7 @@ const pack = {
   githubDiscussions: { title: 'claudio 0.9', body: 'What shipped. https://josegarrido.dev/en/claudio/?ref=github' },
 };
 
-async function world(ai: Pick<PipelineDeps, 'aiRunner'> & Partial<Pick<PipelineDeps, 'maxBudgetUsd' | 'aiTexts'>>) {
+async function world(ai: Pick<PipelineDeps, 'aiRunner'> & Partial<Pick<PipelineDeps, 'aiTexts'>>) {
   const github = new FakeGitHub({
     files: { 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML },
     latestRelease: { tag: 'v0.9.0', url: 'u' },
@@ -114,11 +114,11 @@ test('pack: a pack that falls short fails the launch with the problems, and Clau
   }
 });
 
-test('pack: the settings’ budget is the run’s, and their tone is the prompt’s', async () => {
+test('pack: the owner’s limit for the pack is the run’s budget, and their tone is the prompt’s', async () => {
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack)) });
   const gh = await fakeGitHubArchives();
   try {
-    const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh), maxBudgetUsd: 2.5, aiTexts: async () => ({ tone: 'Dry and exact.' }) });
+    const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh, [], { pack: 2.5, article: 9 }), aiTexts: async () => ({ tone: 'Dry and exact.' }) });
     assert.equal((await draftLaunch(w.launch, w.brand, w.deps)).ok, true);
     const chat = claudioChats(claudio)[0]!;
     assert.equal(chat.headers['x-claudio-max-budget-usd'], '2.5');

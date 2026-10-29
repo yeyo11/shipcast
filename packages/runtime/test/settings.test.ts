@@ -27,7 +27,7 @@ test('.env is a fallback until a value is saved, and the source of each value is
   const values = await settings.read();
   assert.equal(values.launchesRepo, 'yeyo11/launches');
   assert.deepEqual(settings.claudio(), { url: 'http://localhost:8798', token: 'claudio-token' });
-  assert.equal(values.maxBudgetUsd, 5);
+  assert.equal('maxBudgetUsd' in values, false, 'the old single AI budget is not a setting any more, even left in .env');
   assert.equal(settings.sources().launchesRepo, '.env');
 
   await settings.write({ launchesRepo: 'yeyo11/other', claudioToken: 'fresh' });
@@ -44,11 +44,18 @@ test('.env is a fallback until a value is saved, and the source of each value is
 test('a value that does not pass its check is refused, and nothing of that save is kept', async () => {
   const settings = new RuntimeSettings({ registry: await memoryRegistry(), secrets: new MemoryStore(), env: {} });
   await assert.rejects(settings.write({ claudioUrl: 'http://claudio:8798', launchesRepo: 'launches' }), (e) => e instanceof InvalidSetting && /owner\/name/.test(e.message));
-  await assert.rejects(settings.write({ maxBudgetUsd: '0' }), /positive number/);
   await assert.rejects(settings.write({ claudioUrl: 'claudio' }), /http\(s\)/);
   assert.equal((await settings.read()).claudioUrl, undefined);
-  await settings.write({ maxBudgetUsd: '2.5' });
-  assert.equal(settings.current().maxBudgetUsd, 2.5);
+});
+
+test('an ai-budget-usd row left by the old single AI budget is ignored, and kept', async () => {
+  const registry = await memoryRegistry();
+  await registry.settings.setSetting('ai-budget-usd', 3);
+  const settings = new RuntimeSettings({ registry, secrets: new MemoryStore(), env: { SHIPCAST_MAX_BUDGET_USD: '4' } });
+  const values = await settings.read();
+  assert.equal('maxBudgetUsd' in values, false);
+  await settings.write({ launchesRepo: 'yeyo11/launches' });
+  assert.equal(await registry.settings.setting('ai-budget-usd'), 3, 'no migration deletes it');
 });
 
 test('the one-time import copies what .env holds, once, and never undoes an edit or a clear made in the app', async () => {
@@ -57,10 +64,10 @@ test('the one-time import copies what .env holds, once, and never undoes an edit
   const deps = { registry, secrets, env: { ...OLD_ENV, SHIPCAST_LAUNCHES_REPO: 'not a repo' } };
 
   const first = await importEnvSettings(deps);
-  assert.deepEqual(first.imported, ['SHIPCAST_CLAUDIO_URL', 'SHIPCAST_CLAUDIO_TOKEN', 'SHIPCAST_MAX_BUDGET_USD', 'INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET']);
+  assert.deepEqual(first.imported, ['SHIPCAST_CLAUDIO_URL', 'SHIPCAST_CLAUDIO_TOKEN', 'INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET']);
   assert.deepEqual(first.skipped, ['SHIPCAST_LAUNCHES_REPO'], 'a value the Settings page would refuse stays in .env');
   assert.equal(await registry.settings.setting('claudio-url'), 'http://localhost:8798/');
-  assert.equal(await registry.settings.setting('ai-budget-usd'), 5);
+  assert.equal(await registry.settings.setting('ai-budget-usd'), undefined, 'the old single AI budget is not imported');
   assert.equal(await secrets.get('app:claudio-token'), 'claudio-token');
   assert.equal(await secrets.get('app:instagram-app-secret'), 'ig-secret');
 

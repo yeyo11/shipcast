@@ -169,9 +169,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     get launchesRepo() {
       return settings.current().launchesRepo ?? '';
     },
-    get maxBudgetUsd() {
-      return settings.current().maxBudgetUsd;
-    },
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),

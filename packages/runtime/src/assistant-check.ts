@@ -58,7 +58,6 @@ export async function runAssistantCheck(d: AssistantCheckDeps, data: JobData['as
       brand: d.brand,
       ...(texts.tone && { tone: texts.tone }),
       checkout,
-      ...(d.pipeline.maxBudgetUsd !== undefined && { maxBudgetUsd: d.pipeline.maxBudgetUsd }),
       ...(job.signal && { signal: job.signal }),
     },
   );

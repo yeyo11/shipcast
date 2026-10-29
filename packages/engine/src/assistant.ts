@@ -254,14 +254,14 @@ export class AssistantRefused extends ShipcastError {
 
 /**
  * Checks a launch's text against its released code, worked as a heavy job rather than in a page's
- * request: the check task's turns and ceilings with the settings' budget over them, the released code
+ * request: the check task's turns and ceilings (its budget the owner's for it, or its default), the released code
  * read with the runner's tools over the job's clone or in a remote agent's workspace of the release.
  * Not streamed by nature: the answer is structured. A provider's failure is its AiError, which fails the job.
  */
 export async function checkAgainstCode(
   text: string,
   context: AssistantContext,
-  deps: { runner: AiTaskRunner; brand: Brand; tone?: string; checkout: Checkout; maxBudgetUsd?: number; signal?: AbortSignal },
+  deps: { runner: AiTaskRunner; brand: Brand; tone?: string; checkout: Checkout; signal?: AbortSignal },
 ): Promise<CheckAnswer> {
   if (context.kind !== 'launch' || !context.launch) throw new AssistantRefused('there is no code to check an article against: the article is the truth');
   const { system, prompt } = buildCheckPrompt(text, context, deps.brand, { tone: deps.tone });
@@ -269,7 +269,6 @@ export async function checkAgainstCode(
     system,
     prompt,
     repo: { name: context.launch.repo, ref: launchCodeRef(context.launch), hostDir: deps.checkout.hostPath },
-    ...(deps.maxBudgetUsd !== undefined && { limits: { maxBudgetUsd: deps.maxBudgetUsd } }),
     ...(deps.signal && { abortSignal: deps.signal }),
   });
   return result.output;

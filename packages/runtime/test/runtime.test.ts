@@ -51,10 +51,9 @@ test('the runtime starts with only the bootstrap: what needs a setting says whic
   assert.deepEqual(seen.filter((s) => s.startsWith('POST')), [], 'no token is minted until a request needs one');
 
   // A setting saved (as the Settings page does) is read by the next thing that runs, with no restart
-  await runtime.settings.write({ launchesRepo: 'yeyo11/launches', claudioUrl: 'http://claudio:8798', claudioToken: 't', maxBudgetUsd: '3' });
+  await runtime.settings.write({ launchesRepo: 'yeyo11/launches', claudioUrl: 'http://claudio:8798', claudioToken: 't' });
   await runtime.refresh();
   assert.equal(runtime.pipeline.launchesRepo, 'yeyo11/launches');
-  assert.equal(runtime.pipeline.maxBudgetUsd, 3);
   assert.equal((await runtime.brand()).github, 'yeyo11');
   assert.ok(seen.includes('POST /app/installations/9/access_tokens'), 'the brand is read with an installation token');
   assert.deepEqual(runtime.settings.claudio(), { url: 'http://claudio:8798', token: 't' }, 'what the runner reads for claudio when the next task runs');

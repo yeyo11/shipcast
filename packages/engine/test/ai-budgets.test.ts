@@ -82,14 +82,10 @@ test('budgets: Claudio receives the task’s default, or the owner’s override,
   assert.equal(budgetHeader(overridden.headers), '2.5', 'the owner’s limit for this task, not another’s');
 });
 
-test('budgets: the owner’s limit for a task wins over the runtime settings’ single budget, which still applies without one', async () => {
-  const global = claudioSetup(review);
-  await new AiTaskRunner({ resolve: async () => global.setup, fetch: global.fetch }).run(AI_TASK_DEFINITIONS.profile, { prompt: 'Review.', limits: { maxBudgetUsd: 7 } });
-  assert.equal(budgetHeader(global.headers), '7');
-
+test('budgets: the owner’s limit for a task wins over a run’s own ceiling', async () => {
   const own = claudioSetup(review, { profile: 1.5 });
   await new AiTaskRunner({ resolve: async () => own.setup, fetch: own.fetch }).run(AI_TASK_DEFINITIONS.profile, { prompt: 'Review.', limits: { maxBudgetUsd: 7 } });
-  assert.equal(budgetHeader(own.headers), '1.5');
+  assert.equal(budgetHeader(own.headers), '1.5', 'override over the run’s');
 });
 
 test('budgets: the writing assistant and its check share a settings task but not a limit', async () => {

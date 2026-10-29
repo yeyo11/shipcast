@@ -304,14 +304,13 @@ function AiSettingsPage() {
 
       <h2 className="ph">claudio</h2>
       <p className="muted">
-        claudio is a provider of its own: its REST API is what lets Claude Code explore the repo for the content pack, and its OpenAI-compatible surface streams the writing assistant.
-        The budget caps what one pack, article or check against the code may spend, unless that task has a limit of its own below.
+        claudio is a provider of its own: Shipcast calls its OpenAI-compatible API, and Claude Code reads each release in a workspace claudio makes for it.
       </p>
       <SettingsForm settings={data.runtime} submit="Save claudio settings" />
 
       <h2 className="ph">Providers</h2>
       <p className="muted">
-        Each task’s limit caps what one run may spend, up to {data.budgets.max} USD; empty keeps the default shown in the field, and it overrides the budget above for that task.
+        Each task’s limit caps what one run may spend, up to {data.budgets.max} USD; empty keeps the default shown in the field.
         Only claudio takes a limit today: the providers billed per token have no spend ceiling of their own, so their runs are bounded by steps and time instead.
       </p>
       <Tasks data={data} />

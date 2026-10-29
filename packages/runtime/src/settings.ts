@@ -14,8 +14,6 @@ interface BaseValues {
   launchesRepo: string | undefined;
   claudioUrl: string | undefined;
   claudioToken: string | undefined;
-  /** Spend ceiling for one generation, in dollars */
-  maxBudgetUsd: number | undefined;
 }
 
 /**
@@ -78,12 +76,9 @@ export const SETTINGS: Record<SettingName, Definition> = {
     check: (v) => (/^https?:\/\/[^\s]+$/.test(v) ? undefined : `claudio’s URL must be http(s)://…, not "${v}"`),
   },
   claudioToken: { env: 'SHIPCAST_CLAUDIO_TOKEN', store: { kind: 'secret', key: 'app:claudio-token', label: 'claudio token' }, label: 'claudio’s token' },
-  maxBudgetUsd: {
-    env: 'SHIPCAST_MAX_BUDGET_USD',
-    store: { kind: 'setting', key: 'ai-budget-usd' },
-    label: 'The AI budget per generation',
-    check: (v) => (Number(v) > 0 ? undefined : 'the AI budget must be a positive number of dollars'),
-  },
+  // No single AI budget any more: each task's limit (DEFAULT_AI_BUDGETS_USD, or the owner's in the
+  // `ai` settings row) is the only one. An install that set the old one keeps an `ai-budget-usd` row
+  // and maybe SHIPCAST_MAX_BUDGET_USD in its env; neither is read, so both are left as they are.
   ...oauthAppSettings(),
 };
 
@@ -132,15 +127,13 @@ async function stored(deps: SettingsDeps, name: SettingName): Promise<string | u
 }
 
 /** The settings that are not a network's app */
-const BASE: Record<keyof BaseValues, true> = { launchesRepo: true, claudioUrl: true, claudioToken: true, maxBudgetUsd: true };
+const BASE: Record<keyof BaseValues, true> = { launchesRepo: true, claudioUrl: true, claudioToken: true };
 
 function parse(values: Partial<Record<SettingName, string>>): SettingsValues {
-  const budget = values.maxBudgetUsd === undefined ? undefined : Number(values.maxBudgetUsd);
   return {
     launchesRepo: values.launchesRepo,
     claudioUrl: values.claudioUrl?.replace(/\/+$/, ''),
     claudioToken: values.claudioToken,
-    maxBudgetUsd: budget !== undefined && budget > 0 ? budget : undefined,
     ...Object.fromEntries(NAMES.filter((n) => !(n in BASE)).map((n) => [n, values[n]])),
   };
 }
@@ -235,7 +228,7 @@ async function put(deps: SettingsDeps, name: SettingName, value: string | undefi
     else await deps.secrets.set(store.key, value, store.label);
     return;
   }
-  await deps.registry.settings.setSetting(store.key, name === 'maxBudgetUsd' && value !== undefined ? Number(value) : (value ?? ''));
+  await deps.registry.settings.setSetting(store.key, value ?? '');
 }
 
 /** The `.env` names imported already: a value cleared in the app afterwards is not brought back by the next start */

@@ -59,14 +59,14 @@ export function claimArticle(input: ArticleInput, brand: Brand, deps: Pick<Pipel
 export async function generateArticlePack(
   input: ArticleInput,
   brand: Brand,
-  deps: Pick<PipelineDeps, 'aiRunner' | 'aiTexts' | 'maxBudgetUsd' | 'launchesRepo'>,
+  deps: Pick<PipelineDeps, 'aiRunner' | 'aiTexts' | 'launchesRepo'>,
 ): Promise<{ ok: true; pack: ContentPack; config: LaunchConfig } | { ok: false; problems: string[] }> {
   const config = articleConfig(brand, input.channels);
   let pack: ContentPack;
   try {
     // No repo: the answer validated against the pack's schema and repaired once by the runner
     const { prompt, system } = buildArticlePrompt(input, brand, config, deps.launchesRepo, await aiTextsOf(deps));
-    const result = await deps.aiRunner.run(AI_TASK_DEFINITIONS.article, { system, prompt, ...(deps.maxBudgetUsd !== undefined && { limits: { maxBudgetUsd: deps.maxBudgetUsd } }) });
+    const result = await deps.aiRunner.run(AI_TASK_DEFINITIONS.article, { system, prompt });
     pack = result.output;
   } catch (error) {
     return { ok: false, problems: [error instanceof Error ? error.message : String(error)] };

@@ -29,7 +29,7 @@ test('the bootstrap is the database and the GitHub App: nothing else is needed t
   assert.equal(loadConfig({ ...DATABASE, SHIPCAST_GITHUB_APP_ID: '1', SHIPCAST_GITHUB_APP_CLIENT_ID: 'c', SHIPCAST_GITHUB_APP_CLIENT_SECRET: 's', SHIPCAST_GITHUB_APP_PRIVATE_KEY: PEM.replace(/\n/g, '\\n') }, '/repo').githubApp?.privateKey, PEM, 'an inline key with escaped newlines');
 });
 
-test('settings are not the bootstrap: the launches repo, claudio and the budget are never required', () => {
+test('settings are not the bootstrap: the launches repo and claudio are never required, and an old AI budget is ignored', () => {
   assert.doesNotThrow(() => loadConfig({ ...DATABASE, ...APP }, '/repo', files));
   // Old values in .env are not validated here either: they are imported (or skipped) as settings
   assert.doesNotThrow(() => loadConfig({ ...DATABASE, ...APP, SHIPCAST_LAUNCHES_REPO: 'nonsense', SHIPCAST_MAX_BUDGET_USD: '-1' }, '/repo', files));

@@ -112,7 +112,7 @@ test("each OAuth network's app is two settings, named and kept as before", () =>
   assert.deepEqual(app('threadsAppId'), ['THREADS_APP_ID', 'setting', 'threads-app-id', 'The Threads app id']);
   assert.deepEqual(app('linkedinClientSecret'), ['LINKEDIN_CLIENT_SECRET', 'secret', 'app:linkedin-client-secret', 'The LinkedIn client secret']);
   assert.deepEqual(app('redditClientId'), ['REDDIT_CLIENT_ID', 'setting', 'reddit-client-id', 'The Reddit client id']);
-  assert.deepEqual(Object.keys(SETTINGS).slice(0, 4), ['launchesRepo', 'claudioUrl', 'claudioToken', 'maxBudgetUsd']);
+  assert.deepEqual(Object.keys(SETTINGS).slice(0, 3), ['launchesRepo', 'claudioUrl', 'claudioToken']);
 });
 
 test('every channel the engine publishes has an adapter, and only those', () => {

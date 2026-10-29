@@ -16,8 +16,8 @@ export interface SettingView {
   source: string;
 }
 
-/** The AI's settings (claudio's address and token, the budget) live in Settings › AI only, so nothing is configured twice */
-export const AI_SETTING_NAMES: ReadonlySet<string> = new Set(['claudioUrl', 'claudioToken', 'maxBudgetUsd']);
+/** The AI's settings (claudio's address and token) live in Settings › AI only, so nothing is configured twice */
+export const AI_SETTING_NAMES: ReadonlySet<string> = new Set(['claudioUrl', 'claudioToken']);
 
 const SOURCE: Record<string, string> = {
   settings: 'saved here',

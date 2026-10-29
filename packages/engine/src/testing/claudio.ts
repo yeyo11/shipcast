@@ -1,7 +1,7 @@
 import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { claudioAiProvider } from '../ai/providers/claudio/index.ts';
-import type { AiTaskRunner } from '../ai/runner.ts';
+import type { AiRunSetup, AiTaskRunner } from '../ai/runner.ts';
 import { GitHubRest } from '../github.ts';
 import { runnerOn } from './ai-runner.ts';
 
@@ -119,11 +119,11 @@ export function localOnlyFetch(outside: string[] = []): typeof fetch {
   }) as typeof fetch;
 }
 
-/** The runner on Claudio at the fake's address, its workspaces' archives from the fake GitHub */
-export function fakeClaudioRunner(claudio: Pick<FakeServer, 'url'>, github: Pick<FakeServer, 'url'>, outside: string[] = []): AiTaskRunner {
+/** The runner on Claudio at the fake's address, its workspaces' archives from the fake GitHub; `budgets` as the owner's AI settings would set them */
+export function fakeClaudioRunner(claudio: Pick<FakeServer, 'url'>, github: Pick<FakeServer, 'url'>, outside: string[] = [], budgets?: AiRunSetup['budgets']): AiTaskRunner {
   const fetchImpl = localOnlyFetch(outside);
   return runnerOn(
-    { provider: claudioAiProvider, settings: { url: claudio.url, token: FAKE_CLAUDIO_TOKEN } },
+    { provider: claudioAiProvider, settings: { url: claudio.url, token: FAKE_CLAUDIO_TOKEN }, ...(budgets && { budgets }) },
     { archives: new GitHubRest({ token: FAKE_GITHUB_TOKEN, baseUrl: github.url, fetch: fetchImpl }), fetch: fetchImpl },
   );
 }

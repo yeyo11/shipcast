@@ -28,8 +28,6 @@ export interface GenerateOptions extends PromptOptions {
   checkout: Checkout;
   /** The ref the code is read at (a release's tag, or HEAD for a repo made public): what a remote workspace is made from */
   ref: string;
-  /** The settings' spend ceiling, over the task's own */
-  maxBudgetUsd?: number;
   signal?: AbortSignal;
 }
 
@@ -49,7 +47,6 @@ export async function generatePack(options: GenerateOptions): Promise<Generated>
       system,
       prompt,
       repo: { name: launch.repo, ref: options.ref, hostDir: checkout.hostPath },
-      ...(options.maxBudgetUsd !== undefined && { limits: { maxBudgetUsd: options.maxBudgetUsd } }),
       ...(options.signal && { abortSignal: options.signal }),
     });
   } catch (error) {

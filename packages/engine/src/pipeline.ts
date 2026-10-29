@@ -26,7 +26,6 @@ export interface PipelineDeps {
   /** Clones a repo at a ref into the workspace, for the AI task runner's tools to read */
   checkout: (repo: string, ref: string) => Promise<Checkout>;
   now?: () => Date;
-  maxBudgetUsd?: number;
   /** For the site's covers; the global fetch by default */
   fetch?: typeof fetch;
   /** Screenshots and the tour of a project's site; headless Chromium by default */
@@ -142,7 +141,7 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   } catch (error) {
     return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
   }
-  const generated = await generatePack({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
+  const generated = await generatePack({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref });
   if (!generated.ok) {
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }

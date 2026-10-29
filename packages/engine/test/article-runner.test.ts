@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { DEFAULT_AI_BUDGETS_USD } from '@shipcast/schema';
 import { articleConfig, buildArticlePrompt, claimArticle, draftArticle, loadBrand, type PipelineDeps } from '../src/index.ts';
 import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, FakeGitHub, jsonModel, memoryRegistry, mockRunner, scriptedModel, textParts } from '../src/testing/index.ts';
 
@@ -20,7 +21,7 @@ const pack = {
 };
 const input = { title: 'My own title', markdown: 'My own words.', lang: 'en' as const, channels: ['bluesky' as const] };
 
-async function draft(ai: Pick<PipelineDeps, 'aiRunner'> & Partial<Pick<PipelineDeps, 'maxBudgetUsd'>>) {
+async function draft(ai: Pick<PipelineDeps, 'aiRunner'>) {
   const github = new FakeGitHub({ files: { 'yeyo11/launches/brand.yml@HEAD': BRAND_YML } });
   const registry = await memoryRegistry();
   const deps: PipelineDeps = {
@@ -57,14 +58,14 @@ test('article: the answer becomes the drafts with the owner’s own words, from 
   assert.ok(JSON.stringify(call.prompt).includes(JSON.stringify(prompt).slice(1, -1)), 'the prompt is buildArticlePrompt’s');
 });
 
-test('article: on Claudio no workspace is made, and the settings’ budget is the run’s', async () => {
+test('article: on Claudio no workspace is made, and the article task’s default is the run’s budget', async () => {
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack)) });
   const gh = await fakeGitHubArchives();
   try {
-    const now = await draft({ aiRunner: fakeClaudioRunner(claudio, gh), maxBudgetUsd: 1.5 });
+    const now = await draft({ aiRunner: fakeClaudioRunner(claudio, gh) });
     assert.equal(now.ok, true);
     assert.deepEqual(claudio.seen.map((s) => `${s.method} ${s.path}`), ['POST /api/v1/chat/completions']);
-    assert.equal(claudioChats(claudio)[0]!.headers['x-claudio-max-budget-usd'], '1.5');
+    assert.equal(claudioChats(claudio)[0]!.headers['x-claudio-max-budget-usd'], String(DEFAULT_AI_BUDGETS_USD.article));
     assert.equal(gh.seen.length, 0, 'no archive asked for');
   } finally {
     await Promise.all([claudio.close(), gh.close()]);
