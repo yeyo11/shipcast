@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T11:41:45.910844848Z
-updated_at: 2026-10-29T19:48:27.891946875Z
+updated_at: 2026-10-29T20:55:51.854203276Z
 tags:
     - seo
     - search-console
@@ -34,12 +34,17 @@ forward). Bing Webmaster Tools joined the same day.
   `search-canonical:<launch>` cursor (`noteCanonicals` in `packages/engine/src/metrics.ts`), forgotten
   once Google agrees again, and the bell shows a line on the launch ("Google files … under …") until
   then. A page not indexed has no Google canonical yet and is not a mismatch.
-- **Clicks, impressions, CTR and position** of each language's URL come from Search Analytics
-  (`dimensions: ['page']`, an exact-URL filter, final data from the launch's day to today), summed
-  over the languages: `search.clicks`, `search.impressions`, `search.ctr` (clicks over impressions
-  of the sum) and `search.position` (the average position weighted by impressions, Search Console's
-  own way). Final data lags two to three days; fresh data (`dataState: all`) and per-day readings are
-  the dated-values work of the stats model.
+- **Clicks, impressions, CTR and position, day by day.** Since 2026-10-29 the hourly reads ask Search
+  Analytics for each language's URL per day (`dimensions: ['date']`, an exact-URL filter,
+  `dataState: 'all'`, from the launch's day to today; `SearchConsole.pageMetricsByDay`). Each day's
+  clicks and impressions, summed over the languages, are kept under the day the searches happened
+  (Google's days are Pacific time) in `metric_days`, so the stats count a click on the day it
+  happened ([decisions/dated-metrics.md](decisions/dated-metrics.md)). The launch's readings are the
+  days added up: `search.clicks`, `search.impressions`, `search.ctr` (clicks over impressions of the
+  sum) and `search.position` (each day's position weighted by its impressions, Search Console's own
+  way). Fresh data is included, as in Search Console's report: the last two or three days are still
+  being counted and change when read again, and a day read again takes the new value. The six-hourly
+  reads (without `batched-metrics`) still ask for the final since-launch total (`pageMetrics`).
 - **While any article is not indexed**, the sitemap is resubmitted, at most once a day
   (`sitemap-submitted-at`): Google ignores frequent resubmits of an unchanged sitemap.
 
@@ -64,8 +69,11 @@ property, far above two URLs per launch a day.
   before), so the code's old "about six months" was a guess, and the total may be a rolling window
   that drops old days rather than a count since the launch. Until the owner compares one article's
   number with the UI's Pages report over 3, 6 and 16 months, Shipcast treats it as Bing's running
-  total for the page. The dated way is `GetPageStats` or `GetPageQueryStats` (weekly rows with
-  positions), next with the stats model's dated values.
+  total for the page.
+- **Bing is not read per day.** Its dated endpoints are weekly and do not promise a page's whole
+  total: `GetPageStats` lists the site's top pages only, `GetPageQueryStats` a page's numbers per
+  query. Bing stays a counter until the window above is known
+  ([decisions/dated-metrics.md](decisions/dated-metrics.md)).
 - **Telling Bing about a new article** is the blog deploy's job: it pings IndexNow with the changed
   URLs, which Bing and Yandex share, so Shipcast does not submit URLs to Bing itself.
 - It needs the **Bing Webmaster Tools** account connected in Channels with the user's API key
@@ -76,8 +84,10 @@ property, far above two URLs per launch a day.
 
 "In search engines" lists, per language, Google's state ("Indexed" or "Not indexed yet", with its
 coverage state) and, once Bing has been read, Bing's ("Crawled" or "Not crawled yet"), each with when
-it was checked. The numbers sit with the other sources, as "Google Search" and "Bing".
+it was checked. The numbers sit with the other sources, as "Google Search" and "Bing". The Stats
+page's Search tab shows each engine's numbers in the period with their lifetime under them
+([stats.md](stats.md#the-page)).
 
 ## Related
 
-[[publishing.md]] · [[plans/after-mvp.md]] · [[plans/search-presence.md]] · [[launches-repo.md]] · [[engine.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]]
+[[publishing.md]] · [[plans/after-mvp.md]] · [[plans/search-presence.md]] · [[launches-repo.md]] · [[engine.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[decisions/dated-metrics.md]]

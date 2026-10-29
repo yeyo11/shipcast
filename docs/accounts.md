@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-10-29T20:07:09.883173075Z
+updated_at: 2026-10-29T20:58:37.118915621Z
 tags:
     - accounts
     - channels
@@ -51,10 +51,12 @@ that is a channel publishes through its connector
 | Telegram | bot token, channel, owner's chat | a post with the launch image | each post's reactions, from the changes Telegram pushes to the bot; the channel's members |
 | Discord | webhook URL; optionally an invite link | a message with an embed | each message's reactions, read back through the webhook; the server's members, through the invite |
 | GitHub profile | a login, no credential | — | the owner's public profile; followers, following, public repos |
-| Blog analytics (Cloudflare) | API token, account id, site tag | — | page views and visits, by source |
-| Google Search Console | service account JSON key | — | clicks, impressions, CTR, position, URL inspection with the canonical |
+| Blog analytics (Cloudflare) | API token, account id, site tag | — | page views and visits, by source and per day |
+| Google Search Console | service account JSON key | — | clicks and impressions per day, CTR, position, URL inspection with the canonical |
 | Bing Webmaster | API key | — | clicks, impressions, crawl state |
 | Anthropic API, OpenAI-compatible server | API key; base URL and model | — | — (AI providers) |
+
+The per-day readings are kept under the day they happened ([decisions/dated-metrics.md](decisions/dated-metrics.md)).
 
 **The repos are not an account.** The engine reaches GitHub through the GitHub App
 ([decisions/github-app.md](decisions/github-app.md)), which reads each repo's stars, forks, watchers
@@ -221,4 +223,4 @@ spec says its URLs, scopes and app, and the routes under `/auth/<network>` run t
 
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[server.md]] · [[decisions/architecture.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[server.md]] · [[decisions/architecture.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/dated-metrics.md]]

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T17:09:24.256588256Z
-updated_at: 2026-10-29T19:48:57.240875303Z
+updated_at: 2026-10-29T20:59:18.250784165Z
 tags:
     - decision
     - youtube
@@ -87,13 +87,15 @@ gives the rest per video, with the `yt-analytics.readonly` scope:
   `estimatedMinutesWatched`, `averageViewDuration`, `averageViewPercentage`, `shares` and
   `subscribersGained`, kept on the video's piece as `engagedViews`, `watchMinutes`,
   `avgViewSeconds`, `avgViewPercent`, `shares` and `subscribersGained`. `shares` joins the stats'
-  shares family.
+  shares family; since the stats model's second tier (2026-10-29), `watchMinutes`, `engagedViews` and
+  `subscribersGained` (as `follows`) are families of their own ([stats.md](../stats.md)).
 - **Daily.** Google's numbers lag 48 to 72 hours behind the public counters, so the definition's
   `metrics.analytics` cadence is 24 hours; `collectHourly` reads every live video at once on it
   ([publishing.md](../publishing.md#metrics)). The Analytics API has its own quota, not the Data API's
   units.
-- **The averages are not counters**: kept per video as read. A launch's sum of them means nothing,
-  which the stats model has to know.
+- **The averages are not counters**: kept per video as read, and listed in the definition's
+  `metrics.averaged` (`avgViewSeconds`, `avgViewPercent`), so a launch's videos are averaged, never
+  added up, and the Stats page shows them as the period ends ([stats.md](../stats.md)).
 - **A connection made before the scope was asked for** keeps working: the report answers 403
   (insufficient scopes) and the connector says so ("YouTube Analytics was not granted to this
   connection… connect YouTube again"), as one problem of the metrics run, once a day; the hourly

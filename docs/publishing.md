@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T20:09:23.995548238Z
+updated_at: 2026-10-29T20:57:37.972313567Z
 tags:
     - publishing
     - connectors
@@ -340,10 +340,10 @@ longer read.
 | `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
 | `discord` | reactions per message, every emoji's added up | Get Webhook Message, with the webhook that sent it; one call a message |
 | `telegram` | reactions per post, every emoji's added up | `message_reaction_count` updates, collected with `getUpdates` |
-| `blog` | each language's article page views and their sum, `visits`, and page views by source (`views_<source>`) | Cloudflare Web Analytics' GraphQL API, the paths in one query, grouped by referrer host and path |
-| `search` | clicks, impressions, `ctr`, `position`; Google's URL inspection with its canonical | Search Console (service account JWT) |
+| `blog` | each language's article page views and their sum, `visits`, and page views by source (`views_<source>`); the views and visits of each day, kept under the day | Cloudflare Web Analytics' GraphQL API, the paths in one query, grouped by referrer host and path; the days in a second query grouped by date and path |
+| `search` | clicks, impressions, `ctr`, `position`, from each day's clicks and impressions kept under the day searched; Google's URL inspection with its canonical | Search Console (service account JWT), per day with fresh data (`dataState: all`) |
 | `bing` | clicks, impressions, `ctr`, crawl state | Bing Webmaster (over a window Bing does not document: [search-indexing.md](search-indexing.md#bing)) |
-| `github` | stars, forks, watchers; views, unique visitors, clones and unique cloners of the last 14 days, the same per day (`views:<day>`, `visitors:<day>`, `clones:<day>`, `cloners:<day>`), the top referrers and pages (`referrer:<site>`, `path:<page>`, with their unique visitors); the stars given each day (`stars:<day>`); the launch's release downloads (`downloads`) and every release's (`downloads_total`) | GitHub REST through the App, once per repo: the counts (`/repos/{repo}`, conditional), the traffic (`traffic/*`, Administration: read) and the history (`/stargazers/history`, `/releases`) |
+| `github` | stars, forks, watchers; views, unique visitors, clones and unique cloners of the last 14 days, the same per day kept under each day (`views`, `visitors`, `clones`, `cloners`), the top referrers and pages (`referrer:<site>`, `path:<page>`, with their unique visitors); the stars given each day, kept under it (`stars`); the launch's release downloads (`downloads`) and every release's (`downloads_total`) | GitHub REST through the App, once per repo: the counts (`/repos/{repo}`, conditional), the traffic (`traffic/*`, Administration: read) and the history (`/stargazers/history`, `/releases`) |
 
 Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind, age)` in
 `packages/schema/src/channels/registry.ts`: a post, each newsletter issue, a channel's own pieces
@@ -373,6 +373,12 @@ it has no numbers yet, which is neither a failure nor stale. A secondary call th
 Reel's Facebook views when it was not shared there, a breakdown) leaves the rest of the reading;
 Threads' link clicks failing is said in the run's problems while the posts' own numbers count.
 
+**Dated values** (2026-10-29, `collectHourly` only). A source that counts per day keeps each day
+under the day it happened, in `metric_days` (`MetricRepository.recordDays`): Search Console's clicks
+and impressions, the blog's views and visits, a repo's traffic and the stars given each day. A day
+read again takes the source's newest word on it, and the stats count a period of them as the sum of
+its days ([stats.md](stats.md#dated-values), [decisions/dated-metrics.md](decisions/dated-metrics.md)).
+
 **Analytics on their own cadence** (2026-10-29, `collectHourly` only). A channel whose network has a
 slower API apart from its counters declares `metrics.analytics` (a cadence) on its definition, and its
 adapter's metric reader an `analytics(pieces, until)`: YouTube (the YouTube Analytics API, whose
@@ -382,8 +388,9 @@ today, and kept on the piece beside its counters. The `metrics-read:analytics:<c
 records when they were asked for, answered or not, so a refusal is said once a day, never hourly:
 a YouTube connection made before `yt-analytics.readonly` was asked for is one problem of the run
 ("connect YouTube again"), and the hourly counters are read as before. Averages (`avgViewSeconds`,
-`avgViewPercent`, `avgReadSeconds`, and the search `position` and `ctr`) are not counters: a launch's
-sum of them means nothing ([stats.md](stats.md)).
+`avgViewPercent`, `avgReadSeconds`, a Reel's `avg_watch_ms` and `skip_rate`, and the search
+`position` and `ctr`) are not counters: they are listed in each definition's `metrics.averaged`, and
+a launch's pieces are averaged, never added up ([stats.md](stats.md)).
 
 **Where a visit came from.** The blog's and dev.to's sources are named by `sourceOfReferrer` in
 `packages/schema/src/tracking.ts`: each channel by its hosts (LinkedIn, Threads, YouTube, Hashnode,
@@ -462,4 +469,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]]
