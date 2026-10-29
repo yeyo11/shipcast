@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T10:16:36.869342913Z
-updated_at: 2026-10-28T10:52:43.172606145Z
+updated_at: 2026-10-29T15:43:42.775675733Z
 tags:
     - plan
     - goal
@@ -51,7 +51,7 @@ explicitly. Everything else goes on without waiting.
 | Deploys | **This run deploys each verified phase to `apps-1` itself**, over `tailscale ssh yeyo@apps-1`. Never on the owner's laptop |
 | Measurement windows | **Keep working during them** on refactors that change no deployed behaviour; deploy nothing that would alter a window until it ends |
 | YouTube | **Built in this run, right after the channel modules (phase 3b)**, as the first new network on them |
-| YouTube on the real channel | **Allowed, private only**: upload v0.2.0's two videos privately (Google keeps an unaudited project's uploads private anyway), edit one's description, delete nothing |
+| YouTube on the real channel | **Allowed, private only**: upload v0.2.0's two videos privately (expected then: Google keeps an unaudited project's uploads private anyway; on 2026-10-29 the first uploads, the Sluice article's two videos, came out public instead, [decisions/youtube.md](../decisions/youtube.md#privacy-and-googles-audit)), edit one's description, delete nothing |
 
 ## Facts to start from (2026-10-28)
 
@@ -190,7 +190,9 @@ criteria met, verified and deployed (except where a measurement window forbids d
       Its **quota** (10,000 units a day, an upload far more than a read) goes into the per-provider
       limiter and is shown in the app when spent.
     - **Privacy**: request `public`. When Google keeps a video `private` (an unaudited project),
-      record it and show "private until Google audits the project". That is not a failure.
+      record it and show "private until Google audits the project". That is not a failure. (Built as
+      a fallback: the first real uploads, on 2026-10-29, came out public with the project
+      unaudited.)
     - **Connecting**: the OAuth flow at `/auth/youtube/callback` and the client in Settings, like
       Reddit and LinkedIn. Import `data/youtube-oauth.json` once, through that path, into the server's
       secret store (whichever store is current; phase 5's migration carries it), then delete the
@@ -299,12 +301,13 @@ the answer.
 
 The run prepares each of these and ends its report with them:
 
-1. **Request YouTube's API audit** with `docs/plans/youtube-audit.md`; until Google answers, uploads
-   stay private.
+1. **YouTube's API audit**, with `docs/plans/youtube-audit.md`, should Google start holding uploads
+   private or a quota extension be needed: the first uploads, on 2026-10-29, came out public without
+   it.
 2. **Publish the CLI on npm** (`@yeyo11/shipcast`, `npm publish --access public` from the prepared
    package) and **list the Action on the GitHub Marketplace**. Both were left from the v0.2 run.
 3. **Review any design change** the run made (the video look included), on a preview.
 
 ## Related
 
-[[plans/performance-refactor.md]] · [[plans/goal-v0.2.md]] · [[plans/goal-after-mvp.md]] · [[plans/after-mvp.md]] · [[decisions/job-queue.md]] · [[decisions/automatic-channels-only.md]] · [[server.md]] · [[web-app.md]] · [[engine.md]] · [[status.md]]
+[[plans/performance-refactor.md]] · [[plans/goal-v0.2.md]] · [[plans/goal-after-mvp.md]] · [[plans/after-mvp.md]] · [[decisions/job-queue.md]] · [[decisions/automatic-channels-only.md]] · [[server.md]] · [[web-app.md]] · [[engine.md]] · [[status.md]] · [[decisions/youtube.md]]

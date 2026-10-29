@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T12:09:30.457091857Z
-updated_at: 2026-10-27T15:08:10.223494496Z
+updated_at: 2026-10-29T15:44:42.036604826Z
 tags:
     - plan
     - goal
@@ -31,7 +31,7 @@ waits for the owner.
 | --- | --- |
 | Order | The fixes, the review of milestones 1 to 8, the GitHub Action, the v0.2.0 launch, the docs, and **YouTube last** |
 | YouTube video | Two per launch: a **Short** (9:16, under 60 s) and a **horizontal video** (16:9, 1 to 3 min). Slides, demo and subtitles, **no voice** |
-| YouTube's audit | Google keeps API uploads of an unaudited project **private**. Build everything, upload private, prepare the audit form; the owner requests the audit at the end |
+| YouTube's audit | Expected then: Google keeps API uploads of an unaudited project **private**. Build everything, upload private, prepare the audit form; the owner requests the audit at the end. (On 2026-10-29 the first uploads, the Sluice article's two videos, came out public with the project unaudited: [decisions/youtube.md](../decisions/youtube.md#privacy-and-googles-audit)) |
 | Connecting YouTube | The owner prepares Google Cloud and leaves a refresh token in `data/youtube-oauth.json` (steps below). If the file is there when the run reaches YouTube, it is imported into the keychain and deleted; if not, connecting is an owner step at the end |
 | GitHub Action and install | **Both**: a published Action and a one-command install, for other developers |
 | AI in CI | Any of the SDK providers Shipcast already supports (**Anthropic or OpenAI**), chosen by a variable, the key as a repository secret |
@@ -191,9 +191,9 @@ as `decisions/youtube.md` first.
   with the network faked.
 - **v0.2.0 on YouTube**: if `data/youtube-oauth.json` is there (or the owner connected YouTube in the
   app meanwhile), import it, turn `youtube` on in Shipcast's own `launch.yml` and publish v0.2.0's two
-  videos through the launch's normal path (private until the audit), then edit one's description and
-  delete nothing. If it is not there, stop short of any real upload: the connection and v0.2.0's
-  videos join the owner's steps.
+  videos through the launch's normal path (expected private until the audit), then edit one's
+  description and delete nothing. If it is not there, stop short of any real upload: the connection
+  and v0.2.0's videos join the owner's steps.
 - **The audit form**: prepare, in `docs/plans/youtube-audit.md`, everything Google's YouTube API audit
   form asks (what the app does, the scopes and why, the screens, the data kept, the privacy policy's
   address; update the blog's privacy page for YouTube data). The owner sends it at the end.
@@ -232,7 +232,7 @@ The run prepares each of these and ends its report with them, in this order:
 1. **Connect YouTube**, if the run did not find the token (the steps above, or the app's Connect
    button now that it exists), and publish v0.2.0's two videos from the launch page.
 2. **Request YouTube's audit** with the form prepared in `docs/plans/youtube-audit.md`; until Google
-   answers, videos stay private.
+   answers, videos were expected to stay private (they did not: see the YouTube's audit row above).
 3. **Publish the CLI on npm** (`npm publish --access public` from the prepared package, with the
    owner's npm account).
 4. **List the Action on the GitHub Marketplace** (it needs the owner to accept the Marketplace

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T17:09:24.256588256Z
-updated_at: 2026-10-28T17:09:24.256588256Z
+updated_at: 2026-10-29T15:41:04.966664385Z
 tags:
     - decision
     - youtube
@@ -55,9 +55,17 @@ cover) and the scene script the content pack writes for each:
 
 ## Privacy and Google's audit
 
-Shipcast asks for `public`. Google keeps an unaudited API project's uploads `private`; that is recorded
-and shown as "private until Google audits the project", not as a failure. The audit form is prepared in
-[plans/youtube-audit.md](../plans/youtube-audit.md) for the owner to send.
+Shipcast asks for `public` on every upload. Google's policy is that it **may** lock an unaudited API
+project's uploads to `private`, and the plans of 2026-10-28 took that as certain. It was not what
+happened: the first two uploads, the Sluice article's videos on 2026-10-29, came out **public** with
+the project unaudited.
+
+So `private` is a fallback, not the expected outcome. When Google answers an upload as `private`
+anyway, the publishing strategy (`packages/engine/src/publishing/youtube.ts`) still records the video
+as published, keeps a `youtube-privacy:<postId>` cursor saying "private until Google audits the
+project", and notes it in the publishing run's log; it is not a failure. No page reads that cursor
+yet. The audit form stays prepared in [plans/youtube-audit.md](../plans/youtube-audit.md) for the
+owner to send if that happens, or for a quota extension.
 
 ## Connecting
 
@@ -70,4 +78,4 @@ YouTube again.
 
 ## Related
 
-[[decisions/architecture.md]] · [[decisions/automatic-channels-only.md]] · [[plans/goal-v0.2.md]] · [[plans/goal-refactor.md]] · [[plans/youtube-audit.md]] · [[content-pack.md]]
+[[decisions/architecture.md]] · [[decisions/automatic-channels-only.md]] · [[plans/goal-v0.2.md]] · [[plans/goal-refactor.md]] · [[plans/youtube-audit.md]] · [[content-pack.md]] · [[publishing.md]] · [[status.md]]

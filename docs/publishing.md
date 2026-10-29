@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T01:04:15.395327636Z
+updated_at: 2026-10-29T15:42:18.538774469Z
 tags:
     - publishing
     - connectors
@@ -197,8 +197,11 @@ Added on 2026-10-28 as the first network built on the channel modules
 `screenshot`, `cover`) with subtitles burned in and uploaded as an SRT caption track; no voice. Each
 video is its own piece (`post:short`, `post:video`). The upload is resumable and its session's POST is
 never repeated; captions and the thumbnail are extras that never undo a video. The quota (10,000
-units a day; an upload costs 1,600) is checked before an upload starts. Google keeps an unaudited
-project's uploads `private`, which is recorded and shown, not a failure. Not schedulable.
+units a day; an upload costs 1,600) is checked before an upload starts. Each upload asks for
+`public`; the first two (the Sluice article's, 2026-10-29) came out public although the API project
+is not audited. Should Google keep one `private`, the video is still recorded as published and a
+`youtube-privacy:<postId>` cursor notes "private until Google audits the project": a fallback, not a
+failure ([decisions/youtube.md](decisions/youtube.md#privacy-and-googles-audit)). Not schedulable.
 
 ### Scheduled pieces
 
@@ -312,16 +315,22 @@ longer read.
 | `bing` | clicks, impressions, crawl state | Bing Webmaster |
 | `github` | stars, forks, watchers; views and unique visitors of the last 14 days | GitHub REST (`repoStats`), once per repo |
 
+Which pieces have numbers of their own is one rule, `readsMetrics(channel, kind)` in
+`packages/schema/src/channels/registry.ts`: a post, each newsletter issue, and a channel's own pieces
+where its definition has metrics (each of YouTube's videos); never Instagram's story or comment, and
+the blog per article URL rather than per piece. The metrics rounds and the freshness check
+([measurement.md](measurement.md#the-checks)) both use it.
+
 **Two schedules**, by the `batched-metrics` flag:
 
-- **Off** (production today): `collectMetrics` reads every source for every published launch every 6
-  hours (`0 */6 * * *`), one call per post.
-- **On**: `collectHourly` runs every hour (`3 * * * *`) and reads a source only when its last check is
-  older than its cadence: each channel's from its definition (hourly, batched), the site's from
-  `SITE_CADENCES` (GitHub counts hourly and conditional; traffic, Search Console analytics and Bing
-  daily; URL inspection daily until indexed, then weekly, and never past 90 days). A value read again
-  unchanged moves its reading's `checked_at` instead of adding a row. Accounts' sessions and
-  identities are kept between runs (in Redis with `redis-state`).
+- **Off** (production until 2026-10-29): `collectMetrics` reads every source for every published
+  launch every 6 hours (`0 */6 * * *`), one call per post.
+- **On** (production since 2026-10-29): `collectHourly` runs every hour (`3 * * * *`) and reads a
+  source only when its last check is older than its cadence: each channel's from its definition
+  (hourly, batched), the site's from `SITE_CADENCES` (GitHub counts hourly and conditional; traffic,
+  Search Console analytics and Bing daily; URL inspection daily until indexed, then weekly, and never
+  past 90 days). A value read again unchanged moves its reading's `checked_at` instead of adding a
+  row. Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).
 
 Telegram, Discord and LinkedIn give no numbers back; Reddit's per-post numbers are not read. The
 per-post numbers, scored per network ([stats.md](stats.md)), are also what the recommended
@@ -353,4 +362,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]]
