@@ -145,6 +145,22 @@ test('analytics: one report per video, lifetime from the launch day, its columns
   assert.deepEqual(units, [], 'the Analytics API has its own quota: no Data API units');
 });
 
+test('analytics: one video YouTube cannot report on is said, and the others are kept', async () => {
+  const report = () => Response.json({ columnHeaders: [{ name: 'shares' }], rows: [[4]] });
+  const yt = youtube([[REPORTS, sequence(report, () => Response.json({ error: { code: 400, message: 'Invalid filter' } }, { status: 400 }), report)]]);
+  const out = await yt.analytics(
+    [
+      { id: 'v1', since: '2026-10-29' },
+      { id: 'bad', since: '2026-10-29' },
+      { id: 'v3', since: '2026-10-29' },
+    ],
+    '2026-11-03',
+  );
+  assert.deepEqual([...out], [['v1', { shares: 4 }], ['v3', { shares: 4 }]]);
+  assert.equal(out.problems?.length, 1);
+  assert.match(out.problems![0]!, /^bad: .*400/);
+});
+
 test('analytics refused for a token without yt-analytics.readonly: why, as a failure not worth retrying', async () => {
   const yt = youtube([[REPORTS, () => Response.json({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'Request had insufficient authentication scopes.', details: [{ reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }] } }, { status: 403 })]]);
   await assert.rejects(yt.analytics([{ id: 'v1', since: '2026-10-29' }], '2026-11-03'), (error: unknown) => error instanceof ConnectorError && error.retryable === false && /yt-analytics\.readonly.*connect YouTube again/.test(error.message));

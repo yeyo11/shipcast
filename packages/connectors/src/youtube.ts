@@ -1,5 +1,5 @@
 import { HttpClient } from './http-client.ts';
-import { checkProblem, ConnectorError, secretTag, type IdentityCache, imageUrl, okCheck, PostGone, statsOf, type Check, type Comment, type CommentReader, type Deletable, type Metrics, type Profile, type ProfileEdit, type ProfileEditor, type ProfileLink, type ProfileReader, type ProfileStats, type Published, type Replier, type ReplyTarget, type SentReply } from './http.ts';
+import { checkProblem, ConnectorError, secretTag, type IdentityCache, imageUrl, okCheck, PostGone, statsOf, type AnalyticsMany, type Check, type Comment, type CommentReader, type Deletable, type Metrics, type Profile, type ProfileEdit, type ProfileEditor, type ProfileLink, type ProfileReader, type ProfileStats, type Published, type Replier, type ReplyTarget, type SentReply } from './http.ts';
 
 /** The YouTube Analytics scope: watch time, engaged views and shares of the channel's own videos */
 export const YOUTUBE_ANALYTICS_SCOPE = 'https://www.googleapis.com/auth/yt-analytics.readonly';
@@ -400,30 +400,39 @@ export class YouTube implements Deletable, CommentReader, Replier, ProfileReader
    * with the Analytics API off, is refused with why, once, never as a broken account: the views and
    * likes of the hourly reads are not touched.
    */
-  async analytics(videos: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<Map<string, Metrics>> {
-    const out = new Map<string, Metrics>();
+  async analytics(videos: ReadonlyArray<{ id: string; since: string }>, until: string): Promise<AnalyticsMany> {
+    const out: AnalyticsMany = new Map();
     const asked = Object.keys(YOUTUBE_ANALYTICS_METRICS);
+    // A refusal of the whole connection ends the read; anything else is that one video's, said while
+    // the others are read, so one bad video never costs the rest their day's numbers
+    let refused: ConnectorError | undefined;
     for (const video of videos) {
-      const query = new URLSearchParams({ ids: 'channel==MINE', startDate: video.since, endDate: until, metrics: asked.join(','), filters: `video==${video.id}` });
-      const response = await this.#http.request(`${ANALYTICS}?${query}`, { headers: await this.#auth(), what: 'read the analytics' });
-      const text = await response.text();
-      if (response.status === 403 && /SCOPE_INSUFFICIENT|insufficient authentication scopes|insufficientPermissions/i.test(text)) {
-        throw new ConnectorError('YouTube', 'YouTube Analytics was not granted to this connection (yt-analytics.readonly): connect YouTube again from Channels to read watch time, engaged views and shares', 403, false);
+      try {
+        const query = new URLSearchParams({ ids: 'channel==MINE', startDate: video.since, endDate: until, metrics: asked.join(','), filters: `video==${video.id}` });
+        const response = await this.#http.request(`${ANALYTICS}?${query}`, { headers: await this.#auth(), what: 'read the analytics' });
+        const text = await response.text();
+        if (response.status === 403 && /SCOPE_INSUFFICIENT|insufficient authentication scopes|insufficientPermissions/i.test(text)) {
+          throw (refused = new ConnectorError('YouTube', 'YouTube Analytics was not granted to this connection (yt-analytics.readonly): connect YouTube again from Channels to read watch time, engaged views and shares', 403, false));
+        }
+        if (response.status === 403 && /SERVICE_DISABLED|accessNotConfigured|has not been used in project/i.test(text)) {
+          throw (refused = new ConnectorError('YouTube', 'the YouTube Analytics API is off in the Google Cloud project: turn it on, then the analytics are read on the next day', 403, false));
+        }
+        if (response.status === 401) throw (refused = new ConnectorError('YouTube', `read the analytics: 401 ${text.slice(0, 300)}`, 401));
+        if (!response.ok) throw new ConnectorError('YouTube', `read the analytics: ${response.status} ${text.slice(0, 300)}`, response.status);
+        const answer = JSON.parse(text) as { columnHeaders?: Array<{ name: string }>; rows?: number[][] };
+        const row = answer.rows?.[0];
+        if (!row) continue;
+        const values: Metrics = {};
+        (answer.columnHeaders ?? []).forEach((header, i) => {
+          const name = YOUTUBE_ANALYTICS_METRICS[header.name as keyof typeof YOUTUBE_ANALYTICS_METRICS];
+          const value = row[i];
+          if (name && typeof value === 'number' && Number.isFinite(value)) values[name] = value;
+        });
+        out.set(video.id, values);
+      } catch (error) {
+        if (refused) throw refused;
+        (out.problems ??= []).push(`${video.id}: ${error instanceof Error ? error.message : String(error)}`);
       }
-      if (response.status === 403 && /SERVICE_DISABLED|accessNotConfigured|has not been used in project/i.test(text)) {
-        throw new ConnectorError('YouTube', 'the YouTube Analytics API is off in the Google Cloud project: turn it on, then the analytics are read on the next day', 403, false);
-      }
-      if (!response.ok) throw new ConnectorError('YouTube', `read the analytics: ${response.status} ${text.slice(0, 300)}`, response.status);
-      const answer = JSON.parse(text) as { columnHeaders?: Array<{ name: string }>; rows?: number[][] };
-      const row = answer.rows?.[0];
-      if (!row) continue;
-      const values: Metrics = {};
-      (answer.columnHeaders ?? []).forEach((header, i) => {
-        const name = YOUTUBE_ANALYTICS_METRICS[header.name as keyof typeof YOUTUBE_ANALYTICS_METRICS];
-        const value = row[i];
-        if (name && typeof value === 'number' && Number.isFinite(value)) values[name] = value;
-      });
-      out.set(video.id, values);
     }
     return out;
   }
