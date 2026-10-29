@@ -5,10 +5,8 @@ import type { RepoArchiveSource } from '../github.ts';
 
 /*
  * The AI task runner without a network: the AI SDK's mock model behind a provider definition of its
- * own, so a task migrated onto the runner is tested on the runner's real code path (its tool loop,
- * its validation and repair, its errors). A model scripted here answers both the SDK's generate and
- * stream calls, so one model can drive the old provider path and the runner alike, and the two can
- * be compared on what they record.
+ * own, so every task is tested on the runner's real code path (its tool loop, its validation and
+ * repair, its errors). A model scripted here answers both the SDK's generate and stream calls.
  */
 
 export type MockStreamPart = Awaited<ReturnType<MockLanguageModelV4['doStream']>>['stream'] extends ReadableStream<infer P> ? P : never;

@@ -1,9 +1,9 @@
-import { AssistantRefused, checkAgainstCodeOnRunner, launchCodeRef, launchGrounding, type CheckAnswer, type JobRecord, type Launch, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { AssistantRefused, checkAgainstCode, launchCodeRef, launchGrounding, type CheckAnswer, type JobRecord, type Launch, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import type { JobData, JobQueue } from './queue.ts';
 
 /*
- * The writing assistant's "Check against the code" as a heavy job (`ai-runner`): a clone and an
+ * The writing assistant's "Check against the code" as a heavy job: a clone and an
  * agent reading it for minutes never run inside a page's request. The page sends the request, gets
  * the job's id, follows the job's row through its live events (or reads it every few seconds), and
  * reads the result once the job has ended. The result is kept under the job's id; a day later it is
@@ -41,22 +41,20 @@ export interface AssistantCheckDeps {
 
 /**
  * The job: the launch's grounding and its released code, checked on the runner, the answer kept for
- * the page. A launch without code, a missing runner or the provider's failure fails the job with why.
+ * the page. A launch without code or the provider's failure fails the job with why.
  */
 export async function runAssistantCheck(d: AssistantCheckDeps, data: JobData['assistant-check'], job: { id: string; log(line: string): void; signal?: AbortSignal }): Promise<void> {
-  const runner = d.pipeline.aiRunner;
-  if (!runner) throw new Error('checking against the code as a job needs the ai-runner flag');
   const launch = await d.registry.launches.get(data.launchId);
   if (!launch) throw new AssistantRefused(`there is no launch ${data.launchId}`);
   const grounding = await launchGrounding(launch, { github: d.pipeline.github, launchesRepo: d.pipeline.launchesRepo });
   if (grounding.kind !== 'launch' || !grounding.launch) throw new AssistantRefused('an article has no code to check against: the article itself is the truth');
   const texts = (await d.pipeline.aiTexts?.()) ?? {};
   const checkout = await d.pipeline.checkout(launch.repo, launchCodeRef(launch));
-  const answer = await checkAgainstCodeOnRunner(
+  const answer = await checkAgainstCode(
     data.text,
     { kind: 'launch', document: '', launch: grounding.launch, ...(data.lang && { lang: data.lang }), ...(data.channel && { channel: data.channel }) },
     {
-      runner,
+      runner: d.pipeline.aiRunner,
       brand: d.brand,
       ...(texts.tone && { tone: texts.tone }),
       checkout,

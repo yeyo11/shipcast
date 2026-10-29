@@ -1,11 +1,9 @@
-import { ADAPT_TARGETS, AI_TASK_DEFINITIONS, ContentPack, channelInSentence, languageName, ShipcastError, PIECE_LIMITS, type AdaptChannelId, type Brand, type ContentPack as Pack, CheckAnswer, checkJsonSchema } from '@shipcast/schema';
+import { ADAPT_TARGETS, AI_TASK_DEFINITIONS, ContentPack, channelInSentence, languageName, ShipcastError, PIECE_LIMITS, type AdaptChannelId, type Brand, type ContentPack as Pack, type CheckAnswer } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
-import type { AiSetup } from './ai.ts';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
-import { ANALYSIS_TOOLS } from './prompt.ts';
 import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -255,40 +253,12 @@ export class AssistantRefused extends ShipcastError {
 }
 
 /**
- * Checks a launch's text against its released code: an agent reads the checkout with the read-only
- * analysis tools, as the pack's does, and answers with the corrected text and what it found. Not
- * streamed by nature: the answer is structured.
+ * Checks a launch's text against its released code, worked as a heavy job rather than in a page's
+ * request: the check task's turns and ceilings with the settings' budget over them, the released code
+ * read with the runner's tools over the job's clone or in a remote agent's workspace of the release.
+ * Not streamed by nature: the answer is structured. A provider's failure is its AiError, which fails the job.
  */
 export async function checkAgainstCode(
-  text: string,
-  context: AssistantContext,
-  deps: { setup: AiSetup; brand: Brand; checkout: Checkout; maxBudgetUsd?: number },
-): Promise<CheckAnswer> {
-  if (context.kind !== 'launch' || !context.launch) throw new AssistantRefused('there is no code to check an article against: the article is the truth');
-  const { system, prompt } = buildCheckPrompt(text, context, deps.brand, { tone: deps.setup.tone });
-  const result = await deps.setup.provider.generateObject({
-    prompt,
-    appendSystemPrompt: system,
-    jsonSchema: checkJsonSchema(),
-    cwd: deps.checkout.providerPath,
-    hostDir: deps.checkout.hostPath,
-    allowedTools: ANALYSIS_TOOLS,
-    model: deps.setup.model,
-    ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }),
-    maxTurns: 30,
-  });
-  const parsed = CheckAnswer.safeParse(result.output);
-  if (!parsed.success) throw new Error(`the AI's answer is not a check: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
-  return parsed.data;
-}
-
-/**
- * The same check on the AI task runner (`ai-runner`), worked as a heavy job rather than in a page's
- * request: the same prompt, the check task's turns and ceilings with the settings' budget over them,
- * the released code read with the runner's tools over the job's clone or in a remote agent's
- * workspace of the release. A provider's failure is its AiError, which fails the job.
- */
-export async function checkAgainstCodeOnRunner(
   text: string,
   context: AssistantContext,
   deps: { runner: AiTaskRunner; brand: Brand; tone?: string; checkout: Checkout; maxBudgetUsd?: number; signal?: AbortSignal },

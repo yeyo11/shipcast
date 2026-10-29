@@ -19,9 +19,17 @@ export const FLAGS = {
   'batched-metrics': 'Hourly, batched metrics and comment feeds',
   /** Phase 9: the pages update over SSE instead of polling */
   'realtime-ui': 'Pages updated over server-sent events',
-  /** The AI layer: every task run by Shipcast's own AI task runner, providers only as models */
-  'ai-runner': 'AI tasks through the AI task runner',
 } as const;
+
+/**
+ * Flags that were turned on in production and then became the only path, their switch removed. An
+ * environment that still lists one (an old SHIPCAST_FLAGS) starts as before: the name is accepted and
+ * ignored rather than refused as unknown, so retiring a flag never needs an environment change first.
+ */
+const RETIRED: ReadonlySet<string> = new Set([
+  // The AI task runner is the only AI layer (docs/decisions/ai-layer.md)
+  'ai-runner',
+]);
 
 export type Flag = keyof typeof FLAGS;
 
@@ -37,7 +45,7 @@ export class Flags {
     const names = (env.SHIPCAST_FLAGS ?? '')
       .split(',')
       .map((s) => s.trim())
-      .filter(Boolean);
+      .filter((n) => n && !RETIRED.has(n));
     const unknown = names.filter((n) => !(n in FLAGS));
     if (unknown.length > 0) throw new Error(`SHIPCAST_FLAGS: unknown ${unknown.join(', ')}; known: ${Object.keys(FLAGS).join(', ')}`);
     return new Flags(names as Flag[]);

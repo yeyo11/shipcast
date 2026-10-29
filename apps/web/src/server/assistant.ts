@@ -2,19 +2,14 @@ import {
   AssistantRefused,
   buildActionPrompt,
   buildChat,
-  checkAgainstCode,
   isAdaptTarget,
   isAssistantAction,
-  launchCodeRef,
   type AiTaskRunner,
   type AssistantContext,
   type PromptOptions,
-  type Checkout,
   type Launch,
   type AssistantRepository,
 } from '@shipcast/engine';
-// LEGACY (flag off): the old provider's setup, and the check run inside the request
-import type { AiSetup } from '@shipcast/engine/legacy-ai';
 import { AI_TASK_DEFINITIONS, type Brand } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
 import { splitProposals } from '../components/assistant/diff.ts';
@@ -28,25 +23,16 @@ import { id, InvalidInput, object, text } from './input.ts';
  */
 
 export interface AssistantDeps {
-  /** The `assistant` task's provider, model, prompts and tone, from the AI settings; unused with `aiRunner` */
-  setup?(): Promise<AiSetup>;
-  /** With `ai-runner`: the AI task runner the actions and the chat stream from */
-  aiRunner?: AiTaskRunner;
-  /** The owner's tone (and prompts), read before each answer on the runner */
+  /** The AI task runner the actions and the chat stream from */
+  aiRunner: AiTaskRunner;
+  /** The owner's tone (and prompts), read before each answer */
   texts?(): Promise<PromptOptions>;
   brand(): Promise<Brand>;
   launch(id: number): Promise<Launch | undefined>;
   /** What a launch's text is grounded in: its analysis, or nothing for an article */
   grounding(launch: Launch): Promise<Pick<AssistantContext, 'kind' | 'launch'>>;
-  checkout(repo: string, ref: string): Promise<Checkout>;
-  /** Where claudio's REST fallback works when there is no repo: its workspace root */
-  aiWorkdir?: string;
-  maxBudgetUsd?: number;
-  /**
-   * With `ai-runner`: queues the check against the code as a heavy job and gives its id, so no clone
-   * nor agent runs inside this request; without it the check runs here, as before
-   */
-  startCheck?(launch: Launch, request: { text: string; lang?: string; channel?: string }): Promise<string>;
+  /** Queues the check against the code as a heavy job and gives its id, so no clone nor agent runs inside this request */
+  startCheck(launch: Launch, request: { text: string; lang?: string; channel?: string }): Promise<string>;
   /** Where chat turns are kept; without it the chat is not saved */
   sessions?: Pick<AssistantRepository, 'createAssistantSession' | 'assistantSession' | 'addAssistantMessage'>;
 }
@@ -112,8 +98,8 @@ export function parseAssistantRequest(input: unknown): AssistantRequest {
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /**
- * The events for one request, in order: `whole` first when the provider cannot stream, the text as
- * it comes (or the check's result), and `done`; a failure is an `error` event, never a broken stream.
+ * The events for one request, in order: the text as it comes and `done`, or for a check `whole` and
+ * the job that works it; a failure is an `error` event, never a broken stream.
  */
 export async function* assistantEvents(request: AssistantRequest, deps: AssistantDeps, signal?: AbortSignal): AsyncGenerator<AssistantEvent> {
   try {
@@ -127,30 +113,20 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
       ...(request.channel && { channel: request.channel }),
       ...(grounding.launch && { launch: grounding.launch }),
     };
-    const runner = deps.aiRunner;
-    const [setup, brand] = await Promise.all([runner ? undefined : legacySetup(deps), deps.brand()]);
-    const tone = setup ? setup.tone : (await deps.texts?.())?.tone;
+    const [brand, texts] = await Promise.all([deps.brand(), deps.texts?.()]);
+    const tone = texts?.tone;
     const selection = request.selection.trim() ? request.selection : request.document;
 
     if (request.action === 'check') {
       if (!launch || context.kind !== 'launch') throw new AssistantRefused('an article has no code to check against: the article itself is the truth');
       yield { type: 'whole' };
-      if (deps.startCheck) {
-        yield { type: 'job', id: await deps.startCheck(launch, { text: selection, ...(context.lang && { lang: context.lang }), ...(context.channel && { channel: context.channel }) }) };
-        return;
-      }
-      const checkSetup = setup ?? (await legacySetup(deps));
-      const checkout = await deps.checkout(launch.repo, launchCodeRef(launch));
-      const answer = await checkAgainstCode(selection, context, { setup: checkSetup, brand, checkout, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
-      yield { type: 'check', revised: answer.revised, findings: answer.findings };
-      yield { type: 'done' };
+      yield { type: 'job', id: await deps.startCheck(launch, { text: selection, ...(context.lang && { lang: context.lang }), ...(context.channel && { channel: context.channel }) }) };
       return;
     }
 
     // The chat is saved as it goes: the question first, so a session exists even if the answer fails
     const saving = request.action === 'chat' && deps.sessions ? await startSaving(request, launch, deps.sessions) : undefined;
 
-    let whole = false;
     const input =
       request.action === 'chat'
         ? (() => {
@@ -158,20 +134,13 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
             return { system: chat.system, messages: chat.messages };
           })()
         : buildActionPrompt({ action: request.action, selection, ...(request.target && isAdaptTarget(request.target) && { target: request.target }) }, context, brand, { ...(tone && { tone }) });
-    // On the runner every provider streams: there is no whole-answer fallback to announce
-    const stream = runner
-      ? runner.stream(AI_TASK_DEFINITIONS.assistant, { ...input, ...(signal && { abortSignal: signal }) }).textStream
-      : setup!.provider.streamText({ ...input, model: setup!.model, cwd: deps.aiWorkdir ?? '/workspace', ...(signal && { abortSignal: signal }), onWhole: () => (whole = true) });
+    // Every provider streams: there is no whole-answer fallback to announce
+    const stream = deps.aiRunner.stream(AI_TASK_DEFINITIONS.assistant, { ...input, ...(signal && { abortSignal: signal }) }).textStream;
 
-    let told = false;
     let answer = '';
     let settled = false;
     try {
       for await (const chunk of stream) {
-        if (whole && !told) {
-          told = true;
-          yield { type: 'whole' };
-        }
         if (chunk) {
           answer += chunk;
           yield { type: 'text', text: chunk };
@@ -196,12 +165,6 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
     if (signal?.aborted) return;
     yield { type: 'error', message: message(error) };
   }
-}
-
-/** The old provider path's setup, which every caller without the runner gives */
-async function legacySetup(deps: AssistantDeps): Promise<AiSetup> {
-  if (!deps.setup) throw new Error('the assistant has neither the AI task runner nor a provider');
-  return deps.setup();
 }
 
 type Sessions = NonNullable<AssistantDeps['sessions']>;

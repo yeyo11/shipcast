@@ -64,7 +64,7 @@ const cases = only ? file.cases.filter((c) => only.includes(c.id)) : file.cases;
 if (cases.length === 0) throw new Error(`no case matches --only ${values.only}`);
 
 const hostDir = process.env.SHIPCAST_EVAL_WORKSPACE ?? (await mkdtemp(join(tmpdir(), 'shipcast-eval-')));
-const workspace = { hostDir, providerDir: hostDir };
+const workspace = { hostDir };
 
 const brandCheckout = await checkout(workspace, file.brand.repo, file.brand.ref);
 const brandText = await readFile(join(brandCheckout.hostPath, file.brand.path), 'utf8');

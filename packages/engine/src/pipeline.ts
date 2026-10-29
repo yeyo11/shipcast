@@ -1,11 +1,8 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
-import type { AiTask } from '@shipcast/schema';
-import type { AiProvider, AiSetup } from './ai.ts';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, keepPubDates, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
-import { generatePack, generatePackOnRunner, type Generated } from './generate.ts';
-import { setupFor } from './legacy-ai.ts';
+import { generatePack } from './generate.ts';
 import type { PromptOptions } from './prompt.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
@@ -15,22 +12,18 @@ import type { Checkout } from './workspace.ts';
 
 export interface PipelineDeps {
   github: GitHubSource & GitHubWriter;
-  /** LEGACY (flag off): the provider every task falls back on when there are no AI settings to read */
-  ai?: AiProvider;
-  /** LEGACY (flag off): what a task runs with, read from the AI settings each time, so an edit applies to the next draft */
-  aiSetup?: (task: AiTask) => Promise<AiSetup>;
   /**
-   * With `ai-runner`: the AI task runner every task runs on instead of `ai` and `aiSetup`, which
-   * reads the task's provider and model from the AI settings when it runs. Built by the runtime's
-   * aiRunnerFor only.
+   * The AI task runner every task runs on, which reads the task's provider and model from the AI
+   * settings when it runs, so an edit applies to the next draft. Built by the runtime's aiRunnerFor,
+   * or Action mode's ciAiRunner.
    */
-  aiRunner?: AiTaskRunner;
+  aiRunner: AiTaskRunner;
   /** The owner's prompts and tone from the AI settings, read before each task on the runner; the defaults in code without */
   aiTexts?: () => Promise<PromptOptions>;
   registry: Pick<Repositories, 'launches'>;
   /** The repo whose blog and drafts this engine writes to, e.g. `yeyo11/launches` */
   launchesRepo: string;
-  /** Clones a repo at a ref into the workspace shared with the AI */
+  /** Clones a repo at a ref into the workspace, for the AI task runner's tools to read */
   checkout: (repo: string, ref: string) => Promise<Checkout>;
   now?: () => Date;
   maxBudgetUsd?: number;
@@ -38,8 +31,6 @@ export interface PipelineDeps {
   fetch?: typeof fetch;
   /** Screenshots and the tour of a project's site; headless Chromium by default */
   capture?: SiteCapture;
-  /** A folder the AI provider can work in when there is no repo to clone (an article); its workspace root */
-  aiWorkdir?: string;
   /** With `github-events`: the drafts snapshot written as the pull request is opened, so the page never reads GitHub */
   drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
 }
@@ -145,34 +136,13 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     return fail([`could not clone ${launch.repo} at ${ref}: ${error instanceof Error ? error.message : String(error)}`]);
   }
 
-  let generated: Generated;
-  if (deps.aiRunner) {
-    let texts: PromptOptions;
-    try {
-      texts = await aiTextsOf(deps);
-    } catch (error) {
-      return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
-    }
-    generated = await generatePackOnRunner({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
-  } else {
-    let setup: AiSetup;
-    try {
-      setup = await setupFor(deps, 'pack');
-    } catch (error) {
-      return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
-    }
-    generated = await generatePack({
-      ai: setup.provider,
-      model: setup.model,
-      prompts: setup.prompts,
-      tone: setup.tone,
-      launch,
-      config,
-      brand,
-      checkout,
-      maxBudgetUsd: deps.maxBudgetUsd,
-    });
+  let texts: PromptOptions;
+  try {
+    texts = await aiTextsOf(deps);
+  } catch (error) {
+    return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
   }
+  const generated = await generatePack({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref, ...(deps.maxBudgetUsd !== undefined && { maxBudgetUsd: deps.maxBudgetUsd }) });
   if (!generated.ok) {
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }

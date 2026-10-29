@@ -25,9 +25,8 @@ services:
     volumes:
       - claude-config:/home/node/.claude # Claude Code's account and settings
       - claudio-data:/data # claudio's store, credential and sign-ins
-      # The repos Shipcast clones to analyse: the engine writes them here, claudio reads them in
-      # /workspace. Gitignored
-      - ./workspace:/workspace
+      # No shared ./workspace: claudio downloads each release into a workspace of its own
+      # (docs/decisions/ai-layer.md)
     restart: unless-stopped
     stop_grace_period: 30s # time for SIGTERM to stop the chats and close the store
 

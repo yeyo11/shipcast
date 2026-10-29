@@ -27,10 +27,10 @@ test('a release is cloned at its tag, fresh, and mapped to the provider path', a
     writeFileSync(join(origin, 'VERSION'), '1.0.0-dev\n');
     git(origin, 'commit', '--quiet', '-am', 'after the tag');
 
-    const workspace = { hostDir: join(root, 'workspace'), providerDir: '/workspace/', cloneUrl: () => origin };
+    const workspace = { hostDir: join(root, 'workspace'), cloneUrl: () => origin };
     const first = await checkout(workspace, 'yeyo11/claudio', 'v0.9.0');
     assert.equal(readFileSync(join(first.hostPath, 'VERSION'), 'utf8'), '0.9.0\n', 'the tag, not the branch tip');
-    assert.equal(first.providerPath, '/workspace/yeyo11__claudio@v0.9.0');
+    assert.equal(first.hostPath, join(root, 'workspace', 'yeyo11__claudio@v0.9.0'));
 
     writeFileSync(join(first.hostPath, 'leftover'), 'from a previous run');
     const again = await checkout(workspace, 'yeyo11/claudio', 'v0.9.0');
@@ -51,7 +51,7 @@ test('a tag that does not exist fails loudly', async () => {
     writeFileSync(join(origin, 'a'), 'a');
     git(origin, 'add', '.');
     git(origin, 'commit', '--quiet', '-m', 'a');
-    await assert.rejects(checkout({ hostDir: join(root, 'ws'), providerDir: '/workspace', cloneUrl: () => origin }, 'yeyo11/x', 'v9.9.9'));
+    await assert.rejects(checkout({ hostDir: join(root, 'ws'), cloneUrl: () => origin }, 'yeyo11/x', 'v9.9.9'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -66,11 +66,11 @@ test('per job, two jobs of one repo and ref each get a folder of their own, remo
     git(origin, 'add', '.');
     git(origin, 'commit', '--quiet', '-m', 'v0.9.0');
     git(origin, 'tag', 'v0.9.0');
-    const workspace = { hostDir: join(root, 'workspace'), providerDir: '/workspace', cloneUrl: () => origin, perJob: true };
+    const workspace = { hostDir: join(root, 'workspace'), cloneUrl: () => origin, perJob: true };
 
     let release!: () => void;
     const hold = new Promise<void>((r) => (release = r));
-    const seen: Array<{ hostPath: string; providerPath: string }> = [];
+    const seen: Array<{ hostPath: string }> = [];
     const job = () =>
       withJobWorkspace(async () => {
         const clone = await checkout(workspace, 'yeyo11/claudio', 'v0.9.0');
@@ -81,14 +81,14 @@ test('per job, two jobs of one repo and ref each get a folder of their own, remo
     const both = Promise.all([job(), job()]);
     while (seen.length < 2) await new Promise((r) => setTimeout(r, 20));
     assert.notEqual(seen[0]!.hostPath, seen[1]!.hostPath);
-    assert.match(seen[0]!.providerPath, /^\/workspace\/yeyo11__claudio@v0\.9\.0~/);
+    assert.ok(seen[0]!.hostPath.startsWith(join(root, 'workspace', 'yeyo11__claudio@v0.9.0~')));
     release();
     await both;
     for (const clone of seen) assert.equal(existsSync(clone.hostPath), false, 'removed at the end of its job');
 
     // Outside a job, or without perJob, one folder per repo and ref, kept, as before
     const kept = await withJobWorkspace(() => checkout({ ...workspace, perJob: false }, 'yeyo11/claudio', 'v0.9.0'));
-    assert.equal(kept.providerPath, '/workspace/yeyo11__claudio@v0.9.0');
+    assert.equal(kept.hostPath, join(root, 'workspace', 'yeyo11__claudio@v0.9.0'));
     assert.equal(existsSync(kept.hostPath), true);
   } finally {
     rmSync(root, { recursive: true, force: true });

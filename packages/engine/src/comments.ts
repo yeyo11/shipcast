@@ -1,11 +1,10 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { AI_TASK_DEFINITIONS, channelDefinition, channelName, COMMENT_CHANNELS, ContentPack, InvalidRequest, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type Channel, type CommentChannelId, type ReplyCapability, ReplyAnswer, replyJsonSchema } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, channelDefinition, channelName, COMMENT_CHANNELS, ContentPack, InvalidRequest, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type Channel, type CommentChannelId, type ReplyCapability, ReplyAnswer } from '@shipcast/schema';
 import { z } from 'zod';
-import type { AiSetup } from './ai.ts';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { isArticle, launchDir } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
-import { ANALYSIS_TOOLS, buildReplyPrompt, type PromptOptions, type ReplyPromptInput } from './prompt.ts';
+import { buildReplyPrompt, type PromptOptions, type ReplyPromptInput } from './prompt.ts';
 import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Repositories } from './repositories/index.ts';
 import type { CommentStore, SettingReader, SettingStore } from './ports.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
@@ -336,8 +335,6 @@ export interface ReplyContext {
   analysis?: ReplyPromptInput['analysis'];
   /** Each channel's text as the pack had it */
   postText: Partial<Record<CommentChannel, string>>;
-  /** Where the AI works: the checkout as the provider sees it, or a folder with no repo */
-  cwd: string;
   /** The checkout on this machine, when there is one */
   hostDir?: string;
   /** The released code's repo and ref, when there is code: what a remote agent's workspace is made from */
@@ -346,11 +343,9 @@ export interface ReplyContext {
 
 export interface ReplyDeps extends CommentDeps {
   brand: Brand;
-  /** The `replies` task's provider, model, prompts and tone, read from the AI settings; unused with `aiRunner` */
-  setup?(): Promise<AiSetup>;
-  /** With `ai-runner`: the AI task runner the replies are drafted on */
-  aiRunner?: AiTaskRunner;
-  /** The owner's prompts and tone, read before each reply on the runner; the defaults in code without */
+  /** The AI task runner the replies are drafted on */
+  aiRunner: AiTaskRunner;
+  /** The owner's prompts and tone, read before each reply; the defaults in code without */
   texts?(): Promise<PromptOptions>;
   /** A launch's grounding; called once per launch per run */
   context(launch: Launch): Promise<ReplyContext>;
@@ -407,8 +402,7 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
     const launch = (await registry.launches.get(comment.launchId))!;
     if (!contexts.has(launch.id)) contexts.set(launch.id, deps.context(launch));
     const context = await contexts.get(launch.id)!;
-    const setup = deps.aiRunner ? undefined : await legacySetup(deps);
-    const texts: PromptOptions = setup ? { prompts: setup.prompts, tone: setup.tone } : ((await deps.texts?.()) ?? {});
+    const texts: PromptOptions = (await deps.texts?.()) ?? {};
     const thread = await threadOf(registry, comment);
     const { prompt, system } = buildReplyPrompt(
       {
@@ -424,22 +418,9 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
       deps.brand,
       texts,
     );
-    // On the runner the code is read by the provider's own means: the clone's tools, or a remote workspace of the release
+    // The code is read by the provider's own means: the clone's tools, or a remote workspace of the release
     const repo = context.repo && { ...context.repo, ...(context.hostDir && { hostDir: context.hostDir }) };
-    const output = deps.aiRunner
-      ? (await deps.aiRunner.run(AI_TASK_DEFINITIONS.replies, { system, prompt, ...(repo && { repo }) })).output
-      : (
-          await setup!.provider.generateObject({
-            prompt,
-            appendSystemPrompt: system,
-            jsonSchema: replyJsonSchema(),
-            cwd: context.cwd,
-            ...(context.hostDir && { hostDir: context.hostDir }),
-            allowedTools: context.hostDir ? ANALYSIS_TOOLS : [],
-            model: setup!.model,
-            maxTurns: 20,
-          })
-        ).output;
+    const { output } = await deps.aiRunner.run(AI_TASK_DEFINITIONS.replies, { system, prompt, ...(repo && { repo }) });
     const parsed = ReplyAnswer.safeParse(output);
     if (!parsed.success) return fail(`the AI's answer is not a reply: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
     const answer = parsed.data;
@@ -454,12 +435,6 @@ export async function draftReply(id: number, deps: ReplyDeps, contexts = new Map
     if (error instanceof CommentRefused) throw error;
     return fail(`could not draft: ${message(error)}`);
   }
-}
-
-/** The old provider path's setup, which every caller without the runner gives */
-async function legacySetup(deps: ReplyDeps): Promise<AiSetup> {
-  if (!deps.setup) throw new Error('the replies task has neither the AI task runner nor a provider');
-  return deps.setup();
 }
 
 /** The owner's own words for a reply, replacing the draft */
@@ -580,8 +555,6 @@ export function launchReplyContext(deps: {
   github: Pick<GitHubSource, 'fileAt'>;
   launchesRepo: string;
   checkout: (repo: string, ref: string) => Promise<Checkout>;
-  /** Where the AI works when there is no repo to check out */
-  aiWorkdir?: string;
 }): (launch: Launch) => Promise<ReplyContext> {
   return async (launch) => {
     const text = await deps.github.fileAt(deps.launchesRepo, `${launchDir(launch)}/pack.json`, 'HEAD').catch(() => undefined);
@@ -604,9 +577,9 @@ export function launchReplyContext(deps: {
       if (text) postText[channel] = text;
     }
     const base = { ...(pack && { analysis: pack.analysis }), postText };
-    if (isArticle(launch)) return { ...base, cwd: deps.aiWorkdir ?? '/workspace' };
+    if (isArticle(launch)) return base;
     const ref = launch.ref.startsWith('public:') ? 'HEAD' : launch.ref;
     const checkout = await deps.checkout(launch.repo, ref);
-    return { ...base, cwd: checkout.providerPath, hostDir: checkout.hostPath, repo: { name: launch.repo, ref } };
+    return { ...base, hostDir: checkout.hostPath, repo: { name: launch.repo, ref } };
   };
 }

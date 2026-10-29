@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand } from '@shipcast/schema';
 import { ADAPT_TARGETS, AssistantRefused, buildActionPrompt, buildChat, checkAgainstCode, LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES, parseTitles, type AssistantContext } from '../src/index.ts';
-import { Claudio, transcript } from '../src/legacy-ai.ts';
+import { mockRunner, scriptedModel, textParts } from '../src/testing/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'plain and direct.' });
 
@@ -90,70 +90,9 @@ test('the chat asks for a fenced proposal of the selection, or of the whole text
 });
 
 test('checking against the code is refused for an article: there is no code behind it', async () => {
-  const setup = { provider: { id: 'test' as const, generateObject: async () => assert.fail('no call'), streamText: async function* () {} }, prompts: {} };
-  await assert.rejects(checkAgainstCode('x', article, { setup, brand, checkout: { providerPath: '/w', hostPath: '/w' } as never }), AssistantRefused);
-});
-
-interface Call {
-  method: string;
-  path: string;
-  body: unknown;
-}
-
-/** A claudio whose OpenAI-compatible surface answers `v1Status`, and whose REST chat answers `text` */
-function claudio(v1Status: number, text: string, calls: Call[]) {
-  const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
-    const method = init?.method ?? 'GET';
-    calls.push({ method, path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    if (url.pathname.startsWith('/api/v1/')) return Response.json({ error: { message: 'no such route' } }, { status: v1Status });
-    if (method === 'POST' && url.pathname === '/api/chats') return Response.json({ id: 'chat-1', state: 'working' });
-    if (method === 'POST' && url.pathname.endsWith('/stop')) return Response.json({ ok: true });
-    return Response.json({
-      chat: { id: 'chat-1', state: 'idle', alive: true, executions: [{ outcome: 'success', error: null, costUsd: 0.01 }] },
-      entries: [{ role: 'assistant', isSidechain: false, blocks: [{ type: 'tool_use', name: 'StructuredOutput', input: { text } }] }],
-    });
-  }) as typeof globalThis.fetch;
-  return new Claudio({ url: 'http://claudio:8798', token: 'tok', fetch, pollMs: 1, sleep: async () => {} });
-}
-
-test('claudio without its OpenAI-compatible API answers through its REST chat, whole, and says so first', async () => {
-  const calls: Call[] = [];
-  let whole = false;
-  const chunks: string[] = [];
-  for await (const chunk of claudio(404, 'A shorter intro.', calls).streamText({ system: 'Rules.', prompt: 'Shorten it.', cwd: '/workspace', onWhole: () => (whole = true) })) {
-    assert.ok(whole, 'onWhole is called before the text');
-    chunks.push(chunk);
-  }
-  assert.deepEqual(chunks, ['A shorter intro.']);
-  const started = calls.find((c) => c.method === 'POST' && c.path === '/api/chats');
-  const body = started?.body as Record<string, unknown>;
-  assert.equal(body.appendSystemPrompt, 'Rules.');
-  assert.deepEqual(body.allowedTools, [], 'nothing to read: the text is in the prompt');
-  assert.equal(body.cwd, '/workspace');
-  assert.match(String(body.prompt), /^Shorten it\.\n\nPut your whole answer in `text`\.$/);
-  assert.ok(calls.some((c) => c.path === '/api/chats/chat-1/stop'), 'the chat is stopped, freeing its slot');
-});
-
-test('a claudio failure that is not a missing route is not retried through the REST chat', async () => {
-  const calls: Call[] = [];
-  const read = async () => {
-    for await (const _ of claudio(500, 'never', calls).streamText({ prompt: 'x' })) void _;
-  };
-  await assert.rejects(read());
-  assert.ok(!calls.some((c) => c.path === '/api/chats'));
-});
-
-test('a chat becomes one labelled transcript for the REST fallback', () => {
-  const text = transcript({
-    messages: [
-      { role: 'user', content: 'Make it punchier' },
-      { role: 'assistant', content: 'Like this?' },
-      { role: 'user', content: [{ type: 'text', text: 'Shorter' }] },
-    ],
-  });
-  assert.match(text, /The owner wrote:\nMake it punchier\n\nYou wrote:\nLike this\?\n\nThe owner wrote:\nShorter/);
-  assert.match(text, /Answer the owner’s last message\. Put your whole answer in `text`\.$/);
+  const model = scriptedModel(textParts('never'));
+  await assert.rejects(checkAgainstCode('x', article, { runner: mockRunner(model), brand, checkout: { hostPath: '/w' } }), AssistantRefused);
+  assert.equal(model.doStreamCalls.length, 0, 'nothing is asked of the AI');
 });
 
 test('a network piece carries its cap into every action and the chat, counted the way the network counts', () => {

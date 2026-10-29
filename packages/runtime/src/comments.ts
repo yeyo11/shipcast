@@ -1,4 +1,3 @@
-import { setupFor } from '@shipcast/engine/legacy-ai';
 import { launchReplyContext, type CommentRunResult, type PipelineDeps, type Repositories, type ReplyDeps } from '@shipcast/engine';
 import type { GitHubTokenSource, IdentityCache } from '@shipcast/connectors';
 import type { Brand } from '@shipcast/schema';
@@ -37,13 +36,13 @@ export function replyDeps(d: CommentWorkDeps): ReplyDeps {
     registry: d.registry,
     brand: d.brand,
     connectors: commentConnectors({ env: d.env, brand: d.brand, registry: d.registry, secrets: d.secrets, ...(d.fetch && { fetch: d.fetch }), ...(d.github && { github: d.github }), ...(d.cache && { cache: d.cache }) }),
-    // With `ai-runner` the replies are drafted on the runner, with the owner's prompts and tone; else on the old provider
-    ...(d.pipeline.aiRunner ? { aiRunner: d.pipeline.aiRunner, texts: d.pipeline.aiTexts ?? (async () => ({})) } : { setup: () => setupFor(d.pipeline, 'replies') }),
+    // Drafted on the runner, with the owner's prompts and tone
+    aiRunner: d.pipeline.aiRunner,
+    texts: d.pipeline.aiTexts ?? (async () => ({})),
     context: launchReplyContext({
       github: d.pipeline.github,
       launchesRepo: d.pipeline.launchesRepo,
       checkout: d.pipeline.checkout,
-      ...(d.pipeline.aiWorkdir && { aiWorkdir: d.pipeline.aiWorkdir }),
     }),
   };
 }

@@ -2,27 +2,25 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { AiTaskRunner, Launch } from '@shipcast/engine';
 import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, memoryRegistry, mockRunner, scriptedModel, textParts } from '@shipcast/engine/testing';
-import { mockStreamingProvider } from '@shipcast/engine/testing/legacy-ai';
 import { Brand } from '@shipcast/schema';
 import { readEvents, type AssistantEvent } from '../src/components/assistant/protocol.ts';
 import { handleAssistant, type AssistantDeps } from '../src/server/assistant.ts';
 
 /*
- * The writing assistant's quick actions and chat on the AI task runner (`ai-runner`): streamed by
- * every provider, so the old whole-answer fallback and its `whole` event are gone from this path; the
- * same pieces make the same events and the same saved session as the old path; a failure is an
- * `error` event with the AiError's words.
+ * The writing assistant's quick actions and chat on the AI task runner: streamed by every provider,
+ * so a chat or an action never announces a whole answer; the pieces make the events and the saved
+ * session; a failure is an `error` event with the AiError's words.
  */
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 const at = '2026-10-26T00:00:00.000Z';
 const release: Launch = { id: 7, repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal', status: 'drafted', detail: null, createdAt: at, updatedAt: at };
 
-const base: Omit<AssistantDeps, 'setup' | 'aiRunner'> = {
+const base: Omit<AssistantDeps, 'aiRunner'> = {
   brand: async () => brand,
   launch: async (id) => (id === release.id ? release : undefined),
   grounding: async (launch) => ({ kind: 'launch', launch: { repo: launch.repo, ref: launch.ref } }),
-  checkout: async () => assert.fail('nothing is checked out here'),
+  startCheck: async () => assert.fail('no check is queued here'),
 };
 
 async function ask(body: unknown, deps: AssistantDeps): Promise<AssistantEvent[]> {
@@ -35,21 +33,19 @@ async function ask(body: unknown, deps: AssistantDeps): Promise<AssistantEvent[]
 
 const chat = { action: 'chat', selection: '', document: 'Old. Rest.', messages: [{ role: 'user', content: 'Punchier, please' }] };
 
-test('assistant: the same pieces make the same events and the same saved session as the old path', async () => {
+test('assistant: the pieces make the text events and the saved session, with no whole-answer announcement', async () => {
   const pieces = ['```proposal\nNew', '.\n```'];
-  const run = async (ai: Pick<AssistantDeps, 'setup' | 'aiRunner' | 'texts'>) => {
-    const registry = await memoryRegistry();
-    const events = await ask(chat, { ...base, ...ai, sessions: registry.assistant });
-    const saved = events.find((e): e is Extract<AssistantEvent, { type: 'saved' }> => e.type === 'saved');
-    assert.ok(saved, 'the turn is saved');
-    const messages = await registry.assistant.assistantMessages(saved.sessionId);
-    return { events, messages: messages.map((m) => ({ role: m.role, content: m.content, proposals: m.proposals, problem: m.problem })) };
-  };
-  const old = await run({ setup: async () => ({ provider: await mockStreamingProvider(pieces), prompts: {} }) });
+  const registry = await memoryRegistry();
   const model = scriptedModel(textParts(...pieces));
-  const now = await run({ aiRunner: mockRunner(model), texts: async () => ({ tone: 'Plain words.' }) });
-  assert.deepEqual(now, old);
-  assert.ok(!now.events.some((e) => e.type === 'whole'));
+  const events = await ask(chat, { ...base, aiRunner: mockRunner(model), texts: async () => ({ tone: 'Plain words.' }), sessions: registry.assistant });
+  const saved = events.find((e): e is Extract<AssistantEvent, { type: 'saved' }> => e.type === 'saved');
+  assert.ok(saved, 'the turn is saved');
+  assert.deepEqual(events, [{ type: 'text', text: pieces[0] }, { type: 'text', text: pieces[1] }, saved, { type: 'done' }]);
+  const messages = (await registry.assistant.assistantMessages(saved.sessionId)).map((m) => ({ role: m.role, content: m.content, proposals: m.proposals, problem: m.problem }));
+  assert.deepEqual(messages, [
+    { role: 'user', content: 'Punchier, please', proposals: [], problem: null },
+    { role: 'assistant', content: pieces.join(''), proposals: [{ text: 'New.', state: 'open' }], problem: null },
+  ]);
   assert.match(JSON.stringify(model.doStreamCalls[0]!.prompt), /Plain words\./, 'the owner’s tone');
   assert.match(JSON.stringify(model.doStreamCalls[0]!.prompt), /Punchier, please/);
 });

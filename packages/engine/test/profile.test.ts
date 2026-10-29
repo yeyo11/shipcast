@@ -2,27 +2,21 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { MockLanguageModelV4 } from 'ai/test';
+import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { buildProfileReviewPrompt, capabilityWithReview, editProfile, fieldProblem, LOCKED_PROFILE_RULES, parseLinks, profileCapability, ProfileRefused, proposalEdit, readProfileReview, reviewProfile, type Account, type ProfileDeps, type Repositories } from '../src/index.ts';
-import { SdkProvider } from '../src/legacy-ai.ts';
 import { memoryRegistry } from '../src/testing.ts';
+import { mockRunner, textParts } from '../src/testing/index.ts';
 
 /*
  * Account analysis with the networks and the AI faked: the review's prompt, what is kept of the AI's
  * proposals, and edits refused or made through the connector, never a real network.
  */
 
-type GenerateResult = Extract<Awaited<ReturnType<MockLanguageModelV4['doGenerate']>>, { content: unknown }>;
-
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['es', 'en'] }, tone: 'plain' });
 
-function answer(value: unknown): GenerateResult {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(value) }],
-    finishReason: { unified: 'stop', raw: undefined },
-    usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 10, text: 10, reasoning: 0 } },
-    warnings: [],
-  };
+/** One streamed answer of JSON text: how the runner gets a structured answer with no repo to read */
+function answer(value: unknown) {
+  return { stream: convertArrayToReadableStream(textParts(JSON.stringify(value))) };
 }
 
 interface FakeNetwork {
@@ -32,7 +26,7 @@ interface FakeNetwork {
 
 function deps(registry: Repositories, network: FakeNetwork, output: unknown, prompts: string[] = []): ProfileDeps {
   const model = new MockLanguageModelV4({
-    doGenerate: async (options) => {
+    doStream: async (options) => {
       prompts.push(JSON.stringify(options.prompt));
       return answer(output);
     },
@@ -40,8 +34,7 @@ function deps(registry: Repositories, network: FakeNetwork, output: unknown, pro
   return {
     registry,
     brand,
-    cwd: '/workspace',
-    setup: async () => ({ provider: new SdkProvider({ id: 'test', model: () => model }), prompts: {} }),
+    aiRunner: mockRunner(model),
     connector: async () => ({
       profile: async () => structuredClone(network.profile),
       editProfile: async (edit) => {
@@ -129,8 +122,8 @@ test('a review keeps the useful proposals, states the current value from the pro
     }, prompts),
     account.id,
   ).catch((error: unknown) => error);
-  // A field the schema does not know is refused by the answer's own schema
-  assert.ok(review instanceof Error && /not a review/.test(review.message));
+  // A field the schema does not know is refused by the answer's own schema, after the runner's one repair
+  assert.ok(review instanceof Error && /answer to profile is not valid, even after a repair/.test(review.message), String(review));
 
   const ok = await reviewProfile(
     deps(registry, network, {

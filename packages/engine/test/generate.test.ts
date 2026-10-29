@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, LaunchConfig } from '@shipcast/schema';
-import { ANALYSIS_TOOLS, buildPrompt, generatePack, type Launch } from '../src/index.ts';
-import { type AiProvider, type ObjectRequest } from '../src/legacy-ai.ts';
+import { buildPrompt, generatePack, type Launch } from '../src/index.ts';
+import { mockRunner, scriptedModel, submitParts } from '../src/testing/index.ts';
 
 const brand = Brand.parse({
   id: 'personal',
@@ -43,22 +43,14 @@ const goodPack = {
   ],
 };
 
-class FakeAi implements AiProvider {
-  requests: ObjectRequest[] = [];
-  answer: unknown;
-  constructor(answer: unknown) {
-    this.answer = answer;
-  }
-  readonly id = 'test' as const;
-  async *streamText() {}
-  async generateObject(request: ObjectRequest) {
-    this.requests.push(request);
-    if (this.answer instanceof Error) throw this.answer;
-    return { output: this.answer, chatId: 'chat-1', costUsd: 0.5 };
-  }
-}
+const checkout = { hostPath: '/tmp/x' };
 
-const checkout = { hostPath: '/tmp/x', providerPath: '/workspace/yeyo11__claudio@v0.9.0' };
+/** The pack generated on a runner whose model answers `answer` through the submit tool */
+async function generated(answer: unknown) {
+  const model = scriptedModel(submitParts(answer));
+  const result = await generatePack({ runner: mockRunner(model), launch: launch(), config, brand, checkout, ref: 'v0.9.0' });
+  return { result, model };
+}
 
 test('the prompt carries the brand, the truth rule, the pack and one brief per active channel', () => {
   const { prompt, system } = buildPrompt(launch(), config, brand);
@@ -74,46 +66,22 @@ test('the prompt carries the brand, the truth rule, the pack and one brief per a
   assert.doesNotMatch(prompt, /linkedin|\bx:/i, 'channels that are off get no brief');
 });
 
-test('a valid, complete pack is accepted, and the request is read-only and schema-bound', async () => {
-  const ai = new FakeAi(goodPack);
-  const result = await generatePack({ ai, launch: launch(), config, brand, checkout, maxBudgetUsd: 3 });
+test('a valid, complete pack is accepted, and the clone is read with read-only tools only', async () => {
+  const { result, model } = await generated(goodPack);
   assert.equal(result.ok, true);
-  const request = ai.requests[0]!;
-  assert.equal(request.cwd, '/workspace/yeyo11__claudio@v0.9.0');
-  assert.deepEqual(request.allowedTools, ANALYSIS_TOOLS);
-  assert.ok(!request.allowedTools.some((t) => /Write|Edit|Bash\(\*|^Bash$/.test(t)), 'the analysis cannot change the repo');
-  assert.equal((request.jsonSchema as { type: string }).type, 'object');
-  assert.equal(request.maxBudgetUsd, 3);
-});
-
-test('a pack that breaks the schema is refused with the paths of the problems', async () => {
-  const result = await generatePack({ ai: new FakeAi({ ...goodPack, bluesky: { lang: 'en', text: 'x'.repeat(400) } }), launch: launch(), config, brand, checkout });
-  assert.equal(result.ok, false);
-  assert.ok(!result.ok && result.problems.some((p) => p.startsWith('bluesky.text:')));
-  assert.equal(!result.ok && result.chatId, 'chat-1');
+  const tools = (model.doStreamCalls[0]!.tools ?? []).map((t) => t.name).sort();
+  assert.deepEqual(tools, ['git', 'list_files', 'read_files', 'repo_overview', 'search', 'submit_answer'], 'the analysis cannot change the repo');
 });
 
 test('a pack for the wrong launch, or missing a piece, is refused', async () => {
   const { reddit: _r, ...noReddit } = goodPack;
-  const result = await generatePack({
-    ai: new FakeAi({ ...noReddit, kind: 'minor', project: { ...goodPack.project, repo: 'https://github.com/yeyo11/other' } }),
-    launch: launch(),
-    config,
-    brand,
-    checkout,
-  });
+  const { result } = await generated({ ...noReddit, kind: 'minor', project: { ...goodPack.project, repo: 'https://github.com/yeyo11/other' } });
   assert.equal(result.ok, false);
   assert.deepEqual(!result.ok && result.problems, [
     'kind is "minor", the launch is "launch"',
     'project.repo is https://github.com/yeyo11/other, the launch is yeyo11/claudio',
     'reddit: the pack has no reddit',
   ]);
-});
-
-test('a provider failure becomes a refused pack with its message and chat id', async () => {
-  const error = Object.assign(new Error('claudio chat failed: rate limit'), { chatId: 'chat-9' });
-  const result = await generatePack({ ai: new FakeAi(error), launch: launch(), config, brand, checkout });
-  assert.deepEqual(result, { ok: false, problems: ['claudio chat failed: rate limit'], chatId: 'chat-9' });
 });
 
 test('the prompt briefs the phase 5 channels when they are on', () => {

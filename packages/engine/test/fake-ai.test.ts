@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { Brand, LaunchConfig, parseLaunchConfig } from '@shipcast/schema';
-import { AiTaskRunner, FAKE_NOTICE, fakePack, fakePackAiProvider, generatePackOnRunner, type Launch } from '../src/index.ts';
+import { AiTaskRunner, FAKE_NOTICE, fakePack, fakePackAiProvider, generatePack, type Launch } from '../src/index.ts';
 
 const brand = Brand.parse({
   id: 'dev',
@@ -22,11 +22,11 @@ function launch(kind: Launch['kind'] = 'launch'): Launch {
 
 const everyChannel = 'enabled: true\nbrand: dev\npublishing:\n  reddit: approval\n  hashnode: approval\n  linkedin: approval\n  newsletter: approval\n  telegram: approval\n  discord: approval\n  threads: approval\nreddit:\n  subreddits: [node, programming]\n';
 
-function checkoutWith(launchYml: string): { hostPath: string; providerPath: string } {
+function checkoutWith(launchYml: string): { hostPath: string } {
   const dir = mkdtempSync(join(tmpdir(), 'shipcast-fake-ai-'));
   mkdirSync(join(dir, '.github'));
   writeFileSync(join(dir, '.github', 'launch.yml'), launchYml);
-  return { hostPath: dir, providerPath: dir };
+  return { hostPath: dir };
 }
 
 test('the fake pack passes the same checks as a real one, for every channel launch.yml turns on', async () => {
@@ -36,7 +36,7 @@ test('the fake pack passes the same checks as a real one, for every channel laun
     assert.ok(config.ok);
     // On the runner's whole path: it reads launch.yml with the runner's tool and answers through the submit tool
     const runner = new AiTaskRunner({ resolve: async () => ({ provider: fakePackAiProvider(launch(), brand), settings: {} }) });
-    const result = await generatePackOnRunner({ runner, launch: launch(), config: config.value, brand, checkout, ref: 'v0.1.0' });
+    const result = await generatePack({ runner, launch: launch(), config: config.value, brand, checkout, ref: 'v0.1.0' });
     assert.equal(result.ok, true, result.ok ? '' : result.problems.join('; '));
   }
 });
@@ -44,8 +44,8 @@ test('the fake pack passes the same checks as a real one, for every channel laun
 test('the fake provider reads launch.yml from the clone, and fails plainly without one', async () => {
   const runner = new AiTaskRunner({ resolve: async () => ({ provider: fakePackAiProvider(launch(), brand), settings: {} }) });
   const config = LaunchConfig.parse({ enabled: true, brand: 'dev' });
-  const empty = { hostPath: mkdtempSync(join(tmpdir(), 'shipcast-fake-ai-')), providerPath: '' };
-  const result = await generatePackOnRunner({ runner, launch: launch(), config, brand, checkout: empty, ref: 'v0.1.0' });
+  const empty = { hostPath: mkdtempSync(join(tmpdir(), 'shipcast-fake-ai-')) };
+  const result = await generatePack({ runner, launch: launch(), config, brand, checkout: empty, ref: 'v0.1.0' });
   assert.deepEqual(result.ok ? [] : result.problems, ['the fake AI provider could not read .github/launch.yml']);
 });
 

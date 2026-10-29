@@ -37,7 +37,7 @@ export interface Proposal {
   text: string;
   /** Still arriving */
   streaming: boolean;
-  /** The provider sends the whole answer at once (claudio until its streaming API exists) */
+  /** The answer arrives at once, not streamed (the check against the code) */
   whole: boolean;
   /** For titles: the candidates, one of which becomes the text */
   titles?: string[];
@@ -48,7 +48,6 @@ export interface Proposal {
 export interface ChatMessage extends ChatTurn {
   id: number;
   streaming?: boolean;
-  whole?: boolean;
   problem?: string;
   /** What the owner had selected when asking: proposals replace it */
   range?: Range;
@@ -223,8 +222,7 @@ export function useAssistant(target: AssistantTarget) {
       setChat((c) => [...c, mine, answer]);
       const update = (change: (m: ChatMessage) => ChatMessage) => setChat((c) => c.map((m) => (m.id === answer.id ? change(m) : m)));
       void ask({ ...base(), action: 'chat', messages: history, ...(sessionId !== undefined && { sessionId }), ...(range && { range }) }, controller.signal, (event) => {
-        if (event.type === 'whole') update((m) => ({ ...m, whole: true }));
-        else if (event.type === 'saved') {
+        if (event.type === 'saved') {
           setSessionId(event.sessionId);
           update((m) => ({ ...m, savedId: event.messageId }));
         }

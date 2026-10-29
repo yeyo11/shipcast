@@ -8,12 +8,11 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 
 /**
- * The folder shared with the AI provider: the engine clones into `hostDir`, and the provider sees the
- * same folder as `providerDir` (claudio mounts `./workspace` as `/workspace`, docs/claudio.md).
+ * Where the engine clones a release: the AI task runner's tools read the clone here. No AI provider
+ * shares this folder; a remote agent (Claudio) makes a workspace of its own from the repo's archive.
  */
 export interface Workspace {
   hostDir: string;
-  providerDir: string;
   /** Where a repo is cloned from; GitHub over HTTPS unless a test points elsewhere */
   cloneUrl?: (repo: string) => string;
   /**
@@ -42,10 +41,8 @@ export async function withJobWorkspace<T>(work: () => Promise<T>): Promise<T> {
 }
 
 export interface Checkout {
-  /** The clone, as the engine sees it */
+  /** The clone on this machine */
   hostPath: string;
-  /** The same clone, as the provider sees it: the `cwd` of the generation */
-  providerPath: string;
 }
 
 /** `yeyo11/claudio` at `v0.9.0` → `yeyo11__claudio@v0.9.0`: one folder per launch, never shared. */
@@ -71,5 +68,5 @@ export async function checkout(workspace: Workspace, repo: string, ref: string):
   if (ref !== 'HEAD') args.push('--branch', ref);
   await run('git', [...args, url, hostPath], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
 
-  return { hostPath, providerPath: `${workspace.providerDir.replace(/\/+$/, '')}/${name}` };
+  return { hostPath };
 }

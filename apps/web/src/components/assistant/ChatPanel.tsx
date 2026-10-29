@@ -84,7 +84,7 @@ function Answer({ message, assistant }: { message: ChatMessage; assistant: Assis
         })}
         {message.streaming && (
           <p className="muted chat-wait" role="status">
-            {message.whole ? 'Writing… with this provider the answer arrives all at once' : message.content ? '' : 'Writing…'}
+            {message.content ? '' : 'Writing…'}
           </p>
         )}
         {message.problem && (

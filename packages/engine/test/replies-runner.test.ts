@@ -4,9 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import type { Comment } from '@shipcast/connectors';
-import { ANALYSIS_RULES, Brand } from '@shipcast/schema';
-import { draftReply, fetchComments, runComments, type AiTaskRunner, type ReplyContext, type ReplyDeps, type Repositories } from '../src/index.ts';
-import { SdkProvider } from '../src/legacy-ai.ts';
+import { ANALYSIS_RULES, Brand, REPLY_LIMITS } from '@shipcast/schema';
+import { buildReplyPrompt, draftReply, fetchComments, runComments, type AiTaskRunner, type ReplyContext, type ReplyDeps, type Repositories } from '../src/index.ts';
 import {
   claudioAnswer,
   claudioChats,
@@ -23,8 +22,8 @@ import {
 } from '../src/testing/index.ts';
 
 /*
- * A comment's reply on the AI task runner (`ai-runner`): the same answer records the same draft as
- * the old provider path; a launch's code is read with the runner's tools over the clone or in a
+ * A comment's reply on the AI task runner: the answer becomes the comment's draft, from the prompt
+ * buildReplyPrompt writes; a launch's code is read with the runner's tools over the clone or in a
  * Claudio workspace of the release; a failure leaves the comment failed with why, and the run goes on.
  */
 
@@ -43,28 +42,37 @@ async function world(): Promise<{ registry: Repositories; commentId: number }> {
   return { registry, commentId: (await registry.comments.commentByExternalId('mastodon', '101'))!.id };
 }
 
-function deps(registry: Repositories, ai: Pick<ReplyDeps, 'setup' | 'aiRunner' | 'texts'>, context: ReplyContext): ReplyDeps {
+function deps(registry: Repositories, ai: Pick<ReplyDeps, 'aiRunner' | 'texts'>, context: ReplyContext): ReplyDeps {
   return { registry, brand, connectors: async () => ({}), context: async () => context, ...ai };
 }
 
-const noCode: ReplyContext = { analysis, postText: { mastodon: 'claudio is out' }, cwd: '/workspace' };
+const noCode: ReplyContext = { analysis, postText: { mastodon: 'claudio is out' } };
 
 async function recorded(registry: Repositories, id: number) {
   const c = (await registry.comments.comment(id))!;
   return { status: c.status, draft: c.draft, classification: c.classification, note: c.note, problem: c.problem };
 }
 
-test('replies: for the same answer the runner records the draft the old path records, from the same prompt', async () => {
-  const before = await world();
-  const oldModel = jsonModel(answer);
-  await draftReply(before.commentId, deps(before.registry, { setup: async () => ({ provider: new SdkProvider({ id: 'test', model: () => oldModel }), prompts: {} }) }, noCode));
+test('replies: the answer becomes the comment’s draft, from the prompt buildReplyPrompt writes', async () => {
   const now = await world();
   const model = jsonModel(answer);
   await draftReply(now.commentId, deps(now.registry, { aiRunner: mockRunner(model) }, noCode));
-  assert.deepEqual(await recorded(now.registry, now.commentId), await recorded(before.registry, before.commentId));
-  assert.equal((await recorded(now.registry, now.commentId)).draft, answer.reply);
-  const users = (calls: ReadonlyArray<{ prompt: ReadonlyArray<{ role: string }> }>) => JSON.stringify(calls[0]!.prompt.filter((m) => m.role === 'user'));
-  assert.equal(users(model.doStreamCalls), users(oldModel.doGenerateCalls));
+  assert.deepEqual(await recorded(now.registry, now.commentId), { status: 'draft-ready', draft: answer.reply, classification: 'question', note: answer.reason, problem: null });
+  const { prompt } = buildReplyPrompt(
+    {
+      network: 'Mastodon',
+      limit: REPLY_LIMITS.mastodon,
+      comment: { author: '@ana@fosstodon.org', text: 'Is there a Windows build?' },
+      thread: [],
+      post: { text: 'claudio is out', url: 'https://mastodon.social/@me/100' },
+      launch: { repo: 'yeyo11/claudio', ref: 'v1.0.0', article: false },
+      analysis,
+      hasCode: false,
+    },
+    brand,
+    {},
+  );
+  assert.ok(JSON.stringify(model.doStreamCalls[0]!.prompt).includes(JSON.stringify(prompt).slice(1, -1)), 'the prompt is buildReplyPrompt’s');
   assert.equal(model.doStreamCalls[0]!.tools, undefined, 'no code checked out: no tools');
 });
 

@@ -41,7 +41,7 @@ async function world() {
     registry,
     launchesRepo: 'me/launches',
     // The SDK providers read the clone on this machine: the provider's view is the host's
-    checkout: async () => ({ hostPath, providerPath: hostPath }),
+    checkout: async () => ({ hostPath }),
     now: () => new Date('2026-10-29T00:00:00Z'),
     fetch: (async () => new Response(null, { status: 404 })) as typeof fetch,
   } satisfies Partial<PipelineDeps>;

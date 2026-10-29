@@ -1,65 +1,12 @@
-import { AI_TASK_DEFINITIONS, ContentPack, contentPackJsonSchema, missingPieces, type Brand, type LaunchConfig } from '@shipcast/schema';
-import type { AiProvider } from './ai.ts';
+import { AI_TASK_DEFINITIONS, missingPieces, type Brand, type ContentPack, type LaunchConfig } from '@shipcast/schema';
 import { chatIdOf, costOf, type AiTaskRunner } from './ai/runner.ts';
-import { ANALYSIS_TOOLS, buildPrompt, type PromptOptions } from './prompt.ts';
+import { buildPrompt, type PromptOptions } from './prompt.ts';
 import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
 
 export type Generated =
   | { ok: true; pack: ContentPack; chatId: string | undefined; costUsd?: number | null }
   | { ok: false; problems: string[]; chatId: string | undefined; costUsd?: number | null };
-
-export interface GenerateOptions extends PromptOptions {
-  ai: AiProvider;
-  /** The model the settings chose for this task; the provider's default without one */
-  model?: string;
-  launch: Launch;
-  config: LaunchConfig;
-  brand: Brand;
-  checkout: Checkout;
-  /** Spend ceiling for one generation */
-  maxBudgetUsd?: number;
-}
-
-/**
- * Asks the AI for the launch's content pack and accepts it only when it is valid, matches the launch
- * and covers every channel the launch turns on. What the model returns is never trusted as is: a
- * pack that fails here never reaches the drafts pull request.
- */
-export async function generatePack(options: GenerateOptions): Promise<Generated> {
-  const { ai, launch, config, brand, checkout } = options;
-  const { prompt, system } = buildPrompt(launch, config, brand, { prompts: options.prompts, tone: options.tone });
-
-  let result;
-  try {
-    result = await ai.generateObject({
-      prompt,
-      appendSystemPrompt: system,
-      cwd: checkout.providerPath,
-      hostDir: checkout.hostPath,
-      jsonSchema: contentPackJsonSchema(),
-      allowedTools: ANALYSIS_TOOLS,
-      model: options.model,
-      maxBudgetUsd: options.maxBudgetUsd,
-    });
-  } catch (error) {
-    const chatId = error instanceof Error && 'chatId' in error ? (error.chatId as string | undefined) : undefined;
-    return { ok: false, problems: [error instanceof Error ? error.message : String(error)], chatId };
-  }
-
-  const parsed = ContentPack.safeParse(result.output);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      problems: parsed.error.issues.map((i) => `${i.path.join('.') || 'pack'}: ${i.message}`),
-      chatId: result.chatId,
-    };
-  }
-
-  const pack = parsed.data;
-  const problems = packProblems(pack, launch, config, brand);
-  return problems.length > 0 ? { ok: false, problems, chatId: result.chatId, costUsd: result.costUsd } : { ok: true, pack, chatId: result.chatId, costUsd: result.costUsd };
-}
 
 /** What keeps a valid pack from being this launch's: another kind or repo, or a channel it turns on left without its piece */
 function packProblems(pack: ContentPack, launch: Launch, config: LaunchConfig, brand: Brand): string[] {
@@ -72,7 +19,7 @@ function packProblems(pack: ContentPack, launch: Launch, config: LaunchConfig, b
   return problems;
 }
 
-export interface RunnerGenerateOptions extends PromptOptions {
+export interface GenerateOptions extends PromptOptions {
   runner: AiTaskRunner;
   launch: Launch;
   config: LaunchConfig;
@@ -87,12 +34,13 @@ export interface RunnerGenerateOptions extends PromptOptions {
 }
 
 /**
- * The content pack through the AI task runner (`ai-runner`): the same prompt, the pack task's
- * schema and ceilings, the repo read by the provider's own means (the runner's tools over the clone,
- * or a remote agent's workspace). The runner validates the answer against the pack's schema and
- * repairs it once; what is checked here is what only this launch can say.
+ * Asks the AI task runner for the launch's content pack and accepts it only when it is valid, matches
+ * the launch and covers every channel the launch turns on: the pack task's schema and ceilings, the
+ * repo read by the provider's own means (the runner's tools over the clone, or a remote agent's
+ * workspace). The runner validates the answer against the pack's schema and repairs it once; what is
+ * checked here is what only this launch can say, so a pack that fails never reaches the drafts pull request.
  */
-export async function generatePackOnRunner(options: RunnerGenerateOptions): Promise<Generated> {
+export async function generatePack(options: GenerateOptions): Promise<Generated> {
   const { runner, launch, config, brand, checkout } = options;
   const { prompt, system } = buildPrompt(launch, config, brand, { prompts: options.prompts, tone: options.tone });
   let result;

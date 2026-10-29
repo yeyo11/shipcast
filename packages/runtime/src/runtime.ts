@@ -12,10 +12,8 @@ import {
   type AiTaskRunner,
   type PipelineDeps,
 } from '@shipcast/engine';
-// LEGACY (flag off): claudio's REST client behind the pipeline's default provider
-import { Claudio, type AiProvider, type ObjectRequest, type TextRequest } from '@shipcast/engine/legacy-ai';
 import type { Brand } from '@shipcast/schema';
-import { aiRunnerFor, aiSetup } from './ai.ts';
+import { aiRunnerFor } from './ai.ts';
 import { provisionAppKeys } from './app-keys.ts';
 import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
@@ -44,8 +42,8 @@ export interface Runtime {
   /** The owner's user token from the last sign-in through the App; absent without an App */
   userTokens: GitHubUserTokens | undefined;
   pipeline: PipelineDeps;
-  /** With `ai-runner`: the AI task runner every AI task runs on, through `pipeline.aiRunner` */
-  aiRunner: AiTaskRunner | undefined;
+  /** The AI task runner every AI task runs on, also `pipeline.aiRunner` */
+  aiRunner: AiTaskRunner;
   /** The brand the launches repo speaks for, read again every few minutes; SettingMissing without a launches repo */
   brand(): Promise<Brand>;
   /** Reads the settings again: after a save in the app, and before each round */
@@ -58,33 +56,6 @@ export interface Runtime {
   drafts: DraftSnapshotService | undefined;
   /** With `realtime-ui` and a bus: sends the registry's coalesced events still waiting, part of a stop */
   flushEvents(): Promise<void>;
-}
-
-/**
- * claudio as the settings have it when a request is made, so a URL or token changed in the app is
- * used by the next draft without a restart; missing ones fail that draft with where to set them.
- */
-class SettingsClaudio implements AiProvider {
-  readonly id = 'claudio' as const;
-  readonly #settings: RuntimeSettings;
-  readonly #fetch: typeof fetch | undefined;
-
-  constructor(settings: RuntimeSettings, fetchImpl?: typeof fetch) {
-    this.#settings = settings;
-    this.#fetch = fetchImpl;
-  }
-
-  #claudio(): Claudio {
-    return new Claudio({ ...this.#settings.claudio(), ...(this.#fetch && { fetch: this.#fetch }) });
-  }
-
-  generateObject(request: ObjectRequest) {
-    return this.#claudio().generateObject(request);
-  }
-
-  streamText(request: TextRequest) {
-    return this.#claudio().streamText(request);
-  }
 }
 
 export interface RuntimeOptions {
@@ -174,7 +145,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     : undefined;
 
-  // What choosing a task's provider needs, for the old providers and the runner alike
+  // What choosing a task's provider needs: read when a task runs, so a change in the app applies to the next one
   const aiDeps = {
     env,
     registry,
@@ -183,14 +154,15 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     brand,
     ...(options.fetch && { fetch: options.fetch }),
   };
-  const workspace = { hostDir: config.workspaceHostDir, providerDir: config.workspaceProviderDir };
+  const workspace = { hostDir: config.workspaceHostDir };
   const recorder = telemetry();
-  const aiRunner = flags.on('ai-runner') ? aiRunnerFor({ ...aiDeps, archives: github, ...(recorder && { telemetry: recorder }) }) : undefined;
+  const aiRunner = aiRunnerFor({ ...aiDeps, archives: github, ...(recorder && { telemetry: recorder }) });
 
   const pipeline: PipelineDeps = {
     github,
-    ai: new SettingsClaudio(settings, options.fetch),
-    aiSetup: aiSetup(aiDeps),
+    // Every task runs on the runner, with the owner's prompts and tone read before each
+    aiRunner,
+    aiTexts: () => currentAiTexts(registry),
     registry,
     // Getters: the engine reads them as plain values, and they follow the settings. Empty while
     // unset; every way into the pipeline reads the brand first, which says what is missing
@@ -203,8 +175,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),
-    // With `ai-runner` the tasks run on the runner, with the owner's prompts and tone read before each
-    ...(aiRunner && { aiRunner, aiTexts: () => currentAiTexts(registry) }),
   };
 
   return {

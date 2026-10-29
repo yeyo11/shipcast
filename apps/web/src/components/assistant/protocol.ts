@@ -50,12 +50,12 @@ export interface CheckFinding {
 
 /** One line of the answer's stream, as NDJSON */
 export type AssistantEvent =
-  /** The provider cannot stream: the whole answer arrives at once, after a wait */
+  /** The answer is not streamed (the check against the code): it arrives at once, after a wait */
   | { type: 'whole' }
   | { type: 'text'; text: string }
   | { type: 'check'; revised: string; findings: CheckFinding[] }
   /**
-   * The answer is worked as a job (the check against the code, with `ai-runner`): the stream ends
+   * The answer is worked as a job (the check against the code): the stream ends
    * here, and the page follows the job and reads its result (follow.ts) as the `check` it would have been
    */
   | { type: 'job'; id: string }

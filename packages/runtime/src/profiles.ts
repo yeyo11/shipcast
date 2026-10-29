@@ -1,4 +1,3 @@
-import { setupFor } from '@shipcast/engine/legacy-ai';
 import { reviewProfile, type Account, type PipelineDeps, type ProfileConnector, type ProfileDeps, type Repositories } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import { buildConnector } from './catalog.ts';
@@ -39,10 +38,9 @@ export function profileDeps(d: ProfileWorkDeps): ProfileDeps {
   return {
     registry: d.registry,
     brand: d.brand,
-    // With `ai-runner` the review runs on the runner, with the owner's prompts and tone; else on the old provider
-    ...(d.pipeline.aiRunner ? { aiRunner: d.pipeline.aiRunner, texts: d.pipeline.aiTexts ?? (async () => ({})) } : { setup: () => setupFor(d.pipeline, 'profile') }),
-    // A review reads no repo: the provider works in its workspace root, as for an article's reply
-    cwd: d.pipeline.aiWorkdir ?? '/workspace',
+    // The review runs on the runner, with the owner's prompts and tone; it reads no repo
+    aiRunner: d.pipeline.aiRunner,
+    texts: d.pipeline.aiTexts ?? (async () => ({})),
     connector: profileConnector(d),
   };
 }
