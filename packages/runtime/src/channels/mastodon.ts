@@ -1,7 +1,7 @@
 import { mastodonFeed } from './feeds.ts';
 import { batchReader } from '@shipcast/engine';
 import { Mastodon } from '@shipcast/connectors';
-import { mastodon } from '@shipcast/schema';
+import { mastodon, track } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** `https://mastodon.social/@yeyo11` → `https://mastodon.social` */
@@ -52,7 +52,8 @@ export const mastodonAdapter = channelAdapter({
       },
     },
   },
-  publisher: (c) => c,
+  // Mastodon counts every link as 23 characters, so the tags never cost the post its limit
+  publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: track('mastodon', post.text, tracking) }) }),
   editor: (c) => c,
   // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),

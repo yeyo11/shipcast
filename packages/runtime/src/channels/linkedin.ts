@@ -1,5 +1,5 @@
 import { exchangeLinkedInCode, LinkedIn, linkedinAuthorizeUrl } from '@shipcast/connectors';
-import { linkedin } from '@shipcast/schema';
+import { linkedin, track, trackUrl } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** LinkedIn: the owner's LinkedIn app; shares the article on the personal profile and deletes it */
@@ -37,6 +37,8 @@ export const linkedinAdapter = channelAdapter({
     },
   },
   // No metrics: a member's numbers need LinkedIn's Community Management API
-  publisher: (c) => c,
+  publisher: (c) => ({
+    publish: (post, tracking) => c.publish({ ...post, text: track('linkedin', post.text, tracking), article: { ...post.article, url: trackUrl('linkedin', post.article.url, tracking) } }),
+  }),
   editor: (c) => c,
 });
