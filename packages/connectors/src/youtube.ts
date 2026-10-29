@@ -500,8 +500,8 @@ export class YouTube implements Deletable, CommentReader, Replier, ProfileReader
         if (!field) throw new ConnectorError('YouTube', `a channel has no "${link.name}": its links are ${Object.keys(SETTING_LINKS).join(', ')}`, 400, false);
         change[field] = link.value;
       }
-      // A setting left out of the list is cleared, as a link left out is removed elsewhere
-      for (const field of Object.values(SETTING_LINKS)) change[field] ??= '';
+      // Only the settings named change: these are not links a list replaces but channel settings, and
+      // a proposal that leaves out the trailer or the country must not clear them
     }
     await this.editChannel(change);
   }

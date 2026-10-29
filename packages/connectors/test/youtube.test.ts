@@ -200,7 +200,7 @@ test('a channel edit reads brandingSettings and writes it whole, changing only w
   await yt.editProfile({ bio: 'new', links: [{ name: 'Keywords', value: 'rust cli' }, { name: 'Trailer', value: 'https://youtu.be/tr2' }] });
   const sent = JSON.parse(String(calls.find((c) => c.method === 'PUT')!.body)) as { id: string; brandingSettings: { channel: Record<string, string>; image: Record<string, string> } };
   assert.equal(sent.id, 'UC1');
-  assert.deepEqual(sent.brandingSettings.channel, { description: 'new', keywords: 'rust cli', country: '', defaultLanguage: 'es', unsubscribedTrailer: 'tr2' }, 'a setting left out of the links is cleared, the rest kept');
+  assert.deepEqual(sent.brandingSettings.channel, { description: 'new', keywords: 'rust cli', country: 'ES', defaultLanguage: 'es', unsubscribedTrailer: 'tr2' }, 'only the settings the proposal names change: the country it leaves out is kept');
   assert.deepEqual(sent.brandingSettings.image, { bannerExternalUrl: 'https://yt3.example/b' }, 'the banner kept: an update deletes what it leaves out');
   assert.deepEqual(units, ['list', 'channelsUpdate']);
 
