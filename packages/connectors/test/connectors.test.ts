@@ -84,8 +84,10 @@ test('Bluesky logs in once, uploads the card image and posts with facets, langua
     link: { url: 'https://josegarrido.dev/en/claudio/', title: 'claudio', description: 'd', thumb: { bytes: new Uint8Array([1]), mimeType: 'image/jpeg' } },
   });
   assert.deepEqual(published, { externalId: 'at://did:plc:abc/app.bsky.feed.post/3kxyz', url: 'https://bsky.app/profile/yeyo11.bsky.social/post/3kxyz' });
-  const record = JSON.parse(String(calls[2]!.body)) as { repo: string; record: { langs: string[]; facets: unknown[]; embed: { external: { thumb: unknown } } } };
+  const record = JSON.parse(String(calls[2]!.body)) as { repo: string; record: { text: string; langs: string[]; facets: unknown[]; embed: { external: { uri: string; thumb: unknown } } } };
   assert.equal(record.repo, 'did:plc:abc');
+  assert.equal(record.record.text, 'claudio is out https://josegarrido.dev/en/claudio/?ref=bluesky', 'the text as written, its link whole');
+  assert.equal(record.record.embed.external.uri, 'https://josegarrido.dev/en/claudio/');
   assert.deepEqual(record.record.langs, ['en']);
   assert.equal(record.record.facets.length, 1);
   assert.deepEqual(record.record.embed.external.thumb, { ref: 'b1' });
