@@ -1,4 +1,5 @@
 import { connectRepositories } from '../packages/engine/src/repositories/index.ts';
+import { poolOptions } from '../packages/runtime/src/roles.ts';
 import { compareReport, readWindow } from '../packages/engine/src/telemetry/report.ts';
 import { TelemetryStore } from '../packages/engine/src/telemetry/store.ts';
 
@@ -25,7 +26,9 @@ function range(arg: string | undefined): { from: string; to: string } {
 const url = process.env.SHIPCAST_DATABASE_URL;
 if (!url) throw new Error('SHIPCAST_DATABASE_URL is not set');
 const [first, second] = process.argv.slice(2);
-const registry = await connectRepositories(url);
+// Through PgBouncer the migrator's session lock would stay on a pooled connection and block every later start:
+// the migrator takes SHIPCAST_DATABASE_MIGRATE_URL, the direct address, when it is set
+const registry = await connectRepositories(url, poolOptions(process.env));
 try {
   const store = new TelemetryStore(registry.database);
   const before = await readWindow(store, range(first));

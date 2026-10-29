@@ -76,7 +76,13 @@ export async function connectPostgres(url: string, migrateOptions: MigrateOption
   const migrator = postgres(pool.migrateUrl ?? url, { ...options, max: 1 });
   try {
     await migrator`SELECT pg_advisory_lock(${MIGRATION_LOCK})`;
-    await migrateDatabase(drizzle({ client: migrator }), migrateOptions);
+    try {
+      await migrateDatabase(drizzle({ client: migrator }), migrateOptions);
+    } finally {
+      // Released by hand, not left to the connection's end: behind a pooler that keeps server connections
+      // (PgBouncer), ending the client does not end the session, and a lock left on it blocks every start
+      await migrator`SELECT pg_advisory_unlock(${MIGRATION_LOCK})`.catch(() => undefined);
+    }
   } finally {
     await migrator.end();
   }

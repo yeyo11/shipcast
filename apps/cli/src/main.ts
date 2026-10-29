@@ -27,6 +27,7 @@ import {
   readAutomation,
   SettingMissing,
   settingDefinition,
+  poolOptions,
   queuePoolMax,
   roleFromEnv,
   runsTheClock,
@@ -202,7 +203,8 @@ async function migrateCommand(args: string[], from: string | undefined): Promise
     console.error('the table is sealed with SHIPCAST_SECRETS_KEY: set it first (openssl rand -base64 32)');
     return 2;
   }
-  const registry = await connectRepositories(config.databaseUrl);
+  // The migrator's session lock must not go through PgBouncer: SHIPCAST_DATABASE_MIGRATE_URL is the direct address
+  const registry = await connectRepositories(config.databaseUrl, poolOptions(process.env));
   try {
     const result = await migrateSecrets(secretStoreFor(config, { ...process.env, SHIPCAST_SECRET_STORE: source }), new TableStore(new SecretRows(registry.database), Buffer.from(key, 'base64')));
     for (const line of migrationLines(result)) console.log(line);
