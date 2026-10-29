@@ -73,12 +73,12 @@
 .tour-card-head { display: flex; align-items: center; justify-content: space-between; }
 .tour-count { font: var(--sc-label); color: var(--sc-muted); }
 .tour-close { width: 36px; height: 36px; border: 0; }
-@media (pointer: coarse) { .tour-close { width: 44px; height: 44px; } }
 .tour-title { margin: 0; font: 900 26px/1 var(--sc-font-display); text-transform: uppercase; letter-spacing: var(--sc-tracking-display); }
 .tour-text { font-size: 15px; line-height: 1.5; }
 .tour-progress { height: 6px; border-radius: var(--sc-radius-pill); background: var(--sc-hairline); overflow: hidden; }
 .tour-progress span { display: block; height: 100%; background: var(--sc-yellow); }
 .tour-skip { margin-left: auto; min-height: 36px; }
+@media (pointer: coarse), (max-width: 860px) { .tour-close { width: 44px; height: 44px; } .tour-skip { min-height: 44px; } }
 /* The notch: a square turned 45°, outlined on the two sides that stick out, so it reads as the card's own corner */
 .tour-notch { position: absolute; width: 18px; height: 18px; background: var(--sc-ground); border: 0 solid var(--sc-text); transform: rotate(45deg); }
 .tour-notch[data-edge='top'] { top: -10px; border-top-width: var(--sc-border-card); border-left-width: var(--sc-border-card); border-top-left-radius: 3px; }

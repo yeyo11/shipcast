@@ -17,7 +17,8 @@ export function DiffView({ before, after, label }: { before: string; after: stri
           <del>removed</del> <ins>added</ins>
         </span>
       </figcaption>
-      <div className="diff-text">
+      {/* Focusable, so a keyboard can scroll a proposal taller than its box */}
+      <div className="diff-text" role="region" aria-label={label} tabIndex={0}>
         {parts.map((part, i) =>
           part.type === 'equal' ? (
             <span key={i}>{part.text}</span>
