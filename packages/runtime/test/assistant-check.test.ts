@@ -25,7 +25,7 @@ import { withEvents } from '../src/realtime/publish.ts';
 import { MemoryEventBus } from '../src/redis/index.ts';
 
 /*
- * The writing assistant's check against the code as a heavy job (`ai-runner`), end to end on the
+ * The writing assistant's check against the code as a heavy job, end to end on the
  * real queue (pg-boss on PGlite): the page's request queues it, the heavy worker clones and runs the
  * check task on the runner, the job's row announces itself on the bus as it moves, and the page
  * reads the result under the job's id once the job has ended.
@@ -57,7 +57,7 @@ after(async () => {
   await (await template).close();
 });
 
-async function world(runner: AiTaskRunner | undefined) {
+async function world(runner: AiTaskRunner) {
   const client = await clonePglite((await template).client);
   const bus = new MemoryEventBus();
   const events: Array<{ id: string; queue: string; state: string; launchId: number | null }> = [];
@@ -75,7 +75,8 @@ async function world(runner: AiTaskRunner | undefined) {
       clones.push(`${repo}@${ref}`);
       return { hostPath, providerPath: '' };
     },
-    ...(runner && { aiRunner: runner, aiTexts: async () => ({ tone: 'Plain words.' }) }),
+    aiRunner: runner,
+    aiTexts: async () => ({ tone: 'Plain words.' }),
   } as unknown as PipelineDeps;
   const queue = WorkQueue.pglite(client, registry, quiet);
   queues.push(queue);
@@ -119,14 +120,6 @@ test('a provider’s failure fails the job with why, and the page reads that', a
   assert.match(state?.state === 'failed' ? state.problem : '', /answer to assistant-check is not valid, even after a repair/);
   await w.flush();
   assert.equal(w.events.filter((e) => e.id === id).at(-1)?.state, 'failed');
-});
-
-test('without the runner the job refuses to run: the page never sends one with the flag off', async () => {
-  const w = await world(undefined);
-  const id = await startAssistantCheck(w.queue, w.launch, { text: 'x' });
-  const ended = await w.queue.wait(id, 20_000, 100);
-  assert.equal(ended?.state, 'failed');
-  assert.match(ended?.log.at(-1) ?? '', /needs the ai-runner flag/);
 });
 
 test('on Claudio the job reads the release in a workspace of its own, with the check task’s turns', async () => {

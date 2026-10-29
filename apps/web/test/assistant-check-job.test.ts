@@ -9,7 +9,7 @@ import type { Interest, LiveEvent } from '../src/components/live/client.ts';
 import { handleAssistant, type AssistantDeps } from '../src/server/assistant.ts';
 
 /*
- * With `ai-runner` the check against the code leaves the page's request: the endpoint queues it and
+ * The check against the code leaves the page's request: the endpoint queues it and
  * answers the job's id, and the page follows the job (its live events, or a slow read) to its result.
  */
 
@@ -21,12 +21,11 @@ test('the check is queued as a job and its id answered: nothing is cloned nor as
   const started: Array<{ launch: number; text: string; channel?: string }> = [];
   const model = scriptedModel(textParts('never'));
   const deps: AssistantDeps = {
-    // The flag on: the runner is there, and is not asked within the request
+    // The runner is there, and is not asked within the request
     aiRunner: mockRunner(model),
     brand: async () => brand,
     launch: async (id) => (id === release.id ? release : undefined),
     grounding: async (launch) => ({ kind: 'launch', launch: { repo: launch.repo, ref: launch.ref } }),
-    checkout: async () => assert.fail('the request clones nothing'),
     startCheck: async (launch, request) => {
       started.push({ launch: launch.id, ...request });
       return 'job-42';

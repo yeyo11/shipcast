@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { claimManual, draftLaunch, loadBrand, loadProjects, type Repositories } from '../src/index.ts';
-import { type AiProvider, type ObjectRequest } from '../src/legacy-ai.ts';
-import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
+import { FakeGitHub, memoryRegistry, mockRunner, scriptedModel, submitParts } from '../src/testing/index.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n  reddit: off\n';
@@ -20,20 +19,6 @@ const pack = {
   githubDiscussions: { title: 'claudio 0.9', body: 'What shipped. https://josegarrido.dev/en/claudio/?ref=github' },
 };
 
-class FakeAi implements AiProvider {
-  output: unknown;
-  requests: ObjectRequest[] = [];
-  constructor(output: unknown) {
-    this.output = output;
-  }
-  readonly id = 'test' as const;
-  async *streamText() {}
-  async generateObject(request: ObjectRequest) {
-    this.requests.push(request);
-    return { output: this.output, chatId: 'chat-1', costUsd: 0.4 };
-  }
-}
-
 async function setup(output: unknown = pack, files: Record<string, string> = {}) {
   const github = new FakeGitHub({
     files: {
@@ -47,7 +32,8 @@ async function setup(output: unknown = pack, files: Record<string, string> = {})
   const clones: string[] = [];
   const deps = {
     github,
-    ai: new FakeAi(output),
+    // The clone is read with the runner's tools, so the answer comes through the submit tool
+    aiRunner: mockRunner(scriptedModel(submitParts(output))),
     registry,
     launchesRepo: 'yeyo11/launches',
     checkout: async (repo: string, ref: string) => {
@@ -99,7 +85,8 @@ test('a claimed launch becomes a drafts pull request and is recorded as drafted'
   assert.equal(after.detail, 'https://github.com/yeyo11/launches/pull/1');
 });
 
-test('a pack that falls short fails the launch with the problems and the chat to read', async () => {
+// Claudio's chat to read, after the problems, is in pack-runner.test.ts
+test('a pack that falls short fails the launch with the problems', async () => {
   const { github, registry, deps } = await setup({ ...pack, bluesky: undefined });
   const brand = await loadBrand(github, 'yeyo11/launches');
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
@@ -107,7 +94,7 @@ test('a pack that falls short fails the launch with the problems and the chat to
   assert.equal(result.ok, false);
   assert.equal(github.opened.length, 0, 'no pull request for a pack that fails');
   assert.equal((await registry.launches.get(launch.id))!.status, 'failed');
-  assert.match((await registry.launches.get(launch.id))!.detail ?? '', /bluesky: the pack has no bluesky\nclaudio chat: chat-1/);
+  assert.equal((await registry.launches.get(launch.id))!.detail, 'bluesky: the pack has no bluesky');
 });
 
 test('a manual launch takes the latest release and is claimed like any other', async () => {

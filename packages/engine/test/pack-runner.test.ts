@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ANALYSIS_RULES, parseLaunchConfig } from '@shipcast/schema';
-import { draftLaunch, generatePackOnRunner, loadBrand, type PipelineDeps } from '../src/index.ts';
-import { SdkProvider } from '../src/legacy-ai.ts';
+import { buildPrompt, draftLaunch, generatePack, loadBrand, type PipelineDeps } from '../src/index.ts';
 import {
   claudioAnswer,
   claudioChats,
@@ -15,7 +14,6 @@ import {
   fakeClaudioRunner,
   fakeGitHubArchives,
   FakeGitHub,
-  jsonModel,
   memoryRegistry,
   mockRunner,
   scriptedModel,
@@ -24,10 +22,9 @@ import {
 } from '../src/testing/index.ts';
 
 /*
- * The content pack on the AI task runner (`ai-runner`): for the same answer, the launch ends as the
- * old provider path leaves it (the same pull request, the same status and detail); a pack that falls
- * short, a provider that refuses and an answer that stays invalid fail the launch with a readable
- * problem and, on Claudio, the chat to read.
+ * The content pack on the AI task runner: a good answer ends as the drafts pull request, from the
+ * prompt buildPrompt writes; a pack that falls short, a provider that refuses and an answer that stays
+ * invalid fail the launch with a readable problem and, on Claudio, the chat to read.
  */
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
@@ -46,7 +43,7 @@ const pack = {
   githubDiscussions: { title: 'claudio 0.9', body: 'What shipped. https://josegarrido.dev/en/claudio/?ref=github' },
 };
 
-async function world(ai: Partial<Pick<PipelineDeps, 'ai' | 'aiRunner'>> & Partial<Pick<PipelineDeps, 'maxBudgetUsd' | 'aiTexts'>>) {
+async function world(ai: Pick<PipelineDeps, 'aiRunner'> & Partial<Pick<PipelineDeps, 'maxBudgetUsd' | 'aiTexts'>>) {
   const github = new FakeGitHub({
     files: { 'yeyo11/launches/brand.yml@HEAD': BRAND_YML, 'yeyo11/claudio/.github/launch.yml@v0.9.0': LAUNCH_YML },
     latestRelease: { tag: 'v0.9.0', url: 'u' },
@@ -76,18 +73,21 @@ async function outcome(w: Awaited<ReturnType<typeof world>>) {
   return { ok: result.ok, status: after.status, detail: after.detail, branch: pr?.branch, title: pr?.title, files };
 }
 
-const userPrompt = (calls: ReadonlyArray<{ prompt: ReadonlyArray<{ role: string }> }>) => JSON.stringify(calls[0]!.prompt.filter((m) => m.role === 'user'));
-
-test('pack: for the same answer the runner leaves the launch as the old path does, from the same prompt', async () => {
-  const oldModel = jsonModel(pack);
-  const old = await outcome(await world({ ai: new SdkProvider({ id: 'test', model: () => oldModel }) }));
+test('pack: a good answer ends as the drafts pull request, from the prompt buildPrompt writes', async () => {
   // Through the runner with the repo's tools, a provider answers through the submit tool
   const model = scriptedModel(submitParts(pack));
-  const now = await outcome(await world({ aiRunner: mockRunner(model) }));
+  const w = await world({ aiRunner: mockRunner(model) });
+  const now = await outcome(w);
   assert.equal(now.ok, true);
-  assert.deepEqual(now, old);
   assert.equal(now.status, 'drafted');
-  assert.equal(userPrompt(model.doStreamCalls), userPrompt(oldModel.doGenerateCalls), 'the prompt is built by the same function');
+  assert.equal(now.detail, 'https://github.com/yeyo11/launches/pull/1');
+  assert.equal(now.branch, 'launch/claudio-v0.9.0');
+  assert.equal(now.title, 'Launch claudio v0.9.0');
+  assert.ok(now.files?.some((f) => f.startsWith('launches/claudio/v0.9.0/pack.json\n')), 'the pack travels with the drafts');
+  const parsed = parseLaunchConfig(LAUNCH_YML);
+  assert.ok(parsed.ok);
+  const { prompt } = buildPrompt(w.launch, parsed.value, w.brand);
+  assert.ok(JSON.stringify(model.doStreamCalls[0]!.prompt).includes(JSON.stringify(prompt).slice(1, -1)), 'the prompt is buildPrompt’s');
   assert.ok((model.doStreamCalls[0]!.tools ?? []).some((t) => t.name === 'read_files'), 'the clone is read with the runner’s tools');
 });
 
@@ -114,7 +114,7 @@ test('pack: a pack that falls short fails the launch with the problems, and Clau
   }
 });
 
-test('pack: the settings’ budget is the run’s, as it was the old path’s, and their tone is the prompt’s', async () => {
+test('pack: the settings’ budget is the run’s, and their tone is the prompt’s', async () => {
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack)) });
   const gh = await fakeGitHubArchives();
   try {
@@ -154,22 +154,14 @@ test('pack: an answer still invalid after its repair fails the launch with what 
   assert.match((await w.registry.launches.get(w.launch.id))!.detail ?? '', /answer to pack is not valid, even after a repair: .*project/);
 });
 
-test('pack: without a runner the old provider still drafts it: the flag off is today', async () => {
-  const model = jsonModel(pack);
-  const w = await world({ ai: new SdkProvider({ id: 'test', model: () => model }) });
-  assert.equal((await draftLaunch(w.launch, w.brand, w.deps)).ok, true);
-  assert.equal(model.doGenerateCalls.length, 1);
-  assert.equal(model.doStreamCalls.length, 0);
-});
-
-test('pack: the generation carries Claudio’s chat id and the turn’s cost, as the old path’s result did', async () => {
+test('pack: the generation carries Claudio’s chat id and the turn’s cost', async () => {
   const claudio = await fakeClaudio({ chat: (_, res) => claudioAnswer(res, JSON.stringify(pack), 'chat-9') });
   const gh = await fakeGitHubArchives();
   try {
-    const w = await world({});
+    const w = await world({ aiRunner: fakeClaudioRunner(claudio, gh) });
     const parsed = parseLaunchConfig(LAUNCH_YML);
     assert.ok(parsed.ok);
-    const generated = await generatePackOnRunner({ runner: fakeClaudioRunner(claudio, gh), launch: w.launch, config: parsed.value, brand: w.brand, checkout: { hostPath: w.hostPath, providerPath: '' }, ref: 'v0.9.0' });
+    const generated = await generatePack({ runner: w.deps.aiRunner, launch: w.launch, config: parsed.value, brand: w.brand, checkout: { hostPath: w.hostPath, providerPath: '' }, ref: 'v0.9.0' });
     assert.equal(generated.ok, true);
     assert.equal(generated.chatId, 'chat-9');
     assert.equal(generated.costUsd, 0.12, 'usage.cost_usd, through providerMetadata.claudio.costUsd');

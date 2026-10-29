@@ -412,7 +412,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       await runProfileReview({ registry, secrets: d.secrets, pipeline: d.pipeline, brand, ...(d.fetch && { fetch: d.fetch }) }, request, (line) => job.log(line));
     },
 
-    /** The writing assistant's check of a launch's text against its code (`ai-runner`), for the page that follows the job */
+    /** The writing assistant's check of a launch's text against its code, for the page that follows the job */
     async 'assistant-check'(data, job) {
       await runAssistantCheck({ registry, pipeline: d.pipeline, brand: await d.brand() }, data, job);
     },

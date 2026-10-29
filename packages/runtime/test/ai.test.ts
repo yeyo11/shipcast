@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { savePrompt, writeAiSettings } from '@shipcast/engine';
+import { currentAiTexts, savePrompt, writeAiSettings } from '@shipcast/engine';
 import { fakeClaudio, fakeJson, memoryRegistry } from '@shipcast/engine/testing';
 import { AiError, Brand } from '@shipcast/schema';
-import { accountSecretKey, aiProviderCheck, aiRunnerFor, aiRunSetup, aiSetup, AiNotConnected, Flags, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
+import { accountSecretKey, aiProviderCheck, aiRunnerFor, aiRunSetup, Flags, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
@@ -11,29 +11,30 @@ async function deps(): Promise<AiDeps> {
   return { env: {}, registry: await memoryRegistry(), secrets: new MemoryStore(), claudio: () => ({ url: 'http://claudio:8798', token: 't' }), brand: async () => brand };
 }
 
-test('each task gets the provider, model, prompts and tone its settings choose', async () => {
+test('each task gets the provider and model its settings choose, and the owner’s prompts and tone', async () => {
   const d = await deps();
   const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
   await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-test' }), 'Anthropic API');
   await writeAiSettings(d.registry, { tasks: { pack: { provider: 'claudio' }, article: { provider: 'anthropic', model: 'claude-opus-5-5' }, assistant: { provider: 'claudio' } }, tone: 'Plain.' });
   await savePrompt(d.registry, 'channel.devto', 'devto: tags only.');
 
-  const setup = aiSetup(d);
+  const setup = aiRunSetup(d);
   const pack = await setup('pack');
   assert.equal(pack.provider.id, 'claudio');
   assert.equal(pack.model, undefined);
   const article = await setup('article');
   assert.equal(article.provider.id, 'anthropic');
   assert.equal(article.model, 'claude-opus-5-5');
-  assert.equal(article.tone, 'Plain.');
-  assert.deepEqual(article.prompts, { 'channel.devto': 'devto: tags only.' });
+  const texts = await currentAiTexts(d.registry);
+  assert.equal(texts.tone, 'Plain.');
+  assert.deepEqual(texts.prompts, { 'channel.devto': 'devto: tags only.' });
 });
 
-test('a provider chosen without a connected account fails the task with what to do', async () => {
+test('a provider chosen without a connected account fails the task with what to do; claudio needs none', async () => {
   const d = await deps();
   await writeAiSettings(d.registry, { tasks: { pack: { provider: 'openaiCompatible' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' } } });
-  await assert.rejects(aiSetup(d)('pack'), (e) => e instanceof AiNotConnected && /Channels page/.test(e.message));
-  assert.equal((await aiSetup(d)('article')).provider.id, 'claudio');
+  await assert.rejects(aiRunSetup(d)('pack'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Channels page/.test(e.message));
+  assert.equal((await aiRunSetup(d)('article')).provider.id, 'claudio');
 });
 
 test('the AI providers are networks of the catalog, their keys checked before they are kept', async () => {
@@ -53,7 +54,7 @@ test('the AI providers are networks of the catalog, their keys checked before th
   assert.equal(bad.ok, false);
 });
 
-test('the AI task runner reads the same settings and keychain as the old providers', async () => {
+test('the AI task runner reads claudio from the settings and every other provider from its connected account', async () => {
   const d = await deps();
   const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
   await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-test' }), 'Anthropic API');
@@ -71,12 +72,14 @@ test('the AI task runner reads the same settings and keychain as the old provide
   assert.ok(aiRunnerFor({ ...d, archives: { tarballUrl: async () => 'https://codeload.github.com/o/r/tar.gz/v1' } }));
 });
 
-test('the ai-runner flag is off unless it is set', () => {
-  assert.equal(Flags.fromEnv({}).on('ai-runner'), false);
-  assert.equal(Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner' }).on('ai-runner'), true);
+test('the retired ai-runner flag is accepted and ignored: an old SHIPCAST_FLAGS still starts', () => {
+  const flags = Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner, bullmq' });
+  assert.equal(flags.on('bullmq'), true);
+  assert.ok(!('ai-runner' in flags.list()), 'no longer a switch');
+  assert.throws(() => Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runnr' }), /unknown ai-runnr/, 'a typo is still refused');
 });
 
-test('ai-runner: testing a provider asks Claudio’s readiness, and says when Claude is not signed in', async () => {
+test('testing a provider asks Claudio’s readiness, and says when Claude is not signed in', async () => {
   const claudio = await fakeClaudio({ ready: (_, res) => fakeJson(res, 503, { ready: false, reason: 'signed-out' }) });
   try {
     const d = { ...(await deps()), claudio: () => ({ url: claudio.url, token: 't' }) };
@@ -97,7 +100,7 @@ test('ai-runner: testing a provider asks Claudio’s readiness, and says when Cl
   }
 });
 
-test('ai-runner: a provider without a readiness is tested with one cheap call, its failure in AiError’s words', async () => {
+test('a provider without a readiness is tested with one cheap call, its failure in AiError’s words', async () => {
   const d = await deps();
   const missing = await aiProviderCheck(aiRunnerFor({ ...d, archives: { tarballUrl: async () => '' } }), 'anthropic', d);
   assert.deepEqual(missing.ok ? undefined : missing.code, 'ai_not_connected');

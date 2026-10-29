@@ -1,5 +1,4 @@
 import { launchGrounding } from '@shipcast/engine';
-import { setupFor } from '@shipcast/engine/legacy-ai';
 import { startAssistantCheck } from '@shipcast/runtime';
 import type { AssistantDeps } from './assistant.ts';
 import { appContext } from './context.server';
@@ -8,16 +7,14 @@ import { appContext } from './context.server';
 export async function assistantDeps(): Promise<AssistantDeps> {
   const ctx = await appContext();
   return {
-    // With `ai-runner` the answers stream from the runner, with the owner's texts; else from the old provider
-    ...(ctx.deps.aiRunner ? { aiRunner: ctx.deps.aiRunner, texts: ctx.deps.aiTexts ?? (async () => ({})) } : { setup: () => setupFor(ctx.deps, 'assistant') }),
+    // The answers stream from the runner, with the owner's texts
+    aiRunner: ctx.deps.aiRunner,
+    texts: ctx.deps.aiTexts ?? (async () => ({})),
     brand: () => ctx.brand(),
     launch: async (launchId) => (await ctx.registry.launches.get(launchId)) ?? undefined,
     grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }),
-    checkout: (repo, ref) => ctx.deps.checkout(repo, ref),
     sessions: ctx.registry.assistant,
-    // With `ai-runner` the check is a heavy job the page follows, never work inside this request
-    ...(ctx.deps.aiRunner && { startCheck: (launch, request) => startAssistantCheck(ctx.queue, launch, request) }),
-    aiWorkdir: ctx.deps.aiWorkdir ?? ctx.config.workspaceProviderDir,
-    ...(ctx.deps.maxBudgetUsd !== undefined && { maxBudgetUsd: ctx.deps.maxBudgetUsd }),
+    // The check is a heavy job the page follows, never work inside this request
+    startCheck: (launch, request) => startAssistantCheck(ctx.queue, launch, request),
   };
 }

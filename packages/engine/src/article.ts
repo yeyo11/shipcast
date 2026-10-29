@@ -1,18 +1,16 @@
 import {
   AI_TASK_DEFINITIONS,
   CHANNELS,
-  ContentPack,
-  contentPackJsonSchema,
   LaunchConfig,
   missingPieces,
   type Brand,
   type Channel,
+  type ContentPack,
   type Language,
 } from '@shipcast/schema';
 import { stringify } from 'yaml';
 import { keepPubDates, launchDir, renderDrafts, screenshotPaths } from './drafts.ts';
 import { buildAssets } from './launch-assets.ts';
-import { setupFor } from './legacy-ai.ts';
 import { aiTextsOf, deliverDrafts, readProjects, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
 import { buildArticlePrompt } from './prompt.ts';
 import type { Launch } from './repositories/index.ts';
@@ -61,32 +59,15 @@ export function claimArticle(input: ArticleInput, brand: Brand, deps: Pick<Pipel
 export async function generateArticlePack(
   input: ArticleInput,
   brand: Brand,
-  deps: Pick<PipelineDeps, 'ai' | 'aiSetup' | 'aiRunner' | 'aiTexts' | 'aiWorkdir' | 'maxBudgetUsd' | 'launchesRepo'>,
+  deps: Pick<PipelineDeps, 'aiRunner' | 'aiTexts' | 'maxBudgetUsd' | 'launchesRepo'>,
 ): Promise<{ ok: true; pack: ContentPack; config: LaunchConfig } | { ok: false; problems: string[] }> {
   const config = articleConfig(brand, input.channels);
   let pack: ContentPack;
   try {
-    if (deps.aiRunner) {
-      // On the runner (`ai-runner`): no repo, the answer validated against the pack's schema and repaired once there
-      const { prompt, system } = buildArticlePrompt(input, brand, config, deps.launchesRepo, await aiTextsOf(deps));
-      const result = await deps.aiRunner.run(AI_TASK_DEFINITIONS.article, { system, prompt, ...(deps.maxBudgetUsd !== undefined && { limits: { maxBudgetUsd: deps.maxBudgetUsd } }) });
-      pack = result.output;
-    } else {
-      const setup = await setupFor(deps, 'article');
-      const { prompt, system } = buildArticlePrompt(input, brand, config, deps.launchesRepo, { prompts: setup.prompts, tone: setup.tone });
-      const result = await setup.provider.generateObject({
-        prompt,
-        appendSystemPrompt: system,
-        cwd: deps.aiWorkdir ?? '/workspace',
-        jsonSchema: contentPackJsonSchema(),
-        allowedTools: [],
-        model: setup.model,
-        maxBudgetUsd: deps.maxBudgetUsd,
-      });
-      const parsed = ContentPack.safeParse(result.output);
-      if (!parsed.success) return { ok: false, problems: parsed.error.issues.map((i) => `${i.path.join('.') || 'pack'}: ${i.message}`) };
-      pack = parsed.data;
-    }
+    // No repo: the answer validated against the pack's schema and repaired once by the runner
+    const { prompt, system } = buildArticlePrompt(input, brand, config, deps.launchesRepo, await aiTextsOf(deps));
+    const result = await deps.aiRunner.run(AI_TASK_DEFINITIONS.article, { system, prompt, ...(deps.maxBudgetUsd !== undefined && { limits: { maxBudgetUsd: deps.maxBudgetUsd } }) });
+    pack = result.output;
   } catch (error) {
     return { ok: false, problems: [error instanceof Error ? error.message : String(error)] };
   }

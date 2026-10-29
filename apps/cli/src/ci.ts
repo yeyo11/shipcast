@@ -172,10 +172,6 @@ export type CiPipelineBase = Pick<PipelineDeps, 'github' | 'launchesRepo' | 'che
  * The pipeline a draft or a publish runs with: the AI the environment chose, on the AI task runner,
  * and the owner's edited prompts and tone from the registry. The AI settings' choice of provider is
  * the server's and is not read. A draft passes its launch, which the fake provider's pack names.
- *
- * The runner is unconditional here. `ai-runner` is the server's rollout switch (SHIPCAST_FLAGS); the
- * Action has no flags, so a SHIPCAST_FLAGS a workflow happens to set is not read for the AI, and Action
- * mode never runs on the old layer.
  */
 export function ciPipeline(ai: CiAi | undefined, base: CiPipelineBase, launch?: { launch: Launch; brand: Brand }): PipelineDeps {
   return { ...base, aiRunner: ciAiRunner(ai, launch), aiTexts: () => currentAiTexts(base.registry) };

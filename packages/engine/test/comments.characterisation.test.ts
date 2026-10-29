@@ -2,10 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PostGone, type Comment } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { MockLanguageModelV4 } from 'ai/test';
+import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { runComments, writeCommentSettings, type ReplyDeps } from '../src/index.ts';
-import { SdkProvider } from '../src/legacy-ai.ts';
-import { aPublishedLaunch, FakeConnectors, memoryRegistry } from '../src/testing/index.ts';
+import { aPublishedLaunch, FakeConnectors, memoryRegistry, mockRunner, textParts } from '../src/testing/index.ts';
 
 /*
  * Characterisation: one run of the comment assistant over several posts and channels, as it is
@@ -18,8 +17,7 @@ const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://jo
 
 const comment = (externalId: string, text: string): Comment => ({ externalId, author: { handle: '@ana@fosstodon.org' }, text, createdAt: '2026-11-03T09:00:00.000Z', own: false });
 
-const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } };
-const answer = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], finishReason: { unified: 'stop' as const, raw: undefined }, usage, warnings: [] });
+const answer = (value: unknown) => ({ stream: convertArrayToReadableStream(textParts(JSON.stringify(value))) });
 
 test('one run over several posts: read, drafted, sent where auto, logged; a second run adds nothing', async () => {
   const registry = await memoryRegistry();
@@ -46,7 +44,7 @@ test('one run over several posts: read, drafted, sent where auto, logged; a seco
   fake.unconnected.add('githubDiscussions');
 
   const model = new MockLanguageModelV4({
-    doGenerate: async (options) =>
+    doStream: async (options) =>
       JSON.stringify(options.prompt).includes('cheap pills')
         ? answer({ classification: 'spam', language: 'en', dismiss: true, reply: '', reason: 'An ad' })
         : answer({ classification: 'question', language: 'en', dismiss: false, reply: 'Thanks for asking.', reason: 'A question' }),
@@ -55,8 +53,8 @@ test('one run over several posts: read, drafted, sent where auto, logged; a seco
     registry,
     connectors: fake.commentConnectors(),
     brand,
-    setup: async () => ({ provider: new SdkProvider({ id: 'test', model: () => model }), prompts: {} }),
-    context: async () => ({ postText: {}, cwd: '/workspace' }),
+    aiRunner: mockRunner(model),
+    context: async () => ({ postText: {} }),
   };
   const lines: string[] = [];
 
@@ -85,5 +83,5 @@ test('one run over several posts: read, drafted, sent where auto, logged; a seco
   const again = await runComments(deps);
   assert.deepEqual([again.posts, again.found, again.added.length, again.drafted.length, again.sent.length], [3, 4, 0, 0, 0]);
   assert.equal(fake.callsOf('instagram').length, 1, 'a post marked deleted is not read again');
-  assert.equal(model.doGenerateCalls.length, 4, 'no AI call for what is known');
+  assert.equal(model.doStreamCalls.length, 4, 'no AI call for what is known');
 });

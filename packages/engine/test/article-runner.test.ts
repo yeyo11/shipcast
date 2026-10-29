@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { claimArticle, draftArticle, loadBrand, type PipelineDeps } from '../src/index.ts';
-import { SdkProvider } from '../src/legacy-ai.ts';
+import { articleConfig, buildArticlePrompt, claimArticle, draftArticle, loadBrand, type PipelineDeps } from '../src/index.ts';
 import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, FakeGitHub, jsonModel, memoryRegistry, mockRunner, scriptedModel, textParts } from '../src/testing/index.ts';
 
 /*
- * An article on the AI task runner (`ai-runner`): the same answer leaves the same drafts and launch as
- * the old provider path; no repo is read, so Claudio gets no workspace; a failure fails the launch with
- * a readable problem.
+ * An article on the AI task runner: the answer becomes the drafts with the owner's own words; no repo
+ * is read, so Claudio gets no workspace; a failure fails the launch with a readable problem.
  */
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
@@ -22,7 +20,7 @@ const pack = {
 };
 const input = { title: 'My own title', markdown: 'My own words.', lang: 'en' as const, channels: ['bluesky' as const] };
 
-async function draft(ai: Partial<Pick<PipelineDeps, 'ai' | 'aiRunner'>> & Partial<Pick<PipelineDeps, 'maxBudgetUsd'>>) {
+async function draft(ai: Pick<PipelineDeps, 'aiRunner'> & Partial<Pick<PipelineDeps, 'maxBudgetUsd'>>) {
   const github = new FakeGitHub({ files: { 'yeyo11/launches/brand.yml@HEAD': BRAND_YML } });
   const registry = await memoryRegistry();
   const deps: PipelineDeps = {
@@ -39,20 +37,24 @@ async function draft(ai: Partial<Pick<PipelineDeps, 'ai' | 'aiRunner'>> & Partia
   const result = await draftArticle(launch, input, brand, deps);
   const after = (await registry.launches.get(launch.id))!;
   const files = github.opened[0]?.files.map((f) => ('content' in f ? `${f.path}\n${f.content}` : `${f.path} (${f.bytes.length} bytes)`));
-  return { ok: result.ok, status: after.status, detail: after.detail, files };
+  return { ok: result.ok, status: after.status, detail: after.detail, files, brand };
 }
 
-test('article: for the same answer the runner leaves the drafts and the launch as the old path does', async () => {
-  const oldModel = jsonModel(pack);
-  const old = await draft({ ai: new SdkProvider({ id: 'test', model: () => oldModel }) });
+test('article: the answer becomes the drafts with the owner’s own words, from the prompt buildArticlePrompt writes', async () => {
   const model = jsonModel(pack);
   const now = await draft({ aiRunner: mockRunner(model) });
   assert.equal(now.ok, true);
-  assert.deepEqual(now, old);
+  assert.equal(now.status, 'drafted');
+  assert.equal(now.detail, 'https://github.com/yeyo11/launches/pull/1');
+  const en = now.files?.find((f) => f.startsWith('src/content/posts/en/claudio.md\n'));
+  assert.match(en ?? '', /title: "My own title"[\s\S]*My own words\./, 'the owner’s words, not the AI’s copy of them');
+  assert.ok(now.files?.some((f) => f.startsWith('src/content/posts/es/claudio-es.md\n')), 'the translation the AI wrote');
+  assert.ok(now.files?.some((f) => f.startsWith('articles/my-own-title/bluesky.md\n')));
   const call = model.doStreamCalls[0]!;
   assert.equal(call.responseFormat?.type, 'json', 'no repo: the answer comes in the response format');
   assert.equal(call.tools, undefined);
-  assert.equal(JSON.stringify(call.prompt.filter((m) => m.role === 'user')), JSON.stringify(oldModel.doGenerateCalls[0]!.prompt.filter((m) => m.role === 'user')), 'the same prompt function');
+  const { prompt } = buildArticlePrompt(input, now.brand, articleConfig(now.brand, input.channels), 'yeyo11/launches', {});
+  assert.ok(JSON.stringify(call.prompt).includes(JSON.stringify(prompt).slice(1, -1)), 'the prompt is buildArticlePrompt’s');
 });
 
 test('article: on Claudio no workspace is made, and the settings’ budget is the run’s', async () => {

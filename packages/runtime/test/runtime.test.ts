@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { memoryRegistry } from '@shipcast/engine/testing';
+import { AI_TASK_DEFINITIONS } from '@shipcast/schema';
 import { createRuntime, MemoryStore, SettingMissing } from '../src/index.ts';
 
 const pem = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -41,7 +42,9 @@ test('the runtime starts with only the bootstrap: what needs a setting says whic
   assert.deepEqual(runtime.access, { kind: 'app', slug: 'shipcast-test', bot: 'shipcast-test[bot]' });
   assert.equal(runtime.pipeline.launchesRepo, '');
   await assert.rejects(runtime.brand(), (e) => e instanceof SettingMissing && /launches repo is not set/.test(e.message));
-  await assert.rejects(runtime.pipeline.aiSetup!('pack'), SettingMissing, 'claudio is the default provider and has no URL yet');
+  // The runner is always built; a task reads the provider when it runs, before any call
+  assert.equal(runtime.pipeline.aiRunner, runtime.aiRunner);
+  await assert.rejects(runtime.aiRunner.run(AI_TASK_DEFINITIONS.article, { prompt: 'x' }), SettingMissing, 'claudio is the default provider and has no URL yet');
   // Before a launches repo is set the App finds the owner's own installation
   assert.equal((await runtime.githubApp!.installation()).id, 9);
   assert.ok(seen.includes('GET /users/yeyo11/installation'));
@@ -54,7 +57,7 @@ test('the runtime starts with only the bootstrap: what needs a setting says whic
   assert.equal(runtime.pipeline.maxBudgetUsd, 3);
   assert.equal((await runtime.brand()).github, 'yeyo11');
   assert.ok(seen.includes('POST /app/installations/9/access_tokens'), 'the brand is read with an installation token');
-  assert.equal((await runtime.pipeline.aiSetup!('pack')).provider.id, 'claudio');
+  assert.deepEqual(runtime.settings.claudio(), { url: 'http://claudio:8798', token: 't' }, 'what the runner reads for claudio when the next task runs');
 });
 
 test('an install from before the settings keeps working: its .env values are imported at start, once', async () => {

@@ -1,5 +1,5 @@
 import { readAiSettings, writeAiSettings, AI_PROVIDERS, AI_TASKS, type AiProviderId } from '@shipcast/engine';
-import { aiProviderCheck, InvalidSetting, NETWORKS, providerFor, readAutomation } from '@shipcast/runtime';
+import { aiProviderCheck, InvalidSetting, NETWORKS, readAutomation } from '@shipcast/runtime';
 import { parseBrand, formatIssues } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { accountService, launchService, settingsService } from './app-services';
@@ -273,8 +273,8 @@ export const useProviderForAll = createServerFn({ method: 'POST' })
   });
 
 /**
- * Tests a provider without spending anything worth mentioning: claudio's model list (it proves the
- * address and the token), or a one-word answer from an SDK provider.
+ * Tests a provider without spending anything worth mentioning: its readiness where it has one
+ * (claudio's proves the address, the token and the Claude sign-in), or one cheap call.
  */
 export const testProvider = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
@@ -284,31 +284,9 @@ export const testProvider = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await appContext();
     try {
-      // With `ai-runner`: the provider module's own readiness (Claudio's /api/ready says when Claude is not signed in) or one cheap call, its failure in AiError's words
-      if (ctx.deps.aiRunner) {
-        const checked = await aiProviderCheck(ctx.deps.aiRunner, data, { env: process.env, registry: ctx.registry, secrets: ctx.secrets, claudio: () => ctx.settings.claudio(), brand: () => ctx.brand() });
-        return checked.ok ? { ok: true as const, detail: checked.detail } : { ok: false as const, problem: checked.problem };
-      }
-      if (data === 'claudio') {
-        const { url, token } = ctx.settings.claudio();
-        const response = await fetch(`${url}/api/providers/claude-code/models`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
-        if (response.status === 401 || response.status === 403) return { ok: false as const, problem: 'claudio refused the token' };
-        if (!response.ok) return { ok: false as const, problem: `claudio answered ${response.status}` };
-        return { ok: true as const, detail: 'claudio answers and accepts the token' };
-      }
-      const provider = await providerFor(data, {
-        env: process.env,
-        registry: ctx.registry,
-        secrets: ctx.secrets,
-        claudio: () => ctx.settings.claudio(),
-        brand: () => ctx.brand(),
-      });
-      let answer = '';
-      for await (const chunk of provider.streamText({ prompt: 'Answer with the single word OK.', abortSignal: AbortSignal.timeout(30_000) })) {
-        answer += chunk;
-        if (answer.length > 40) break;
-      }
-      return { ok: true as const, detail: `it answered “${answer.trim().slice(0, 40)}”` };
+      // The provider module's own readiness (Claudio's /api/ready says when Claude is not signed in) or one cheap call, its failure in AiError's words
+      const checked = await aiProviderCheck(ctx.deps.aiRunner, data, { env: process.env, registry: ctx.registry, secrets: ctx.secrets, claudio: () => ctx.settings.claudio(), brand: () => ctx.brand() });
+      return checked.ok ? { ok: true as const, detail: checked.detail } : { ok: false as const, problem: checked.problem };
     } catch (error) {
       return { ok: false as const, problem: message(error) };
     }

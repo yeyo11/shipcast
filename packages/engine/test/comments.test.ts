@@ -2,22 +2,17 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError, PostGone, type Comment, type ReplyTarget } from '@shipcast/connectors';
 import { Brand } from '@shipcast/schema';
-import { MockLanguageModelV4 } from 'ai/test';
+import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { CommentRefused, dismissComment, draftReply, editReplyDraft, fetchComments, LOCKED_REPLY_RULES, readCommentSettings, runComments, sendReply, writeCommentSettings, type CommentConnectors, type Repositories, type ReplyContext, type ReplyDeps } from '../src/index.ts';
-import { SdkProvider } from '../src/legacy-ai.ts';
 import { memoryRegistry } from '../src/testing.ts';
+import { mockRunner, textParts } from '../src/testing/index.ts';
 
-type GenerateResult = Extract<Awaited<ReturnType<MockLanguageModelV4['doGenerate']>>, { content: unknown }>;
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
 
-function answer(value: unknown): GenerateResult {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(value) }],
-    finishReason: { unified: 'stop', raw: undefined },
-    usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 10, text: 10, reasoning: 0 } },
-    warnings: [],
-  };
+/** One streamed answer of JSON text: how the runner gets a structured answer with no repo to read */
+function answer(value: unknown) {
+  return { stream: convertArrayToReadableStream(textParts(JSON.stringify(value))) };
 }
 
 const comment = (id: string, text: string, extra: Partial<Comment> = {}): Comment => ({
@@ -68,7 +63,6 @@ async function world(channel: 'mastodon' | 'devto' = 'mastodon'): Promise<World>
 const context: ReplyContext = {
   analysis: { summary: 'Claude Code as a service', implemented: ['REST API'], planned: ['Windows support'], documentedOnly: [], limitations: [] },
   postText: { mastodon: 'claudio is out' },
-  cwd: '/workspace',
 };
 
 function replyDeps(w: World, model: MockLanguageModelV4): ReplyDeps & { contexts: number } {
@@ -77,7 +71,7 @@ function replyDeps(w: World, model: MockLanguageModelV4): ReplyDeps & { contexts
     connectors: w.connectors,
     brand,
     contexts: 0,
-    setup: async () => ({ provider: new SdkProvider({ id: 'test', model: () => model }), prompts: {} }),
+    aiRunner: mockRunner(model),
     context: async () => {
       deps.contexts++;
       return context;
@@ -147,7 +141,7 @@ test('a reply is drafted through the AI provider with the locked rules last, gro
   const w = await world();
   w.thread = [comment('101', 'Is there a Windows build?'), comment('1022', 'Same question', { inReplyTo: '101' })];
   await fetchComments(w);
-  const model = new MockLanguageModelV4({ doGenerate: async () => reply('Not yet: Windows support is planned, the REST API works today.') });
+  const model = new MockLanguageModelV4({ doStream: async () => reply('Not yet: Windows support is planned, the REST API works today.') });
   const target = (await w.registry.comments.commentByExternalId('mastodon', '1022'))!;
   const drafted = await draftReply(target.id, replyDeps(w, model));
   assert.equal(drafted.status, 'draft-ready');
@@ -155,7 +149,7 @@ test('a reply is drafted through the AI provider with the locked rules last, gro
   assert.equal(drafted.classification, 'question');
   assert.equal(drafted.note, 'They asked about Windows');
 
-  const call = model.doGenerateCalls[0]!;
+  const call = model.doStreamCalls[0]!;
   const system = call.prompt.find((m) => m.role === 'system');
   assert.ok(system?.role === 'system');
   for (const rule of LOCKED_REPLY_RULES) assert.ok(system.content.includes(rule), rule);
@@ -170,7 +164,7 @@ test('spam is classified and suggested for dismissal: no draft, and auto mode ne
   const w = await world();
   await writeCommentSettings(w.registry, { replies: { mastodon: 'auto' } });
   w.thread = [comment('101', 'Buy followers at spam.example')];
-  const model = new MockLanguageModelV4({ doGenerate: async () => answer({ classification: 'spam', language: 'en', dismiss: true, reply: 'Thanks!', reason: 'An ad for followers' }) });
+  const model = new MockLanguageModelV4({ doStream: async () => answer({ classification: 'spam', language: 'en', dismiss: true, reply: 'Thanks!', reason: 'An ad for followers' }) });
   const result = await runComments(replyDeps(w, model));
   assert.equal(result.toDismiss, 1);
   assert.equal(result.sent.length, 0);
@@ -184,7 +178,7 @@ test('spam is classified and suggested for dismissal: no draft, and auto mode ne
 test('approval mode drafts and never sends; auto mode sends the draft at once', async () => {
   const w = await world();
   w.thread = [comment('101', 'Does it run on Windows?')];
-  const model = new MockLanguageModelV4({ doGenerate: async () => reply('Not yet, it is planned.') });
+  const model = new MockLanguageModelV4({ doStream: async () => reply('Not yet, it is planned.') });
   const deps = replyDeps(w, model);
   assert.equal((await readCommentSettings(w.registry)).replies.mastodon, 'approval', 'approval by default');
   const approval = await runComments(deps);
@@ -243,7 +237,7 @@ test('a draft over the network’s limit is refused, and dev.to never sends: aut
 test('a draft the AI could not write leaves the comment failed with the reason, and the run goes on', async () => {
   const w = await world();
   w.thread = [comment('101', 'Hi')];
-  const model = new MockLanguageModelV4({ doGenerate: async () => answer({ nope: true }) });
+  const model = new MockLanguageModelV4({ doStream: async () => answer({ nope: true }) });
   const result = await runComments(replyDeps(w, model));
   assert.equal(result.drafted.length, 0);
   const stored = (await w.registry.comments.commentByExternalId('mastodon', '101'))!;

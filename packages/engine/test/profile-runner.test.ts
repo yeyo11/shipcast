@@ -5,7 +5,7 @@ import { readProfileReview, reviewProfile, type ProfileDeps, type Repositories }
 import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRunner, fakeGitHubArchives, memoryRegistry } from '../src/testing/index.ts';
 
 /*
- * A profile review on the AI task runner (`ai-runner`), on Claudio: no repo, so no workspace, the
+ * A profile review on the AI task runner, on Claudio: no repo, so no workspace, the
  * profile task's turns and budget on the call; a failure is an AiError that fails the review's job,
  * and nothing is stored.
  */
@@ -18,10 +18,9 @@ async function world(): Promise<{ registry: Repositories; accountId: number }> {
   return { registry, accountId: account.id };
 }
 
-const deps = (registry: Repositories, runner: NonNullable<ProfileDeps['aiRunner']>): ProfileDeps => ({
+const deps = (registry: Repositories, runner: ProfileDeps['aiRunner']): ProfileDeps => ({
   registry,
   brand,
-  cwd: '/workspace',
   aiRunner: runner,
   connector: async () => ({ profile: async () => ({ displayName: 'Me', bio: 'Old bio', links: [], hasAvatar: true }) }),
   now: () => new Date('2026-10-27T10:00:00Z'),

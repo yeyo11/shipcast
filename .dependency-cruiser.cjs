@@ -19,53 +19,6 @@ const nodeIo = `^(node:)?(${NODE_IO.map((m) => m.replace('/', '\\/')).join('|')}
 const ws = (...names) => names.flatMap((n) => [`^${n}/`, `^@shipcast/${n.split('/')[1]}(/|$)`]).join('|');
 const anyWorkspace = '^(packages|apps)/|^@shipcast/';
 
-/*
- * The AI layer before the AI task runner, kept while the `ai-runner` flag is verified in production:
- * the AiProvider port and its providers (engine's ai.ts), claudio's REST client (claudio.ts), their
- * one entry point (legacy-ai.ts, `@shipcast/engine/legacy-ai`) and the old streaming mock
- * (testing/ai.ts, `@shipcast/engine/testing/legacy-ai`). Every file below holds an old branch or an
- * old-path test; removing the layer is deleting those branches and these modules, so nothing new may
- * join the list.
- */
-const LEGACY_AI = '^packages/engine/src/(ai|claudio|legacy-ai|testing/ai)[.]ts$|^@shipcast/engine/(testing/)?legacy-ai$';
-const LEGACY_AI_FILES = [
-  // The layer itself
-  'packages/engine/src/ai.ts',
-  'packages/engine/src/claudio.ts',
-  'packages/engine/src/legacy-ai.ts',
-  'packages/engine/src/testing/ai.ts',
-  // The old branch of each task
-  'packages/engine/src/pipeline.ts',
-  'packages/engine/src/generate.ts',
-  'packages/engine/src/article.ts',
-  'packages/engine/src/comments.ts',
-  'packages/engine/src/profile.ts',
-  'packages/engine/src/assistant.ts',
-  'packages/runtime/src/ai.ts',
-  'packages/runtime/src/runtime.ts',
-  'packages/runtime/src/comments.ts',
-  'packages/runtime/src/profiles.ts',
-  'apps/web/src/server/assistant.ts',
-  'apps/web/src/server/assistant.server.ts',
-  // Tests of the old path, or comparing it with the runner's
-  'packages/engine/test/ai.test.ts',
-  'packages/engine/test/article-review.test.ts',
-  'packages/engine/test/article-runner.test.ts',
-  'packages/engine/test/assistant.test.ts',
-  'packages/engine/test/claudio.test.ts',
-  'packages/engine/test/comments.characterisation.test.ts',
-  'packages/engine/test/comments.test.ts',
-  'packages/engine/test/generate.test.ts',
-  'packages/engine/test/pack-runner.test.ts',
-  'packages/engine/test/pipeline.test.ts',
-  'packages/engine/test/profile.test.ts',
-  'packages/engine/test/replies-runner.test.ts',
-  'packages/runtime/test/profiles.test.ts',
-  'apps/web/test/assistant.test.ts',
-  'apps/web/test/assistant-runner.test.ts',
-];
-const exactly = (files) => `^(${files.map((f) => f.replace(/[.]/g, '[.]')).join('|')})$`;
-
 module.exports = {
   forbidden: [
     {
@@ -150,16 +103,6 @@ module.exports = {
       severity: 'error',
       from: { pathNot: '^packages/engine/src/(ai/providers/|ai/runner[.]ts$|ai[.]ts$|claudio[.]ts$)' },
       to: { path: '(^|/)@ai-sdk/', pathNot: '(^|/)@ai-sdk/provider(-utils)?/' },
-    },
-    {
-      name: 'legacy-ai-layer-only-in-legacy-files',
-      comment:
-        'the AI layer before the AI task runner (engine ai.ts, claudio.ts, legacy-ai.ts, testing/ai.ts) is imported only by ' +
-        'the files of LEGACY_AI_FILES, each an old branch behind the ai-runner flag or a test of it: new code runs on the ' +
-        'runner, and the layer is removed by deleting those branches and these modules',
-      severity: 'error',
-      from: { pathNot: exactly(LEGACY_AI_FILES) },
-      to: { path: LEGACY_AI },
     },
     {
       name: 'no-cycles-between-packages',

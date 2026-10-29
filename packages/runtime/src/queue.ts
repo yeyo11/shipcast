@@ -37,7 +37,7 @@ export interface JobData {
   /** With `github-events`: a drafts pull request read again after GitHub said it changed */
   'drafts-snapshot': { pullRequest: number; delivery: string };
   /**
-   * With `ai-runner`: a launch's text checked against its released code by the writing assistant,
+   * A launch's text checked against its released code by the writing assistant,
    * out of the page's request; the result is kept for the page under the job's id (assistant-check.ts)
    */
   'assistant-check': { launchId: number; text: string; lang?: string; channel?: string };

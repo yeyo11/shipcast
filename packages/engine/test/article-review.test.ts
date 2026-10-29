@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { approveLaunch, articleConfig, articleSlug, claimArticle, draftArticle, draftLaunch, editDraft, isArticle, launchDir, loadBrand, readReview, type Repositories } from '../src/index.ts';
-import { type AiProvider, type ObjectRequest } from '../src/legacy-ai.ts';
-import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
+import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
+import { FakeGitHub, memoryRegistry, mockRunner, promptOf, submitParts, textParts } from '../src/testing/index.ts';
 
 const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n';
@@ -20,18 +20,13 @@ function fakeGitHub(files: Record<string, string>): FakeGitHub {
   return github;
 }
 
-class FakeAi implements AiProvider {
-  requests: ObjectRequest[] = [];
-  output: unknown;
-  constructor(output: unknown) {
-    this.output = output;
-  }
-  readonly id = 'test' as const;
-  async *streamText() {}
-  async generateObject(request: ObjectRequest) {
-    this.requests.push(request);
-    return { output: this.output, chatId: 'c', costUsd: 0.1 };
-  }
+/** A model that answers `output` the way the runner asks: through the submit tool beside the repo's tools, else as JSON text */
+function answering(output: unknown): MockLanguageModelV4 {
+  return new MockLanguageModelV4({
+    doStream: async (options) => ({
+      stream: convertArrayToReadableStream((options.tools ?? []).length > 0 ? submitParts(output) : textParts(JSON.stringify(output))),
+    }),
+  });
 }
 
 const version = { title: 'T', description: 'd', markdown: 'AI copy' };
@@ -48,9 +43,11 @@ const launchPack = {
 };
 
 async function deps(github: FakeGitHub, output: unknown = launchPack) {
+  const model = answering(output);
   return {
+    model,
     github,
-    ai: new FakeAi(output),
+    aiRunner: mockRunner(model),
     registry: await memoryRegistry(),
     launchesRepo: 'yeyo11/launches',
     checkout: async () => ({ hostPath: '/h', providerPath: '/workspace/x' }),
@@ -103,10 +100,10 @@ test('an article keeps the owner’s words, gets its translation and pieces, and
   const { launch } = await claimArticle(input, brand, d);
   const result = await draftArticle(launch, input, brand, d);
   assert.ok(result.ok, result.ok ? '' : result.problems.join('; '));
-  const ai = d.ai.requests[0]!;
-  assert.match(ai.prompt, /My own words\./);
-  assert.match(ai.prompt, /Translate it faithfully into Spanish/);
-  assert.deepEqual(ai.allowedTools, []);
+  const prompt = promptOf(d.model);
+  assert.match(prompt, /My own words\./);
+  assert.match(prompt, /Translate it faithfully into Spanish/);
+  assert.equal(d.model.doStreamCalls[0]!.tools, undefined, 'an article reads no repo');
   const pr = github.opened[0]!;
   assert.equal(pr.branch, 'article/my-own-title');
   const en = pr.files.find((f) => f.path === 'src/content/posts/en/claudio.md');
