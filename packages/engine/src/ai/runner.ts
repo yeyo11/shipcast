@@ -1,4 +1,4 @@
-import { AiError, ANALYSIS_RULES, type AiTask, type AiTaskDefinition, type AiTaskLimits } from '@shipcast/schema';
+import { AI_BUDGET_TASKS, AiError, ANALYSIS_RULES, type AiBudgetTask, type AiTask, type AiTaskDefinition, type AiTaskLimits } from '@shipcast/schema';
 import { hasToolCall, jsonSchema, Output, stepCountIs, streamText, tool, type JSONSchema7, type LanguageModelUsage, type ModelMessage, type OutputInterface, type ProviderMetadata, type StopCondition, type SystemModelMessage, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import type { TimingKind, TimingOutcome } from '../telemetry/store.ts';
@@ -34,6 +34,11 @@ export interface AiRunSetup {
   settings: AiProviderSettings;
   /** Empty for the provider's own default */
   model?: string;
+  /**
+   * The spend ceilings the owner set in the AI settings, by task id (`assistant-check` apart from
+   * `assistant`); a task left out runs with its definition's default.
+   */
+  budgets?: Partial<Record<AiBudgetTask, number>>;
 }
 
 /** Where the runner reports how long each task took; the telemetry recorder is one */
@@ -63,7 +68,11 @@ export interface AiRunInput {
    */
   repo?: { name: string; ref: string; hostDir?: string };
   abortSignal?: AbortSignal;
-  /** This run's own ceilings over the task's: the spend ceiling from the settings */
+  /**
+   * This run's own ceilings over the task's: the runtime settings' single AI budget
+   * (SHIPCAST_MAX_BUDGET_USD) for the pack, the article and the check. A ceiling the owner set for
+   * the task in the AI settings wins over this one's budget, being the more specific choice.
+   */
   limits?: Partial<AiTaskLimits>;
   /** Told of every tool call and every model call as they happen: how an evaluation sees a run */
   observer?: AiRunObserver;
@@ -252,12 +261,17 @@ export class AiTaskRunner {
     if (task.needsRepo === 'always' && !input.repo) throw new Error(`${task.id} reads the repository: its checkout is missing`);
     const setup = given ?? (await this.#deps.resolve(task.settingsTask));
     const { provider, settings } = setup;
-    const limits: AiTaskLimits = { ...task.limits, ...input.limits };
+    const budget = budgetOf(task.id, setup.budgets);
+    const limits: AiTaskLimits = { ...task.limits, ...input.limits, ...(budget !== undefined && { maxBudgetUsd: budget }) };
     const repo = task.needsRepo === 'never' ? undefined : input.repo;
     const remote = provider.capabilities.repoAccess === 'remote-workspace';
     if (repo && !remote && !repo.hostDir) throw new Error(`${task.id} reads the repository with the ${provider.name}'s tools: its checkout is missing`);
     // A remote agent reads the repo in a workspace of its own, prepared when the run starts; the others get tools here
     const tools: ToolSet = repo?.hostDir && !remote ? repoTools(repo.hostDir) : {};
+    // The budget reaches only a provider that can be told one (callOptions: Claudio's maxBudgetUsd). The
+    // others (the Anthropic API, OpenAI, OpenAI-compatible servers) bill per token and take no spend
+    // ceiling on a call, so nothing is sent to them: their run is bounded by the steps, output
+    // tokens and timeout Shipcast enforces itself.
     const call: AiCallContext = {
       task: task.id,
       limits: { ...(limits.maxTurns !== undefined && { maxTurns: limits.maxTurns }), maxBudgetUsd: limits.maxBudgetUsd },
@@ -404,6 +418,11 @@ export class AiTaskRunner {
     const [steps, usage, response, providerMetadata] = await Promise.all([result.steps, result.totalUsage, result.response, result.providerMetadata]);
     return { text, steps: steps.length, usage, responseMessages: response.messages, providerMetadata, ...(submitted && { submitted }) };
   }
+}
+
+/** The owner's ceiling for a task, when the task is one the AI settings budget and the owner set one */
+function budgetOf(taskId: string, budgets: AiRunSetup['budgets']): number | undefined {
+  return (AI_BUDGET_TASKS as readonly string[]).includes(taskId) ? budgets?.[taskId as AiBudgetTask] : undefined;
 }
 
 /** A provider's conversation id in a call's metadata, under the provider's own key (`providerMetadata.claudio.chatId`) */

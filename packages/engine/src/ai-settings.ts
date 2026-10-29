@@ -1,4 +1,4 @@
-import { AI_TASKS, contentPackJsonSchema, formatIssues, InvalidRequest, parseLaunchConfig, ShipcastError, type AiTask, type Brand, type LaunchConfig } from '@shipcast/schema';
+import { AI_BUDGET_TASKS, AI_TASKS, contentPackJsonSchema, DEFAULT_AI_BUDGETS_USD, MAX_AI_BUDGET_USD, formatIssues, InvalidRequest, parseLaunchConfig, ShipcastError, type AiBudgetTask, type AiTask, type Brand, type LaunchConfig } from '@shipcast/schema';
 import { z } from 'zod';
 import { AI_PROVIDERS } from './ai/providers/registry.ts';
 
@@ -29,7 +29,8 @@ import type { Launch, Repositories } from './repositories/index.ts';
 
 /*
  * The AI settings live in the registry's `settings` table, as JSON under two keys: which provider and
- * model each task runs with (and the brand's tone override), and the history of every edited prompt.
+ * model each task runs with (with the brand's tone override and the tasks' spend ceilings the owner
+ * changed), and the history of every edited prompt.
  * See docs/decisions/ai-providers.md.
  */
 
@@ -53,10 +54,25 @@ export function taskChoiceFor<const Id extends string>(providers: readonly [Id, 
 const TaskChoice = taskChoiceFor(AI_PROVIDERS);
 export type TaskChoice = z.infer<typeof TaskChoice>;
 
+/** One task's spend ceiling in USD, when the owner overrides its default (DEFAULT_AI_BUDGETS_USD) */
+export const AiBudgetUsd = z.number().positive().max(MAX_AI_BUDGET_USD);
+
+/** The overridden ceilings only: a task left out runs with its default */
+const AiBudgets = z.strictObject({
+  pack: AiBudgetUsd.optional(),
+  article: AiBudgetUsd.optional(),
+  assistant: AiBudgetUsd.optional(),
+  'assistant-check': AiBudgetUsd.optional(),
+  replies: AiBudgetUsd.optional(),
+  profile: AiBudgetUsd.optional(),
+});
+export type AiBudgets = z.infer<typeof AiBudgets>;
+
 const AiSettings = z.strictObject({
   tasks: z.strictObject({ pack: TaskChoice, article: TaskChoice, assistant: TaskChoice, replies: TaskChoice, profile: TaskChoice }),
   /** Replaces brand.yml's tone in every prompt when set */
   tone: z.string().trim().max(2000).optional(),
+  budgets: AiBudgets.optional(),
 });
 export type AiSettings = z.infer<typeof AiSettings>;
 
@@ -79,7 +95,17 @@ function clean(settings: AiSettings): AiSettings {
       return [task, choice.model ? choice : { provider: choice.provider }];
     }),
   ) as AiSettings['tasks'];
-  return settings.tone ? { tasks, tone: settings.tone } : { tasks };
+  const budgets: AiBudgets = {};
+  for (const task of AI_BUDGET_TASKS) {
+    const budget = settings.budgets?.[task];
+    if (budget !== undefined) budgets[task] = budget;
+  }
+  return { tasks, ...(settings.tone && { tone: settings.tone }), ...(Object.keys(budgets).length > 0 && { budgets }) };
+}
+
+/** A task's spend ceiling as the settings have it: the owner's override, or the task's default */
+export function aiBudgetUsd(settings: Pick<AiSettings, 'budgets'>, task: AiBudgetTask): number {
+  return settings.budgets?.[task] ?? DEFAULT_AI_BUDGETS_USD[task];
 }
 
 /** The settings as stored, each task falling back on claudio; a stored value that no longer parses is ignored */
@@ -87,15 +113,21 @@ export async function readAiSettings(registry: Pick<Repositories, 'settings'>): 
   const stored = await registry.settings.setting<unknown>(AI_SETTINGS_KEY);
   const tasks = { ...DEFAULT_AI_SETTINGS.tasks };
   let tone: string | undefined;
+  const budgets: AiBudgets = {};
   if (stored && typeof stored === 'object') {
-    const value = stored as { tasks?: Record<string, unknown>; tone?: unknown };
+    const value = stored as { tasks?: Record<string, unknown>; tone?: unknown; budgets?: Record<string, unknown> };
     for (const task of AI_TASKS) {
       const parsed = TaskChoice.safeParse(value.tasks?.[task]);
       if (parsed.success) tasks[task] = parsed.data;
     }
     if (typeof value.tone === 'string' && value.tone.trim()) tone = value.tone.trim();
+    // A ceiling that no longer parses (the maximum lowered since) falls back on the task's default, alone
+    for (const task of AI_BUDGET_TASKS) {
+      const parsed = AiBudgetUsd.safeParse(value.budgets?.[task]);
+      if (parsed.success) budgets[task] = parsed.data;
+    }
   }
-  return clean({ tasks, tone });
+  return clean({ tasks, ...(tone && { tone }), budgets });
 }
 
 export async function writeAiSettings(registry: Pick<Repositories, 'settings'>, input: unknown): Promise<AiSettings> {
@@ -104,7 +136,9 @@ export async function writeAiSettings(registry: Pick<Repositories, 'settings'>, 
   const stored = await readAiSettings(registry);
   const replies = parsed.data.tasks.replies ?? stored.tasks.replies;
   const profile = parsed.data.tasks.profile ?? stored.tasks.profile;
-  const settings = clean({ ...parsed.data, tasks: { ...parsed.data.tasks, replies, profile } });
+  // A client written before the budgets existed saves without them; the stored ones stay
+  const budgets = parsed.data.budgets ?? stored.budgets;
+  const settings = clean({ ...parsed.data, tasks: { ...parsed.data.tasks, replies, profile }, ...(budgets && { budgets }) });
   await registry.settings.setSetting(AI_SETTINGS_KEY, settings);
   return settings;
 }

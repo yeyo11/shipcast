@@ -71,6 +71,14 @@ test('the AI task runner reads the same settings and keychain as the old provide
   assert.ok(aiRunnerFor({ ...d, archives: { tarballUrl: async () => 'https://codeload.github.com/o/r/tar.gz/v1' } }));
 });
 
+test('the runner’s setup carries the spend limits the owner set in the AI settings, and none until then', async () => {
+  const d = await deps();
+  const setup = aiRunSetup(d);
+  assert.equal((await setup('pack')).budgets, undefined);
+  await writeAiSettings(d.registry, { tasks: { pack: { provider: 'claudio' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' } }, budgets: { pack: 6, 'assistant-check': 1.5 } });
+  assert.deepEqual((await setup('assistant')).budgets, { pack: 6, 'assistant-check': 1.5 });
+});
+
 test('the ai-runner flag is off unless it is set', () => {
   assert.equal(Flags.fromEnv({}).on('ai-runner'), false);
   assert.equal(Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner' }).on('ai-runner'), true);

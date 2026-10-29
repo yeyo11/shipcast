@@ -23,8 +23,8 @@ export interface AiTaskLimits {
   /** An agent's turns, for a provider that takes a ceiling of its own (claudio's REST API took `maxTurns`) */
   maxTurns?: number;
   /**
-   * The spend ceiling in USD, for a provider that takes one: the task's own, or the settings' for a
-   * run. Always set, since a provider left without one applies its own (Claudio: 1 USD, too little
+   * The spend ceiling in USD, for a provider that takes one: the task's default
+   * (DEFAULT_AI_BUDGETS_USD), which the AI settings may override per task. Always set, since a provider left without one applies its own (Claudio: 1 USD, too little
    * for a pack and more than a reply needs).
    */
   maxBudgetUsd: number;
@@ -83,6 +83,28 @@ const MAX_OUTPUT_TOKENS = 32_000;
 /** How long claudio let a generation run before stopping it (claudio.ts, `timeoutMs`) */
 const TIMEOUT_MS = 30 * 60_000;
 
+/**
+ * The tasks whose spend ceiling the owner may set in the AI settings: every task definition's id but
+ * the provider check, whose ceiling only has to be next to nothing. The writing assistant and its
+ * check against the code share the `assistant` settings task, but not its budget: a check reads the
+ * repository, a suggestion does not.
+ */
+export const AI_BUDGET_TASKS = ['pack', 'article', 'assistant', 'assistant-check', 'replies', 'profile'] as const;
+export type AiBudgetTask = (typeof AI_BUDGET_TASKS)[number];
+
+/** Each task's spend ceiling in USD until the AI settings override it: the one place they are set */
+export const DEFAULT_AI_BUDGETS_USD: Readonly<Record<AiBudgetTask, number>> = {
+  pack: 5,
+  article: 3,
+  'assistant-check': 2,
+  assistant: 1,
+  replies: 1,
+  profile: 0.5,
+};
+
+/** The highest ceiling the AI settings accept for one run, so a typo cannot open the meter */
+export const MAX_AI_BUDGET_USD = 50;
+
 const task = <T>(definition: AiTaskDefinition<T>): AiTaskDefinition<T> => definition;
 
 export const AI_TASK_DEFINITIONS = {
@@ -92,7 +114,7 @@ export const AI_TASK_DEFINITIONS = {
     settingsTask: 'pack',
     output: { schema: ContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
     needsRepo: 'always',
-    limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: 5 },
+    limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.pack },
   }),
   /** An article's translation and pieces (article.ts): the owner's text is the truth, no repo */
   article: task({
@@ -100,14 +122,14 @@ export const AI_TASK_DEFINITIONS = {
     settingsTask: 'article',
     output: { schema: ContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
     needsRepo: 'never',
-    limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: 3 },
+    limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.article },
   }),
   /** A turn of the writing assistant, streamed (assistant.ts): text, no repo, no output ceiling set today */
   assistant: task<string>({
     id: 'assistant',
     settingsTask: 'assistant',
     needsRepo: 'never',
-    limits: { maxSteps: 1, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: 1 },
+    limits: { maxSteps: 1, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.assistant },
   }),
   /** A launch's text checked against its code (assistant.ts, checkAgainstCode: maxTurns 30) */
   assistantCheck: task({
@@ -115,7 +137,7 @@ export const AI_TASK_DEFINITIONS = {
     settingsTask: 'assistant',
     output: { schema: CheckAnswer, jsonSchema: checkJsonSchema, name: 'check' },
     needsRepo: 'always',
-    limits: { maxSteps: 30, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 30, maxBudgetUsd: 2 },
+    limits: { maxSteps: 30, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 30, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD['assistant-check'] },
   }),
   /** A reply to a comment (comments.ts: maxTurns 20), grounded in the code when it is checked out */
   replies: task({
@@ -123,7 +145,7 @@ export const AI_TASK_DEFINITIONS = {
     settingsTask: 'replies',
     output: { schema: ReplyAnswer, jsonSchema: replyJsonSchema, name: 'reply' },
     needsRepo: 'when-given',
-    limits: { maxSteps: 20, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 20, maxBudgetUsd: 1 },
+    limits: { maxSteps: 20, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 20, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.replies },
   }),
   /** A review of an account's profile (profile.ts: maxTurns 5) */
   profile: task({
@@ -131,7 +153,7 @@ export const AI_TASK_DEFINITIONS = {
     settingsTask: 'profile',
     output: { schema: ProfileReviewAnswer, jsonSchema: profileReviewJsonSchema, name: 'profile_review' },
     needsRepo: 'never',
-    limits: { maxSteps: 5, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 5, maxBudgetUsd: 0.5 },
+    limits: { maxSteps: 5, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxTurns: 5, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.profile },
   }),
   /**
    * Whether a provider answers at all, for onboarding and the AI settings (a provider without a

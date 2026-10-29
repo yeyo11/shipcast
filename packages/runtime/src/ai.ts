@@ -98,13 +98,14 @@ export async function aiProviderSettings(id: string, deps: AiDeps): Promise<AiPr
   return { ...found.settings, ...found.secrets };
 }
 
-/** What the runner runs a task with: the task's provider and model as the AI settings have them when it runs */
+/** What the runner runs a task with: the task's provider, model and the owner's spend ceilings as the AI settings have them when it runs */
 export function aiRunSetup(deps: AiDeps): (task: AiTask) => Promise<AiRunSetup> {
   return async (task) => {
-    const choice = (await readAiSettings(deps.registry)).tasks[task];
+    const ai = await readAiSettings(deps.registry);
+    const choice = ai.tasks[task];
     const provider = aiProviderDefinition(choice.provider);
     if (!provider) throw new AiError('ai_not_connected', `the AI settings choose "${choice.provider}" for ${task}, which is not a provider`);
-    return { provider, settings: await aiProviderSettings(choice.provider, deps), ...(choice.model && { model: choice.model }) };
+    return { provider, settings: await aiProviderSettings(choice.provider, deps), ...(choice.model && { model: choice.model }), ...(ai.budgets && { budgets: ai.budgets }) };
   };
 }
 
