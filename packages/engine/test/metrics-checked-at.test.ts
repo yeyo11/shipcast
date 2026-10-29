@@ -130,3 +130,13 @@ test("freshness ages a reading from its last check, against each channel's own c
   assert.equal(fresh!.value, 0.5);
   assert.equal((fresh!.detail as { cadenceHours: number }).cadenceHours, 6, 'the shape of the answer is kept');
 });
+
+test('a referrer or page out of GitHub’s top ten since the last read is no longer among the latest numbers', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await aPublishedLaunch(registry, []);
+  await registry.metrics.recordMetrics(launch.id, 'github', { views: 9, 'referrer:a.dev': 4, 'referrer_visitors:a.dev': 2, 'referrer:b.dev': 3, 'path:/x': 5 }, at('09:00'), null, MOVES);
+  // The next day's read: b.dev dropped out of the top ten, a.dev unchanged, /x changed
+  await registry.metrics.recordMetrics(launch.id, 'github', { views: 12, 'referrer:a.dev': 4, 'referrer_visitors:a.dev': 2, 'path:/x': 6 }, at('10:00'), null, MOVES);
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [m.name, m.value]));
+  assert.deepEqual(latest, { views: 12, 'referrer:a.dev': 4, 'referrer_visitors:a.dev': 2, 'path:/x': 6 });
+});

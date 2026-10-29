@@ -3,6 +3,9 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm
 import type { Database } from '../db/connect.ts';
 import { metricDays, metrics } from '../db/schema.ts';
 
+/** A reading of a top list a source names afresh each read (GitHub's top referrers and pages) */
+const isTopListMetric = (name: string) => /^(?:referrer|referrer_visitors|path|path_visitors):/.test(name);
+
 /**
  * One number read from one source for one launch, at one moment. A launch's readings add up its
  * pieces': two newsletter issues read in one round are one reading of the newsletter. A ratio (a
@@ -134,7 +137,17 @@ export class MetricRepository {
    */
   async latestMetrics(launchId: number): Promise<MetricReading[]> {
     const rows = await this.#latestSums(launchId);
-    return rows.map(({ pieces, ...r }) => (isAveragedMetric(r.source, r.name) ? { ...r, value: r.value / pieces } : r));
+    // A top list (GitHub's ten referrers and pages) names only who is in it now: one that dropped out
+    // was not read again, and its last value would stand for ever. Only those of the newest read stay
+    const newestOfList = new Map<string, string>();
+    for (const r of rows) {
+      if (!isTopListMetric(r.name)) continue;
+      const was = newestOfList.get(r.source);
+      if (was === undefined || r.checkedAt > was) newestOfList.set(r.source, r.checkedAt);
+    }
+    return rows
+      .filter((r) => !isTopListMetric(r.name) || r.checkedAt === newestOfList.get(r.source))
+      .map(({ pieces, ...r }) => (isAveragedMetric(r.source, r.name) ? { ...r, value: r.value / pieces } : r));
   }
 
   /** The newest reading of every metric of a launch, its pieces' added up, with how many there were */
