@@ -270,9 +270,9 @@ function contract(backend: string, make: () => Ports, skip: false | string) {
   });
 }
 
-async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
+async function until(check: () => boolean | Promise<boolean>, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while (!check()) {
+  while (!(await check())) {
     if (Date.now() > deadline) throw new Error('timed out');
     await wait(10);
   }
@@ -293,7 +293,8 @@ describe('Redis connections', { skip: redisSkip }, () => {
       bus.onReconnect(() => reconnects++);
       await bus.subscribe('launch.changed', (p) => seen.push(p.launchId));
       await publisher.publish('launch.changed', { launchId: 1 });
-      await until(() => seen.length === 1);
+      // The margins are a loaded CI runner's, not a laptop's: they only make a failing run slower
+      await until(() => seen.length === 1, 10_000);
       // Kill every pub/sub connection of this test, as a Redis restart or a network cut would
       const admin = redis.client();
       const clients = (await admin.client('LIST')) as string;
@@ -302,9 +303,15 @@ describe('Redis connections', { skip: redisSkip }, () => {
         const id = /id=(\d+)/.exec(line)?.[1];
         if (id) await admin.client('KILL', 'ID', id);
       }
-      await until(() => reconnects === 1, 10_000);
+      await until(() => reconnects === 1, 20_000);
+      // ioredis says ready once it has sent the re-SUBSCRIBE, not once Redis has taken it: a publish
+      // from another connection can get there first and is then lost for good, which no wait would
+      // fix. So the next event waits for the server to list the channel again, as a replica's next
+      // event comes some time after its reconnect.
+      const channels = () => admin.pubsub('CHANNELS', `${redis.prefix}*`);
+      await until(async () => (await channels()).length === 1, 10_000);
       await publisher.publish('launch.changed', { launchId: 2 });
-      await until(() => seen.length === 2, 5000);
+      await until(() => seen.length === 2, 10_000);
       assert.deepEqual(seen, [1, 2]);
     } finally {
       await bus.close();
