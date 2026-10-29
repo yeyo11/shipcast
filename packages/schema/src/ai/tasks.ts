@@ -20,7 +20,7 @@ export interface AiTaskLimits {
   maxOutputTokens: number;
   /** The whole run, repair included; Shipcast enforces it whatever the provider */
   timeoutMs: number;
-  /** An agent's turns, for a provider that takes a ceiling of its own (claudio's REST API took `maxTurns`) */
+  /** An agent's turns, for a provider that takes a ceiling of its own (Claudio's, as a header on each call) */
   maxTurns?: number;
   /**
    * The spend ceiling in USD, for a provider that takes one: the task's default

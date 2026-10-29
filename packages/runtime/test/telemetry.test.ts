@@ -31,8 +31,8 @@ test('an AI server is labelled as one, never as Mastodon', () => {
   assert.equal(classify('https://mastodon.social/api/v1/statuses').provider, 'mastodon');
   // A registered host names every call to it, claudio's REST API included, whatever the path
   registerAiHost('http://apps-1.tail.ts.net:8799/', 'claudio');
-  assert.equal(classify('http://apps-1.tail.ts.net:8799/api/chats/abc').provider, 'claudio');
-  assert.equal(classify('http://apps-1.tail.ts.net:8800/api/chats/abc').provider, 'apps-1.tail.ts.net', 'the port is part of the host registered');
+  assert.equal(classify('http://apps-1.tail.ts.net:8799/api/workspaces/abc').provider, 'claudio');
+  assert.equal(classify('http://apps-1.tail.ts.net:8800/api/workspaces/abc').provider, 'apps-1.tail.ts.net', 'the port is part of the host registered');
   registerAiHost('not a url', 'x');
 });
 
