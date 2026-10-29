@@ -149,6 +149,13 @@ test('an Instagram story refused for any other reason fails as before', async ()
   await assert.rejects(instagram.storyMetrics('s1'), /401/);
 });
 
+test('an Instagram story refused for a missing permission is a failure, though Meta gives it the same #10', async () => {
+  // Code 10 is also Graph API's "permission denied": only the message tells it from too few viewers
+  const refusal = () => Response.json({ error: { message: '(#10) Application does not have permission for this action', type: 'OAuthException', code: 10 } }, { status: 403 });
+  const instagram = new Instagram({ userId: '1784', accessToken: 't', fetch: fakeFetch([[`GET ${G}/s1/insights`, refusal]], []) });
+  await assert.rejects(instagram.storyMetrics('s1'), /permission/);
+});
+
 test('the Instagram snapshot adds the last day’s account insights, and says what Meta refused', async () => {
   const calls: Call[] = [];
   const followers = { n: 500 };

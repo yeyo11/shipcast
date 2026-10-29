@@ -52,8 +52,12 @@ const ACCOUNT_METRICS: Readonly<Record<string, string>> = {
 /** Meta gives follows and unfollows only from 100 followers up */
 const FOLLOWS_MIN_FOLLOWERS = 100;
 
-/** Graph API's (#10) on a story's insights: fewer than five accounts saw it, and Meta keeps its numbers back */
-const NOT_ENOUGH_VIEWERS = /"code"\s*:\s*10\b|not enough viewers/i;
+/**
+ * Graph API's (#10) on a story's insights when fewer than five accounts saw it and Meta keeps its
+ * numbers back. Matched by its message only: code 10 is also Graph API's "permission denied", and a
+ * token without `instagram_business_manage_insights` must fail, not read as a story nobody saw.
+ */
+const NOT_ENOUGH_VIEWERS = /not enough viewers/i;
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
