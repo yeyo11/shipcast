@@ -130,10 +130,10 @@ export class LaunchService {
    * Approves the drafts: merges their pull request, or for a launch Shipcast holds records the
    * approval of every draft as it is now; the caller queues the publishing after either
    */
-  async approve(launchId: number, by = 'owner'): Promise<Launch> {
+  async approve(launchId: number, by = 'owner', seen?: Readonly<Record<string, number>>): Promise<Launch> {
     const launch = await this.#launch(launchId);
     if (isAppLaunch(launch)) {
-      await this.#app().approve(launch, by);
+      await this.#app().approve(launch, by, seen);
       return launch;
     }
     await approveLaunch(launch, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });

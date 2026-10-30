@@ -4,6 +4,17 @@ import type { DraftFile } from './drafts.ts';
 import { draftPath } from './launch-store.ts';
 import type { Launch, StoredApproval, StoredDraft } from './repositories/index.ts';
 
+/** Each draft's current version, by draft id: what the review shows and what an approval names */
+export function currentVersions(drafts: readonly Pick<StoredDraft, 'id' | 'versionId'>[]): Record<string, number> {
+  return Object.fromEntries(drafts.map((d) => [String(d.id), d.versionId]));
+}
+
+/** Whether the versions the owner read are every draft's current one, no more and no fewer */
+export function sameVersions(seen: Readonly<Record<string, number>>, current: Readonly<Record<string, number>>): boolean {
+  const keys = Object.keys(current);
+  return keys.length === Object.keys(seen).length && keys.every((id) => seen[id] === current[id]);
+}
+
 /*
  * The launch model's fifth phase (docs/app-review.md): a launch held by Shipcast is reviewed,
  * previewed and approved in the app, with no pull request. What is pure of it lives here: the drafts'

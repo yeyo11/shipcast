@@ -1,6 +1,6 @@
 import { SOURCE_LIMITS, type ArticleInput, type SourceInput, type SourcesLaunchInput } from '@shipcast/engine';
 import { CHANNELS, type Channel } from '@shipcast/schema';
-import { InvalidInput, list, object, text } from './input.ts';
+import { id, InvalidInput, list, object, text } from './input.ts';
 
 /*
  * The shapes of the requests that start work, checked the same way whether they come from a page's
@@ -80,4 +80,26 @@ export function channelName(value: unknown): Channel {
   const channel = text(value, 'channel', 40);
   if (!(CHANNELS as readonly string[]).includes(channel)) throw new InvalidInput('unknown channel');
   return channel as Channel;
+}
+
+/**
+ * An approval: the launch, and for a launch Shipcast holds the versions the owner read (the review's
+ * `app.versions`, draft id to version id), so a draft changed since is refused instead of approved
+ * unseen. An id alone is still read, as the API took it before.
+ */
+export function approvalRequest(input: unknown): { id: number; versions: Record<string, number> | undefined } {
+  if (typeof input === 'number') return { id: id(input), versions: undefined };
+  const o = object(input, 'input');
+  return { id: id(o.id), versions: approvalVersions(o.versions) };
+}
+
+export function approvalVersions(value: unknown): Record<string, number> | undefined {
+  if (value === undefined || value === null) return undefined;
+  const o = object(value, 'versions');
+  const entries = Object.entries(o);
+  if (entries.length > 500) throw new InvalidInput('versions names too many drafts');
+  for (const [key, version] of entries) {
+    if (!/^\d{1,10}$/.test(key) || typeof version !== 'number' || !Number.isSafeInteger(version) || version <= 0) throw new InvalidInput('versions maps each draft id to the version id read');
+  }
+  return Object.fromEntries(entries) as Record<string, number>;
 }

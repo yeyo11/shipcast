@@ -1,5 +1,5 @@
 import { draftBody, draftFile, draftOf, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
-import type { ArticlePreview, BlogCommit, SitePreview } from './app-review.ts';
+import { currentVersions, type ArticlePreview, type BlogCommit, type SitePreview } from './app-review.ts';
 import { draftsBranch, isArticle, launchDir, type DraftFile } from './drafts.ts';
 import { draftPath } from './launch-store.ts';
 import { launchConfigText } from './publish.ts';
@@ -47,6 +47,8 @@ export interface AppReview {
   preview: SitePreview | null;
   /** The commit that put its article and media on the site */
   published: BlogCommit | null;
+  /** Each draft's current version by draft id: what the page sends back with its approval */
+  versions: Record<string, number>;
 }
 
 export interface Review {
@@ -168,7 +170,7 @@ function storedDrafts(launch: Launch, stored: Pick<StoredReviewInput, 'drafts' |
  */
 export function reviewForApp(
   launch: Launch,
-  stored: Pick<StoredReviewInput, 'drafts' | 'media'> & { app: AppReview; approvedPaths: ReadonlyMap<string, boolean>; previews: ReadonlyMap<string, ArticlePreview> },
+  stored: Pick<StoredReviewInput, 'drafts' | 'media'> & { app: Omit<AppReview, 'versions'>; approvedPaths: ReadonlyMap<string, boolean>; previews: ReadonlyMap<string, ArticlePreview> },
   mediaUrl: (row: StoredMediaRow) => string,
 ): Review {
   const drafts = storedDrafts(launch, stored, mediaUrl).map((d) => {
@@ -176,7 +178,7 @@ export function reviewForApp(
     const preview = stored.previews.get(d.path);
     return { ...d, ...(approved !== undefined && { approved }), ...(preview && { preview }) };
   });
-  return { app: stored.app, drafts: sorted(drafts) };
+  return { app: { ...stored.app, versions: currentVersions(stored.drafts) }, drafts: sorted(drafts) };
 }
 
 /**

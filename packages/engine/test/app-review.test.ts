@@ -354,3 +354,61 @@ test('who edited and who approved is recorded: the login, or `owner` when the ca
   await launches.approve(launch.id);
   assert.equal((await registry.launchStore.approval(launch.id))?.by, 'owner');
 });
+
+test('the article is not edited once its commit to the site started: what is on the site stays what was approved', async () => {
+  // Until the fix, a launch still drafted (a channel left to go) took an edit of the article after its
+  // commit: the next round read the new version, and the site and the published pieces disagreed
+  const { registry, launch, deliver, launches, publish } = await setup();
+  await deliver();
+  await launches.approve(launch.id);
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'held back'));
+  assert.equal((await publish()).state, 'partial');
+  assert.ok(await registry.cursors.cursor(appBlogKey(launch.id)));
+  assert.equal((await registry.launches.get(launch.id))!.status, 'drafted');
+  await assert.rejects(launches.editDraft(launch.id, ARTICLE, ARTICLE_TEXT.replace('The article.', 'Changed.')), /on the site already/);
+  // A pending commit (a run cut between the commit and its record) counts too
+  await registry.cursors.setCursor(appBlogKey(launch.id), JSON.stringify({ pending: { path: ARTICLE, content: ARTICLE_TEXT } }));
+  await assert.rejects(launches.editDraft(launch.id, ARTICLE, 'x'), /on the site already/);
+  // Another channel still waiting is edited as before
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'edited again'));
+});
+
+test('an approval names the versions the owner read: a draft changed since is refused, not approved unseen', async () => {
+  // Until the fix approving took every draft's current version, so an edit (or a redraft) landing
+  // between the owner reading the page and pressing Approve was approved without being read
+  const { registry, launch, deliver, launches, read } = await setup();
+  await deliver();
+  const seen = (await read.review((await registry.launches.get(launch.id))!, async () => undefined))!.app!.versions;
+  assert.equal(Object.keys(seen).length, 3, 'the review names each draft’s current version');
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'changed while the owner read'));
+  await assert.rejects(launches.approve(launch.id, 'yeyo11', seen), /changed since/);
+  assert.equal(await registry.launchStore.approval(launch.id), undefined, 'nothing approved');
+  // A versions map missing a draft is refused too: the owner did not see it
+  const fresh = (await read.review((await registry.launches.get(launch.id))!, async () => undefined))!.app!.versions;
+  const [first] = Object.keys(fresh);
+  const partial = Object.fromEntries(Object.entries(fresh).filter(([id]) => id !== first));
+  await assert.rejects(launches.approve(launch.id, 'yeyo11', partial), /changed since/);
+  await launches.approve(launch.id, 'yeyo11', fresh);
+  assert.deepEqual((await registry.launchStore.approval(launch.id))?.versions, fresh);
+});
+
+test('a failed launch drafted again keeps only the new attempt’s drafts and media: the earlier ones are retired', async () => {
+  // Until the fix, a piece or a file the new attempt no longer made stayed current from the earlier one:
+  // shown for review, approved with the rest, its file committed to the site
+  const { registry, media, app, launch, deliver } = await setup();
+  await deliver();
+  const ogPng = (await registry.launchStore.media(launch.id)).find((m) => m.publicPath === `/${D}/og.png`)!;
+  await registry.launches.setStatus(launch.id, 'failed', 'the analysis failed');
+  const again = files.filter((f) => f.path !== MASTODON && f.path !== `public/${D}/og.png`);
+  await app.hold((await registry.launches.get(launch.id))!, { pack, configText: LAUNCH_YML, files: again });
+
+  const drafts = await registry.launchStore.drafts(launch.id);
+  assert.deepEqual(drafts.map((d) => d.channel).sort(), ['blog', 'bluesky'], 'Mastodon’s draft of the earlier attempt is retired');
+  const rows = await registry.launchStore.media(launch.id);
+  assert.ok(!rows.some((m) => m.publicPath === `/${D}/og.png`), 'its file is no longer the launch’s');
+  assert.ok(rows.some((m) => m.publicPath === `/${D}/og.jpg`));
+  assert.equal(await media.has(ogPng.path), false, 'and its bytes go when nothing else names them');
+  // The history stays: the retired draft's versions are still rows
+  const { rows: versions } = (await registry.database.execute(sql`select count(*)::int as n from draft_versions v join drafts d on d.id = v.draft_id where d.launch_id = ${launch.id} and d.channel = 'mastodon'`)) as unknown as { rows: Array<{ n: number }> };
+  assert.equal(versions[0]?.n, 1);
+});

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, type Channel } from '@shipcast/schema';
-import { DeletionRefused, inTransaction, LaunchDeletionService, publishLaunch, sha256Hex, type PostKind, type PostOutcome } from '../src/index.ts';
+import { appBlogKey, DeletionRefused, inTransaction, LaunchDeletionService, publishLaunch, sha256Hex, type PostKind, type PostOutcome } from '../src/index.ts';
 import { FakeGitHub, memoryRegistry, MemoryMediaStore } from '../src/testing/index.ts';
 
 /*
@@ -171,4 +171,125 @@ test('a merged drafts pull request put the article on the site: such a launch is
   const launch = await claim();
   await registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/5`);
   assert.equal((await service.plan(launch.id)).mode, 'hidden');
+});
+
+test('a launch Shipcast holds whose article was committed is hidden, not removed, even where app-review is off', async () => {
+  // The service is built without app-review (the flag off in this process): until the fix it asked
+  // app-review alone, so the launch was "never published" and removed, its article left on the site
+  const { registry, service, claim } = await setup();
+  const launch = await claim();
+  await registry.launches.setModel(launch.id, 'app');
+  await registry.launches.setStatus(launch.id, 'drafted', null);
+  await registry.cursors.setCursor(appBlogKey(launch.id), JSON.stringify({ sha: 'abc123', at: '2026-10-30T10:00:00.000Z' }));
+  assert.equal((await service.plan(launch.id)).mode, 'hidden');
+
+  // A commit still pending (its record not written yet) may be on main already: hidden as well
+  const other = await claim('v2.0.0');
+  await registry.launches.setModel(other.id, 'app');
+  await registry.launches.setStatus(other.id, 'drafted', null);
+  await registry.cursors.setCursor(appBlogKey(other.id), JSON.stringify({ pending: { path: 'src/content/posts/en/x.md', content: 'x' } }));
+  assert.equal((await service.plan(other.id)).mode, 'hidden');
+});
+
+/** The service with a hook run inside the deletion's transaction, before its work: what another worker does meanwhile */
+function racing(s: Awaited<ReturnType<typeof setup>>, meanwhile: () => Promise<unknown>) {
+  return new LaunchDeletionService({
+    registry: s.registry,
+    inTransaction: async (work) => {
+      await meanwhile();
+      return inTransaction(s.registry, work);
+    },
+    posts: { deleteMany: async () => [] },
+    github: s.github,
+    launchesRepo: LAUNCHES,
+    media: s.media,
+  });
+}
+
+test('a piece that goes out between the plan and the removal stops it: the launch is not removed', async () => {
+  const s = await setup();
+  const launch = await s.claim();
+  await s.registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/7`);
+  const service = racing(s, () => s.post(launch.id, 'bluesky'));
+  await assert.rejects(service.delete(launch.id), (error: unknown) => error instanceof DeletionRefused && error.reason === 'state');
+  assert.ok(await s.registry.launches.get(launch.id), 'still there, with the piece that went out');
+  assert.equal(await s.registry.launchDeletions.removed('github-release:yeyo11/claudio@v1.0.0'), false);
+});
+
+test('a piece a worker claimed between the plan and the removal stops it too', async () => {
+  const s = await setup();
+  const launch = await s.claim();
+  await s.registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/7`);
+  const service = racing(s, () => s.registry.attempts.claim({ launchId: launch.id, channel: 'bluesky', kind: 'post' }, { holder: 'job-1', leaseMs: 60_000, idempotent: false }));
+  await assert.rejects(service.delete(launch.id), /published meanwhile|being published/);
+  assert.ok(await s.registry.launches.get(launch.id));
+});
+
+test('hiding is one transaction: a failed record leaves the launch shown and its waiting pieces scheduled', async () => {
+  const s = await setup();
+  const launch = await s.claim();
+  await s.registry.launches.setStatus(launch.id, 'published');
+  await s.post(launch.id, 'blog', 'article:en');
+  const waiting = await s.post(launch.id, 'bluesky', 'post', 'scheduled');
+  const service = new LaunchDeletionService({
+    registry: s.registry,
+    inTransaction: (work) =>
+      inTransaction(s.registry, (tx) =>
+        work({
+          ...tx,
+          launchDeletions: Object.assign(Object.create(Object.getPrototypeOf(tx.launchDeletions) as object) as typeof tx.launchDeletions, tx.launchDeletions, {
+            record: () => Promise.reject(new Error('the disk is full')),
+          }),
+        }),
+      ),
+    posts: { deleteMany: async () => [] },
+    github: s.github,
+    launchesRepo: LAUNCHES,
+  });
+  await assert.rejects(service.delete(launch.id), /the disk is full/);
+  assert.equal((await s.registry.launches.get(launch.id))!.deletedAt, undefined, 'not hidden');
+  assert.equal((await s.registry.posts.post(waiting.post.id))?.status, 'scheduled', 'not unscheduled');
+});
+
+test('a launch hidden by another request meanwhile is not hidden and recorded twice', async () => {
+  const s = await setup();
+  const launch = await s.claim();
+  await s.registry.launches.setStatus(launch.id, 'published');
+  await s.post(launch.id, 'bluesky');
+  const service = racing(s, () => s.registry.launches.hide(launch.id));
+  await assert.rejects(service.delete(launch.id), /deleted already/);
+  assert.equal((await s.registry.launchDeletions.ofLaunch(launch.id)), undefined);
+});
+
+test('publishing stops before the next channel once the launch is deleted mid-run', async () => {
+  const registry = await memoryRegistry();
+  const { launch: claimed } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const launch = await registry.launches.setStatus(claimed.id, 'drafted', `https://github.com/${LAUNCHES}/pull/3`);
+  const D = 'launches/claudio/v0.8.2';
+  const pack = {
+    schemaVersion: 1,
+    kind: 'launch',
+    project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.8.2' },
+    analysis: { summary: 's', implemented: ['x'], planned: [], documentedOnly: [], limitations: [] },
+    bluesky: { lang: 'en', text: 'AI bluesky' },
+    mastodon: { lang: 'en', text: 'AI mastodon' },
+  };
+  const github = new FakeGitHub({
+    pullRequestState: 'merged',
+    files: {
+      [`${LAUNCHES}/${D}/pack.json@HEAD`]: JSON.stringify(pack),
+      [`${LAUNCHES}/${D}/bluesky.md@HEAD`]: '# Bluesky\n\n> **Approval:** x\n\nbluesky\n',
+      [`${LAUNCHES}/${D}/mastodon.md@HEAD`]: '# Mastodon\n\n> **Approval:** x\n\nmastodon\n',
+      'yeyo11/claudio/.github/launch.yml@v0.8.2': 'enabled: true\nbrand: personal\n',
+    },
+  });
+  const sent: string[] = [];
+  // The owner deletes the launch while Bluesky's post is going out: Mastodon's must not follow it
+  const publishers = {
+    bluesky: { publish: async () => (sent.push('bluesky'), await registry.launches.hide(launch.id), { externalId: 'b1', url: 'https://bsky.app/b1' }) },
+    mastodon: { publish: async () => (sent.push('mastodon'), { externalId: 'm1', url: 'https://mastodon.social/m1' }) },
+  };
+  const fetchOk = (async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]))) as typeof fetch;
+  await publishLaunch(launch, brand, { github, registry, launchesRepo: LAUNCHES, publishers, fetch: fetchOk });
+  assert.deepEqual(sent, ['bluesky']);
 });

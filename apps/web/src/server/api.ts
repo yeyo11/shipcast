@@ -34,7 +34,7 @@ import { cookieOf, readSession, SESSION_COOKIE } from './session.server.ts';
 import { launchDetail, launchView, publishAgain } from './launches.server.ts';
 import { isRepo } from './launches-search.ts';
 import { channelList, postChanges } from './post-changes.ts';
-import { articleRequest, channelName, launchRequest, moment } from './requests.ts';
+import { approvalVersions, articleRequest, channelName, launchRequest, moment } from './requests.ts';
 export { ApiError } from './errors.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 import { PROFILE_ROUTES, PROFILE_SCHEMAS, type ProfileApi } from './profile-api.ts';
@@ -79,7 +79,8 @@ export interface ApiDeps {
   jobs(page: { limit: number; before?: JobCursor }): Promise<{ jobs: JobView[]; next: JobCursor | null }>;
   startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<WorkAnswer>;
   /** `by` is who approves, recorded on a launch Shipcast holds (docs/app-review.md) */
-  approve(launchId: number, by?: string): Promise<WorkAnswer>;
+  /** `versions`: the drafts' versions the caller read (a launch Shipcast holds); a draft changed since is refused */
+  approve(launchId: number, by?: string, versions?: Readonly<Record<string, number>>): Promise<WorkAnswer>;
   startArticle(input: ArticleInput, direct: boolean): Promise<WorkAnswer>;
   startPublishing(launch: Launch, retryChannel?: Channel): Promise<string>;
   /** What editing and deleting published pieces needs: the connectors by account, and GitHub for the blog */
@@ -324,6 +325,8 @@ export interface ApiRoute {
   body?: JsonSchema;
   /** The body's media type; JSON when left out */
   bodyType?: string;
+  /** A body the route reads when sent, and does without otherwise */
+  bodyOptional?: true;
   response: { status: 200 | 202; description: string; schema: JsonSchema };
   handle(deps: ApiDeps, call: Call): Promise<Response>;
 }
@@ -456,10 +459,17 @@ export const ROUTES: ApiRoute[] = [
     path: '/launches/{id}/approve',
     scope: 'write',
     operationId: 'approveLaunch',
-    summary: 'Approve the drafts: merge their pull request, then publish',
+    summary: 'Approve the drafts: merge their pull request, then publish. For a launch Shipcast holds, send the versions read (its review’s app.versions): a draft changed since is refused with a 409',
+    body: {
+      type: 'object',
+      properties: { versions: { type: 'object', additionalProperties: { type: 'integer' }, description: 'Draft id to the version id read, as GET /launches/{id} gives them under review.app.versions' } },
+    },
+    bodyOptional: true,
     response: { status: 202, description: 'Accepted: a job publishes the launch', schema: ref('Accepted') },
-    async handle(deps, { params }) {
-      return refused(await deps.approve((await existingLaunch(deps, params.id)).id, 'api'));
+    async handle(deps, { params, request }) {
+      // The body is optional: a client that sends none approves the current versions, as before
+      const versions = request.headers.get('content-type') ? approvalVersions(object(await readJson(request), 'the body').versions) : undefined;
+      return refused(await deps.approve((await existingLaunch(deps, params.id)).id, 'api', versions));
     },
   },
   {
@@ -978,7 +988,7 @@ export function openApiDocument(publicUrl: string) {
       security: [{ bearer: [route.scope] }],
       'x-scope': route.scope,
       ...(pathParams.length + queryParams.length > 0 && { parameters: [...pathParams, ...queryParams] }),
-      ...(route.body && { requestBody: { required: true, content: { [route.bodyType ?? 'application/json']: { schema: route.body } } } }),
+      ...(route.body && { requestBody: { required: route.bodyOptional !== true, content: { [route.bodyType ?? 'application/json']: { schema: route.body } } } }),
       responses: {
         [String(route.response.status)]: { description: route.response.description, content: { 'application/json': { schema: route.response.schema } } },
         ...errors(

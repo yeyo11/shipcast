@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ContentPack, contentPackFor, draftBody, parseProjects, pieceLimitProblem, PROJECTS_PATH, Refused, withCover, type ChannelDefinition, type LaunchConfig } from '@shipcast/schema';
-import { appBlogKey, appPreviewKey, channelWaits, isAppLaunch, forAppReview, previewAddress, type BlogCommit, type SitePreview } from '../app-review.ts';
+import { appBlogKey, appPreviewKey, channelWaits, currentVersions, sameVersions, isAppLaunch, forAppReview, previewAddress, type BlogCommit, type SitePreview } from '../app-review.ts';
 import { isArticle, keepPubDates, projectSlug, type DraftFile } from '../drafts.ts';
 import { GitHubError, type CommitFile, type GitHubSource, type PreviewWriter } from '../github.ts';
 import { coverPath } from '../launch-assets.ts';
@@ -89,6 +89,11 @@ export class AppReviewService {
     const drafts = await this.#store.drafts(launch.id);
     const draft = drafts.find((d) => draftPath(d) === path);
     if (!draft) throw new AppReviewRefused('invalid', `${path} is not a draft of this launch`);
+    // Once the article's commit started (recorded, or pending while it is made) the site has, or is
+    // about to have, the approved text: a later version would only reach the channels, not the site
+    if (draft.channel === 'blog' && (await this.#deps.registry.cursors.cursor(appBlogKey(launch.id))) !== undefined) {
+      throw new AppReviewRefused('state', `${path} is on the site already: the article is not edited here after its commit`);
+    }
     const posts = await this.#deps.registry.posts.posts(launch.id, { channel: draft.channel as never });
     if (posts.some((p) => p.status !== 'scheduled' && draftOfPiece(p.channel, p.kind, drafts) === draft.piece)) {
       throw new AppReviewRefused('state', `${path} is out already: edit it on its channel`);
@@ -101,15 +106,21 @@ export class AppReviewService {
     await this.#store.addVersion(launch.id, { channel: draft.channel, piece: draft.piece, body, fields: { ...draft.fields, path }, origin: 'owner', author });
   }
 
-  /** The owner approves the drafts as they are now: every draft's current version, the approval before revoked */
-  async approve(launch: Launch, by = 'owner'): Promise<StoredApproval> {
+  /**
+   * The owner approves the drafts as they are now: every draft's current version, the approval before
+   * revoked. `seen` is the versions the owner read (the review's `app.versions`): an edit or a redraft
+   * that landed after the page was read is refused rather than approved unseen. A caller that names
+   * none (a script through the API) approves the current versions.
+   */
+  async approve(launch: Launch, by = 'owner', seen?: Readonly<Record<string, number>>): Promise<StoredApproval> {
     this.#open(launch);
     if (!(await this.#store.currentPack(launch.id))) throw new AppReviewRefused('state', 'this launch has no drafts to approve');
-    return this.#approve(launch, by, null);
+    return this.#approve(launch, by, null, seen);
   }
 
-  async #approve(launch: Launch, by: string, note: string | null): Promise<StoredApproval> {
-    const versions = Object.fromEntries((await this.#store.drafts(launch.id)).map((d) => [String(d.id), d.versionId]));
+  async #approve(launch: Launch, by: string, note: string | null, seen?: Readonly<Record<string, number>>): Promise<StoredApproval> {
+    const versions = currentVersions(await this.#store.drafts(launch.id));
+    if (seen && !sameVersions(seen, versions)) throw new AppReviewRefused('state', 'the drafts changed since you read them: read them again before approving');
     return this.#store.approve(launch.id, { by, versions, note });
   }
 
