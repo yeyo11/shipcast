@@ -147,6 +147,7 @@ function ChannelPanel({
   capabilities,
   launchId,
   timezone,
+  held,
   schedule,
   totals,
   site,
@@ -160,6 +161,8 @@ function ChannelPanel({
   capabilities: Capabilities;
   launchId: number;
   timezone: string;
+  /** A launch Shipcast holds (app-review): it waits for an approval in the app, not a merge */
+  held: boolean;
   schedule: SchedulingChannel | undefined;
   /** The channel's own totals, from the launch's numbers: what its network counts */
   totals: Partial<Totals> | undefined;
@@ -227,7 +230,7 @@ function ChannelPanel({
           ))}
         </ul>
       )}
-      {schedule && <ChannelSchedule launchId={launchId} item={schedule} timezone={timezone} />}
+      {schedule && <ChannelSchedule launchId={launchId} item={schedule} timezone={timezone} held={held} />}
       {capability && (
         <p className="chan-can">
           <strong>{allowance(capability)}.</strong> {capability.note}
@@ -257,7 +260,7 @@ export function Channels({
   drafts: Draft[];
   capabilities: Capabilities;
   failures: ReadonlyArray<{ channel: string; message: string }>;
-  scheduling: { timezone: string; channels: SchedulingChannel[] };
+  scheduling: { timezone: string; channels: SchedulingChannel[]; held?: boolean };
   /** The channel shown, from the address; the first one when unset or unknown */
   channel: string | undefined;
   onChannel: (channel: string) => void;
@@ -332,6 +335,7 @@ export function Channels({
         capabilities={capabilities}
         launchId={launchId}
         timezone={scheduling.timezone}
+        held={scheduling.held ?? false}
         schedule={scheduling.channels.find((c) => c.channel === current.channel)}
         totals={numbers[current.channel]?.totals}
         site={numbers[current.channel]?.site}

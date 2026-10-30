@@ -27,7 +27,7 @@ function useNow(): Date {
   return now;
 }
 
-export function ChannelSchedule({ launchId, item, timezone }: { launchId: number; item: SchedulingChannel; timezone: string }) {
+export function ChannelSchedule({ launchId, item, timezone, held }: { launchId: number; item: SchedulingChannel; timezone: string; held: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const now = useNow();
@@ -105,7 +105,7 @@ export function ChannelSchedule({ launchId, item, timezone }: { launchId: number
             {scheduled ? 'Move' : 'Schedule'}
           </button>
         </div>
-        <small className="muted">Times in {timezone}. Left without a time, it publishes when the pull request is merged.</small>
+        <small className="muted">Times in {timezone}. Left without a time, it publishes when {held ? 'the drafts are approved' : 'the pull request is merged'}.</small>
       </div>
     </div>
   );

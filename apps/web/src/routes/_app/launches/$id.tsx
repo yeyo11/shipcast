@@ -556,7 +556,7 @@ function LaunchPage() {
                 drafts={reviewOk?.drafts ?? []}
                 capabilities={pieces.capabilities}
                 failures={launch.failures}
-                scheduling={pieces.scheduling}
+                scheduling={{ ...pieces.scheduling, held: Boolean(app) }}
                 channel={search.channel}
                 onChannel={(channel) => go({ tab: 'channels', channel })}
                 numbers={numbers.channels}
