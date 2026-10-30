@@ -323,6 +323,8 @@ test('the article edited after publishing is a version, so the page reads it as 
 
   const article = (await registry.launchStore.drafts(release.id)).find((d) => d.piece === 'article:en')!;
   assert.equal(article.origin, 'post-publish-edit');
+  const [linked] = await registry.queries.selectRows<{ id: number }>(sql`SELECT draft_version_id AS id FROM posts WHERE id = ${post!.id}`);
+  assert.equal(Number(linked!.id), article.versionId, 'the post names the version it now says');
   assert.equal((await read.review(release, never))?.drafts.find((d) => d.path === ARTICLE_EN)?.content, '---\ntitle: "claudio"\nupdatedDate: 2026-10-30\n---\n\nThe article, edited.\n');
 
   // Without the launch store, the edit is the commit alone, as before

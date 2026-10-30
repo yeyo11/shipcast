@@ -99,7 +99,7 @@ export interface EditDeps {
    * With `launch-store`: an article edited after publishing is also a version in the launch model,
    * so what the launch page reads from it (`launch-store-read`) is the article as the site shows it
    */
-  launchStore?: Pick<LaunchStoreService, 'edited'> | undefined;
+  launchStore?: Pick<LaunchStoreService, 'articleEdited'> | undefined;
   /** For an image Mastodon needs as bytes */
   fetch?: typeof fetch;
   now?: () => Date;
@@ -204,7 +204,7 @@ async function editArticle(post: Post, changes: PostChanges, deps: EditDeps): Pr
   // It reports what it could not store on its own and never throws: the edit is made either way
   if (deps.launchStore) {
     const launch = await deps.registry.launches.get(post.launchId).catch(() => undefined);
-    if (launch) await deps.launchStore.edited(launch, path, content, null, 'post-publish-edit');
+    if (launch) await deps.launchStore.articleEdited(launch, post.id, path, content);
   }
 }
 

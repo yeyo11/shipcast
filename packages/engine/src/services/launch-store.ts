@@ -113,16 +113,32 @@ export class LaunchStoreService {
 
   /**
    * The owner edited a draft in Shipcast, which committed it to the pull request: a version of their
-   * own. An article edited after it was published (committed to main) is a `post-publish-edit`
-   * version, so the copy stays what the site shows. A failure is added to what the check last
-   * reported, which a full check replaces.
+   * own. A failure is added to what the check last reported, which a full check replaces.
    */
-  async edited(launch: Launch, path: string, content: string, author: string | null = null, origin: Extract<DraftOrigin, 'owner' | 'post-publish-edit'> = 'owner'): Promise<string[]> {
+  edited(launch: Launch, path: string, content: string, author: string | null = null): Promise<string[]> {
+    return this.#editStored(launch, path, async (stored) => {
+      await this.#version(launch.id, await this.#store.drafts(launch.id), { ...stored, path, body: content, origin: 'owner', author });
+    });
+  }
+
+  /**
+   * A published article was edited (Edit on the launch page, committed to the launches repo's main):
+   * a `post-publish-edit` version, so the copy stays what the site shows, and the article's post now
+   * names that version. Reported like an edit when it cannot be stored.
+   */
+  articleEdited(launch: Launch, postId: number, path: string, content: string): Promise<string[]> {
+    return this.#editStored(launch, path, async (stored) => {
+      const versionId = await this.#version(launch.id, await this.#store.drafts(launch.id), { ...stored, path, body: content, origin: 'post-publish-edit' });
+      await this.#store.linkPost(postId, versionId);
+    });
+  }
+
+  async #editStored(launch: Launch, path: string, work: (stored: { channel: string; piece: string }) => Promise<void>): Promise<string[]> {
     try {
       if (!(await this.#holds(launch))) return [];
       const stored = storedFile(launch, path);
       if (stored.kind !== 'draft') return [];
-      await this.#version(launch.id, await this.#store.drafts(launch.id), { ...stored, path, body: content, origin, author });
+      await work(stored);
       return [];
     } catch (error) {
       const problem = `${path}: the edit was not stored: ${error instanceof Error ? error.message : String(error)}`;
@@ -178,11 +194,12 @@ export class LaunchStoreService {
     return (await this.#store.currentPack(launch.id)) !== undefined;
   }
 
-  /** A new version of a piece's draft, unless its current one already says the same */
-  async #version(launchId: number, current: readonly StoredDraft[], input: { channel: string; piece: string; path: string; body: string; origin: DraftOrigin; author?: string | null; packId?: number }): Promise<void> {
+  /** A new version of a piece's draft, unless its current one already says the same: the id of the current version either way */
+  async #version(launchId: number, current: readonly StoredDraft[], input: { channel: string; piece: string; path: string; body: string; origin: DraftOrigin; author?: string | null; packId?: number }): Promise<number> {
     const draft = current.find((d) => d.channel === input.channel && d.piece === input.piece);
-    if (draft && draft.body === input.body) return;
-    await this.#store.addVersion(launchId, { channel: input.channel, piece: input.piece, body: input.body, fields: { path: input.path }, origin: input.origin, author: input.author ?? null, packId: input.packId ?? null });
+    if (draft && draft.body === input.body) return draft.versionId;
+    const { versionId } = await this.#store.addVersion(launchId, { channel: input.channel, piece: input.piece, body: input.body, fields: { path: input.path }, origin: input.origin, author: input.author ?? null, packId: input.packId ?? null });
+    return versionId;
   }
 
   async #approve(launch: Launch, input: { by: string; at?: string; note: string }): Promise<void> {
