@@ -4,11 +4,12 @@ import { Jobs } from '../../../components/Jobs';
 import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { Channels, metricWords } from '../../../components/launch/Channels';
 import { ChannelIcon, DailyBars, TotalsRow } from '../../../components/launch/Glance';
+import { DeleteLaunch } from '../../../components/launch/DeleteLaunch';
 import { AccountNumbers } from '../../../components/launch/Numbers';
 import { Automation, EmptyDrafts, PublishFailed, Shipped, WaitingForYou } from '../../../components/illustrations';
 import { Empty, PageHead } from '../../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
-import { ChevronIcon, ExternalIcon, SendIcon } from '../../../components/ui/icons';
+import { ChevronIcon, CloseIcon, ExternalIcon, SendIcon } from '../../../components/ui/icons';
 import { useToast } from '../../../components/Toasts';
 import { Notice, number, Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
@@ -301,6 +302,8 @@ function LaunchPage() {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  // With launch-delete: the dialog that says what deleting would do (docs/launch-delete.md)
+  const [deleting, setDeleting] = useState(false);
   const { launch, review, index, jobs, pieces, numbers } = data;
   const running = jobs.some((j) => j.state === 'running' && !j.queued) || launch.status === 'generating';
   // Live (realtime-ui): this launch's own events reload it, whether or not something runs
@@ -450,9 +453,26 @@ function LaunchPage() {
                 }}
               />
             )}
+            {data.deletable && !launch.deletedAt && <ToolbarAction label="Delete launch" icon={<CloseIcon />} disabled={running} onClick={() => setDeleting(true)} />}
           </>
         }
       />
+      {data.deletable && (
+        <DeleteLaunch
+          launchId={launch.id}
+          open={deleting}
+          onOpenChange={setDeleting}
+          onDeleted={async () => {
+            await router.invalidate();
+            await router.navigate({ to: '/' });
+          }}
+        />
+      )}
+      {launch.deletedAt && (
+        <Notice tone="wait">
+          <strong>Deleted on {when(launch.deletedAt)}.</strong> It is hidden from the lists and nothing more of it goes out; the posts that were kept stay on their networks.
+        </Notice>
+      )}
 
       {data.fakeNetworks && (
         <Notice tone="wait">

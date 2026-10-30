@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { claimEvent, type GitHubEvent, type Launch, type Outcome } from '@shipcast/engine';
+import { claimEvent, type GitHubEvent, type Launch, type Outcome, type PipelineDeps } from '@shipcast/engine';
 import type { RoundDeps } from './rounds.ts';
 
 /** The keychain key of the webhook's secret */
@@ -94,7 +94,7 @@ export async function launchOfPullRequest(d: Pick<RoundDeps, 'registry'>, url: s
   return (await d.registry.launches.recent(500)).find((l) => l.status === 'drafted' && l.detail === url);
 }
 
-/** Claims the release a webhook announced, by the same rules as polling */
-export function claimFromWebhook(d: Pick<RoundDeps, 'github' | 'registry' | 'brand'>, event: GitHubEvent): Promise<Outcome> {
-  return claimEvent(event, { github: d.github, registry: d.registry, brand: d.brand });
+/** Claims the release a webhook announced, by the same rules as polling (the trigger rules and the deletions too, when on) */
+export function claimFromWebhook(d: Pick<RoundDeps, 'github' | 'registry' | 'brand'> & { pipeline?: Pick<PipelineDeps, 'triggers' | 'removed'> }, event: GitHubEvent): Promise<Outcome> {
+  return claimEvent(event, { github: d.github, registry: d.registry, brand: d.brand, triggers: d.pipeline?.triggers, removed: d.pipeline?.removed });
 }

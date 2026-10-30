@@ -11,6 +11,7 @@ import {
   LaunchStoreService,
   PostgresLock,
   SecretRows,
+  TriggerService,
   type OpenRepositories,
   type AiTaskRunner,
   type MediaStore,
@@ -69,6 +70,8 @@ export interface Runtime {
   launchRead: LaunchReadService | undefined;
   /** With `app-review`: new launches reviewed, approved and published from Shipcast, with no pull request (docs/app-review.md) */
   appReview: AppReviewService | undefined;
+  /** With `launch-triggers`: the owner's trigger rules, which every claim of a GitHub event goes by (docs/launch-triggers.md) */
+  triggers: TriggerService | undefined;
 }
 
 export interface RuntimeOptions {
@@ -180,6 +183,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         })
       : undefined;
 
+  const triggers = flags.on('launch-triggers') ? new TriggerService({ registry }) : undefined;
+  // A release whose launch the owner removed is never launched again by its events (docs/launch-delete.md)
+  const removed = flags.on('launch-delete') ? (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey) : undefined;
+
   const drafts = caches
     ? new DraftSnapshotService({
         github,
@@ -221,6 +228,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     ...(launchStore && { launchStore }),
     ...(launchRead && { launchRead }),
     ...(appReview && { appReview }),
+    ...(triggers && { triggers }),
+    ...(removed && { removed }),
   };
 
   return {
@@ -250,5 +259,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     launchStore,
     launchRead,
     appReview,
+    triggers,
   };
 }

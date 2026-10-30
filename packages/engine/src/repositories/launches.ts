@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { PackKind } from '@shipcast/schema';
 import type { Database } from '../db/connect.ts';
 import { launches, nowIso } from '../db/schema.ts';
@@ -36,6 +36,11 @@ export interface Launch {
   updatedAt: string;
   /** Always set on a launch read from the registry; a launch built without it is `legacy` */
   model?: LaunchModel;
+  /**
+   * When the owner deleted it, a launch that had published (docs/launch-delete.md): hidden from the
+   * lists, the rounds and the metrics, its row kept so it is never launched again. Absent otherwise
+   */
+  deletedAt?: string;
 }
 
 export const LAUNCH_STATUSES: readonly LaunchStatus[] = ['detected', 'generating', 'drafted', 'published', 'skipped', 'failed'];
@@ -87,6 +92,11 @@ export interface NewLaunch {
   trigger: Trigger;
   kind: PackKind;
   brand: string;
+  /**
+   * What "a launch happens once" is also checked on (`launches.dedupe_key`, docs/launch-triggers.md):
+   * a claim whose key is taken finds that launch, whatever its repo and ref
+   */
+  dedupeKey?: string;
 }
 
 
@@ -115,8 +125,12 @@ function toLaunch(row: typeof launches.$inferSelect): Launch {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     model: row.model === 'app' ? 'app' : 'legacy',
+    ...(row.deletedAt !== null && { deletedAt: row.deletedAt }),
   };
 }
+
+// The lists, the rounds and the metrics leave out a launch the owner deleted (docs/launch-delete.md)
+const shown = isNull(launches.deletedAt);
 
 /**
  * The launches: the record that makes "a launch happens once" hold. A release is claimed before
@@ -136,13 +150,34 @@ export class LaunchRepository {
    * `ON CONFLICT` waits for a concurrent claim of the same release to commit, so only one wins.
    */
   async claim(launch: NewLaunch): Promise<{ claimed: boolean; launch: Launch }> {
-    const [inserted] = await this.#db
-      .insert(launches)
-      .values({ repo: launch.repo, ref: launch.ref, trigger: launch.trigger, kind: launch.kind, brand: launch.brand, status: 'detected' })
-      .onConflictDoNothing({ target: [launches.repo, launches.ref] })
-      .returning();
+    const values = { repo: launch.repo, ref: launch.ref, trigger: launch.trigger, kind: launch.kind, brand: launch.brand, status: 'detected' };
+    if (launch.dedupeKey !== undefined) {
+      // Either unique key taken is the same launch: a release by its repo and tag, or by its key
+      const [keyed] = await this.#db.insert(launches).values({ ...values, dedupeKey: launch.dedupeKey }).onConflictDoNothing().returning();
+      if (keyed) return { claimed: true, launch: toLaunch(keyed) };
+      return { claimed: false, launch: ((await this.find(launch.repo, launch.ref)) ?? (await this.findByDedupeKey(launch.dedupeKey)))! };
+    }
+    const [inserted] = await this.#db.insert(launches).values(values).onConflictDoNothing({ target: [launches.repo, launches.ref] }).returning();
     if (inserted) return { claimed: true, launch: toLaunch(inserted) };
     return { claimed: false, launch: (await this.find(launch.repo, launch.ref))! };
+  }
+
+  async findByDedupeKey(key: string): Promise<Launch | undefined> {
+    const [row] = await this.#db.select().from(launches).where(eq(launches.dedupeKey, key));
+    return row ? toLaunch(row) : undefined;
+  }
+
+  /** The launch's dedupe key as stored; null for one claimed before the launch model, or by hand */
+  async dedupeKey(id: number): Promise<string | null> {
+    const [row] = await this.#db.select({ key: launches.dedupeKey }).from(launches).where(eq(launches.id, id));
+    return row?.key ?? null;
+  }
+
+  /** Hides a published launch the owner deleted (docs/launch-delete.md); its row and its posts stay */
+  async hide(id: number): Promise<Launch> {
+    const [row] = await this.#db.update(launches).set({ deletedAt: nowIso, updatedAt: nowIso }).where(eq(launches.id, id)).returning();
+    if (!row) throw new Error(`no launch with id ${id}`);
+    return toLaunch(row);
   }
 
   async find(repo: string, ref: string): Promise<Launch | undefined> {
@@ -158,9 +193,9 @@ export class LaunchRepository {
     return row ? toLaunch(row) : undefined;
   }
 
-  /** The newest launches first, for `shipcast status`. */
+  /** The newest launches first, for `shipcast status`; one the owner deleted is left out. */
   async recent(limit = 20): Promise<Launch[]> {
-    const rows = await this.#db.select().from(launches).orderBy(desc(launches.createdAt), desc(launches.id)).limit(limit);
+    const rows = await this.#db.select().from(launches).where(shown).orderBy(desc(launches.createdAt), desc(launches.id)).limit(limit);
     return rows.map(toLaunch);
   }
 
@@ -197,7 +232,7 @@ export class LaunchRepository {
    * scan a table that has one row per release, small next to comments or metrics.
    */
   #launchConditions(filter: LaunchFilter): SQL[] {
-    const where: SQL[] = [];
+    const where: SQL[] = [shown];
     if (filter.status !== undefined) where.push(eq(launches.status, filter.status));
     if (filter.trigger !== undefined) where.push(eq(launches.trigger, filter.trigger));
     if (filter.kind !== undefined) where.push(eq(launches.kind, filter.kind));
@@ -250,7 +285,7 @@ export class LaunchRepository {
    */
   async launchList(filter: LaunchFilter & { page?: number; pageSize?: number } = {}): Promise<LaunchPage> {
     const where = this.#launchConditions(filter);
-    const condition = where.length > 0 ? and(...where) : undefined;
+    const condition = and(...where);
     const pageSize = Math.min(Math.max(Math.trunc(filter.pageSize ?? 24), 1), 100);
     const [totalRow] = await this.#db.select({ n: count() }).from(launches).where(condition);
     const total = Number(totalRow?.n ?? 0);
@@ -270,10 +305,10 @@ export class LaunchRepository {
   /** The options of the list's filters, from grouped counts whatever the number of launches */
   async launchFacets(): Promise<LaunchFacets> {
     const [repos, statuses, triggers, kinds] = await Promise.all([
-      this.#db.select({ value: launches.repo, n: count() }).from(launches).groupBy(launches.repo).orderBy(asc(launches.repo)),
-      this.#db.select({ value: launches.status, n: count() }).from(launches).groupBy(launches.status),
-      this.#db.select({ value: launches.trigger, n: count() }).from(launches).groupBy(launches.trigger),
-      this.#db.select({ value: launches.kind, n: count() }).from(launches).groupBy(launches.kind),
+      this.#db.select({ value: launches.repo, n: count() }).from(launches).where(shown).groupBy(launches.repo).orderBy(asc(launches.repo)),
+      this.#db.select({ value: launches.status, n: count() }).from(launches).where(shown).groupBy(launches.status),
+      this.#db.select({ value: launches.trigger, n: count() }).from(launches).where(shown).groupBy(launches.trigger),
+      this.#db.select({ value: launches.kind, n: count() }).from(launches).where(shown).groupBy(launches.kind),
     ]);
     // In the vocabulary's own order, not the database's, so the options never move around
     const ordered = <T extends string>(rows: Array<{ value: string; n: number }>, known: readonly T[]) =>

@@ -17,6 +17,7 @@ import {
   LAUNCH_STATUSES,
   TRIGGERS,
   type LaunchCursor,
+  type LaunchDeletionService,
   type LaunchFilter,
   type LaunchOrder,
   type Post,
@@ -92,6 +93,14 @@ export interface ApiDeps {
   redraftComment(commentId: number): Promise<WorkAnswer>;
   /** Account analysis: a profile's review as a job, and its edit on the network */
   profiles?: ProfileApi;
+  /** With `launch-delete`: deleting a launch (docs/launch-delete.md); without it the routes answer 404 */
+  deletion?: Pick<LaunchDeletionService, 'plan' | 'delete'> | undefined;
+}
+
+/** The deletion service, or the 404 of a route that is not there while the flag is off */
+function deletionOf(deps: ApiDeps): Pick<LaunchDeletionService, 'plan' | 'delete'> {
+  if (!deps.deletion) throw new ApiError(404, 'not_found', 'launches are deleted only with the launch-delete flag on');
+  return deps.deletion;
 }
 
 /** Failed sign-ins per client: in this process (FailureLimiter) or across replicas (sharedLimiter) */
@@ -554,6 +563,45 @@ export const ROUTES: ApiRoute[] = [
       return json(200, { outcomes: await postService(deps).deleteMany(launch.id, channels) });
     },
   },
+  {
+    method: 'GET',
+    path: '/launches/{id}/deletion',
+    scope: 'read',
+    operationId: 'planLaunchDeletion',
+    summary: 'What deleting a launch would do: removed (never published) or hidden (published), its channels with posts out, and how many posts link its article',
+    response: { status: 200, description: 'The plan; nothing is changed', schema: ref('DeletionPlan') },
+    async handle(deps, { params }) {
+      const { mode, refused, channels, articleLinks } = await deletionOf(deps).plan(launchId(params.id));
+      return json(200, { mode, refused: refused ?? null, channels, articleLinks });
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/launches/{id}',
+    scope: 'write',
+    operationId: 'deleteLaunch',
+    summary: 'Delete a launch: one never published is removed, a published one hidden with its posts kept, except on the channels named, whose posts are deleted on their networks too',
+    query: [{ name: 'channels', description: 'Comma-separated channels whose posts go from the networks too (blog removes the article, whatever links it); none when left out', schema: { type: 'string' } }],
+    response: {
+      status: 200,
+      description: 'What was done',
+      schema: {
+        type: 'object',
+        required: ['mode', 'outcomes', 'problems'],
+        properties: {
+          mode: { type: 'string', enum: ['removed', 'hidden'] },
+          outcomes: { type: 'array', items: ref('PostOutcome') },
+          warning: { type: 'string', description: 'How many posts still link the removed article' },
+          problems: { type: 'array', items: { type: 'string' }, description: 'What could not be tidied up after; the deletion stands' },
+        },
+      },
+    },
+    async handle(deps, { params, url }) {
+      const channels = channelList(url.searchParams.get('channels')) ?? [];
+      const result = await deletionOf(deps).delete(launchId(params.id), { channels, by: 'api' });
+      return json(200, { mode: result.mode, outcomes: result.outcomes, ...(result.warning && { warning: result.warning }), problems: result.problems });
+    },
+  },
   ...STATS_ROUTES,
   ...PROFILE_ROUTES,
   {
@@ -887,6 +935,7 @@ const launchProperties = {
   pullRequest: { type: 'string', description: 'The drafts pull request, when there is one' },
   problem: { type: 'string', description: 'Why it failed' },
   createdAt: { type: 'string', format: 'date-time' },
+  deletedAt: { type: 'string', format: 'date-time', description: 'When it was deleted; a deleted launch is hidden from the list' },
   posts: {
     type: 'array',
     items: {
@@ -967,6 +1016,19 @@ export function openApiDocument(publicUrl: string) {
         },
         Accepted: { type: 'object', required: ['job'], properties: { job: { type: 'string', description: 'The job doing the work; follow it at /jobs' } } },
         Launch: { type: 'object', properties: launchProperties },
+        DeletionPlan: {
+          type: 'object',
+          required: ['mode', 'refused', 'channels', 'articleLinks'],
+          properties: {
+            mode: { type: 'string', enum: ['removed', 'hidden'], description: 'removed: nothing of it was ever out, it goes with its rows; hidden: it published, so it is soft-deleted' },
+            refused: { type: ['string', 'null'], description: 'Why it cannot be deleted now' },
+            channels: {
+              type: 'array',
+              items: { type: 'object', properties: { channel: { type: 'string' }, out: { type: 'integer' }, remove: { type: 'string', enum: ['yes', 'no', 'unpublish'] } } },
+            },
+            articleLinks: { type: 'integer', description: 'Posts out on other channels, each linking the article' },
+          },
+        },
         LaunchDetail: {
           type: 'object',
           properties: {

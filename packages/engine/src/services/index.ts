@@ -16,3 +16,5 @@ export * from './launch-store.ts';
 export * from './launch-import.ts';
 export * from './launch-read.ts';
 export * from './app-review.ts';
+export * from './triggers.ts';
+export * from './launch-delete.ts';

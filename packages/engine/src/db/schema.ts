@@ -684,3 +684,31 @@ export const launchImports = pgTable(
   },
   (t) => [index('launch_imports_by_batch').on(t.batch), index('launch_imports_by_launch').on(t.launchId)],
 );
+
+/*
+ * The launches the owner deleted (docs/launch-delete.md, the launch model's seventh phase): one row
+ * per deletion, the key a trigger checks so a release whose launch was removed is never launched
+ * again. No foreign key: a launch never published is removed with its row; a published one stays,
+ * hidden (`launches.deleted_at`), and this says who hid it and what went from the networks with it.
+ */
+export const launchDeletions = pgTable(
+  'launch_deletions',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    launchId: integer('launch_id').notNull(),
+    // What "a launch happens once" is checked on: the launch's dedupe key, or the one its repo and ref imply
+    dedupeKey: text('dedupe_key').notNull(),
+    repo: text('repo').notNull(),
+    ref: text('ref').notNull(),
+    // removed (never published: its rows are gone) or hidden (published: soft-deleted, its posts kept unless chosen)
+    mode: text('mode').notNull(),
+    // A GitHub login, `api` or `owner`
+    by: text('by').notNull(),
+    at: text('at').notNull().default(nowIso),
+    // The channels whose posts the owner chose to delete on the networks too
+    channels: jsonb('channels').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    // With the blog among them: how many posts still out linked the article it removed
+    articleLinks: integer('article_links'),
+  },
+  (t) => [index('launch_deletions_by_key').on(t.dedupeKey), index('launch_deletions_by_launch').on(t.launchId)],
+);

@@ -134,7 +134,7 @@ export async function runRound(d: RoundDeps, options: RoundOptions): Promise<voi
 
   if (options.detect) {
     await step('detect', log, async () => {
-      for (const outcome of await detect({ github: d.github, registry: d.registry, brand: d.brand })) {
+      for (const outcome of await detect({ github: d.github, registry: d.registry, brand: d.brand, triggers: d.pipeline.triggers, removed: d.pipeline.removed })) {
         if (outcome.result === 'claimed') await draft(outcome.launch, services);
         else if (outcome.result === 'invalid-config') log(`${outcome.event.repo}: ${outcome.launch.detail}`);
       }
