@@ -1,4 +1,4 @@
-import type { ArticleInput } from '@shipcast/engine';
+import { SOURCE_LIMITS, type ArticleInput, type SourceInput, type SourcesLaunchInput } from '@shipcast/engine';
 import { CHANNELS, type Channel } from '@shipcast/schema';
 import { InvalidInput, list, object, text } from './input.ts';
 
@@ -30,6 +30,40 @@ export function articleRequest(input: unknown): { input: ArticleInput; direct: b
   const markdown = text(o.markdown, 'markdown', 200_000);
   if (!title || !markdown.trim()) throw new InvalidInput('an article needs a title and a body');
   return { input: { title, markdown, lang, channels }, direct: o.direct === true };
+}
+
+const optional = (value: unknown, name: string, max: number) => (value === undefined || value === null || value === '' ? undefined : text(value, name, max));
+
+/** One source of a launch made from sources, by its kind; anything else in it is refused rather than ignored */
+function sourceInput(value: unknown, name: string): SourceInput {
+  const o = object(value, name);
+  const kind = text(o.kind, `${name}.kind`, 10);
+  if (kind === 'text') {
+    const title = optional(o.title, `${name}.title`, SOURCE_LIMITS.titleChars);
+    return { kind, text: text(o.text, `${name}.text`, SOURCE_LIMITS.textChars), ...(title && { title }) };
+  }
+  if (kind === 'url') return { kind, url: text(o.url, `${name}.url`, 2000) };
+  if (kind === 'repo') {
+    const ref = optional(o.ref, `${name}.ref`, 140);
+    return { kind, repo: text(o.repo, `${name}.repo`, 140), ...(ref && { ref }), ...(o.primary === true && { primary: true }) };
+  }
+  if (kind === 'media') {
+    const label = optional(o.name, `${name}.name`, SOURCE_LIMITS.labelChars);
+    const alt = optional(o.alt, `${name}.alt`, SOURCE_LIMITS.labelChars);
+    return { kind, sha256: text(o.sha256, `${name}.sha256`, 64), ...(label && { name: label }), ...(alt && { alt }) };
+  }
+  throw new InvalidInput(`${name}.kind is text, url, repo or media`);
+}
+
+/** A launch made from sources: its title, language, channels and sources (the engine's checkSources judges the rest) */
+export function sourcesRequest(input: unknown): SourcesLaunchInput {
+  const o = object(input, 'input');
+  const lang = text(o.lang ?? 'en', 'lang', 2);
+  if (lang !== 'en' && lang !== 'es') throw new InvalidInput('lang is en or es');
+  const channels = list(o.channels ?? [], 'channels').filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
+  if (!Array.isArray(o.sources)) throw new InvalidInput('sources must be a list');
+  if (o.sources.length > SOURCE_LIMITS.sources) throw new InvalidInput(`a launch has at most ${SOURCE_LIMITS.sources} sources`);
+  return { title: text(o.title, 'title', SOURCE_LIMITS.titleChars).trim(), lang, channels, sources: o.sources.map((s, i) => sourceInput(s, `sources[${i}]`)) };
 }
 
 /** A moment with its offset; a time without one would be read in the server's zone, which is nobody's choice */

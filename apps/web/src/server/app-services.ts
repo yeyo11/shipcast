@@ -3,7 +3,9 @@ import {
   CommentService,
   launchConfigOf,
   LaunchService,
+  pageFetcher,
   SettingsService,
+  SourcesService,
   PostService,
   ScheduleService,
   type AppReviewService,
@@ -13,6 +15,7 @@ import {
   type GitHubRest,
   type LaunchReadService,
   type LaunchStoreService,
+  type MediaStore,
   type PipelineDeps,
   type Post,
   type Repositories,
@@ -85,4 +88,18 @@ export const launchService = (deps: {
     ...(deps.drafts && { drafts: deps.drafts }),
     ...(deps.launchStore && { launchStore: deps.launchStore }),
     ...(deps.appReview && { appReview: deps.appReview }),
+  });
+
+/**
+ * With `launch-sources`: launches made from sources, claimed through the launch service (a primary
+ * repo's release and its pre-flight) and fed by the guarded page fetcher and the media store
+ */
+export const sourcesService = (deps: { registry: Pick<Repositories, 'launches' | 'sources'>; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest; media: MediaStore }) =>
+  new SourcesService({
+    launchService: launchService(deps),
+    launches: deps.registry.launches,
+    sources: deps.registry.sources,
+    launchesRepo: deps.deps.launchesRepo,
+    media: deps.media,
+    fetchPage: pageFetcher(),
   });

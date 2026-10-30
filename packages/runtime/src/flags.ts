@@ -50,6 +50,12 @@ export const FLAGS = {
    * (docs/app-review.md). Needs `launch-store-read` (with `launch-store`) and `launch-media`
    */
   'app-review': 'Launches reviewed and approved in the app, with no pull request',
+  /**
+   * Launch model, phase 6: a launch made from sources (text, URLs, several repos, uploaded media),
+   * a launch.yml's `sources` read when its release triggers it, and stars read per repo. Off, a
+   * launch is its one repo as before and `sources` in a launch.yml is parsed and ignored
+   */
+  'launch-sources': 'Launches made from sources: text, URLs, several repos and uploaded media',
 } as const;
 
 /**

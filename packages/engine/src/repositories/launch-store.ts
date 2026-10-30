@@ -76,7 +76,7 @@ export interface VersionInput {
 }
 
 /** What a launch is about, as `launch_sources` keeps it */
-export interface SourceInput {
+export interface SourceRowInput {
   position: number;
   kind: string;
   role: string;
@@ -201,7 +201,7 @@ export class LaunchStoreRepository {
   }
 
   /** Adds what the launch is about, at its position */
-  async addSource(launchId: number, input: SourceInput): Promise<void> {
+  async addSource(launchId: number, input: SourceRowInput): Promise<void> {
     await this.#db.insert(launchSources).values({ launchId, ...input });
   }
 

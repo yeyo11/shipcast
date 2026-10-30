@@ -20,6 +20,7 @@ import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppCommentsRouteImport } from './routes/_app/comments'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
+import { Route as AppSourcesRouteImport } from './routes/_app/sources'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppStatsRouteImport } from './routes/_app/stats'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
@@ -111,6 +112,11 @@ const AppCommentsRoute = AppCommentsRouteImport.update({
 const AppLaunchRoute = AppLaunchRouteImport.update({
   id: '/launch',
   path: '/launch',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSourcesRoute = AppSourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -315,6 +321,7 @@ export interface FileRoutesByFullPath {
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
   '/launch': typeof AppLaunchRoute
+  '/sources': typeof AppSourcesRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
@@ -364,6 +371,7 @@ export interface FileRoutesByTo {
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
   '/launch': typeof AppLaunchRoute
+  '/sources': typeof AppSourcesRoute
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
@@ -415,6 +423,7 @@ export interface FileRoutesById {
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
   '/_app/launch': typeof AppLaunchRoute
+  '/_app/sources': typeof AppSourcesRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/stats': typeof AppStatsRoute
   '/_app/tokens': typeof AppTokensRoute
@@ -468,6 +477,7 @@ export interface FileRouteTypes {
     | '/automation'
     | '/comments'
     | '/launch'
+    | '/sources'
     | '/settings'
     | '/stats'
     | '/tokens'
@@ -517,6 +527,7 @@ export interface FileRouteTypes {
     | '/automation'
     | '/comments'
     | '/launch'
+    | '/sources'
     | '/stats'
     | '/tokens'
     | '/write'
@@ -567,6 +578,7 @@ export interface FileRouteTypes {
     | '/_app/automation'
     | '/_app/comments'
     | '/_app/launch'
+    | '/_app/sources'
     | '/_app/settings'
     | '/_app/stats'
     | '/_app/tokens'
@@ -711,6 +723,13 @@ declare module '@tanstack/react-router' {
       path: '/launch'
       fullPath: '/launch'
       preLoaderRoute: typeof AppLaunchRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/sources': {
+      id: '/_app/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof AppSourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings': {
@@ -1005,6 +1024,7 @@ interface AppRouteChildren {
   AppAutomationRoute: typeof AppAutomationRoute
   AppCommentsRoute: typeof AppCommentsRoute
   AppLaunchRoute: typeof AppLaunchRoute
+  AppSourcesRoute: typeof AppSourcesRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppStatsRoute: typeof AppStatsRoute
   AppTokensRoute: typeof AppTokensRoute
@@ -1023,6 +1043,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAutomationRoute: AppAutomationRoute,
   AppCommentsRoute: AppCommentsRoute,
   AppLaunchRoute: AppLaunchRoute,
+  AppSourcesRoute: AppSourcesRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppStatsRoute: AppStatsRoute,
   AppTokensRoute: AppTokensRoute,

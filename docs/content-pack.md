@@ -1,14 +1,12 @@
 ---
 created_at: 2026-10-26T21:05:17.808588978Z
-updated_at: 2026-10-30T00:52:47.399299093Z
+updated_at: 2026-10-30T03:14:47.659258472Z
 tags:
     - schema
     - content-pack
     - ai
     - decision
-    - seo
-    - channels
-    - youtube
+    - sources
 ---
 # The content pack
 
@@ -34,7 +32,10 @@ The AI tasks that answer with a pack (`pack`, `article`; `packages/schema/src/ai
 repair before giving up ([decisions/ai-layer.md](decisions/ai-layer.md)). `AiContentPack` is
 `ContentPack` with the project as it was before the launch model: `repo` required and no `repos`.
 It is also what `contentPackJsonSchema()` hands to Claude, so what the AI is asked for did not change
-when `ContentPack` was widened (below), and every pack it accepts is a `ContentPack`.
+when `ContentPack` was widened (below), and every pack it accepts is a `ContentPack`. A launch made
+from sources (the `launch-sources` flag, [sources.md](sources.md)) is asked for `AiSourcesPack`
+instead (`SOURCES_PACK_TASK`, `sourcesPackJsonSchema()`): the project as `ContentPack` has it, and an
+analysis with `claims`. It runs as the pack task, with its settings, ceilings and budget.
 
 ## Shape
 
@@ -43,7 +44,7 @@ when `ContentPack` was widened (below), and every pack it accepts is a `ContentP
 | `schemaVersion` | `1` |
 | `kind` | `launch`, `major` or `minor` ([launch-yml.md](launch-yml.md)) |
 | `project` | `name`; `repo`, the primary repo's URL (the one whose release triggered the launch), optional; `repos`, the URLs of further repos the launch is also about, optional; optional `version` (the release tag) |
-| `analysis` | `summary`, `implemented` (at least one), `planned`, `documentedOnly`, `limitations` |
+| `analysis` | `summary`, `implemented` (at least one, unless the pack has `claims`), `planned`, `documentedOnly`, `limitations`; and for a launch made from sources `claims`, each statement the pieces make with the ids of the sources that show it (`S1`, `S2`…) |
 | `article` | `tags`, and an `en` and/or `es` version, each with its own `slug`, `title`, `description` (≤ 200), `markdown` and an optional `imageAlt` (≤ 140) |
 | `devto` | `tags` (1–4, lowercase letters and digits); dev.to republishes the English article with the blog as canonical URL |
 | `hashnode` | `tags` (1–5); Hashnode republishes the English article with the blog as its original URL |
@@ -74,9 +75,10 @@ Since 2026-10-30, the first phase of the launch model
 `project.repo` is optional (a product with no repo, a talk, an opinion article) and `project.repos`
 lists further repos besides the primary one. A release's pack still names its repo: `generatePack`
 refuses a pack whose `project.repo` is missing or is not the launch's repo, and further repos never
-stand in for the primary one. The blog front matter gets `repo:` only when the pack has one. Until the
-sources phase gives a launch something other than a repo to be about, the AI is still asked for the
-old shape (`AiContentPack`, above).
+stand in for the primary one. The blog front matter gets `repo:` only when the pack has one. A
+release drafted from its repo alone is still asked for the old shape (`AiContentPack`, above); a
+launch made from sources gets the new one, and its project's repos are then set by Shipcast from the
+sources, whatever the model wrote ([sources.md](sources.md)).
 
 ## One slug per language
 
@@ -122,6 +124,11 @@ for the owner reviewing the drafts and never go into a piece. For an article wri
 analysis is a one-line summary and the article is the source of truth
 ([engine.md](engine.md#articles-written-in-the-app)).
 
+A launch made from sources holds the principle per source: its analysis lists `claims`, every
+statement any piece will make with the sources that show it, and the draft is refused when a claim
+cites a source the launch does not have. Its `implemented` may be empty (an opinion shows nothing
+running), which only a pack with claims may leave so ([sources.md](sources.md)).
+
 ## Valid is not complete
 
 Every piece is optional, so one schema serves every `launch.yml`. Whether a pack has what *this*
@@ -147,4 +154,4 @@ its 100.
 
 ## Related
 
-[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/architecture.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]] · [[decisions/launch-model.md]] · [[media-store.md]]
+[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/architecture.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[sources.md]]

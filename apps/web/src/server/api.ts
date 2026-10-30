@@ -37,6 +37,7 @@ import { articleRequest, channelName, launchRequest, moment } from './requests.t
 export { ApiError } from './errors.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 import { PROFILE_ROUTES, PROFILE_SCHEMAS, type ProfileApi } from './profile-api.ts';
+import { SOURCES_ROUTES, SOURCES_SCHEMAS, type SourcesApi } from './sources-api.ts';
 import { commentView } from './comment-view.ts';
 import { accountService, commentService, postService, scheduleService } from './app-services.ts';
 
@@ -92,6 +93,8 @@ export interface ApiDeps {
   redraftComment(commentId: number): Promise<WorkAnswer>;
   /** Account analysis: a profile's review as a job, and its edit on the network */
   profiles?: ProfileApi;
+  /** With launch-sources: a launch made from sources, and the files uploaded for it */
+  sources?: SourcesApi;
 }
 
 /** Failed sign-ins per client: in this process (FailureLimiter) or across replicas (sharedLimiter) */
@@ -310,6 +313,8 @@ export interface ApiRoute {
   summary: string;
   query?: Array<{ name: string; description: string; schema: JsonSchema }>;
   body?: JsonSchema;
+  /** The body's media type; JSON when left out */
+  bodyType?: string;
   response: { status: 200 | 202; description: string; schema: JsonSchema };
   handle(deps: ApiDeps, call: Call): Promise<Response>;
 }
@@ -556,6 +561,7 @@ export const ROUTES: ApiRoute[] = [
   },
   ...STATS_ROUTES,
   ...PROFILE_ROUTES,
+  ...SOURCES_ROUTES,
   {
     method: 'POST',
     path: '/launches/{id}/schedule',
@@ -923,7 +929,7 @@ export function openApiDocument(publicUrl: string) {
       security: [{ bearer: [route.scope] }],
       'x-scope': route.scope,
       ...(pathParams.length + queryParams.length > 0 && { parameters: [...pathParams, ...queryParams] }),
-      ...(route.body && { requestBody: { required: true, content: { 'application/json': { schema: route.body } } } }),
+      ...(route.body && { requestBody: { required: true, content: { [route.bodyType ?? 'application/json']: { schema: route.body } } } }),
       responses: {
         [String(route.response.status)]: { description: route.response.description, content: { 'application/json': { schema: route.response.schema } } },
         ...errors(
@@ -1128,6 +1134,7 @@ export function openApiDocument(publicUrl: string) {
         },
         ...STATS_SCHEMAS,
         ...PROFILE_SCHEMAS,
+        ...SOURCES_SCHEMAS,
       },
     },
   };

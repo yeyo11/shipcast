@@ -112,3 +112,20 @@ test('an invalid tour step, site or page is an error with its line', () => {
   assert.ok(!result.ok);
   assert.match(formatIssues('launch.yml', result.issues), /launch\.yml:\d+/);
 });
+
+test('a launch.yml may name further repos and pages; left out, the parsed file is what it was', () => {
+  const plain = parseLaunchConfig('enabled: true\nbrand: personal\n');
+  assert.ok(plain.ok);
+  assert.equal('sources' in plain.value, false, 'no key added to a file without it');
+  const named = parseLaunchConfig('enabled: true\nbrand: personal\nsources:\n  repos: [yeyo11/claudio-web]\n  urls: [https://claudio.example/]\n');
+  assert.ok(named.ok);
+  assert.deepEqual(named.value.sources, { repos: ['yeyo11/claudio-web'], urls: ['https://claudio.example/'] });
+  const pagesOnly = parseLaunchConfig('enabled: true\nbrand: personal\nsources:\n  urls: [https://claudio.example/]\n');
+  assert.ok(pagesOnly.ok);
+  assert.deepEqual(pagesOnly.value.sources?.repos, []);
+  const wrong = parseLaunchConfig('enabled: true\nbrand: personal\nsources:\n  repos: [claudio]\n  urls: [ftp://x]\n  pages: []\n');
+  assert.ok(!wrong.ok);
+  const said = formatIssues('launch.yml', wrong.issues);
+  assert.match(said, /owner\/name/);
+  assert.match(said, /http or https/);
+});

@@ -1,7 +1,11 @@
 import {
   AppReviewService,
+  archiveFolder,
   checkout,
+  cloneInto,
   currentAiTexts,
+  jobFolder,
+  pageFetcher,
   GitHubApp,
   GitHubRest,
   loadBrand,
@@ -221,6 +225,17 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     ...(launchStore && { launchStore }),
     ...(launchRead && { launchRead }),
     ...(appReview && { appReview }),
+    // Phase 6 of the launch model: a launch made from sources, its bundle in a folder of the job's own
+    ...(flags.on('launch-sources') && {
+      sources: {
+        store: registry.sources,
+        launches: registry.launches,
+        folder: (name: string) => jobFolder({ ...workspace, perJob: split(roleFromEnv(env)) }, name),
+        clone: (repo: string, ref: string, hostPath: string, sha?: string) => cloneInto(workspace, repo, ref, hostPath, sha),
+        archive: archiveFolder,
+        fetchPage: pageFetcher(),
+      },
+    }),
   };
 
   return {

@@ -87,6 +87,10 @@ export interface NewLaunch {
   trigger: Trigger;
   kind: PackKind;
   brand: string;
+  /** What the app lists it as; a launch made from sources has one (launch-sources) */
+  title?: string;
+  /** The launch.yml a launch with no repo publishes by (launch-sources) */
+  channelsSource?: string;
 }
 
 
@@ -138,11 +142,22 @@ export class LaunchRepository {
   async claim(launch: NewLaunch): Promise<{ claimed: boolean; launch: Launch }> {
     const [inserted] = await this.#db
       .insert(launches)
-      .values({ repo: launch.repo, ref: launch.ref, trigger: launch.trigger, kind: launch.kind, brand: launch.brand, status: 'detected' })
+      .values({ repo: launch.repo, ref: launch.ref, trigger: launch.trigger, kind: launch.kind, brand: launch.brand, status: 'detected', ...(launch.title !== undefined && { title: launch.title }), ...(launch.channelsSource !== undefined && { channelsSource: launch.channelsSource }) })
       .onConflictDoNothing({ target: [launches.repo, launches.ref] })
       .returning();
     if (inserted) return { claimed: true, launch: toLaunch(inserted) };
     return { claimed: false, launch: (await this.find(launch.repo, launch.ref))! };
+  }
+
+  /** A launch's title and the launch.yml it publishes by, as the launch model keeps them; undefined for no such launch */
+  async modelFields(id: number): Promise<{ title: string | null; channelsSource: string | null } | undefined> {
+    const [row] = await this.#db.select({ title: launches.title, channelsSource: launches.channelsSource }).from(launches).where(eq(launches.id, id));
+    return row;
+  }
+
+  /** Names a launch again and sets the launch.yml it publishes by: a failed launch made from sources, asked for again */
+  async setModelFields(id: number, fields: { title: string; channelsSource: string | null }): Promise<void> {
+    await this.#db.update(launches).set({ title: fields.title, channelsSource: fields.channelsSource, updatedAt: nowIso }).where(eq(launches.id, id));
   }
 
   async find(repo: string, ref: string): Promise<Launch | undefined> {

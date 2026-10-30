@@ -78,6 +78,17 @@ export const LaunchConfig = z.strictObject({
       screenshots: z.array(ScreenshotPage).min(1).max(MAX_SCREENSHOTS, `at most ${MAX_SCREENSHOTS} screenshot pages`).optional(),
     })
     .prefault({}),
+  /**
+   * What else the launch is about besides this repo (launch-sources, docs/sources.md): further repos,
+   * read at their default branch, and pages Shipcast fetches. This repo stays the primary one: its
+   * release is what triggers the launch. Ignored while the launch-sources flag is off
+   */
+  sources: z
+    .strictObject({
+      repos: z.array(z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'a repo is owner/name')).max(5, 'at most 5 further repos').default([]),
+      urls: z.array(z.url({ protocol: /^https?$/, error: 'an http or https URL' })).max(8, 'at most 8 pages').default([]),
+    })
+    .optional(),
   reddit: z
     .strictObject({
       /** Names without the r/ prefix */

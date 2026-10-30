@@ -46,16 +46,43 @@ const Analysis = z
   })
   .describe('What the code shows. Every piece below may only present the implemented list as working.');
 
+/** One thing the pieces may say, and the sources that show it (`S1`, `S2`… as the sources' index numbers them) */
+export const SourceClaim = z.strictObject({
+  text: z.string().min(1).describe('One statement the pieces may make, as the sources show it'),
+  sources: z
+    .array(z.string().regex(/^S[1-9][0-9]*$/, 'a source id from the index, such as S1'))
+    .min(1)
+    .describe('The ids of the sources that show it, from SOURCES.md'),
+});
+export type SourceClaim = z.infer<typeof SourceClaim>;
+
+/**
+ * A launch made from sources answers with claims as well: every statement the pieces may make,
+ * each tied to the sources that show it, which is how the truth rule holds per source
+ * (docs/sources.md). Optional in a pack as kept, since a pack written from one repo has none.
+ */
+const SourcesAnalysis = Analysis.extend({
+  // A launch about an opinion or a talk may show nothing implemented: its claims say what it shows
+  implemented: z.array(z.string().min(1)).describe('What a repo’s code shows working; for a launch with no repo, what the sources show exists. May be empty when nothing is'),
+  claims: z.array(SourceClaim).min(1).describe('Every statement the pieces make, each with the sources that show it; nothing goes into a piece that no claim backs'),
+});
+
+/** A kept pack's analysis: a release's, with at least one implemented feature, or one made from sources, with its claims */
+const KeptAnalysis = Analysis.extend({ implemented: z.array(z.string().min(1)), claims: z.array(SourceClaim).optional() }).refine((a) => a.claims !== undefined || a.implemented.length > 0, {
+  path: ['implemented'],
+  message: 'a pack without claims lists at least one implemented feature',
+});
+
 const projectName = z.string().min(1);
 const projectVersion = z.string().optional().describe('The release tag that triggered the launch, if any');
 
-const packOf = <P extends z.ZodType>(project: P) =>
+const packOf = <P extends z.ZodType, A extends z.ZodType = typeof Analysis>(project: P, analysis: A = Analysis as unknown as A) =>
   z
     .strictObject({
       schemaVersion: z.literal(1),
       kind: PackKind,
       project,
-      analysis: Analysis,
+      analysis,
       ...pieces,
       releaseNotes: z.string().optional().describe('Improved release notes in Markdown, for the minor pack'),
     })
@@ -67,14 +94,14 @@ const packOf = <P extends z.ZodType>(project: P) =>
  * about several is also about (docs/decisions/launch-model.md); a release's pack still names its
  * repo, which generatePack checks against the launch.
  */
-export const ContentPack = packOf(
-  z.strictObject({
-    name: projectName,
-    repo: z.url().optional().describe("The primary repo's URL: the one whose release triggered the launch; absent when the launch is about no repo"),
-    repos: z.array(z.url()).optional().describe('Further repos the launch is also about, besides the primary one'),
-    version: projectVersion,
-  }),
-);
+const AppProject = z.strictObject({
+  name: projectName,
+  repo: z.url().optional().describe("The primary repo's URL: the one whose release triggered the launch; absent when the launch is about no repo"),
+  repos: z.array(z.url()).optional().describe('Further repos the launch is also about, besides the primary one'),
+  version: projectVersion,
+});
+
+export const ContentPack = packOf(AppProject, KeptAnalysis);
 
 export type ContentPack = z.infer<typeof ContentPack>;
 
@@ -84,6 +111,13 @@ export type ContentPack = z.infer<typeof ContentPack>;
  * gives a launch something other than a repo to be about. Every pack it accepts is a ContentPack.
  */
 export const AiContentPack = packOf(z.strictObject({ name: projectName, repo: z.url(), version: projectVersion }));
+
+/**
+ * The pack a launch made from sources is asked for (launch-sources): its project may have no repo or
+ * several, and its analysis ties every statement to the sources that show it. Every pack it accepts
+ * is a ContentPack.
+ */
+export const AiSourcesPack = packOf(AppProject, SourcesAnalysis);
 
 /**
  * The pack's schema for a list of definitions: the registry's pack with the pieces of the channels it
@@ -165,4 +199,9 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
  */
 export function contentPackJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(AiContentPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
+}
+
+/** The same for a launch made from sources: the pack with its claims */
+export function sourcesPackJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(AiSourcesPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
 }
