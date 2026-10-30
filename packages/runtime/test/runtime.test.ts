@@ -109,7 +109,10 @@ test('launch-triggers and launch-delete (docs/launch-triggers.md, docs/launch-de
   const off = await start('');
   assert.equal(off.triggers, undefined);
   assert.equal(off.pipeline.triggers, undefined, 'without it, each repo’s launch.yml decides alone');
-  assert.equal(off.pipeline.removed, undefined);
+  // A removed launch stays removed whichever flags a later process runs with: the check is always on
+  assert.equal(await off.pipeline.removed?.('github-release:yeyo11/claudio@v1.0.0'), false, 'the removed releases are read without launch-delete too');
+  await off.registry.launchDeletions.record({ launchId: 1, dedupeKey: 'github-release:yeyo11/claudio@v0.9.0', repo: 'yeyo11/claudio', ref: 'v0.9.0', by: 'owner', mode: 'removed', channels: [], articleLinks: null });
+  assert.equal(await off.pipeline.removed?.('github-release:yeyo11/claudio@v0.9.0'), true);
   const on = await start('launch-triggers,launch-delete');
   assert.ok(on.triggers);
   assert.equal(on.pipeline.triggers, on.triggers);
