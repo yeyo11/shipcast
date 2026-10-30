@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T06:19:22.606949087Z
-updated_at: 2026-10-30T06:19:22.606949087Z
+updated_at: 2026-10-30T06:36:30.858864244Z
 tags:
     - launches
     - launch-model
@@ -152,6 +152,8 @@ publishing before the article's approval, one commit with the article and media 
 an edit after approving holding one channel, a failed commit tried again with nothing out before the
 article is live, `auto` channels without approval (and a media-only commit with the blog off),
 "publish directly", the real site's preview, and a process without the flag.
+`packages/runtime/test/runtime.test.ts`: the start refuses `app-review` without `launch-store-read`
+or `launch-media`, and builds no service (the pipeline opens pull requests) unless it is named.
 
 ## Related
 
