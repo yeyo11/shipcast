@@ -1,4 +1,5 @@
 import { newWebhookSecret, WEBHOOK_SECRET_KEY, writeAutomation, type AutomationMode } from '@shipcast/runtime';
+import { CHANNELS } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { automationChanged, automationView, roundNow } from './automation.server';
 import { appContext } from './context.server';
@@ -17,8 +18,27 @@ export const getAutomation = createServerFn({ method: 'GET' }).handler(async () 
     owner: (await ctx.brand()).github,
     /** The queue's work of the last day: drafting, publishing, GitHub's deliveries (moved here from the launches list) */
     jobs: await jobsPage(ctx.registry, { page: 1, state: 'all' }),
+    /** With `launch-triggers`: the rules that decide which GitHub events create a launch (docs/launch-triggers.md); null without */
+    triggers: ctx.triggers ? await ctx.triggers.rules() : null,
+    channels: [...CHANNELS],
   };
 });
+
+/** The trigger rules, replaced as a whole; each is checked by the engine, which says what is wrong */
+export const saveTriggers = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    if (!Array.isArray(input)) throw new InvalidInput('the rules are a list');
+    return input as unknown[];
+  })
+  .handler(async ({ data }) => {
+    const ctx = await appContext();
+    if (!ctx.triggers) return { ok: false as const, problem: 'trigger rules apply only with the launch-triggers flag on' };
+    try {
+      return { ok: true as const, rules: await ctx.triggers.save(data) };
+    } catch (error) {
+      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+    }
+  });
 
 /** One page of the work list, for the filter and the pager on the Automation page */
 export const getJobsPage = createServerFn({ method: 'GET' })

@@ -56,6 +56,18 @@ export const FLAGS = {
    * launch is its one repo as before and `sources` in a launch.yml is parsed and ignored
    */
   'launch-sources': 'Launches made from sources: text, URLs, several repos and uploaded media',
+  /**
+   * Launch model, phase 7: the owner's trigger rules (a setting) decide which GitHub events create a
+   * launch, a repo with no launch.yml can be launched on a rule's channels, and each claim carries its
+   * dedupe key (docs/launch-triggers.md). Off, each repo's launch.yml decides alone, as before
+   */
+  'launch-triggers': 'Launches created by the trigger rules in Settings, launch.yml optional',
+  /**
+   * Launch model, phase 7: a launch can be deleted (docs/launch-delete.md): one never published is
+   * removed, a published one hidden, its posts kept on the networks unless the owner picks channels
+   * to delete them on; an event never launches a removed launch's release again
+   */
+  'launch-delete': 'Launches deleted from the app and the API',
 } as const;
 
 /**

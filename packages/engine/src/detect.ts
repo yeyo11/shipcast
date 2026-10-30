@@ -1,6 +1,8 @@
-import { formatIssues, parseLaunchConfig, resolvePack, type Brand } from '@shipcast/schema';
+import { formatIssues, matchingRule, parseLaunchConfig, resolvePack, type Brand, type PackKind } from '@shipcast/schema';
 import type { GitHubEvent, GitHubSource } from './github.ts';
+import { dedupeKeyOf } from './launch-import.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
+import { ruleLaunchYml, type TriggerService } from './services/triggers.ts';
 
 export const LAUNCH_CONFIG_PATH = '.github/launch.yml';
 
@@ -16,6 +18,13 @@ export interface DetectOptions {
   registry: Pick<Repositories, 'launches' | 'cursors'>;
   /** The brand of the launches repo this engine writes to; launches for any other are refused */
   brand: Brand;
+  /**
+   * With `launch-triggers`: the owner's trigger rules decide which events create a launch, a repo
+   * with no launch.yml is launched on a rule's channels, and each claim carries its dedupe key
+   */
+  triggers?: Pick<TriggerService, 'rules' | 'keepChannels'> | undefined;
+  /** With `launch-delete`: whether the owner removed the launch a dedupe key names; its events launch nothing again */
+  removed?: ((dedupeKey: string) => Promise<boolean>) | undefined;
 }
 
 /**
@@ -23,8 +32,9 @@ export interface DetectOptions {
  * repo made public) whose `.github/launch.yml` asks for it. Events already seen are skipped through
  * the last event id, and the request itself is conditional, so polling often is free.
  */
-export async function detect({ github, registry, brand }: DetectOptions): Promise<Outcome[]> {
-  const owner = brand.github;
+export async function detect(options: DetectOptions): Promise<Outcome[]> {
+  const { github, registry } = options;
+  const owner = options.brand.github;
   const etagKey = `events-etag:${owner}`;
   const lastKey = `events-last-id:${owner}`;
 
@@ -37,7 +47,7 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
 
   const outcomes: Outcome[] = [];
   for (const event of fresh) {
-    outcomes.push(await claimEvent(event, { github, registry, brand }));
+    outcomes.push(await claimEvent(event, options));
     // Advanced per event, so a crash halfway through resumes where it stopped
     await registry.cursors.setCursor(lastKey, event.id);
   }
@@ -47,45 +57,70 @@ export async function detect({ github, registry, brand }: DetectOptions): Promis
 
 /**
  * Decides one event: the same rules whether it came from polling the events or from a GitHub webhook,
- * so a release is launched (or ignored) for the same reasons either way, and claimed only once.
+ * so a release is launched (or ignored) for the same reasons either way, and claimed only once. With
+ * `triggers` the owner's rules decide which events count and launch.yml is optional input
+ * (docs/launch-triggers.md); without, the repo's launch.yml decides alone, as it always did.
  */
-export async function claimEvent(event: GitHubEvent, { github, registry, brand }: DetectOptions): Promise<Outcome> {
-  if (event.type === 'release' && event.prerelease) return { event, result: 'ignored', reason: 'a pre-release' };
+export async function claimEvent(event: GitHubEvent, options: DetectOptions): Promise<Outcome> {
+  const { github, registry, brand } = options;
+  const prerelease = event.type === 'release' && event.prerelease;
+  const rule = options.triggers ? matchingRule(await options.triggers.rules(), { type: event.type, repo: event.repo, prerelease }) : undefined;
+  if (options.triggers && !rule) return { event, result: 'ignored', reason: prerelease ? 'a pre-release, which no trigger rule takes' : 'no trigger rule matches' };
+  if (!options.triggers && prerelease) return { event, result: 'ignored', reason: 'a pre-release' };
 
   // A repo made public has no tag: its launch reads the default branch and is keyed by the event
   const ref = event.type === 'release' ? event.tag : 'HEAD';
-  const text = await github.fileAt(event.repo, LAUNCH_CONFIG_PATH, ref);
-  if (text === undefined) return { event, result: 'ignored', reason: `no ${LAUNCH_CONFIG_PATH}` };
-
   const key = event.type === 'release' ? event.tag : `public:${event.id}`;
-  const parsed = parseLaunchConfig(text);
+  // The same release (or the same repo made public, by webhook and by poll) is one key, so it is claimed once
+  const dedupeKey = dedupeKeyOf({ repo: event.repo, ref: key });
+  if (options.removed && (await options.removed(dedupeKey))) return { event, result: 'ignored', reason: 'its launch was deleted' };
+  const claim = (kind: PackKind) => registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id, ...(rule && { dedupeKey }) });
+
+  const text = await github.fileAt(event.repo, LAUNCH_CONFIG_PATH, ref);
+  // A rule that names channels launches a repo with no launch.yml on them; the launch keeps them as its own
+  const kept = text === undefined && rule?.channels ? ruleLaunchYml(brand, rule.channels) : undefined;
+  const config = text ?? kept;
+  if (config === undefined) {
+    return { event, result: 'ignored', reason: rule ? `no ${LAUNCH_CONFIG_PATH}, and the rule "${rule.id}" launches only repos with one` : `no ${LAUNCH_CONFIG_PATH}` };
+  }
+
+  const parsed = parseLaunchConfig(config);
   if (!parsed.ok) {
     // Recorded as failed so the owner hears about it, and so it is not retried on every poll
-    const claim = await registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind: 'minor', brand: brand.id });
-    if (claim.claimed) {
-      await registry.launches.setStatus(claim.launch.id, 'failed', formatIssues(LAUNCH_CONFIG_PATH, parsed.issues));
+    const claimed = await claim('minor');
+    if (claimed.claimed) {
+      await registry.launches.setStatus(claimed.launch.id, 'failed', formatIssues(LAUNCH_CONFIG_PATH, parsed.issues));
     }
-    return { event, result: 'invalid-config', launch: (await registry.launches.get(claim.launch.id))! };
+    return { event, result: 'invalid-config', launch: (await registry.launches.get(claimed.launch.id))! };
   }
 
-  const config = parsed.value;
-  if (!config.enabled) return { event, result: 'ignored', reason: 'launch.yml has enabled: false' };
-  if (event.type === 'release' && !config.triggers.release) {
+  const { value } = parsed;
+  if (!value.enabled) return { event, result: 'ignored', reason: 'launch.yml has enabled: false' };
+  // A repo's own launch.yml still says no for itself, whatever a rule takes
+  if (event.type === 'release' && !value.triggers.release) {
     return { event, result: 'ignored', reason: 'releases do not trigger launches in this repo' };
   }
-  if (event.type === 'public' && !config.triggers.public) {
+  if (event.type === 'public' && !kept && !value.triggers.public) {
     return { event, result: 'ignored', reason: 'going public does not trigger a launch in this repo' };
   }
-  if (config.brand !== brand.id) {
-    return { event, result: 'ignored', reason: `launch.yml names brand "${config.brand}", not "${brand.id}"` };
+  if (value.brand !== brand.id) {
+    return { event, result: 'ignored', reason: `launch.yml names brand "${value.brand}", not "${brand.id}"` };
   }
 
   const kind =
-    event.type === 'public' ? (config.pack ?? 'launch') : resolvePack(config, event.tag, await registry.launches.lastPublishedRef(event.repo));
-  const claim = await registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id });
-  return claim.claimed
-    ? { event, result: 'claimed', launch: claim.launch }
-    : { event, result: 'already-claimed', launch: claim.launch };
+    event.type === 'public' ? (value.pack ?? 'launch') : resolvePack(value, event.tag, await registry.launches.lastPublishedRef(event.repo));
+  const claimed = await claim(kind);
+  if (claimed.claimed && kept && options.triggers && rule) {
+    try {
+      await options.triggers.keepChannels(claimed.launch.id, kept);
+    } catch (error) {
+      const launch = await registry.launches.setStatus(claimed.launch.id, 'failed', `the channels of the rule "${rule.id}" could not be kept: ${error instanceof Error ? error.message : String(error)}`);
+      return { event, result: 'invalid-config', launch };
+    }
+  }
+  return claimed.claimed
+    ? { event, result: 'claimed', launch: claimed.launch }
+    : { event, result: 'already-claimed', launch: claimed.launch };
 }
 
 function triggerOf(event: GitHubEvent): 'release' | 'public' {

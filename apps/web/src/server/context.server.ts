@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
-import { PostgresFakeNetworkLedger, TelemetryStore, type AppReviewService, type DraftSnapshotService, type GitHubApp, type LaunchReadService, type LaunchStoreService, type GitHubRest, type MediaStore, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { PostgresFakeNetworkLedger, TelemetryStore, type AppReviewService, type DraftSnapshotService, type GitHubApp, type LaunchReadService, type LaunchStoreService, type MediaStore, type TriggerService, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   assertPreviewSafe,
   attachTelemetryStore,
@@ -102,6 +102,8 @@ export interface AppContext {
   launchRead: LaunchReadService | undefined;
   /** With `app-review`: new launches reviewed, previewed and approved in the app (docs/app-review.md) */
   appReview: AppReviewService | undefined;
+  /** With `launch-triggers`: the owner's trigger rules, edited in Settings (docs/launch-triggers.md) */
+  triggers: TriggerService | undefined;
   githubCaches: GitHubCaches | undefined;
   /** With `realtime-ui`, in a process that serves pages: the tabs' event streams (GET /api/events) */
   live: LiveHub | undefined;
@@ -205,6 +207,7 @@ async function createContext(): Promise<AppContext> {
     launchStore: runtime.launchStore,
     launchRead: runtime.launchRead,
     appReview: runtime.appReview,
+    triggers: runtime.triggers,
     githubCaches: runtime.githubCaches,
     live: undefined,
     preview,

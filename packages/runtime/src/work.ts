@@ -216,7 +216,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         throw new RetryLater(result.reason);
       }
       if (result.state === 'skipped') {
-        job.log('The pull request was closed without merging: nothing published');
+        job.log(current.deletedAt ? 'The launch was deleted: nothing published' : 'The pull request was closed without merging: nothing published');
         return;
       }
       for (const p of result.posted) job.log(`${p.channel}: ${p.url}`);
@@ -282,7 +282,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     /** A delivery's work: what GitHub announced is claimed and drafted, or a merged launch published */
     async delivery({ action }, job) {
       if (action.kind === 'claim') {
-        const outcome = await claimFromWebhook({ github: d.github, registry, brand: await d.brand() }, action.event);
+        const outcome = await claimFromWebhook({ github: d.github, registry, brand: await d.brand(), pipeline: d.pipeline }, action.event);
         if (outcome.result !== 'claimed') {
           job.log(outcome.result === 'ignored' ? `Ignored: ${outcome.reason}` : `Not claimed: ${outcome.result}`);
           return;

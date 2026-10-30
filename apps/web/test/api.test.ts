@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import type { ArticleInput, Editors, Launch, Repositories, ReviewGitHub } from '@shipcast/engine';
+import { inTransaction, LaunchDeletionService, type ArticleInput, type Editors, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { COMMENT_CHANNELS } from '@shipcast/schema';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
 import { checkBearer, FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
+import { postService } from '../src/server/app-services.ts';
 import { jobsFeed } from '../src/server/jobs.server.ts';
 import { createSession, SESSION_COOKIE } from '../src/server/session.server.ts';
 
@@ -627,4 +628,41 @@ test('each kind of refusal answers its status with the same body, whichever area
     message: 'something went wrong; the details are in the app’s log',
   });
   assert.ok(launch.id > 0);
+});
+
+test('a launch is deleted through the API only with launch-delete: hidden when it published, its posts kept unless named', async () => {
+  const s = await setup();
+  const { launch, mastodon, telegram } = await publishedLaunch(s.registry);
+  assert.equal((await call(s.deps, 'DELETE', `/launches/${launch.id}`, { token: s.write })).status, 404, 'no such route while the flag is off');
+  assert.equal((await call(s.deps, 'GET', `/launches/${launch.id}/deletion`, { token: s.read })).status, 404);
+
+  const deps: ApiDeps = {
+    ...s.deps,
+    deletion: new LaunchDeletionService({ registry: s.registry, inTransaction: (work) => inTransaction(s.registry, work), posts: postService(s.deps), github: { pullRequestState: async () => 'open', closePreview: async () => {} }, launchesRepo: 'yeyo11/launches' }),
+  };
+  const plan = await call(deps, 'GET', `/launches/${launch.id}/deletion`, { token: s.read });
+  assert.deepEqual(await body(plan), {
+    mode: 'hidden',
+    refused: null,
+    channels: [
+      { channel: 'mastodon', out: 1, remove: 'yes' },
+      { channel: 'bluesky', out: 1, remove: 'yes' },
+      { channel: 'telegram', out: 1, remove: 'yes' },
+    ],
+    articleLinks: 3,
+  });
+  assert.equal((await call(deps, 'DELETE', `/launches/${launch.id}?channels=reddit`, { token: s.write })).status, 400, 'nothing of it is out there');
+  assert.equal((await call(deps, 'DELETE', `/launches/${launch.id}`, { token: s.read })).status, 403);
+
+  const deleted = await call(deps, 'DELETE', `/launches/${launch.id}?channels=mastodon`, { token: s.write });
+  assert.equal(deleted.status, 200);
+  const answer = await body(deleted);
+  assert.equal(answer.mode, 'hidden');
+  assert.deepEqual((answer.outcomes as Array<{ channel: string; ok: boolean }>).map((o) => `${o.channel} ${o.ok}`), ['mastodon true']);
+  assert.deepEqual(s.sent, ['delete mastodon 111']);
+  assert.equal((await s.registry.posts.post(mastodon.id))!.status, 'deleted');
+  assert.equal((await s.registry.posts.post(telegram.id))!.status, 'live', 'kept by default');
+  assert.equal(((await body(await call(deps, 'GET', '/launches', { token: s.read }))).launches as unknown[]).length, 0, 'hidden from the list');
+  assert.ok(((await body(await call(deps, 'GET', `/launches/${launch.id}`, { token: s.read }))) as { deletedAt?: string }).deletedAt, 'still read by id');
+  assert.equal((await call(deps, 'DELETE', `/launches/${launch.id}`, { token: s.write })).status, 409, 'deleted already');
 });
