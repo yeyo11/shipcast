@@ -79,7 +79,29 @@ export class LaunchStoreService {
    * fail the draft with, since these rows are all there is of the launch.
    */
   async held(launch: Launch, delivery: Omit<Delivery, 'direct'>): Promise<string[]> {
-    return (await this.#write(launch, delivery)).problems;
+    const { problems } = await this.#write(launch, delivery);
+    // A launch drafted again (a failed one retried) is this delivery and nothing else: a piece or a
+    // file the earlier attempt made and this one did not would otherwise stay current, be reviewed,
+    // approved and committed to the site. Only once everything was stored, so a failed write keeps
+    // the earlier rows for the next attempt to replace
+    if (problems.length === 0) await this.#retireOthers(launch, delivery.files);
+    return problems;
+  }
+
+  async #retireOthers(launch: Launch, files: readonly DraftFile[]): Promise<void> {
+    const pieces: Array<{ channel: string; piece: string }> = [];
+    const own: string[] = [];
+    for (const file of files) {
+      const stored = storedFile(launch, file.path);
+      if (stored.kind === 'draft') pieces.push({ channel: stored.channel, piece: stored.piece });
+      else if (stored.kind === 'media' && !stored.shared && 'bytes' in file) own.push(sha256Hex(file.bytes));
+    }
+    await this.#store.retireDrafts(launch.id, pieces);
+    const removed = await this.#store.removeMedia(launch.id, own);
+    for (const row of removed) {
+      // The bytes are addressed by content and may be another launch's too; a refused delete only leaves them stored
+      if (!(await this.#store.mediaInUse(row.sha256))) await this.#deps.media.delete(row.path).catch(() => undefined);
+    }
   }
 
   /** The pack, the channels, a version of each draft and every file, as the drafts were handed over */

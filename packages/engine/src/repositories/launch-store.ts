@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, max, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, max, notInArray, or } from 'drizzle-orm';
 import type { Database } from '../db/connect.ts';
 import { approvals, drafts, draftVersions, launchChannels, launches, launchSources, media, nowIso, packs, posts } from '../db/schema.ts';
 import { lockFor, transaction } from './transaction.ts';
@@ -206,6 +206,26 @@ export class LaunchStoreRepository {
       await tx.update(drafts).set({ currentVersionId: version!.id, updatedAt: nowIso }).where(eq(drafts.id, draft!.id));
       return { draftId: draft!.id, versionId: version!.id, n };
     });
+  }
+
+  /**
+   * Takes the drafts of the launch outside `keep` out of the review: their current version is cleared,
+   * so `drafts` no longer lists them, and their versions stay as history. What a new attempt at the
+   * drafts no longer makes must not stay current from the earlier one.
+   */
+  async retireDrafts(launchId: number, keep: readonly { channel: string; piece: string }[]): Promise<number> {
+    const kept = new Set(keep.map((k) => `${k.channel}\u0000${k.piece}`));
+    const rows = await this.#db.select({ id: drafts.id, channel: drafts.channel, piece: drafts.piece }).from(drafts).where(and(eq(drafts.launchId, launchId), isNotNull(drafts.currentVersionId)));
+    const retired = rows.filter((r) => !kept.has(`${r.channel}\u0000${r.piece}`)).map((r) => r.id);
+    if (retired.length > 0) await this.#db.update(drafts).set({ currentVersionId: null, updatedAt: nowIso }).where(inArray(drafts.id, retired));
+    return retired.length;
+  }
+
+  /** Removes the launch's own media rows (never a shared one) whose bytes are not in `keep`; answers the rows removed */
+  async removeMedia(launchId: number, keep: readonly string[]): Promise<StoredMediaRow[]> {
+    const own = eq(media.launchId, launchId);
+    const where = keep.length > 0 ? and(own, notInArray(media.sha256, [...keep])) : own;
+    return (await this.#db.delete(media).where(where).returning()).map(mediaOf);
   }
 
   /** Records a stored file; the same bytes twice under one owner are one row, the first kept */

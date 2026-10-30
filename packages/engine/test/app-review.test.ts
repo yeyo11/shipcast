@@ -391,3 +391,24 @@ test('an approval names the versions the owner read: a draft changed since is re
   await launches.approve(launch.id, 'yeyo11', fresh);
   assert.deepEqual((await registry.launchStore.approval(launch.id))?.versions, fresh);
 });
+
+test('a failed launch drafted again keeps only the new attempt’s drafts and media: the earlier ones are retired', async () => {
+  // Until the fix, a piece or a file the new attempt no longer made stayed current from the earlier one:
+  // shown for review, approved with the rest, its file committed to the site
+  const { registry, media, app, launch, deliver } = await setup();
+  await deliver();
+  const ogPng = (await registry.launchStore.media(launch.id)).find((m) => m.publicPath === `/${D}/og.png`)!;
+  await registry.launches.setStatus(launch.id, 'failed', 'the analysis failed');
+  const again = files.filter((f) => f.path !== MASTODON && f.path !== `public/${D}/og.png`);
+  await app.hold((await registry.launches.get(launch.id))!, { pack, configText: LAUNCH_YML, files: again });
+
+  const drafts = await registry.launchStore.drafts(launch.id);
+  assert.deepEqual(drafts.map((d) => d.channel).sort(), ['blog', 'bluesky'], 'Mastodon’s draft of the earlier attempt is retired');
+  const rows = await registry.launchStore.media(launch.id);
+  assert.ok(!rows.some((m) => m.publicPath === `/${D}/og.png`), 'its file is no longer the launch’s');
+  assert.ok(rows.some((m) => m.publicPath === `/${D}/og.jpg`));
+  assert.equal(await media.has(ogPng.path), false, 'and its bytes go when nothing else names them');
+  // The history stays: the retired draft's versions are still rows
+  const { rows: versions } = (await registry.database.execute(sql`select count(*)::int as n from draft_versions v join drafts d on d.id = v.draft_id where d.launch_id = ${launch.id} and d.channel = 'mastodon'`)) as unknown as { rows: Array<{ n: number }> };
+  assert.equal(versions[0]?.n, 1);
+});
