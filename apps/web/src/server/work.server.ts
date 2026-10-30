@@ -58,13 +58,13 @@ export async function startArticle(input: ArticleInput, direct: boolean): Promis
 }
 
 /** Approving merges the pull request, or for a launch Shipcast holds records the approval; publishing follows as a job */
-export async function approve(launchId: number): Promise<Started> {
+export async function approve(launchId: number, by?: string): Promise<Started> {
   const service = await launches();
   // Approving merges a real pull request on the launches repo; a launch Shipcast holds is approved in its own rows
   if (fakeNetworks() && !isAppLaunch((await service.get(launchId)) ?? {})) return { ok: false, problem: PREVIEW_REFUSAL };
   let launch: Launch;
   try {
-    launch = await service.approve(launchId);
+    launch = await service.approve(launchId, by);
   } catch (error) {
     // GitHub refusing the merge is the owner's to read, as a refusal is
     return { ok: false, problem: error instanceof Error ? error.message : String(error) };

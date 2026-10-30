@@ -115,9 +115,10 @@ export class LaunchService {
    * long for its network), then tells the snapshot and the launch model's copy, neither of which can
    * fail the edit.
    */
-  async editDraft(launchId: number, path: string, content: string): Promise<void> {
+  async editDraft(launchId: number, path: string, content: string, author: string | null = null): Promise<void> {
     const launch = await this.#launch(launchId);
-    if (isAppLaunch(launch)) return this.#app().edit(launch, path, content);
+    // Who wrote it (a login, `api`) is kept on the version of a launch Shipcast holds
+    if (isAppLaunch(launch)) return this.#app().edit(launch, path, content, author);
     await editDraft(launch, path, content, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });
     const committed = content.endsWith('\n') ? content : `${content}\n`;
     // The page reads the snapshot: the edit shows at once, before GitHub's delivery confirms it
@@ -129,10 +130,10 @@ export class LaunchService {
    * Approves the drafts: merges their pull request, or for a launch Shipcast holds records the
    * approval of every draft as it is now; the caller queues the publishing after either
    */
-  async approve(launchId: number): Promise<Launch> {
+  async approve(launchId: number, by = 'owner'): Promise<Launch> {
     const launch = await this.#launch(launchId);
     if (isAppLaunch(launch)) {
-      await this.#app().approve(launch);
+      await this.#app().approve(launch, by);
       return launch;
     }
     await approveLaunch(launch, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });

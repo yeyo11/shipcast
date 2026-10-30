@@ -1,12 +1,14 @@
 import { imageUrl } from '@shipcast/schema';
 import { isAppLaunch, preflight, type Launch } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
+import { getRequest } from '@tanstack/react-start/server';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
 import { repoList } from './repo-list';
 import { id, object, text } from './input';
 import { ownerAvatarUrl } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
+import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
 import { launchPage } from './launch-page.server';
 import { launchNumbers, postAccounts, readTimezone } from './launch-summary.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
@@ -96,7 +98,7 @@ export const saveDraft = createServerFn({ method: 'POST' })
     // A draft edit is a commit on the real pull request; a launch Shipcast holds keeps it in its own rows
     if (fakeNetworks() && !isAppLaunch(launch)) return { ok: false as const, problem: PREVIEW_REFUSAL };
     try {
-      await launches.editDraft(launch.id, data.path, data.content);
+      await launches.editDraft(launch.id, data.path, data.content, await signedIn());
       return { ok: true as const };
     } catch (error) {
       return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
@@ -145,9 +147,15 @@ export const findSitePreview = createServerFn({ method: 'POST' })
     }
   });
 
+/** The signed-in login, which a launch Shipcast holds records on an edit or an approval */
+async function signedIn(): Promise<string | null> {
+  const session = await readSession((await appContext()).secrets, cookieOf(getRequest(), SESSION_COOKIE));
+  return session?.login ?? null;
+}
+
 export const approveDrafts = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
-  .handler(({ data }) => approve(data));
+  .handler(async ({ data }) => approve(data, (await signedIn()) ?? undefined));
 
 /** Publishing again: a channel that failed for good gets another chance, or a merged launch is followed */
 export const publishAgain = createServerFn({ method: 'POST' })

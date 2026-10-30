@@ -313,3 +313,16 @@ test('the preview address and the article preview, as pure functions', () => {
   assert.match(preview.html, /href="https:\/\/josegarrido.dev\/en\/"/);
   assert.match(preview.html, /&lt;b&gt;bold&lt;\/b&gt;/);
 });
+
+test('who edited and who approved is recorded: the login, or `owner` when the caller does not say', async () => {
+  const { registry, launch, deliver, launches } = await setup();
+  await deliver();
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'by the owner'), 'yeyo11');
+  const { rows } = (await registry.database.execute(sql`select author from draft_versions where origin = 'owner'`)) as unknown as { rows: Array<{ author: string | null }> };
+  assert.deepEqual(rows, [{ author: 'yeyo11' }]);
+  await launches.approve(launch.id, 'yeyo11');
+  assert.equal((await registry.launchStore.approval(launch.id))?.by, 'yeyo11');
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'again'));
+  await launches.approve(launch.id);
+  assert.equal((await registry.launchStore.approval(launch.id))?.by, 'owner');
+});

@@ -76,7 +76,8 @@ export interface ApiDeps {
   /** A page of the last day's work list, the newest first; `next` starts the following page */
   jobs(page: { limit: number; before?: JobCursor }): Promise<{ jobs: JobView[]; next: JobCursor | null }>;
   startLaunch(repo: string, ref: string | undefined, direct: boolean): Promise<WorkAnswer>;
-  approve(launchId: number): Promise<WorkAnswer>;
+  /** `by` is who approves, recorded on a launch Shipcast holds (docs/app-review.md) */
+  approve(launchId: number, by?: string): Promise<WorkAnswer>;
   startArticle(input: ArticleInput, direct: boolean): Promise<WorkAnswer>;
   startPublishing(launch: Launch, retryChannel?: Channel): Promise<string>;
   /** What editing and deleting published pieces needs: the connectors by account, and GitHub for the blog */
@@ -444,7 +445,7 @@ export const ROUTES: ApiRoute[] = [
     summary: 'Approve the drafts: merge their pull request, then publish',
     response: { status: 202, description: 'Accepted: a job publishes the launch', schema: ref('Accepted') },
     async handle(deps, { params }) {
-      return refused(await deps.approve((await existingLaunch(deps, params.id)).id));
+      return refused(await deps.approve((await existingLaunch(deps, params.id)).id, 'api'));
     },
   },
   {
