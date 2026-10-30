@@ -18,6 +18,43 @@ export const migrationsFolder = join(import.meta.dirname, '..', '..', 'drizzle')
 // Any constant; it only has to be the same for every process that migrates this database
 const MIGRATION_LOCK = 7_461_726;
 
+/**
+ * How long a migration waits for a table's lock before it gives up. An ALTER waiting behind a long
+ * transaction holds its own place in that table's lock queue, and every query of the app on the
+ * table queues behind it: a short wait that fails and is tried again keeps the app answering
+ */
+export const MIGRATION_LOCK_TIMEOUT = '5s';
+
+/** Postgres's lock_not_available: what a statement that waited lock_timeout fails with */
+const LOCK_NOT_AVAILABLE = '55P03';
+
+function isLockTimeout(error: unknown): boolean {
+  // Drizzle wraps the driver's error in its own, the SQLSTATE on the cause
+  for (let e: unknown = error, depth = 0; e && typeof e === 'object' && depth < 4; e = (e as { cause?: unknown }).cause, depth++) {
+    if ((e as { code?: unknown }).code === LOCK_NOT_AVAILABLE) return true;
+  }
+  return false;
+}
+
+/**
+ * Runs `run` again when it failed on a lock timeout: `attempts` runs at most (5), waiting 1 s, 2 s,
+ * 4 s… between them, so with a 5 s lock timeout a start gives up after about 40 s rather than queue
+ * the app behind it for as long as the blocking transaction lasts. Any other error is thrown at once.
+ * The migrations run in one transaction, so a failed run left nothing applied.
+ */
+export async function retryOnLockTimeout<T>(run: () => Promise<T>, options: { attempts?: number; sleep?: (ms: number) => Promise<void> } = {}): Promise<T> {
+  const attempts = options.attempts ?? 5;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= attempts || !isLockTimeout(error)) throw error;
+      await sleep(1000 * 2 ** (attempt - 1));
+    }
+  }
+}
+
 /** The schema node:sqlite's registry had, which a copy of it lands in before the rest convert it */
 export const FIRST_MIGRATION = '0000_registry';
 
@@ -77,7 +114,10 @@ export async function connectPostgres(url: string, migrateOptions: MigrateOption
   try {
     await migrator`SELECT pg_advisory_lock(${MIGRATION_LOCK})`;
     try {
-      await migrateDatabase(drizzle({ client: migrator }), migrateOptions);
+      // Set after the advisory lock, whose wait (another process migrating) is meant to be long; for
+      // this session only, which is the migrator's own connection
+      await migrator.unsafe(`SET lock_timeout = '${MIGRATION_LOCK_TIMEOUT}'`);
+      await retryOnLockTimeout(() => migrateDatabase(drizzle({ client: migrator }), migrateOptions));
     } finally {
       // Released by hand, not left to the connection's end: behind a pooler that keeps server connections
       // (PgBouncer), ending the client does not end the session, and a lock left on it blocks every start
