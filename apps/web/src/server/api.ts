@@ -171,7 +171,13 @@ async function launchResource(deps: ApiDeps, launch: Launch) {
       ? null
       : 'error' in review
         ? { error: review.error }
-        : { pullRequest: review.pullRequest, count: review.drafts.length, files: review.drafts.map((d) => ({ path: d.path, label: d.label, kind: d.kind })) };
+        : {
+            ...(review.pullRequest && { pullRequest: review.pullRequest }),
+            // A launch Shipcast holds has no pull request: its approval and what each channel waits for (docs/app-review.md)
+            ...(review.app && { approval: review.app.approval, waiting: review.app.waiting }),
+            count: review.drafts.length,
+            files: review.drafts.map((d) => ({ path: d.path, label: d.label, kind: d.kind, ...(d.approved !== undefined && { approved: d.approved }) })),
+          };
   return { ...detail.launch, detail: detail.detail, metrics: detail.metrics, index: detail.index, drafts };
 }
 
@@ -982,11 +988,13 @@ export function openApiDocument(publicUrl: string) {
             },
             drafts: {
               type: ['object', 'null'],
-              description: 'The drafts pull request and its files, without their text; null when the launch has none',
+              description: 'The drafts and their files, without their text: in the drafts pull request, or held by Shipcast (no pullRequest; approval and waiting instead); null when the launch has none',
               properties: {
                 pullRequest: { type: 'object', properties: { number: { type: 'integer' }, url: { type: 'string' }, state: { type: 'string', enum: ['open', 'merged', 'closed'] }, branch: { type: 'string' } } },
+                approval: { type: ['object', 'null'], description: 'A launch Shipcast holds: the approval in force', properties: { by: { type: 'string' }, at: { type: 'string' } } },
+                waiting: { type: 'object', description: 'A launch Shipcast holds: why each channel may not go out yet, by channel', additionalProperties: { type: 'string' } },
                 count: { type: 'integer' },
-                files: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, label: { type: 'string' }, kind: { type: 'string' } } } },
+                files: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, label: { type: 'string' }, kind: { type: 'string' }, approved: { type: 'boolean', description: 'A launch Shipcast holds: whether this version is the approved one' } } } },
                 error: { type: 'string' },
               },
             },

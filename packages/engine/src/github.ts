@@ -82,6 +82,20 @@ export interface PullRequestDraft {
 /** A file in a commit made straight onto a branch: written, or removed */
 export type CommitFile = PullRequestDraft['files'][number] | { path: string; delete: true };
 
+/**
+ * A launch's preview on the real site (docs/app-review.md): a branch of the launches repo with the
+ * site's files, and a draft pull request from it, which is what the repo's workflow deploys to a
+ * `*.workers.dev` preview. A draft cannot be merged by mistake.
+ */
+export interface PreviewWriter {
+  /** The branch made again from the base with the files as one commit (forced: a preview has nothing to keep), and its draft pull request, opened unless open */
+  pushPreview(draft: Omit<PullRequestDraft, 'files'> & { files: CommitFile[] }): Promise<{ number: number; url: string; sha: string }>;
+  /** The bodies of the comments on a pull request, oldest first */
+  pullRequestComments(repo: string, number: number): Promise<string[]>;
+  /** Closes the preview's pull request and deletes its branch; either already gone is not an error */
+  closePreview(repo: string, number: number, branch: string): Promise<void>;
+}
+
 /** The writes the engine makes on GitHub; a fake stands in for it in tests. */
 export interface GitHubWriter {
   /** Opens the pull request, or returns the open one for the same branch */
@@ -123,7 +137,7 @@ export class GitHubError extends Error {
  * here: polling the events every few minutes costs nothing while nothing happens, because a `304`
  * does not count against the rate limit.
  */
-export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource {
+export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource, PreviewWriter {
   readonly #auth: GitHubAuth;
   readonly #fetch: typeof fetch;
   readonly #base: string;
@@ -372,6 +386,34 @@ export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource
     // Shipcast's own commit is a push it may never hear of: what it kept of those paths goes now
     await this.#files?.forget(repo, files.map((f) => f.path));
     return commit;
+  }
+
+  async pushPreview(draft: Omit<PullRequestDraft, 'files'> & { files: CommitFile[] }): Promise<{ number: number; url: string; sha: string }> {
+    const base = (await this.#ok('GET', `/repos/${draft.repo}/git/ref/heads/${encodeURIComponent(draft.base)}`)) as { object: { sha: string } };
+    const commit = await this.#commit(draft.repo, base.object.sha, draft.message, draft.files);
+    const created = await this.#json('POST', `/repos/${draft.repo}/git/refs`, { ref: `refs/heads/${draft.branch}`, sha: commit.sha });
+    if (created.status === 422) {
+      await this.#ok('PATCH', `/repos/${draft.repo}/git/refs/heads/${encodeURIComponent(draft.branch)}`, { sha: commit.sha, force: true });
+    } else if (created.status >= 300) {
+      throw new GitHubError(`GitHub could not create ${draft.branch}: ${created.status}`, created.status);
+    }
+    const [owner] = draft.repo.split('/');
+    const open = (await this.#ok('GET', `/repos/${draft.repo}/pulls?state=open&head=${owner}:${encodeURIComponent(draft.branch)}`)) as Array<{ number: number; html_url: string }>;
+    if (open[0]) return { number: open[0].number, url: open[0].html_url, sha: commit.sha };
+    const pr = (await this.#ok('POST', `/repos/${draft.repo}/pulls`, { title: draft.title, head: draft.branch, base: draft.base, body: draft.body, draft: true })) as { number: number; html_url: string };
+    return { number: pr.number, url: pr.html_url, sha: commit.sha };
+  }
+
+  async pullRequestComments(repo: string, number: number): Promise<string[]> {
+    const comments = (await this.#ok('GET', `/repos/${repo}/issues/${number}/comments?per_page=100`)) as Array<{ body?: string | null }>;
+    return comments.map((c) => c.body ?? '');
+  }
+
+  async closePreview(repo: string, number: number, branch: string): Promise<void> {
+    const closed = await this.#json('PATCH', `/repos/${repo}/pulls/${number}`, { state: 'closed' });
+    if (closed.status >= 300 && closed.status !== 404) throw new GitHubError(`GitHub could not close #${number}: ${closed.status}`, closed.status);
+    const deleted = await this.#json('DELETE', `/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`);
+    if (deleted.status >= 300 && deleted.status !== 404 && deleted.status !== 422) throw new GitHubError(`GitHub could not delete ${branch}: ${deleted.status}`, deleted.status);
   }
 
   /** Every file under a folder at a ref, by path; none when the folder is not there */

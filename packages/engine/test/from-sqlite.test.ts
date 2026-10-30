@@ -73,6 +73,7 @@ test('every row of a SQLite registry is copied as it was, ids included, and new 
       detail: 'https://github.com/yeyo11/launches/pull/1',
       createdAt: '2026-10-01T10:00:00.000Z',
       updatedAt: '2026-10-02T10:00:00.000Z',
+      model: 'legacy',
     });
     assert.deepEqual((await registry.posts.posts(3)).map((p) => p.channel), ['blog', 'devto']);
     assert.deepEqual((await registry.metrics.metricHistory(3, 'devto', 'views')).map((m) => m.value), [10, 12.5]);

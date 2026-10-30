@@ -329,6 +329,19 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 .draft .ui-collapsible-inner { padding-top: 12px; }
 .draft-path { font-size: 12px; }
 .preview { white-space: pre-wrap; font-size: 14.5px; line-height: 1.55; }
+/* An article as the blog shows it (docs/app-review.md): one readable column, on the app's own roles */
+.article-preview { max-width: 68ch; margin-top: 14px; font: var(--sc-body-lg); overflow-wrap: anywhere; }
+.article-preview-title { margin: 0 0 8px; font: var(--sc-title); letter-spacing: var(--sc-tracking-title); }
+.article-preview-lead { margin: 0 0 16px; color: var(--sc-muted); }
+.article-preview-image { display: block; width: 100%; height: auto; margin: 0 0 20px; border-radius: var(--sc-radius-card); border: 2px solid var(--sc-hairline); }
+.article-preview-body h2, .article-preview-body h3, .article-preview-body h4 { margin: 28px 0 10px; font-family: var(--sc-font-display); line-height: 1.1; }
+.article-preview-body p, .article-preview-body ul, .article-preview-body ol, .article-preview-body blockquote, .article-preview-body pre, .article-preview-body table { margin: 0 0 16px; }
+.article-preview-body img { max-width: 100%; height: auto; border-radius: var(--sc-radius-card); }
+.article-preview-body blockquote { padding-left: 14px; border-left: 3px solid var(--sc-hairline); color: var(--sc-muted); }
+.article-preview-body code { font-family: var(--sc-font-mono); font-size: 0.85em; }
+.article-preview-body pre { padding: 14px 16px; overflow-x: auto; background: var(--sc-raised); border-radius: var(--sc-radius-chip); font-size: 14px; line-height: 1.5; }
+.article-preview-body table { border-collapse: collapse; }
+.article-preview-body th, .article-preview-body td { padding: 6px 10px; border: 1px solid var(--sc-hairline); text-align: left; }
 .thumbs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
 .thumbs img { height: 180px; max-width: none; border-radius: 12px; border: 2px solid var(--sc-hairline); }
 

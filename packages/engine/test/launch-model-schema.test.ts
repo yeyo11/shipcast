@@ -30,7 +30,9 @@ test('the launch model migration only adds: every launch, post and attempt reads
       { repo: claudio?.repo, ref: claudio?.ref, status: claudio?.status, detail: claudio?.detail },
       { repo: 'yeyo11/claudio', ref: 'v0.9.0', status: 'published', detail: 'https://github.com/yeyo11/launches/pull/1' },
     );
-    assert.deepEqual(Object.keys(claudio ?? {}).sort(), ['brand', 'createdAt', 'detail', 'id', 'kind', 'ref', 'repo', 'status', 'trigger', 'updatedAt'], 'the Launch the app reads has no new fields');
+    // Only `model`, which the fifth phase reads (docs/app-review.md): legacy for every launch from before
+    assert.deepEqual(Object.keys(claudio ?? {}).sort(), ['brand', 'createdAt', 'detail', 'id', 'kind', 'model', 'ref', 'repo', 'status', 'trigger', 'updatedAt'], 'the Launch the app reads has only the model added');
+    assert.equal(claudio?.model, 'legacy');
     const { rows } = await client.query<Record<string, unknown>>('SELECT id, title, model, dedupe_key, channels_source, deleted_at, approved_at FROM launches ORDER BY id');
     assert.deepEqual(rows, [1, 6, 7].map((id) => ({ id, title: null, model: 'legacy', dedupe_key: null, channels_source: null, deleted_at: null, approved_at: null })));
     assert.deepEqual((await client.query('SELECT draft_version_id FROM posts')).rows, [{ draft_version_id: null }]);

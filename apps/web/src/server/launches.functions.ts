@@ -1,5 +1,5 @@
 import { imageUrl } from '@shipcast/schema';
-import { preflight } from '@shipcast/engine';
+import { isAppLaunch, preflight, type Launch } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
@@ -93,11 +93,53 @@ export const saveDraft = createServerFn({ method: 'POST' })
     const launches = launchService(await appContext());
     const launch = await launches.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
-    // A draft edit is a commit on the real pull request
-    if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
+    // A draft edit is a commit on the real pull request; a launch Shipcast holds keeps it in its own rows
+    if (fakeNetworks() && !isAppLaunch(launch)) return { ok: false as const, problem: PREVIEW_REFUSAL };
     try {
       await launches.editDraft(launch.id, data.path, data.content);
       return { ok: true as const };
+    } catch (error) {
+      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+/** A launch Shipcast holds, for its preview on the real site; a refusal when it is not one or the flag is off */
+async function heldLaunch(launchId: number): Promise<{ ok: true; launch: Launch; service: NonNullable<Awaited<ReturnType<typeof appContext>>['appReview']> } | { ok: false; problem: string }> {
+  const ctx = await appContext();
+  if (!ctx.appReview) return { ok: false, problem: 'launches are reviewed in Shipcast only with the app-review flag on' };
+  const launch = await launchService(ctx).get(launchId);
+  if (!launch) return { ok: false, problem: 'no such launch' };
+  if (!isAppLaunch(launch)) return { ok: false, problem: 'this launch is reviewed in its pull request, which has its own preview' };
+  return { ok: true, launch, service: ctx.appReview };
+}
+
+/**
+ * "Preview on the real site" (docs/app-review.md): the article and its media pushed to a preview
+ * branch of the launches repo, whose draft pull request the site's workflow deploys in a few minutes
+ */
+export const previewOnSite = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => id(input))
+  .handler(async ({ data }) => {
+    // It writes a branch and a pull request on the real launches repo
+    if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
+    const held = await heldLaunch(data);
+    if (!held.ok) return held;
+    try {
+      return { ok: true as const, preview: await held.service.requestPreview(held.launch) };
+    } catch (error) {
+      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+/** Looks for the preview's address, which the site's workflow writes on its pull request once deployed */
+export const findSitePreview = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => id(input))
+  .handler(async ({ data }) => {
+    const held = await heldLaunch(data);
+    if (!held.ok) return held;
+    try {
+      const preview = await held.service.findPreview(held.launch);
+      return preview ? { ok: true as const, preview } : { ok: false as const, problem: 'no preview was asked for' };
     } catch (error) {
       return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
     }

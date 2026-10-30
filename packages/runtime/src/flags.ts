@@ -43,6 +43,13 @@ export const FLAGS = {
    * which keeps them up to date, and `launch-media` for its files
    */
   'launch-store-read': 'Launches read from the launch model instead of GitHub',
+  /**
+   * Launch model, phase 5: a new launch has no pull request. Its drafts are reviewed, edited (as
+   * versions), previewed and approved in the app, `auto` channels go out without approval, and the
+   * article and its media reach the launches repo as one commit when it is published
+   * (docs/app-review.md). Needs `launch-store-read` (with `launch-store`) and `launch-media`
+   */
+  'app-review': 'Launches reviewed and approved in the app, with no pull request',
 } as const;
 
 /**

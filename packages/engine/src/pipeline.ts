@@ -9,6 +9,7 @@ import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
 import type { LaunchReadService } from './services/launch-read.ts';
+import type { AppReviewService } from './services/app-review.ts';
 import type { LaunchStoreService } from './services/launch-store.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -41,6 +42,11 @@ export interface PipelineDeps {
   launchStore?: Pick<LaunchStoreService, 'drafted' | 'merged'>;
   /** With `launch-store-read`: the pack replies and the writing assistant are grounded in, from the launch model's tables */
   launchRead?: Pick<LaunchReadService, 'pack'>;
+  /**
+   * With `app-review`: a new launch's drafts are held by Shipcast, reviewed and approved in the app
+   * (docs/app-review.md), with no pull request and no commit until it is published
+   */
+  appReview?: AppReviewService;
 }
 
 /** The prompts and tone a task on the runner is written with: the settings', or the ones in code */
@@ -59,7 +65,8 @@ export interface DraftOptions {
 
 /**
  * Hands the drafts over: a pull request to review, or, when publishing directly, one commit on main.
- * The launch records where they went (`direct:<sha>` or the pull request's URL). `source` is what the
+ * The launch records where they went (`direct:<sha>` or the pull request's URL). With `app-review`
+ * Shipcast keeps them instead, and publishing directly approves them at once (docs/app-review.md). `source` is what the
  * drafts were made from, for the launch model's shadow write when it is on.
  */
 export async function deliverDrafts(
@@ -73,6 +80,14 @@ export async function deliverDrafts(
   const shadow = async (delivered: Launch, files: readonly DraftFile[], direct?: { sha: string }) => {
     if (source) await deps.launchStore?.drafted(delivered, { ...source, files, ...(direct && { direct }) }).catch(() => undefined);
   };
+  if (deps.appReview && source) {
+    try {
+      const held = await deps.appReview.hold(launch, { ...source, files: pull.files }, { direct: options.direct ?? false });
+      return { ok: true, launch: held, where: `Shipcast, launch #${launch.id}` };
+    } catch (error) {
+      return { ok: false, problem: `could not keep the drafts in Shipcast: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
   try {
     if (options.direct) {
       if (!deps.github.commitToBranch) return { ok: false, problem: 'this GitHub client cannot commit directly' };

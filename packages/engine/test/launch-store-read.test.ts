@@ -289,7 +289,7 @@ test('a launch the shadow write stores: open until the merge is recorded, an edi
   assert.equal((await read.review(drafted, never))?.drafts[0]?.content, draft('Bluesky', 'hello, edited in Shipcast'));
 
   await registry.launchStore.approveOnce(drafted.id, { by: 'yeyo11', versions: {} });
-  assert.equal((await read.review(drafted, never))?.pullRequest.state, 'merged');
+  assert.equal((await read.review(drafted, never))?.pullRequest?.state, 'merged');
 });
 
 test('a launch closed without merging reads as closed; one with no pull request has no review, as on GitHub', async () => {
@@ -297,7 +297,7 @@ test('a launch closed without merging reads as closed; one with no pull request 
   const closed = await registry.launches.setStatus(release.id, 'skipped', `https://github.com/${LAUNCHES}/pull/1: closed without merging`);
   // The import recorded the merge; a launch closed unmerged has none
   await registry.database.execute(sql`DELETE FROM approvals WHERE launch_id = ${release.id}`);
-  assert.equal((await read.review(closed, never))?.pullRequest.state, 'closed');
+  assert.equal((await read.review(closed, never))?.pullRequest?.state, 'closed');
   const direct = { ...closed, status: 'drafted', detail: 'direct:abc https://github.com/x' } as Launch;
   assert.equal(await read.review(direct, never), undefined);
 });

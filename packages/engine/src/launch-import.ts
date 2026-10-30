@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { isMap, isScalar, parseDocument } from 'yaml';
 import { CHANNELS, ContentPack, parseLaunchConfig, PublishMode, type LaunchConfig } from '@shipcast/schema';
 import { isArticle } from './drafts.ts';
-import { MAIN_PIECE } from './launch-store.ts';
+import { channelsAsLaunchYml, MAIN_PIECE } from './launch-store.ts';
 import type { ChannelRow, Launch } from './repositories/index.ts';
 
 /*
@@ -68,6 +68,16 @@ export function readLaunchYml(text: string): { config: LaunchConfig; dropped: st
   }
   const again = dropped.length > 0 ? parseLaunchConfig(String(doc)) : parsed;
   return again.ok ? { config: again.value, dropped } : undefined;
+}
+
+/**
+ * The channels a launch the launch model holds publishes on, as launch.yml says them: the one copied
+ * when it was drafted, each channel's mode from its row (the import turned off the channels that
+ * never published). Undefined when no channels were stored, or they do not parse.
+ */
+export function storedChannelConfig(channels: { rows: readonly ChannelRow[]; source: string | null }): LaunchConfig | undefined {
+  if (channels.source === null) return undefined;
+  return readLaunchYml(channels.rows.length > 0 ? channelsAsLaunchYml(channels.source, channels.rows) : channels.source)?.config;
 }
 
 /**

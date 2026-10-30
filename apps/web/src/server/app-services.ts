@@ -6,6 +6,7 @@ import {
   SettingsService,
   PostService,
   ScheduleService,
+  type AppReviewService,
   type CommentDeps,
   type DraftSnapshotService,
   type EditDeps,
@@ -74,4 +75,14 @@ export const launchService = (deps: {
   github: GitHubRest;
   drafts?: Pick<DraftSnapshotService, 'edited'> | undefined;
   launchStore?: Pick<LaunchStoreService, 'edited'> | undefined;
-}) => new LaunchService({ launches: deps.registry.launches, claims: deps.deps, github: deps.github, ...(deps.drafts && { drafts: deps.drafts }), ...(deps.launchStore && { launchStore: deps.launchStore }) });
+  /** With `app-review`: a launch Shipcast holds is edited and approved in the app */
+  appReview?: Pick<AppReviewService, 'edit' | 'approve'> | undefined;
+}) =>
+  new LaunchService({
+    launches: deps.registry.launches,
+    claims: deps.deps,
+    github: deps.github,
+    ...(deps.drafts && { drafts: deps.drafts }),
+    ...(deps.launchStore && { launchStore: deps.launchStore }),
+    ...(deps.appReview && { appReview: deps.appReview }),
+  });
