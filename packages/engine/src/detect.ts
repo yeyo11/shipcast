@@ -1,8 +1,8 @@
 import { formatIssues, matchingRule, parseLaunchConfig, resolvePack, type Brand, type PackKind } from '@shipcast/schema';
 import type { GitHubEvent, GitHubSource } from './github.ts';
-import { dedupeKeyOf } from './launch-import.ts';
+import { dedupeKeyOf, ruleLaunchYml } from './launch-keys.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
-import { ruleLaunchYml, type TriggerService } from './services/triggers.ts';
+import type { TriggerService } from './services/triggers.ts';
 
 export const LAUNCH_CONFIG_PATH = '.github/launch.yml';
 
@@ -20,9 +20,9 @@ export interface DetectOptions {
   brand: Brand;
   /**
    * With `launch-triggers`: the owner's trigger rules decide which events create a launch, a repo
-   * with no launch.yml is launched on a rule's channels, and each claim carries its dedupe key
+   * with no launch.yml is launched on a rule's channels. Each claim carries its dedupe key either way
    */
-  triggers?: Pick<TriggerService, 'rules' | 'keepChannels'> | undefined;
+  triggers?: Pick<TriggerService, 'rules' | 'claimKeeping'> | undefined;
   /** With `launch-delete`: whether the owner removed the launch a dedupe key names; its events launch nothing again */
   removed?: ((dedupeKey: string) => Promise<boolean>) | undefined;
 }
@@ -74,7 +74,8 @@ export async function claimEvent(event: GitHubEvent, options: DetectOptions): Pr
   // The same release (or the same repo made public, by webhook and by poll) is one key, so it is claimed once
   const dedupeKey = dedupeKeyOf({ repo: event.repo, ref: key });
   if (options.removed && (await options.removed(dedupeKey))) return { event, result: 'ignored', reason: 'its launch was deleted' };
-  const claim = (kind: PackKind) => registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id, ...(rule && { dedupeKey }) });
+  const newLaunch = (kind: PackKind) => ({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id, dedupeKey });
+  const claim = (kind: PackKind) => registry.launches.claim(newLaunch(kind));
 
   const text = await github.fileAt(event.repo, LAUNCH_CONFIG_PATH, ref);
   // A rule that names channels launches a repo with no launch.yml on them; the launch keeps them as its own
@@ -109,15 +110,18 @@ export async function claimEvent(event: GitHubEvent, options: DetectOptions): Pr
 
   const kind =
     event.type === 'public' ? (value.pack ?? 'launch') : resolvePack(value, event.tag, await registry.launches.lastPublishedRef(event.repo));
-  const claimed = await claim(kind);
-  if (claimed.claimed && kept && options.triggers && rule) {
+  let claimed: { claimed: boolean; launch: Launch };
+  if (kept && options.triggers && rule) {
     try {
-      await options.triggers.keepChannels(claimed.launch.id, kept);
+      claimed = await options.triggers.claimKeeping(newLaunch(kind), kept);
     } catch (error) {
-      const launch = await registry.launches.setStatus(claimed.launch.id, 'failed', `the channels of the rule "${rule.id}" could not be kept: ${error instanceof Error ? error.message : String(error)}`);
+      // Rolled back whole: recorded as failed on its own, so the owner hears of it and it is not retried on every poll
+      const failed = await claim(kind);
+      if (!failed.claimed) return { event, result: 'already-claimed', launch: failed.launch };
+      const launch = await registry.launches.setStatus(failed.launch.id, 'failed', `the channels of the rule "${rule.id}" could not be kept: ${error instanceof Error ? error.message : String(error)}`);
       return { event, result: 'invalid-config', launch };
     }
-  }
+  } else claimed = await claim(kind);
   return claimed.claimed
     ? { event, result: 'claimed', launch: claimed.launch }
     : { event, result: 'already-claimed', launch: claimed.launch };

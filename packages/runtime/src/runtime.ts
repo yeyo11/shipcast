@@ -8,6 +8,7 @@ import {
   pageFetcher,
   GitHubApp,
   GitHubRest,
+  inTransaction,
   loadBrand,
   connectRepositories,
   DraftSnapshotService,
@@ -187,9 +188,11 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         })
       : undefined;
 
-  const triggers = flags.on('launch-triggers') ? new TriggerService({ registry }) : undefined;
-  // A release whose launch the owner removed is never launched again by its events (docs/launch-delete.md)
-  const removed = flags.on('launch-delete') ? (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey) : undefined;
+  const triggers = flags.on('launch-triggers') ? new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) }) : undefined;
+  // A release whose launch the owner removed is never launched again by its events (docs/launch-delete.md),
+  // whatever the flags: a process started without launch-delete (a rollback, another replica) must not
+  // relaunch what one with it removed. One indexed lookup (launch_deletions_by_key) per claim
+  const removed = (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey);
 
   const drafts = caches
     ? new DraftSnapshotService({
@@ -244,7 +247,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       },
     }),
     ...(triggers && { triggers }),
-    ...(removed && { removed }),
+    removed,
   };
 
   return {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, DEFAULT_TRIGGER_RULES, parseLaunchConfig, ShipcastError, type TriggerRule } from '@shipcast/schema';
-import { claimEvent, draftLaunch, TriggerService, type GitHubEvent } from '../src/index.ts';
+import { claimEvent, draftLaunch, inTransaction, TriggerService, type GitHubEvent } from '../src/index.ts';
 import { FakeGitHub, memoryRegistry, mockRunner, scriptedModel, submitParts } from '../src/testing/index.ts';
 
 /*
@@ -28,19 +28,33 @@ const madePublic = (id: string, repo: string): GitHubEvent => ({ id, type: 'publ
 async function setup(files: Record<string, string> = {}, rules?: TriggerRule[]) {
   const registry = await memoryRegistry();
   const github = new FakeGitHub({ files });
-  const triggers = new TriggerService({ registry });
+  const triggers = new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) });
   if (rules) await triggers.save(rules);
   return { registry, github, triggers, options: { github, registry, brand, triggers } };
 }
 
 const rule = (over: Partial<TriggerRule> & Pick<TriggerRule, 'id' | 'event'>): TriggerRule => ({ enabled: true, repos: '*', prereleases: false, channels: null, ...over });
 
-test('today, without the rules: a repo made public is claimed once by its webhook and again by the poll', async () => {
+test('without the rules too, a repo made public by webhook and by poll is one launch: every claim carries its dedupe key', async () => {
   const { registry, github } = await setup({ 'yeyo11/tool/.github/launch.yml@HEAD': `${VALID}triggers:\n  public: true\n` });
   const byWebhook = await claimEvent(madePublic('webhook-public-yeyo11/tool', 'yeyo11/tool'), { github, registry, brand });
   const byPoll = await claimEvent(madePublic('4567', 'yeyo11/tool'), { github, registry, brand });
   assert.equal(byWebhook.result, 'claimed');
-  assert.equal(byPoll.result, 'claimed', 'two events of one going public are two launches before the dedupe key');
+  // Before, with the flag off, the claim carried no key and these were two launches of one event
+  assert.equal(byPoll.result, 'already-claimed');
+  assert.ok('launch' in byWebhook && (await registry.launches.dedupeKey(byWebhook.launch.id)) === 'github-public:yeyo11/tool');
+});
+
+test('a claim by hand, an article or a release without the rules is keyed too, so a later trigger finds it', async () => {
+  const registry = await memoryRegistry();
+  const manual = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  const article = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:why', trigger: 'article', kind: 'launch', brand: 'personal' });
+  assert.equal(await registry.launches.dedupeKey(manual.launch.id), 'github-release:yeyo11/claudio@v1.0.0');
+  assert.equal(await registry.launches.dedupeKey(article.launch.id), 'article:why');
+  const { options } = await setup({ 'yeyo11/claudio/.github/launch.yml@v1.0.0': VALID });
+  const byRule = await claimEvent(release('1', 'yeyo11/claudio', 'v1.0.0'), { ...options, registry });
+  assert.ok('launch' in byRule);
+  assert.deepEqual({ result: byRule.result, id: byRule.launch.id }, { result: 'already-claimed', id: manual.launch.id });
 });
 
 test('the default rules decide as launch.yml alone did', async () => {
@@ -148,6 +162,28 @@ test('a repo with no launch.yml is launched on the rule’s channels, which its 
   const files = github.opened[0]!.files.map((f) => f.path);
   assert.ok(files.some((p) => p.endsWith('/bluesky.md')), 'the rule’s channel is drafted');
   assert.ok(!files.some((p) => p.endsWith('/mastodon.md')), 'a channel the rule leaves out is not');
+});
+
+test('a launch a rule creates is claimed with its channels in one transaction: never a launch without them, and a failure is still recorded', async () => {
+  const registry = await memoryRegistry();
+  const github = new FakeGitHub({});
+  await new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) }).save([rule({ id: 'everything', event: 'release', channels: ['blog'] })]);
+  // The transaction is lost after both writes, before its commit (a dropped connection): neither may stay
+  const lost = new TriggerService({
+    registry,
+    inTransaction: (work) =>
+      inTransaction(registry, async (tx) => {
+        await work(tx);
+        throw new Error('the connection dropped');
+      }),
+  });
+  const outcome = await claimEvent(release('1', 'yeyo11/plain', 'v1.0.0'), { github, registry, brand, triggers: lost });
+  assert.equal(outcome.result, 'invalid-config');
+  assert.ok('launch' in outcome);
+  assert.equal(outcome.launch.status, 'failed', 'the owner hears of it, and no worker drafts a launch with no channels');
+  assert.match(outcome.launch.detail ?? '', /the channels of the rule "everything" could not be kept: the connection dropped/);
+  assert.equal((await registry.launches.recent()).length, 1);
+  assert.equal((await registry.launchStore.channels(outcome.launch.id)).source, null);
 });
 
 test('without the rules, a repo with no launch.yml still fails its draft as before', async () => {

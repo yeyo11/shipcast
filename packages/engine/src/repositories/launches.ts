@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, ilike, isNull, or, sql, type SQL } from 'dri
 import { PackKind } from '@shipcast/schema';
 import type { Database } from '../db/connect.ts';
 import { launches, nowIso } from '../db/schema.ts';
+import { dedupeKeyOf } from '../launch-keys.ts';
 import { likePattern } from './sql.ts';
 
 /** What started a launch; the launch.yml `triggers` decide which of these are honoured. An `article` is written in the app, not released. */
@@ -98,7 +99,8 @@ export interface NewLaunch {
   channelsSource?: string;
   /**
    * What "a launch happens once" is also checked on (`launches.dedupe_key`, docs/launch-triggers.md):
-   * a claim whose key is taken finds that launch, whatever its repo and ref
+   * a claim whose key is taken finds that launch, whatever its repo and ref. The one its repo and ref
+   * imply when left out (dedupeKeyOf)
    */
   dedupeKey?: string;
 }
@@ -155,15 +157,14 @@ export class LaunchRepository {
    */
   async claim(launch: NewLaunch): Promise<{ claimed: boolean; launch: Launch }> {
     const values = { repo: launch.repo, ref: launch.ref, trigger: launch.trigger, kind: launch.kind, brand: launch.brand, status: 'detected', ...(launch.title !== undefined && { title: launch.title }), ...(launch.channelsSource !== undefined && { channelsSource: launch.channelsSource }) };
-    if (launch.dedupeKey !== undefined) {
-      // Either unique key taken is the same launch: a release by its repo and tag, or by its key
-      const [keyed] = await this.#db.insert(launches).values({ ...values, dedupeKey: launch.dedupeKey }).onConflictDoNothing().returning();
-      if (keyed) return { claimed: true, launch: toLaunch(keyed) };
-      return { claimed: false, launch: ((await this.find(launch.repo, launch.ref)) ?? (await this.findByDedupeKey(launch.dedupeKey)))! };
-    }
-    const [inserted] = await this.#db.insert(launches).values(values).onConflictDoNothing({ target: [launches.repo, launches.ref] }).returning();
-    if (inserted) return { claimed: true, launch: toLaunch(inserted) };
-    return { claimed: false, launch: (await this.find(launch.repo, launch.ref))! };
+    // Every claim is keyed, whoever makes it (a trigger, the poll without rules, a launch by hand, an
+    // article): a claim left without its key was invisible to the next one keyed the same way, so the
+    // same repo going public by webhook and by poll, or a release by hand and then by a rule, launched twice
+    const dedupeKey = launch.dedupeKey ?? dedupeKeyOf(launch);
+    // Either unique key taken is the same launch: a release by its repo and tag, or by its key
+    const [keyed] = await this.#db.insert(launches).values({ ...values, dedupeKey }).onConflictDoNothing().returning();
+    if (keyed) return { claimed: true, launch: toLaunch(keyed) };
+    return { claimed: false, launch: ((await this.find(launch.repo, launch.ref)) ?? (await this.findByDedupeKey(dedupeKey)))! };
   }
 
   /** A launch's title and the launch.yml it publishes by, as the launch model keeps them; undefined for no such launch */

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isMap, isScalar, parseDocument } from 'yaml';
 import { CHANNELS, ContentPack, parseLaunchConfig, PublishMode, type LaunchConfig } from '@shipcast/schema';
-import { isArticle } from './drafts.ts';
 import { channelsAsLaunchYml, MAIN_PIECE } from './launch-store.ts';
 import type { ChannelRow, Launch } from './repositories/index.ts';
 
@@ -20,15 +19,8 @@ export function gitBlobSha(content: Uint8Array | string): string {
   return createHash('sha1').update(`blob ${bytes.byteLength}\0`).update(bytes).digest('hex');
 }
 
-/**
- * What "a launch happens once" is checked on once there is no repo and tag to claim
- * (`launches.dedupe_key`): the release a launch announced, the repo that went public, the article.
- */
-export function dedupeKeyOf(launch: Pick<Launch, 'repo' | 'ref'>): string {
-  if (isArticle(launch)) return `article:${launch.ref.slice('article:'.length)}`;
-  if (launch.ref.startsWith('public:')) return `github-public:${launch.repo}`;
-  return `github-release:${launch.repo}@${launch.ref}`;
-}
+/** Moved to launch-keys.ts, which core detection imports without the import's dependencies; re-exported for its callers */
+export { dedupeKeyOf } from './launch-keys.ts';
 
 /**
  * The launch's channel rows as imported: a channel that was on but never published anything (a

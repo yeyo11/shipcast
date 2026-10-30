@@ -1,23 +1,17 @@
-import { CHANNELS, DEFAULT_TRIGGER_RULES, InvalidRequest, parseLaunchConfig, TriggerRule, TriggerRules, type Brand, type Channel } from '@shipcast/schema';
-import { stringify } from 'yaml';
+import { DEFAULT_TRIGGER_RULES, InvalidRequest, parseLaunchConfig, TriggerRule, TriggerRules } from '@shipcast/schema';
 import { channelRows } from '../launch-store.ts';
 import type { Launch, Repositories } from '../repositories/index.ts';
 
 /** The setting the owner's trigger rules are kept under */
 export const TRIGGERS_SETTING = 'triggers';
 
-/**
- * The launch.yml a rule stands in for when the repo has none: every channel the rule names waits
- * for approval, every other is off. Kept as the launch's channels (`channels_source`), so the draft,
- * the review and publishing read it as they read a repo's own.
- */
-export function ruleLaunchYml(brand: Pick<Brand, 'id'>, channels: readonly Channel[]): string {
-  const publishing = Object.fromEntries(CHANNELS.map((c) => [c, channels.includes(c) ? 'approval' : 'off']));
-  return stringify({ enabled: true, brand: brand.id, publishing });
-}
+/** Moved to launch-keys.ts, so detect.ts does not import a service; re-exported for its callers */
+export { ruleLaunchYml } from '../launch-keys.ts';
 
 export interface TriggerServiceDeps {
   registry: Pick<Repositories, 'settings' | 'launchStore'>;
+  /** Runs `work` in one transaction with every repository over it (`inTransaction`, from the composition root) */
+  inTransaction<T>(work: (tx: Repositories) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -54,11 +48,19 @@ export class TriggerService {
     return parsed.data;
   }
 
-  /** A launch claimed for a repo without launch.yml keeps its rule's channels, which its draft reads */
-  async keepChannels(launchId: number, launchYml: string): Promise<void> {
+  /**
+   * Claims a launch for a repo without launch.yml together with its rule's channels, which its draft
+   * reads: one transaction, so a worker never picks up a claimed launch whose channels were not kept
+   * yet, or never will be after a crash between the two writes
+   */
+  async claimKeeping(launch: Parameters<Repositories['launches']['claim']>[0], launchYml: string): Promise<{ claimed: boolean; launch: Launch }> {
     const config = parseLaunchConfig(launchYml);
     if (!config.ok) throw new Error('the rule’s channels do not parse as a launch.yml');
-    await this.#deps.registry.launchStore.replaceChannels(launchId, channelRows(config.value), launchYml);
+    return this.#deps.inTransaction(async (tx) => {
+      const claimed = await tx.launches.claim(launch);
+      if (claimed.claimed) await tx.launchStore.replaceChannels(claimed.launch.id, channelRows(config.value), launchYml);
+      return claimed;
+    });
   }
 
   /** The channels kept for a launch, as launch.yml text, when its repo has none at the ref */

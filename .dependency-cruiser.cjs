@@ -105,6 +105,15 @@ module.exports = {
       to: { path: '(^|/)@ai-sdk/', pathNot: '(^|/)@ai-sdk/provider(-utils)?/' },
     },
     {
+      name: 'detection-not-services',
+      comment:
+        'claiming an event (detect.ts) is core: the webhook and the poll both go through it, so it imports no service and ' +
+        'not the import of old launches; the keys and the rule\'s launch.yml it needs live in launch-keys.ts. Types only are fine',
+      severity: 'error',
+      from: { path: '^packages/engine/src/detect[.]ts$' },
+      to: { path: '^packages/engine/src/(services/|launch-import[.]ts$)', dependencyTypesNot: ['type-only'] },
+    },
+    {
       name: 'no-cycles-between-packages',
       comment: 'workspace packages form a DAG: a cycle through two packages is a layering error',
       severity: 'error',
