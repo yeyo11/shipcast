@@ -35,12 +35,26 @@ async function setup(files: Record<string, string> = {}, rules?: TriggerRule[]) 
 
 const rule = (over: Partial<TriggerRule> & Pick<TriggerRule, 'id' | 'event'>): TriggerRule => ({ enabled: true, repos: '*', prereleases: false, channels: null, ...over });
 
-test('today, without the rules: a repo made public is claimed once by its webhook and again by the poll', async () => {
+test('without the rules too, a repo made public by webhook and by poll is one launch: every claim carries its dedupe key', async () => {
   const { registry, github } = await setup({ 'yeyo11/tool/.github/launch.yml@HEAD': `${VALID}triggers:\n  public: true\n` });
   const byWebhook = await claimEvent(madePublic('webhook-public-yeyo11/tool', 'yeyo11/tool'), { github, registry, brand });
   const byPoll = await claimEvent(madePublic('4567', 'yeyo11/tool'), { github, registry, brand });
   assert.equal(byWebhook.result, 'claimed');
-  assert.equal(byPoll.result, 'claimed', 'two events of one going public are two launches before the dedupe key');
+  // Before, with the flag off, the claim carried no key and these were two launches of one event
+  assert.equal(byPoll.result, 'already-claimed');
+  assert.ok('launch' in byWebhook && (await registry.launches.dedupeKey(byWebhook.launch.id)) === 'github-public:yeyo11/tool');
+});
+
+test('a claim by hand, an article or a release without the rules is keyed too, so a later trigger finds it', async () => {
+  const registry = await memoryRegistry();
+  const manual = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  const article = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:why', trigger: 'article', kind: 'launch', brand: 'personal' });
+  assert.equal(await registry.launches.dedupeKey(manual.launch.id), 'github-release:yeyo11/claudio@v1.0.0');
+  assert.equal(await registry.launches.dedupeKey(article.launch.id), 'article:why');
+  const { options } = await setup({ 'yeyo11/claudio/.github/launch.yml@v1.0.0': VALID });
+  const byRule = await claimEvent(release('1', 'yeyo11/claudio', 'v1.0.0'), { ...options, registry });
+  assert.ok('launch' in byRule);
+  assert.deepEqual({ result: byRule.result, id: byRule.launch.id }, { result: 'already-claimed', id: manual.launch.id });
 });
 
 test('the default rules decide as launch.yml alone did', async () => {

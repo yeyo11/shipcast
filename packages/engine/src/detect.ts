@@ -20,7 +20,7 @@ export interface DetectOptions {
   brand: Brand;
   /**
    * With `launch-triggers`: the owner's trigger rules decide which events create a launch, a repo
-   * with no launch.yml is launched on a rule's channels, and each claim carries its dedupe key
+   * with no launch.yml is launched on a rule's channels. Each claim carries its dedupe key either way
    */
   triggers?: Pick<TriggerService, 'rules' | 'keepChannels'> | undefined;
   /** With `launch-delete`: whether the owner removed the launch a dedupe key names; its events launch nothing again */
@@ -74,7 +74,7 @@ export async function claimEvent(event: GitHubEvent, options: DetectOptions): Pr
   // The same release (or the same repo made public, by webhook and by poll) is one key, so it is claimed once
   const dedupeKey = dedupeKeyOf({ repo: event.repo, ref: key });
   if (options.removed && (await options.removed(dedupeKey))) return { event, result: 'ignored', reason: 'its launch was deleted' };
-  const claim = (kind: PackKind) => registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id, ...(rule && { dedupeKey }) });
+  const claim = (kind: PackKind) => registry.launches.claim({ repo: event.repo, ref: key, trigger: triggerOf(event), kind, brand: brand.id, dedupeKey });
 
   const text = await github.fileAt(event.repo, LAUNCH_CONFIG_PATH, ref);
   // A rule that names channels launches a repo with no launch.yml on them; the launch keeps them as its own
