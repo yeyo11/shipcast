@@ -195,6 +195,18 @@ export class LaunchRepository {
     return toLaunch(row);
   }
 
+  /**
+   * The launch's row, locked until the transaction this repository runs in ends (SELECT … FOR
+   * UPDATE): a deletion takes it before it re-reads the launch's pieces and attempts, so a publishing
+   * worker's claim (an insert into publish_attempts, which takes FOR KEY SHARE on this row) waits for
+   * the deletion or is seen by it, never slips between the check and the delete. Outside a
+   * transaction the lock ends with the statement and buys nothing.
+   */
+  async lock(id: number): Promise<Launch | undefined> {
+    const [row] = await this.#db.select().from(launches).where(eq(launches.id, id)).for('update');
+    return row ? toLaunch(row) : undefined;
+  }
+
   async find(repo: string, ref: string): Promise<Launch | undefined> {
     const [row] = await this.#db
       .select()

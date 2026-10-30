@@ -1,5 +1,5 @@
 import { CAPABILITIES, pullRequestNumber, Refused, type Channel, type DeleteSupport } from '@shipcast/schema';
-import { isAppLaunch } from '../app-review.ts';
+import { appBlogKey, isAppLaunch } from '../app-review.ts';
 import { draftsBranch } from '../drafts.ts';
 import type { PostOutcome } from '../edit.ts';
 import type { GitHubSource, PreviewWriter } from '../github.ts';
@@ -46,7 +46,7 @@ export interface DeletionResult {
 }
 
 export interface LaunchDeletionDeps {
-  registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'launchDeletions' | 'launchStore'>;
+  registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'launchDeletions' | 'launchStore' | 'cursors'>;
   /** Runs `work` in one transaction with every repository over it (`inTransaction`, from the composition root) */
   inTransaction<T>(work: (tx: Repositories) => Promise<T>): Promise<T>;
   /** Deleting a piece on its network: PostService's, the one way a published piece is deleted */
@@ -55,8 +55,8 @@ export interface LaunchDeletionDeps {
   github: Pick<GitHubSource, 'pullRequestState'> & Pick<PreviewWriter, 'closePreview'>;
   /** Read at each call: the launches repo is a setting the owner can change */
   readonly launchesRepo: string;
-  /** With `app-review`: a launch Shipcast holds whose article reached the site, and its preview to close */
-  appReview?: Pick<AppReviewService, 'published' | 'closePreview'> | undefined;
+  /** With `app-review`: a launch Shipcast holds, whose preview on the site is closed when it is removed */
+  appReview?: Pick<AppReviewService, 'closePreview'> | undefined;
   /** Where a removed launch's media bytes are, deleted once no launch names them */
   media?: Pick<MediaStore, 'delete'> | undefined;
 }
@@ -115,6 +115,13 @@ export class LaunchDeletionService {
       const problems = await this.#closeOpenDrafts(launch);
       const files = (await this.#deps.registry.launchStore.media(launch.id)).map((m) => m.sha256);
       const deletion = await this.#deps.inTransaction(async (tx) => {
+        // The plan was read outside this transaction: a worker may have sent or claimed a piece since.
+        // With the launch's row locked, a claim in flight is either committed and seen here or waits
+        // for this transaction and then finds no launch, so nothing goes out of a removed launch
+        const locked = await tx.launches.lock(launch.id);
+        if (!locked) throw new DeletionRefused('not_found', 'no such launch');
+        if (locked.deletedAt) throw new DeletionRefused('state', `This launch cannot be deleted: it was deleted already, on ${locked.deletedAt.slice(0, 10)}.`);
+        if (await this.#sentOrSending(tx, launch.id)) throw new DeletionRefused('state', 'This launch cannot be removed: a piece of it was published meanwhile, or is being published. Delete it again to hide it.');
         // Its scheduled pieces, attempts and snapshot go with it; jobs and assistant sessions stay, unlinked
         await tx.launchImports.removeLaunch(launch.id);
         return tx.launchDeletions.record({ ...base, mode: 'removed', channels: [], articleLinks: null });
@@ -126,13 +133,21 @@ export class LaunchDeletionService {
     const unknown = channels.filter((c) => !plan.channels.some((p) => p.channel === c));
     if (unknown.length > 0) throw new DeletionRefused('invalid', `nothing of this launch is out on ${unknown.join(', ')}`);
     const outcomes = channels.length > 0 ? await this.#deps.posts.deleteMany(launch.id, channels) : [];
-    // Nothing more goes out: what waited for its time is dropped with the launch
-    const pieces = await this.#deps.registry.posts.posts(launch.id);
-    for (const p of pieces.filter((x) => x.status === 'scheduled')) await this.#deps.registry.posts.unschedulePost(p.id);
+    // Nothing more goes out: what waited for its time is dropped, the launch hidden and the deletion
+    // recorded together, under the launch's row lock, so a failure leaves none of it half done and a
+    // second deletion of the same launch meanwhile is refused instead of recorded twice
     const articleGone = channels.includes('blog');
-    const linking = pieces.filter((p) => isOut(p) && p.channel !== 'blog').length;
-    await this.#deps.registry.launches.hide(launch.id);
-    const deletion = await this.#deps.registry.launchDeletions.record({ ...base, mode: 'hidden', channels, articleLinks: articleGone ? linking : null });
+    const { deletion, linking } = await this.#deps.inTransaction(async (tx) => {
+      const locked = await tx.launches.lock(launch.id);
+      if (!locked) throw new DeletionRefused('not_found', 'no such launch');
+      if (locked.deletedAt) throw new DeletionRefused('state', `This launch cannot be deleted: it was deleted already, on ${locked.deletedAt.slice(0, 10)}.`);
+      const pieces = await tx.posts.posts(launch.id);
+      for (const p of pieces.filter((x) => x.status === 'scheduled')) await tx.posts.unschedulePost(p.id);
+      const linking = pieces.filter((p) => isOut(p) && p.channel !== 'blog').length;
+      await tx.launches.hide(launch.id);
+      const deletion = await tx.launchDeletions.record({ ...base, mode: 'hidden', channels, articleLinks: articleGone ? linking : null });
+      return { deletion, linking };
+    });
     const warning =
       articleGone && linking > 0 ? `${postCount(linking)} still ${linking === 1 ? 'links' : 'link'} to the article, which is gone: ${linking === 1 ? 'its link is' : 'their links are'} broken now.` : undefined;
     return { mode: 'hidden', deletion, outcomes, ...(warning && { warning }), problems: [] };
@@ -148,10 +163,18 @@ export class LaunchDeletionService {
     if (pieces.some((p) => p.status !== 'scheduled' && p.status !== 'failed')) return true;
     const attempts = await this.#deps.registry.attempts.ofLaunch(launch.id);
     if (attempts.some((a) => a.state === 'live' || a.state === 'unknown' || a.state === 'attempting')) return true;
-    if (isAppLaunch(launch)) return (await this.#deps.appReview?.published(launch.id)) !== undefined;
+    // Read from the cursor itself, not through app-review, which a process without the flag lacks: its
+    // launch must still not be removed as never published. A commit still pending may be on main already
+    if (isAppLaunch(launch)) return (await this.#deps.registry.cursors.cursor(appBlogKey(launch.id))) !== undefined;
     if (launch.detail?.startsWith('direct:')) return true;
     const number = launch.status === 'drafted' ? pullRequestNumber(launch) : undefined;
     return number !== undefined && (await this.#deps.github.pullRequestState(this.#deps.launchesRepo, number)) === 'merged';
+  }
+
+  /** Whether any piece of the launch is out (or was) or claimed by a worker, read inside the deletion's transaction */
+  async #sentOrSending(tx: Repositories, launchId: number): Promise<boolean> {
+    if ((await tx.posts.posts(launchId)).some((p) => p.status !== 'scheduled' && p.status !== 'failed')) return true;
+    return (await tx.attempts.ofLaunch(launchId)).some((a) => a.state === 'live' || a.state === 'unknown' || a.state === 'attempting');
   }
 
   /** A removed launch leaves nothing open that could still publish it: its drafts pull request, its preview on the site */

@@ -20,7 +20,7 @@ export function deletionService(ctx: AppContext): LaunchDeletionService | undefi
     get launchesRepo() {
       return ctx.deps.launchesRepo;
     },
-    ...(appReview && { appReview: real ? appReview : { published: (launchId) => appReview.published(launchId), closePreview: async () => undefined } }),
+    ...(appReview && { appReview: real ? appReview : { closePreview: async () => undefined } }),
     ...(real && { media: ctx.media }),
   });
 }

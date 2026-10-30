@@ -685,6 +685,12 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     runs.set(d.id, own ? own.run(contextFor(d.id as Channel)) : builtIn[d.id as keyof typeof BUILT_IN_PUBLISHING]);
   }
 
+  // Read again before each send: the owner may delete the launch while this run is under way (a
+  // removed launch has no row any more), and nothing more of it may go out from then on
+  const deleted = async () => {
+    const now = await registry.launches.get(launch.id);
+    return !now || now.deletedAt !== undefined;
+  };
   for (const definition of channels) {
     const channel = definition.id as EngineChannel;
     const mode = modeOf(definition);
@@ -702,10 +708,11 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       problems.push(`${channel}: no piece in the pack or no credentials configured`);
       continue;
     }
+    if (await deleted()) return { state: 'skipped', launch };
     try {
       // Claimed for this run, then checked again: a worker that read the pieces before another's went out sends nothing
       const guarded = deps.guard
-        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !done(await registry.posts.posts(launch.id), channel) && !(await registry.cursors.cursor(failureKey(launch, channel))) }, run)
+        ? await deps.guard.run({ launchId: launch.id, channel, kind: 'post' }, { idempotent: IDEMPOTENT_CHANNELS.has(channel), reclaimLive: true, stillNeeded: async () => !(await deleted()) && !done(await registry.posts.posts(launch.id), channel) && !(await registry.cursors.cursor(failureKey(launch, channel))) }, run)
         : { ran: true as const, value: await run() };
       if (!guarded.ran) {
         if (guarded.attempt.state !== 'live') heldElsewhere.push({ channel, why: notSentBecause(guarded.attempt) });
