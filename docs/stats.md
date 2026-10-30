@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T16:39:48.121797373Z
-updated_at: 2026-10-29T20:55:18.185855014Z
+created_at: 2026-10-30T13:06:09.095720895Z
+updated_at: 2026-10-30T22:36:09.176150536Z
 tags:
     - stats
     - metrics
@@ -46,7 +46,7 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Bluesky | | likes | replies | reposts + quotes | | |
 | Mastodon | | favourites | replies | boosts + quotes | | |
 | Reddit | | score | comments | crossposts | | |
-| Instagram | views | likes | comments | shares + reposts | bio-link clicks | |
+| Instagram | views | likes | comments | shares (+ reposts on Reels and stories) | bio-link clicks | |
 | Threads | views | likes | replies | reposts + quotes + shares | link clicks | |
 | GitHub Discussions | | reactions + upvotes | comments | | | |
 | YouTube | views | likes | comments | shares (YouTube Analytics, daily) | | |
@@ -59,6 +59,13 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 Instagram's views and shares include its story's while Meta keeps them (24 hours). Its `reach` is
 unique accounts, not impressions (Meta retired those in 2025), so it is the second tier's `reach`,
 never `impressions`.
+
+A feed post's shares are its `shares` alone: since 2026-10-29 Meta refuses `reposts` for feed posts
+("does not support the metrics: reposts", although its media insights reference still lists it for
+FEED), so the connector no longer asks for it there; Reels and stories still read it. Readings
+before that date may hold a feed post's `reposts`, which the family still sums. When Meta refuses a
+metric by name, the connector asks that set again without it and leaves it out for the rest of the
+process, so one retired metric no longer loses a piece's other numbers.
 
 GitHub Discussions' `comments` are everyone's comments and their replies but the owner's and
 Shipcast's own (since 2026-10-29; before, the top-level comments only, Shipcast's replies included).

@@ -31,15 +31,15 @@ test('an Instagram carousel reads its feed set, then its profile activity apart,
           () =>
             metric(calls.at(-1)!.url) === 'profile_activity'
               ? Response.json({ data: [broken('profile_activity', { BIO_LINK_CLICKED: 3, OTHER: 1 })] })
-              : Response.json({ data: [insight('views', 400), insight('reach', 150), insight('reposts', 2), insight('follows', 1), insight('profile_visits', 9)] }),
+              : Response.json({ data: [insight('views', 400), insight('reach', 150), insight('shares', 2), insight('follows', 1), insight('profile_visits', 9)] }),
         ],
       ],
       calls,
     ),
   });
-  assert.deepEqual(await instagram.metrics('m1'), { views: 400, reach: 150, reposts: 2, follows: 1, profile_visits: 9, profile_activity: 4, bio_link_clicks: 3 });
+  assert.deepEqual(await instagram.metrics('m1'), { views: 400, reach: 150, shares: 2, follows: 1, profile_visits: 9, profile_activity: 4, bio_link_clicks: 3 });
   const asked = calls.filter((c) => c.url.includes('/insights')).map((c) => metric(c.url));
-  assert.deepEqual(asked, ['views,reach,likes,comments,saved,shares,reposts,total_interactions,follows,profile_visits', 'profile_activity']);
+  assert.deepEqual(asked, ['views,reach,likes,comments,saved,shares,total_interactions,follows,profile_visits', 'profile_activity']);
   assert.equal(new URL(calls.at(-1)!.url).searchParams.get('breakdown'), 'action_type');
 });
 
@@ -67,11 +67,61 @@ test('an Instagram Reel reads its watch time and skip rate, and Facebook views o
   };
   const shared = reel(() => Response.json({ data: [insight('facebook_views', 120)] }));
   assert.deepEqual(await shared.instagram.metrics('r1'), { views: 900, avg_watch_ms: 4200, skip_rate: 35.5, facebook_views: 120 });
-  assert.equal(metric(shared.calls.find((c) => c.url.includes('/insights'))!.url), 'views,reach,likes,comments,saved,shares,reposts,total_interactions,ig_reels_avg_watch_time,reels_skip_rate');
+  assert.equal(metric(shared.calls.find((c) => c.url.includes('/insights'))!.url), 'views,reach,likes,comments,saved,shares,total_interactions,reposts,ig_reels_avg_watch_time,reels_skip_rate');
 
   // A Reel not shared to Facebook: Meta refuses the call, and the rest still counts
   const alone = reel(() => Response.json({ error: { message: 'The media is not shared to Facebook', code: 100 } }, { status: 400 }));
   assert.deepEqual(await alone.instagram.metrics('r1'), { views: 900, avg_watch_ms: 4200, skip_rate: 35.5 });
+});
+
+test('an Instagram set Meta refuses a metric of by name is asked again without it, and from then on', async () => {
+  const calls: Call[] = [];
+  const refuse = (names: string) => Response.json({ error: { message: `(#100) Instagram Insights Media API endpoint does not support the metrics: ${names}`, type: 'IGApiException', code: 100 } }, { status: 400 });
+  const instagram = new Instagram({
+    // An account of its own: what is refused is remembered per account for the process
+    userId: 'refusing',
+    accessToken: 't',
+    fetch: fakeFetch(
+      [
+        [`GET ${G}/r1?fields=media_type`, () => Response.json({ media_type: 'VIDEO' })],
+        [`GET ${G}/r2?fields=media_type`, () => Response.json({ media_type: 'VIDEO' })],
+        [
+          `GET ${G}/r`,
+          () => {
+            const asked = metric(calls.at(-1)!.url) ?? '';
+            if (asked === 'facebook_views') return Response.json({ data: [] });
+            return asked.includes('reposts') ? refuse('reposts') : Response.json({ data: [insight('views', 900), insight('likes', 7), insight('shares', 3)] });
+          },
+        ],
+      ],
+      calls,
+    ),
+  });
+  assert.deepEqual(await instagram.metrics('r1'), { views: 900, likes: 7, shares: 3 }, 'the rest of the piece still counts');
+  assert.deepEqual(await instagram.metrics('r2'), { views: 900, likes: 7, shares: 3 });
+  const sets = calls.filter((c) => c.url.includes('/insights') && metric(c.url) !== 'facebook_views').map((c) => metric(c.url));
+  assert.deepEqual(sets, [
+    'views,reach,likes,comments,saved,shares,total_interactions,reposts,ig_reels_avg_watch_time,reels_skip_rate',
+    'views,reach,likes,comments,saved,shares,total_interactions,ig_reels_avg_watch_time,reels_skip_rate',
+    'views,reach,likes,comments,saved,shares,total_interactions,ig_reels_avg_watch_time,reels_skip_rate',
+  ]);
+});
+
+test('an Instagram refusal that names no metric of the set, or all of it, still fails', async () => {
+  const answer = { message: 'Invalid parameter' };
+  const instagram = new Instagram({
+    userId: 'failing',
+    accessToken: 't',
+    fetch: fakeFetch(
+      [
+        [`GET ${G}/s1/insights`, () => Response.json({ error: { ...answer, type: 'IGApiException', code: 100 } }, { status: 400 })],
+      ],
+      [],
+    ),
+  });
+  await assert.rejects(instagram.storyMetrics('s1'), /Invalid parameter/);
+  answer.message = 'Instagram Insights Media API endpoint does not support the metrics: impressions';
+  await assert.rejects(instagram.storyMetrics('s1'), /impressions/);
 });
 
 /** A cache that keeps every value it is given, with the time it was given for */
@@ -122,7 +172,7 @@ test('an Instagram post’s profile activity and a Reel’s Facebook views are r
   const asked = (name: string) => calls.filter((c) => c.url.includes('/insights') && metric(c.url) === name).length;
   assert.equal(asked('profile_activity'), 1);
   assert.equal(asked('facebook_views'), 1, 'a Reel Meta refuses is not asked again within the day');
-  assert.equal(asked('views,reach,likes,comments,saved,shares,reposts,total_interactions,follows,profile_visits'), 3, 'the counters stay hourly');
+  assert.equal(asked('views,reach,likes,comments,saved,shares,total_interactions,follows,profile_visits'), 3, 'the counters stay hourly');
   assert.ok([...cache.kept].filter(([key]) => !key.startsWith('instagram-media-type:')).every(([, { ttl }]) => ttl <= 86_400), 'kept a day at most');
 });
 
@@ -156,7 +206,7 @@ test('an Instagram piece whose type cannot be read gets what every type has; a c
     ),
   });
   assert.deepEqual(await instagram.metrics('x'), { views: 2 });
-  assert.equal(metric(calls.at(-1)!.url), 'views,reach,likes,comments,saved,shares,reposts,total_interactions', 'no profile activity nor Facebook views without a type');
+  assert.equal(metric(calls.at(-1)!.url), 'views,reach,likes,comments,saved,shares,total_interactions', 'no profile activity nor Facebook views without a type');
   await instagram.metrics('p1');
   await instagram.metrics('p1');
   assert.equal(calls.filter((c) => c.url.startsWith(`${G}/p1?fields=media_type`)).length, 1, 'the type is read once');

@@ -32,10 +32,13 @@ const valueOf = (m: Insight) => m.total_value?.value ?? m.values?.[0]?.value ?? 
  * Each piece's insights by type (Meta's media insights reference): a metric a type does not have
  * fails the whole call, so each type asks for its own set, and what may be missing (a breakdown, a
  * Reel's Facebook views) is asked for in a call of its own whose refusal costs nothing else.
+ * `reposts` is left out of a feed post's set: Meta's reference still lists it for FEED, but since
+ * 2026-10-29 the Instagram Login API refuses it there ("does not support the metrics: reposts"). A
+ * piece whose type cannot be read is asked without it too, since it is most likely a feed post.
  */
-const BOTH = 'views,reach,likes,comments,saved,shares,reposts,total_interactions';
+const BOTH = 'views,reach,likes,comments,saved,shares,total_interactions';
 const FEED_METRICS = `${BOTH},follows,profile_visits`;
-const REELS_METRICS = `${BOTH},ig_reels_avg_watch_time,reels_skip_rate`;
+const REELS_METRICS = `${BOTH},reposts,ig_reels_avg_watch_time,reels_skip_rate`;
 const STORY_METRICS = 'views,reach,shares,reposts,total_interactions,follows,profile_visits';
 /** Meta's names that read badly as words on a page; the average watch time is in milliseconds */
 const RENAMED: Readonly<Record<string, string>> = { ig_reels_avg_watch_time: 'avg_watch_ms', reels_skip_rate: 'skip_rate' };
@@ -62,6 +65,15 @@ const FOLLOWS_MIN_FOLLOWERS = 100;
 const NOT_ENOUGH_VIEWERS = /not enough viewers/i;
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** Graph API's (#100) when a set names a metric the piece's type no longer has: the names follow */
+const UNSUPPORTED = /does not support the metrics?:?\s*([a-z_]+(?:\s*,\s*[a-z_]+)*)/i;
+
+/**
+ * The metrics Meta refused by name, by account and set, for as long as the process runs: a set is
+ * asked without them from then on, so one retired metric costs one extra call, not every reading.
+ */
+const REFUSED = new Map<string, Set<string>>();
 
 /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
 export type InstagramMedia = { kind: 'image' | 'video'; url: string };
@@ -297,6 +309,25 @@ export class Instagram implements CommentReader, Replier {
     return { total: metric ? valueOf(metric) : 0, by };
   }
 
+  /**
+   * A piece's main set of insights. When Meta refuses metrics by name, the set is asked again once
+   * without them, and they are remembered (`REFUSED`), so the rest of the piece's numbers still count.
+   */
+  async #counters(id: string, metrics: string, what: string): Promise<Insight[]> {
+    const key = `${this.#user}:${metrics}`;
+    const refused = REFUSED.get(key) ?? new Set<string>();
+    const ask = () => metrics.split(',').filter((m) => !refused.has(m));
+    try {
+      return await this.#insights(id, { metric: ask().join(',') }, what);
+    } catch (error) {
+      const named = UNSUPPORTED.exec(message(error))?.[1]?.split(/\s*,\s*/).filter((m) => ask().includes(m)) ?? [];
+      if (!named.length || named.length === ask().length) throw error;
+      for (const m of named) refused.add(m);
+      REFUSED.set(key, refused);
+      return this.#insights(id, { metric: ask().join(',') }, what);
+    }
+  }
+
   #numbers(data: Insight[]): Metrics {
     const out: Metrics = {};
     for (const metric of data) out[RENAMED[metric.name] ?? metric.name] = valueOf(metric);
@@ -318,9 +349,9 @@ export class Instagram implements CommentReader, Replier {
 
   /**
    * A post's insights, by its type. Every post: views (every time on screen; `views` replaced
-   * impressions and plays in 2025), reach (unique accounts), likes, comments, saves, shares, reposts
-   * and total interactions. A feed post or carousel also: follows, profile visits, and the profile
-   * actions it brought (`profile_activity`, with its bio-link clicks, in a call of its own). A Reel:
+   * impressions and plays in 2025), reach (unique accounts), likes, comments, saves, shares and total
+   * interactions. A feed post or carousel also: follows, profile visits, and the profile actions it
+   * brought (`profile_activity`, with its bio-link clicks, in a call of its own). A Reel: its reposts,
    * its average watch time (`avg_watch_ms`) and skip rate (`skip_rate`, a percentage), and the views
    * it got on Facebook when it was shared there (`facebook_views`, which Meta refuses for a Reel that
    * was not). The profile activity and the Facebook views are read once a day (`#daily`), the rest on
@@ -330,7 +361,7 @@ export class Instagram implements CommentReader, Replier {
     const type = await this.#mediaType(externalId);
     const reel = type === 'VIDEO';
     const feed = type === 'IMAGE' || type === 'CAROUSEL_ALBUM';
-    const out = this.#numbers(await this.#insights(externalId, { metric: reel ? REELS_METRICS : feed ? FEED_METRICS : BOTH }, 'metrics'));
+    const out = this.#numbers(await this.#counters(externalId, reel ? REELS_METRICS : feed ? FEED_METRICS : BOTH, 'metrics'));
     if (feed) {
       Object.assign(
         out,
@@ -371,7 +402,7 @@ export class Instagram implements CommentReader, Replier {
   async storyMetrics(externalId: string): Promise<Metrics> {
     let out: Metrics;
     try {
-      out = this.#numbers(await this.#insights(externalId, { metric: STORY_METRICS }, 'story metrics'));
+      out = this.#numbers(await this.#counters(externalId, STORY_METRICS, 'story metrics'));
     } catch (error) {
       if (NOT_ENOUGH_VIEWERS.test(message(error))) return {};
       throw error;
