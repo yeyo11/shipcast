@@ -19,6 +19,11 @@ export const FLAGS = {
   'batched-metrics': 'Hourly, batched metrics and comment feeds',
   /** Phase 9: the pages update over SSE instead of polling */
   'realtime-ui': 'Pages updated over server-sent events',
+  /**
+   * Launch model (docs/decisions/launch-model.md), phase 1: the media store on Cloudflare R2, built
+   * from SHIPCAST_MEDIA_* in .env. Off, the store refuses every call; nothing calls it yet
+   */
+  'launch-media': 'Launch media in the R2 media store',
 } as const;
 
 /**

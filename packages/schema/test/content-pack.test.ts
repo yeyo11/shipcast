@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  AI_TASK_DEFINITIONS,
+  AiContentPack,
   Brand,
   ContentPack,
   pieceLimitProblem,
@@ -200,4 +202,23 @@ test('a piece is measured against its network the way that network counts', () =
   assert.match(pieceLimitProblem('threads', `${'a'.repeat(497)}🔎`) ?? '', /this is 501/, 'an emoji is its UTF-8 bytes on Threads');
   assert.equal(pieceLimitProblem('linkedin', 'a'.repeat(1300)), undefined);
   assert.equal(pieceLimitProblem('devto', 'a'.repeat(99_999)), undefined, 'an article has no cap here');
+});
+
+test('a pack may be about no repo, or name further repos besides the primary one', () => {
+  const { repo: _repo, ...noRepo } = fullPack.project;
+  assert.ok(ContentPack.safeParse({ ...fullPack, project: noRepo }).success, 'a product, a talk or an opinion has no repo');
+  const several = ContentPack.parse({ ...fullPack, project: { ...fullPack.project, repos: ['https://github.com/yeyo11/claudio-app'] } });
+  assert.deepEqual(several.project.repos, ['https://github.com/yeyo11/claudio-app']);
+  assert.ok(!ContentPack.safeParse({ ...fullPack, project: { ...fullPack.project, repos: ['not a url'] } }).success);
+});
+
+test('the AI tasks are still asked for a pack with its repo and no further repos, as before the launch model', () => {
+  const { repo: _repo, ...noRepo } = fullPack.project;
+  assert.ok(!AiContentPack.safeParse({ ...fullPack, project: noRepo }).success);
+  assert.ok(!AiContentPack.safeParse({ ...fullPack, project: { ...fullPack.project, repos: [] } }).success);
+  assert.equal(AI_TASK_DEFINITIONS.pack.output?.schema, AiContentPack);
+  assert.equal(AI_TASK_DEFINITIONS.article.output?.schema, AiContentPack);
+  const project = (contentPackJsonSchema() as { properties: { project: { required: string[]; properties: Record<string, unknown> } } }).properties.project;
+  assert.deepEqual(project.required, ['name', 'repo']);
+  assert.deepEqual(Object.keys(project.properties), ['name', 'repo', 'version']);
 });

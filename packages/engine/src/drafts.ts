@@ -132,7 +132,7 @@ export function renderDrafts(
         `lang: ${lang}`,
         `translationKey: ${q(translationKey)}`,
         // An article written in the app belongs to no project, so the blog shows no repo for it
-        ...(isArticle(launch) ? [] : [`repo: ${q(pack.project.repo)}`]),
+        ...(isArticle(launch) || !pack.project.repo ? [] : [`repo: ${q(pack.project.repo)}`]),
         ...(pack.project.version ? [`version: ${q(pack.project.version)}`] : []),
         `tags: [${pack.article.tags.map(q).join(', ')}]`,
         ...(image ? [`image: ${q(image)}`, `imageAlt: ${q(version.imageAlt ?? [projectLabel(pack, launch), version.title].filter(Boolean).join(': '))}`] : []),

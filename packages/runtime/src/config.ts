@@ -115,6 +115,37 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, root = process.
   };
 }
 
+const MEDIA_VARIABLES = ['SHIPCAST_MEDIA_ENDPOINT', 'SHIPCAST_MEDIA_BUCKET', 'SHIPCAST_MEDIA_ACCESS_KEY_ID', 'SHIPCAST_MEDIA_SECRET_ACCESS_KEY'] as const;
+
+/** The media store's bucket (docs/media-store.md): Cloudflare R2, or another S3-compatible store */
+export type MediaStoreConfig = { endpoint: string; bucket: string; accessKeyId: string; secretAccessKey: string; region: string | undefined };
+
+/**
+ * Reads the media store's bucket and key pair from the environment, which `loadConfig` has loaded
+ * `.env` into. Undefined when none of it is set, so the store refuses with what is missing; half of
+ * it set is a mistake worth stopping for. Only read with the `launch-media` flag on.
+ */
+export function loadMediaStoreConfig(env: NodeJS.ProcessEnv = process.env): MediaStoreConfig | undefined {
+  const value = (name: string) => env[name]?.trim() || undefined;
+  const given = MEDIA_VARIABLES.filter((n) => value(n));
+  if (given.length === 0) return undefined;
+  const missing = MEDIA_VARIABLES.filter((n) => !value(n));
+  if (missing.length > 0) throw new ConfigError(`the media store is half set in .env: missing ${missing.join(', ')} (see .env.example)`);
+  const endpoint = value('SHIPCAST_MEDIA_ENDPOINT')!.replace(/\/+$/, '');
+  // Not echoed back whole: an endpoint pasted with a key in its query would land in the logs
+  if (!/^https:\/\/[^/?#\s]+$/.test(endpoint)) throw new ConfigError('SHIPCAST_MEDIA_ENDPOINT must be https://host, such as https://<account id>.r2.cloudflarestorage.com');
+  return {
+    endpoint,
+    bucket: value('SHIPCAST_MEDIA_BUCKET')!,
+    accessKeyId: value('SHIPCAST_MEDIA_ACCESS_KEY_ID')!,
+    secretAccessKey: value('SHIPCAST_MEDIA_SECRET_ACCESS_KEY')!,
+    region: value('SHIPCAST_MEDIA_REGION'),
+  };
+}
+
+/** The variables the media store needs, for the refusal of a process started without them */
+export const MEDIA_STORE_VARIABLES: readonly string[] = MEDIA_VARIABLES;
+
 /** What the web app needs besides the engine's bootstrap: still `.env`, since it is needed before a sign-in */
 export interface AppConfig {
   /** The app's address, `https://…` without a trailing slash: OAuth callbacks are built on it */

@@ -12,3 +12,4 @@ export * from './connectors.ts';
 export * from './clock.ts';
 export * from './queue.ts';
 export * from './fixtures.ts';
+export * from './media.ts';

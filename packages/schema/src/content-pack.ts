@@ -46,22 +46,44 @@ const Analysis = z
   })
   .describe('What the code shows. Every piece below may only present the implemented list as working.');
 
-export const ContentPack = z
-  .strictObject({
-    schemaVersion: z.literal(1),
-    kind: PackKind,
-    project: z.strictObject({
-      name: z.string().min(1),
-      repo: z.url(),
-      version: z.string().optional().describe('The release tag that triggered the launch, if any'),
-    }),
-    analysis: Analysis,
-    ...pieces,
-    releaseNotes: z.string().optional().describe('Improved release notes in Markdown, for the minor pack'),
-  })
-  .describe('Everything one launch publishes, written from the code of the project');
+const projectName = z.string().min(1);
+const projectVersion = z.string().optional().describe('The release tag that triggered the launch, if any');
+
+const packOf = <P extends z.ZodType>(project: P) =>
+  z
+    .strictObject({
+      schemaVersion: z.literal(1),
+      kind: PackKind,
+      project,
+      analysis: Analysis,
+      ...pieces,
+      releaseNotes: z.string().optional().describe('Improved release notes in Markdown, for the minor pack'),
+    })
+    .describe('Everything one launch publishes, written from the code of the project');
+
+/**
+ * A launch's pack as it is kept and read. Its repo is optional, so a launch about something with no
+ * repo (a product, a talk, an opinion) has a pack too, and `repos` names the further repos a launch
+ * about several is also about (docs/decisions/launch-model.md); a release's pack still names its
+ * repo, which generatePack checks against the launch.
+ */
+export const ContentPack = packOf(
+  z.strictObject({
+    name: projectName,
+    repo: z.url().optional().describe("The primary repo's URL: the one whose release triggered the launch; absent when the launch is about no repo"),
+    repos: z.array(z.url()).optional().describe('Further repos the launch is also about, besides the primary one'),
+    version: projectVersion,
+  }),
+);
 
 export type ContentPack = z.infer<typeof ContentPack>;
+
+/**
+ * The pack the AI tasks are asked for: the shape they were asked for before the launch model, a repo
+ * required and no further repos, so what Claude is handed does not change until the sources phase
+ * gives a launch something other than a repo to be about. Every pack it accepts is a ContentPack.
+ */
+export const AiContentPack = packOf(z.strictObject({ name: projectName, repo: z.url(), version: projectVersion }));
 
 /**
  * The pack's schema for a list of definitions: the registry's pack with the pieces of the channels it
@@ -142,5 +164,5 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
  * Code's `--json-schema` validator refuses a schema that declares draft 2020-12.
  */
 export function contentPackJsonSchema(): Record<string, unknown> {
-  return z.toJSONSchema(ContentPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
+  return z.toJSONSchema(AiContentPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
 }

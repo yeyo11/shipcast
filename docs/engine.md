@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-29T15:32:44.591250786Z
+updated_at: 2026-10-30T00:55:29.780951176Z
 tags:
     - engine
     - registry
@@ -21,6 +21,7 @@ tags:
     - services
     - repositories
     - telemetry
+    - launch-model
 ---
 # The engine
 
@@ -41,7 +42,7 @@ depends on `@shipcast/schema` ([launch-yml.md](launch-yml.md), [content-pack.md]
 | Domain | `packages/schema` | channel definitions (`src/channels`), the pack's schema, AI task definitions (`src/ai`), rules, `ShipcastError`, the failure keys (`failures.ts`); pure, no I/O |
 | Application | `packages/engine/src/services`, `src/publishing` | one service per area, the only place a use case lives |
 | Ports | `packages/engine/src/ports.ts` | narrow `Pick`s of the repositories a service takes (`PostStore`, `ScheduleStore`, `MetricStore`…) |
-| Adapters | `src/repositories`, `github.ts`, `src/ai`, connectors, runtime's channel adapters | Postgres, GitHub, AI providers, networks |
+| Adapters | `src/repositories`, `github.ts`, `src/ai`, `src/media`, connectors, runtime's channel adapters | Postgres, GitHub, AI providers, the media store ([media-store.md](media-store.md)), networks |
 
 dependency-cruiser checks the direction in `pnpm typecheck`: entry points never import a connector
 or a repository, and the domain imports no I/O. (The rule that fenced the old AI layer went with it
@@ -128,6 +129,29 @@ launch happens once" hold:
   `TableStore`, used with `secrets-table` ([server.md](server.md)).
 - **Telemetry** (`provider_calls`, `timings`, `checks`, migration `0012`): `src/telemetry/`
   ([measurement.md](measurement.md)).
+- **The launch model's tables** (migration `0018`, 2026-10-30), the first phase of
+  [decisions/launch-model.md](decisions/launch-model.md): added, with no repository and **read or
+  written by nothing yet**. Each hangs on its launch with `on delete cascade`, so a purge of the
+  launch's row takes them all (the soft delete keeps the row):
+
+  | Table | Holds |
+  | --- | --- |
+  | `launch_sources` | what a launch is about, in order (`position`): its `kind` (`repo_release`, `repo_ref`, `repo`, `url`, `text`, `media`, `video`, `launch`), its `role` (`primary`, `context`), the repo, ref and frozen `sha`, a URL with what fetching it answered, the owner's text, a file (`media_id`), `meta` and a `content_hash` |
+  | `launch_channels` | per launch and channel (the key), its `mode`, account, `options` (subreddits…) and a `note`: `launch.yml`'s `publishing`, copied once |
+  | `packs` | every analysis: the pack as returned, its `version` (unique per launch), the AI task, provider, chat and cost, `accepted` |
+  | `drafts` | one per publishable piece, unique on `(launch, channel, piece)`, with its `current_version_id` |
+  | `draft_versions` | every version of a draft, never changed: `n` (unique per draft), `body`, `fields`, `origin` (`ai`, `owner`, `assistant`, `import`, `post-publish-edit`), `author`, the pack it came from |
+  | `media` | what describes a file of the media store ([media-store.md](media-store.md)): its sha256 (once per launch), kind, type, size, store and key, role and `public_path` |
+  | `approvals` | who approved a launch, when, and the exact version of each draft (`versions`), until `revoked_at` |
+
+  `launches` gained `title`, `model` (`legacy`, today's pull-request flow, for every row; `app` for a
+  launch held by Shipcast), `channels_source` (the `launch.yml` its channel rows came from),
+  `deleted_at` and `approved_at`, and **`dedupe_key`**, unique where set (Postgres lets any number of
+  nulls through): the claim for a launch with no repo and tag, as `github-release:<owner/name>@<tag>`,
+  `github-public:<owner/name>` or `article:<slug>`, and null for a launch the owner may start twice.
+  `repo` and `ref` stay required during the transition (a launch with no repo gets synthetic ones).
+  `posts` and `publish_attempts` gained `draft_version_id`, and `publish_attempts` `approval_id`: what
+  exactly went out, under which approval.
 
 An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
 ([decisions/postgres.md](decisions/postgres.md#moving-an-install)).
@@ -219,7 +243,9 @@ steps, output tokens and the timeout.
    brand's name and tone closed by the **locked** truth rules (only what the code implements is
    presented as working; no invented commands or numbers; a different text per channel), and a
    prompt with the pack's brief and one brief per active channel, each from its channel definition.
-   The answer is accepted only when it validates, matches the launch and `missingPieces` is empty.
+   The answer is accepted only when it validates, matches the launch (its kind, and its
+   `project.repo` is the launch's repo: further `repos` never stand in for it) and `missingPieces` is
+   empty.
 4. **The drafts** (`drafts.ts`): each article at `src/content/posts/<lang>/<slug>.md`, a draft per
    channel at the file its definition names under `launches/<project>/<ref>/`, and `pack.json`; the
    media go with them ([publishing.md](publishing.md#the-launchs-media)).
@@ -286,4 +312,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]]

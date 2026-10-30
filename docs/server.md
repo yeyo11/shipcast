@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-10-29T15:35:18.257427073Z
+updated_at: 2026-10-30T00:54:00.114538025Z
 tags:
     - server
     - deploy
@@ -197,7 +197,9 @@ transaction mode:
 ## The flags
 
 `SHIPCAST_FLAGS` is a comma-separated list (`packages/runtime/src/flags.ts`); every flag is off
-unless named, and an unknown name stops the start. Production names all of them:
+unless named, and an unknown name stops the start. Production names all of the refactor's; the
+launch model's ([decisions/launch-model.md](decisions/launch-model.md)) ship off and are turned on
+one at a time once each phase is verified:
 
 | Flag | Turns on |
 | --- | --- |
@@ -208,6 +210,7 @@ unless named, and an unknown name stops the start. Production names all of them:
 | `github-events` | pages read the drafts snapshot; GitHub is read on events and hourly |
 | `batched-metrics` | hourly, batched metrics and comment feeds |
 | `realtime-ui` | pages updated over server-sent events instead of polling |
+| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. Nothing calls it yet |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
@@ -229,4 +232,4 @@ drafts snapshot.
 
 ## Related
 
-[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]]
+[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]]
