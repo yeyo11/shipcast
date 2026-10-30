@@ -511,6 +511,8 @@ export const launchSources = pgTable(
     meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     // What the analysis read: a source that changes leaves the pack stale
     contentHash: text('content_hash'),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     createdAt: text('created_at').notNull().default(nowIso),
   },
   (t) => [unique('launch_sources_position_unique').on(t.launchId, t.position)],
@@ -532,6 +534,8 @@ export const launchChannels = pgTable(
     options: jsonb('options').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
     // Why it is as it is when no one chose it, such as a piece imported but never published
     note: text('note'),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     updatedAt: text('updated_at').notNull().default(nowIso),
   },
   (t) => [primaryKey({ name: 'launch_channels_key', columns: [t.launchId, t.channel] })],
@@ -553,6 +557,8 @@ export const packs = pgTable(
     chatId: text('chat_id'),
     costUsd: doublePrecision('cost_usd'),
     accepted: boolean('accepted').notNull().default(false),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     createdAt: text('created_at').notNull().default(nowIso),
   },
   (t) => [unique('packs_version_unique').on(t.launchId, t.version)],
@@ -569,6 +575,8 @@ export const drafts = pgTable(
     channel: text('channel').notNull(),
     piece: text('piece').notNull(),
     currentVersionId: integer('current_version_id').references((): AnyPgColumn => draftVersions.id, { onDelete: 'set null' }),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     createdAt: text('created_at').notNull().default(nowIso),
     updatedAt: text('updated_at').notNull().default(nowIso),
   },
@@ -593,6 +601,8 @@ export const draftVersions = pgTable(
     // Who wrote it: a GitHub login or an API token's name; null for the AI
     author: text('author'),
     packId: integer('pack_id').references(() => packs.id, { onDelete: 'set null' }),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     createdAt: text('created_at').notNull().default(nowIso),
   },
   (t) => [unique('draft_versions_n_unique').on(t.draftId, t.n)],
@@ -621,6 +631,8 @@ export const media = pgTable(
     role: text('role').notNull(),
     // Its address on the site once published (/launches/claudio/v0.9.0/og.png); null before
     publicPath: text('public_path'),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     createdAt: text('created_at').notNull().default(nowIso),
   },
   // The same file twice in one launch is one row; two launches may share the stored bytes, which are
@@ -641,8 +653,34 @@ export const approvals = pgTable(
     at: text('at').notNull().default(nowIso),
     // {draft id: version id}, as approved
     versions: jsonb('versions').$type<Record<string, number>>().notNull(),
+    // The import that wrote it (docs/launch-import.md), so a batch is rolled back by its rows alone; null for every other writer
+    importBatch: text('import_batch'),
     revokedAt: text('revoked_at'),
     note: text('note'),
   },
   (t) => [index('approvals_by_launch').on(t.launchId, t.at)],
+);
+
+/*
+ * The import of the launches drafted before Shipcast held them (docs/launch-import.md, the launch
+ * model's third phase): one row per launch a batch imported or deleted, with what the launch was
+ * before, so the batch is verified and rolled back from here. No foreign key: a deleted launch's row
+ * is gone, and its rows are kept here whole until a rollback puts them back.
+ */
+export const launchImports = pgTable(
+  'launch_imports',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    batch: text('batch').notNull(),
+    launchId: integer('launch_id').notNull(),
+    // import or delete
+    action: text('action').notNull(),
+    // An import: the launch's columns it set, as they were. A deletion: every row it removed, by table
+    before: jsonb('before').$type<Record<string, unknown>>().notNull(),
+    // What it wrote and read: the commit of the launches repo, the counts the verification compares
+    summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    at: text('at').notNull().default(nowIso),
+    rolledBackAt: text('rolled_back_at'),
+  },
+  (t) => [index('launch_imports_by_batch').on(t.batch), index('launch_imports_by_launch').on(t.launchId)],
 );
