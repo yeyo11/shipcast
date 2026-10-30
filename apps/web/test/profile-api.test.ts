@@ -125,7 +125,7 @@ test('an edit goes through the engine’s checks before the network, and the net
 });
 
 test('the OpenAPI document lists the profile routes and their schemas', () => {
-  const doc = openApiDocument('https://shipcast.example') as { paths: Record<string, Record<string, unknown>>; components: { schemas: Record<string, unknown> } };
+  const doc = openApiDocument('https://shipcast.example', {}) as { paths: Record<string, Record<string, unknown>>; components: { schemas: Record<string, unknown> } };
   assert.ok(doc.paths['/profile-capabilities']?.get);
   assert.ok(doc.paths['/accounts/{accountId}/profile-review']?.get);
   assert.ok(doc.paths['/accounts/{accountId}/profile-review']?.post);

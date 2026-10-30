@@ -88,8 +88,9 @@ test('an upload is read up to the cap and no further, whatever its length says',
   assert.deepEqual(uploaded, [3]);
 });
 
-test('the OpenAPI document describes both routes, the upload as bytes', () => {
-  const doc = openApiDocument('https://shipcast.example') as { paths: Record<string, Record<string, { requestBody?: { content: Record<string, unknown> } }>> };
+test('the OpenAPI document describes both routes, the upload as bytes', async () => {
+  const { deps } = await setup({ start: unused, upload: unused });
+  const doc = openApiDocument('https://shipcast.example', deps) as { paths: Record<string, Record<string, { requestBody?: { content: Record<string, unknown> } }>> };
   assert.ok(doc.paths['/launches/sources']?.post?.requestBody?.content['application/json']);
   assert.ok(doc.paths['/media']?.post?.requestBody?.content['application/octet-stream']);
 });

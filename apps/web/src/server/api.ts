@@ -314,7 +314,15 @@ interface Call {
 type JsonSchema = Record<string, unknown>;
 
 /** One route: how it is matched and served, and what the OpenAPI document says of it */
+/** What decides whether a flag-gated route is there: the services the flags built */
+export type RouteAvailability = Pick<ApiDeps, 'sources' | 'deletion'>;
+
 export interface ApiRoute {
+  /**
+   * Whether the route is there in this process; always when left out. A route behind a flag that is
+   * off is left out of the OpenAPI document, so a client (MCP among them) is not offered what refuses
+   */
+  available?(deps: RouteAvailability): boolean;
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   /** OpenAPI's form, `/launches/{id}`, relative to /api/v1 */
   path: string;
@@ -583,6 +591,7 @@ export const ROUTES: ApiRoute[] = [
     path: '/launches/{id}/deletion',
     scope: 'read',
     operationId: 'planLaunchDeletion',
+    available: (deps) => deps.deletion !== undefined,
     summary: 'What deleting a launch would do: removed (never published) or hidden (published), its channels with posts out, and how many posts link its article',
     response: { status: 200, description: 'The plan; nothing is changed', schema: ref('DeletionPlan') },
     async handle(deps, { params }) {
@@ -595,6 +604,7 @@ export const ROUTES: ApiRoute[] = [
     path: '/launches/{id}',
     scope: 'write',
     operationId: 'deleteLaunch',
+    available: (deps) => deps.deletion !== undefined,
     summary: 'Delete a launch: one never published is removed, a published one hidden with its posts kept, except on the channels named, whose posts are deleted on their networks too',
     query: [{ name: 'channels', description: 'Comma-separated channels whose posts go from the networks too (blog removes the article, whatever links it); none when left out', schema: { type: 'string' } }],
     response: {
@@ -910,7 +920,7 @@ export async function handleApi(request: Request, deps: ApiDeps): Promise<Respon
   try {
     if (path === '/openapi.json') {
       if (request.method !== 'GET') throw new ApiError(405, 'method_not_allowed', 'GET only', { allow: 'GET' });
-      return json(200, openApiDocument(deps.publicUrl), { 'cache-control': 'no-cache' });
+      return json(200, openApiDocument(deps.publicUrl, deps), { 'cache-control': 'no-cache' });
     }
 
     // The signed-in owner, through WebMCP, may do what a read and write token may
@@ -973,9 +983,10 @@ const launchProperties = {
 };
 
 /** The OpenAPI 3.1 description, built from ROUTES so it cannot drift from what is served */
-export function openApiDocument(publicUrl: string) {
+export function openApiDocument(publicUrl: string, availability: RouteAvailability) {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const route of ROUTES) {
+    if (route.available && !route.available(availability)) continue;
     const pathParams = [...route.path.matchAll(/\{(\w+)\}/g)].map((m) => {
       const p = PATH_PARAMS[m[1]!] ?? { description: m[1]!, schema: { type: 'string' } };
       return { name: m[1], in: 'path', required: true, description: p.description, schema: p.schema };

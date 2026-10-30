@@ -334,6 +334,11 @@ test('the OpenAPI document is public and lists every route with its scope', asyn
   assert.equal(doc.servers[0]?.url, 'https://shipcast.example/api/v1');
   for (const route of ROUTES) {
     const operation = doc.paths[route.path]?.[route.method.toLowerCase()] as { security: Array<{ bearer: string[] }>; operationId: string } | undefined;
+    // A route behind a flag that is off here is left out (below)
+    if (route.available && !route.available(s.deps)) {
+      assert.equal(operation, undefined, `${route.method} ${route.path} is not described while its flag is off`);
+      continue;
+    }
     assert.ok(operation, `${route.method} ${route.path}`);
     assert.deepEqual(operation.security, [{ bearer: [route.scope] }]);
   }
@@ -678,4 +683,17 @@ test('approving names the versions read: passed on to the approval, and a malfor
   assert.deepEqual(s.calls.filter((c) => c.startsWith('approve')), [`approve ${launch.id} {"4":9,"5":11}`]);
   assert.deepEqual(approvalRequest(7), { id: 7, versions: undefined }, 'the page’s old form, an id alone, still reads');
   assert.deepEqual(approvalRequest({ id: 7, versions: { '1': 2 } }), { id: 7, versions: { '1': 2 } });
+});
+
+test('the OpenAPI document leaves out the routes whose flag is off, and lists them once it is on', async () => {
+  // Until the fix the document described deletion and sources to every client, flags off, though those routes refuse
+  const s = await setup();
+  const off = openApiDocument('https://shipcast.example', s.deps);
+  for (const path of ['/launches/{id}/deletion', '/media', '/launches/sources']) assert.equal(off.paths[path], undefined, path);
+  assert.equal(off.paths['/launches/{id}']?.delete, undefined);
+  assert.ok(off.paths['/launches/{id}']?.get, 'the routes beside them stay');
+  const deletion = new LaunchDeletionService({ registry: s.registry, inTransaction: (work) => inTransaction(s.registry, work), posts: postService(s.deps), github: { pullRequestState: async () => 'open', closePreview: async () => {} }, launchesRepo: 'yeyo11/launches' });
+  const on = openApiDocument('https://shipcast.example', { ...s.deps, deletion, sources: { start: async () => ({ ok: true, job: 'j' }), upload: async () => ({ ok: false, problem: 'x' }) } });
+  for (const path of ['/launches/{id}/deletion', '/media', '/launches/sources']) assert.ok(on.paths[path], path);
+  assert.ok(on.paths['/launches/{id}']?.delete);
 });

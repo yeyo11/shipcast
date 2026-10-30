@@ -95,6 +95,7 @@ export const SOURCES_ROUTES: ApiRoute[] = [
     path: '/media',
     scope: 'write',
     operationId: 'uploadMedia',
+    available: (deps) => deps.sources !== undefined,
     summary: 'Upload an image for a launch made from sources (PNG, JPEG, GIF or WebP; its metadata is removed); name it in the launch by its sha256',
     body: { type: 'string', format: 'binary' },
     bodyType: 'application/octet-stream',
@@ -114,6 +115,7 @@ export const SOURCES_ROUTES: ApiRoute[] = [
     path: '/launches/sources',
     scope: 'write',
     operationId: 'launchFromSources',
+    available: (deps) => deps.sources !== undefined,
     summary: 'Make a launch from sources (text, pages, repos, uploaded files) and draft it: the primary repo’s release is the launch, or with no repo it is claimed by its title',
     body: {
       type: 'object',

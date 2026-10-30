@@ -121,7 +121,7 @@ test('parameters that are not valid are a 400 that says why', async () => {
 });
 
 test('the OpenAPI document describes the stats routes and their schemas', () => {
-  const doc = openApiDocument('https://shipcast.example');
+  const doc = openApiDocument('https://shipcast.example', {});
   for (const path of ['/stats/overview', '/stats/series', '/stats/ranking', '/accounts/{accountId}/growth']) {
     const operation = doc.paths[path]?.get as { 'x-scope': string; parameters: Array<{ name: string; schema: { type: string } }> } | undefined;
     assert.equal(operation?.['x-scope'], 'read', path);
