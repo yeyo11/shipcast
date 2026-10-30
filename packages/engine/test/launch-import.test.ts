@@ -4,6 +4,8 @@ import { sql } from 'drizzle-orm';
 import { draftFile } from '@shipcast/schema';
 import {
   channelsAsLaunchYml,
+  databaseTarget,
+  verifyRefusal,
   dedupeKeyOf,
   draftOfPiece,
   gitBlobSha,
@@ -308,4 +310,13 @@ test('the pure mapping', () => {
     { launchId: 8, input: { markdown: 'b' } },
   ]);
   assert.throws(() => parseArticleInputs('{"nope":1}', 'f'), /f:1: no launchId and input/);
+});
+
+test('the import script names its database without the password, and --verify runs only where writing is allowed or the database is said to be a copy', () => {
+  assert.equal(databaseTarget('postgres://shipcast:s3cret@db.internal:5432/shipcast?sslmode=require'), 'db.internal:5432/shipcast');
+  assert.ok(!databaseTarget('postgres://u:s3cret@h/d').includes('s3cret'));
+  // Connecting migrates the database: a verification aimed at production by mistake must stop before it
+  assert.match(verifyRefusal({ writable: false, databaseIsCopy: false }) ?? '', /launch-import.*--database-is-copy/);
+  assert.equal(verifyRefusal({ writable: true, databaseIsCopy: false }), undefined);
+  assert.equal(verifyRefusal({ writable: false, databaseIsCopy: true }), undefined);
 });

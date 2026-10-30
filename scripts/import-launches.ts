@@ -4,18 +4,21 @@
  *
  *   node scripts/import-launches.ts [--delete 2,4,7] [--at <sha>] [--inputs <file.jsonl>]...   the plan, written nowhere
  *   node scripts/import-launches.ts --apply [same options]                                    writes it, then verifies
- *   node scripts/import-launches.ts --verify <batch>
+ *   node scripts/import-launches.ts --verify <batch> [--database-is-copy]
  *   node scripts/import-launches.ts --rollback <batch>
  *
  * Reads Postgres at SHIPCAST_DATABASE_URL and the launches repo through GitHub's API with
  * GITHUB_TOKEN (GETs only; any token that may read the repos). Writing needs `launch-import` in
  * SHIPCAST_FLAGS, and the media store (`launch-media` with SHIPCAST_MEDIA_*) for the files. Take a
- * pg_dump first. `--inputs` adds the owner's article inputs captured outside the database (BullMQ's
- * jobs, one per line); pg-boss's are read from the database itself.
+ * pg_dump first. `--verify` runs with `launch-import` on, or with `--database-is-copy` on a restored
+ * copy: connecting migrates the database, so it never runs on production by accident. The target
+ * (host and database, never the password) is printed before anything connects. `--inputs` adds the
+ * owner's article inputs captured outside the database (BullMQ's jobs, one per line); pg-boss's are
+ * read from the database itself.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { connectRepositories, describePlan, GitHubRest, inTransaction, LaunchImportService, parseArticleInputs, type CapturedArticleInput, type Verification } from '../packages/engine/src/index.ts';
+import { connectRepositories, databaseTarget, describePlan, GitHubRest, inTransaction, LaunchImportService, parseArticleInputs, type CapturedArticleInput, type Verification, verifyRefusal } from '../packages/engine/src/index.ts';
 import { dryPublishing, Flags, mediaStoreFor } from '../packages/runtime/src/index.ts';
 
 const root = resolve(import.meta.dirname, '..');
@@ -39,6 +42,14 @@ if (!url || !token) {
 }
 
 const flags = Flags.fromEnv(process.env);
+// Named before connecting, since connecting already migrates it: the owner sees which database this is first
+console.log(`Database ${databaseTarget(url)}`);
+const verifyBatch = option('--verify');
+const refused = verifyBatch ? verifyRefusal({ writable: flags.on('launch-import'), databaseIsCopy: args.includes('--database-is-copy') }) : undefined;
+if (refused) {
+  console.error(refused);
+  process.exit(2);
+}
 const registry = await connectRepositories(url);
 try {
   const launchesRepo = process.env.SHIPCAST_LAUNCHES_REPO?.trim() || (await registry.settings.setting<string>('launches-repo'));
@@ -54,9 +65,8 @@ try {
     dryPublishing: () => dryPublishing(),
     writable: flags.on('launch-import'),
   });
-  console.log(`Database ${new URL(url).host}${new URL(url).pathname}, launches repo ${launchesRepo}`);
+  console.log(`Launches repo ${launchesRepo}`);
 
-  const verifyBatch = option('--verify');
   const rollbackBatch = option('--rollback');
   if (rollbackBatch) {
     const removed = await service.rollback(rollbackBatch);

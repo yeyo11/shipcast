@@ -612,6 +612,26 @@ function skipped(launch: Launch, reason: string): LaunchPlan {
   return { ...empty(launch), action: 'skip', reason };
 }
 
+/**
+ * The database the import script works on, as it prints it before connecting: host, port and name,
+ * never the user or the password, so the line can be pasted into a log or a chat
+ */
+export function databaseTarget(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.host}${parsed.pathname}`;
+}
+
+/**
+ * Why the import script refuses `--verify` here, if it does. Connecting migrates the database and the
+ * checks read every launch, so a verification is run where the import may write (`launch-import` on)
+ * or on a database the owner says is a restored copy (`--database-is-copy`), never by accident on
+ * production with the flag off.
+ */
+export function verifyRefusal(options: { writable: boolean; databaseIsCopy: boolean }): string | undefined {
+  if (options.writable || options.databaseIsCopy) return undefined;
+  return '--verify needs launch-import in SHIPCAST_FLAGS, or --database-is-copy when the database is a restored copy';
+}
+
 /** The plan as the dry run prints it: one block per launch */
 export function describePlan(plan: ImportPlan): string[] {
   const lines = [`The launches repo's main at ${plan.at}`];
