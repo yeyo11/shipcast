@@ -6,6 +6,7 @@ import {
   loadBrand,
   connectRepositories,
   DraftSnapshotService,
+  LaunchStoreService,
   PostgresLock,
   SecretRows,
   type OpenRepositories,
@@ -60,6 +61,8 @@ export interface Runtime {
   flushEvents(): Promise<void>;
   /** With `launch-media` and its bucket in .env: where launch media are kept; otherwise it refuses every call */
   media: MediaStore;
+  /** With `launch-store`: the launch model's shadow write beside the drafts pull request (docs/launch-store.md) */
+  launchStore: LaunchStoreService | undefined;
 }
 
 export interface RuntimeOptions {
@@ -139,6 +142,19 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     return cached.brand;
   };
 
+  const media = mediaStoreFor(flags, env, { ...(options.fetch && { fetch: options.fetch }) });
+  // Its media go to the media store, which refuses while launch-media is off: the check reports that
+  const launchStore = flags.on('launch-store')
+    ? new LaunchStoreService({
+        registry,
+        media,
+        github,
+        get launchesRepo() {
+          return settings.current().launchesRepo ?? '';
+        },
+      })
+    : undefined;
+
   const drafts = caches
     ? new DraftSnapshotService({
         github,
@@ -146,6 +162,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         get launchesRepo() {
           return settings.current().launchesRepo ?? '';
         },
+        ...(launchStore && { launchStore }),
       })
     : undefined;
 
@@ -176,6 +193,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),
+    ...(launchStore && { launchStore }),
   };
 
   return {
@@ -201,6 +219,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     flushEvents: async () => {
       await announced?.flush();
     },
-    media: mediaStoreFor(flags, env, { ...(options.fetch && { fetch: options.fetch }) }),
+    media,
+    launchStore,
   };
 }

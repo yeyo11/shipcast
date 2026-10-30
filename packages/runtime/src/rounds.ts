@@ -51,7 +51,7 @@ export async function publishOne(launch: Launch, d: RoundDeps, services: Service
   const connectors = publishConnectors(services);
   const result = d.publishing
     ? await d.publishing.service.publish(launch, d.brand, connectors, d.publishing.holder)
-    : await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });
+    : await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }) });
   if (result.state === 'published' || result.state === 'partial') {
     for (const p of result.posted) log(`${name(launch)} on ${p.channel}: ${p.url}`);
     for (const p of result.problems) log(`${name(launch)}: ${p}`);

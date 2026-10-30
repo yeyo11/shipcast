@@ -1,5 +1,5 @@
 import { imageUrl } from '@shipcast/schema';
-import { editDraft, preflight } from '@shipcast/engine';
+import { preflight } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
@@ -90,16 +90,13 @@ export const saveDraft = createServerFn({ method: 'POST' })
     return { id: id(o.id), path: text(o.path, 'path', 300), content: text(o.content, 'content', 200_000) };
   })
   .handler(async ({ data }) => {
-    const ctx = await appContext();
-    const { github, deps } = ctx;
-    const launch = await launchService(ctx).get(data.id);
+    const launches = launchService(await appContext());
+    const launch = await launches.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
     // A draft edit is a commit on the real pull request
     if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
     try {
-      await editDraft(launch, data.path, data.content, { github, launchesRepo: deps.launchesRepo });
-      // The page reads the snapshot: the edit shows at once, before GitHub's delivery confirms it
-      await ctx.drafts?.edited(launch, data.path, data.content.endsWith('\n') ? data.content : `${data.content}\n`);
+      await launches.editDraft(launch.id, data.path, data.content);
       return { ok: true as const };
     } catch (error) {
       return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };

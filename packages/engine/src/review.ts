@@ -5,7 +5,11 @@ import type { DraftSnapshot, DraftSnapshotInput, Launch } from './repositories/i
 
 /** The GitHub calls reviewing a launch's drafts makes; `GitHubRest` has them all */
 export interface ReviewGitHub {
-  pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string; headSha?: string }>;
+  /** `mergedBy` and `mergedAt` once merged: who approved the drafts, and when */
+  pullRequest(
+    repo: string,
+    number: number,
+  ): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string; headSha?: string; mergedBy?: string | null; mergedAt?: string | null }>;
   pullRequestFiles(repo: string, number: number): Promise<string[]>;
   /** The files with their blob shas, for the snapshot; the paths alone when a client lacks it */
   pullRequestFileEntries?(repo: string, number: number): Promise<Array<{ path: string; sha: string | null }>>;

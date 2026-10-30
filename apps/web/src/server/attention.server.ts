@@ -1,4 +1,4 @@
-import { CANONICAL_PREFIX, failurePrefix, METRIC_PROBLEM_PREFIX, type CanonicalMismatch, type Repositories } from '@shipcast/engine';
+import { CANONICAL_PREFIX, failurePrefix, LAUNCH_STORE_PREFIX, METRIC_PROBLEM_PREFIX, type CanonicalMismatch, type Repositories } from '@shipcast/engine';
 import { attentionItems, buildAttention, type Attention, type AttentionInput } from './attention.ts';
 
 type AttentionRegistry = Pick<Repositories, 'launches' | 'cursors' | 'accounts' | 'comments' | 'posts' | 'attention'>;
@@ -16,8 +16,19 @@ function pagesOf(value: string): CanonicalMismatch[] {
   }
 }
 
+/** A launch-store cursor's differences; none for a value that does not parse, as for the canonicals */
+function differencesOf(value: string): string[] {
+  try {
+    const report: unknown = JSON.parse(value);
+    const differences: unknown = report && typeof report === 'object' && 'differences' in report ? report.differences : undefined;
+    return Array.isArray(differences) ? differences.filter((d): d is string => typeof d === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
-  const [launches, failures, metricProblems, accounts, facets, newest, scheduled, canonicals] = await Promise.all([
+  const [launches, failures, metricProblems, accounts, facets, newest, scheduled, canonicals, stored] = await Promise.all([
     registry.launches.recent(60),
     registry.cursors.cursorsWithPrefix(failurePrefix()),
     registry.cursors.cursorsWithPrefix(METRIC_PROBLEM_PREFIX),
@@ -26,6 +37,7 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
     registry.comments.newestWaitingCommentId(false),
     registry.posts.scheduledPosts(),
     registry.cursors.cursorsWithPrefix(CANONICAL_PREFIX),
+    registry.cursors.cursorsWithPrefix(LAUNCH_STORE_PREFIX),
   ]);
   return {
     launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt })),
@@ -36,6 +48,7 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
     scheduled: scheduled.map((p) => ({ launchId: p.launchId, scheduledAt: p.scheduledAt })),
     metricProblems,
     canonicals: canonicals.map(({ key, value }) => ({ launchId: Number(key.slice(CANONICAL_PREFIX.length)), pages: pagesOf(value) })),
+    storeDifferences: stored.map(({ key, value }) => ({ launchId: Number(key.slice(LAUNCH_STORE_PREFIX.length)), differences: differencesOf(value) })),
     now: new Date(),
   };
 }

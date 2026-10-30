@@ -21,6 +21,9 @@ export interface FakePullRequest {
   state: PullRequestState;
   /** The paths the pull request changes, as GitHub lists them */
   files: string[];
+  /** Who merged it and when, once merged */
+  mergedBy?: string;
+  mergedAt?: string;
 }
 
 /** The methods a fake GitHub can be asked, by name, for the call log and for failures */
@@ -201,10 +204,10 @@ export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewG
       .sort();
   }
 
-  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: PullRequestState; branch: string; title: string }> {
+  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: PullRequestState; branch: string; title: string; mergedBy?: string; mergedAt?: string }> {
     this.#record('pullRequest', [repo, number]);
     const pr = this.#pull(repo, number);
-    return { number, url: `https://github.com/${repo}/pull/${number}`, state: pr.state, branch: pr.branch, title: pr.title };
+    return { number, url: `https://github.com/${repo}/pull/${number}`, state: pr.state, branch: pr.branch, title: pr.title, ...(pr.mergedBy && { mergedBy: pr.mergedBy }), ...(pr.mergedAt && { mergedAt: pr.mergedAt }) };
   }
 
   async pullRequestFiles(repo: string, number: number): Promise<string[]> {

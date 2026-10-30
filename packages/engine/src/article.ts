@@ -118,8 +118,9 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
   const files = [
     ...(await keepPubDates(renderDrafts(pack, launch, config, brand, now, assets.media.ogPng, screenshotPaths(assets.files)), deps.github, deps.launchesRepo, now)),
     ...assets.files,
-    { path: `${dir}/launch.yml`, content: `# The channels chosen in Shipcast for this article\n${stringify({ enabled: true, brand: brand.id, publishing: config.publishing })}` },
   ];
+  const configText = `# The channels chosen in Shipcast for this article\n${stringify({ enabled: true, brand: brand.id, publishing: config.publishing })}`;
+  files.push({ path: `${dir}/launch.yml`, content: configText });
   const delivered = await deliverDrafts(
     launch,
     deps,
@@ -129,6 +130,7 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
       title: `Article: ${input.title}`,
       body: `An article written in Shipcast, with its translation and a piece for each channel.\n\n**Merging publishes** the article on the blog and every \`approval\` channel. Edit any file first: what is merged is what gets published.`,
       message: `article: ${input.title}\n\nWritten in Shipcast; translated and distributed by it.`,
+      source: { pack, configText },
     },
     options,
   );

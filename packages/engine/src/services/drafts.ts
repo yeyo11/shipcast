@@ -3,12 +3,15 @@ import type { DraftFile } from '../drafts.ts';
 import { launchConfigText } from '../publish.ts';
 import type { DraftSnapshot, Launch, Repositories } from '../repositories/index.ts';
 import { openedSnapshot, readDraftSnapshot, type ReviewGitHub } from '../review.ts';
+import type { LaunchStoreService } from './launch-store.ts';
 
 export interface DraftSnapshotDeps {
   github: ReviewGitHub;
   registry: Pick<Repositories, 'drafts' | 'launches'>;
   /** Read at each call: the launches repo is a setting the owner can change */
   readonly launchesRepo: string;
+  /** With `launch-store`: each reading of a pull request also checks the launch model's copy of it */
+  launchStore?: Pick<LaunchStoreService, 'pullRequestRead'>;
 }
 
 /** How many recent launches the poll and the deliveries look through for a pull request's launch */
@@ -33,7 +36,11 @@ export class DraftSnapshotService {
   /** Reads the pull request from GitHub and rewrites the snapshot; undefined for a launch without one */
   async refresh(launch: Launch): Promise<DraftSnapshot | undefined> {
     const read = await readDraftSnapshot(launch, { github: this.#deps.github, launchesRepo: this.#deps.launchesRepo });
-    return read && this.#deps.registry.drafts.saveSnapshot(read);
+    if (!read) return undefined;
+    const saved = await this.#deps.registry.drafts.saveSnapshot(read);
+    // It reports what differs on its own and never throws
+    await this.#deps.launchStore?.pullRequestRead(launch, read).catch(() => undefined);
+    return saved;
   }
 
   /**
