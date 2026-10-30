@@ -30,6 +30,12 @@ export const FLAGS = {
    * Nothing reads them yet; its media need `launch-media` too
    */
   'launch-store': 'Launch model shadow write beside the drafts pull request',
+  /**
+   * Launch model, phase 3: scripts/import-launches.ts may write (docs/launch-import.md): import the
+   * launches drafted before the shadow write, delete the ones decided, roll a batch back. Off, it only
+   * plans and verifies; the app never reads it
+   */
+  'launch-import': 'Import of the existing launches into the launch model (scripts/import-launches.ts)',
 } as const;
 
 /**
