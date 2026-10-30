@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-10-30T00:54:00.114538025Z
+updated_at: 2026-10-30T02:01:58.165829889Z
 tags:
     - server
     - deploy
@@ -210,7 +210,8 @@ one at a time once each phase is verified:
 | `github-events` | pages read the drafts snapshot; GitHub is read on events and hourly |
 | `batched-metrics` | hourly, batched metrics and comment feeds |
 | `realtime-ui` | pages updated over server-sent events instead of polling |
-| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. Nothing calls it yet |
+| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. Only the shadow write (`launch-store`) calls it |
+| `launch-store` | the launch model's shadow write: each drafts pull request's pack, channels, drafts (as versions), media and merge also written to the launch model's tables and checked against it, differences in the attention bell ([launch-store.md](launch-store.md)); nothing reads the rows yet. Its media need `launch-media` on too |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
@@ -232,4 +233,4 @@ drafts snapshot.
 
 ## Related
 
-[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]]
+[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]]

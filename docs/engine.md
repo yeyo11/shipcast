@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-30T00:55:29.780951176Z
+updated_at: 2026-10-30T02:03:09.164228172Z
 tags:
     - engine
     - registry
@@ -18,10 +18,6 @@ tags:
     - settings
     - stats
     - scheduling
-    - services
-    - repositories
-    - telemetry
-    - launch-model
 ---
 # The engine
 
@@ -52,13 +48,14 @@ on 2026-10-29.)
 
 | Service | Use cases |
 | --- | --- |
-| `LaunchService` | the launches list, claim by hand (with the pre-flight check), claim an article, approve |
+| `LaunchService` | the launches list, claim by hand (with the pre-flight check), claim an article, edit a draft (`editDraft`: the commit, then the snapshot and the launch model's copy), approve |
 | `PublishingService` (`src/publishing/service.ts`) | publish a launch under per-piece claims, Try again on a channel, publish again ([decisions/publishing-state.md](decisions/publishing-state.md)) |
 | `PostService` | edit, delete, edit many, delete a launch's posts |
 | `ScheduleService` | schedule, move, cancel, recommended times, time zone ([scheduling.md](scheduling.md)) |
 | `CommentService` | list, edit a reply's draft, send, dismiss, settings |
 | `MetricsService` | read now; the hourly reads (`readHourly`) |
 | `DraftSnapshotService` | the drafts pull request as last read: written when opened and on each edit, refreshed on a webhook or by hand |
+| `LaunchStoreService` | with `launch-store`: the launch model's shadow write beside the drafts pull request, and its check ([launch-store.md](launch-store.md)) |
 | `AccountService`, `SettingsService` | rename, make primary; settings |
 | `NotificationService` | the owner's notices (drafted, published), to the private chat only |
 
@@ -84,6 +81,7 @@ uses; `inTransaction` runs a use case over several in one transaction.
 | `metrics` | readings, history, `lastChecked` |
 | `accounts` | connected accounts and their daily snapshots |
 | `drafts` | the drafts snapshot (`draft_snapshots`) |
+| `launchStore` | the launch model's packs, channel rows, drafts and versions, media and approvals |
 | `jobs`, `comments`, `settings`, `cursors`, `apiTokens`, `assistant`, `attention` | as named |
 | `queries` | the raw read-only SQL the query builder cannot say (stats, telemetry reports, checks) |
 
@@ -119,7 +117,8 @@ launch happens once" hold:
   `ai-budget-usd`, the global AI budget removed on 2026-10-29, is left in place and never read.)
 - **Cursors** keep positions and state only: polling, a channel's permanent failure (its key built
   and parsed only in `@shipcast/schema/failures`), a cancelled schedule, Instagram audience hours,
-  index status, the last round and delivery.
+  index status, the last round and delivery, and what the launch store's check last found
+  (`launch-store:<launch id>`).
 - **Accounts** and **account snapshots** ([accounts.md](accounts.md),
   [decisions/account-snapshots.md](decisions/account-snapshots.md)): adding, making primary and
   removing run in a transaction locked per network and brand; one snapshot row per account per UTC day.
@@ -130,9 +129,11 @@ launch happens once" hold:
 - **Telemetry** (`provider_calls`, `timings`, `checks`, migration `0012`): `src/telemetry/`
   ([measurement.md](measurement.md)).
 - **The launch model's tables** (migration `0018`, 2026-10-30), the first phase of
-  [decisions/launch-model.md](decisions/launch-model.md): added, with no repository and **read or
-  written by nothing yet**. Each hangs on its launch with `on delete cascade`, so a purge of the
-  launch's row takes them all (the soft delete keeps the row):
+  [decisions/launch-model.md](decisions/launch-model.md). Since the second phase the
+  `LaunchStoreRepository` (`repositories/launch-store.ts`) writes the packs, channel rows, drafts and
+  versions, media and approvals, through the shadow write of the `launch-store` flag
+  ([launch-store.md](launch-store.md)); **nothing reads them yet**. Each hangs on its launch with
+  `on delete cascade`, so a purge of the launch's row takes them all (the soft delete keeps the row):
 
   | Table | Holds |
   | --- | --- |
@@ -251,7 +252,8 @@ steps, output tokens and the timeout.
    media go with them ([publishing.md](publishing.md#the-launchs-media)).
 5. **Delivery** (`deliverDrafts`): a **pull request** in the launches repo (branch
    `launch/<project>-<ref>`, one commit through the Git data API), or, with `direct`, **one commit
-   straight onto `main`**. The drafts snapshot is written as the pull request opens.
+   straight onto `main`**. The drafts snapshot is written as the pull request opens, and with
+   `launch-store` the launch model's copy too ([launch-store.md](launch-store.md)).
 
 `claimManual(repo, ref?)` starts a launch by hand. In the app and the rounds, drafting is a `draft`
 job (a `heavy` one in a split), never retried on its own since it costs an AI run.
@@ -266,8 +268,9 @@ of them, and the locked truth rule becomes "only what the article says".
 
 ## Reviewing and approving
 
-`review.ts`: `readReview` lists a launch's drafts from its pull request, `editDraft` saves an edit as
-a commit on its branch (only drafts, only while open; the snapshot is patched with it), and
+`review.ts`: `readReview` lists a launch's drafts from its pull request, `LaunchService.editDraft`
+saves an edit as a commit on its branch (`editDraft`: only drafts, only while open; the snapshot is
+patched with it, and with `launch-store` it is a version of the owner's), and
 `LaunchService.approve` merges it with a squash, after which publishing follows as on any merge. With
 `github-events` the launch page reads the drafts from the snapshot, never from GitHub; **Refresh from
 GitHub** reads it again.
@@ -312,4 +315,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]]
