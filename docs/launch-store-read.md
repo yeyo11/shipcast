@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T04:52:08.327618725Z
-updated_at: 2026-10-30T04:52:08.327618725Z
+updated_at: 2026-10-30T05:06:13.916670297Z
 tags:
     - launches
     - launch-model
@@ -62,6 +62,10 @@ The channels are launch.yml as copied at the delivery (`launches.channels_source
 (`readLaunchYml`, which leaves out a retired channel). The pack is the newest accepted one, read
 without the keys of retired channels (`readPack`).
 
+An article edited after it was published (Edit on the launch page, a commit to the launches repo's
+main) is also a `post-publish-edit` version with `launch-store` on (`EditDeps.launchStore`, the
+shadow write's `edited`), so the page shows the article as the site does.
+
 ## The files, served by the app
 
 `GET /media/<id>` (`apps/web/src/routes/media.$mediaId.ts`) answers a `media` row's bytes from the
@@ -93,11 +97,11 @@ the pack agree. What differs:
 - **An edit made on GitHub reaches the rows only when the pull request is read**: with `github-events`
   the delivery of the push (or the hourly poll, or "Refresh from GitHub"); without it, at the merge,
   when publishing reads the merged pull request once. Until then the page shows the text before it.
-  Run the flag with `github-events` on.
+  Run the flag with `github-events` on. A commit made by hand on the launches repo's main after the
+  merge is not read at all.
 - **A merge on GitHub shows as open** until it is recorded the same way (an approval in the app is
   recorded at once with `github-events`; publishing records it in any case).
-- **An edit of the blog article after publishing** (Edit on the launch page, which commits to main)
-  is not a draft version yet: the page shows the article as merged or imported.
+- An article's edit after publishing does not move the post's `draft_version_id` yet.
 - Writes are unchanged: saving a draft commits to the pull request (and adds a version through the
   shadow write), approving merges it, publishing reads the merged files.
 
@@ -110,8 +114,9 @@ the review lists none and `/media/<id>` cannot answer. The order in production: 
 every reader to GitHub with no other change.
 
 The tests: `packages/engine/test/launch-store-read.test.ts` (parity on imported launches, a launch
-the shadow write stores, the fallback) and `apps/web/test/no-external-calls.test.ts` (the launch
-page with no snapshot makes no outbound call; scheduling refuses a channel its row turns off).
+the shadow write stores, an article edited after publishing, the fallback) and
+`apps/web/test/no-external-calls.test.ts` (the launch page with no snapshot makes no outbound call;
+scheduling refuses a channel its row turns off).
 
 ## Related
 
