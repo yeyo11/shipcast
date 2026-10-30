@@ -8,6 +8,7 @@ import {
   pageFetcher,
   GitHubApp,
   GitHubRest,
+  inTransaction,
   loadBrand,
   connectRepositories,
   DraftSnapshotService,
@@ -187,7 +188,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         })
       : undefined;
 
-  const triggers = flags.on('launch-triggers') ? new TriggerService({ registry }) : undefined;
+  const triggers = flags.on('launch-triggers') ? new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) }) : undefined;
   // A release whose launch the owner removed is never launched again by its events (docs/launch-delete.md)
   const removed = flags.on('launch-delete') ? (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey) : undefined;
 

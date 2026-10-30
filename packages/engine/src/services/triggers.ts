@@ -10,6 +10,8 @@ export { ruleLaunchYml } from '../launch-keys.ts';
 
 export interface TriggerServiceDeps {
   registry: Pick<Repositories, 'settings' | 'launchStore'>;
+  /** Runs `work` in one transaction with every repository over it (`inTransaction`, from the composition root) */
+  inTransaction<T>(work: (tx: Repositories) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -46,11 +48,19 @@ export class TriggerService {
     return parsed.data;
   }
 
-  /** A launch claimed for a repo without launch.yml keeps its rule's channels, which its draft reads */
-  async keepChannels(launchId: number, launchYml: string): Promise<void> {
+  /**
+   * Claims a launch for a repo without launch.yml together with its rule's channels, which its draft
+   * reads: one transaction, so a worker never picks up a claimed launch whose channels were not kept
+   * yet, or never will be after a crash between the two writes
+   */
+  async claimKeeping(launch: Parameters<Repositories['launches']['claim']>[0], launchYml: string): Promise<{ claimed: boolean; launch: Launch }> {
     const config = parseLaunchConfig(launchYml);
     if (!config.ok) throw new Error('the rule’s channels do not parse as a launch.yml');
-    await this.#deps.registry.launchStore.replaceChannels(launchId, channelRows(config.value), launchYml);
+    return this.#deps.inTransaction(async (tx) => {
+      const claimed = await tx.launches.claim(launch);
+      if (claimed.claimed) await tx.launchStore.replaceChannels(claimed.launch.id, channelRows(config.value), launchYml);
+      return claimed;
+    });
   }
 
   /** The channels kept for a launch, as launch.yml text, when its repo has none at the ref */

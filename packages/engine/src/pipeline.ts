@@ -59,7 +59,7 @@ export interface PipelineDeps {
    * a GitHub event goes by, and the channels kept for a launch a rule created for a repo without a
    * launch.yml, which its draft reads instead
    */
-  triggers?: Pick<TriggerService, 'rules' | 'keepChannels' | 'channelsText'>;
+  triggers?: Pick<TriggerService, 'rules' | 'claimKeeping' | 'channelsText'>;
   /** With `launch-delete` (docs/launch-delete.md): whether the owner removed the launch a dedupe key names, so no event launches it again */
   removed?: (dedupeKey: string) => Promise<boolean>;
 }

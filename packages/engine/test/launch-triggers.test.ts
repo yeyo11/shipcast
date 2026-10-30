@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Brand, DEFAULT_TRIGGER_RULES, parseLaunchConfig, ShipcastError, type TriggerRule } from '@shipcast/schema';
-import { claimEvent, draftLaunch, TriggerService, type GitHubEvent } from '../src/index.ts';
+import { claimEvent, draftLaunch, inTransaction, TriggerService, type GitHubEvent } from '../src/index.ts';
 import { FakeGitHub, memoryRegistry, mockRunner, scriptedModel, submitParts } from '../src/testing/index.ts';
 
 /*
@@ -28,7 +28,7 @@ const madePublic = (id: string, repo: string): GitHubEvent => ({ id, type: 'publ
 async function setup(files: Record<string, string> = {}, rules?: TriggerRule[]) {
   const registry = await memoryRegistry();
   const github = new FakeGitHub({ files });
-  const triggers = new TriggerService({ registry });
+  const triggers = new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) });
   if (rules) await triggers.save(rules);
   return { registry, github, triggers, options: { github, registry, brand, triggers } };
 }
@@ -162,6 +162,28 @@ test('a repo with no launch.yml is launched on the rule’s channels, which its 
   const files = github.opened[0]!.files.map((f) => f.path);
   assert.ok(files.some((p) => p.endsWith('/bluesky.md')), 'the rule’s channel is drafted');
   assert.ok(!files.some((p) => p.endsWith('/mastodon.md')), 'a channel the rule leaves out is not');
+});
+
+test('a launch a rule creates is claimed with its channels in one transaction: never a launch without them, and a failure is still recorded', async () => {
+  const registry = await memoryRegistry();
+  const github = new FakeGitHub({});
+  await new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) }).save([rule({ id: 'everything', event: 'release', channels: ['blog'] })]);
+  // The transaction is lost after both writes, before its commit (a dropped connection): neither may stay
+  const lost = new TriggerService({
+    registry,
+    inTransaction: (work) =>
+      inTransaction(registry, async (tx) => {
+        await work(tx);
+        throw new Error('the connection dropped');
+      }),
+  });
+  const outcome = await claimEvent(release('1', 'yeyo11/plain', 'v1.0.0'), { github, registry, brand, triggers: lost });
+  assert.equal(outcome.result, 'invalid-config');
+  assert.ok('launch' in outcome);
+  assert.equal(outcome.launch.status, 'failed', 'the owner hears of it, and no worker drafts a launch with no channels');
+  assert.match(outcome.launch.detail ?? '', /the channels of the rule "everything" could not be kept: the connection dropped/);
+  assert.equal((await registry.launches.recent()).length, 1);
+  assert.equal((await registry.launchStore.channels(outcome.launch.id)).source, null);
 });
 
 test('without the rules, a repo with no launch.yml still fails its draft as before', async () => {
