@@ -322,6 +322,8 @@ async function mergedContent(launch: Launch, deps: PublishDeps): Promise<LaunchC
 }
 
 export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {
+  // A launch the owner deleted sends nothing more, whatever was queued or scheduled before (docs/launch-delete.md)
+  if (launch.deletedAt) return { state: 'skipped', launch };
   const { github, registry } = deps;
   const http = deps.fetch ?? globalThis.fetch;
   // A launch Shipcast holds is read from its rows, each channel cleared by its mode and the approval (docs/app-review.md)

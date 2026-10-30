@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-30T06:22:21.300560819Z
+updated_at: 2026-10-30T07:59:17.803690004Z
 tags:
     - engine
     - registry
@@ -59,6 +59,8 @@ on 2026-10-29.)
 | `LaunchImportService` | the import of the launches drafted before the shadow write, and the deletion of the ones decided away: plan, apply (with `launch-import`), verify, roll back; run by `scripts/import-launches.ts` ([launch-import.md](launch-import.md)) |
 | `LaunchReadService` | with `launch-store-read`: a launch's drafts (the review), its channels and its pack read from the launch model's tables for the launch page, the REST API, scheduling and the assistants' grounding, and its stored files for `/media/<id>`; a launch the tables do not hold is read as before ([launch-store-read.md](launch-store-read.md)) |
 | `AppReviewService` | with `app-review`: a new launch held by Shipcast with no pull request (`hold`), its edits as versions, its approval as a row, whether anything can go out, what publishing reads, the one commit of its article and media to the launches repo at publishing, and the preview on the real site ([app-review.md](app-review.md)) |
+| `TriggerService` | with `launch-triggers`: the owner's trigger rules (read, saved), and the channels a launch a rule created for a repo without launch.yml keeps ([launch-triggers.md](launch-triggers.md)); the claim itself stays `claimEvent` |
+| `LaunchDeletionService` | with `launch-delete`: what deleting a launch would do, and the deletion: one never published removed with its rows, a published one hidden, its posts deleted on the channels named through `PostService` ([launch-delete.md](launch-delete.md)) |
 | `AccountService`, `SettingsService` | rename, make primary; settings |
 | `NotificationService` | the owner's notices (drafted, published), to the private chat only |
 
@@ -78,7 +80,7 @@ uses; `inTransaction` runs a use case over several in one transaction.
 
 | Repository | Holds |
 | --- | --- |
-| `launches` | claim, statuses, the paged and filtered list, `lastPublishedRef` |
+| `launches` | claim (with a dedupe key when given), statuses, the paged and filtered list (a hidden launch left out), `lastPublishedRef`, `hide` |
 | `posts` | one row per piece, scheduling |
 | `attempts` (`PublishAttempts`) | the outbox of publish claims (`publish_attempts`) |
 | `metrics` | readings, history, `lastChecked` |
@@ -86,6 +88,7 @@ uses; `inTransaction` runs a use case over several in one transaction.
 | `drafts` | the drafts snapshot (`draft_snapshots`) |
 | `launchStore` | the launch model's packs, channel rows, drafts and versions, media and approvals |
 | `launchImports` | the import's batch log (`launch_imports`), the deletion of a launch with every row on it and its restore, a batch's rollback |
+| `launchDeletions` | the launches the owner deleted (`launch_deletions`), and whether a dedupe key's launch was removed |
 | `jobs`, `comments`, `settings`, `cursors`, `apiTokens`, `assistant`, `attention` | as named |
 | `queries` | the raw read-only SQL the query builder cannot say (stats, telemetry reports, checks) |
 
@@ -117,7 +120,8 @@ launch happens once" hold:
   reading has `checked_at`: with `batched-metrics` an unchanged value moves `checked_at` on the last
   row instead of adding one ([stats.md](stats.md)).
 - **Settings** (`key`, `jsonb` value): the automation mode, the AI settings and prompts, the
-  launches repo, claudio's URL, the Instagram app id, the time zone, the onboarding. (A stored
+  launches repo, claudio's URL, the Instagram app id, the time zone, the onboarding, and with
+  `launch-triggers` the trigger rules (`triggers`, [launch-triggers.md](launch-triggers.md)). (A stored
   `ai-budget-usd`, the global AI budget removed on 2026-10-29, is left in place and never read.)
 - **Cursors** keep positions and state only: polling, a channel's permanent failure (its key built
   and parsed only in `@shipcast/schema/failures`), a cancelled schedule, Instagram audience hours,
@@ -143,8 +147,10 @@ launch happens once" hold:
   grounding read them instead of GitHub ([launch-store-read.md](launch-store-read.md)); publishing
   still reads the merged pull request. Since the fifth, with `app-review`, a new launch is held by
   them alone (`model = 'app'`): reviewed, approved and published from them
-  ([app-review.md](app-review.md)). Each hangs on its launch with `on delete cascade`, so a purge
-  of the launch's row takes them all (the soft delete keeps the row):
+  ([app-review.md](app-review.md)). Each hangs on its launch with `on delete cascade`, so removing
+  the launch's row takes them all; since the seventh, with `launch-delete`, a launch never published
+  is removed that way and a published one is hidden (`launches.deleted_at`, the row kept), each
+  deletion recorded in `launch_deletions` ([launch-delete.md](launch-delete.md)):
 
   | Table | Holds |
   | --- | --- |
@@ -164,12 +170,13 @@ launch happens once" hold:
   `repo` and `ref` stay required during the transition (a launch with no repo gets synthetic ones).
   `posts` and `publish_attempts` gained `draft_version_id`, and `publish_attempts` `approval_id`: what
   exactly went out, under which approval. The `Launch` the registry reads carries `model` since the
-  fifth phase.
+  fifth phase, and `deletedAt` once the owner hid it (the seventh).
 
   Migration `0019` (2026-10-30) added `import_batch` to the seven tables (the import that wrote a
   row; null for every other writer) and `launch_imports`, the import's batch log: one row per launch
   a batch imported or deleted, with what it was before, so a batch is verified and rolled back from
-  there ([launch-import.md](launch-import.md)).
+  there ([launch-import.md](launch-import.md)). Migration `0020` (2026-10-30) added
+  `launch_deletions`, one row per launch the owner deleted ([launch-delete.md](launch-delete.md)).
 
 An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
 ([decisions/postgres.md](decisions/postgres.md#moving-an-install)).
@@ -197,7 +204,9 @@ resolved with Shipcast's own token, for a provider that downloads the repo itsel
 `enabled: false`, a pre-release, a trigger turned off, or another brand → ignored; an invalid file →
 claimed and recorded `failed` with the line-numbered issues; otherwise **claimed**, with the pack from
 `resolvePack`. With `github-events` releases arrive by webhook and the round's detection runs at most
-hourly, as a safety net.
+hourly, as a safety net. With `launch-triggers` the owner's trigger rules decide which events count,
+launch.yml is optional input and each claim carries its dedupe key; with `launch-delete` an event of
+a removed launch launches nothing ([launch-triggers.md](launch-triggers.md)).
 
 ## The pre-flight check
 
@@ -250,7 +259,9 @@ steps, output tokens and the timeout.
 
 `draftLaunch(launch, brand, deps, { direct? })` (`pipeline.ts`) records each step in the registry:
 
-1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's.
+1. **`launch.yml` at the ref**, validated, and its `brand` checked against the launches repo's. With
+   `launch-triggers`, a launch a rule created for a repo with none reads the channels it kept instead
+   ([launch-triggers.md](launch-triggers.md)).
 2. **A fresh shallow clone** of the release (`workspace.ts`). In a split deployment
    (`SHIPCAST_ROLE`) each job's clone has a unique name and is removed when the job ends
    (`withJobWorkspace`), so no two jobs share one; a single process keeps one
@@ -343,4 +354,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]] · [[app-review.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]] · [[app-review.md]] · [[launch-triggers.md]] · [[launch-delete.md]]

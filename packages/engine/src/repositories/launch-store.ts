@@ -212,6 +212,12 @@ export class LaunchStoreRepository {
     return (await this.#db.select().from(media).where(where).orderBy(media.id)).map(mediaOf);
   }
 
+  /** Whether any row still names these bytes: the store keeps them by content, and two launches may share them */
+  async mediaInUse(sha256: string): Promise<boolean> {
+    const [row] = await this.#db.select({ id: media.id }).from(media).where(eq(media.sha256, sha256)).limit(1);
+    return row !== undefined;
+  }
+
   /** A published piece now says this version of its draft (an edit after publishing) */
   async linkPost(postId: number, versionId: number): Promise<void> {
     await this.#db.update(posts).set({ draftVersionId: versionId }).where(eq(posts.id, postId));

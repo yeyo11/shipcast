@@ -4,6 +4,8 @@ import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
+import { deletionService } from './deletion.server';
+import { channelList } from './post-changes';
 import { repoList } from './repo-list';
 import { id, object, text } from './input';
 import { ownerAvatarUrl } from './launch-list';
@@ -63,7 +65,49 @@ export const getLaunch = createServerFn({ method: 'GET' })
       ...page,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
       fakeNetworks: fakeNetworks(),
+      /** With `launch-delete`: the page offers to delete the launch (docs/launch-delete.md) */
+      deletable: ctx.flags.on('launch-delete'),
     };
+  });
+
+const DELETE_OFF = 'launches are deleted only with the launch-delete flag on';
+
+/** What deleting a launch would do, for the owner to choose before anything happens (docs/launch-delete.md) */
+export const getDeletion = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => id(input))
+  .handler(async ({ data }) => {
+    const service = deletionService(await appContext());
+    if (!service) return { ok: false as const, problem: DELETE_OFF };
+    try {
+      const { mode, refused, channels, articleLinks } = await service.plan(data);
+      return { ok: true as const, plan: { mode, refused: refused ?? null, channels, articleLinks } };
+    } catch (error) {
+      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+/** Deletes a launch: removed when it never published, otherwise hidden, with the posts of the channels ticked deleted on their networks */
+export const deleteLaunch = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    const o = object(input, 'input');
+    return { id: id(o.id), channels: channelList(o.channels) ?? [] };
+  })
+  .handler(async ({ data }) => {
+    const service = deletionService(await appContext());
+    if (!service) return { ok: false as const, problem: DELETE_OFF };
+    try {
+      const result = await service.delete(data.id, { channels: data.channels, by: (await signedIn()) ?? 'owner' });
+      return {
+        ok: true as const,
+        mode: result.mode,
+        warning: result.warning ?? null,
+        problems: result.problems,
+        failed: result.outcomes.flatMap((o) => (o.ok ? [] : [`${o.channel || 'a post'}: ${o.problem}`])),
+        deleted: result.outcomes.filter((o) => o.ok).length,
+      };
+    } catch (error) {
+      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+    }
   });
 
 /**

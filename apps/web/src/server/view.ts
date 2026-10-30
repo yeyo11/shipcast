@@ -22,6 +22,8 @@ export interface LaunchView {
   /** Replies Shipcast sent under this launch's posts, per channel: a count, never a row each */
   replies: Record<string, number>;
   headline: Array<{ label: string; value: number }>;
+  /** When the owner deleted it (a published launch, kept hidden: docs/launch-delete.md) */
+  deletedAt?: string;
 }
 
 /** A piece beside its channel's name: nothing for the post itself, the language for an article or an issue, the subreddit for a Reddit post */

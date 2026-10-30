@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-10-27T17:45:56.266034156Z
+updated_at: 2026-10-30T07:58:02.65797894Z
 tags:
     - api
     - reference
@@ -78,6 +78,8 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats
 | `DELETE /posts/{postId}` | write | Deletes one published post (dev.to unpublishes it). Answers `{ "post" }`, now `deleted`; the launch never publishes it again |
 | `PATCH /launches/{id}/posts` | write | The same change to every live post of the launch, or of `"channels": [...]`, each network taking the fields it has; scheduled pieces are left out. Answers `{ "outcomes": [...] }`, one per post: `ok` with the post, or the `reason` (`unsupported`, `invalid`, `no_credentials`, `failed`…) and the `problem` |
 | `DELETE /launches/{id}/posts?channels=a,b` | write | Deletes every live post of the launch, or of the channels named; answers the outcomes the same way |
+| `GET /launches/{id}/deletion` | read | With `launch-delete`: what deleting the launch would do, nothing changed: `{ mode, refused, channels, articleLinks }`, `mode` `removed` (never published) or `hidden` (published), each channel with pieces out and what deleting there does (`yes`, `unpublish`, `no`) ([launch-delete.md](launch-delete.md)) |
+| `DELETE /launches/{id}?channels=a,b` | write | With `launch-delete`: deletes the launch. One never published is removed; a published one is hidden (`deletedAt` on `GET /launches/{id}`, gone from `GET /launches`), its posts kept except on the channels named, deleted there too (`blog` removes the article). Answers `{ mode, outcomes, warning?, problems }`, `warning` saying how many posts still link a removed article; 409 while its drafts are being written or once deleted. Without the flag, 404 |
 | `POST /accounts/{accountId}/profile-review` | write | A job reviews the account's profile with the AI settings' `profile` task; nothing changes on the network. The body is optional: `{ "pasted"?: { "displayName"?, "bio"?, "links"?: "Label: value\n…" }, "language"?: "es" }`, `pasted` for a network whose API cannot read the profile (Instagram, Threads, LinkedIn, Reddit), `language` one of the brand's |
 | `PATCH /accounts/{accountId}/profile` | write | `{ "displayName"?, "bio"?, "links"?: [{ "name", "value" }] }`, at least one: changes the profile on its network with the account's own credential (Mastodon, Bluesky, a Telegram channel), only the fields sent, within the network's limits. Answers `{ "profile" }`, as the network has it now, or `null` |
 | `POST /comments/check` | write | Check comments now: a job reads every live post's comments and drafts the new ones' replies |
@@ -180,4 +182,4 @@ to a test post of its own against a fourth
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[decisions/lists.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[decisions/lists.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[launch-delete.md]]

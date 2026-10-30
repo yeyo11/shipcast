@@ -178,7 +178,7 @@ export class AppReviewService {
   async #published(launch: Launch, record: BlogCommit): Promise<BlogCommit> {
     await this.#deps.registry.cursors.setCursor(appBlogKey(launch.id), JSON.stringify(record));
     // The preview has served its purpose; a failure to close it never holds the launch back
-    await this.#closePreview(launch).catch(() => undefined);
+    await this.closePreview(launch).catch(() => undefined);
     return record;
   }
 
@@ -244,7 +244,8 @@ export class AppReviewService {
     return kept ? (JSON.parse(kept) as SitePreview) : undefined;
   }
 
-  async #closePreview(launch: Launch): Promise<void> {
+  /** Closes the real site's preview of a launch, when one was asked for: at publishing, or when the launch is deleted */
+  async closePreview(launch: Pick<Launch, 'id'>): Promise<void> {
     const prior = await this.sitePreview(launch.id);
     if (!prior) return;
     await this.#deps.github.closePreview(this.#deps.launchesRepo, prior.number, prior.branch);

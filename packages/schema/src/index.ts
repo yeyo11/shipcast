@@ -1,6 +1,7 @@
 export * from './channels.ts';
 export * from './channels/index.ts';
 export * from './launch-config.ts';
+export * from './triggers.ts';
 export * from './brand.ts';
 export * from './content-pack.ts';
 export * from './pack.ts';

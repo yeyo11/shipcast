@@ -59,6 +59,7 @@ export async function launchView(registry: Pick<Repositories, 'posts' | 'metrics
       const found = metrics.find((m) => m.source === source && m.name === name);
       return found ? [{ label, value: found.value }] : [];
     }),
+    ...(launch.deletedAt && { deletedAt: launch.deletedAt }),
   };
 }
 

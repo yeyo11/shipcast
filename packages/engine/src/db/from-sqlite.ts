@@ -16,7 +16,7 @@ const TABLES = ['launches', 'posts', 'metrics', 'cursors', 'accounts'] as const;
 const IDENTITIES = ['launches', 'accounts'];
 
 /** Every table a migration creates, to start again from nothing */
-const ALL_TABLES = ['launch_imports', 'approvals', 'media', 'draft_versions', 'drafts', 'packs', 'launch_channels', 'launch_sources', 'draft_snapshots', 'secrets', 'publish_attempts', 'checks', 'timings', 'provider_calls', 'attention_dismissals', 'assistant_messages', 'assistant_sessions', 'comments', 'account_snapshots', 'jobs', 'api_tokens', 'metric_days', 'metrics', 'posts', 'settings', 'cursors', 'accounts', 'launches'];
+const ALL_TABLES = ['launch_deletions', 'launch_imports', 'approvals', 'media', 'draft_versions', 'drafts', 'packs', 'launch_channels', 'launch_sources', 'draft_snapshots', 'secrets', 'publish_attempts', 'checks', 'timings', 'provider_calls', 'attention_dismissals', 'assistant_messages', 'assistant_sessions', 'comments', 'account_snapshots', 'jobs', 'api_tokens', 'metric_days', 'metrics', 'posts', 'settings', 'cursors', 'accounts', 'launches'];
 
 // Well under Postgres' 65535 parameters per statement, at 11 columns a row
 const BATCH = 1000;

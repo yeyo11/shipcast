@@ -11,6 +11,7 @@ import type { Launch, Repositories } from './repositories/index.ts';
 import type { LaunchReadService } from './services/launch-read.ts';
 import type { AppReviewService } from './services/app-review.ts';
 import type { LaunchStoreService } from './services/launch-store.ts';
+import type { TriggerService } from './services/triggers.ts';
 import type { Checkout } from './workspace.ts';
 
 export interface PipelineDeps {
@@ -47,6 +48,14 @@ export interface PipelineDeps {
    * (docs/app-review.md), with no pull request and no commit until it is published
    */
   appReview?: AppReviewService;
+  /**
+   * With `launch-triggers` (docs/launch-triggers.md): the owner's trigger rules, which every claim of
+   * a GitHub event goes by, and the channels kept for a launch a rule created for a repo without a
+   * launch.yml, which its draft reads instead
+   */
+  triggers?: Pick<TriggerService, 'rules' | 'keepChannels' | 'channelsText'>;
+  /** With `launch-delete` (docs/launch-delete.md): whether the owner removed the launch a dedupe key names, so no event launches it again */
+  removed?: (dedupeKey: string) => Promise<boolean>;
 }
 
 /** The prompts and tone a task on the runner is written with: the settings', or the ones in code */
@@ -155,7 +164,8 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   await registry.launches.setStatus(launch.id, 'generating');
   const ref = launch.ref.startsWith('public:') ? 'HEAD' : launch.ref;
 
-  const text = await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, ref);
+  // A launch a trigger rule created for a repo with no launch.yml was given the rule's channels instead
+  const text = (await github.fileAt(launch.repo, LAUNCH_CONFIG_PATH, ref)) ?? (await deps.triggers?.channelsText(launch));
   if (text === undefined) return fail([`${launch.repo} has no ${LAUNCH_CONFIG_PATH} at ${ref}`]);
   const parsed = parseLaunchConfig(text);
   if (!parsed.ok) return fail([formatIssues(LAUNCH_CONFIG_PATH, parsed.issues)]);

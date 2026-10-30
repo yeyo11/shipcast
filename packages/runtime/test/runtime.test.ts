@@ -103,3 +103,15 @@ test('app-review (docs/app-review.md) needs the reads and the media of the launc
   assert.ok(on.appReview);
   assert.equal(on.pipeline.appReview, on.appReview);
 });
+
+test('launch-triggers and launch-delete (docs/launch-triggers.md, docs/launch-delete.md) are off unless named', async () => {
+  const start = async (flags: string) => createRuntime({ env: { ...BOOTSTRAP, SHIPCAST_FLAGS: flags }, root: '/repo', registry: await memoryRegistry(), secrets: new MemoryStore(), fetch: fakeGitHub([]) });
+  const off = await start('');
+  assert.equal(off.triggers, undefined);
+  assert.equal(off.pipeline.triggers, undefined, 'without it, each repo’s launch.yml decides alone');
+  assert.equal(off.pipeline.removed, undefined);
+  const on = await start('launch-triggers,launch-delete');
+  assert.ok(on.triggers);
+  assert.equal(on.pipeline.triggers, on.triggers);
+  assert.equal(await on.pipeline.removed?.('github-release:yeyo11/claudio@v1.0.0'), false);
+});

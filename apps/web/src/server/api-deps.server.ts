@@ -1,6 +1,7 @@
 import { processState } from '@shipcast/runtime/redis';
 import { FailureLimiter, sharedLimiter, type ApiDeps, type SignInLimiter } from './api';
 import { appContext } from './context.server';
+import { deletionService } from './deletion.server';
 import { jobsFeed } from './jobs.server';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { editingDeps } from './posts.server';
@@ -40,5 +41,6 @@ export async function apiDeps(): Promise<ApiDeps> {
     checkComments,
     redraftComment,
     profiles: profileApi,
+    deletion: deletionService(ctx),
   };
 }
