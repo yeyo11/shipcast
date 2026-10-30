@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T07:55:43.916970887Z
-updated_at: 2026-10-30T07:55:43.916970887Z
+updated_at: 2026-10-30T10:47:08.035298122Z
 tags:
     - launches
     - launch-model
@@ -31,10 +31,30 @@ phase is [launch-triggers.md](launch-triggers.md).
 "Published" is decided from what may be out, not from the status alone: a post of any status but
 `scheduled` or `failed`, an attempt `live`, `unknown` or `attempting`, a `published` status, or the
 article already on the site (a merged drafts pull request, a direct commit, or the site commit of a
-launch Shipcast holds, `AppReviewService.published`).
+launch Shipcast holds). For a launch Shipcast holds the service reads its `app-blog:<id>` cursor
+itself, recorded or still pending, whatever the `app-review` flag of the process: before the review
+fixes of 2026-10-30 it asked `AppReviewService`, which a process without `app-review` does not have,
+and a launch whose article was on the site could have been removed as never published.
 
 A launch whose drafts are being written (`detected`, `generating`) is refused until they are, so a
 draft job never finds its launch gone; a hidden launch is refused a second time.
+
+## Races with publishing
+
+The plan is read outside any transaction, so a worker may send or claim a piece between the plan and
+the deletion. The deletion therefore runs in one transaction that first locks the launch's row
+(`launches.lock`, `SELECT … FOR UPDATE`, 2026-10-30):
+
+- **Removed**: inside the lock the posts and the publish attempts are read again; a piece out, or an
+  attempt `live`, `unknown` or `attempting`, refuses the removal ("published meanwhile": delete it
+  again to hide it). A claim in flight is a `publish_attempts` insert, whose foreign key takes a
+  `FOR KEY SHARE` lock on the launch's row, which conflicts with `FOR UPDATE`: it is either committed
+  before the lock and seen, or waits for the deletion and then finds no launch.
+- **Hidden**: the waiting pieces are unscheduled, the launch hidden and the deletion recorded in that
+  same transaction, `deletedAt` re-checked under the lock, so a failure leaves none of it half done
+  and a second deletion meanwhile is refused instead of recorded twice.
+- **Publishing** re-reads the launch's `deletedAt` before each channel's send (and in the piece
+  guard's `stillNeeded`), so a run that started before the deletion sends nothing more after it.
 
 ## The posts, channel by channel
 
@@ -58,10 +78,13 @@ launch's id, repo and ref, its dedupe key (the stored one, or the one its repo a
 `dedupeKeyOf`), the mode, who (the signed-in login, `api`, or `owner`), when, the channels deleted on
 the networks and the article's links. No foreign key: a removed launch's row is gone.
 
-A removed launch's key keeps an event from launching it again: with the flag, the runtime hands the
-claim `removed` (`launchDeletions.removed`), and `claimEvent` ignores an event whose key was removed
-("its launch was deleted"), with or without the trigger rules. A hidden launch needs no check: its
-row still holds the claim. Launching the same release by hand is still possible.
+A removed launch's key keeps an event from launching it again: the runtime always hands the claim
+`removed` (`launchDeletions.removed`, one lookup on the `launch_deletions_by_key` index), and
+`claimEvent` ignores an event whose key was removed ("its launch was deleted"), with or without the
+trigger rules. Since 2026-10-30 the check does not depend on the `launch-delete` flag: a process
+started without it (a rollback, another replica) must not relaunch what one with it removed. A
+hidden launch needs no check: its row still holds the claim. Launching the same release by hand is
+still possible.
 
 ## Entry points
 
@@ -71,10 +94,11 @@ row still holds the claim. Launching the same release by hand is still possible.
 | `GET /api/v1/launches/{id}/deletion` | the plan (`read`) |
 | `DELETE /api/v1/launches/{id}?channels=a,b` | the deletion (`write`), the posts of the channels named deleted on their networks; answers `mode`, the `outcomes`, a `warning` and `problems` (what could not be tidied after) |
 
-Without the flag both routes answer 404 and the page shows no button. One implementation behind
-them: `LaunchDeletionService` (`packages/engine/src/services/launch-delete.ts`), built once by
-`deletionService` (`apps/web/src/server/deletion.server.ts`). On a preview with fake networks it
-closes nothing on GitHub and drops no media bytes.
+Without the flag both routes answer 404, are left out of the OpenAPI document (`ApiRoute.available`),
+and the page shows no button. One implementation behind them: `LaunchDeletionService`
+(`packages/engine/src/services/launch-delete.ts`), built once by `deletionService`
+(`apps/web/src/server/deletion.server.ts`). On a preview with fake networks it closes nothing on
+GitHub and drops no media bytes.
 
 ## Not done
 
@@ -89,8 +113,13 @@ closes nothing on GitHub and drops no media bytes.
 `packages/engine/test/launch-delete.test.ts`: every launch listed today, a launch never published
 removed with its rows and its pull request closed, its media bytes dropped unless shared, the
 refusals, a published one hidden with its posts kept, the channels ticked deleted with the article's
-warning, a hidden launch publishing nothing more, and a merged pull request counting as published.
-`apps/web/test/api.test.ts`: the routes off without the flag, the plan, the scopes and a deletion.
+warning, a hidden launch publishing nothing more, a merged pull request counting as published, a
+launch Shipcast holds whose article was committed hidden even without `app-review`, a piece sent or
+claimed between the plan and the removal stopping it, hiding as one transaction, a second deletion
+meanwhile refused, and publishing stopping mid-run once the launch is deleted.
+`packages/runtime/test/runtime.test.ts`: the removed releases read without the flag.
+`apps/web/test/api.test.ts`: the routes off without the flag (and out of the OpenAPI document), the
+plan, the scopes and a deletion.
 
 ## Related
 
