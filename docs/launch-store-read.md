@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T04:52:08.327618725Z
-updated_at: 2026-10-30T05:06:13.916670297Z
+updated_at: 2026-10-30T05:21:41.419793316Z
 tags:
     - launches
     - launch-model
@@ -64,7 +64,8 @@ without the keys of retired channels (`readPack`).
 
 An article edited after it was published (Edit on the launch page, a commit to the launches repo's
 main) is also a `post-publish-edit` version with `launch-store` on (`EditDeps.launchStore`, the
-shadow write's `edited`), so the page shows the article as the site does.
+shadow write's `articleEdited`), and its post's `draft_version_id` names that version, so the page
+shows the article as the site does.
 
 ## The files, served by the app
 
@@ -101,7 +102,6 @@ the pack agree. What differs:
   merge is not read at all.
 - **A merge on GitHub shows as open** until it is recorded the same way (an approval in the app is
   recorded at once with `github-events`; publishing records it in any case).
-- An article's edit after publishing does not move the post's `draft_version_id` yet.
 - Writes are unchanged: saving a draft commits to the pull request (and adds a version through the
   shadow write), approving merges it, publishing reads the merged files.
 

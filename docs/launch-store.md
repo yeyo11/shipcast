@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T02:00:22.986242054Z
-updated_at: 2026-10-30T05:06:41.206689672Z
+updated_at: 2026-10-30T05:22:40.544353644Z
 tags:
     - launches
     - launch-model
@@ -35,7 +35,7 @@ function, `storedFile` (`packages/engine/src/launch-store.ts`), which the import
 | The owner edits a draft in Shipcast | `LaunchService.editDraft`, which the launch page's save now calls | a version of the owner's (origin `owner`) |
 | The pull request is read (the drafts snapshot's refresh: a delivery, the hourly poll, "Refresh from GitHub", an approval in the app) | `DraftSnapshotService.refresh` | each draft whose text changed on GitHub becomes a version of the owner's; a merged pull request becomes the `approvals` row, by the merger's login at `merged_at`, naming the version of each draft merged, and `launches.approved_at` |
 | Publishing finds the drafts approved | `publishLaunch` through `PublishDeps.launchStore` | the same read of the merged pull request, once, when no approval is recorded: the approval is written whether `github-events` is on or not |
-| The owner edits a published article (Edit on the launch page, a commit to main) | `editPost` through `EditDeps.launchStore` | a version of the article as committed (origin `post-publish-edit`) |
+| The owner edits a published article (Edit on the launch page, a commit to main) | `editPost` through `EditDeps.launchStore` (`articleEdited`) | a version of the article as committed (origin `post-publish-edit`), and the article's post's `draft_version_id` set to it |
 
 The mapping:
 
