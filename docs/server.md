@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-10-30T00:54:00.114538025Z
+updated_at: 2026-10-30T03:15:48.539765467Z
 tags:
     - server
     - deploy
@@ -211,6 +211,7 @@ one at a time once each phase is verified:
 | `batched-metrics` | hourly, batched metrics and comment feeds |
 | `realtime-ui` | pages updated over server-sent events instead of polling |
 | `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. Nothing calls it yet |
+| `launch-sources` | launches made from sources: text, pages (fetched through the guarded fetcher), several repos and uploaded images, from the app's Launch from sources page and `POST /api/v1/launches/sources`; a launch.yml's `sources` read when its release triggers it; further repos' stars read per repo ([sources.md](sources.md)). Uploads also need `launch-media` |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
@@ -232,4 +233,4 @@ drafts snapshot.
 
 ## Related
 
-[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]]
+[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[sources.md]]

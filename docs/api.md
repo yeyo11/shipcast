@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-10-27T17:45:56.266034156Z
+updated_at: 2026-10-30T03:17:05.690150072Z
 tags:
     - api
     - reference
@@ -16,6 +16,7 @@ tags:
     - comments
     - lists
     - profiles
+    - sources
 ---
 # The REST API
 
@@ -47,7 +48,8 @@ wrong ones.
 
 The OpenAPI 3.1 document is at `GET /api/v1/openapi.json`, public, built from the same table the
 routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats routes of
-`stats-api.ts` and the profile routes of `profile-api.ts`), so it cannot drift.
+`stats-api.ts`, the profile routes of `profile-api.ts` and the sources routes of `sources-api.ts`),
+so it cannot drift.
 
 | Route | Scope | Does |
 | --- | --- | --- |
@@ -74,6 +76,8 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the stats
 | `DELETE /posts/{postId}/schedule` | write | Cancels a scheduled piece: its channel is not published for that launch until it is scheduled again. Answers `{ "post" }`, the removed row |
 | `PATCH /settings/timezone` | write | `{ "timezone": "Europe/Madrid" }`: an IANA name; offsets such as `+01:00` are refused, having no summer time |
 | `POST /articles` | write | `{ "title", "markdown", "lang": "en"\|"es", "channels"?: [...], "direct"?: false }`: an article written by hand |
+| `POST /launches/sources` | write | With `launch-sources`: `{ "title", "lang"?: "en"\|"es", "channels"?: [...], "sources": [...] }`, each source `{ "kind": "text", "text", "title"? }`, `{ "kind": "url", "url" }`, `{ "kind": "repo", "repo", "ref"?, "primary"? }` or `{ "kind": "media", "sha256", "name"?, "alt"? }`: a launch made from sources, drafted as a job; its pages are fetched before the claim, and a page refused, an upload not found or a title launched already is a 409 ([sources.md](sources.md)) |
+| `POST /media` | write | With `launch-sources`: the bytes of a PNG, JPEG, GIF or WebP (`content-type: application/octet-stream`, up to 20 MiB), its metadata removed and kept in the media store (`launch-media`). Answers `{ "file": { "sha256", "mime", "bytes", "width", "height" } }`; a `media` source names it by its sha256 |
 | `PATCH /posts/{postId}` | write | Edits one published post on its network with the account it went out with: `{ "text"?, "title"?, "tags"?, "link"?, "imageUrl"?, "imageAlt"? }`, at least one; a field the network does not take is refused, and so is a piece still scheduled. Answers `{ "post" }`, now `edited` |
 | `DELETE /posts/{postId}` | write | Deletes one published post (dev.to unpublishes it). Answers `{ "post" }`, now `deleted`; the launch never publishes it again |
 | `PATCH /launches/{id}/posts` | write | The same change to every live post of the launch, or of `"channels": [...]`, each network taking the fields it has; scheduled pieces are left out. Answers `{ "outcomes": [...] }`, one per post: `ok` with the post, or the `reason` (`unsupported`, `invalid`, `no_credentials`, `failed`…) and the `problem` |
@@ -100,12 +104,13 @@ request and answers **200**. Errors are `{ "error": { "code", "message" } }`:
 
 | Status | Code | When |
 | --- | --- | --- |
-| 400 | `invalid_input` | A field, a query parameter or the cursor is not valid (a cursor sent with another sort included); an edit with a field that network does not take; a period backwards or a series of more than 400 buckets; a time without its offset, a channel with no time, a zone that is not IANA; a reply that is empty, over the channel's limit, or approved with no draft; a profile field over the network's limit, links not written as `Label: value`, or a review of a network that cannot read the profile with nothing pasted |
+| 400 | `invalid_input` | A field, a query parameter or the cursor is not valid (a cursor sent with another sort included); an edit with a field that network does not take; a period backwards or a series of more than 400 buckets; a time without its offset, a channel with no time, a zone that is not IANA; a reply that is empty, over the channel's limit, or approved with no draft; a profile field over the network's limit, links not written as `Label: value`, or a review of a network that cannot read the profile with nothing pasted; a source of an unknown kind, or an upload that is not one of the images taken |
 | 401 | `unauthorized` | No token, a wrong one, a revoked one, or only the session cookie |
 | 403 | `insufficient_scope` | The token lacks the route's scope |
 | 404 | `not_found` | No such launch, post, account, comment or route |
 | 405 | `method_not_allowed` | The route exists with another method (`Allow` lists them) |
-| 409 | `refused` | The work was refused: launched already, a failing pre-flight, drafts that do not merge; a network that cannot edit or delete, a post deleted already or still scheduled, no credentials for the account it went out with; a schedule for a piece out already or a launch done; a reply on a network that cannot send one (dev.to), to the owner's own comment, or to a comment sent, being sent or dismissed already; a profile edit on a network that cannot make it, or with a credential that must be connected again |
+| 409 | `refused` | The work was refused: launched already, a failing pre-flight, drafts that do not merge; a network that cannot edit or delete, a post deleted already or still scheduled, no credentials for the account it went out with; a schedule for a piece out already or a launch done; a reply on a network that cannot send one (dev.to), to the owner's own comment, or to a comment sent, being sent or dismissed already; a profile edit on a network that cannot make it, or with a credential that must be connected again; a launch made from sources while `launch-sources` is off, or whose page the fetcher refused |
+| 413 | `too_large` | An upload over 20 MiB, stopped as soon as it passes the cap |
 | 415 | `unsupported_media_type` | A body that is not `application/json` |
 | 429 | `rate_limited` | Ten wrong tokens from this client in ten minutes; see `Retry-After` |
 | 502 | `upstream` | The network refused the edit, the delete, the reply or the profile edit; the message is what it said |
@@ -143,6 +148,10 @@ curl -X POST -H "authorization: Bearer $TOKEN" "$APP/api/v1/accounts/2/profile-r
 curl -H "authorization: Bearer $TOKEN" "$APP/api/v1/accounts/2/profile-review"
 curl -X PATCH -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"bio":"The proposed bio"}' "$APP/api/v1/accounts/2/profile"
+curl -X POST -H "authorization: Bearer $TOKEN" -H 'content-type: application/octet-stream' \
+  --data-binary @screenshot.png "$APP/api/v1/media"
+curl -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"title":"Why I self-host","sources":[{"kind":"text","text":"My notes"},{"kind":"url","url":"https://example.com/post"}]}' "$APP/api/v1/launches/sources"
 curl "$APP/api/v1/openapi.json"
 ```
 
@@ -164,8 +173,9 @@ after two weeks, so the offset stays small.
 Unit tests on a PGlite registry cover the tokens (creation, hash, verification, revocation, a
 foreign pepper), the scopes, the limit on wrong tokens and every route's answers
 (`packages/runtime/test/api-tokens.test.ts`, `apps/web/test/api.test.ts`,
-`apps/web/test/stats-api.test.ts`, `apps/web/test/profile-api.test.ts`), the edit, delete,
-scheduling, comment and profile routes included, with fake connectors. The jobs' cursor is walked to
+`apps/web/test/stats-api.test.ts`, `apps/web/test/profile-api.test.ts`,
+`apps/web/test/sources-api.test.ts`), the edit, delete, scheduling, comment, profile and sources
+routes included, with fake connectors. The jobs' cursor is walked to
 the end, and the work list's pages are checked on a day of more than 200 jobs
 (`apps/web/test/jobs-page.test.ts`); the launches' search, filters, sort and cursors in
 `packages/engine/test/launches-list.test.ts`. On 2026-10-25 the built app ran against a copy of the
@@ -176,8 +186,9 @@ against another such copy ([stats.md](stats.md#checked)), the recommendations ag
 ([scheduling.md](scheduling.md#checked)), and the comment assistant's reading, drafting and one send
 to a test post of its own against a fourth
 ([decisions/comment-assistant.md](decisions/comment-assistant.md#checked)). The profile routes of
-2026-10-27 were checked with fake networks only; no real profile was read or edited.
+2026-10-27 were checked with fake networks only; no real profile was read or edited. The sources
+routes of 2026-10-30 were checked with the work faked; nothing was fetched or uploaded for real.
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[decisions/lists.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[decisions/lists.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[sources.md]]

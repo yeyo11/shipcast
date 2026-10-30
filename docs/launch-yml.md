@@ -1,10 +1,11 @@
 ---
 created_at: 2026-10-25T10:29:05.41216436Z
-updated_at: 2026-10-26T20:50:41.735093397Z
+updated_at: 2026-10-30T03:14:02.144761572Z
 tags:
     - schema
     - launch-yml
     - configuration
+    - sources
 ---
 # launch.yml
 
@@ -57,6 +58,10 @@ assets:
     - path: /docs/start
       name: start        # optional; taken from the path otherwise ("/" is "home")
 
+sources:                 # optional, read only with the launch-sources flag on
+  repos: [yeyo11/claudio-web]        # further repos, at their default branch; at most 5
+  urls: [https://claudio.example/]   # pages Shipcast fetches; at most 8
+
 reddit:
   subreddits: [ClaudeAI, node]   # names without r/; only read when reddit is turned on
 ```
@@ -72,6 +77,17 @@ deployed project (`assets.site`), which Shipcast opens in headless Chromium thro
 mobile) of the listed pages, and, when there is no `assets.demo`, records the tour as the demo GIF.
 Without a tour it records the default one: a pause, a slow scroll to the bottom and back to the top.
 The pre-flight check accepts a site that answers in place of a committed demo.
+
+## Further sources
+
+Added on 2026-10-30 with phase 6 of the launch model ([sources.md](sources.md)). A project that is
+more than its own repo (an app and its site, a library and its docs) names the rest under `sources`:
+`repos` (`owner/name`, read at their default branch) and `urls` (http or https pages, fetched by
+Shipcast through its guarded fetcher). When this repo's release triggers the launch, the release is
+the primary source and the others are read beside it; a release of one of the further repos triggers
+nothing. A page that cannot be fetched fails the draft rather than being left out. The key is
+optional and adds nothing to a file without it; with the `launch-sources` flag off it is parsed and
+ignored.
 
 ## Publishing modes
 
@@ -90,7 +106,8 @@ off by default, is turned on per project) — and leave every other channel `off
 so a network that needs an account is never drafted for before one is connected. A project that
 wants Reddit sets `publishing.reddit: approval` and lists its subreddits. An article written in the
 app has no `launch.yml` of its own: the channels chosen there are written beside its drafts
-([engine.md](engine.md#articles-written-in-the-app)).
+([engine.md](engine.md#articles-written-in-the-app)), and so are those of a launch made from sources
+with no repo ([sources.md](sources.md)).
 
 ## Rules the schema holds
 
@@ -111,4 +128,4 @@ that is not semver gets `minor`, the quiet choice.
 
 ## Related
 
-[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]]
+[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]] · [[sources.md]]
