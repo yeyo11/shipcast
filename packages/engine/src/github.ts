@@ -60,6 +60,13 @@ interface RawEvent {
   };
 }
 
+/** A file of a commit's tree: its path, its blob sha and its size in bytes */
+export interface TreeFile {
+  path: string;
+  sha: string;
+  size: number;
+}
+
 /** A pull request that carries a set of files, opened from a fresh branch off the base. */
 export interface PullRequestDraft {
   repo: string;
@@ -374,6 +381,26 @@ export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource
     if (status >= 300) throw new GitHubError(`GitHub could not list ${repo} at ${ref}: ${status}`, status);
     const prefix = `${folder.replace(/\/+$/, '')}/`;
     return ((data as { tree: Array<{ path: string; type: string }> }).tree ?? []).filter((e) => e.type === 'blob' && e.path.startsWith(prefix)).map((e) => e.path);
+  }
+
+  /** The commit a ref (a branch, a tag, a sha) names, so a reader can stay on it while the ref moves */
+  async commitSha(repo: string, ref: string): Promise<string> {
+    return ((await this.#ok('GET', `/repos/${repo}/commits/${encodeURIComponent(ref)}`)) as { sha: string }).sha;
+  }
+
+  /** Every file of a commit with its blob sha, which is the git hash of its bytes */
+  async tree(repo: string, sha: string): Promise<TreeFile[]> {
+    const data = (await this.#ok('GET', `/repos/${repo}/git/trees/${encodeURIComponent(sha)}?recursive=1`)) as { truncated?: boolean; tree: Array<{ path: string; type: string; sha: string; size?: number }> };
+    // A truncated listing would pass for a commit without the files it left out
+    if (data.truncated) throw new GitHubError(`GitHub listed ${repo} at ${sha} only in part`, 500);
+    return data.tree.filter((e) => e.type === 'blob').map((e) => ({ path: e.path, sha: e.sha, size: e.size ?? 0 }));
+  }
+
+  /** A file's bytes by its blob sha, text or not (`fileAt` reads text only) */
+  async blob(repo: string, sha: string): Promise<Uint8Array> {
+    const data = (await this.#ok('GET', `/repos/${repo}/git/blobs/${encodeURIComponent(sha)}`)) as { content: string; encoding: string };
+    if (data.encoding !== 'base64') throw new GitHubError(`GitHub blob ${sha} of ${repo} came as ${data.encoding}`, 500);
+    return new Uint8Array(Buffer.from(data.content, 'base64'));
   }
 
   /** A pull request's branch and state, for reviewing its drafts */

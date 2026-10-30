@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-30T02:03:09.164228172Z
+updated_at: 2026-10-30T04:01:47.717883348Z
 tags:
     - engine
     - registry
@@ -56,6 +56,7 @@ on 2026-10-29.)
 | `MetricsService` | read now; the hourly reads (`readHourly`) |
 | `DraftSnapshotService` | the drafts pull request as last read: written when opened and on each edit, refreshed on a webhook or by hand |
 | `LaunchStoreService` | with `launch-store`: the launch model's shadow write beside the drafts pull request, and its check ([launch-store.md](launch-store.md)) |
+| `LaunchImportService` | the import of the launches drafted before the shadow write, and the deletion of the ones decided away: plan, apply (with `launch-import`), verify, roll back; run by `scripts/import-launches.ts` ([launch-import.md](launch-import.md)) |
 | `AccountService`, `SettingsService` | rename, make primary; settings |
 | `NotificationService` | the owner's notices (drafted, published), to the private chat only |
 
@@ -82,6 +83,7 @@ uses; `inTransaction` runs a use case over several in one transaction.
 | `accounts` | connected accounts and their daily snapshots |
 | `drafts` | the drafts snapshot (`draft_snapshots`) |
 | `launchStore` | the launch model's packs, channel rows, drafts and versions, media and approvals |
+| `launchImports` | the import's batch log (`launch_imports`), the deletion of a launch with every row on it and its restore, a batch's rollback |
 | `jobs`, `comments`, `settings`, `cursors`, `apiTokens`, `assistant`, `attention` | as named |
 | `queries` | the raw read-only SQL the query builder cannot say (stats, telemetry reports, checks) |
 
@@ -132,8 +134,10 @@ launch happens once" hold:
   [decisions/launch-model.md](decisions/launch-model.md). Since the second phase the
   `LaunchStoreRepository` (`repositories/launch-store.ts`) writes the packs, channel rows, drafts and
   versions, media and approvals, through the shadow write of the `launch-store` flag
-  ([launch-store.md](launch-store.md)); **nothing reads them yet**. Each hangs on its launch with
-  `on delete cascade`, so a purge of the launch's row takes them all (the soft delete keeps the row):
+  ([launch-store.md](launch-store.md)), and since the third the import writes them for the launches
+  drafted before ([launch-import.md](launch-import.md)); **nothing reads them yet**. Each hangs on its
+  launch with `on delete cascade`, so a purge of the launch's row takes them all (the soft delete
+  keeps the row):
 
   | Table | Holds |
   | --- | --- |
@@ -153,6 +157,11 @@ launch happens once" hold:
   `repo` and `ref` stay required during the transition (a launch with no repo gets synthetic ones).
   `posts` and `publish_attempts` gained `draft_version_id`, and `publish_attempts` `approval_id`: what
   exactly went out, under which approval.
+
+  Migration `0019` (2026-10-30) added `import_batch` to the seven tables (the import that wrote a
+  row; null for every other writer) and `launch_imports`, the import's batch log: one row per launch
+  a batch imported or deleted, with what it was before, so a batch is verified and rolled back from
+  there ([launch-import.md](launch-import.md)).
 
 An install from before Postgres moves its `data/shipcast.db` with `pnpm sqlite-to-postgres`
 ([decisions/postgres.md](decisions/postgres.md#moving-an-install)).
@@ -315,4 +324,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]]

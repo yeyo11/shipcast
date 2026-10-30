@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, max, or } from 'drizzle-orm';
 import type { Database } from '../db/connect.ts';
-import { approvals, drafts, draftVersions, launchChannels, launches, media, nowIso, packs } from '../db/schema.ts';
+import { approvals, drafts, draftVersions, launchChannels, launches, launchSources, media, nowIso, packs } from '../db/schema.ts';
 import { lockFor, transaction } from './transaction.ts';
 
 /*
@@ -71,6 +71,22 @@ export interface VersionInput {
   origin: DraftOrigin;
   author?: string | null;
   packId?: number | null;
+  /** The import batch writing it (docs/launch-import.md): the draft too, when this version makes it */
+  importBatch?: string;
+}
+
+/** What a launch is about, as `launch_sources` keeps it */
+export interface SourceInput {
+  position: number;
+  kind: string;
+  role: string;
+  repo?: string | null;
+  ref?: string | null;
+  sha?: string | null;
+  text?: string | null;
+  meta?: Record<string, unknown>;
+  contentHash?: string | null;
+  importBatch?: string;
 }
 
 type MediaRow = typeof media.$inferSelect;
@@ -106,24 +122,24 @@ export class LaunchStoreRepository {
   }
 
   /** A pack the AI wrote, accepted as the current one: the next version of the launch's packs */
-  addPack(launchId: number, pack: Record<string, unknown>, meta: { aiTask?: string | null } = {}): Promise<StoredPack> {
+  addPack(launchId: number, pack: Record<string, unknown>, meta: { aiTask?: string | null; importBatch?: string } = {}): Promise<StoredPack> {
     return transaction(this.#db, async (tx) => {
       await lockFor(tx, `launch-store:${launchId}`);
       const [last] = await tx.select({ n: max(packs.version) }).from(packs).where(eq(packs.launchId, launchId));
       const [row] = await tx
         .insert(packs)
-        .values({ launchId, version: (last?.n ?? 0) + 1, pack, aiTask: meta.aiTask ?? null, accepted: true })
+        .values({ launchId, version: (last?.n ?? 0) + 1, pack, aiTask: meta.aiTask ?? null, accepted: true, importBatch: meta.importBatch ?? null })
         .returning({ id: packs.id, version: packs.version, pack: packs.pack });
       return row!;
     });
   }
 
   /** The launch's channel rows, replaced as a whole, and the launch.yml they were read from */
-  replaceChannels(launchId: number, rows: readonly ChannelRow[], source: string | null): Promise<void> {
+  replaceChannels(launchId: number, rows: readonly ChannelRow[], source: string | null, importBatch?: string): Promise<void> {
     return transaction(this.#db, async (tx) => {
       await tx.delete(launchChannels).where(eq(launchChannels.launchId, launchId));
       if (rows.length > 0) {
-        await tx.insert(launchChannels).values(rows.map((r) => ({ launchId, channel: r.channel, mode: r.mode, options: r.options ?? {}, note: r.note ?? null })));
+        await tx.insert(launchChannels).values(rows.map((r) => ({ launchId, channel: r.channel, mode: r.mode, options: r.options ?? {}, note: r.note ?? null, importBatch: importBatch ?? null })));
       }
       await tx.update(launches).set({ channelsSource: source }).where(eq(launches.id, launchId));
     });
@@ -162,7 +178,7 @@ export class LaunchStoreRepository {
    */
   addVersion(launchId: number, input: VersionInput): Promise<{ draftId: number; versionId: number; n: number }> {
     return transaction(this.#db, async (tx) => {
-      await tx.insert(drafts).values({ launchId, channel: input.channel, piece: input.piece }).onConflictDoNothing();
+      await tx.insert(drafts).values({ launchId, channel: input.channel, piece: input.piece, importBatch: input.importBatch ?? null }).onConflictDoNothing();
       const [draft] = await tx
         .select({ id: drafts.id })
         .from(drafts)
@@ -172,7 +188,7 @@ export class LaunchStoreRepository {
       const n = (last?.n ?? 0) + 1;
       const [version] = await tx
         .insert(draftVersions)
-        .values({ draftId: draft!.id, n, body: input.body, fields: input.fields ?? {}, origin: input.origin, author: input.author ?? null, packId: input.packId ?? null })
+        .values({ draftId: draft!.id, n, body: input.body, fields: input.fields ?? {}, origin: input.origin, author: input.author ?? null, packId: input.packId ?? null, importBatch: input.importBatch ?? null })
         .returning({ id: draftVersions.id });
       await tx.update(drafts).set({ currentVersionId: version!.id, updatedAt: nowIso }).where(eq(drafts.id, draft!.id));
       return { draftId: draft!.id, versionId: version!.id, n };
@@ -180,8 +196,13 @@ export class LaunchStoreRepository {
   }
 
   /** Records a stored file; the same bytes twice under one owner are one row, the first kept */
-  async addMedia(input: MediaInput): Promise<void> {
+  async addMedia(input: MediaInput & { importBatch?: string }): Promise<void> {
     await this.#db.insert(media).values(input).onConflictDoNothing();
+  }
+
+  /** Adds what the launch is about, at its position */
+  async addSource(launchId: number, input: SourceInput): Promise<void> {
+    await this.#db.insert(launchSources).values({ launchId, ...input });
   }
 
   /** The launch's files, and the shared ones (covers) at any of `publicPaths` */
@@ -206,7 +227,7 @@ export class LaunchStoreRepository {
    * Records an approval, and its time on the launch for the lists, unless one is in force already,
    * which is answered instead: two writers seeing the same merge record it once.
    */
-  approveOnce(launchId: number, input: { by: string; at?: string; versions: Record<string, number>; note?: string | null }): Promise<StoredApproval> {
+  approveOnce(launchId: number, input: { by: string; at?: string; versions: Record<string, number>; note?: string | null; importBatch?: string }): Promise<StoredApproval> {
     return transaction(this.#db, async (tx) => {
       await lockFor(tx, `launch-store:${launchId}`);
       const [found] = await tx
@@ -217,7 +238,7 @@ export class LaunchStoreRepository {
       if (found) return found;
       const [row] = await tx
         .insert(approvals)
-        .values({ launchId, by: input.by, versions: input.versions, note: input.note ?? null, ...(input.at && { at: input.at }) })
+        .values({ launchId, by: input.by, versions: input.versions, note: input.note ?? null, importBatch: input.importBatch ?? null, ...(input.at && { at: input.at }) })
         .returning({ id: approvals.id, by: approvals.by, at: approvals.at, versions: approvals.versions, note: approvals.note });
       await tx.update(launches).set({ approvedAt: row!.at }).where(eq(launches.id, launchId));
       return row!;
