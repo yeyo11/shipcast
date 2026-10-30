@@ -1,5 +1,5 @@
 import type { BlogRepo } from '../edit.ts';
-import { GitHubError, type CommitFile, type EventsPage, type GitHubSource, type GitHubWriter, type PullRequestDraft, type RepoStats } from '../github.ts';
+import { GitHubError, type CommitFile, type EventsPage, type GitHubSource, type GitHubWriter, type PreviewWriter, type PullRequestDraft, type RepoStats } from '../github.ts';
 import type { ReviewGitHub } from '../review.ts';
 
 /*
@@ -40,7 +40,10 @@ export type GitHubMethod =
   | 'updateFile'
   | 'mergePullRequest'
   | 'repoStats'
-  | 'defaultBranch';
+  | 'defaultBranch'
+  | 'pushPreview'
+  | 'pullRequestComments'
+  | 'closePreview';
 
 export interface GitHubCall {
   method: GitHubMethod;
@@ -62,7 +65,7 @@ export interface FakeGitHubOptions {
   stats?: RepoStats;
 }
 
-export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewGitHub {
+export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewGitHub, PreviewWriter {
   /** Text files by `owner/name/path@ref`; tests read and write it directly */
   readonly files: Record<string, string>;
   /** Binary files a pull request or a commit carried, by the same key */
@@ -73,6 +76,8 @@ export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewG
   readonly updates: Array<{ repo: string; branch: string; path: string; content: string; message: string }> = [];
   readonly merged: number[] = [];
   readonly pulls = new Map<string, FakePullRequest>();
+  /** Comments on pull requests by `owner/name#number`, oldest first; a test writes the site workflow's */
+  readonly comments = new Map<string, string[]>();
   events: EventsPage[];
   latest: { tag: string; url: string } | undefined;
   /** The state of a pull request the fake was not given; tests flip it to merge */
@@ -244,5 +249,29 @@ export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewG
   async defaultBranch(repo: string): Promise<string> {
     this.#record('defaultBranch', [repo]);
     return this.defaultBranchName;
+  }
+
+  /** As GitHub's: the branch made again from the default branch with the files, its draft pull request opened once */
+  async pushPreview(draft: Omit<PullRequestDraft, 'files'> & { files: CommitFile[] }): Promise<{ number: number; url: string; sha: string }> {
+    this.#record('pushPreview', [draft]);
+    const sha = `preview${this.calls.filter((c) => c.method === 'pushPreview').length}`;
+    this.#write(draft.repo, draft.branch, draft.files);
+    const url = (n: number) => `https://github.com/${draft.repo}/pull/${n}`;
+    const existing = [...this.pulls.values()].find((p) => p.repo === draft.repo && p.branch === draft.branch && p.state === 'open');
+    if (existing) return { number: existing.number, url: url(existing.number), sha };
+    const number = this.#next++;
+    this.addPullRequest({ repo: draft.repo, number, branch: draft.branch, base: draft.base, title: draft.title, body: draft.body, files: draft.files.map((f) => f.path) });
+    return { number, url: url(number), sha };
+  }
+
+  async pullRequestComments(repo: string, number: number): Promise<string[]> {
+    this.#record('pullRequestComments', [repo, number]);
+    return [...(this.comments.get(`${repo}#${number}`) ?? [])];
+  }
+
+  async closePreview(repo: string, number: number, branch: string): Promise<void> {
+    this.#record('closePreview', [repo, number, branch]);
+    const pr = this.pulls.get(`${repo}#${number}`);
+    if (pr) pr.state = 'closed';
   }
 }

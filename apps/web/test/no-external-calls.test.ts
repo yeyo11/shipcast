@@ -83,7 +83,7 @@ test('getLaunch with 13 drafts reads only the registry: no outbound call, GitHub
   assert.ok(page);
   assert.ok(page.review && !('error' in page.review), 'the drafts came from the snapshot, not from an error');
   assert.equal(page.review.drafts.length, 13);
-  assert.equal(page.review.pullRequest.state, 'open');
+  assert.equal(page.review.pullRequest?.state, 'open');
   assert.equal(page.review.drafts.find((d) => d.path === `${D}/bluesky.md`)?.content, `# ${D}/bluesky.md\n`);
   assert.ok(page.draftsReadAt, 'the page says when the drafts were read');
 });
@@ -122,7 +122,7 @@ test('with launch-store-read, getLaunch reads the launch model alone: no outboun
   });
   assert.deepEqual(calls, []);
   assert.ok(page?.review && !('error' in page.review), 'the drafts came from the tables, not from an error');
-  assert.equal(page.review.pullRequest.state, 'open');
+  assert.equal(page.review.pullRequest?.state, 'open');
   assert.equal(page.review.drafts.find((d) => d.path === `${D}/bluesky.md`)?.content, '# Bluesky\n\nhello\n');
   assert.match(page.review.drafts.find((d) => d.kind === 'image')?.url ?? '', /^\/media\/\d+$/, 'served by the app, not GitHub');
   assert.equal('draftsReadAt' in page, false);

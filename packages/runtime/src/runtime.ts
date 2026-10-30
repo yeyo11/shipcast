@@ -1,4 +1,5 @@
 import {
+  AppReviewService,
   checkout,
   currentAiTexts,
   GitHubApp,
@@ -66,6 +67,8 @@ export interface Runtime {
   launchStore: LaunchStoreService | undefined;
   /** With `launch-store-read`: launches read from the launch model's tables instead of GitHub (docs/launch-store-read.md) */
   launchRead: LaunchReadService | undefined;
+  /** With `app-review`: new launches reviewed, approved and published from Shipcast, with no pull request (docs/app-review.md) */
+  appReview: AppReviewService | undefined;
 }
 
 export interface RuntimeOptions {
@@ -160,7 +163,22 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
 
   // Rows nobody keeps up to date would show a launch as it was when the flag was turned on
   if (flags.on('launch-store-read') && !launchStore) throw new ConfigError('the launch-store-read flag needs launch-store, which keeps the launch model up to date');
-  const launchRead = flags.on('launch-store-read') ? new LaunchReadService({ registry, media }) : undefined;
+  const launchRead = flags.on('launch-store-read') ? new LaunchReadService({ registry, media, site: async () => (await brand()).site }) : undefined;
+  // A launch held by Shipcast is nowhere else: its rows must be read back (launch-store-read) and its media kept (launch-media)
+  if (flags.on('app-review') && !launchRead) throw new ConfigError('the app-review flag needs launch-store-read (and launch-store), which keep and read the launches Shipcast holds');
+  if (flags.on('app-review') && !flags.on('launch-media')) throw new ConfigError('the app-review flag needs launch-media: a launch Shipcast holds keeps its media in the media store');
+  const appReview =
+    flags.on('app-review') && launchStore
+      ? new AppReviewService({
+          registry,
+          media,
+          github,
+          store: launchStore,
+          get launchesRepo() {
+            return settings.current().launchesRepo ?? '';
+          },
+        })
+      : undefined;
 
   const drafts = caches
     ? new DraftSnapshotService({
@@ -202,6 +220,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     ...(drafts && { drafts }),
     ...(launchStore && { launchStore }),
     ...(launchRead && { launchRead }),
+    ...(appReview && { appReview }),
   };
 
   return {
@@ -230,5 +249,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     media,
     launchStore,
     launchRead,
+    appReview,
   };
 }

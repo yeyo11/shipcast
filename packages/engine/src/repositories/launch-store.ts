@@ -255,4 +255,29 @@ export class LaunchStoreRepository {
       return row!;
     });
   }
+
+  /**
+   * The owner approves the launch in the app (docs/app-review.md): the versions named are the ones
+   * approved, and the approval in force before is revoked, so the newest approval is the one that
+   * counts. An approval already naming exactly these versions is answered instead of a second row.
+   */
+  approve(launchId: number, input: { by: string; versions: Record<string, number>; note?: string | null }): Promise<StoredApproval> {
+    return transaction(this.#db, async (tx) => {
+      await lockFor(tx, `launch-store:${launchId}`);
+      const columns = { id: approvals.id, by: approvals.by, at: approvals.at, versions: approvals.versions, note: approvals.note };
+      const [found] = await tx
+        .select(columns)
+        .from(approvals)
+        .where(and(eq(approvals.launchId, launchId), isNull(approvals.revokedAt)))
+        .orderBy(desc(approvals.at), desc(approvals.id))
+        .limit(1);
+      if (found && sameVersions(found.versions, input.versions)) return found;
+      await tx.update(approvals).set({ revokedAt: nowIso }).where(and(eq(approvals.launchId, launchId), isNull(approvals.revokedAt)));
+      const [row] = await tx.insert(approvals).values({ launchId, by: input.by, versions: input.versions, note: input.note ?? null }).returning(columns);
+      await tx.update(launches).set({ approvedAt: row!.at }).where(eq(launches.id, launchId));
+      return row!;
+    });
+  }
 }
+
+const sameVersions = (a: Record<string, number>, b: Record<string, number>) => Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([k, v]) => b[k] === v);

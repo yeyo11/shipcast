@@ -123,7 +123,7 @@ export async function roundRunning(registry: Pick<Repositories, 'jobs'>): Promis
 export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const { registry } = d;
   const flags = d.flags ?? new Flags();
-  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }) });
+  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }), ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
   // Phase 8: the hourly reads, with what they keep between runs, which lives as long as the process
   const batched = flags.on('batched-metrics');
@@ -134,6 +134,13 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     const found = await registry.launches.get(id);
     if (!found) throw new Error(`no launch ${id}`);
     return found;
+  };
+  /**
+   * A launch Shipcast holds whose `auto` channels need no approval goes out as soon as its drafts are
+   * ready (docs/app-review.md); one whose drafts wait for the owner, or a pull request, waits
+   */
+  const publishWhatIsReady = async (drafted: Launch) => {
+    if (drafted.model === 'app' && (await publishing.approval(drafted)).state === 'approved') await startPublishing(queue, drafted);
   };
   // Work nobody started by hand waits while automation is off; the same job sent by hand runs
   const off = async (reason: string) => reason !== BY_HAND && (await readAutomation(registry)).mode === 'off';
@@ -157,7 +164,10 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       job.log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
       // Straight to publishing: the publish run tells the owner what went out
       if (direct) await startPublishing(queue, result.launch);
-      else await notifications(services).drafted(current, result);
+      else {
+        await notifications(services).drafted(current, result);
+        await publishWhatIsReady(result.launch);
+      }
     },
 
     async article({ launchId, input, direct }, job) {
@@ -170,7 +180,10 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       if (!result.ok) throw new Error(result.problems.join('\n'));
       job.log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
       if (direct) await startPublishing(queue, result.launch);
-      else await notifications(services).drafted(current, result, { article: input.title });
+      else {
+        await notifications(services).drafted(current, result, { article: input.title });
+        await publishWhatIsReady(result.launch);
+      }
     },
 
     /*
@@ -193,7 +206,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       const connectors = publishConnectors(services);
       const result = flags.on('publishing-service')
         ? await publishing.publish(current, brand, connectors, job.id)
-        : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }) });
+        : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }), ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
       if (result.state === 'waiting') {
         const minutes = Math.round((PUBLISH_RETRIES * PUBLISH_RETRY_SECONDS) / 60);
         if (job.lastAttempt) throw new Error(`still waiting after ${minutes} minutes (${result.reason}); the next publish round will pick it up`);

@@ -88,7 +88,8 @@ function DraftsEditor() {
   const texts = reviewOk?.drafts.filter((d) => d.kind === 'article' || d.kind === 'channel') ?? [];
   const [path, setPath] = useState(texts[0]?.path ?? '');
   const current = texts.find((d) => d.path === path);
-  const editable = reviewOk?.pullRequest.state === 'open';
+  // A launch Shipcast holds is edited while drafted (docs/app-review.md); one in a pull request while it is open
+  const editable = reviewOk?.app ? reviewOk.app.open : reviewOk?.pullRequest?.state === 'open';
   const article = launch.ref.startsWith('article:');
 
   return (
