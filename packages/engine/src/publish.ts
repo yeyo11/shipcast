@@ -85,6 +85,8 @@ export interface PublishContext {
   read(path: string): Promise<string | undefined>;
   /** The lead article's address, every channel's link */
   articleUrl: string;
+  /** The site whose links are tagged and the launch's campaign, for the channel's publisher to tag its links with (docs/tracking.md) */
+  tracking: LinkTracking;
   title: string;
   description: string;
   /** The public address of one of the launch's media files (`og.png`, `screenshots/home-desktop.png`) */
@@ -448,6 +450,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     dir,
     read,
     articleUrl,
+    tracking,
     title,
     description,
     mediaUrl: (file) => `${brand.site}${mediaPath(launch, file)}`,

@@ -107,3 +107,26 @@ test('dev.to and Hashnode: the canonical URL and the article go out clean', asyn
     assert.deepEqual(sent(), [article], channel);
   }
 });
+
+test('YouTube: the description’s links are tagged with the video’s format, unless the tags would push it over 5000', async () => {
+  const adapter = adapterOf('youtube');
+  assert.ok(adapter);
+  const uploads: Array<{ description: string; short: boolean }> = [];
+  const connection = {
+    youtube: { publish: async (video: { description: string; short: boolean }) => (uploads.push(video), { externalId: 'x', url: 'https://www.youtube.com/watch?v=x', extras: [] }) },
+    quota: { ensureUpload: async () => undefined },
+  };
+  const publisher = adapter.publisher(connection) as { publish(video: { description: string; short: boolean }, tracking?: { site: string; campaign: string }): Promise<unknown> };
+  const description = `${ARTICLE}?ref=youtube\n\nWhat claudio does. Code: https://github.com/yeyo11/claudio`;
+  await publisher.publish({ description, short: true }, tracking);
+  await publisher.publish({ description, short: false }, tracking);
+  const full = `${ARTICLE}?ref=youtube\n\n${'a'.repeat(5000 - `${ARTICLE}?ref=youtube`.length - 2)}`;
+  await publisher.publish({ description: full, short: false }, tracking);
+  await publisher.publish({ description, short: true });
+  assert.deepEqual(uploads.map((u) => u.description), [
+    `${tagged('youtube', 'social', 'short')}\n\nWhat claudio does. Code: https://github.com/yeyo11/claudio`,
+    `${tagged('youtube', 'social', 'video')}\n\nWhat claudio does. Code: https://github.com/yeyo11/claudio`,
+    full,
+    description,
+  ]);
+});

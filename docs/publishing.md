@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-30T06:25:05.412713931Z
+created_at: 2026-10-30T13:05:46.293300118Z
+updated_at: 2026-10-30T21:32:05.315614386Z
 tags:
     - publishing
     - connectors
@@ -143,10 +143,12 @@ and step 3 reads each channel's approved version.
    **Links.** The drafts link the article with `?ref=<channel>`, as Claude writes them. Since
    2026-10-29 every link to the site in a post's text, link card or embed goes out with UTM tags
    instead, naming the network and the launch's campaign (`utm_source`, `utm_medium`,
-   `utm_campaign`, and the subreddit or the issue's language as `utm_content`): the channel's adapter
+   `utm_campaign`, and the subreddit, the issue's language or the YouTube video's format as
+   `utm_content`): the channel's adapter
    tags them as the piece goes out, from the one table in `packages/schema/src/tracking.ts`. dev.to
    and Hashnode keep a clean canonical URL, and a text the tags would push over its limit on Threads,
-   Telegram or Discord keeps its `?ref=`. See [tracking.md](tracking.md).
+   Telegram or Discord, or a YouTube description over 5000 characters, keeps its `?ref=`. See
+   [tracking.md](tracking.md).
 5. A temporary failure (`ConnectorError.retryable`: 429, 5xx, no answer) is retried on the next run;
    a permanent one is recorded as the channel's failure cursor (its key built and read only in
    `@shipcast/schema/failures`) and not retried until the owner's **Try again** in the app or the API

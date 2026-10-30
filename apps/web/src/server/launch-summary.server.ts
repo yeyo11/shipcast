@@ -3,7 +3,7 @@ import { UTM_CHANNELS } from '@shipcast/schema';
 import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /** Each tagged channel's `utm_source`, which names its visits in Umami's readings */
-const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(UTM_CHANNELS).map(([channel, tags]) => [channel, tags.source]));
+export const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(UTM_CHANNELS).map(([channel, tags]) => [channel, tags.source]));
 
 /**
  * A launch's counters at their latest reading: each piece's latest number, read per piece so pieces

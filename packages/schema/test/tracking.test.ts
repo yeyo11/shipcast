@@ -18,10 +18,11 @@ test('each channel’s source and medium; content only where the channel tells i
   assert.deepEqual(utmFor('githubDiscussions', 'c'), { source: 'github', medium: 'social', campaign: 'c' });
   assert.deepEqual(utmFor('reddit', 'c', 'selfhosted'), { source: 'reddit', medium: 'social', campaign: 'c', content: 'selfhosted' });
   assert.deepEqual(utmFor('newsletter', 'c', 'es'), { source: 'newsletter', medium: 'email', campaign: 'c', content: 'es' });
+  assert.deepEqual(utmFor('youtube', 'c', 'short'), { source: 'youtube', medium: 'social', campaign: 'c', content: 'short' });
   assert.deepEqual(utmFor('discord', 'c', 'ignored'), { source: 'discord', medium: 'social', campaign: 'c' });
   assert.deepEqual(
     Object.keys(UTM_CHANNELS).sort(),
-    ['bluesky', 'discord', 'githubDiscussions', 'linkedin', 'mastodon', 'newsletter', 'reddit', 'telegram', 'threads'],
+    ['bluesky', 'discord', 'githubDiscussions', 'linkedin', 'mastodon', 'newsletter', 'reddit', 'telegram', 'threads', 'youtube'],
     'dev.to and Hashnode keep a clean canonical URL; Instagram has no clickable links',
   );
 });
@@ -71,6 +72,17 @@ test('a text the tags would push over its network’s limit keeps its ?ref=', ()
   const full = `${'a'.repeat(500 - link.length - 1)} ${link}`;
   assert.equal(full.length, 500);
   assert.equal(trackWithinLimit('threads', full, tracking), full, 'tagged it would be over 500');
+});
+
+test('a text that is not its channel’s piece is measured against the limit given, with its content', () => {
+  const tracking = { site: SITE, campaign: 'claudio-v1-0-0' };
+  const link = `${SITE}/en/claudio/?ref=youtube`;
+  const tags = 'utm_source=youtube&utm_medium=social&utm_campaign=claudio-v1-0-0&utm_content=video';
+  assert.equal(trackWithinLimit('youtube', `${link}\n\nA demo.`, tracking, { content: 'video', max: 5000 }), `${SITE}/en/claudio/?${tags}\n\nA demo.`);
+  const full = `${link}\n\n${'a'.repeat(5000 - link.length - 2)}`;
+  assert.equal(full.length, 5000);
+  assert.equal(trackWithinLimit('youtube', full, tracking, { content: 'video', max: 5000 }), full, 'tagged it would be over 5000');
+  assert.equal(trackWithinLimit('youtube', full, undefined, { content: 'video', max: 5000 }), full);
 });
 
 test('a referrer host maps to the channel that sent the visit', () => {

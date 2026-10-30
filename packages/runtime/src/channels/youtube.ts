@@ -1,7 +1,7 @@
 import { youtubeFeed } from './feeds.ts';
 import { ConnectorError, exchangeYouTubeCode, PostGone, YouTube, youtubeAuthorizeUrl, youtubeBucketOf, YOUTUBE_DAILY_UNITS, YOUTUBE_DAILY_UPLOADS, YOUTUBE_UNITS, type YouTubeCall, type YouTubeVideo } from '@shipcast/connectors';
 import { batchReader, youtubeStrategy, type ChangeEditor, type YouTubePublisher } from '@shipcast/engine';
-import { youtube } from '@shipcast/schema';
+import { LIMITS, trackWithinLimit, youtube } from '@shipcast/schema';
 import { MemoryTokenBucket } from '../redis/memory.ts';
 import type { BucketSpec, TokenBucket } from '../redis/ports.ts';
 import { channelAdapter, type Credentials, type OAuthApp } from './adapter.ts';
@@ -121,9 +121,12 @@ export const youtubeAdapter = channelAdapter({
     },
   },
   publisher: ({ youtube: connector, quota }: YouTubeConnection): YouTubePublisher => ({
-    publish: async (video) => {
+    // The description's links say which of the two videos the visit came from; a description the
+    // tags would push over YouTube's limit keeps its `?ref=youtube`
+    publish: async (video, tracking) => {
       await quota.ensureUpload(video);
-      return connector.publish(video);
+      const description = trackWithinLimit('youtube', video.description, tracking, { content: video.short ? 'short' : 'video', max: LIMITS.youtubeDescription });
+      return connector.publish({ ...video, description });
     },
   }),
   strategy: youtubeStrategy(),

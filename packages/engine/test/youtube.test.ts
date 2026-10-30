@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import type { YouTubePublished, YouTubeVideo } from '@shipcast/connectors';
-import { Brand, ContentPack, parseLaunchConfig, parseYouTubeDraft, YOUTUBE_VIDEOS, youtubeDraft } from '@shipcast/schema';
+import { Brand, campaignOf, ContentPack, parseLaunchConfig, parseYouTubeDraft, YOUTUBE_VIDEOS, youtubeDraft, type LinkTracking } from '@shipcast/schema';
 import { bindStrategy, collectMetrics, editPost, PRIVATE_UNTIL_AUDIT, PublishingService, renderDrafts, youtubeKind, youtubePrivacyKey, youtubeStrategy, type ChangeEditor, type Editors, type YouTubeStrategyOptions } from '../src/index.ts';
 import { aLaunch, FakeGitHub, LAUNCHES_REPO, memoryRegistry } from '../src/testing/index.ts';
 
@@ -66,8 +66,10 @@ function site(media: Record<string, { bytes: Uint8Array; type: string }> = {}): 
 /** YouTube faked: each upload recorded, private as Google keeps an unaudited project's */
 class FakeYouTube {
   readonly uploads: YouTubeVideo[] = [];
-  async publish(video: YouTubeVideo): Promise<YouTubePublished> {
+  readonly trackings: Array<LinkTracking | undefined> = [];
+  async publish(video: YouTubeVideo, tracking?: LinkTracking): Promise<YouTubePublished> {
     this.uploads.push(video);
+    this.trackings.push(tracking);
     const id = `yt-${this.uploads.length}`;
     return { externalId: id, url: video.short ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`, privacy: 'private', extras: video.short ? ['thumbnail: a custom thumbnail needs a verified channel'] : [] };
   }
@@ -113,6 +115,8 @@ test('a launch with youtube on uploads both videos once, records them, and says 
   assert.equal(short?.title, 'claudio, edited', 'the draft as merged');
   assert.equal(video?.title, 'claudio, a walk-through');
   assert.ok(short?.description.startsWith('https://josegarrido.dev/en/claudio/?ref=youtube\n\n'), 'the article first');
+  const tracking = { site: 'https://josegarrido.dev', campaign: campaignOf(launch) };
+  assert.deepEqual(yt.trackings, [tracking, tracking], 'each upload is handed the launch’s tracking, for the adapter to tag its links');
   assert.match(video?.description ?? '', /0:00 What it is\n0:20 Demo\n0:40 The page$/, 'the horizontal one ends with its chapters');
   assert.doesNotMatch(short?.description ?? '', /0:00/, 'a Short has no chapters');
   assert.deepEqual(video?.captions?.map((c) => [c.lang, c.name]), [['en', 'English']]);

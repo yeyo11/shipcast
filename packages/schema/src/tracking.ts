@@ -14,8 +14,8 @@ import { pieceLimitProblem } from './content-pack.ts';
 export interface UtmChannel {
   source: string;
   medium: 'social' | 'email';
-  /** What tells this channel's pieces apart: a subreddit, an issue's language */
-  content?: 'subreddit' | 'language';
+  /** What tells this channel's pieces apart: a subreddit, an issue's language, a video's format (`short`, `video`) */
+  content?: 'subreddit' | 'language' | 'format';
 }
 
 /**
@@ -33,6 +33,7 @@ export const UTM_CHANNELS = {
   reddit: { source: 'reddit', medium: 'social', content: 'subreddit' },
   githubDiscussions: { source: 'github', medium: 'social' },
   newsletter: { source: 'newsletter', medium: 'email', content: 'language' },
+  youtube: { source: 'youtube', medium: 'social', content: 'format' },
 } as const satisfies Partial<Record<Channel, UtmChannel>>;
 
 export type TrackedChannel = keyof typeof UTM_CHANNELS;
@@ -130,12 +131,15 @@ export function trackUrl(channel: TrackedChannel, url: string, tracking: LinkTra
 }
 
 /**
- * A text whose network counts every character of a link (Threads, Telegram, Discord), tagged only
- * when it still fits: one the tags would push over the limit goes out as written, with its `?ref=`
+ * A text whose network counts every character of a link (Threads, Telegram, Discord, YouTube's
+ * description), tagged only when it still fits: one the tags would push over the limit goes out as
+ * written, with its `?ref=`. The limit is the channel's piece limit, or `max` characters for a text
+ * that is not the channel's piece (a video's description).
  */
-export function trackWithinLimit(channel: TrackedChannel, text: string, tracking: LinkTracking | undefined): string {
-  const tagged = track(channel, text, tracking);
-  return pieceLimitProblem(channel, tagged) ? text : tagged;
+export function trackWithinLimit(channel: TrackedChannel, text: string, tracking: LinkTracking | undefined, options: { content?: string; max?: number } = {}): string {
+  const tagged = track(channel, text, tracking, options.content);
+  const over = options.max === undefined ? pieceLimitProblem(channel, tagged) !== undefined : tagged.length > options.max;
+  return over ? text : tagged;
 }
 
 /**

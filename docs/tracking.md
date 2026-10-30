@@ -1,12 +1,13 @@
 ---
-created_at: 2026-10-29T16:44:03.12150434Z
-updated_at: 2026-10-30T00:18:58.150285326Z
+created_at: 2026-10-30T13:06:18.012917751Z
+updated_at: 2026-10-30T21:31:46.507869137Z
 tags:
     - tracking
     - utm
     - publishing
     - channels
     - metrics
+    - youtube
 ---
 # Link tracking: UTM tags on every published link
 
@@ -28,11 +29,20 @@ and Discord's embed went out untagged, and most analytics tools do not read `ref
 | Reddit | `reddit` | `social` | the subreddit |
 | GitHub Discussions | `github` | `social` | — |
 | Newsletter | `newsletter` | `email` | the issue's language (`en`, `es`) |
+| YouTube | `youtube` | `social` | the video's format (`short`, `video`) |
 | dev.to, Hashnode | not tagged: the canonical URL must stay clean, and the referrer names them already | | |
 | Instagram | no clickable links | | |
-| YouTube | not in the table: its description keeps `?ref=youtube` | | |
 
 With `social` as the medium, GA4 files a visit under Organic Social whatever its source.
+
+**`utm_content` tells a channel's pieces apart** where one launch gets more than one piece with
+links from it, so the visits of each can be compared: Reddit's post in each subreddit, the
+newsletter's issue in each language, and YouTube's two videos, the Short (`short`) and the
+horizontal one (`video`), added on 2026-10-30. Its values are lowercase, with dashes and no
+spaces. Every other tagged channel publishes one piece with links per launch, so it has none. The
+other channels with several pieces need none either: Instagram's post, story and comment have no
+clickable links, and the blog's article per language (`article:<lang>`) is the page the links
+point to.
 
 **The campaign** is the launch's own (`campaignOf`): `<project>-<version>` for a release
 (`shipcast-v0-2-0`), `<project>-launch` for a repo that went public, the slug for an article written
@@ -57,24 +67,34 @@ rather than a repo and a tag (epic SHP-5, later).
   - Threads, Telegram and Discord count a link's every character: a text the tags would push over its
     limit (`pieceLimitProblem`) goes out with its `?ref=` instead (`trackWithinLimit`). Discord's
     embed URL is tagged either way.
+  - YouTube's description is built to fit its 5000 characters with the article's link as
+    `?ref=youtube` (the link first, the text cut to the room left, the chapters last); a description
+    the tags would push over 5000 goes out as built, with its `?ref=` (`trackWithinLimit` with
+    `max`, since the description is not a piece the pack caps as one text).
 
 ## Where it lives
 
 - `packages/schema/src/tracking.ts`, the one place the tags are decided: `UTM_CHANNELS` (the table
   above), `campaignOf`, `utmFor`, `trackedUrl`, `tagLinks` (plain text and Markdown), `tagHtmlLinks`
   (the newsletter's `href`s, with their `&` kept escaped), and the calls the adapters make: `track`,
-  `trackUrl`, `trackWithinLimit`.
+  `trackUrl`, `trackWithinLimit` (with the piece's `content`, and a `max` for a text that is not
+  the channel's piece).
 - `packages/engine/src/publish.ts` hands each tagged channel's publisher the launch's `tracking`
   (`{ site, campaign }`, and the issue's language for the newsletter) as a second argument. The engine
   still builds its links with `?ref=` as before; a publisher given no tracking sends them unchanged.
+  A channel published by its own strategy (`PublishStrategy`, YouTube) finds the same tracking in
+  its `PublishContext` and hands it to its publisher: `packages/engine/src/publishing/youtube.ts`
+  passes it with each upload.
 - Each channel's adapter in `packages/runtime/src/channels/*` tags where its text, card or embed goes
   out: Bluesky's text and card, Mastodon's text, Threads' and Telegram's text, Discord's message and
   embed, LinkedIn's text and shared article, each Reddit body with its subreddit, GitHub Discussions'
-  body, and every link of the newsletter's issue (its button, its image and its body) with its
-  language. The connectors never see the tracking.
+  body, every link of the newsletter's issue (its button, its image and its body) with its
+  language, and each YouTube video's description with its format (`short` for the Short, `video`
+  for the horizontal one, from the upload's `short`). The connectors never see the tracking.
 - Tests: `packages/schema/test/tracking.test.ts`, `packages/runtime/test/channel-links.test.ts` (what
   each adapter hands its network), the `richText` test in `packages/connectors/test/connectors.test.ts`,
-  and the newsletter's tracking in `packages/engine/test/publish.test.ts`.
+  the newsletter's tracking in `packages/engine/test/publish.test.ts`, and the YouTube strategy
+  handing the tracking to its publisher in `packages/engine/test/youtube.test.ts`.
 
 ## The other half: where a visit came from
 
@@ -105,8 +125,12 @@ were the other options, not built.
 
 ## Not covered
 
-- **Edits.** Editing a live post (Mastodon, Telegram, Discord, GitHub Discussions) sends the text as
-  edited, untagged: an edit that touches a link brings its `?ref=` back.
+- **Edits.** Editing a live post (Mastodon, Telegram, Discord, GitHub Discussions, a YouTube video's
+  description) sends the text as edited, untagged: an edit that touches a link brings its `?ref=`
+  back.
+- **`utm_content` in Umami.** The Umami connector reads a campaign by `utm_source` only, so the
+  launch page shows YouTube's visits as one channel, the Short's and the video's together; telling
+  them apart there means reading `utm_content` as well ([umami.md](umami.md)).
 - **New text-post channels** published through `textPostStrategy` keep `?ref=<channel>` until their
   adapter tags them and they join `UTM_CHANNELS`.
 - **The site side** (phase 2, SHP-4): the tool that reads the tags is Umami, and its read connector

@@ -187,3 +187,11 @@ test('each tagged channel’s site visits come from Umami’s readings of its ut
   });
   assert.deepEqual(channelSiteVisits([], { bluesky: 'bluesky' }), {});
 });
+
+test('the launch page maps every tagged channel’s utm_source back to it, YouTube’s two videos included', async () => {
+  const { UTM_SOURCES } = await import('../src/server/launch-summary.server.ts');
+  assert.equal(UTM_SOURCES.youtube, 'youtube');
+  assert.equal(UTM_SOURCES.githubDiscussions, 'github');
+  const readings = [{ source: 'umami', name: 'views_youtube', value: 12 }, { source: 'umami', name: 'visits_youtube', value: 9 }];
+  assert.deepEqual(channelSiteVisits(readings, UTM_SOURCES), { youtube: { views: 12, visits: 9 } });
+});

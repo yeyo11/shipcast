@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-30T00:17:23.108283647Z
-updated_at: 2026-10-30T00:17:23.108283647Z
+created_at: 2026-10-30T13:06:20.652967468Z
+updated_at: 2026-10-30T21:31:55.438054306Z
 tags:
     - umami
     - tracking
@@ -64,7 +64,10 @@ numbers answer "which channel brought readers", per launch.
 
 - **The launch page, Channels tab**: each tagged channel's totals line gains "N site visits" (the
   page views in its tooltip), from `visits_<utm_source>` mapped back to the channel through
-  `UTM_CHANNELS` (`github` is GitHub Discussions). A channel Umami counted nothing for shows nothing.
+  `UTM_CHANNELS` (`UTM_SOURCES` in `apps/web/src/server/launch-summary.server.ts`; `github` is GitHub
+  Discussions, `youtube` YouTube since its links are tagged, 2026-10-30). A channel Umami counted
+  nothing for shows nothing. A channel's pieces count together: YouTube's Short and video are one
+  line, since `utm_content` is not read.
 - **Details, every number**: the `umami` readings under "Umami", like any source.
 - **The Channels page, Measurement**: the "Blog analytics (Umami)" account, its card showing the
   site's visits of the last seven days.
@@ -105,6 +108,8 @@ in `collectHourly`), `packages/schema/src/channels/cadence.ts` (`SITE_CADENCES.u
   sends them yet.
 - Hand-written `utm_source` values outside `UTM_CHANNELS` are kept (`views_<source>`) but belong to
   no channel on the page.
+- `utm_content` (a subreddit, an issue's language, YouTube's `short` or `video`) is not read: the
+  page cannot yet compare a channel's pieces.
 - Umami's time zone is UTC for the days, as Cloudflare's and GitHub's.
 
 ## Related

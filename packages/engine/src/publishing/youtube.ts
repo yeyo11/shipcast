@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { chapterLines, durationSeconds, renderVideo, type Scene, type VideoFormat, type VideoRequest } from '@shipcast/assets';
 import { planScreenshots } from '@shipcast/capture';
 import { ConnectorError, type YouTubePublished, type YouTubeVideo } from '@shipcast/connectors';
-import { draftBody, draftFile, lookOf, parseYouTubeDraft, YOUTUBE_VIDEOS, type YouTubePiece, type YouTubeScene, type YouTubeVideoPart } from '@shipcast/schema';
+import { draftBody, draftFile, lookOf, parseYouTubeDraft, YOUTUBE_VIDEOS, type LinkTracking, type YouTubePiece, type YouTubeScene, type YouTubeVideoPart } from '@shipcast/schema';
 import { isArticle, projectLabel, projectSlug } from '../drafts.ts';
 import { loadProjects } from '../pipeline.ts';
 import type { PublishContext, PublishStrategy } from '../publish.ts';
@@ -17,9 +17,13 @@ import type { Post } from '../repositories/index.ts';
  * is a piece of its own (`post:short`, `post:video`), recorded the moment it is up.
  */
 
-/** What the run needs of the connector: packages/connectors' YouTube, behind the adapter's quota check */
+/**
+ * What the run needs of the connector: packages/connectors' YouTube, behind the adapter's quota check.
+ * `tracking` is the launch's: the adapter tags the description's links with it, the video's format
+ * (`short`, `video`) as their `utm_content` (docs/tracking.md).
+ */
 export interface YouTubePublisher {
-  publish(video: YouTubeVideo): Promise<YouTubePublished>;
+  publish(video: YouTubeVideo, tracking?: LinkTracking): Promise<YouTubePublished>;
 }
 
 /**
@@ -143,7 +147,11 @@ async function scenesOf(script: readonly YouTubeScene[], media: Media, duration:
   return scenes;
 }
 
-/** The description as uploaded: the article first, what the video shows, then the horizontal video's chapters */
+/**
+ * The description as uploaded: the article first, what the video shows, then the horizontal video's
+ * chapters. Its links keep the `?ref=youtube` they are written with: the adapter swaps it for the
+ * UTM tags when they fit in YouTube's 5000 characters.
+ */
 function description(context: PublishContext, text: string, chapters: Array<{ at: number; title: string }>): string {
   const link = `${context.articleUrl}?ref=youtube`;
   // YouTube shows chapters only from three, the first at 0:00
@@ -205,7 +213,7 @@ export function youtubeStrategy(options: YouTubeStrategyOptions = {}): PublishSt
               continue;
             }
             try {
-              const published = await publisher.publish(upload);
+              const published = await publisher.publish(upload, context.tracking);
               // Recorded at once: the other video failing must not get this one uploaded twice
               const post = await context.record({ kind: youtubeKind(part), externalId: published.externalId, url: published.url });
               if (published.privacy === 'private') {
