@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T16:44:03.12150434Z
-updated_at: 2026-10-29T19:49:21.834877807Z
+updated_at: 2026-10-30T00:18:58.150285326Z
 tags:
     - tracking
     - utm
@@ -97,9 +97,11 @@ one table beside the tags (2026-10-29):
 - Used by the blog's numbers (`views_<source>`, [publishing.md](publishing.md#metrics)) and by
   dev.to's referrers.
 
-Reading the tags themselves needs a source that sees the query string: Cloudflare's zone HTTP
-analytics (server-side, 31 days of retention, so read daily; a `Zone Analytics: Read` token), or the
-blog's Worker in the launches repo logging `utm_source`. Both are an owner decision, not built.
+Reading the tags themselves needs a source that sees the query string. **Umami** is that source
+(2026-10-30, SHP-4, behind the `umami` flag until the owner's instance exists): it reads each
+launch's campaign by `utm_source` and the launch page shows the visits per channel
+([umami.md](umami.md)). Cloudflare's zone HTTP analytics or the blog's Worker logging `utm_source`
+were the other options, not built.
 
 ## Not covered
 
@@ -107,9 +109,10 @@ blog's Worker in the launches repo logging `utm_source`. Both are an owner decis
   edited, untagged: an edit that touches a link brings its `?ref=` back.
 - **New text-post channels** published through `textPostStrategy` keep `?ref=<channel>` until their
   adapter tags them and they join `UTM_CHANNELS`.
-- **The site side** (phase 2, SHP-4): choosing the tool that reads the tags, the blog's conversion
-  events, and a connector that reads visits by source and campaign into the app come next.
+- **The site side** (phase 2, SHP-4): the tool that reads the tags is Umami, and its read connector
+  is built behind its flag ([umami.md](umami.md)); deploying Umami and the blog's conversion events
+  come next.
 
 ## Related
 
-[[publishing.md]] · [[stats.md]] · [[decisions/mvp-scope.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[search-indexing.md]]
+[[publishing.md]] · [[stats.md]] · [[umami.md]] · [[decisions/mvp-scope.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[search-indexing.md]]

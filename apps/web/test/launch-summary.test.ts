@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { METRIC_FAMILIES } from '@shipcast/engine';
-import { cardChannels, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, markCapacity, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
+import { cardChannels, channelSiteVisits, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, markCapacity, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
 
 test('a launch totals its counters through the stats families, with GitHub stars apart from reactions', () => {
   const totals = launchTotals(
@@ -168,4 +168,22 @@ test('a row holds as many tiles as its real width allows, with the "+n" in the l
     const tiles = shown.length + (folded.length > 0 ? 1 : 0);
     assert.ok(tiles * 44 - 8 <= width, `${tiles} tiles fit in ${width}px`);
   }
+});
+
+test('each tagged channel’s site visits come from Umami’s readings of its utm_source, and only where Umami counted some', () => {
+  const readings = [
+    { source: 'umami', name: 'views', value: 40 },
+    { source: 'umami', name: 'views_bluesky', value: 30 },
+    { source: 'umami', name: 'visits_bluesky', value: 20 },
+    { source: 'umami', name: 'visitors_bluesky', value: 18 },
+    { source: 'umami', name: 'views_github', value: 4 },
+    { source: 'umami', name: 'visits_github', value: 3 },
+    // The blog's referrer split is Cloudflare's, not the tags'
+    { source: 'blog', name: 'views_mastodon', value: 9 },
+  ];
+  assert.deepEqual(channelSiteVisits(readings, { bluesky: 'bluesky', githubDiscussions: 'github', mastodon: 'mastodon' }), {
+    bluesky: { views: 30, visits: 20 },
+    githubDiscussions: { views: 4, visits: 3 },
+  });
+  assert.deepEqual(channelSiteVisits([], { bluesky: 'bluesky' }), {});
 });

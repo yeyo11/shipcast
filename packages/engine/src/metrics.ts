@@ -1,6 +1,6 @@
 import type { MetricStore } from './ports.ts';
-import { ConnectorError, type AnalyticsMany, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
-import { channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
+import { ConnectorError, type AnalyticsMany, type CampaignVisits, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
+import { campaignOf, channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
@@ -132,6 +132,11 @@ export interface MetricSources {
     pageMetrics(url: string): Promise<Metrics>;
     inspect?(url: string): Promise<IndexStatus>;
   };
+  /**
+   * The blog's visits by the UTM tags of the links Shipcast published (Umami, behind the `umami`
+   * flag): a launch's campaign by `utm_source`, over the launch and per day. Read by the hourly reads only
+   */
+  umami?: { campaignVisits(campaign: string, since: string, until: string): Promise<CampaignVisits> };
   /** The launched repo's stars, forks and traffic */
   github?: { repoStats(repo: string): Promise<RepoStats> };
   /**
@@ -307,6 +312,36 @@ export function blogValues(pages: ReadonlyArray<PageVisits & { lang: Language }>
     for (const [source, count] of Object.entries(page.bySource)) add(`views_${source}`, count);
   }
   return values;
+}
+
+/**
+ * A launch's visits from its tagged links as readings: the campaign's page views and visits, and each
+ * source's (`views_<utm_source>`, `visits_<utm_source>`, `visitors_<utm_source>`). The sources' unique
+ * visitors are not added up: one person can come from two networks.
+ */
+export function campaignValues(visits: CampaignVisits): Record<string, number> {
+  const sources = Object.entries(visits.bySource);
+  const values: Record<string, number> = { views: sources.reduce((n, [, v]) => n + v.views, 0), visits: sources.reduce((n, [, v]) => n + v.visits, 0) };
+  for (const [source, v] of sources) {
+    values[`views_${source}`] = v.views;
+    values[`visits_${source}`] = v.visits;
+    values[`visitors_${source}`] = v.visitors;
+  }
+  return values;
+}
+
+/** The same per day: the campaign's page views, and each source's page views and unique visitors */
+export function campaignDays(visits: CampaignVisits): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const [source, days] of Object.entries(visits.days)) {
+    for (const [d, v] of Object.entries(days)) {
+      const of = (out[d] ??= { views: 0 });
+      of.views = (of.views ?? 0) + v.views;
+      of[`views_${source}`] = v.views;
+      of[`visitors_${source}`] = v.visitors;
+    }
+  }
+  return out;
 }
 
 /**
@@ -680,6 +715,20 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       await attempt('blog visits by day', async () => {
         const byDay = await blog.pageVisitsByDay!(paths, since, until);
         for (const site of blogDue) await recordDays(site.launch.id, 'blog', sumDays(site.urls.map(({ url }) => byDay.get(new URL(url).pathname) ?? {})));
+      });
+    }
+  }
+
+  // The blog's visits from each launch's tagged links, by its campaign: every published launch has
+  // one, article or not, since its posts link to the site wherever the launch's pages are
+  const umami = sources.umami;
+  if (umami) {
+    for (const launch of launches) {
+      if (!siteDue(launch.id, 'umami', 'views', SITE_CADENCES.umami.hours)) continue;
+      await attempt(`${launch.repo} ${launch.ref} Umami`, async () => {
+        const visits = await umami.campaignVisits(campaignOf(launch), launch.createdAt.slice(0, 10), until);
+        await record(launch.id, 'umami', campaignValues(visits));
+        await recordDays(launch.id, 'umami', campaignDays(visits));
       });
     }
   }

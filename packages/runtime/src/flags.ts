@@ -68,6 +68,8 @@ export const FLAGS = {
    * to delete them on; an event never launches a removed launch's release again
    */
   'launch-delete': 'Launches deleted from the app and the API',
+  /** SHP-4: the blog's visits per launch and channel from Umami, until the Umami instance exists */
+  umami: 'Blog visits by UTM source and campaign from Umami',
 } as const;
 
 /**
