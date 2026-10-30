@@ -96,7 +96,8 @@ test('R2 is called on the bucket path with the content type, and a refusal names
   const down = new R2MediaStore({ endpoint: 'https://account.r2.cloudflarestorage.com', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' }, { fetch: (async () => new Response('', { status: 503 })) as typeof fetch });
   await assert.rejects(down.has(mediaKey(sha256Hex(PNG))), (error: unknown) => error instanceof MediaStoreFailed && error.retryable);
   const unreachable = new R2MediaStore({ endpoint: 'https://account.r2.cloudflarestorage.com', bucket: 'b', accessKeyId: 'k', secretAccessKey: 's' }, { fetch: (async () => { throw new TypeError('fetch failed'); }) as typeof fetch });
-  await assert.rejects(unreachable.put(PNG, 'image/png'), (error: unknown) => error instanceof MediaStoreFailed && error.retryable && /did not reach account\.r2\.cloudflarestorage\.com/.test(error.message));
+  await assert.rejects(unreachable.put(PNG, 'image/png'), (error: unknown) => error instanceof MediaStoreFailed && error.retryable && !error.message.includes('account.r2') && /did not reach account\.r2\.cloudflarestorage\.com/.test(String((error.cause as Error | undefined)?.message)),
+    'the endpoint (it names the account) is only in the cause, for the log');
 });
 
 test('a store that is not set up refuses every call with its reason, never retried', async () => {

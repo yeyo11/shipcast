@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { test } from 'node:test';
 import { parseLaunchConfig, ShipcastError, type Brand } from '@shipcast/schema';
-import { LaunchRefused, SourcesService, unavailableMediaStore, type LaunchService, type NewLaunchSource } from '../src/index.ts';
+import { LaunchRefused, MediaStoreFailed, SourcesService, unavailableMediaStore, type LaunchService, type NewLaunchSource } from '../src/index.ts';
 import { memoryRegistry, MemoryMediaStore } from '../src/testing/index.ts';
 
 /*
@@ -132,4 +132,30 @@ test('an upload while the media store is unavailable says why', async () => {
   });
   await assert.rejects(service.upload(PNG), /launch-media flag is off/);
   await assert.rejects(service.upload(new Uint8Array(ascii('<svg/>'))), /only PNG/);
+});
+
+test('a page refused or a store that fails is answered in general words; what happened is logged', async () => {
+  const registry = await memoryRegistry();
+  const logged: Array<{ message: string; fields: Record<string, unknown> }> = [];
+  const failing: MemoryMediaStore = Object.assign(new MemoryMediaStore(), {
+    put: async () => Promise.reject(new MediaStoreFailed('media store: the store could not be reached', { cause: new Error('PUT media/ab did not reach account.r2.cloudflarestorage.com') })),
+  });
+  const service = new SourcesService({
+    launchService: { claimManual: async () => Promise.reject(new Error('unused')) },
+    launches: registry.launches,
+    sources: registry.sources,
+    launchesRepo: 'yeyo11/launches',
+    media: failing,
+    fetchPage: async () => Promise.reject(new Refused('the page’s address is not one a source may be read from', { cause: new Error('internal.test leads to 10.0.0.1') })),
+    log: (message, fields = {}) => logged.push({ message, fields }),
+  });
+  await assert.rejects(service.upload(PNG), (e: unknown) => e instanceof MediaStoreFailed && !e.message.includes('account.r2'));
+  await assert.rejects(
+    service.create({ title: 'Inside', lang: 'en', channels: [], sources: [{ kind: 'url', url: 'http://internal.test/' }] }, brand),
+    (e: unknown) => e instanceof LaunchRefused && !e.message.includes('10.0.0.1'),
+  );
+  assert.deepEqual(logged.map((l) => l.message), ['an upload could not be stored', 'a source page was not read']);
+  assert.match(String(logged[0]?.fields.detail), /did not reach account\.r2\.cloudflarestorage\.com/);
+  assert.match(String(logged[1]?.fields.detail), /internal\.test leads to 10\.0\.0\.1/);
+  assert.equal(logged[1]?.fields.url, 'http://internal.test/');
 });

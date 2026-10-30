@@ -82,7 +82,8 @@ export class R2MediaStore implements MediaStore {
       // A view over a SharedArrayBuffer is no request body: the bytes are copied into a plain one
       return await this.#fetch(url, { method, headers: signed, ...(options.body && { body: new Uint8Array(options.body) }) });
     } catch (error) {
-      throw new MediaStoreFailed(`media store: ${method} ${key} did not reach ${url.host}`, { cause: error });
+      // The endpoint's host names the storage account: kept in the cause, for the log, out of what a client is answered
+      throw new MediaStoreFailed('media store: the store could not be reached', { cause: new Error(`${method} ${key} did not reach ${url.host}`, { cause: error }) });
     }
   }
 }

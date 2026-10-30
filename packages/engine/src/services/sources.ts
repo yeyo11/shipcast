@@ -1,6 +1,6 @@
 import { ShipcastError, type Brand } from '@shipcast/schema';
 import { articleConfig, articleSlug } from '../article.ts';
-import { mediaKey, type MediaStore } from '../media/store.ts';
+import { MediaStoreFailed, mediaKey, type MediaStore } from '../media/store.ts';
 import type { Launch, LaunchRepository, LaunchSourceRepository, NewLaunchSource, SourceMedia } from '../repositories/index.ts';
 import { channelsText } from '../sources/draft.ts';
 import { checkSources, InvalidSources, primaryRepoOf, type SourceInput, type SourcesLaunchInput } from '../sources/model.ts';
@@ -18,6 +18,18 @@ export interface SourcesServiceDeps {
   media: MediaStore;
   /** The guarded fetcher every page goes through */
   fetchPage: PageFetcher;
+  /**
+   * Where the particulars of a refused page or a failed store go: the client is answered in general
+   * words (they could map the server's network or name the storage account), the log keeps the rest
+   */
+  log?: (message: string, fields?: Record<string, unknown>) => void;
+}
+
+/** An error's message and those of its causes, for the log */
+function detailOf(error: unknown): string {
+  const lines: string[] = [];
+  for (let e: unknown = error, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) lines.push(e.message);
+  return lines.join(': ');
 }
 
 /**
@@ -41,7 +53,13 @@ export class SourcesService {
    */
   async upload(bytes: Uint8Array): Promise<SourceMedia> {
     const file = sanitiseUpload(bytes);
-    const stored = await this.#deps.media.put(file.body, file.mime);
+    let stored: Awaited<ReturnType<MediaStore['put']>>;
+    try {
+      stored = await this.#deps.media.put(file.body, file.mime);
+    } catch (error) {
+      if (error instanceof MediaStoreFailed) this.#deps.log?.('an upload could not be stored', { detail: detailOf(error) });
+      throw error;
+    }
     return this.#deps.sources.recordUpload({
       sha256: stored.sha256,
       kind: file.kind,
@@ -113,7 +131,10 @@ export class SourcesService {
         try {
           rows.push({ row: await this.#deps.fetchPage(source.url) });
         } catch (error) {
-          if (error instanceof ShipcastError) throw new LaunchRefused('invalid', `${source.url} could not be read: ${error.message}`);
+          if (error instanceof ShipcastError) {
+            this.#deps.log?.('a source page was not read', { url: source.url, detail: detailOf(error) });
+            throw new LaunchRefused('invalid', `${source.url} could not be read: ${error.message}`);
+          }
           throw error;
         }
       } else if (source.kind === 'repo') {

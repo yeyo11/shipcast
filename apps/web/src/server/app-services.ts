@@ -21,6 +21,7 @@ import {
   type Repositories,
   type ReviewGitHub,
 } from '@shipcast/engine';
+import { logger } from '@shipcast/runtime';
 
 /*
  * The engine's application services as the web builds them, for the server functions, the launch
@@ -102,4 +103,5 @@ export const sourcesService = (deps: { registry: Pick<Repositories, 'launches' |
     launchesRepo: deps.deps.launchesRepo,
     media: deps.media,
     fetchPage: pageFetcher(),
+    log: (message, fields) => logger().warn(message, { module: 'sources', ...fields }),
   });

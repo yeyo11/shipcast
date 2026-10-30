@@ -68,6 +68,18 @@ const REFUSALS: Record<UrlRefusal, { httpStatus: number; retryable: boolean }> =
   network: { httpStatus: 502, retryable: true },
 };
 
+/*
+ * What a refusal tells the client about the network behind a name stays general: which address a
+ * host resolved to, or that it did not resolve, or what a socket error said, would let anyone who may
+ * add a source map the server's own network through the answers. The particulars go in the cause,
+ * which the caller logs (SourcesService), never in the message.
+ */
+const NOT_FOUND = 'the page’s host could not be found';
+const NOT_PUBLIC = 'the page’s address is not one a source may be read from';
+
+/** The particulars of a refusal, for the log: an error carrying them, chained to what failed */
+const detail = (text: string, cause?: unknown) => new Error(text, cause === undefined ? undefined : { cause });
+
 /** Why a source URL was not read: the reason is the code */
 export class UrlRefused extends ShipcastError {
   readonly reason: UrlRefusal;
@@ -178,12 +190,12 @@ async function openConnection(hostname: string, port: number, secure: boolean, g
     try {
       addresses = await guard.resolve(hostname);
     } catch (error) {
-      throw new UrlRefused('network', `${hostname} did not resolve`, { cause: error });
+      throw new UrlRefused('network', NOT_FOUND, { cause: detail(`${hostname} did not resolve`, error) });
     }
-    if (addresses.length === 0) throw new UrlRefused('network', `${hostname} did not resolve`);
+    if (addresses.length === 0) throw new UrlRefused('network', NOT_FOUND, { cause: detail(`${hostname} did not resolve`) });
   }
   const refused = addresses.find((a) => !guard.allowAddress(a.address));
-  if (refused) throw new UrlRefused('address', `${hostname} leads to ${refused.address}, an address a source may not be read from`);
+  if (refused) throw new UrlRefused('address', NOT_PUBLIC, { cause: detail(`${hostname} leads to ${refused.address}`) });
   guard.signal.throwIfAborted();
 
   let lastError: unknown;
@@ -200,7 +212,7 @@ async function openConnection(hostname: string, port: number, secure: boolean, g
     const peer = socket.remoteAddress;
     if (peer === undefined || !guard.allowAddress(peer)) {
       socket.destroy();
-      throw new UrlRefused('address', `${hostname} connected to ${peer ?? 'an unknown address'}, an address a source may not be read from`);
+      throw new UrlRefused('address', NOT_PUBLIC, { cause: detail(`${hostname} connected to ${peer ?? 'an unknown address'}`) });
     }
     if (!secure) return socket;
     // The certificate is checked against the name the URL gave, not against the address it resolved
@@ -365,8 +377,7 @@ export async function fetchGuarded(url: string, options: GuardedFetchOptions = {
     if (error instanceof UrlRefused) throw error;
     if (options.signal?.aborted) throw options.signal.reason;
     if (timeout.aborted) throw new UrlRefused('timeout', `the page did not load within ${timeoutMs} ms`, { cause: error });
-    const message = error instanceof Error ? error.message : String(error);
-    throw new UrlRefused('network', `could not read ${current.href}: ${message}`, { cause: error });
+    throw new UrlRefused('network', 'the page could not be read', { cause: detail(`could not read ${current.href}`, error) });
   } finally {
     // Every way out, a refusal above all, drops the connection rather than leaving it to drain
     request?.destroy();
