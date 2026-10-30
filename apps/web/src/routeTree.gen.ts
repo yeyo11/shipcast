@@ -50,6 +50,7 @@ import { Route as AppSettingsAiRouteImport } from './routes/_app/settings/ai'
 import { Route as AppSettingsApiRouteImport } from './routes/_app/settings/api'
 import { Route as AppSettingsAutomationRouteImport } from './routes/_app/settings/automation'
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
+import { Route as ApiSourcesMediaRouteImport } from './routes/api/sources/media'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.callback'
 import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagram.callback'
@@ -264,6 +265,11 @@ const ApiGithubWebhookRoute = ApiGithubWebhookRouteImport.update({
   path: '/api/github/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSourcesMediaRoute = ApiSourcesMediaRouteImport.update({
+  id: '/api/sources/media',
+  path: '/api/sources/media',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
   id: '/api/v1/$',
   path: '/api/v1/$',
@@ -349,6 +355,7 @@ export interface FileRoutesByFullPath {
   '/settings/api': typeof AppSettingsApiRoute
   '/settings/automation': typeof AppSettingsAutomationRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
+  '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
@@ -399,6 +406,7 @@ export interface FileRoutesByTo {
   '/settings/api': typeof AppSettingsApiRoute
   '/settings/automation': typeof AppSettingsAutomationRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
+  '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
@@ -452,6 +460,7 @@ export interface FileRoutesById {
   '/_app/settings/api': typeof AppSettingsApiRoute
   '/_app/settings/automation': typeof AppSettingsAutomationRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
+  '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
@@ -505,6 +514,7 @@ export interface FileRouteTypes {
     | '/settings/api'
     | '/settings/automation'
     | '/api/github/webhook'
+    | '/api/sources/media'
     | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
@@ -555,6 +565,7 @@ export interface FileRouteTypes {
     | '/settings/api'
     | '/settings/automation'
     | '/api/github/webhook'
+    | '/api/sources/media'
     | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
@@ -607,6 +618,7 @@ export interface FileRouteTypes {
     | '/_app/settings/api'
     | '/_app/settings/automation'
     | '/api/github/webhook'
+    | '/api/sources/media'
     | '/api/v1/$'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
@@ -643,6 +655,7 @@ export interface RootRouteChildren {
   AvatarsAccountIdRoute: typeof AvatarsAccountIdRoute
   MediaMediaIdRoute: typeof MediaMediaIdRoute
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
+  ApiSourcesMediaRoute: typeof ApiSourcesMediaRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
 }
 
@@ -935,6 +948,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGithubWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sources/media': {
+      id: '/api/sources/media'
+      path: '/api/sources/media'
+      fullPath: '/api/sources/media'
+      preLoaderRoute: typeof ApiSourcesMediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/$': {
       id: '/api/v1/$'
       path: '/api/v1/$'
@@ -1166,6 +1186,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvatarsAccountIdRoute: AvatarsAccountIdRoute,
   MediaMediaIdRoute: MediaMediaIdRoute,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
+  ApiSourcesMediaRoute: ApiSourcesMediaRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
 }
 export const routeTree = rootRouteImport

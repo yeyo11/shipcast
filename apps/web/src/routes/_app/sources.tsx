@@ -5,7 +5,7 @@ import { PageHead } from '../../components/PageHead';
 import { useToast } from '../../components/Toasts';
 import { Combobox } from '../../components/ui/Combobox';
 import { getChannels } from '../../server/channels.functions';
-import { launchFromSources, listRepos, uploadSourceFile } from '../../server/launches.functions';
+import { launchFromSources, listRepos } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
 
 /*
@@ -13,6 +13,19 @@ import { CHANNEL_NAMES } from '../../server/view';
  * images, gathered into one launch. Plain on purpose: the form's look follows Launch a repo and Write
  * until the owner settles one for it.
  */
+
+type Uploaded = { ok: true; file: { sha256: string; mime: string; width: number | null; height: number | null } } | { ok: false; problem: string };
+
+/** The file's bytes as the body (routes/api/sources/media.ts): the server checks the flag and the size before reading it */
+async function uploadFile(file: File): Promise<Uploaded> {
+  try {
+    const response = await fetch('/api/sources/media', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file });
+    if ((response.headers.get('content-type') ?? '').includes('json')) return (await response.json()) as Uploaded;
+    return { ok: false, problem: (await response.text()) || `the upload answered ${response.status}` };
+  } catch (error) {
+    return { ok: false, problem: error instanceof Error ? error.message : String(error) };
+  }
+}
 
 export const Route = createFileRoute('/_app/sources')({
   head: () => ({ meta: [{ title: 'Launch from sources · Shipcast' }] }),
@@ -76,9 +89,7 @@ function LaunchFromSources() {
     else if (kind === 'repo' && draft.repo) setSources([...sources, { kind, repo: draft.repo, ...(draft.ref.trim() && { ref: draft.ref.trim() }) }]);
     else if (kind === 'media' && file) {
       setBusy('Uploading…');
-      const form = new FormData();
-      form.set('file', file);
-      const answer = await uploadSourceFile({ data: form }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
+      const answer = await uploadFile(file);
       setBusy(null);
       if (!answer.ok) return toast.fail(answer.problem);
       const size = answer.file.width && answer.file.height ? `${answer.file.width}×${answer.file.height}` : answer.file.mime;

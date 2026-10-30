@@ -61,6 +61,26 @@ export async function readCapped(request: Request, max: number): Promise<Uint8Ar
   return out;
 }
 
+/**
+ * The app's own upload (POST /api/sources/media, routes/api/sources/media.ts), behind the session: the
+ * file's bytes as the body, no multipart. The flag and the declared length are checked before a byte
+ * is read, and the body is read only up to the cap, which a server function's multipart parsing,
+ * done whole before the function runs, could not promise. Answers as the page's other calls do.
+ */
+export async function pageUpload(request: Request, deps: { enabled: boolean; upload: SourcesApi['upload'] }): Promise<Response> {
+  const page = (status: number, body: unknown) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
+  if (!deps.enabled) {
+    await request.body?.cancel().catch(() => undefined);
+    return page(404, { ok: false, problem: 'launches made from sources are off (the launch-sources flag, SHIPCAST_FLAGS)' });
+  }
+  const bytes = await readCapped(request, MAX_UPLOAD_BYTES);
+  if (!bytes) return page(413, { ok: false, problem: `a file has at most ${MAX_UPLOAD_BYTES} bytes` });
+  const stored = await deps.upload(bytes);
+  if (!stored.ok) return page(409, stored);
+  const { sha256, mime, width, height } = stored.file;
+  return page(200, { ok: true, file: { sha256, mime, width, height } });
+}
+
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 
 const sourceSchema: JsonSchema = {

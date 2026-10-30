@@ -4,6 +4,7 @@ import { MAX_UPLOAD_BYTES, type ReviewGitHub, type SourcesLaunchInput } from '@s
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { createApiToken, MemoryStore } from '@shipcast/runtime';
 import { FailureLimiter, handleApi, openApiDocument, type ApiDeps } from '../src/server/api.ts';
+import { pageUpload } from '../src/server/sources-api.ts';
 import { sourcesRequest } from '../src/server/requests.ts';
 import { readCapped, type SourcesApi } from '../src/server/sources-api.ts';
 
@@ -100,4 +101,39 @@ test('the request shape: a source of each kind, nothing else, and the title trim
   assert.throws(() => sourcesRequest({ title: 'T', sources: 'all of them' }), /must be a list/);
   assert.throws(() => sourcesRequest({ title: 'T', lang: 'fr', sources: [] }), /en or es/);
   assert.throws(() => sourcesRequest({ title: 'T', sources: [{ kind: 'url' }] }), /url must be text/);
+});
+
+test('the page’s upload: the flag and the length are checked before a byte is read, and the body is read up to the cap', async () => {
+  // Until the fix the page's upload was a server function: its multipart body was parsed whole, flag
+  // off or not and whatever its size, before the function could refuse it
+  const uploaded: number[] = [];
+  const upload = async (bytes: Uint8Array) => (uploaded.push(bytes.byteLength), { ok: true as const, file: { id: 1, sha256: 'b'.repeat(64), kind: 'image', mime: 'image/png', bytes: bytes.byteLength, width: 2, height: 3, storage: 'memory', path: 'media/bb/x' } });
+  let pulled = 0;
+  // A body that counts its reads; a high-water mark of 0 so nothing is pulled before someone reads.
+  // A plain object for the request, as above: a Request computes its own content-length
+  const watched = (length: number, declared?: number) =>
+    ({
+      headers: new Headers({ 'content-type': 'application/octet-stream', ...(declared !== undefined && { 'content-length': String(declared) }) }),
+      body: new ReadableStream<Uint8Array>({ pull(controller) { pulled += 1; controller.enqueue(new Uint8Array(length)); controller.close(); } }, { highWaterMark: 0 }),
+    }) as unknown as Request;
+
+  const off = await pageUpload(watched(10), { enabled: false, upload });
+  assert.equal(off.status, 404);
+  assert.equal(pulled, 0, 'flag off: the body is never read');
+
+  const declared = await pageUpload(watched(10, MAX_UPLOAD_BYTES + 1), { enabled: true, upload });
+  assert.equal(declared.status, 413);
+  assert.equal(pulled, 0, 'a declared length over the cap: never read');
+
+  const big = await pageUpload(watched(MAX_UPLOAD_BYTES + 1), { enabled: true, upload });
+  assert.equal(big.status, 413, 'a body longer than it says is cut at the cap');
+
+  const ok = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1, 2, 3]) }), { enabled: true, upload });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { ok: true, file: { sha256: 'b'.repeat(64), mime: 'image/png', width: 2, height: 3 } });
+  assert.deepEqual(uploaded, [3]);
+
+  const refused = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1]) }), { enabled: true, upload: async () => ({ ok: false, problem: 'only PNG, JPEG, GIF or WebP' }) });
+  assert.equal(refused.status, 409);
+  assert.deepEqual(await refused.json(), { ok: false, problem: 'only PNG, JPEG, GIF or WebP' });
 });

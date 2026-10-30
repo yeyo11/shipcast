@@ -7,7 +7,7 @@ import { appContext } from './context.server';
 import { deletionService } from './deletion.server';
 import { channelList } from './post-changes';
 import { repoList } from './repo-list';
-import { id, InvalidInput, object, text } from './input';
+import { id, object, text } from './input';
 import { ownerAvatarUrl } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
@@ -16,7 +16,7 @@ import { launchNumbers, postAccounts, readTimezone } from './launch-summary.serv
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchView, publishAgain as publishAgainFor } from './launches.server';
 import { approvalRequest, articleRequest, channelName, launchRequest, sourcesRequest } from './requests';
-import { approve, startArticle, startLaunch, startPublishing, startSources, uploadSource } from './work.server';
+import { approve, startArticle, startLaunch, startPublishing, startSources } from './work.server';
 
 /** A page holds a few rows of cards on any screen, two or three across, and each card reads its own numbers */
 const LAUNCHES_PAGE = 24;
@@ -246,16 +246,4 @@ export const launchFromSources = createServerFn({ method: 'POST' })
   .validator((input: unknown) => sourcesRequest(input))
   .handler(({ data }) => startSources(data));
 
-/** An image for a launch made from sources, into the media store; the page names it by the sha256 answered */
-export const uploadSourceFile = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const file = input instanceof FormData ? input.get('file') : null;
-    if (!(file instanceof Blob)) throw new InvalidInput('send the file as `file` in a form');
-    return file;
-  })
-  .handler(async ({ data }) => {
-    const answer = await uploadSource(new Uint8Array(await data.arrayBuffer()));
-    if (!answer.ok) return answer;
-    const { sha256, mime, width, height } = answer.file;
-    return { ok: true as const, file: { sha256, mime, width, height } };
-  });
+// An image for a launch made from sources is uploaded through POST /api/sources/media (routes/api/sources/media.ts), not a server function
