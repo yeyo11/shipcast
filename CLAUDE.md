@@ -71,7 +71,7 @@ Both run as [Sluice](.sluice.toml) gates (`typecheck` on pre-commit, `test` on p
 
 Write every feature and every decision as a document under `docs/` (plans in `docs/plans/`,
 decisions in `docs/decisions/`), in the pull request that builds it, with the
-`write-knowledge-doc` skill. **Every document is written through pando's `kb_add_document`**, new
+`base:write-knowledge-doc` skill (plugin `base@yeyo11`). **Every document is written through pando's `kb_add_document`**, new
 or updated, never with Write or Edit: the tool sets the front matter (dates, tags), mirrors the file
 to `docs/` and indexes its links. A hook blocks direct writes to `docs/**/*.md`.
 [docs/knowledge-base.md](docs/knowledge-base.md) has the format, the tools and the re-sync.
