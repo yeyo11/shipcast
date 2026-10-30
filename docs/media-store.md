@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T00:39:53.627637481Z
-updated_at: 2026-10-30T00:39:53.627637481Z
+updated_at: 2026-10-30T02:01:07.927058581Z
 tags:
     - media
     - storage
@@ -14,8 +14,10 @@ tags:
 Where a launch's images and videos live once Shipcast, not the launches repo, holds a launch
 ([decisions/launch-model.md](decisions/launch-model.md)). The owner chose **Cloudflare R2** from the
 start: it also covers the video sources that come later, and it keeps media off the server's
-volume. Built on 2026-10-30 as the first phase of the launch model, behind the `launch-media` flag;
-**nothing calls it yet**. The launches' media of today still ride in the drafts pull request
+volume. Built on 2026-10-30 as the first phase of the launch model, behind the `launch-media` flag.
+Its only caller is the shadow write of the second phase (`launch-store`,
+[launch-store.md](launch-store.md)), which puts a copy of every file of a drafts pull request in it;
+the launches' media of today still ride in the drafts pull request and are published from there
 ([publishing.md](publishing.md#the-launchs-media)).
 
 ## The port
@@ -74,17 +76,17 @@ The bytes are in the store; what describes them is a row of `media` in Postgres 
 [engine.md](engine.md#the-launch-registry)): the launch (null for a file no launch owns, such as a
 project's cover), `sha256`, `kind`, `mime`, `bytes` (a `bigint`: a video can pass 2 GiB), the size or
 length, `storage` (`r2`) and `path` (the key), its `role` (`og`, `screenshot`, `carousel`, `story`,
-`demo`, `chart`, `upload`) and, once published on the site, its `public_path`. One launch holds a
-file once (`unique (launch_id, sha256)`); a purge removes an object only when no row names its
-sha256 any more.
+`demo`, `cover`, `chart`, `upload`, or `other`) and its `public_path` on the site (for a launch of the
+pull-request flow, where its pull request puts it). One launch holds a file once
+(`unique (launch_id, sha256)`); a purge removes an object only when no row names its sha256 any more.
 
 ## Still to do
 
 - Adding the bucket to the server's nightly backup, which today covers Postgres only: part of the
   media phase in the decision.
-- Writing media to it (the shadow write), serving it to the app for review, and handing networks a
-  public address at publish time: later phases of the launch model.
+- Serving it to the app for review, and handing networks a public address at publish time: later
+  phases of the launch model. Writing to it is done (the shadow write, [launch-store.md](launch-store.md)).
 
 ## Related
 
-[[decisions/launch-model.md]] · [[engine.md]] · [[publishing.md]] · [[server.md]] · [[content-pack.md]] · [[launches-repo.md]]
+[[decisions/launch-model.md]] · [[engine.md]] · [[publishing.md]] · [[server.md]] · [[content-pack.md]] · [[launches-repo.md]] · [[launch-store.md]]

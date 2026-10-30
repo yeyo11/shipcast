@@ -20,12 +20,14 @@ export class PublishingService {
   readonly #github: GitHubSource;
   readonly #launchesRepo: string;
   readonly #attempts: PublishAttempts;
+  readonly #launchStore: PublishDeps['launchStore'];
 
-  constructor(deps: { registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts }) {
+  constructor(deps: { registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts; launchStore?: PublishDeps['launchStore'] }) {
     this.#registry = deps.registry;
     this.#github = deps.github;
     this.#launchesRepo = deps.launchesRepo;
     this.#attempts = deps.attempts ?? deps.registry.attempts;
+    this.#launchStore = deps.launchStore;
   }
 
   get attempts(): PublishAttempts {
@@ -46,6 +48,7 @@ export class PublishingService {
       launchesRepo: this.#launchesRepo,
       guard: new PieceGuard(this.#attempts, holder),
       keepUnpublishable: true,
+      ...(this.#launchStore && { launchStore: this.#launchStore }),
     });
   }
 

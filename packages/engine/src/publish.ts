@@ -12,6 +12,7 @@ import { failureKey as failureKeyOf } from './publishing/retry.ts';
 
 const failureKey = (launch: Launch, channel: Channel) => failureKeyOf(launch.id, channel);
 import type { Launch, Post, Repositories } from './repositories/index.ts';
+import type { LaunchStoreService } from './services/launch-store.ts';
 
 /**
  * What the engine needs from each network's connector: the connectors in `@shipcast/connectors`
@@ -174,6 +175,8 @@ export interface PublishDeps {
    * the characterisation tests found (publish.characterisation.test.ts). The publishing service's rule.
    */
   keepUnpublishable?: boolean;
+  /** With `launch-store`: told once the drafts are found approved, so the merge is also an approval row (services/launch-store.ts) */
+  launchStore?: Pick<LaunchStoreService, 'merged'>;
 }
 
 /**
@@ -285,6 +288,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const approved = await approval(launch, deps);
   if (approved.state === 'waiting') return { state: 'waiting', launch, reason: approved.reason };
   if (approved.state === 'closed') return { state: 'skipped', launch: await registry.launches.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
+  // It reports on its own and never throws: publishing goes on whatever the shadow write found
+  await deps.launchStore?.merged(launch).catch(() => undefined);
 
   const dir = launchDir(launch);
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');

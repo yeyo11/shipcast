@@ -7,8 +7,10 @@ import {
   PostService,
   ScheduleService,
   type CommentDeps,
+  type DraftSnapshotService,
   type EditDeps,
   type GitHubRest,
+  type LaunchStoreService,
   type PipelineDeps,
   type Post,
   type Repositories,
@@ -56,6 +58,14 @@ export const accountService = (deps: { registry: Pick<Repositories, 'accounts'> 
 
 export const settingsService = (deps: { registry: Pick<Repositories, 'settings'> }) => new SettingsService(deps.registry);
 
-/** Over the app's pipeline (the claim's registry and launches repo) and its GitHub (the pre-flight, the merge) */
-export const launchService = (deps: { registry: Pick<Repositories, 'launches'>; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest }) =>
-  new LaunchService({ launches: deps.registry.launches, claims: deps.deps, github: deps.github });
+/**
+ * Over the app's pipeline (the claim's registry and launches repo) and its GitHub (the pre-flight, the
+ * merge, an edit), with the drafts snapshot and the launch model's copy an edit also goes to when they are on
+ */
+export const launchService = (deps: {
+  registry: Pick<Repositories, 'launches'>;
+  deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>;
+  github: GitHubRest;
+  drafts?: Pick<DraftSnapshotService, 'edited'> | undefined;
+  launchStore?: Pick<LaunchStoreService, 'edited'> | undefined;
+}) => new LaunchService({ launches: deps.registry.launches, claims: deps.deps, github: deps.github, ...(deps.drafts && { drafts: deps.drafts }), ...(deps.launchStore && { launchStore: deps.launchStore }) });

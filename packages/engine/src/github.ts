@@ -377,7 +377,10 @@ export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource
   }
 
   /** A pull request's branch and state, for reviewing its drafts */
-  async pullRequest(repo: string, number: number): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string; headSha: string }> {
+  async pullRequest(
+    repo: string,
+    number: number,
+  ): Promise<{ number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string; title: string; headSha: string; mergedBy: string | null; mergedAt: string | null }> {
     const pr = (await this.#ok('GET', `/repos/${repo}/pulls/${number}`)) as {
       number: number;
       html_url: string;
@@ -385,8 +388,19 @@ export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource
       merged: boolean;
       title: string;
       head: { ref: string; sha: string };
+      merged_by?: { login?: string } | null;
+      merged_at?: string | null;
     };
-    return { number: pr.number, url: pr.html_url, state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed', branch: pr.head.ref, title: pr.title, headSha: pr.head.sha };
+    return {
+      number: pr.number,
+      url: pr.html_url,
+      state: pr.state === 'open' ? 'open' : pr.merged ? 'merged' : 'closed',
+      branch: pr.head.ref,
+      title: pr.title,
+      headSha: pr.head.sha,
+      mergedBy: pr.merged_by?.login ?? null,
+      mergedAt: pr.merged_at ?? null,
+    };
   }
 
   /** The paths a pull request adds or changes (up to 300, GitHub's page limit times three) */

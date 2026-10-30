@@ -10,6 +10,7 @@ import { JobRepository } from './jobs.ts';
 import { AccountRepository } from './accounts.ts';
 import { CursorRepository } from './cursors.ts';
 import { DraftSnapshotRepository } from './draft-snapshots.ts';
+import { LaunchStoreRepository } from './launch-store.ts';
 import { SettingRepository } from './settings.ts';
 import { MetricRepository } from './metrics.ts';
 import { PostRepository } from './posts.ts';
@@ -37,6 +38,7 @@ export * from './jobs.ts';
 export * from './accounts.ts';
 export * from './cursors.ts';
 export * from './draft-snapshots.ts';
+export * from './launch-store.ts';
 export * from './settings.ts';
 export * from './metrics.ts';
 export * from './posts.ts';
@@ -57,6 +59,8 @@ export interface Repositories {
   readonly cursors: CursorRepository;
   /** The drafts pull requests as last read from GitHub: what the launch page shows (phase 7) */
   readonly drafts: DraftSnapshotRepository;
+  /** A launch's packs, channel rows, draft versions, media and approvals in Shipcast (the launch model) */
+  readonly launchStore: LaunchStoreRepository;
   readonly settings: SettingRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
@@ -79,6 +83,7 @@ export function repositoriesOn(db: Database): Repositories {
     accounts: new AccountRepository(db),
     cursors: new CursorRepository(db),
     drafts: new DraftSnapshotRepository(db),
+    launchStore: new LaunchStoreRepository(db),
     settings: new SettingRepository(db),
     metrics: new MetricRepository(db),
     posts: new PostRepository(db),

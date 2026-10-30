@@ -13,7 +13,7 @@ import { parseFailureKey } from '@shipcast/schema/failures';
  * (an account that breaks again, the same failure after a retry) is shown again.
  */
 
-export type AttentionKind = 'approve' | 'retry' | 'reply' | 'reconnect' | 'permission' | 'scheduled' | 'canonical';
+export type AttentionKind = 'approve' | 'retry' | 'reply' | 'reconnect' | 'permission' | 'scheduled' | 'canonical' | 'drift';
 
 /** Where a line goes: typed per route, so the bell's links stay checked by the router */
 export type AttentionTarget =
@@ -50,6 +50,8 @@ export interface AttentionInput {
   metricProblems?: ReadonlyArray<{ key: string; value: string }>;
   /** Article pages Google files under another canonical URL, by launch (the engine's `search-canonical:` cursors) */
   canonicals?: ReadonlyArray<{ launchId: number; pages: ReadonlyArray<{ url: string; googleCanonical: string }> }>;
+  /** With `launch-store`: what the launch model's copy of a launch differs from its pull request in, by launch (the engine's `launch-store:` cursors) */
+  storeDifferences?: ReadonlyArray<{ launchId: number; differences: readonly string[] }>;
   now: Date;
   /** How far ahead a scheduled post is worth a line; a day by default */
   soonMs?: number;
@@ -128,6 +130,13 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
     const more = c.pages.length > 1 ? ` and ${c.pages.length - 1} more` : '';
     // The pair of URLs is the condition: Google choosing yet another one is a new line
     items.push({ key: `launch:${c.launchId}:canonical:${digest(c.pages.map((p) => `${p.url} ${p.googleCanonical}`).join('\n'))}`, kind: 'canonical', text: `Google files ${first.url} under ${first.googleCanonical}${more}: its search numbers go there`, action: 'See it', target: { to: '/launches/$id', params: { id: String(c.launchId) } } });
+  }
+  for (const d of input.storeDifferences ?? []) {
+    const l = byId.get(d.launchId);
+    if (!l || d.differences.length === 0) continue;
+    const more = d.differences.length > 1 ? ` and ${d.differences.length - 1} more` : '';
+    // What differs is the condition: a check that finds something else is a new line
+    items.push({ key: `launch:${d.launchId}:store:${digest(d.differences.join('\n'))}`, kind: 'drift', text: `${launchName(l.repo, l.ref)}: Shipcast's copy differs from the pull request (${d.differences[0]}${more})`, action: 'See the launch', target: { to: '/launches/$id', params: { id: String(d.launchId) } } });
   }
   for (const a of input.brokenAccounts) {
     items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${a.network}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } } });
