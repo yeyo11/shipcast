@@ -9,7 +9,7 @@ import {
   type Language,
 } from '@shipcast/schema';
 import { stringify } from 'yaml';
-import { keepPubDates, launchDir, renderDrafts, screenshotPaths } from './drafts.ts';
+import { draftsBranch, keepPubDates, launchDir, renderDrafts, screenshotPaths } from './drafts.ts';
 import { buildAssets } from './launch-assets.ts';
 import { aiTextsOf, deliverDrafts, readProjects, type DraftOptions, type DraftResult, type PipelineDeps } from './pipeline.ts';
 import { buildArticlePrompt } from './prompt.ts';
@@ -126,7 +126,7 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
     deps,
     {
       files,
-      branch: `article/${dir.slice('articles/'.length)}`,
+      branch: draftsBranch(launch),
       title: `Article: ${input.title}`,
       body: `An article written in Shipcast, with its translation and a piece for each channel.\n\n**Merging publishes** the article on the blog and every \`approval\` channel. Edit any file first: what is merged is what gets published.`,
       message: `article: ${input.title}\n\nWritten in Shipcast; translated and distributed by it.`,

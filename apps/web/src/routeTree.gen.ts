@@ -38,6 +38,7 @@ import { Route as AuthRedditRouteImport } from './routes/auth/reddit'
 import { Route as AuthThreadsRouteImport } from './routes/auth/threads'
 import { Route as AuthYoutubeRouteImport } from './routes/auth/youtube'
 import { Route as AvatarsAccountIdRouteImport } from './routes/avatars.$accountId'
+import { Route as MediaMediaIdRouteImport } from './routes/media.$mediaId'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
 import { Route as AppDesignComponentsRouteImport } from './routes/_app/design/components'
@@ -202,6 +203,11 @@ const AvatarsAccountIdRoute = AvatarsAccountIdRouteImport.update({
   path: '/avatars/$accountId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaMediaIdRoute = MediaMediaIdRouteImport.update({
+  id: '/media/$mediaId',
+  path: '/media/$mediaId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppChannelsIndexRoute = AppChannelsIndexRouteImport.update({
   id: '/channels/',
   path: '/channels/',
@@ -327,6 +333,7 @@ export interface FileRoutesByFullPath {
   '/auth/threads': typeof AuthThreadsRouteWithChildren
   '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
+  '/media/$mediaId': typeof MediaMediaIdRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
@@ -374,6 +381,7 @@ export interface FileRoutesByTo {
   '/auth/threads': typeof AuthThreadsRouteWithChildren
   '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
+  '/media/$mediaId': typeof MediaMediaIdRoute
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
@@ -425,6 +433,7 @@ export interface FileRoutesById {
   '/auth/threads': typeof AuthThreadsRouteWithChildren
   '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
+  '/media/$mediaId': typeof MediaMediaIdRoute
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
   '/_app/design/components': typeof AppDesignComponentsRoute
@@ -477,6 +486,7 @@ export interface FileRouteTypes {
     | '/auth/threads'
     | '/auth/youtube'
     | '/avatars/$accountId'
+    | '/media/$mediaId'
     | '/channels/$network'
     | '/design/components'
     | '/design/illustrations'
@@ -524,6 +534,7 @@ export interface FileRouteTypes {
     | '/auth/threads'
     | '/auth/youtube'
     | '/avatars/$accountId'
+    | '/media/$mediaId'
     | '/'
     | '/channels/$network'
     | '/design/components'
@@ -574,6 +585,7 @@ export interface FileRouteTypes {
     | '/auth/threads'
     | '/auth/youtube'
     | '/avatars/$accountId'
+    | '/media/$mediaId'
     | '/_app/'
     | '/_app/channels/$network'
     | '/_app/design/components'
@@ -617,6 +629,7 @@ export interface RootRouteChildren {
   AuthThreadsRoute: typeof AuthThreadsRouteWithChildren
   AuthYoutubeRoute: typeof AuthYoutubeRouteWithChildren
   AvatarsAccountIdRoute: typeof AvatarsAccountIdRoute
+  MediaMediaIdRoute: typeof MediaMediaIdRoute
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
 }
@@ -824,6 +837,13 @@ declare module '@tanstack/react-router' {
       path: '/avatars/$accountId'
       fullPath: '/avatars/$accountId'
       preLoaderRoute: typeof AvatarsAccountIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/media/$mediaId': {
+      id: '/media/$mediaId'
+      path: '/media/$mediaId'
+      fullPath: '/media/$mediaId'
+      preLoaderRoute: typeof MediaMediaIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/channels/': {
@@ -1123,6 +1143,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthThreadsRoute: AuthThreadsRouteWithChildren,
   AuthYoutubeRoute: AuthYoutubeRouteWithChildren,
   AvatarsAccountIdRoute: AvatarsAccountIdRoute,
+  MediaMediaIdRoute: MediaMediaIdRoute,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,
 }

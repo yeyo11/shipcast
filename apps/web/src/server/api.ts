@@ -12,6 +12,7 @@ import {
   type EditDeps,
   type JobCursor,
   type Launch,
+  type LaunchReadService,
   LAUNCH_ORDERS,
   LAUNCH_STATUSES,
   TRIGGERS,
@@ -67,6 +68,8 @@ export interface ApiDeps {
   secrets: SecretStore;
   github: ReviewGitHub;
   launchesRepo: string;
+  /** With `launch-store-read`: a launch's drafts and channels from the launch model's tables, not GitHub */
+  launchRead?: Pick<LaunchReadService, 'review' | 'channelConfig'> | undefined;
   /** The public origin the OpenAPI document names as its server */
   publicUrl: string;
   limiter: SignInLimiter;
@@ -159,9 +162,9 @@ const refused = (answer: WorkAnswer): Response => {
   throw new ApiError(409, 'refused', answer.problem);
 };
 
-/** A launch's posts, numbers, index status and drafts; the drafts' text stays in the pull request */
+/** A launch's posts, numbers, index status and drafts; the drafts' text stays in the pull request (or the launch model) */
 async function launchResource(deps: ApiDeps, launch: Launch) {
-  const detail = await launchDetail(deps.registry, launch, { github: deps.github, launchesRepo: deps.launchesRepo });
+  const detail = await launchDetail(deps.registry, launch, { github: deps.github, launchesRepo: deps.launchesRepo, stored: deps.launchRead });
   const review = detail.review;
   const drafts =
     review === null

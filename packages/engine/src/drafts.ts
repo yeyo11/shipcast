@@ -1,4 +1,4 @@
-import { articleLink, CHANNEL_DEFINITIONS, discussionDraft, draftFile, hasDemo, type Brand, type Channel, type ChannelDefinition, type ContentPack, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { articleLink, CHANNEL_DEFINITIONS, ContentPack, discussionDraft, draftFile, hasDemo, type Brand, type Channel, type ChannelDefinition, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import type { GitHubSource } from './github.ts';
 import { issueDraftBody } from './newsletter.ts';
 
@@ -47,6 +47,27 @@ export function projectLabel(pack: Pick<ContentPack, 'project'>, launch: Pick<La
 export function launchDir(launch: Pick<Launch, 'repo' | 'ref'>): string {
   if (isArticle(launch)) return `articles/${launch.ref.slice('article:'.length).replace(/[^a-z0-9-]/g, '-')}`;
   return `launches/${projectSlug(launch.repo)}/${launch.ref.replace(/[^A-Za-z0-9._-]/g, '_')}`;
+}
+
+/**
+ * The pack a launch's drafts committed, read from the launches repo's default branch: what replies
+ * and the writing assistant are grounded in. Undefined before the merge, or when it does not parse.
+ */
+export async function packOnLaunchesRepo(github: Pick<GitHubSource, 'fileAt'>, launchesRepo: string, launch: Pick<Launch, 'repo' | 'ref'>): Promise<ContentPack | undefined> {
+  const text = await github.fileAt(launchesRepo, `${launchDir(launch)}/pack.json`, 'HEAD').catch(() => undefined);
+  try {
+    const parsed = text === undefined ? undefined : ContentPack.safeParse(JSON.parse(text));
+    return parsed?.success ? parsed.data : undefined;
+  } catch {
+    // A pack that is not JSON grounds nothing
+    return undefined;
+  }
+}
+
+/** The branch of the launches repo a launch's drafts pull request is opened from: `launch/<project>-<ref>`, or `article/<slug>` */
+export function draftsBranch(launch: Pick<Launch, 'repo' | 'ref'>): string {
+  const dir = launchDir(launch);
+  return isArticle(launch) ? `article/${dir.slice('articles/'.length)}` : `launch/${dir.slice('launches/'.length).replace('/', '-')}`;
 }
 
 function modeLine(mode: PublishMode): string {

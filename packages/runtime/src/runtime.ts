@@ -6,6 +6,7 @@ import {
   loadBrand,
   connectRepositories,
   DraftSnapshotService,
+  LaunchReadService,
   LaunchStoreService,
   PostgresLock,
   SecretRows,
@@ -17,7 +18,7 @@ import {
 import type { Brand } from '@shipcast/schema';
 import { aiRunnerFor } from './ai.ts';
 import { provisionAppKeys } from './app-keys.ts';
-import { loadConfig, type Config } from './config.ts';
+import { ConfigError, loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
 import { poolOptions, roleFromEnv, split } from './roles.ts';
 import { githubCaches, type GitHubCaches } from './github-events.ts';
@@ -63,6 +64,8 @@ export interface Runtime {
   media: MediaStore;
   /** With `launch-store`: the launch model's shadow write beside the drafts pull request (docs/launch-store.md) */
   launchStore: LaunchStoreService | undefined;
+  /** With `launch-store-read`: launches read from the launch model's tables instead of GitHub (docs/launch-store-read.md) */
+  launchRead: LaunchReadService | undefined;
 }
 
 export interface RuntimeOptions {
@@ -155,6 +158,10 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
       })
     : undefined;
 
+  // Rows nobody keeps up to date would show a launch as it was when the flag was turned on
+  if (flags.on('launch-store-read') && !launchStore) throw new ConfigError('the launch-store-read flag needs launch-store, which keeps the launch model up to date');
+  const launchRead = flags.on('launch-store-read') ? new LaunchReadService({ registry, media }) : undefined;
+
   const drafts = caches
     ? new DraftSnapshotService({
         github,
@@ -194,6 +201,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),
     ...(launchStore && { launchStore }),
+    ...(launchRead && { launchRead }),
   };
 
   return {
@@ -221,5 +229,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     media,
     launchStore,
+    launchRead,
   };
 }

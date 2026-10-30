@@ -12,7 +12,7 @@ export async function assistantDeps(): Promise<AssistantDeps> {
     texts: ctx.deps.aiTexts ?? (async () => ({})),
     brand: () => ctx.brand(),
     launch: async (launchId) => (await ctx.registry.launches.get(launchId)) ?? undefined,
-    grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo() }),
+    grounding: (launch) => launchGrounding(launch, { github: ctx.github, launchesRepo: ctx.settings.launchesRepo(), stored: ctx.deps.launchRead }),
     sessions: ctx.registry.assistant,
     // The check is a heavy job the page follows, never work inside this request
     startCheck: (launch, request) => startAssistantCheck(ctx.queue, launch, request),

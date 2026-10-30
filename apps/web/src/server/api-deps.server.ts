@@ -26,6 +26,7 @@ export async function apiDeps(): Promise<ApiDeps> {
     secrets: ctx.secrets,
     github: ctx.github,
     launchesRepo: ctx.deps.launchesRepo,
+    launchRead: ctx.launchRead,
     publicUrl: ctx.app.publicUrl,
     limiter: limiterOf(),
     jobs: (page) => jobsFeed(ctx.registry, page),

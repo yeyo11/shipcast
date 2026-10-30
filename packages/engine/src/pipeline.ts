@@ -1,13 +1,14 @@
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type ContentPack, type Projects } from '@shipcast/schema';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { asPublishedDirectly, keepPubDates, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
+import { asPublishedDirectly, draftsBranch, keepPubDates, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
 import { generatePack } from './generate.ts';
 import type { PromptOptions } from './prompt.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
+import type { LaunchReadService } from './services/launch-read.ts';
 import type { LaunchStoreService } from './services/launch-store.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -38,6 +39,8 @@ export interface PipelineDeps {
    * channels, drafts and media in Shipcast's own tables, and records the approval publishing finds
    */
   launchStore?: Pick<LaunchStoreService, 'drafted' | 'merged'>;
+  /** With `launch-store-read`: the pack replies and the writing assistant are grounded in, from the launch model's tables */
+  launchRead?: Pick<LaunchReadService, 'pack'>;
 }
 
 /** The prompts and tone a task on the runner is written with: the settings', or the ones in code */
@@ -182,7 +185,7 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     deps,
     {
       files,
-      branch: `launch/${launchDir(launch).slice('launches/'.length).replace('/', '-')}`,
+      branch: draftsBranch(launch),
       title: `Launch ${name}`,
       body: pullRequestBody(generated.pack, launch, config),
       message: `launch: ${name}\n\nDrafted by Shipcast from the code of ${launch.repo} at ${launch.ref}.`,

@@ -7,6 +7,7 @@ import type { CommitFile } from './github.ts';
 import { composedText } from './edit-rules.ts';
 import type { PostStore } from './ports.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
+import type { LaunchStoreService } from './services/launch-store.ts';
 
 /*
  * Editing and deleting what a launch published, per piece or for a whole launch at once. A piece's
@@ -94,6 +95,11 @@ export interface EditDeps {
    */
   editors(channel: Channel, accountId: number | null): Promise<Editors>;
   blog?: { github: BlogRepo; launchesRepo: string };
+  /**
+   * With `launch-store`: an article edited after publishing is also a version in the launch model,
+   * so what the launch page reads from it (`launch-store-read`) is the article as the site shows it
+   */
+  launchStore?: Pick<LaunchStoreService, 'articleEdited'> | undefined;
   /** For an image Mastodon needs as bytes */
   fetch?: typeof fetch;
   now?: () => Date;
@@ -195,6 +201,11 @@ async function editArticle(post: Post, changes: PostChanges, deps: EditDeps): Pr
   const body = changes.text ?? parts.body;
   const content = `---\n${front.toString().trimEnd()}\n---\n\n${body.trim()}\n`;
   await github.commitToBranch(launchesRepo, 'main', `Edit the article ${post.externalId} (${kindLanguage(post.kind)})`, [{ path, content }]);
+  // It reports what it could not store on its own and never throws: the edit is made either way
+  if (deps.launchStore) {
+    const launch = await deps.registry.launches.get(post.launchId).catch(() => undefined);
+    if (launch) await deps.launchStore.articleEdited(launch, post.id, path, content);
+  }
 }
 
 /**

@@ -1,7 +1,8 @@
 import { draftBody, draftFile, draftOf, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
-import { launchDir, type DraftFile } from './drafts.ts';
+import { draftsBranch, isArticle, launchDir, type DraftFile } from './drafts.ts';
+import { draftPath } from './launch-store.ts';
 import { launchConfigText } from './publish.ts';
-import type { DraftSnapshot, DraftSnapshotInput, Launch } from './repositories/index.ts';
+import type { DraftSnapshot, DraftSnapshotInput, Launch, StoredDraft, StoredMediaRow } from './repositories/index.ts';
 
 /** The GitHub calls reviewing a launch's drafts makes; `GitHubRest` has them all */
 export interface ReviewGitHub {
@@ -93,6 +94,45 @@ export function reviewFromSnapshot(launch: Launch, snapshot: DraftSnapshot, laun
     return withMediaUrl(draft, launchesRepo, ref);
   });
   return { pullRequest: { ...pullRequest }, drafts: sorted(drafts) };
+}
+
+/** A launch as the launch model's rows hold it, for the review the page shows */
+export interface StoredReviewInput {
+  drafts: readonly StoredDraft[];
+  /** The launch's own files; a project's cover is the site's, not the launch's */
+  media: readonly StoredMediaRow[];
+  hasPack: boolean;
+  channelsSource: string | null;
+  /** An approval is in force: the drafts were decided (the merge, or a commit straight onto main) */
+  approved: boolean;
+}
+
+/**
+ * The review from the launch model's rows (`launch-store-read`): the same shape readReview answers
+ * from GitHub, with each text's current version and the media served by the app (`mediaUrl`).
+ * Undefined for a launch without a pull request, as readReview. The pull request's state is what
+ * Shipcast knows of it: merged once an approval is recorded or the launch is out, closed once
+ * publishing found it closed, open otherwise.
+ */
+export function reviewFromStore(launch: Launch, stored: StoredReviewInput, mediaUrl: (row: StoredMediaRow) => string): Review | undefined {
+  const number = pullRequestNumber(launch);
+  if (!number) return undefined;
+  const url = /https:\/\/github\.com\/\S+\/pull\/\d+/.exec(launch.detail ?? '')?.[0] ?? '';
+  const state = stored.approved || launch.status === 'published' ? 'merged' : launch.status === 'skipped' && (launch.detail ?? '').includes('closed without merging') ? 'closed' : 'open';
+  const dir = launchDir(launch);
+  const texts = stored.drafts.map((d) => {
+    const draft: Draft = describe(draftPath(d) ?? `${dir}/${d.channel}-${d.piece}.md`, dir);
+    draft.content = d.body;
+    return draft;
+  });
+  const files = stored.media.flatMap((row) => {
+    if (row.publicPath === null) return [];
+    const draft: Draft = describe(`public${row.publicPath}`, dir);
+    if (draft.kind === 'image' || draft.kind === 'video') draft.url = mediaUrl(row);
+    return [draft];
+  });
+  const data = [...(stored.hasPack ? [`${dir}/pack.json`] : []), ...(isArticle(launch) && stored.channelsSource !== null ? [`${dir}/launch.yml`] : [])].map((path) => describe(path, dir));
+  return { pullRequest: { number, url, state, branch: draftsBranch(launch) }, drafts: sorted([...texts, ...files, ...data]) };
 }
 
 /**
