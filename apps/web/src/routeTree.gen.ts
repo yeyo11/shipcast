@@ -20,8 +20,8 @@ import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppCommentsRouteImport } from './routes/_app/comments'
 import { Route as AppLaunchRouteImport } from './routes/_app/launch'
-import { Route as AppSourcesRouteImport } from './routes/_app/sources'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppSourcesRouteImport } from './routes/_app/sources'
 import { Route as AppStatsRouteImport } from './routes/_app/stats'
 import { Route as AppTokensRouteImport } from './routes/_app/tokens'
 import { Route as AppWriteRouteImport } from './routes/_app/write'
@@ -114,14 +114,14 @@ const AppLaunchRoute = AppLaunchRouteImport.update({
   path: '/launch',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSourcesRoute = AppSourcesRouteImport.update({
-  id: '/sources',
-  path: '/sources',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSourcesRoute = AppSourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
   getParentRoute: () => AppRoute,
 } as any)
 const AppStatsRoute = AppStatsRouteImport.update({
@@ -321,8 +321,8 @@ export interface FileRoutesByFullPath {
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
   '/launch': typeof AppLaunchRoute
-  '/sources': typeof AppSourcesRoute
   '/settings': typeof AppSettingsRouteWithChildren
+  '/sources': typeof AppSourcesRoute
   '/stats': typeof AppStatsRoute
   '/tokens': typeof AppTokensRoute
   '/write': typeof AppWriteRoute
@@ -423,8 +423,8 @@ export interface FileRoutesById {
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
   '/_app/launch': typeof AppLaunchRoute
-  '/_app/sources': typeof AppSourcesRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
+  '/_app/sources': typeof AppSourcesRoute
   '/_app/stats': typeof AppStatsRoute
   '/_app/tokens': typeof AppTokensRoute
   '/_app/write': typeof AppWriteRoute
@@ -477,8 +477,8 @@ export interface FileRouteTypes {
     | '/automation'
     | '/comments'
     | '/launch'
-    | '/sources'
     | '/settings'
+    | '/sources'
     | '/stats'
     | '/tokens'
     | '/write'
@@ -578,8 +578,8 @@ export interface FileRouteTypes {
     | '/_app/automation'
     | '/_app/comments'
     | '/_app/launch'
-    | '/_app/sources'
     | '/_app/settings'
+    | '/_app/sources'
     | '/_app/stats'
     | '/_app/tokens'
     | '/_app/write'
@@ -725,18 +725,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/sources': {
-      id: '/_app/sources'
-      path: '/sources'
-      fullPath: '/sources'
-      preLoaderRoute: typeof AppSourcesRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/sources': {
+      id: '/_app/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof AppSourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/stats': {
@@ -1024,8 +1024,8 @@ interface AppRouteChildren {
   AppAutomationRoute: typeof AppAutomationRoute
   AppCommentsRoute: typeof AppCommentsRoute
   AppLaunchRoute: typeof AppLaunchRoute
-  AppSourcesRoute: typeof AppSourcesRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
+  AppSourcesRoute: typeof AppSourcesRoute
   AppStatsRoute: typeof AppStatsRoute
   AppTokensRoute: typeof AppTokensRoute
   AppWriteRoute: typeof AppWriteRoute
@@ -1043,8 +1043,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppAutomationRoute: AppAutomationRoute,
   AppCommentsRoute: AppCommentsRoute,
   AppLaunchRoute: AppLaunchRoute,
-  AppSourcesRoute: AppSourcesRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppSourcesRoute: AppSourcesRoute,
   AppStatsRoute: AppStatsRoute,
   AppTokensRoute: AppTokensRoute,
   AppWriteRoute: AppWriteRoute,
