@@ -43,6 +43,7 @@ export function replyDeps(d: CommentWorkDeps): ReplyDeps {
       github: d.pipeline.github,
       launchesRepo: d.pipeline.launchesRepo,
       checkout: d.pipeline.checkout,
+      stored: d.pipeline.launchRead,
     }),
   };
 }

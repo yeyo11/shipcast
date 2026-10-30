@@ -1,4 +1,4 @@
-import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, reviewFromSnapshot, type DraftSnapshot, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, reviewFromSnapshot, type DraftSnapshot, type Launch, type LaunchReadService, type Repositories, type Review, type ReviewGitHub } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -75,11 +75,14 @@ export async function launchDetail(
     launchesRepo: string;
     /** With `github-events`: the drafts snapshot, read from the registry, instead of the pull request from GitHub */
     snapshot?: Promise<DraftSnapshot | undefined>;
+    /** With `launch-store-read`: the drafts from the launch model's tables, for a launch they hold */
+    stored?: Pick<LaunchReadService, 'review'> | undefined;
   },
 ) {
   const fromSnapshot = deps.snapshot?.then((s) => ({ review: s && reviewFromSnapshot(launch, s, deps.launchesRepo), readAt: s?.readAt ?? null }));
-  // The pull request is read from GitHub (or the snapshot), the rest from the registry: all at once
-  const reviewing = (fromSnapshot ? fromSnapshot.then((s) => s.review) : readReview(launch, deps)).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+  const fromPullRequest = (): Promise<Review | undefined> => (fromSnapshot ? fromSnapshot.then((s) => s.review) : readReview(launch, deps));
+  // The pull request is read from GitHub (or the snapshot, or the launch model), the rest from the registry: all at once
+  const reviewing = (deps.stored ? deps.stored.review(launch, fromPullRequest) : fromPullRequest()).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
   const urls = articleUrls(await registry.posts.posts(launch.id, { channel: 'blog' }));
   const views = await Promise.all(
     urls.flatMap(({ lang, url }) =>

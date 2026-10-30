@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { LaunchService, type ReviewGitHub } from '@shipcast/engine';
-import { memoryRegistry } from '@shipcast/engine/testing';
+import { LaunchReadService, LaunchService, type ReviewGitHub } from '@shipcast/engine';
+import { memoryRegistry, MemoryMediaStore } from '@shipcast/engine/testing';
 import { instrumentFetch, MemoryStore, withOrigin, type CallSample, type TelemetryRecorder } from '@shipcast/runtime';
 import { MemoryCache } from '@shipcast/runtime/redis';
 import { Brand } from '@shipcast/schema';
-import { commentService } from '../src/server/app-services.ts';
+import { commentService, scheduleService } from '../src/server/app-services.ts';
 import { attentionFor } from '../src/server/attention.server.ts';
 import { automationView } from '../src/server/automation.server.ts';
 import { channelsViewOf } from '../src/server/channels-view.server.ts';
@@ -93,6 +93,51 @@ test('without the snapshot the same loader reads GitHub, as before the flag', as
   const page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES }, launch);
   assert.ok(page.review && 'error' in page.review && /GitHub was called/.test(page.review.error));
   assert.equal('draftsReadAt' in page, false);
+});
+
+/*
+ * The launch model's fourth phase (docs/launch-store-read.md): with `launch-store-read`, a launch the
+ * launch model's tables hold is read from them alone, with no snapshot at all: its drafts, its files
+ * served by the app and the channels it can still schedule, as launch.yml's rows say them.
+ */
+async function stored() {
+  const registry = await memoryRegistry();
+  const media = new MemoryMediaStore();
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  const drafted = await registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/7`);
+  const store = registry.launchStore;
+  await store.addPack(launch.id, { schemaVersion: 1 });
+  await store.replaceChannels(launch.id, [{ channel: 'bluesky', mode: 'approval' }, { channel: 'mastodon', mode: 'off' }, { channel: 'threads', mode: 'approval' }], 'enabled: true\nbrand: personal\npublishing:\n  bluesky: approval\n  mastodon: approval\n  threads: approval\n');
+  await store.addVersion(launch.id, { channel: 'bluesky', piece: 'post', body: '# Bluesky\n\nhello\n', fields: { path: `${D}/bluesky.md` }, origin: 'ai' });
+  const put = await media.put(new Uint8Array([1, 2, 3]), 'image/jpeg');
+  await store.addMedia({ launchId: launch.id, sha256: put.sha256, kind: 'image', mime: 'image/jpeg', bytes: 3, storage: media.storage, path: put.key, role: 'og', publicPath: `/${D}/og.jpg` });
+  return { registry, launch: drafted, read: new LaunchReadService({ registry, media }) };
+}
+
+test('with launch-store-read, getLaunch reads the launch model alone: no outbound call, GitHub never asked', async () => {
+  const { registry, launch, read } = await stored();
+  let page: Awaited<ReturnType<typeof launchPage>> | undefined;
+  const calls = await counted('fn:getLaunch', async () => {
+    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, stored: read }, launch);
+  });
+  assert.deepEqual(calls, []);
+  assert.ok(page?.review && !('error' in page.review), 'the drafts came from the tables, not from an error');
+  assert.equal(page.review.pullRequest.state, 'open');
+  assert.equal(page.review.drafts.find((d) => d.path === `${D}/bluesky.md`)?.content, '# Bluesky\n\nhello\n');
+  assert.match(page.review.drafts.find((d) => d.kind === 'image')?.url ?? '', /^\/media\/\d+$/, 'served by the app, not GitHub');
+  assert.equal('draftsReadAt' in page, false);
+  const channels = page.pieces.scheduling.channels.map((c) => c.channel);
+  assert.ok(channels.includes('bluesky') && channels.includes('threads'));
+  assert.ok(!channels.includes('mastodon'), 'a channel its row turns off cannot be scheduled');
+});
+
+test('with launch-store-read, scheduling reads the channels from the tables', async () => {
+  const { registry, launch, read } = await stored();
+  const schedule = scheduleService({ registry, armSchedule: async () => {}, github: unreachable, launchesRepo: LAUNCHES, launchRead: read });
+  const at = new Date(Date.now() + 86_400_000);
+  await assert.rejects(schedule.schedule(launch.id, { mastodon: at }));
+  const [post] = await schedule.schedule(launch.id, { bluesky: at });
+  assert.equal(post?.status, 'scheduled');
 });
 
 test("the launches list and the stats pages' loaders make no outbound call", async () => {

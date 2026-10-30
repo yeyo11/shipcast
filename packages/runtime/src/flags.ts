@@ -27,7 +27,7 @@ export const FLAGS = {
   /**
    * Launch model, phase 2: the drafts pull request's pack, channels, drafts (as versions), media and
    * merge are also written to the launch model's tables and checked against it (docs/launch-store.md).
-   * Nothing reads them yet; its media need `launch-media` too
+   * Read only with `launch-store-read`; its media need `launch-media` too
    */
   'launch-store': 'Launch model shadow write beside the drafts pull request',
   /**
@@ -36,6 +36,13 @@ export const FLAGS = {
    * plans and verifies; the app never reads it
    */
   'launch-import': 'Import of the existing launches into the launch model (scripts/import-launches.ts)',
+  /**
+   * Launch model, phase 4: the launch page, the REST API (and MCP), scheduling's channels and the
+   * reply and writing assistants' grounding read the launch model's tables instead of GitHub
+   * (docs/launch-store-read.md); a launch they do not hold is read as before. Needs `launch-store`,
+   * which keeps them up to date, and `launch-media` for its files
+   */
+  'launch-store-read': 'Launches read from the launch model instead of GitHub',
 } as const;
 
 /**

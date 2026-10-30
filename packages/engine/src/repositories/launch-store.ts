@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, max, or } from 'drizzle-orm';
 import type { Database } from '../db/connect.ts';
-import { approvals, drafts, draftVersions, launchChannels, launches, launchSources, media, nowIso, packs } from '../db/schema.ts';
+import { approvals, drafts, draftVersions, launchChannels, launches, launchSources, media, nowIso, packs, posts } from '../db/schema.ts';
 import { lockFor, transaction } from './transaction.ts';
 
 /*
@@ -210,6 +210,17 @@ export class LaunchStoreRepository {
     const own = eq(media.launchId, launchId);
     const where = publicPaths.length > 0 ? or(own, and(isNull(media.launchId), inArray(media.publicPath, [...publicPaths]))) : own;
     return (await this.#db.select().from(media).where(where).orderBy(media.id)).map(mediaOf);
+  }
+
+  /** A published piece now says this version of its draft (an edit after publishing) */
+  async linkPost(postId: number, versionId: number): Promise<void> {
+    await this.#db.update(posts).set({ draftVersionId: versionId }).where(eq(posts.id, postId));
+  }
+
+  /** One stored file by its row's id, whichever launch it is of */
+  async mediaRow(id: number): Promise<StoredMediaRow | undefined> {
+    const [row] = await this.#db.select().from(media).where(eq(media.id, id));
+    return row && mediaOf(row);
   }
 
   /** The approval in force: the newest one not revoked */

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-30T04:01:47.717883348Z
+updated_at: 2026-10-30T04:36:41.857137956Z
 tags:
     - engine
     - registry
@@ -57,6 +57,7 @@ on 2026-10-29.)
 | `DraftSnapshotService` | the drafts pull request as last read: written when opened and on each edit, refreshed on a webhook or by hand |
 | `LaunchStoreService` | with `launch-store`: the launch model's shadow write beside the drafts pull request, and its check ([launch-store.md](launch-store.md)) |
 | `LaunchImportService` | the import of the launches drafted before the shadow write, and the deletion of the ones decided away: plan, apply (with `launch-import`), verify, roll back; run by `scripts/import-launches.ts` ([launch-import.md](launch-import.md)) |
+| `LaunchReadService` | with `launch-store-read`: a launch's drafts (the review), its channels and its pack read from the launch model's tables for the launch page, the REST API, scheduling and the assistants' grounding, and its stored files for `/media/<id>`; a launch the tables do not hold is read as before ([launch-store-read.md](launch-store-read.md)) |
 | `AccountService`, `SettingsService` | rename, make primary; settings |
 | `NotificationService` | the owner's notices (drafted, published), to the private chat only |
 
@@ -135,9 +136,11 @@ launch happens once" hold:
   `LaunchStoreRepository` (`repositories/launch-store.ts`) writes the packs, channel rows, drafts and
   versions, media and approvals, through the shadow write of the `launch-store` flag
   ([launch-store.md](launch-store.md)), and since the third the import writes them for the launches
-  drafted before ([launch-import.md](launch-import.md)); **nothing reads them yet**. Each hangs on its
-  launch with `on delete cascade`, so a purge of the launch's row takes them all (the soft delete
-  keeps the row):
+  drafted before ([launch-import.md](launch-import.md)). Since the fourth, with the
+  `launch-store-read` flag, the launch page, the REST API (and MCP), scheduling and the assistants'
+  grounding read them instead of GitHub ([launch-store-read.md](launch-store-read.md)); publishing
+  still reads the merged pull request. Each hangs on its launch with `on delete cascade`, so a purge
+  of the launch's row takes them all (the soft delete keeps the row):
 
   | Table | Holds |
   | --- | --- |
@@ -260,9 +263,10 @@ steps, output tokens and the timeout.
    channel at the file its definition names under `launches/<project>/<ref>/`, and `pack.json`; the
    media go with them ([publishing.md](publishing.md#the-launchs-media)).
 5. **Delivery** (`deliverDrafts`): a **pull request** in the launches repo (branch
-   `launch/<project>-<ref>`, one commit through the Git data API), or, with `direct`, **one commit
-   straight onto `main`**. The drafts snapshot is written as the pull request opens, and with
-   `launch-store` the launch model's copy too ([launch-store.md](launch-store.md)).
+   `launch/<project>-<ref>`, or `article/<slug>`, named by `draftsBranch`; one commit through the Git
+   data API), or, with `direct`, **one commit straight onto `main`**. The drafts snapshot is written
+   as the pull request opens, and with `launch-store` the launch model's copy too
+   ([launch-store.md](launch-store.md)).
 
 `claimManual(repo, ref?)` starts a launch by hand. In the app and the rounds, drafting is a `draft`
 job (a `heavy` one in a split), never retried on its own since it costs an AI run.
@@ -282,7 +286,9 @@ saves an edit as a commit on its branch (`editDraft`: only drafts, only while op
 patched with it, and with `launch-store` it is a version of the owner's), and
 `LaunchService.approve` merges it with a squash, after which publishing follows as on any merge. With
 `github-events` the launch page reads the drafts from the snapshot, never from GitHub; **Refresh from
-GitHub** reads it again.
+GitHub** reads it again. With `launch-store-read` a launch the launch model holds is shown from its
+rows instead (`reviewFromStore`, the same shape), its files served by the app
+([launch-store-read.md](launch-store-read.md)).
 
 ## Telemetry
 
@@ -324,4 +330,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]]

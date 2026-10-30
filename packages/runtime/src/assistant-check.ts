@@ -46,7 +46,7 @@ export interface AssistantCheckDeps {
 export async function runAssistantCheck(d: AssistantCheckDeps, data: JobData['assistant-check'], job: { id: string; log(line: string): void; signal?: AbortSignal }): Promise<void> {
   const launch = await d.registry.launches.get(data.launchId);
   if (!launch) throw new AssistantRefused(`there is no launch ${data.launchId}`);
-  const grounding = await launchGrounding(launch, { github: d.pipeline.github, launchesRepo: d.pipeline.launchesRepo });
+  const grounding = await launchGrounding(launch, { github: d.pipeline.github, launchesRepo: d.pipeline.launchesRepo, stored: d.pipeline.launchRead });
   if (grounding.kind !== 'launch' || !grounding.launch) throw new AssistantRefused('an article has no code to check against: the article itself is the truth');
   const texts = (await d.pipeline.aiTexts?.()) ?? {};
   const checkout = await d.pipeline.checkout(launch.repo, launchCodeRef(launch));
