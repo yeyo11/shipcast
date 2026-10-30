@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import { bigint, boolean, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, unique, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 /*
  * The registry's tables. The first migration mirrors node:sqlite's column for column, so
@@ -24,10 +24,30 @@ export const launches = pgTable(
     detail: text('detail'),
     createdAt: text('created_at').notNull().default(nowIso),
     updatedAt: text('updated_at').notNull().default(nowIso),
+    /*
+     * The launch model where Shipcast, not GitHub, holds a launch (docs/decisions/launch-model.md),
+     * added unused in its first phase. `repo` and `ref` stay required through the transition: a launch
+     * with no repo gets synthetic ones, so every reader of today keeps working.
+     */
+    // What the app lists it as; null until a pack or the owner names it
+    title: text('title'),
+    // legacy (drafts in a pull request) or app (drafts, approval and media in Shipcast)
+    model: text('model').notNull().default('legacy'),
+    // What "a launch happens once" is checked on when there is no repo and tag to claim:
+    // github-release:<owner/name>@<tag>, github-public:<owner/name>, article:<slug>; null for a
+    // launch the owner may start twice on purpose, since Postgres lets any number of nulls through
+    dedupeKey: text('dedupe_key'),
+    // The launch.yml its channel rows were copied from, kept as written for provenance
+    channelsSource: text('channels_source'),
+    // Soft delete: the row and its posts stay, so a deleted launch is never claimed again
+    deletedAt: text('deleted_at'),
+    // The approval in force, copied from `approvals` so a list needs no join
+    approvedAt: text('approved_at'),
   },
   (t) => [
     // The claim: a second launch of the same repo and ref is refused by the database, not by a check
     unique('launches_repo_ref_unique').on(t.repo, t.ref),
+    unique('launches_dedupe_key_unique').on(t.dedupeKey),
     // The list's order, alone or after a status or a repo, read forwards or backwards (newest or oldest first)
     index('launches_by_newest').on(t.createdAt.desc(), t.id.desc()),
     index('launches_by_status').on(t.status, t.createdAt.desc(), t.id.desc()),
@@ -53,6 +73,8 @@ export const posts = pgTable(
     url: text('url'),
     status: text('status').notNull().default('live'),
     contentHash: text('content_hash'),
+    // The draft version it published, so an edit and the comment assistant start from what went out
+    draftVersionId: integer('draft_version_id').references((): AnyPgColumn => draftVersions.id, { onDelete: 'set null' }),
     scheduledAt: text('scheduled_at'),
     publishedAt: text('published_at').notNull().default(nowIso),
     updatedAt: text('updated_at').notNull().default(nowIso),
@@ -401,6 +423,9 @@ export const publishAttempts = pgTable(
     error: text('error'),
     externalId: text('external_id'),
     url: text('url'),
+    // What exactly went out, and under which approval (the launch model; null on the pull-request flow)
+    draftVersionId: integer('draft_version_id').references((): AnyPgColumn => draftVersions.id, { onDelete: 'set null' }),
+    approvalId: integer('approval_id').references((): AnyPgColumn => approvals.id, { onDelete: 'set null' }),
     startedAt: text('started_at').notNull().default(nowIso),
     updatedAt: text('updated_at').notNull().default(nowIso),
   },
@@ -450,3 +475,174 @@ export const draftSnapshots = pgTable('draft_snapshots', {
   files: jsonb('files').$type<Array<{ path: string; content: string | null; sha: string | null }>>().notNull(),
   readAt: text('read_at').notNull().default(nowIso),
 });
+
+/*
+ * A launch held by Shipcast (docs/decisions/launch-model.md): what it is about, how each channel
+ * publishes it, the packs the AI wrote, every version of every draft, its media and its approvals.
+ * Added in the model's first phase and read by nothing yet. Every table hangs on the launch with a
+ * cascade, so removing a launch's row (a purge, never the soft delete) takes all of it.
+ */
+
+// What a launch is about, in order: a release of a repo, a repo, a page, the owner's text, a file
+export const launchSources = pgTable(
+  'launch_sources',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    // repo_release, repo_ref, repo, url, text, media, video or launch (another launch)
+    kind: text('kind').notNull(),
+    // primary (the project: its Discussions, its stars) or context
+    role: text('role').notNull().default('context'),
+    repo: text('repo'),
+    ref: text('ref'),
+    // Frozen when the analysis read it, so a second analysis reads the same code
+    sha: text('sha'),
+    url: text('url'),
+    fetchedAt: text('fetched_at'),
+    httpStatus: integer('http_status'),
+    contentType: text('content_type'),
+    // The owner's own words, a fetched page as Markdown or a transcript
+    text: text('text'),
+    mediaId: integer('media_id').references((): AnyPgColumn => media.id, { onDelete: 'set null' }),
+    // Title, language, a video's length, where its captions came from
+    meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // What the analysis read: a source that changes leaves the pack stale
+    contentHash: text('content_hash'),
+    createdAt: text('created_at').notNull().default(nowIso),
+  },
+  (t) => [unique('launch_sources_position_unique').on(t.launchId, t.position)],
+);
+
+// How each channel publishes this launch: launch.yml's `publishing` and options, copied once and edited in the app after that
+export const launchChannels = pgTable(
+  'launch_channels',
+  {
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id, { onDelete: 'cascade' }),
+    channel: text('channel').notNull(),
+    // auto, approval or off
+    mode: text('mode').notNull(),
+    // The account it publishes from; null for the channel's primary, or a channel with no account (the blog)
+    accountId: integer('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+    // The channel's own options: subreddits, the Instagram tour…
+    options: jsonb('options').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // Why it is as it is when no one chose it, such as a piece imported but never published
+    note: text('note'),
+    updatedAt: text('updated_at').notNull().default(nowIso),
+  },
+  (t) => [primaryKey({ name: 'launch_channels_key', columns: [t.launchId, t.channel] })],
+);
+
+// One row per analysis: the pack the AI returned, kept whole; the accepted one with the highest version is current
+export const packs = pgTable(
+  'packs',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    pack: jsonb('pack').$type<Record<string, unknown>>().notNull(),
+    // The AI task that wrote it (pack, article…) and what ran it
+    aiTask: text('ai_task'),
+    provider: text('provider'),
+    chatId: text('chat_id'),
+    costUsd: doublePrecision('cost_usd'),
+    accepted: boolean('accepted').notNull().default(false),
+    createdAt: text('created_at').notNull().default(nowIso),
+  },
+  (t) => [unique('packs_version_unique').on(t.launchId, t.version)],
+);
+
+// One per piece a launch can publish, the same across its versions: (devto, post), (blog, article:en), (reddit, subreddit:x)…
+export const drafts = pgTable(
+  'drafts',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id, { onDelete: 'cascade' }),
+    channel: text('channel').notNull(),
+    piece: text('piece').notNull(),
+    currentVersionId: integer('current_version_id').references((): AnyPgColumn => draftVersions.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull().default(nowIso),
+    updatedAt: text('updated_at').notNull().default(nowIso),
+  },
+  (t) => [unique('drafts_piece_unique').on(t.launchId, t.channel, t.piece)],
+);
+
+// Every version of a draft, never changed once written: the edit history, and what an approval names
+export const draftVersions = pgTable(
+  'draft_versions',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    draftId: integer('draft_id')
+      .notNull()
+      .references((): AnyPgColumn => drafts.id, { onDelete: 'cascade' }),
+    // 1, 2, 3… within the draft
+    n: integer('n').notNull(),
+    body: text('body').notNull(),
+    // What is not the body: a title, tags, front matter, captions
+    fields: jsonb('fields').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // ai, owner, assistant, import or post-publish-edit
+    origin: text('origin').notNull(),
+    // Who wrote it: a GitHub login or an API token's name; null for the AI
+    author: text('author'),
+    packId: integer('pack_id').references(() => packs.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull().default(nowIso),
+  },
+  (t) => [unique('draft_versions_n_unique').on(t.draftId, t.n)],
+);
+
+// A launch's files, kept in the media store under their content's sha256; only what describes them is here
+export const media = pgTable(
+  'media',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    // Null for a file no launch owns, such as a project's cover
+    launchId: integer('launch_id').references(() => launches.id, { onDelete: 'cascade' }),
+    sha256: text('sha256').notNull(),
+    // image, video, audio or document
+    kind: text('kind').notNull(),
+    mime: text('mime').notNull(),
+    // A video can pass 2 GiB, which an integer cannot count
+    bytes: bigint('bytes', { mode: 'number' }).notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    durationSeconds: doublePrecision('duration_seconds'),
+    // Which store holds the bytes (r2) and under which key
+    storage: text('storage').notNull(),
+    path: text('path').notNull(),
+    // og, screenshot, carousel, story, demo, chart or upload
+    role: text('role').notNull(),
+    // Its address on the site once published (/launches/claudio/v0.9.0/og.png); null before
+    publicPath: text('public_path'),
+    createdAt: text('created_at').notNull().default(nowIso),
+  },
+  // The same file twice in one launch is one row; two launches may share the stored bytes, which are
+  // addressed by content, so a purge removes them only when no row names them any more
+  (t) => [unique('media_launch_sha256_unique').on(t.launchId, t.sha256).nullsNotDistinct(), index('media_by_sha256').on(t.sha256)],
+);
+
+// The owner's approval of a launch, with the exact version of each draft it approved
+export const approvals = pgTable(
+  'approvals',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    launchId: integer('launch_id')
+      .notNull()
+      .references(() => launches.id, { onDelete: 'cascade' }),
+    // A GitHub login, or an API token's name
+    by: text('by').notNull(),
+    at: text('at').notNull().default(nowIso),
+    // {draft id: version id}, as approved
+    versions: jsonb('versions').$type<Record<string, number>>().notNull(),
+    revokedAt: text('revoked_at'),
+    note: text('note'),
+  },
+  (t) => [index('approvals_by_launch').on(t.launchId, t.at)],
+);

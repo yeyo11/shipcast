@@ -12,7 +12,9 @@ export type Generated =
 function packProblems(pack: ContentPack, launch: Launch, config: LaunchConfig, brand: Brand): string[] {
   const problems: string[] = [];
   if (pack.kind !== launch.kind) problems.push(`kind is "${pack.kind}", the launch is "${launch.kind}"`);
-  if (pack.project.repo.replace(/\/+$/, '').toLowerCase() !== `https://github.com/${launch.repo}`.toLowerCase()) {
+  // A release's launch is about its repo, the primary one: further repos never stand in for it
+  if (!pack.project.repo) problems.push(`project.repo is missing, the launch is ${launch.repo}`);
+  else if (pack.project.repo.replace(/\/+$/, '').toLowerCase() !== `https://github.com/${launch.repo}`.toLowerCase()) {
     problems.push(`project.repo is ${pack.project.repo}, the launch is ${launch.repo}`);
   }
   problems.push(...missingPieces(pack, config, brand));

@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { ContentPack, contentPackJsonSchema } from '../content-pack.ts';
+import { AiContentPack, contentPackJsonSchema } from '../content-pack.ts';
 import { CheckAnswer, checkJsonSchema, ProfileReviewAnswer, profileReviewJsonSchema, ReplyAnswer, replyJsonSchema } from './answers.ts';
 
 /*
@@ -116,7 +116,7 @@ export const AI_TASK_DEFINITIONS = {
   pack: task({
     id: 'pack',
     settingsTask: 'pack',
-    output: { schema: ContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
+    output: { schema: AiContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
     needsRepo: 'always',
     limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.pack },
   }),
@@ -124,7 +124,7 @@ export const AI_TASK_DEFINITIONS = {
   article: task({
     id: 'article',
     settingsTask: 'article',
-    output: { schema: ContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
+    output: { schema: AiContentPack, jsonSchema: contentPackJsonSchema, name: 'content_pack' },
     needsRepo: 'never',
     limits: { maxSteps: SDK_MAX_STEPS, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, maxBudgetUsd: DEFAULT_AI_BUDGETS_USD.article },
   }),

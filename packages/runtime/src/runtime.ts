@@ -10,6 +10,7 @@ import {
   SecretRows,
   type OpenRepositories,
   type AiTaskRunner,
+  type MediaStore,
   type PipelineDeps,
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
@@ -19,6 +20,7 @@ import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
 import { poolOptions, roleFromEnv, split } from './roles.ts';
 import { githubCaches, type GitHubCaches } from './github-events.ts';
+import { mediaStoreFor } from './media.ts';
 import { withEvents } from './realtime/publish.ts';
 import type { Cache, EventBus } from './redis/ports.ts';
 import { GitHubUserTokens } from './github-user.ts';
@@ -56,6 +58,8 @@ export interface Runtime {
   drafts: DraftSnapshotService | undefined;
   /** With `realtime-ui` and a bus: sends the registry's coalesced events still waiting, part of a stop */
   flushEvents(): Promise<void>;
+  /** With `launch-media` and its bucket in .env: where launch media are kept; otherwise it refuses every call */
+  media: MediaStore;
 }
 
 export interface RuntimeOptions {
@@ -197,5 +201,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     flushEvents: async () => {
       await announced?.flush();
     },
+    media: mediaStoreFor(flags, env, { ...(options.fetch && { fetch: options.fetch }) }),
   };
 }
