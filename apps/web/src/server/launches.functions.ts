@@ -15,7 +15,7 @@ import { launchPage } from './launch-page.server';
 import { launchNumbers, postAccounts, readTimezone } from './launch-summary.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchView, publishAgain as publishAgainFor } from './launches.server';
-import { articleRequest, channelName, launchRequest, sourcesRequest } from './requests';
+import { approvalRequest, articleRequest, channelName, launchRequest, sourcesRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing, startSources, uploadSource } from './work.server';
 
 /** A page holds a few rows of cards on any screen, two or three across, and each card reads its own numbers */
@@ -198,8 +198,8 @@ async function signedIn(): Promise<string | null> {
 }
 
 export const approveDrafts = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => id(input))
-  .handler(async ({ data }) => approve(data, (await signedIn()) ?? undefined));
+  .validator((input: unknown) => approvalRequest(input))
+  .handler(async ({ data }) => approve(data.id, (await signedIn()) ?? undefined, data.versions));
 
 /** Publishing again: a channel that failed for good gets another chance, or a merged launch is followed */
 export const publishAgain = createServerFn({ method: 'POST' })

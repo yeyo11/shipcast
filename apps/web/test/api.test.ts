@@ -9,6 +9,7 @@ import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
 import { checkBearer, FailureLimiter, handleApi, openApiDocument, PEER_HEADER, ROUTES, type ApiDeps } from '../src/server/api.ts';
 import { postService } from '../src/server/app-services.ts';
 import { jobsFeed } from '../src/server/jobs.server.ts';
+import { approvalRequest } from '../src/server/requests.ts';
 import { createSession, SESSION_COOKIE } from '../src/server/session.server.ts';
 
 const github: ReviewGitHub = {
@@ -56,8 +57,8 @@ async function setup(): Promise<Setup> {
       calls.push(`launch ${repo} ${ref ?? '-'} ${direct}`);
       return repo === 'yeyo11/old' ? { ok: false, problem: 'launched already' } : { ok: true, job: 'j2' };
     },
-    approve: async (id) => {
-      calls.push(`approve ${id}`);
+    approve: async (id, _by, versions) => {
+      calls.push(versions ? `approve ${id} ${JSON.stringify(versions)}` : `approve ${id}`);
       return { ok: true, job: 'j3' };
     },
     startArticle: async (input: ArticleInput, direct) => {
@@ -665,4 +666,16 @@ test('a launch is deleted through the API only with launch-delete: hidden when i
   assert.equal(((await body(await call(deps, 'GET', '/launches', { token: s.read }))).launches as unknown[]).length, 0, 'hidden from the list');
   assert.ok(((await body(await call(deps, 'GET', `/launches/${launch.id}`, { token: s.read }))) as { deletedAt?: string }).deletedAt, 'still read by id');
   assert.equal((await call(deps, 'DELETE', `/launches/${launch.id}`, { token: s.write })).status, 409, 'deleted already');
+});
+
+test('approving names the versions read: passed on to the approval, and a malformed list is a 400', async () => {
+  // The page and an API client send back the review's app.versions; an edit landing in between is then refused (409) by the engine
+  const s = await setup();
+  const { launch } = await s.registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v3.0.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
+  assert.equal((await call(s.deps, 'POST', `/launches/${launch.id}/approve`, { token: s.write, body: { versions: { '4': 9, '5': 11 } } })).status, 202);
+  assert.equal((await call(s.deps, 'POST', `/launches/${launch.id}/approve`, { token: s.write, body: { versions: { '4': 'latest' } } })).status, 400);
+  assert.equal((await call(s.deps, 'POST', `/launches/${launch.id}/approve`, { token: s.write, body: { versions: [1, 2] } })).status, 400);
+  assert.deepEqual(s.calls.filter((c) => c.startsWith('approve')), [`approve ${launch.id} {"4":9,"5":11}`]);
+  assert.deepEqual(approvalRequest(7), { id: 7, versions: undefined }, 'the page’s old form, an id alone, still reads');
+  assert.deepEqual(approvalRequest({ id: 7, versions: { '1': 2 } }), { id: 7, versions: { '1': 2 } });
 });

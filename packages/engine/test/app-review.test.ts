@@ -354,3 +354,40 @@ test('who edited and who approved is recorded: the login, or `owner` when the ca
   await launches.approve(launch.id);
   assert.equal((await registry.launchStore.approval(launch.id))?.by, 'owner');
 });
+
+test('the article is not edited once its commit to the site started: what is on the site stays what was approved', async () => {
+  // Until the fix, a launch still drafted (a channel left to go) took an edit of the article after its
+  // commit: the next round read the new version, and the site and the published pieces disagreed
+  const { registry, launch, deliver, launches, publish } = await setup();
+  await deliver();
+  await launches.approve(launch.id);
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'held back'));
+  assert.equal((await publish()).state, 'partial');
+  assert.ok(await registry.cursors.cursor(appBlogKey(launch.id)));
+  assert.equal((await registry.launches.get(launch.id))!.status, 'drafted');
+  await assert.rejects(launches.editDraft(launch.id, ARTICLE, ARTICLE_TEXT.replace('The article.', 'Changed.')), /on the site already/);
+  // A pending commit (a run cut between the commit and its record) counts too
+  await registry.cursors.setCursor(appBlogKey(launch.id), JSON.stringify({ pending: { path: ARTICLE, content: ARTICLE_TEXT } }));
+  await assert.rejects(launches.editDraft(launch.id, ARTICLE, 'x'), /on the site already/);
+  // Another channel still waiting is edited as before
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'edited again'));
+});
+
+test('an approval names the versions the owner read: a draft changed since is refused, not approved unseen', async () => {
+  // Until the fix approving took every draft's current version, so an edit (or a redraft) landing
+  // between the owner reading the page and pressing Approve was approved without being read
+  const { registry, launch, deliver, launches, read } = await setup();
+  await deliver();
+  const seen = (await read.review((await registry.launches.get(launch.id))!, async () => undefined))!.app!.versions;
+  assert.equal(Object.keys(seen).length, 3, 'the review names each draft’s current version');
+  await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'changed while the owner read'));
+  await assert.rejects(launches.approve(launch.id, 'yeyo11', seen), /changed since/);
+  assert.equal(await registry.launchStore.approval(launch.id), undefined, 'nothing approved');
+  // A versions map missing a draft is refused too: the owner did not see it
+  const fresh = (await read.review((await registry.launches.get(launch.id))!, async () => undefined))!.app!.versions;
+  const [first] = Object.keys(fresh);
+  const partial = Object.fromEntries(Object.entries(fresh).filter(([id]) => id !== first));
+  await assert.rejects(launches.approve(launch.id, 'yeyo11', partial), /changed since/);
+  await launches.approve(launch.id, 'yeyo11', fresh);
+  assert.deepEqual((await registry.launchStore.approval(launch.id))?.versions, fresh);
+});

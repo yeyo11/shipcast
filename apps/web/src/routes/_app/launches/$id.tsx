@@ -388,7 +388,8 @@ function LaunchPage() {
 
   const approve = async () => {
     setBusy(true);
-    const answer = await approveDrafts({ data: launch.id });
+    // The versions on screen: a draft changed since the page was read is refused, not approved unseen
+    const answer = await approveDrafts({ data: { id: launch.id, ...(app && { versions: app.versions }) } });
     setBusy(false);
     if (answer.ok) toast.done('Approved', app ? 'The article and its media go to the site in one commit; once it is live, every approved channel publishes.' : 'The pull request is merged; the blog deploys, then every channel publishes.');
     else toast.fail(answer.problem);
