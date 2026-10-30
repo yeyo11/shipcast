@@ -24,6 +24,12 @@ export const FLAGS = {
    * from SHIPCAST_MEDIA_* in .env. Off, the store refuses every call; nothing calls it yet
    */
   'launch-media': 'Launch media in the R2 media store',
+  /**
+   * Launch model, phase 2: the drafts pull request's pack, channels, drafts (as versions), media and
+   * merge are also written to the launch model's tables and checked against it (docs/launch-store.md).
+   * Nothing reads them yet; its media need `launch-media` too
+   */
+  'launch-store': 'Launch model shadow write beside the drafts pull request',
 } as const;
 
 /**

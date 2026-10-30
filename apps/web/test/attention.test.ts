@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseFailureKey } from '@shipcast/schema/failures';
-import { canonicalKey } from '@shipcast/engine';
+import { canonicalKey, launchStoreKey } from '@shipcast/engine';
 import { aPublishedLaunch, memoryRegistry } from '@shipcast/engine/testing';
 import { ATTENTION_KEY, attentionItems, attentionLabel, buildAttention } from '../src/server/attention.ts';
 import { attentionFor } from '../src/server/attention.server.ts';
@@ -139,4 +139,25 @@ test('a canonical cursor that is not a list of pages is skipped, and the bell st
   const canonical = attention.items.filter((i) => i.kind === 'canonical');
   assert.equal(canonical.length, 1);
   assert.match(canonical[0]!.text, /dev\.to/);
+});
+
+test("with launch-store, a launch whose copy in Shipcast differs from its pull request is a line, new again when something else differs", async () => {
+  const storeDifferences = [{ launchId: 1, differences: ['launches/alpha/v1.0.0/bluesky.md: no draft in the database', 'pack.json: no pack in the database'] }];
+  const line = attentionItems({ ...base, storeDifferences }).find((i) => i.kind === 'drift');
+  assert.match(line!.text, /alpha v1\.0\.0: Shipcast's copy differs from the pull request \(launches\/alpha\/v1\.0\.0\/bluesky\.md: no draft in the database and 1 more\)/);
+  assert.deepEqual(line?.target, { to: '/launches/$id', params: { id: '1' } });
+  assert.match(line!.key, ATTENTION_KEY);
+  const other = attentionItems({ ...base, storeDifferences: [{ launchId: 1, differences: ['pack.json: no pack in the database'] }] }).find((i) => i.kind === 'drift');
+  assert.notEqual(other?.key, line?.key);
+  assert.equal(attentionItems({ ...base, storeDifferences: [{ launchId: 1, differences: [] }] }).filter((i) => i.kind === 'drift').length, 0);
+
+  // From the engine's cursor, as the check writes it; one that does not parse is skipped
+  const registry = await memoryRegistry();
+  const { launch } = await aPublishedLaunch(registry, []);
+  const second = await aPublishedLaunch(registry, [], { ref: 'v2.0.0' });
+  await registry.cursors.setCursor(launchStoreKey(launch.id), JSON.stringify({ at: now.toISOString(), differences: ['og.png: no media in the database'] }));
+  await registry.cursors.setCursor(launchStoreKey(second.launch.id), 'not json');
+  const drift = (await attentionFor(registry)).items.filter((i) => i.kind === 'drift');
+  assert.equal(drift.length, 1);
+  assert.match(drift[0]!.text, /og\.png: no media in the database/);
 });

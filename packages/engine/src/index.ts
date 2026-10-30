@@ -19,6 +19,7 @@ export * from './newsletter.ts';
 export * from './preflight.ts';
 export * from './article.ts';
 export * from './review.ts';
+export * from './launch-store.ts';
 export * from './stats.ts';
 export * from './comments.ts';
 export * from './db/snapshot.ts';
