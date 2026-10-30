@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-26T21:05:26.208773459Z
-updated_at: 2026-10-29T22:02:59.5753498Z
+updated_at: 2026-10-30T06:25:05.412713931Z
 tags:
     - publishing
     - connectors
@@ -95,6 +95,13 @@ Binary files go into the pull request as base64 blobs through the Git data API.
 `publishing-service` every entry point (the publish job, a scheduled piece's wake-up, the round, the
 CLI) calls it through `PublishingService` (`packages/engine/src/publishing/service.ts`), which adds
 the per-piece claims below.
+
+A launch Shipcast holds (the `app-review` flag, [app-review.md](app-review.md)) is published by the
+same function from its rows instead of the merged files: step 1 is its approval in the app, channel
+by channel (`auto` channels need none, and nothing goes while the article waits for its approval);
+before step 2 Shipcast commits the article and its media to the launches repo's `main` as one
+commit, once, tried again until it lands, with nothing else going out until the article is live;
+and step 3 reads each channel's approved version.
 
 1. Pull request **open** → wait; **closed without merging** → the launch is `skipped`. A launch
    published without a pull request (`direct:<sha>`) skips this step.
@@ -496,4 +503,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]] · [[app-review.md]]

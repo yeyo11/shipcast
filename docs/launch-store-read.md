@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T04:52:08.327618725Z
-updated_at: 2026-10-30T05:21:41.419793316Z
+updated_at: 2026-10-30T06:23:11.676791488Z
 tags:
     - launches
     - launch-model
@@ -18,7 +18,8 @@ media and approval in Postgres, and the import ([launch-import.md](launch-import
 existing ones in. With the flag on, the places that read a launch from GitHub read those rows
 instead: **a view of a launch the tables hold makes no GitHub call**. Writing still goes through
 the drafts pull request (an edit is a commit on its branch, approving merges it, publishing reads
-the merged files); the app taking over review, approval and publishing is the next phase.
+the merged files); the app taking over review, approval and publishing is the next phase,
+[app-review.md](app-review.md), which reads its launches through the same service.
 
 ## What reads the rows
 
@@ -33,6 +34,12 @@ handed the way the caller reads today, which it uses for a launch the tables do 
 | Scheduling: the page's schedulable channels and `ScheduleService` (the page's actions and `POST /launches/{id}/schedule`) | `launchConfigOf`: launch.yml at the release's tag, or an article's beside its drafts | `channelConfig`: the launch.yml copied when it was drafted, each channel's mode from its row |
 | The comment assistant's grounding (`launchReplyContext`) | `pack.json` on the launches repo's main | `pack`: the current pack row |
 | The writing assistant's grounding (`launchGrounding`, in the page and in the heavy check job) | the same `pack.json` | the same `pack` |
+
+A launch Shipcast holds (`model = 'app'`, the fifth phase) has no pull request to fall back on:
+`review` answers it from the rows alone with its own shape (`Review.app` instead of `pullRequest`:
+the approval, what waits, each article's preview, [app-review.md](app-review.md)). The channels as
+the rows say them are one function, `storedChannelConfig` (`launch-import.ts`), which publishing such
+a launch reads too.
 
 The legacy reads of the pack were two copies of one parse; they are one function now,
 `packOnLaunchesRepo` (`drafts.ts`). The drafts branch name, which the pipeline and the article flow
@@ -120,4 +127,4 @@ scheduling refuses a channel its row turns off).
 
 ## Related
 
-[[decisions/launch-model.md]] · [[launch-store.md]] · [[launch-import.md]] · [[media-store.md]] · [[engine.md]] · [[server.md]] · [[api.md]] · [[mcp.md]] · [[scheduling.md]] · [[decisions/comment-assistant.md]]
+[[decisions/launch-model.md]] · [[launch-store.md]] · [[launch-import.md]] · [[media-store.md]] · [[engine.md]] · [[server.md]] · [[api.md]] · [[mcp.md]] · [[scheduling.md]] · [[decisions/comment-assistant.md]] · [[app-review.md]]

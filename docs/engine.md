@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-30T04:36:41.857137956Z
+updated_at: 2026-10-30T06:22:21.300560819Z
 tags:
     - engine
     - registry
@@ -48,7 +48,7 @@ on 2026-10-29.)
 
 | Service | Use cases |
 | --- | --- |
-| `LaunchService` | the launches list, claim by hand (with the pre-flight check), claim an article, edit a draft (`editDraft`: the commit, then the snapshot and the launch model's copy), approve |
+| `LaunchService` | the launches list, claim by hand (with the pre-flight check), claim an article, edit a draft (`editDraft`: the commit, then the snapshot and the launch model's copy), approve; for a launch Shipcast holds, edit and approve through `AppReviewService` |
 | `PublishingService` (`src/publishing/service.ts`) | publish a launch under per-piece claims, Try again on a channel, publish again ([decisions/publishing-state.md](decisions/publishing-state.md)) |
 | `PostService` | edit, delete, edit many, delete a launch's posts |
 | `ScheduleService` | schedule, move, cancel, recommended times, time zone ([scheduling.md](scheduling.md)) |
@@ -58,6 +58,7 @@ on 2026-10-29.)
 | `LaunchStoreService` | with `launch-store`: the launch model's shadow write beside the drafts pull request, and its check ([launch-store.md](launch-store.md)) |
 | `LaunchImportService` | the import of the launches drafted before the shadow write, and the deletion of the ones decided away: plan, apply (with `launch-import`), verify, roll back; run by `scripts/import-launches.ts` ([launch-import.md](launch-import.md)) |
 | `LaunchReadService` | with `launch-store-read`: a launch's drafts (the review), its channels and its pack read from the launch model's tables for the launch page, the REST API, scheduling and the assistants' grounding, and its stored files for `/media/<id>`; a launch the tables do not hold is read as before ([launch-store-read.md](launch-store-read.md)) |
+| `AppReviewService` | with `app-review`: a new launch held by Shipcast with no pull request (`hold`), its edits as versions, its approval as a row, whether anything can go out, what publishing reads, the one commit of its article and media to the launches repo at publishing, and the preview on the real site ([app-review.md](app-review.md)) |
 | `AccountService`, `SettingsService` | rename, make primary; settings |
 | `NotificationService` | the owner's notices (drafted, published), to the private chat only |
 
@@ -120,8 +121,9 @@ launch happens once" hold:
   `ai-budget-usd`, the global AI budget removed on 2026-10-29, is left in place and never read.)
 - **Cursors** keep positions and state only: polling, a channel's permanent failure (its key built
   and parsed only in `@shipcast/schema/failures`), a cancelled schedule, Instagram audience hours,
-  index status, the last round and delivery, and what the launch store's check last found
-  (`launch-store:<launch id>`).
+  index status, the last round and delivery, what the launch store's check last found
+  (`launch-store:<launch id>`), and for a launch Shipcast holds its publish commit (`app-blog:<launch id>`)
+  and its preview on the real site (`app-preview:<launch id>`).
 - **Accounts** and **account snapshots** ([accounts.md](accounts.md),
   [decisions/account-snapshots.md](decisions/account-snapshots.md)): adding, making primary and
   removing run in a transaction locked per network and brand; one snapshot row per account per UTC day.
@@ -139,7 +141,9 @@ launch happens once" hold:
   drafted before ([launch-import.md](launch-import.md)). Since the fourth, with the
   `launch-store-read` flag, the launch page, the REST API (and MCP), scheduling and the assistants'
   grounding read them instead of GitHub ([launch-store-read.md](launch-store-read.md)); publishing
-  still reads the merged pull request. Each hangs on its launch with `on delete cascade`, so a purge
+  still reads the merged pull request. Since the fifth, with `app-review`, a new launch is held by
+  them alone (`model = 'app'`): reviewed, approved and published from them
+  ([app-review.md](app-review.md)). Each hangs on its launch with `on delete cascade`, so a purge
   of the launch's row takes them all (the soft delete keeps the row):
 
   | Table | Holds |
@@ -159,7 +163,8 @@ launch happens once" hold:
   `github-public:<owner/name>` or `article:<slug>`, and null for a launch the owner may start twice.
   `repo` and `ref` stay required during the transition (a launch with no repo gets synthetic ones).
   `posts` and `publish_attempts` gained `draft_version_id`, and `publish_attempts` `approval_id`: what
-  exactly went out, under which approval.
+  exactly went out, under which approval. The `Launch` the registry reads carries `model` since the
+  fifth phase.
 
   Migration `0019` (2026-10-30) added `import_batch` to the seven tables (the import that wrote a
   row; null for every other writer) and `launch_imports`, the import's batch log: one row per launch
@@ -266,7 +271,9 @@ steps, output tokens and the timeout.
    `launch/<project>-<ref>`, or `article/<slug>`, named by `draftsBranch`; one commit through the Git
    data API), or, with `direct`, **one commit straight onto `main`**. The drafts snapshot is written
    as the pull request opens, and with `launch-store` the launch model's copy too
-   ([launch-store.md](launch-store.md)).
+   ([launch-store.md](launch-store.md)). With `app-review` neither happens: the drafts are kept by
+   Shipcast alone, and nothing reaches the launches repo until the launch is published
+   ([app-review.md](app-review.md)).
 
 `claimManual(repo, ref?)` starts a launch by hand. In the app and the rounds, drafting is a `draft`
 job (a `heavy` one in a split), never retried on its own since it costs an AI run.
@@ -289,6 +296,12 @@ patched with it, and with `launch-store` it is a version of the owner's), and
 GitHub** reads it again. With `launch-store-read` a launch the launch model holds is shown from its
 rows instead (`reviewFromStore`, the same shape), its files served by the app
 ([launch-store-read.md](launch-store-read.md)).
+
+With `app-review` a new launch has no pull request ([app-review.md](app-review.md)): an edit is a
+version of the owner's, approving is an `approvals` row naming the versions approved (an edit after
+it holds back that channel until it is approved again), `auto` channels need no approval, the page
+previews each article as the blog would and can push a preview of the real site, and publishing
+reads the approved versions after committing the article and its media to the launches repo.
 
 ## Telemetry
 
@@ -330,4 +343,4 @@ The launch's media, publishing after the merge, the newsletter and metrics are i
 
 ## Related
 
-[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]]
+[[launch-yml.md]] · [[content-pack.md]] · [[claudio.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[web-app.md]] · [[accounts.md]] · [[stats.md]] · [[scheduling.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/ai-providers.md]] · [[decisions/postgres.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/account-snapshots.md]] · [[decisions/github-app.md]] · [[decisions/youtube.md]] · [[status.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]] · [[app-review.md]]
