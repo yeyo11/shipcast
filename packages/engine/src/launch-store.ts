@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { parseDocument } from 'yaml';
 import { draftOf, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
 import type { ChannelRow, Launch, StoredDraft, StoredMediaRow, StoredPack } from './repositories/index.ts';
@@ -81,6 +82,18 @@ export function channelRows(config: LaunchConfig): ChannelRow[] {
     mode: config.publishing[channel],
     options: channel === 'reddit' ? { subreddits: config.reddit.subreddits } : {},
   }));
+}
+
+/**
+ * The launch.yml the launch's channel rows say: the one they were copied from, each channel's mode
+ * set from its row. What a reader of today's files (publishing, the schedule) is handed for a launch
+ * whose channels Shipcast changed, such as the import's channels turned off.
+ */
+export function channelsAsLaunchYml(source: string, rows: readonly ChannelRow[]): string {
+  const doc = parseDocument(source);
+  // The rows are every channel there is: one the file names and the rows do not (a channel retired since) goes
+  doc.setIn(['publishing'], doc.createNode(Object.fromEntries(rows.map((row) => [row.channel, row.mode]))));
+  return String(doc);
 }
 
 /** The launch's rows, as the check compares them with its pull request */
