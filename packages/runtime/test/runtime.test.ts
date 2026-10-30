@@ -91,3 +91,15 @@ test('without an App the engine runs on the old token, as before', async () => {
   assert.equal((await runtime.brand()).id, 'personal');
   assert.deepEqual(seen, ['GET /repos/yeyo11/launches/contents/brand.yml']);
 });
+
+test('app-review (docs/app-review.md) needs the reads and the media of the launch model, and is off unless named', async () => {
+  const start = async (flags: string) => createRuntime({ env: { ...BOOTSTRAP, SHIPCAST_FLAGS: flags }, root: '/repo', registry: await memoryRegistry(), secrets: new MemoryStore(), fetch: fakeGitHub([]) });
+  await assert.rejects(start('app-review'), /app-review flag needs launch-store-read/);
+  await assert.rejects(start('launch-store,launch-store-read,app-review'), /app-review flag needs launch-media/);
+  const off = await start('launch-store,launch-store-read,launch-media');
+  assert.equal(off.appReview, undefined);
+  assert.equal(off.pipeline.appReview, undefined, 'without it, drafts go to a pull request as before');
+  const on = await start('launch-store,launch-store-read,launch-media,app-review');
+  assert.ok(on.appReview);
+  assert.equal(on.pipeline.appReview, on.appReview);
+});
