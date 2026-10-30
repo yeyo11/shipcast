@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
+import tls from 'node:tls';
 import { after, test } from 'node:test';
 import zlib from 'node:zlib';
 import { fetchGuarded, UrlRefused, type GuardedFetchOptions, type UrlRefusal } from '../src/sources/fetch-url.ts';
@@ -401,6 +403,56 @@ test('a gzip or brotli body is decoded', async () => {
     assert.equal(page.bytes, Buffer.byteLength(text));
     assert.deepEqual(page.redirects, []);
   }
+});
+
+// A self-signed certificate for pages.test, made once with openssl for this test and trusted by nobody
+const SELF_SIGNED = {
+  key: `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQguFmsIF8wEsEKFoFS
+li4VuXrstdt2QNjU5VEbLMhXV6OhRANCAASa8d+NM8sKL/qp+Kxs2LBIqgRcZr0x
+KkiFoLj2/Clm5WEvPc4oabyTPXqdTK+lN8sunkoRyRJ7VYddcPx7a6QR
+-----END PRIVATE KEY-----
+`,
+  cert: `-----BEGIN CERTIFICATE-----
+MIIBmDCCAT6gAwIBAgIUXmyZzi4V+9rOeuVN1dRUbZ6KgkIwCgYIKoZIzj0EAwIw
+FTETMBEGA1UEAwwKcGFnZXMudGVzdDAgFw0yNjEwMzAwMzMyMzZaGA8yMTI2MTAw
+NjAzMzIzNlowFTETMBEGA1UEAwwKcGFnZXMudGVzdDBZMBMGByqGSM49AgEGCCqG
+SM49AwEHA0IABJrx340zywov+qn4rGzYsEiqBFxmvTEqSIWguPb8KWblYS89zihp
+vJM9ep1Mr6U3yy6eShHJEntVh11w/HtrpBGjajBoMB0GA1UdDgQWBBT76OF+eN+Q
+zXr+I0hyivJU5egS+zAfBgNVHSMEGDAWgBT76OF+eN+QzXr+I0hyivJU5egS+zAP
+BgNVHRMBAf8EBTADAQH/MBUGA1UdEQQOMAyCCnBhZ2VzLnRlc3QwCgYIKoZIzj0E
+AwIDSAAwRQIgIEg54To4yTivQjRPVYuRVZdBUuLUz3aMBu10q04m5c0CIQCbLOGZ
+KCsM/gafmADkTmcNPO3MIqhqKvicrr2LismYag==
+-----END CERTIFICATE-----
+`,
+};
+
+test('https goes over the vetted connection, names the host for SNI, and refuses a certificate nobody trusts', async () => {
+  const servernames: string[] = [];
+  const requests: string[] = [];
+  const server = https.createServer(
+    {
+      ...SELF_SIGNED,
+      SNICallback: (servername, done) => {
+        servernames.push(servername);
+        done(null, tls.createSecureContext(SELF_SIGNED));
+      },
+    },
+    (req, res) => {
+      requests.push(req.url ?? '');
+      html(res, '<p>secret</p>');
+    },
+  );
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  closers.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const { port } = server.address() as net.AddressInfo;
+  const resolve = resolver({ 'pages.test': [{ address: '127.0.0.1', family: 4 }] });
+
+  const error = await refused(fetchGuarded(`https://pages.test:${port}/`, { resolve, allowAddress: onlyFirstLoopback }), 'network');
+  assert.match(String((error.cause as Error | undefined)?.message ?? error.message), /self-signed|certificate|could not connect/i);
+  assert.deepEqual(resolve.calls, ['pages.test'], 'resolved once, then connected to the vetted address');
+  assert.deepEqual(servernames, ['pages.test'], 'the certificate is checked against the hostname, not the IP');
+  assert.deepEqual(requests, [], 'no request crosses an untrusted connection');
 });
 
 test("the caller's abort ends the fetch with its own reason", async () => {
