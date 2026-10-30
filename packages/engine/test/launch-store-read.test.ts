@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { draftFile, parseLaunchConfig, type Channel, type ContentPack } from '@shipcast/schema';
 import {
   deliverDrafts,
+  editPost,
   gitBlobSha,
   inTransaction,
   launchConfigOf,
@@ -15,6 +16,7 @@ import {
   launchReplyContext,
   packOnLaunchesRepo,
   readReview,
+  type EditDeps,
   type ImportGitHub,
   type Launch,
   type PipelineDeps,
@@ -146,13 +148,14 @@ async function imported() {
   const registry = await memoryRegistry();
   const github = new LaunchesRepo();
   const media = new MemoryMediaStore();
-  const published = async (repo: string, ref: string, trigger: 'manual' | 'article', number: number, posts: Array<[Channel, PostKind]>) => {
+  // A blog post's external id is its article's slug, as publishing records it
+  const published = async (repo: string, ref: string, trigger: 'manual' | 'article', number: number, slug: string, posts: Array<[Channel, PostKind]>) => {
     const { launch } = await registry.launches.claim({ repo, ref, trigger, kind: 'launch', brand: 'personal' });
-    for (const [channel, kind] of posts) await registry.posts.recordPost({ launchId: launch.id, channel, kind, url: `https://example.com/${channel}/${kind}`, externalId: `${channel}-${kind}-${launch.id}` });
+    for (const [channel, kind] of posts) await registry.posts.recordPost({ launchId: launch.id, channel, kind, url: `https://example.com/${channel}/${kind}`, externalId: channel === 'blog' ? slug : `${channel}-${kind}-${launch.id}` });
     return registry.launches.setStatus(launch.id, 'published', `https://github.com/${LAUNCHES}/pull/${number}`);
   };
-  const release = await published('yeyo11/claudio', 'v1.0.0', 'manual', 1, [['blog', 'article:en'], ['bluesky', 'post']]);
-  const article = await published(LAUNCHES, 'article:my-post', 'article', 2, [['blog', 'article:es'], ['bluesky', 'post']]);
+  const release = await published('yeyo11/claudio', 'v1.0.0', 'manual', 1, 'claudio', [['blog', 'article:en'], ['bluesky', 'post']]);
+  const article = await published(LAUNCHES, 'article:my-post', 'article', 2, 'my-post', [['blog', 'article:es'], ['bluesky', 'post']]);
   const service = new LaunchImportService({ registry, inTransaction: (work) => inTransaction(registry, work), github, media, launchesRepo: LAUNCHES, dryPublishing: never as never, writable: true });
   await service.apply(await service.plan({ deletions: [] }));
   github.calls = [];
@@ -297,4 +300,32 @@ test('a launch closed without merging reads as closed; one with no pull request 
   assert.equal((await read.review(closed, never))?.pullRequest.state, 'closed');
   const direct = { ...closed, status: 'drafted', detail: 'direct:abc https://github.com/x' } as Launch;
   assert.equal(await read.review(direct, never), undefined);
+});
+
+test('the article edited after publishing is a version, so the page reads it as the site shows it', async () => {
+  const { registry, release, read, media } = await imported();
+  const store = new LaunchStoreService({ registry, media, github: new FakeGitHub(), launchesRepo: LAUNCHES });
+  const commits: string[] = [];
+  const blog: NonNullable<EditDeps['blog']> = {
+    github: {
+      fileAt: async (_repo, path) => text(COMMITS[MAIN]![path]),
+      commitToBranch: async (_repo, branch, _message, files) => {
+        commits.push(`${branch} ${files.map((f) => f.path).join(',')}`);
+        return { sha: 'e'.repeat(40) };
+      },
+      filesUnder: async () => [],
+    },
+    launchesRepo: LAUNCHES,
+  };
+  const [post] = await registry.posts.posts(release.id, { channel: 'blog' });
+  await editPost(post!.id, { text: 'The article, edited.' }, { registry, editors: async () => ({}), blog, launchStore: store, now: () => new Date('2026-10-30T10:00:00Z') });
+  assert.deepEqual(commits, [`main ${ARTICLE_EN}`]);
+
+  const article = (await registry.launchStore.drafts(release.id)).find((d) => d.piece === 'article:en')!;
+  assert.equal(article.origin, 'post-publish-edit');
+  assert.equal((await read.review(release, never))?.drafts.find((d) => d.path === ARTICLE_EN)?.content, '---\ntitle: "claudio"\nupdatedDate: 2026-10-30\n---\n\nThe article, edited.\n');
+
+  // Without the launch store, the edit is the commit alone, as before
+  await editPost(post!.id, { text: 'Again.' }, { registry, editors: async () => ({}), blog });
+  assert.equal((await registry.launchStore.drafts(release.id)).find((d) => d.piece === 'article:en')!.n, article.n);
 });

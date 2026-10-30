@@ -113,14 +113,16 @@ export class LaunchStoreService {
 
   /**
    * The owner edited a draft in Shipcast, which committed it to the pull request: a version of their
-   * own. A failure is added to what the check last reported, which a full check replaces.
+   * own. An article edited after it was published (committed to main) is a `post-publish-edit`
+   * version, so the copy stays what the site shows. A failure is added to what the check last
+   * reported, which a full check replaces.
    */
-  async edited(launch: Launch, path: string, content: string, author: string | null = null): Promise<string[]> {
+  async edited(launch: Launch, path: string, content: string, author: string | null = null, origin: Extract<DraftOrigin, 'owner' | 'post-publish-edit'> = 'owner'): Promise<string[]> {
     try {
       if (!(await this.#holds(launch))) return [];
       const stored = storedFile(launch, path);
       if (stored.kind !== 'draft') return [];
-      await this.#version(launch.id, await this.#store.drafts(launch.id), { ...stored, path, body: content, origin: 'owner', author });
+      await this.#version(launch.id, await this.#store.drafts(launch.id), { ...stored, path, body: content, origin, author });
       return [];
     } catch (error) {
       const problem = `${path}: the edit was not stored: ${error instanceof Error ? error.message : String(error)}`;
