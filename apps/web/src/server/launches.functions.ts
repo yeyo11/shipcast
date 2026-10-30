@@ -56,7 +56,7 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = ctx;
     const launch = await launchService(ctx).get(data);
     if (!launch) return null;
-    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, ...(ctx.drafts && { drafts: ctx.drafts }) }, launch);
+    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, ...(ctx.drafts && { drafts: ctx.drafts }), stored: ctx.launchRead }, launch);
     return {
       ...page,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */

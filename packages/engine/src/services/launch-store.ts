@@ -40,7 +40,7 @@ export interface Delivery {
  * while the drafts pull request still decides everything, every launch it carries is also written to
  * Shipcast's own tables (the pack, the channel rows, each draft as versions, the media in the media
  * store, the approval at the merge) and compared with the pull request. Built only with the
- * `launch-store` flag on. Nothing reads these rows yet, so nothing here may stop today's flow: no
+ * `launch-store` flag on. The pull request still decides, so nothing here may stop today's flow: no
  * method throws, and what failed or differs is reported under the launch's cursor, which the
  * attention list shows, and answered for the caller's log.
  */

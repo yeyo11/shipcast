@@ -7,8 +7,11 @@ interface PiecesDeps {
   github: Pick<ReviewGitHub, 'fileAt'>;
   launchesRepo: string;
   draftPaths: readonly string[] | Promise<readonly string[]>;
-  /** With `github-events`: launch.yml as the drafts snapshot kept it, instead of a read from GitHub */
-  launchConfig?: Promise<LaunchConfig | undefined>;
+  /**
+   * With `github-events`: launch.yml as the drafts snapshot kept it, instead of a read from GitHub;
+   * with `launch-store-read`, the launch model's channel rows. Asked only for a launch that can still schedule
+   */
+  launchConfig?: () => Promise<LaunchConfig | undefined>;
 }
 
 /** A channel a drafted launch can still put on a time, and its scheduled piece when it has one */
@@ -55,7 +58,7 @@ async function schedulingChannels(
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);
   if (launch.status !== 'drafted' && launch.status !== 'detected' && launch.status !== 'generating') return { timezone, channels: [] };
-  const config = await (deps.launchConfig ?? launchConfigOf(deps.github, deps.launchesRepo, launch)).catch(() => undefined);
+  const config = await (deps.launchConfig ? deps.launchConfig() : launchConfigOf(deps.github, deps.launchesRepo, launch)).catch(() => undefined);
   // Only needed when launch.yml cannot be read; the caller may still be reading them from GitHub
   const draftPaths = config ? [] : await deps.draftPaths;
   // Each channel's drafts found by its own matcher: `github-discussion.md`, `newsletter-<lang>.md`

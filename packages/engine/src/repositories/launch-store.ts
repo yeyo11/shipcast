@@ -212,6 +212,12 @@ export class LaunchStoreRepository {
     return (await this.#db.select().from(media).where(where).orderBy(media.id)).map(mediaOf);
   }
 
+  /** One stored file by its row's id, whichever launch it is of */
+  async mediaRow(id: number): Promise<StoredMediaRow | undefined> {
+    const [row] = await this.#db.select().from(media).where(eq(media.id, id));
+    return row && mediaOf(row);
+  }
+
   /** The approval in force: the newest one not revoked */
   async approval(launchId: number): Promise<StoredApproval | undefined> {
     const [row] = await this.#db

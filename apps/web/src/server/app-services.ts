@@ -10,6 +10,7 @@ import {
   type DraftSnapshotService,
   type EditDeps,
   type GitHubRest,
+  type LaunchReadService,
   type LaunchStoreService,
   type PipelineDeps,
   type Post,
@@ -35,15 +36,20 @@ export interface PieceServiceDeps {
   /** For the launch's launch.yml: a channel it sets to off cannot be scheduled */
   github: Pick<ReviewGitHub, 'fileAt'>;
   launchesRepo: string;
+  /** With `launch-store-read`: the launch's channels from the launch model's rows, for a launch they hold */
+  launchRead?: Pick<LaunchReadService, 'channelConfig'> | undefined;
 }
 
 export const postService = (deps: Pick<PieceServiceDeps, 'registry' | 'editing'>) => new PostService({ launches: deps.registry.launches, editing: deps.editing });
 
-export const scheduleService = (deps: Pick<PieceServiceDeps, 'registry' | 'armSchedule' | 'github' | 'launchesRepo'>) =>
+export const scheduleService = (deps: Pick<PieceServiceDeps, 'registry' | 'armSchedule' | 'github' | 'launchesRepo' | 'launchRead'>) =>
   new ScheduleService({
     store: deps.registry,
     recommendations: deps.registry,
-    launchConfig: (launch) => launchConfigOf(deps.github, deps.launchesRepo, launch),
+    launchConfig: (launch) => {
+      const fromGitHub = () => launchConfigOf(deps.github, deps.launchesRepo, launch);
+      return deps.launchRead ? deps.launchRead.channelConfig(launch, fromGitHub) : fromGitHub();
+    },
     arm: deps.armSchedule,
   });
 

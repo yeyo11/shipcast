@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
-import { PostgresFakeNetworkLedger, TelemetryStore, type DraftSnapshotService, type GitHubApp, type LaunchStoreService, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { PostgresFakeNetworkLedger, TelemetryStore, type DraftSnapshotService, type GitHubApp, type LaunchReadService, type LaunchStoreService, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   assertPreviewSafe,
   attachTelemetryStore,
@@ -96,6 +96,8 @@ export interface AppContext {
   drafts: DraftSnapshotService | undefined;
   /** With `launch-store`: the launch model's shadow write beside the drafts pull request */
   launchStore: LaunchStoreService | undefined;
+  /** With `launch-store-read`: the launch page, the REST API and scheduling read the launch model's tables, not GitHub */
+  launchRead: LaunchReadService | undefined;
   githubCaches: GitHubCaches | undefined;
   /** With `realtime-ui`, in a process that serves pages: the tabs' event streams (GET /api/events) */
   live: LiveHub | undefined;
@@ -196,6 +198,7 @@ async function createContext(): Promise<AppContext> {
     },
     drafts: runtime.drafts,
     launchStore: runtime.launchStore,
+    launchRead: runtime.launchRead,
     githubCaches: runtime.githubCaches,
     live: undefined,
     preview,

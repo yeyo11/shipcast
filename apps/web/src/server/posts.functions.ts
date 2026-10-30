@@ -14,7 +14,7 @@ import { armSchedule } from './work.server';
 
 async function deps(): Promise<PostActionDeps> {
   const ctx = await appContext();
-  return { registry: ctx.registry, editing: editingDeps, armSchedule, github: ctx.github, launchesRepo: ctx.deps.launchesRepo };
+  return { registry: ctx.registry, editing: editingDeps, armSchedule, github: ctx.github, launchesRepo: ctx.deps.launchesRepo, launchRead: ctx.launchRead };
 }
 
 export const editPiece = createServerFn({ method: 'POST' })
