@@ -1,6 +1,7 @@
 import type { Check, GitHubTokenSource, IdentityCache, Profile, ProfileEdit, ProfileStats } from '@shipcast/connectors';
 import type { CommentConnectors, Editors, MetricSources, Publishers, PublishStrategy } from '@shipcast/engine';
 import type { Brand, Channel, ChannelDefinition } from '@shipcast/schema';
+import type { Flag } from '../flags.ts';
 import type { TokenBucket } from '../redis/ports.ts';
 
 /*
@@ -140,7 +141,9 @@ export interface SourceSpec<C = unknown> extends NetworkSpec<C> {
   /** An AI provider the AI settings can choose */
   ai?: boolean;
   /** Where its connector goes in the metric sources, and the name `shipcast status` says it by */
-  source?: { slot: 'blog' | 'search' | 'bing'; configured: string };
+  source?: { slot: 'blog' | 'search' | 'bing' | 'umami'; configured: string };
+  /** The flag it ships behind: off, it is neither listed nor read */
+  flag?: Flag;
 }
 
 /** What a channel's connector is wired as, for the engine's ports; each one only where the network has it */

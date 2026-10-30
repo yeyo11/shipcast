@@ -69,6 +69,8 @@ export interface AppContext {
   userTokens: GitHubUserTokens | undefined;
   secrets: SecretStore;
   deps: PipelineDeps;
+  /** With `launch-media` and its bucket in .env: where uploads are kept; otherwise it refuses every call, saying why */
+  media: MediaStore;
   /** Reads the settings again, after the Settings page saved them */
   refresh(): Promise<void>;
   /**
@@ -102,8 +104,6 @@ export interface AppContext {
   appReview: AppReviewService | undefined;
   /** With `launch-triggers`: the owner's trigger rules, edited in Settings (docs/launch-triggers.md) */
   triggers: TriggerService | undefined;
-  /** Where launch media are kept (`launch-media`); it refuses every call without the flag */
-  media: MediaStore;
   githubCaches: GitHubCaches | undefined;
   /** With `realtime-ui`, in a process that serves pages: the tabs' event streams (GET /api/events) */
   live: LiveHub | undefined;
@@ -189,6 +189,7 @@ async function createContext(): Promise<AppContext> {
     userTokens: runtime.userTokens,
     secrets,
     deps,
+    media: runtime.media,
     refresh: runtime.refresh,
     settingsSaved: events.settingsSaved,
     announce: events.announce,
@@ -207,7 +208,6 @@ async function createContext(): Promise<AppContext> {
     launchRead: runtime.launchRead,
     appReview: runtime.appReview,
     triggers: runtime.triggers,
-    media: runtime.media,
     githubCaches: runtime.githubCaches,
     live: undefined,
     preview,

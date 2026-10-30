@@ -51,6 +51,12 @@ export const FLAGS = {
    */
   'app-review': 'Launches reviewed and approved in the app, with no pull request',
   /**
+   * Launch model, phase 6: a launch made from sources (text, URLs, several repos, uploaded media),
+   * a launch.yml's `sources` read when its release triggers it, and stars read per repo. Off, a
+   * launch is its one repo as before and `sources` in a launch.yml is parsed and ignored
+   */
+  'launch-sources': 'Launches made from sources: text, URLs, several repos and uploaded media',
+  /**
    * Launch model, phase 7: the owner's trigger rules (a setting) decide which GitHub events create a
    * launch, a repo with no launch.yml can be launched on a rule's channels, and each claim carries its
    * dedupe key (docs/launch-triggers.md). Off, each repo's launch.yml decides alone, as before
@@ -62,6 +68,8 @@ export const FLAGS = {
    * to delete them on; an event never launches a removed launch's release again
    */
   'launch-delete': 'Launches deleted from the app and the API',
+  /** SHP-4: the blog's visits per launch and channel from Umami, until the Umami instance exists */
+  umami: 'Blog visits by UTM source and campaign from Umami',
 } as const;
 
 /**

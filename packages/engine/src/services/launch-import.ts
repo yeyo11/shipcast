@@ -8,7 +8,7 @@ import { channelRows, channelsAsLaunchYml, mediaKind, mimeOf, RELEASE_NOTES, sto
 import { sha256Hex, type MediaStore, type StoredMedia } from '../media/store.ts';
 import { cancelledKey, launchConfigText, publishLaunch, type ChannelPublishing, type Publishers, type PublishResult } from '../publish.ts';
 import { failureKey } from '../publishing/retry.ts';
-import type { CapturedLaunch, ChannelRow, ImportedColumns, Launch, LaunchCounts, Repositories, SourceInput } from '../repositories/index.ts';
+import type { CapturedLaunch, ChannelRow, ImportedColumns, Launch, LaunchCounts, Repositories, SourceRowInput } from '../repositories/index.ts';
 
 /*
  * The import of the launches drafted before Shipcast held them (docs/launch-import.md, phase 3 of
@@ -83,7 +83,7 @@ export interface LaunchPlan {
   reason?: string;
   title?: string | null;
   dedupeKey?: string | null;
-  source?: SourceInput;
+  source?: SourceRowInput;
   channels?: { source: string; rows: ChannelRow[]; turnedOff: string[] };
   packs: Array<{ pack: Record<string, unknown>; from: string }>;
   drafts: DraftPlan[];
@@ -303,7 +303,7 @@ export class LaunchImportService {
   }
 
   /** What the launch is about: the release it announced, or the owner's own text for an article */
-  async #source(launch: Launch, plan: LaunchPlan, inputs: readonly CapturedArticleInput[]): Promise<SourceInput | undefined> {
+  async #source(launch: Launch, plan: LaunchPlan, inputs: readonly CapturedArticleInput[]): Promise<SourceRowInput | undefined> {
     if (!isArticle(launch)) {
       if (launch.ref.startsWith('public:')) return { position: 1, kind: 'repo', role: 'primary', repo: launch.repo };
       const sha = await this.#deps.github.commitSha(launch.repo, launch.ref).catch(() => undefined);

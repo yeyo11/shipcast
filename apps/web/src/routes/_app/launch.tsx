@@ -1,5 +1,5 @@
 import type { Preflight as Result } from '@shipcast/engine';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { Sealing } from '../../components/illustrations';
 import { PageHead } from '../../components/PageHead';
@@ -17,7 +17,7 @@ export const Route = createFileRoute('/_app/launch')({
 });
 
 function LaunchARepo() {
-  const { owner, repos } = Route.useLoaderData();
+  const { owner, repos, sources, appReview } = Route.useLoaderData();
   const navigate = useNavigate();
   const [repo, setRepo] = useState('');
   const [releases, setReleases] = useState<Awaited<ReturnType<typeof listReleases>>>([]);
@@ -50,6 +50,11 @@ function LaunchARepo() {
   return (
     <>
       <PageHead title="Launch a repo" art={<Sealing width={200} />}>Pick one of {owner}’s repos and a release. Shipcast reads its code, writes every piece and hands you the drafts.</PageHead>
+      {sources && (
+        <p className="muted">
+          About more than one repo, or about something with no repo at all? <Link to="/sources">Launch from sources</Link>.
+        </p>
+      )}
       <form
         className="form"
         onSubmit={async (e) => {
@@ -105,7 +110,7 @@ function LaunchARepo() {
                 <span>Publish without review</span>
               </label>
             </div>
-            <small>{direct ? 'The drafts go straight onto the blog’s main branch and every approved channel publishes once the site is live.' : 'The drafts wait in a pull request until you approve them here or merge it on GitHub.'}</small>
+            <small>{direct ? 'The drafts go straight onto the blog’s main branch and every approved channel publishes once the site is live.' : appReview ? 'The drafts wait in Shipcast until you approve them here.' : 'The drafts wait in a pull request until you approve them here or merge it on GitHub.'}</small>
           </fieldset>
         )}
         <div className="row">

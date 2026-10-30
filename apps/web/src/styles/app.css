@@ -368,6 +368,8 @@ a.pop-line:hover, a.pop-line:focus-visible { background: var(--sc-raised); }
 /* A one-line strip: what waits for the owner on a page, without the weight of a poster band */
 .strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 16px; margin: 0 0 20px; border-radius: var(--sc-radius-card); }
 .strip-yellow { background: var(--sc-yellow); color: var(--sc-on-yellow); }
+/* A strip's secondary buttons take its ink: the default outline is light, unreadable on yellow */
+.strip-yellow .btn:not(.btn-primary) { color: var(--sc-on-yellow); border-color: var(--sc-on-yellow); }
 .strip-title { font: 800 17px/1.2 var(--sc-font-display); text-transform: uppercase; }
 .strip-text { margin: 0; flex: 1 1 320px; font-size: 14.5px; }
 .hero-numbers { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: stretch; margin-bottom: 12px; }

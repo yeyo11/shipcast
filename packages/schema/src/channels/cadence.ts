@@ -23,6 +23,8 @@ export const SITE_CADENCES = {
   urlInspectionIndexed: { hours: 24 * 7, read: 'single', why: 'indexed: only a drop-out is news' },
   /** Bing Webmaster's clicks, impressions and crawl state */
   bing: { hours: 24, read: 'single', why: 'daily data' },
+  /** The blog's visits by UTM source from Umami (flag `umami`): self-hosted, live and with no quota */
+  umami: { hours: 1, read: 'single', why: 'live, self-hosted' },
 } as const satisfies Record<string, MetricCadence>;
 
 /**

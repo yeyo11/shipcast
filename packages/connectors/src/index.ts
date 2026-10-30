@@ -6,6 +6,7 @@ export * from './bluesky.ts';
 export * from './mastodon.ts';
 export * from './instagram.ts';
 export * from './cloudflare.ts';
+export * from './umami.ts';
 export * from './search-console.ts';
 export * from './brevo.ts';
 export * from './oauth.ts';

@@ -3,10 +3,13 @@ import { test } from 'node:test';
 import {
   AI_TASK_DEFINITIONS,
   AiContentPack,
+  AiSourcesPack,
   Brand,
   ContentPack,
   pieceLimitProblem,
   contentPackJsonSchema,
+  SOURCES_PACK_TASK,
+  sourcesPackJsonSchema,
   graphemeCount,
   DEFAULT_MODES,
   threadsLength,
@@ -221,4 +224,22 @@ test('the AI tasks are still asked for a pack with its repo and no further repos
   const project = (contentPackJsonSchema() as { properties: { project: { required: string[]; properties: Record<string, unknown> } } }).properties.project;
   assert.deepEqual(project.required, ['name', 'repo']);
   assert.deepEqual(Object.keys(project.properties), ['name', 'repo', 'version']);
+});
+
+test('a launch made from sources is asked for claims, each naming the sources that show it', () => {
+  const { repo: _repo, ...noRepo } = fullPack.project;
+  const claims = [{ text: 'it runs Claude Code as a service', sources: ['S1', 'S2'] }];
+  const withClaims = { ...fullPack, project: noRepo, analysis: { ...fullPack.analysis, claims } };
+  assert.ok(AiSourcesPack.safeParse(withClaims).success, 'no repo, with claims');
+  assert.ok(!AiSourcesPack.safeParse({ ...withClaims, analysis: fullPack.analysis }).success, 'claims are required there');
+  assert.ok(!AiSourcesPack.safeParse({ ...withClaims, analysis: { ...fullPack.analysis, claims: [{ text: 'x', sources: [] }] } }).success, 'a claim cites a source');
+  assert.ok(!AiSourcesPack.safeParse({ ...withClaims, analysis: { ...fullPack.analysis, claims: [{ text: 'x', sources: ['the README'] }] } }).success, 'by its id');
+  assert.ok(ContentPack.safeParse(withClaims).success, 'every pack it accepts is a ContentPack');
+  assert.ok(!AiContentPack.safeParse({ ...fullPack, analysis: { ...fullPack.analysis, claims } }).success, 'the pack of a release is asked for nothing new');
+  assert.equal(SOURCES_PACK_TASK.output?.schema, AiSourcesPack);
+  assert.equal(SOURCES_PACK_TASK.id, 'pack', 'the pack’s settings, ceilings and budget');
+  const analysis = (sourcesPackJsonSchema() as { properties: { analysis: { required: string[] } } }).properties.analysis;
+  assert.ok(analysis.required.includes('claims'));
+  const legacy = (contentPackJsonSchema() as { properties: { analysis: { properties: Record<string, unknown> } } }).properties.analysis;
+  assert.ok(!('claims' in legacy.properties), 'what Claude is handed for a release is unchanged');
 });

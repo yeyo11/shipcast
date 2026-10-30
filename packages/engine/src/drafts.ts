@@ -254,14 +254,17 @@ export function renderDrafts(
 
 /** The pull request's description: what the code analysis found, and what merging does. */
 export function pullRequestBody(pack: ContentPack, launch: Launch, config: LaunchConfig): string {
+  return [`Launch of [${launch.repo}](https://github.com/${launch.repo}) at \`${launch.ref}\` (${launch.kind} pack), drafted by Shipcast from the code.`, '', ...reviewSections(pack, config)].join('\n');
+}
+
+/** What a drafts pull request says below its first line: how merging works, the analysis and the channels */
+export function reviewSections(pack: ContentPack, config: LaunchConfig): string[] {
   const list = (items: string[]) => (items.length > 0 ? items.map((i) => `- ${i}`).join('\n') : '- none');
   const channels = (Object.keys(config.publishing) as Channel[])
     .filter((c) => config.publishing[c] !== 'off')
     .map((c) => `- **${c}**: ${config.publishing[c]}`)
     .join('\n');
   return [
-    `Launch of [${launch.repo}](https://github.com/${launch.repo}) at \`${launch.ref}\` (${launch.kind} pack), drafted by Shipcast from the code.`,
-    '',
     '**Merging publishes** the article on the blog and every `approval` channel.',
     'Edit any file in this pull request first: what is merged is what gets published.',
     '',
@@ -284,7 +287,7 @@ export function pullRequestBody(pack: ContentPack, launch: Launch, config: Launc
     '### Channels',
     '',
     channels,
-  ].join('\n');
+  ];
 }
 
 /**

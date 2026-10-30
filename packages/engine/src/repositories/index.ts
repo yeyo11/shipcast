@@ -14,6 +14,7 @@ import { LaunchStoreRepository } from './launch-store.ts';
 import { LaunchImportRepository } from './launch-imports.ts';
 import { LaunchDeletionRepository } from './launch-deletions.ts';
 import { SettingRepository } from './settings.ts';
+import { LaunchSourceRepository } from './sources.ts';
 import { MetricRepository } from './metrics.ts';
 import { PostRepository } from './posts.ts';
 import { RawQueries } from './sql.ts';
@@ -44,6 +45,7 @@ export * from './launch-store.ts';
 export * from './launch-imports.ts';
 export * from './launch-deletions.ts';
 export * from './settings.ts';
+export * from './sources.ts';
 export * from './metrics.ts';
 export * from './posts.ts';
 export * from './sql.ts';
@@ -70,6 +72,8 @@ export interface Repositories {
   /** The launches the owner deleted, and the keys a trigger never launches again */
   readonly launchDeletions: LaunchDeletionRepository;
   readonly settings: SettingRepository;
+  /** What each launch is about: its sources and the files uploaded for them (launch-sources) */
+  readonly sources: LaunchSourceRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
   /** The posts' publish attempts, the outbox a worker claims a piece in before it calls the network */
@@ -95,6 +99,7 @@ export function repositoriesOn(db: Database): Repositories {
     launchImports: new LaunchImportRepository(db),
     launchDeletions: new LaunchDeletionRepository(db),
     settings: new SettingRepository(db),
+    sources: new LaunchSourceRepository(db),
     metrics: new MetricRepository(db),
     posts: new PostRepository(db),
     attempts: new PublishAttempts(db),

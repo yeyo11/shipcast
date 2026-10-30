@@ -81,6 +81,30 @@ export function dailyViews(points: ReadonlyArray<{ bucket: string; increase: num
 export interface ChannelNumbers {
   totals: Partial<Totals>;
   daily: Day[];
+  /** The site's visits from the channel's tagged links, where Umami has counted any */
+  site?: SiteVisits;
+}
+
+/** A channel's page views and visits on the site, from the links it published (Umami, by `utm_source`) */
+export interface SiteVisits {
+  views: number;
+  visits: number;
+}
+
+/**
+ * Each tagged channel's visits from a launch's Umami readings (`views_<utm_source>`,
+ * `visits_<utm_source>`), under the channel whose links carry that source; `sources` is each tagged
+ * channel's `utm_source` (UTM_CHANNELS). A channel Umami has not counted is absent.
+ */
+export function channelSiteVisits(readings: readonly CounterReading[], sources: Readonly<Record<string, string>>): Record<string, SiteVisits> {
+  const out: Record<string, SiteVisits> = {};
+  const value = (name: string) => readings.find((r) => r.source === 'umami' && r.name === name)?.value;
+  for (const [channel, source] of Object.entries(sources)) {
+    const views = value(`views_${source}`);
+    const visits = value(`visits_${source}`);
+    if (views !== undefined || visits !== undefined) out[channel] = { views: views ?? 0, visits: visits ?? 0 };
+  }
+  return out;
 }
 
 /** What a launch's card and its page lead with, and each channel's part of it */

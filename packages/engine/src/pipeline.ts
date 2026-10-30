@@ -1,7 +1,8 @@
-import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type ContentPack, type Projects } from '@shipcast/schema';
+import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type ContentPack, type LaunchConfig, type Projects } from '@shipcast/schema';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
-import { asPublishedDirectly, draftsBranch, keepPubDates, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
+import { asPublishedDirectly, draftsBranch, isArticle, keepPubDates, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
+import { draftFromSources, type SourcesDeps } from './sources/draft.ts';
 import { generatePack } from './generate.ts';
 import type { PromptOptions } from './prompt.ts';
 import type { SiteCapture } from '@shipcast/capture';
@@ -34,6 +35,11 @@ export interface PipelineDeps {
   fetch?: typeof fetch;
   /** Screenshots and the tour of a project's site; headless Chromium by default */
   capture?: SiteCapture;
+  /**
+   * With `launch-sources`: what a launch made from sources is drafted with (its rows, the bundle's
+   * folder and clones, the guarded page fetcher). Absent, every launch is its one repo, as before
+   */
+  sources?: SourcesDeps;
   /** With `github-events`: the drafts snapshot written as the pull request is opened, so the page never reads GitHub */
   drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
   /**
@@ -151,17 +157,17 @@ export type DraftResult =
 /**
  * Takes a claimed launch to its drafts pull request: reads launch.yml at the ref, clones the release,
  * generates and checks the content pack, and opens the pull request in the launches repo. The
- * registry records each step, so a failure says where it stopped and why.
+ * registry records each step, so a failure says where it stopped and why. With launch-sources
+ * (`deps.sources`), a launch made from sources, or whose launch.yml names further sources, is
+ * drafted from all of them instead (sources/draft.ts).
  */
 export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDeps, options: DraftOptions = {}): Promise<DraftResult> {
   const { github, registry } = deps;
-  const fail = async (problems: string[]): Promise<DraftResult> => ({
-    ok: false,
-    launch: await registry.launches.setStatus(launch.id, 'failed', problems.join('\n')),
-    problems,
-  });
+  const fail = failWith(launch, deps);
 
   await registry.launches.setStatus(launch.id, 'generating');
+  // A launch with no repo has no launch.yml to read: its channels were chosen when it was made
+  if (deps.sources && isArticle(launch)) return (await draftFromSources(launch, undefined, brand, { ...deps, sources: deps.sources }, options)) ?? fail(['this launch has no sources']);
   const ref = launch.ref.startsWith('public:') ? 'HEAD' : launch.ref;
 
   // A launch a trigger rule created for a repo with no launch.yml was given the rule's channels instead
@@ -171,6 +177,10 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   if (!parsed.ok) return fail([formatIssues(LAUNCH_CONFIG_PATH, parsed.issues)]);
   const config = parsed.value;
   if (config.brand !== brand.id) return fail([`launch.yml names brand "${config.brand}"; ${deps.launchesRepo} is "${brand.id}"`]);
+  if (deps.sources) {
+    const drafted = await draftFromSources(launch, config, brand, { ...deps, sources: deps.sources }, options, text);
+    if (drafted) return drafted;
+  }
 
   let checkout: Checkout;
   try {
@@ -190,34 +200,53 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }
 
+  const name = `${projectSlug(launch.repo)} ${launch.ref}`;
+  return deliverPack(launch, generated.pack, config, brand, checkout, deps, options, {
+    branch: draftsBranch(launch),
+    title: `Launch ${name}`,
+    body: pullRequestBody(generated.pack, launch, config),
+    message: `launch: ${name}\n\nDrafted by Shipcast from the code of ${launch.repo} at ${launch.ref}.`,
+    source: { pack: generated.pack, configText: text },
+  });
+}
+
+/** Records a launch's failure with its problems, and answers it as the draft's result */
+export function failWith(launch: Launch, deps: Pick<PipelineDeps, 'registry'>): (problems: string[]) => Promise<DraftResult> {
+  return async (problems) => ({ ok: false, launch: await deps.registry.launches.setStatus(launch.id, 'failed', problems.join('\n')), problems });
+}
+
+/**
+ * From an accepted pack to the drafts: the media drawn (the clone's screenshots and demo, when the
+ * launch has one), every piece rendered, and all of it handed over as a pull request or one commit.
+ */
+export async function deliverPack(
+  launch: Launch,
+  pack: ContentPack,
+  config: LaunchConfig,
+  brand: Brand,
+  checkout: Checkout,
+  deps: PipelineDeps,
+  options: DraftOptions,
+  delivery: { branch: string; title: string; body: string; message: string; extraFiles?: DraftFile[]; source?: { pack: ContentPack; configText: string } },
+): Promise<DraftResult> {
+  const fail = failWith(launch, deps);
   let known;
   try {
-    known = await readProjects(github, deps.launchesRepo);
+    known = await readProjects(deps.github, deps.launchesRepo);
   } catch (error) {
     return fail([error instanceof Error ? error.message : String(error)]);
   }
-  const assets = await buildAssets({ pack: generated.pack, launch, config, brand, checkout, projects: known.projects, projectsText: known.text, fetch: deps.fetch, capture: deps.capture });
+  const assets = await buildAssets({ pack, launch, config, brand, checkout, projects: known.projects, projectsText: known.text, fetch: deps.fetch, capture: deps.capture });
   if (!assets.ok) return fail([assets.problem]);
 
   const now = (deps.now ?? (() => new Date()))();
   const files = [
-    ...(await keepPubDates(renderDrafts(generated.pack, launch, config, brand, now, assets.media.ogPng, screenshotPaths(assets.files)), github, deps.launchesRepo, now)),
+    ...(await keepPubDates(renderDrafts(pack, launch, config, brand, now, assets.media.ogPng, screenshotPaths(assets.files)), deps.github, deps.launchesRepo, now)),
     ...assets.files,
+    ...(delivery.extraFiles ?? []),
   ];
-  const name = `${projectSlug(launch.repo)} ${launch.ref}`;
-  const delivered = await deliverDrafts(
-    launch,
-    deps,
-    {
-      files,
-      branch: draftsBranch(launch),
-      title: `Launch ${name}`,
-      body: pullRequestBody(generated.pack, launch, config),
-      message: `launch: ${name}\n\nDrafted by Shipcast from the code of ${launch.repo} at ${launch.ref}.`,
-      source: { pack: generated.pack, configText: text },
-    },
-    options,
-  );
+  const { extraFiles: _extra, ...pr } = delivery;
+  const delivered = await deliverDrafts(launch, deps, { files, ...pr }, options);
   if (!delivered.ok) return fail([delivered.problem]);
   return { ok: true, launch: delivered.launch, pullRequest: delivered.where };
 }

@@ -56,17 +56,51 @@ export function checkoutName(repo: string, ref: string): string {
  * time so a previous run can never leak into this one.
  */
 export async function checkout(workspace: Workspace, repo: string, ref: string): Promise<Checkout> {
+  const hostPath = await jobFolder(workspace, checkoutName(repo, ref));
+  await cloneInto(workspace, repo, ref, hostPath);
+  return { hostPath };
+}
+
+/**
+ * A fresh, empty folder of the workspace under a name: per job (removed with the job's clones) when
+ * the workspace is, or one per name kept until the next use of it. Where a clone goes, and where a
+ * launch made from sources gathers its bundle (sources/bundle.ts).
+ */
+export async function jobFolder(workspace: Workspace, name: string): Promise<string> {
   const clones = workspace.perJob ? jobClones.getStore() : undefined;
-  const name = clones ? `${checkoutName(repo, ref)}~${randomUUID()}` : checkoutName(repo, ref);
-  const hostPath = join(workspace.hostDir, name);
+  const hostPath = join(workspace.hostDir, clones ? `${name}~${randomUUID()}` : name);
   clones?.add(hostPath);
   await mkdir(workspace.hostDir, { recursive: true });
   await rm(hostPath, { recursive: true, force: true });
+  return hostPath;
+}
 
+/**
+ * A shallow clone of the repo at a ref into a folder that does not exist yet, and the commit it is
+ * at. With `sha`, the clone is moved to that commit when the ref has moved on since: what a second
+ * analysis of a launch reads is the code the first one read.
+ */
+export async function cloneInto(workspace: Workspace, repo: string, ref: string, hostPath: string, sha?: string): Promise<{ sha: string }> {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
   const url = workspace.cloneUrl?.(repo) ?? `https://github.com/${repo}.git`;
   const args = ['clone', '--depth', '1', '--quiet'];
   if (ref !== 'HEAD') args.push('--branch', ref);
-  await run('git', [...args, url, hostPath], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+  await run('git', [...args, url, hostPath], { env });
+  const head = (await run('git', ['-C', hostPath, 'rev-parse', 'HEAD'])).stdout.trim();
+  if (!sha || sha === head) return { sha: head };
+  await run('git', ['-C', hostPath, 'fetch', '--depth', '1', '--quiet', 'origin', sha], { env });
+  await run('git', ['-C', hostPath, 'checkout', '--quiet', '--detach', sha]);
+  return { sha };
+}
 
-  return { hostPath };
+/** A bundle bigger than this is refused rather than held in memory and sent */
+export const ARCHIVE_MAX_BYTES = 256 * 1024 * 1024;
+
+/**
+ * A folder as a gzip tarball without its `.git` folders: what a remote agent's workspace is made
+ * from when no archive URL holds what it reads (Claudio refuses a tarball with a `.git` path).
+ */
+export async function archiveFolder(hostPath: string): Promise<Uint8Array<ArrayBuffer>> {
+  const { stdout } = await run('tar', ['--exclude=.git', '-czf', '-', '-C', hostPath, '.'], { encoding: 'buffer', maxBuffer: ARCHIVE_MAX_BYTES });
+  return new Uint8Array(stdout);
 }

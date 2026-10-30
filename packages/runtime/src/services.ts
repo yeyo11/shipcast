@@ -6,6 +6,7 @@ import { buildConnector, credentialsFromEnv, networkSpec, SOURCES, type Built } 
 import { networkOf, type AnyChannelAdapter, type Credentials } from './channels/adapter.ts';
 import { INSTAGRAM_REFRESHED_KEY, INSTAGRAM_TOKEN_KEY } from './channels/instagram.ts';
 import { CHANNEL_ADAPTERS } from './channels/registry.ts';
+import { Flags } from './flags.ts';
 import type { TokenBucket } from './redis/ports.ts';
 import { getJson, type SecretStore } from './secrets.ts';
 
@@ -32,6 +33,8 @@ export interface ServiceDeps {
   cache?: IdentityCache;
   /** The validators of the repo counts' conditional reads, kept between runs */
   etags?: EtagCache;
+  /** The flags a source behind one is read with; the environment's by default */
+  flags?: Flags;
 }
 
 export interface Services {
@@ -149,8 +152,9 @@ export async function buildServices(deps: ServiceDeps): Promise<Services> {
   // Stars, forks, watchers and the repo's traffic through the App's installation: traffic needs its
   // Administration: read, granted on 2026-10-26; without it the public numbers are read
   configured.push('github');
+  const flags = deps.flags ?? Flags.fromEnv(deps.env);
   for (const source of SOURCES) {
-    if (!source.source) continue;
+    if (!source.source || (source.flag && !flags.on(source.flag))) continue;
     const found = await built(source.id);
     if (!found) continue;
     // Each source's connector is what its slot of MetricSources reads (catalog.ts builds the right one)

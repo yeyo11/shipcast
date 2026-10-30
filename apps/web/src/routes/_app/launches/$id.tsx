@@ -506,7 +506,7 @@ function LaunchPage() {
               </button>
             )}
             {reviewOk?.pullRequest && (
-              <a className="btn btn-small" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer" style={{ color: '#000', borderColor: '#000' }}>
+              <a className="btn btn-small" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer">
                 Open the pull request
               </a>
             )}
@@ -556,7 +556,7 @@ function LaunchPage() {
                 drafts={reviewOk?.drafts ?? []}
                 capabilities={pieces.capabilities}
                 failures={launch.failures}
-                scheduling={pieces.scheduling}
+                scheduling={{ ...pieces.scheduling, held: Boolean(app) }}
                 channel={search.channel}
                 onChannel={(channel) => go({ tab: 'channels', channel })}
                 numbers={numbers.channels}

@@ -7,7 +7,7 @@ import { appContext } from './context.server';
 import { deletionService } from './deletion.server';
 import { channelList } from './post-changes';
 import { repoList } from './repo-list';
-import { id, object, text } from './input';
+import { id, InvalidInput, object, text } from './input';
 import { ownerAvatarUrl } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
@@ -15,8 +15,8 @@ import { launchPage } from './launch-page.server';
 import { launchNumbers, postAccounts, readTimezone } from './launch-summary.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchView, publishAgain as publishAgainFor } from './launches.server';
-import { articleRequest, channelName, launchRequest } from './requests';
-import { approve, startArticle, startLaunch, startPublishing } from './work.server';
+import { articleRequest, channelName, launchRequest, sourcesRequest } from './requests';
+import { approve, startArticle, startLaunch, startPublishing, startSources, uploadSource } from './work.server';
 
 /** A page holds a few rows of cards on any screen, two or three across, and each card reads its own numbers */
 const LAUNCHES_PAGE = 24;
@@ -212,7 +212,14 @@ export const publishAgain = createServerFn({ method: 'POST' })
 export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
   const ctx = await appContext();
   const b = await ctx.brand();
-  return { owner: b.github, repos: await repoList({ github: ctx.github, cache: ctx.flags.on('realtime-ui') ? ctx.process.shared.cache : undefined }, b.github) };
+  return {
+    owner: b.github,
+    repos: await repoList({ github: ctx.github, cache: ctx.flags.on('realtime-ui') ? ctx.process.shared.cache : undefined }, b.github),
+    // Whether a launch can also be made from sources here (launch-sources)
+    sources: ctx.flags.on('launch-sources'),
+    // Whether new drafts wait in Shipcast rather than in a pull request (app-review)
+    appReview: ctx.flags.on('app-review'),
+  };
 });
 
 export const listReleases = createServerFn({ method: 'GET' })
@@ -233,3 +240,22 @@ export const launchRepo = createServerFn({ method: 'POST' })
 export const writeArticle = createServerFn({ method: 'POST' })
   .validator((input: unknown) => articleRequest(input))
   .handler(({ data }) => startArticle(data.input, data.direct));
+
+/** A launch made from sources (launch-sources), drafted as a job */
+export const launchFromSources = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => sourcesRequest(input))
+  .handler(({ data }) => startSources(data));
+
+/** An image for a launch made from sources, into the media store; the page names it by the sha256 answered */
+export const uploadSourceFile = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    const file = input instanceof FormData ? input.get('file') : null;
+    if (!(file instanceof Blob)) throw new InvalidInput('send the file as `file` in a form');
+    return file;
+  })
+  .handler(async ({ data }) => {
+    const answer = await uploadSource(new Uint8Array(await data.arrayBuffer()));
+    if (!answer.ok) return answer;
+    const { sha256, mime, width, height } = answer.file;
+    return { ok: true as const, file: { sha256, mime, width, height } };
+  });

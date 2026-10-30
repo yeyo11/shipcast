@@ -197,7 +197,7 @@ transaction mode:
 ## The flags
 
 `SHIPCAST_FLAGS` is a comma-separated list (`packages/runtime/src/flags.ts`); every flag is off
-unless named, and an unknown name stops the start. Production names all of the refactor's; the
+unless named, and an unknown name stops the start. Production names all of the refactor's. `umami` stays off until the Umami instance exists; the
 launch model's ([decisions/launch-model.md](decisions/launch-model.md)) ship off and are turned on
 one at a time once each phase is verified:
 
@@ -210,13 +210,15 @@ one at a time once each phase is verified:
 | `github-events` | pages read the drafts snapshot; GitHub is read on events and hourly |
 | `batched-metrics` | hourly, batched metrics and comment feeds |
 | `realtime-ui` | pages updated over server-sent events instead of polling |
-| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. The shadow write (`launch-store`), the import (`launch-import`), `/media/<id>` (`launch-store-read`) and the launches Shipcast holds (`app-review`) call it; a removed launch's bytes are deleted from it (`launch-delete`) |
+| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. The shadow write (`launch-store`), the import (`launch-import`), `/media/<id>` (`launch-store-read`), the launches Shipcast holds (`app-review`) and uploads made for a launch from sources (`launch-sources`) call it; a removed launch's bytes are deleted from it (`launch-delete`) |
 | `launch-store` | the launch model's shadow write: each drafts pull request's pack, channels, drafts (as versions), media and merge also written to the launch model's tables and checked against it, differences in the attention bell ([launch-store.md](launch-store.md)); the rows are read only with `launch-store-read`. Its media need `launch-media` on too |
 | `launch-import` | lets `scripts/import-launches.ts` write: import the launches drafted before the shadow write, delete the ones decided away, roll a batch back ([launch-import.md](launch-import.md)). Off, the script only plans and verifies; the app never reads it. Turned on only for the run, with `launch-media` |
 | `launch-store-read` | the launch page, `GET /launches/{id}` (and MCP's `get_launch`), scheduling's channels and the reply and writing assistants' grounding read the launch model's tables instead of GitHub; a launch they do not hold is read as before ([launch-store-read.md](launch-store-read.md)). Needs `launch-store` (the start refuses without it) and `launch-media` for its files; turned on after the import is verified, with `github-events` |
 | `app-review` | a new launch has no pull request: its drafts are held by Shipcast, edited (as versions), previewed (in the app, and on the real site on demand) and approved in the app; `auto` channels go out without approval; the article and its media reach the launches repo as one commit at publishing, before anything links them ([app-review.md](app-review.md)). A process without it leaves such launches waiting. Needs `launch-store-read` (with `launch-store`) and `launch-media`: the start refuses without them |
+| `launch-sources` | launches made from sources: text, pages (fetched through the guarded fetcher), several repos and uploaded images, from the app's Launch from sources page and `POST /api/v1/launches/sources`; a launch.yml's `sources` read when its release triggers it; further repos' stars read per repo ([sources.md](sources.md)). Uploads also need `launch-media` |
 | `launch-triggers` | the owner's trigger rules (Settings → Automation) decide which GitHub events create a launch; a repo with no launch.yml can be launched on a rule's channels, and each claim carries its dedupe key, so a second event or a re-run launches nothing ([launch-triggers.md](launch-triggers.md)). Off, each repo's launch.yml decides alone. Until rules are saved, the defaults decide as launch.yml did |
 | `launch-delete` | a launch can be deleted from its page and `DELETE /launches/{id}`: one never published is removed with its rows, a published one hidden with its posts kept on the networks unless channels are named; an event never launches a removed launch's release again ([launch-delete.md](launch-delete.md)). Off, the routes answer 404 and the page offers nothing |
+| `umami` | the blog's visits per launch and channel from Umami ([umami.md](umami.md)); off until the Umami instance exists |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
@@ -238,4 +240,4 @@ drafts snapshot.
 
 ## Related
 
-[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]] · [[app-review.md]] · [[launch-triggers.md]] · [[launch-delete.md]]
+[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]] · [[app-review.md]] · [[sources.md]] · [[launch-triggers.md]] · [[launch-delete.md]] · [[umami.md]]
