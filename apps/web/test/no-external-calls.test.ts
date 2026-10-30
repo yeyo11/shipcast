@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LaunchService, type ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { instrumentFetch, MemoryStore, withOrigin, type CallSample, type TelemetryRecorder } from '@shipcast/runtime';
+import { Flags, instrumentFetch, MemoryStore, withOrigin, type CallSample, type TelemetryRecorder } from '@shipcast/runtime';
 import { MemoryCache } from '@shipcast/runtime/redis';
 import { Brand } from '@shipcast/schema';
 import { commentService } from '../src/server/app-services.ts';
@@ -131,7 +131,7 @@ test("the comments, channels, automation, bell and profile loaders make no outbo
       await comments.settings();
     })),
     ...(await counted('fn:getChannels', async () => {
-      const view = await channelsViewOf({ registry, secrets: new MemoryStore(), brand: async () => brand, settings: { oauthApp: () => undefined } });
+      const view = await channelsViewOf({ registry, secrets: new MemoryStore(), brand: async () => brand, settings: { oauthApp: () => undefined }, flags: new Flags() });
       assert.equal(view.networks.find((n) => n.id === 'bluesky')?.accounts.length, 1);
     })),
     ...(await counted('fn:getAutomation', async () => {

@@ -1,18 +1,22 @@
 import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Repositories } from '@shipcast/engine';
-import { channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
+import { UTM_CHANNELS } from '@shipcast/schema';
+import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
+
+/** Each tagged channel's `utm_source`, which names its visits in Umami's readings */
+const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(UTM_CHANNELS).map(([channel, tags]) => [channel, tags.source]));
 
 /**
  * A launch's counters at their latest reading: each piece's latest number, read per piece so pieces
  * read at different times all count, plus the latest reading of each launch-wide source.
  */
-async function readingsOf(registry: Pick<Repositories, 'posts' | 'metrics'>, launch: Launch): Promise<CounterReading[]> {
+async function readingsOf(registry: Pick<Repositories, 'posts' | 'metrics'>, launch: Launch): Promise<{ counters: CounterReading[]; umami: CounterReading[] }> {
   const [site, history, posts] = await Promise.all([registry.metrics.latestMetrics(launch.id), registry.metrics.postMetricHistory(launch.id), registry.posts.posts(launch.id)]);
   const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
   const pieces = latestByPiece(history).flatMap((r) => {
     const source = channel.get(r.postId);
     return source ? [{ source, name: r.name, value: r.value }] : [];
   });
-  return [...site.filter((m) => (SITE_SOURCES as readonly string[]).includes(m.source)), ...pieces];
+  return { counters: [...site.filter((m) => (SITE_SOURCES as readonly string[]).includes(m.source)), ...pieces], umami: site.filter((m) => m.source === 'umami') };
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -50,12 +54,13 @@ export async function launchNumbers(registry: Pick<Repositories, 'posts' | 'metr
   const [readings, series] = await Promise.all([Promise.all(launches.map((l) => readingsOf(registry, l))), seriesOf(registry, launches)]);
   return new Map(
     launches.map((l, i) => {
-      const mine = readings[i] ?? [];
+      const mine = readings[i]?.counters ?? [];
       const perChannel = channelTotals(mine, METRIC_FAMILIES);
+      const site = channelSiteVisits(readings[i]?.umami ?? [], UTM_SOURCES);
       const days = series.channels.get(l.id) ?? new Map<string, ReadonlyArray<{ bucket: string; increase: number }>>();
-      const names = new Set([...Object.keys(perChannel), ...days.keys()]);
+      const names = new Set([...Object.keys(perChannel), ...days.keys(), ...Object.keys(site)]);
       const channels = Object.fromEntries(
-        [...names].map((name) => [name, { totals: perChannel[name] ?? {}, daily: dailyViews(days.get(name) ?? [], l.createdAt) }]),
+        [...names].map((name) => [name, { totals: perChannel[name] ?? {}, daily: dailyViews(days.get(name) ?? [], l.createdAt), ...(site[name] && { site: site[name] }) }]),
       );
       return [l.id, { totals: launchTotals(mine, METRIC_FAMILIES), daily: dailyViews(series.launches.get(l.id) ?? [], l.createdAt), channels }];
     }),

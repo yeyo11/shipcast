@@ -56,6 +56,7 @@ export function keyMetric(network: string, snapshot: AccountView['snapshot']): {
     case 'brevo':
       return { value: snapshot?.followers ?? null, label: 'Subscribers', others: null, followers: true };
     case 'cloudflare':
+    case 'umami':
       return { value: extra.visits7d ?? null, label: 'Visits, last 7 days', others: null, followers: false };
     case 'searchConsole':
     case 'bingWebmaster':

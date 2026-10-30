@@ -1,7 +1,8 @@
-import { BingWebmaster, checkProblem, CloudflareAnalytics, GitHubProfile, json, SearchConsole, type Check, type IdentityCache, type ServiceAccount } from '@shipcast/connectors';
+import { BingWebmaster, checkProblem, CloudflareAnalytics, GitHubProfile, json, SearchConsole, UmamiAnalytics, type Check, type IdentityCache, type ServiceAccount } from '@shipcast/connectors';
 import type { Brand, Channel } from '@shipcast/schema';
 import { buildContext, envCredentials, MissingField, networkOf, type AnyChannelAdapter, type Connection, type Credentials, type Field, type NetworkSpec, type SourceSpec } from './channels/adapter.ts';
 import { CHANNEL_ADAPTERS } from './channels/registry.ts';
+import type { Flag, Flags } from './flags.ts';
 import type { TokenBucket } from './redis/ports.ts';
 
 
@@ -26,6 +27,8 @@ export interface Network {
   howTo: string;
   /** An AI provider the AI settings can choose, rather than a channel or a source of numbers */
   ai?: boolean;
+  /** The flag it ships behind (networksOn) */
+  flag?: Flag;
 }
 
 /** An Anthropic key, checked by listing the models it may use */
@@ -122,6 +125,34 @@ export const SOURCES: readonly SourceSpec[] = [
       return { connector, check: () => connector.check(), profileStats: () => connector.profileStats() };
     },
   },
+  // The blog's visits by the links' UTM tags (docs/umami.md): an account only, no `.env` variables,
+  // and behind its flag until the owner's Umami instance exists
+  {
+    id: 'umami',
+    name: 'Blog analytics (Umami)',
+    metrics: true,
+    auth: 'form',
+    flag: 'umami',
+    fields: [
+      { key: 'url', label: 'Umami address', secret: false, placeholder: 'https://umami.example.com', help: 'Your Umami’s address; its API is under /api' },
+      { key: 'websiteId', label: 'Website id', secret: false, help: 'Settings → Websites → the site → Edit: the id in Umami’s tracking code' },
+      { key: 'apiKey', label: 'API key', secret: true, optional: true, placeholder: 'umami_…', help: 'Settings → API keys; or leave it empty and give a user below' },
+      { key: 'username', label: 'Username', secret: false, optional: true, help: 'Only without an API key: a user that can view the website' },
+      { key: 'password', label: 'Password', secret: true, optional: true, help: 'That user’s password; a user with two-factor sign-in needs an API key' },
+    ],
+    permissions: ['Reads the blog’s visits from each launch’s links, by the channel and the campaign their UTM tags name'],
+    howTo: 'Umami → Settings → API keys → Create key, and the website’s id from Settings → Websites. A username and password work too.',
+    source: { slot: 'umami', configured: 'umami' },
+    build: ({ need, get, fetch }) => {
+      const apiKey = get('apiKey');
+      const username = get('username');
+      const password = get('password');
+      const login = apiKey ? { apiKey } : username && password ? { username, password } : undefined;
+      if (!login) throw new MissingField('umami needs an API key, or a username and a password');
+      const connector = new UmamiAnalytics({ url: need('url'), websiteId: need('websiteId'), ...login, ...(fetch && { fetch }) });
+      return { connector, check: () => connector.check(), profileStats: () => connector.profileStats() };
+    },
+  },
   // The owner's own GitHub profile, public: the repos' numbers come through the GitHub App instead
   {
     id: 'github',
@@ -189,7 +220,7 @@ function channelNetwork(adapter: AnyChannelAdapter, spec: NetworkSpec): Network 
 }
 
 function sourceNetwork(spec: SourceSpec): Network {
-  return { id: spec.id, name: spec.name, metrics: spec.metrics, auth: spec.auth, fields: spec.fields, permissions: spec.permissions, howTo: spec.howTo, ...(spec.ai && { ai: true }) };
+  return { id: spec.id, name: spec.name, metrics: spec.metrics, auth: spec.auth, fields: spec.fields, permissions: spec.permissions, howTo: spec.howTo, ...(spec.ai && { ai: true }), ...(spec.flag && { flag: spec.flag }) };
 }
 
 /**
@@ -207,6 +238,11 @@ export function catalogOf(adapters: readonly AnyChannelAdapter[]): Network[] {
 }
 
 export const NETWORKS: readonly Network[] = catalogOf(CHANNEL_ADAPTERS);
+
+/** The networks the Channels page lists: a network behind a flag only while its flag is on */
+export function networksOn(flags: Flags, networks: readonly Network[] = NETWORKS): Network[] {
+  return networks.filter((n) => !n.flag || flags.on(n.flag));
+}
 
 export function network(id: string): Network | undefined {
   return NETWORKS.find((n) => n.id === id);

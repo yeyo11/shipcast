@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { publishAgain } from '../../server/launches.functions';
 import { deleteAllPieces, deletePiece, editPiece, editPieces } from '../../server/posts.functions';
 import { allowance, channelEntries, draftPrefill, networkName, pieceName, signed, type ChannelEntry, type PieceRow } from '../../server/pieces';
-import type { ChannelNumbers, Totals } from '../../server/launch-summary';
+import type { ChannelNumbers, SiteVisits, Totals } from '../../server/launch-summary';
 import type { SchedulingChannel } from '../../server/pieces.server';
 import type { PieceOutcome } from '../../server/post-actions';
 import { CHANNEL_NAMES } from '../../server/view';
@@ -149,6 +149,7 @@ function ChannelPanel({
   timezone,
   schedule,
   totals,
+  site,
   selected,
   onSelect,
   onEdit,
@@ -162,6 +163,8 @@ function ChannelPanel({
   schedule: SchedulingChannel | undefined;
   /** The channel's own totals, from the launch's numbers: what its network counts */
   totals: Partial<Totals> | undefined;
+  /** The site's visits from the channel's tagged links, where Umami counted any */
+  site: SiteVisits | undefined;
   selected: ReadonlySet<number>;
   onSelect: (id: number, on: boolean) => void;
   onEdit: (row: PieceRow) => void;
@@ -185,14 +188,19 @@ function ChannelPanel({
           <StateDot mark={entry.mark} label={entry.label} word />
         </div>
       </header>
-      {totals && Object.keys(totals).length > 0 && (
+      {((totals && Object.keys(totals).length > 0) || site) && (
         <p className="chan-numbers" aria-label={`${channelTitle(entry.channel)}'s totals`}>
           {(['views', 'reactions', 'comments', 'clicks'] as const).flatMap((k) =>
-            totals[k] === undefined ? [] : [
+            totals?.[k] === undefined ? [] : [
               <span key={k}>
                 <strong>{number(totals[k])}</strong> {k}
               </span>,
             ],
+          )}
+          {site && (
+            <span title={`${number(site.views)} page views on the site from this channel’s links, counted by Umami`}>
+              <strong>{number(site.visits)}</strong> site visits
+            </span>
           )}
         </p>
       )}
@@ -326,6 +334,7 @@ export function Channels({
         timezone={scheduling.timezone}
         schedule={scheduling.channels.find((c) => c.channel === current.channel)}
         totals={numbers[current.channel]?.totals}
+        site={numbers[current.channel]?.site}
         selected={selected}
         onSelect={(id, on) =>
           setSelected((now) => {

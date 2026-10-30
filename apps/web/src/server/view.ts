@@ -80,6 +80,7 @@ export const CHANNEL_NAMES: Record<string, string> = {
   search: 'Google Search',
   bing: 'Bing',
   github: 'GitHub',
+  umami: 'Umami',
 };
 
 /** The design system's glyph for a channel, from its definition, or for a source or network that has one */

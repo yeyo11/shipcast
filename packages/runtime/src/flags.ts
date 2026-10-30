@@ -19,6 +19,8 @@ export const FLAGS = {
   'batched-metrics': 'Hourly, batched metrics and comment feeds',
   /** Phase 9: the pages update over SSE instead of polling */
   'realtime-ui': 'Pages updated over server-sent events',
+  /** SHP-4: the blog's visits per launch and channel from Umami, until the Umami instance exists */
+  umami: 'Blog visits by UTM source and campaign from Umami',
 } as const;
 
 /**
