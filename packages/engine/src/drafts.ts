@@ -44,7 +44,7 @@ export function projectLabel(pack: Pick<ContentPack, 'project'>, launch: Pick<La
 }
 
 /** Where a launch's pieces live in the launches repo: `launches/<project>/<ref>/`, or `articles/<slug>/` for an article. */
-export function launchDir(launch: Launch): string {
+export function launchDir(launch: Pick<Launch, 'repo' | 'ref'>): string {
   if (isArticle(launch)) return `articles/${launch.ref.slice('article:'.length).replace(/[^a-z0-9-]/g, '-')}`;
   return `launches/${projectSlug(launch.repo)}/${launch.ref.replace(/[^A-Za-z0-9._-]/g, '_')}`;
 }

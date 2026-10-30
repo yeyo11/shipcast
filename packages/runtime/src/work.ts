@@ -123,7 +123,7 @@ export async function roundRunning(registry: Pick<Repositories, 'jobs'>): Promis
 export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const { registry } = d;
   const flags = d.flags ?? new Flags();
-  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo });
+  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }) });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
   // Phase 8: the hourly reads, with what they keep between runs, which lives as long as the process
   const batched = flags.on('batched-metrics');
@@ -193,7 +193,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       const connectors = publishConnectors(services);
       const result = flags.on('publishing-service')
         ? await publishing.publish(current, brand, connectors, job.id)
-        : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors });
+        : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }) });
       if (result.state === 'waiting') {
         const minutes = Math.round((PUBLISH_RETRIES * PUBLISH_RETRY_SECONDS) / 60);
         if (job.lastAttempt) throw new Error(`still waiting after ${minutes} minutes (${result.reason}); the next publish round will pick it up`);

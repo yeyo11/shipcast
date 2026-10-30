@@ -1,4 +1,4 @@
-import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type Projects } from '@shipcast/schema';
+import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type ContentPack, type Projects } from '@shipcast/schema';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, keepPubDates, launchDir, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
@@ -8,6 +8,7 @@ import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
+import type { LaunchStoreService } from './services/launch-store.ts';
 import type { Checkout } from './workspace.ts';
 
 export interface PipelineDeps {
@@ -32,6 +33,11 @@ export interface PipelineDeps {
   capture?: SiteCapture;
   /** With `github-events`: the drafts snapshot written as the pull request is opened, so the page never reads GitHub */
   drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
+  /**
+   * With `launch-store`: the launch model's shadow write, which also keeps each delivery's pack,
+   * channels, drafts and media in Shipcast's own tables, and records the approval publishing finds
+   */
+  launchStore?: Pick<LaunchStoreService, 'drafted' | 'merged'>;
 }
 
 /** The prompts and tone a task on the runner is written with: the settings', or the ones in code */
@@ -50,25 +56,35 @@ export interface DraftOptions {
 
 /**
  * Hands the drafts over: a pull request to review, or, when publishing directly, one commit on main.
- * The launch records where they went (`direct:<sha>` or the pull request's URL).
+ * The launch records where they went (`direct:<sha>` or the pull request's URL). `source` is what the
+ * drafts were made from, for the launch model's shadow write when it is on.
  */
 export async function deliverDrafts(
   launch: Launch,
   deps: PipelineDeps,
-  drafts: { files: DraftFile[]; branch: string; title: string; body: string; message: string },
+  drafts: { files: DraftFile[]; branch: string; title: string; body: string; message: string; source?: { pack: ContentPack; configText: string } },
   options: DraftOptions,
 ): Promise<{ ok: true; launch: Launch; where: string } | { ok: false; problem: string }> {
+  const { source, ...pull } = drafts;
+  // The shadow write never fails a draft: it reports what it could not store on its own (services/launch-store.ts)
+  const shadow = async (delivered: Launch, files: readonly DraftFile[], direct?: { sha: string }) => {
+    if (source) await deps.launchStore?.drafted(delivered, { ...source, files, ...(direct && { direct }) }).catch(() => undefined);
+  };
   try {
     if (options.direct) {
       if (!deps.github.commitToBranch) return { ok: false, problem: 'this GitHub client cannot commit directly' };
-      const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', drafts.message, asPublishedDirectly(drafts.files));
+      const files = asPublishedDirectly(pull.files);
+      const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', pull.message, files);
       const where = `https://github.com/${deps.launchesRepo}/commit/${commit.sha}`;
-      return { ok: true, launch: await deps.registry.launches.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`), where };
+      const drafted = await deps.registry.launches.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`);
+      await shadow(drafted, files, { sha: commit.sha });
+      return { ok: true, launch: drafted, where };
     }
-    const pr = await deps.github.openPullRequest({ repo: deps.launchesRepo, base: 'main', ...drafts });
+    const pr = await deps.github.openPullRequest({ repo: deps.launchesRepo, base: 'main', ...pull });
     const drafted = await deps.registry.launches.setStatus(launch.id, 'drafted', pr.url);
     // A snapshot that fails to write is not a failed draft: the next delivery or poll writes it
-    await deps.drafts?.opened(drafted, pr, drafts.branch, drafts.files).catch(() => undefined);
+    await deps.drafts?.opened(drafted, pr, pull.branch, pull.files).catch(() => undefined);
+    await shadow(drafted, pull.files);
     return { ok: true, launch: drafted, where: pr.url };
   } catch (error) {
     const what = options.direct ? 'commit the drafts to main' : 'open the drafts pull request';
@@ -170,6 +186,7 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
       title: `Launch ${name}`,
       body: pullRequestBody(generated.pack, launch, config),
       message: `launch: ${name}\n\nDrafted by Shipcast from the code of ${launch.repo} at ${launch.ref}.`,
+      source: { pack: generated.pack, configText: text },
     },
     options,
   );
