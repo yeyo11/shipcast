@@ -462,3 +462,18 @@ test("the caller's abort ends the fetch with its own reason", async () => {
   setTimeout(() => controller.abort(reason), 50);
   await assert.rejects(fetchGuarded(`${target.url}/`, { allowAddress: onlyFirstLoopback, signal: controller.signal }), (error) => error === reason);
 });
+
+test('a refusal tells the client nothing of the network behind the name: the addresses are only in its cause, for the log', async () => {
+  const target = await serve('127.0.0.1', (_req, res) => html(res, 'secret'));
+  const causes = (error: unknown): string => (error instanceof Error ? `${error.message} ${causes(error.cause)}` : '');
+  const resolve = resolver({ 'internal.test': [{ address: '10.20.30.40', family: 4 }] });
+  const leading = await refused(fetchGuarded(`http://internal.test:${target.port}/`, { resolve, timeoutMs: 2000 }), 'address');
+  assert.doesNotMatch(leading.message, /10\.20\.30\.40/);
+  assert.match(causes(leading.cause), /10\.20\.30\.40/);
+  const missing = await refused(fetchGuarded('http://nowhere.test/', { resolve, timeoutMs: 2000 }), 'network');
+  assert.doesNotMatch(missing.message, /no such host/);
+  assert.match(causes(missing.cause), /no such host nowhere\.test/);
+  // The vetted address passes, the socket reaches another: what it reached stays out of the answer too
+  const swapped = await refused(fetchGuarded(`http://127.0.0.1:${target.port}/`, { resolve, timeoutMs: 2000, allowAddress: () => false }), 'address');
+  assert.doesNotMatch(swapped.message, /127\.0\.0\.1 (is|leads|connected)/);
+});

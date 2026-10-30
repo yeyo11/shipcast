@@ -100,3 +100,44 @@ test('a picture cut short is refused rather than stored half-read', () => {
   assert.throws(() => sanitiseUpload(png().subarray(0, 40)), /cut short|no end/);
   assert.throws(() => sanitiseUpload(jpeg().subarray(0, 30)), /cut short|no image data|malformed/);
 });
+
+test('a JPEG ends at its end-of-image marker: what a phone appends after it (a motion photo’s video) goes', () => {
+  const video = [...ascii('ftypmp42'), ...GPS];
+  const clean = sanitiseUpload(new Uint8Array([...jpeg(), ...video]));
+  assert.deepEqual([...clean.body.subarray(-2)], [0xff, 0xd9]);
+  assert.ok(!contains(clean.body, ascii('ftypmp42')) && !contains(clean.body, GPS));
+  assert.deepEqual(sanitiseUpload(jpeg()).body, sanitiseUpload(new Uint8Array([...jpeg(), ...video])).body);
+  // A scan with no end-of-image marker cannot be told from what follows it
+  assert.throws(() => sanitiseUpload(jpeg().subarray(0, jpeg().byteLength - 2)), /no end/);
+});
+
+/** A GIF89a, 2 × 1, with a global colour table, the looping extension, a comment and an XMP application extension */
+function gif(): Uint8Array {
+  const subBlocks = (data: number[]) => [data.length, ...data, 0];
+  return new Uint8Array([
+    ...ascii('GIF89a'),
+    2, 0, 1, 0, 0x80, 0, 0,
+    0, 0, 0, 255, 255, 255,
+    0x21, 0xff, 11, ...ascii('NETSCAPE2.0'), 3, 1, 0, 0, 0,
+    0x21, 0xfe, ...subBlocks(ascii('a comment')),
+    0x21, 0xff, 11, ...ascii('XMP DataXMP'), ...subBlocks([...ascii('<x:xmpmeta>'), ...GPS]),
+    0x21, 0xf9, 4, 0, 10, 0, 0, 0,
+    0x2c, 0, 0, 0, 0, 2, 0, 1, 0, 0,
+    2, 2, 0x4c, 0x01, 0,
+    0x3b,
+    ...ascii('trailing'),
+  ]);
+}
+
+test('a GIF loses its comments, its application data and what trails it, and keeps its looping and its frames', () => {
+  const clean = sanitiseUpload(gif());
+  assert.equal(clean.mime, 'image/gif');
+  assert.ok(!contains(clean.body, ascii('a comment')));
+  assert.ok(!contains(clean.body, ascii('XMP DataXMP')) && !contains(clean.body, GPS));
+  assert.ok(!contains(clean.body, ascii('trailing')));
+  assert.ok(contains(clean.body, ascii('NETSCAPE2.0')), 'an animation still loops');
+  assert.ok(contains(clean.body, [0x21, 0xf9, 4, 0, 10, 0, 0, 0]), 'the frame timing stays');
+  assert.ok(contains(clean.body, [0x2c, 0, 0, 0, 0, 2, 0, 1, 0, 0, 2, 2, 0x4c, 0x01, 0, 0x3b]), 'the frame and the trailer stay');
+  assert.deepEqual([clean.width, clean.height], [2, 1]);
+  assert.throws(() => sanitiseUpload(gif().subarray(0, 40)), /cut short|no end/);
+});
