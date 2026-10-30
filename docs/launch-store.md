@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T02:00:22.986242054Z
-updated_at: 2026-10-30T02:00:22.986242054Z
+updated_at: 2026-10-30T04:38:25.940431313Z
 tags:
     - launches
     - launch-model
@@ -15,10 +15,12 @@ The second phase of [decisions/launch-model.md](decisions/launch-model.md), buil
 behind the `launch-store` flag (off by default, and in production until it is verified). While the
 drafts pull request in the launches repo still decides everything, every launch it carries is also
 written to the launch model's tables ([engine.md](engine.md), migration `0018`) and compared with
-the pull request. **Nothing reads those rows yet**: the launch page, publishing, the API and MCP
-read GitHub as before. The phase is done when, for a real launch, the copy in Postgres agrees with
-its pull request; the import of the existing launches and the reads from the database are the next
-phases.
+the pull request. Until the fourth phase's `launch-store-read` flag is on
+([launch-store-read.md](launch-store-read.md)), **nothing reads those rows**: the launch page,
+publishing, the API and MCP read GitHub as before. With it, the launch page, the API, scheduling
+and the assistants read them; publishing still reads the merged pull request. The phase is done
+when, for a real launch, the copy in Postgres agrees with its pull request; the import of the
+existing launches is the third phase ([launch-import.md](launch-import.md)).
 
 ## What is written, and when
 
@@ -93,4 +95,4 @@ more cursor prefix, which is empty.
 
 ## Related
 
-[[decisions/launch-model.md]] · [[engine.md]] · [[media-store.md]] · [[launches-repo.md]] · [[publishing.md]] · [[server.md]]
+[[decisions/launch-model.md]] · [[engine.md]] · [[media-store.md]] · [[launches-repo.md]] · [[publishing.md]] · [[server.md]] · [[launch-import.md]] · [[launch-store-read.md]]
