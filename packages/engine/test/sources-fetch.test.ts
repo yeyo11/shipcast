@@ -449,7 +449,9 @@ test('https goes over the vetted connection, names the host for SNI, and refuses
   const resolve = resolver({ 'pages.test': [{ address: '127.0.0.1', family: 4 }] });
 
   const error = await refused(fetchGuarded(`https://pages.test:${port}/`, { resolve, allowAddress: onlyFirstLoopback }), 'network');
-  assert.match(String((error.cause as Error | undefined)?.message ?? error.message), /self-signed|certificate|could not connect/i);
+  // The client's answer is general (see the last test): the TLS failure is in the cause chain, for the log
+  const causes = (e: unknown): string => (e instanceof Error ? `${e.message} ${causes(e.cause)}` : '');
+  assert.match(causes(error), /self-signed|certificate|could not connect/i);
   assert.deepEqual(resolve.calls, ['pages.test'], 'resolved once, then connected to the vetted address');
   assert.deepEqual(servernames, ['pages.test'], 'the certificate is checked against the hostname, not the IP');
   assert.deepEqual(requests, [], 'no request crosses an untrusted connection');

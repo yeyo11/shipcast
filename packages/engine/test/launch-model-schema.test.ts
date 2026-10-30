@@ -21,7 +21,7 @@ async function migrated() {
   return connection;
 }
 
-test('the launch model migration only adds: every launch, post and attempt reads as before, the new columns empty', async () => {
+test('the launch model migration only adds: every launch, post and attempt reads as before, the new columns empty but the backfilled dedupe key', async () => {
   const { db, client, close } = await migrated();
   try {
     const registry = repositoriesOn(db);
@@ -34,7 +34,9 @@ test('the launch model migration only adds: every launch, post and attempt reads
     assert.deepEqual(Object.keys(claudio ?? {}).sort(), ['brand', 'createdAt', 'detail', 'id', 'kind', 'model', 'ref', 'repo', 'status', 'trigger', 'updatedAt'], 'the Launch the app reads has only the model added');
     assert.equal(claudio?.model, 'legacy');
     const { rows } = await client.query<Record<string, unknown>>('SELECT id, title, model, dedupe_key, channels_source, deleted_at, approved_at FROM launches ORDER BY id');
-    assert.deepEqual(rows, [1, 6, 7].map((id) => ({ id, title: null, model: 'legacy', dedupe_key: null, channels_source: null, deleted_at: null, approved_at: null })));
+    // 0021 backfills the key each launch's repo and ref imply (dedupeKeyOf); the rest stays empty
+    const keys: Record<number, string> = { 1: 'github-release:yeyo11/claudio@v0.9.0', 6: 'article:monto-rea', 7: 'github-release:yeyo11/shipcast@v0.2.0' };
+    assert.deepEqual(rows, [1, 6, 7].map((id) => ({ id, title: null, model: 'legacy', dedupe_key: keys[id], channels_source: null, deleted_at: null, approved_at: null })));
     assert.deepEqual((await client.query('SELECT draft_version_id FROM posts')).rows, [{ draft_version_id: null }]);
     assert.deepEqual((await client.query('SELECT draft_version_id, approval_id FROM publish_attempts')).rows, [{ draft_version_id: null, approval_id: null }]);
     for (const table of ['launch_sources', 'launch_channels', 'packs', 'drafts', 'draft_versions', 'media', 'approvals']) {
