@@ -58,13 +58,15 @@ function Automation() {
   const [busy, setBusy] = useState(false);
   // With launch-triggers: the rules, saved with the rest of the form
   const [rules, setRules] = useState<RuleDraft[] | null>(data.triggers);
-  const rulesChanged = JSON.stringify(rules) !== JSON.stringify(data.triggers);
+  const savedRules = JSON.stringify(data.triggers);
+  const rulesChanged = JSON.stringify(rules) !== savedRules;
   // What was saved comes back from the server: the form starts again from it, so the save bar closes
   useEffect(() => {
     setMode(data.mode);
     setIntervalText(String(data.intervalSeconds));
   }, [data.mode, data.intervalSeconds]);
-  useEffect(() => setRules(data.triggers), [data.triggers]);
+  // By value: the page reloads every few seconds while a round runs, and an unsaved edit must survive that
+  useEffect(() => setRules(JSON.parse(savedRules) as RuleDraft[] | null), [savedRules]);
   // Live (realtime-ui): any job's row or a saved setting reloads it; otherwise, while a round runs, it polls
   const live = useLiveEnabled();
   useLiveRoute(Route.id, live ? ['job', 'settings'] : null);
