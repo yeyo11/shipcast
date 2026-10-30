@@ -135,6 +135,9 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     if (!found) throw new Error(`no launch ${id}`);
     return found;
   };
+  // With launch-sources, a launch's further repos have their numbers read too, apart from its primary repo's
+  const withRepos = (services: Services): Services =>
+    flags.on('launch-sources') ? { ...services, sources: { ...services.sources, furtherRepos: (ids) => registry.sources.furtherRepos(ids) } } : services;
   // Work nobody started by hand waits while automation is off; the same job sent by hand runs
   const off = async (reason: string) => reason !== BY_HAND && (await readAutomation(registry)).mode === 'off';
 
@@ -358,10 +361,10 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       }
       const brand = await d.brand();
       if (postId !== undefined) {
-        for (const line of await readMetricsHourly({ registry, brand }, await hourlyServicesFor(brand), new Date(), { posts: [postId] })) job.log(line);
+        for (const line of await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand)), new Date(), { posts: [postId] })) job.log(line);
         return;
       }
-      const lines = batched ? await readMetricsHourly({ registry, brand }, await hourlyServicesFor(brand)) : await readMetrics({ registry, brand }, await servicesFor(brand));
+      const lines = batched ? await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand))) : await readMetrics({ registry, brand }, withRepos(await servicesFor(brand)));
       for (const line of lines) job.log(line);
     },
 

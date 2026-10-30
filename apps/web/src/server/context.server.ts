@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
-import { PostgresFakeNetworkLedger, TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { PostgresFakeNetworkLedger, TelemetryStore, type DraftSnapshotService, type GitHubApp, type GitHubRest, type MediaStore, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   assertPreviewSafe,
   attachTelemetryStore,
@@ -69,6 +69,8 @@ export interface AppContext {
   userTokens: GitHubUserTokens | undefined;
   secrets: SecretStore;
   deps: PipelineDeps;
+  /** With `launch-media` and its bucket in .env: where uploads are kept; otherwise it refuses every call, saying why */
+  media: MediaStore;
   /** Reads the settings again, after the Settings page saved them */
   refresh(): Promise<void>;
   /**
@@ -179,6 +181,7 @@ async function createContext(): Promise<AppContext> {
     userTokens: runtime.userTokens,
     secrets,
     deps,
+    media: runtime.media,
     refresh: runtime.refresh,
     settingsSaved: events.settingsSaved,
     announce: events.announce,

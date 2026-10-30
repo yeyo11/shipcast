@@ -3,12 +3,15 @@ import {
   CommentService,
   launchConfigOf,
   LaunchService,
+  pageFetcher,
   SettingsService,
+  SourcesService,
   PostService,
   ScheduleService,
   type CommentDeps,
   type EditDeps,
   type GitHubRest,
+  type MediaStore,
   type PipelineDeps,
   type Post,
   type Repositories,
@@ -59,3 +62,17 @@ export const settingsService = (deps: { registry: Pick<Repositories, 'settings'>
 /** Over the app's pipeline (the claim's registry and launches repo) and its GitHub (the pre-flight, the merge) */
 export const launchService = (deps: { registry: Pick<Repositories, 'launches'>; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest }) =>
   new LaunchService({ launches: deps.registry.launches, claims: deps.deps, github: deps.github });
+
+/**
+ * With `launch-sources`: launches made from sources, claimed through the launch service (a primary
+ * repo's release and its pre-flight) and fed by the guarded page fetcher and the media store
+ */
+export const sourcesService = (deps: { registry: Pick<Repositories, 'launches' | 'sources'>; deps: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>; github: GitHubRest; media: MediaStore }) =>
+  new SourcesService({
+    launchService: launchService(deps),
+    launches: deps.registry.launches,
+    sources: deps.registry.sources,
+    launchesRepo: deps.deps.launchesRepo,
+    media: deps.media,
+    fetchPage: pageFetcher(),
+  });

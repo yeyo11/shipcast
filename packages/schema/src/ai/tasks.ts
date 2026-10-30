@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { AiContentPack, contentPackJsonSchema } from '../content-pack.ts';
+import { AiContentPack, AiSourcesPack, contentPackJsonSchema, sourcesPackJsonSchema } from '../content-pack.ts';
 import { CheckAnswer, checkJsonSchema, ProfileReviewAnswer, profileReviewJsonSchema, ReplyAnswer, replyJsonSchema } from './answers.ts';
 
 /*
@@ -171,3 +171,17 @@ export const AI_TASK_DEFINITIONS = {
     limits: { maxSteps: 1, maxOutputTokens: 16, timeoutMs: 30_000, maxTurns: 1, maxBudgetUsd: 0.05 },
   }),
 } as const;
+
+/**
+ * A launch made from sources (packages/engine/src/sources/draft.ts, launch-sources): the pack read
+ * from a bundle of the sources (each repo, the fetched pages, the owner's text) with every statement
+ * tied to its sources. It is the pack task, from more than one repo's code, so it runs with the
+ * pack's settings, ceilings and budget, and is kept out of AI_TASK_DEFINITIONS, whose ids are one per task.
+ */
+export const SOURCES_PACK_TASK = task({
+  id: 'pack',
+  settingsTask: 'pack',
+  output: { schema: AiSourcesPack, jsonSchema: sourcesPackJsonSchema, name: 'content_pack' },
+  needsRepo: 'always',
+  limits: AI_TASK_DEFINITIONS.pack.limits,
+});

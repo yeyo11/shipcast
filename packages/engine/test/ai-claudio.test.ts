@@ -224,6 +224,21 @@ test('the runner: a workspace from the codeload URL, the analysis rules and the 
   }
 });
 
+test('the runner: a run that brings its own tarball (a launch made from sources) has its workspace made from it, and GitHub is not asked', async () => {
+  const fake = await claudio();
+  const gh = await github();
+  try {
+    const tarball = new Uint8Array([0x1f, 0x8b, 8, 0, 0, 0, 0, 0]);
+    const result = await runnerOn(fake.url, gh.url).run(answerTask('always'), { prompt: 'Answer.', repo: { name: 'launch-7', ref: 'article:x', hostDir: '/nowhere', archive: async () => tarball } });
+    assert.deepEqual(result.output, { answer: 'from claudio' });
+    assert.deepEqual(gh.seen, [], 'no archive URL asked for');
+    assert.deepEqual(fake.seen.map((s) => `${s.method} ${s.path}`), ['POST /api/workspaces', 'POST /api/v1/chat/completions', 'DELETE /api/workspaces/ws-1']);
+    assert.equal(fake.seen[0]!.headers['content-type'], 'application/gzip');
+  } finally {
+    await Promise.all([fake.close(), gh.close()]);
+  }
+});
+
 test('the runner deletes the workspace after a failed run and after an aborted one', async () => {
   const failing = await claudio((_, res) => json(res, 500, { error: { message: 'boom', type: 'server_error' } }));
   const gh = await github();

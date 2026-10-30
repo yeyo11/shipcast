@@ -1,6 +1,10 @@
 import {
+  archiveFolder,
   checkout,
+  cloneInto,
   currentAiTexts,
+  jobFolder,
+  pageFetcher,
   GitHubApp,
   GitHubRest,
   loadBrand,
@@ -176,6 +180,17 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
     ...(drafts && { drafts }),
+    // Phase 6 of the launch model: a launch made from sources, its bundle in a folder of the job's own
+    ...(flags.on('launch-sources') && {
+      sources: {
+        store: registry.sources,
+        launches: registry.launches,
+        folder: (name: string) => jobFolder({ ...workspace, perJob: split(roleFromEnv(env)) }, name),
+        clone: (repo: string, ref: string, hostPath: string, sha?: string) => cloneInto(workspace, repo, ref, hostPath, sha),
+        archive: archiveFolder,
+        fetchPage: pageFetcher(),
+      },
+    }),
   };
 
   return {

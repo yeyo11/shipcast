@@ -24,6 +24,12 @@ export const FLAGS = {
    * from SHIPCAST_MEDIA_* in .env. Off, the store refuses every call; nothing calls it yet
    */
   'launch-media': 'Launch media in the R2 media store',
+  /**
+   * Launch model, phase 6: a launch made from sources (text, URLs, several repos, uploaded media),
+   * a launch.yml's `sources` read when its release triggers it, and stars read per repo. Off, a
+   * launch is its one repo as before and `sources` in a launch.yml is parsed and ignored
+   */
+  'launch-sources': 'Launches made from sources: text, URLs, several repos and uploaded media',
 } as const;
 
 /**

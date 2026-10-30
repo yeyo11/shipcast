@@ -4,7 +4,7 @@ import type { z } from 'zod';
 import type { TimingKind, TimingOutcome } from '../telemetry/store.ts';
 import { toAiError } from './errors.ts';
 import type { RepoArchiveSource } from '../github.ts';
-import type { AiCallContext, AiMessageOptions, AiProviderDefinition, AiProviderSettings } from './providers/definition.ts';
+import type { AiCallContext, AiMessageOptions, AiProviderDefinition, AiProviderSettings, WorkspaceSource } from './providers/definition.ts';
 import { repoTools } from './repo-tools.ts';
 
 /*
@@ -64,9 +64,11 @@ export interface AiRunInput {
   /**
    * The repo a task reads, at its ref. A `local-tools` provider reads the job's checkout on this
    * machine (`hostDir`); a `remote-workspace` one, a workspace made from the repo's archive, so it
-   * needs no checkout.
+   * needs no checkout. With `archive`, that workspace is made from the gzip tarball it answers
+   * instead of the repo's archive URL: a launch made from sources is a folder of several repos and
+   * pages, which no single archive URL holds.
    */
-  repo?: { name: string; ref: string; hostDir?: string };
+  repo?: { name: string; ref: string; hostDir?: string; archive?: () => Promise<Uint8Array<ArrayBuffer>> };
   abortSignal?: AbortSignal;
   /**
    * This run's own ceilings over the task's, for an evaluation or a test. A spend ceiling the owner
@@ -132,7 +134,7 @@ interface Plan {
   limits: AiTaskLimits;
   tools: ToolSet;
   /** The repo a remote agent reads in a workspace of its own, prepared for the run */
-  remoteRepo: { name: string; ref: string } | undefined;
+  remoteRepo: { name: string; ref: string; archive?: () => Promise<Uint8Array<ArrayBuffer>> } | undefined;
   /** What the provider's call options are made of, but the workspace, which is known once it is prepared */
   call: AiCallContext;
   /** A message rather than a string when the provider caches it */
@@ -289,7 +291,7 @@ export class AiTaskRunner {
       modelId: setup.model || provider.defaultModel(settings),
       limits,
       tools,
-      remoteRepo: repo && remote ? { name: repo.name, ref: repo.ref } : undefined,
+      remoteRepo: repo && remote ? { name: repo.name, ref: repo.ref, ...(repo.archive && { archive: repo.archive }) } : undefined,
       call,
       system,
       messages,
@@ -316,14 +318,19 @@ export class AiTaskRunner {
     if (!plan.remoteRepo) return work(withCall());
     const workspaces = provider.workspaces?.(settings, this.#deps.fetch ? { fetch: this.#deps.fetch } : {});
     if (!workspaces) throw new Error(`the ${provider.name} reads the repository on its side but has no workspaces`);
-    if (!this.#deps.archives) throw new Error(`the ${provider.name} reads the repository from its archive: the runner has no archive source`);
-    const url = await this.#deps.archives.tarballUrl(plan.remoteRepo.name, plan.remoteRepo.ref);
-    const { id } = await workspaces.prepare({ url }, plan.signal);
+    const { id } = await workspaces.prepare(await this.#workspaceSource(plan.remoteRepo, provider.name), plan.signal);
     try {
       return await work(withCall({ id, allowedTools: ANALYSIS_RULES }));
     } finally {
       await workspaces.release(id).catch(() => undefined);
     }
+  }
+
+  /** What a remote workspace is made from: the tarball the run brings, or the repo's archive URL */
+  async #workspaceSource(repo: NonNullable<Plan['remoteRepo']>, providerName: string): Promise<WorkspaceSource> {
+    if (repo.archive) return { archive: await repo.archive() };
+    if (!this.#deps.archives) throw new Error(`the ${providerName} reads the repository from its archive: the runner has no archive source`);
+    return { url: await this.#deps.archives.tarballUrl(repo.name, repo.ref) };
   }
 
   /** Times the run under its task and provider, and turns its failure into an AiError */

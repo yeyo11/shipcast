@@ -145,6 +145,41 @@ export interface MetricSources {
     traffic(repo: string): Promise<RepoTraffic>;
     history(repo: string): Promise<RepoHistory>;
   };
+  /**
+   * With launch-sources: each launch's further repos, besides the primary one, by launch id. Their
+   * stars, forks and watchers are read like the primary's and kept apart, per repo, under
+   * `github:<owner/name>` (furtherRepoSource), so the launch's own `github` numbers stay its primary repo's
+   */
+  furtherRepos?: (launchIds: readonly number[]) => Promise<Map<number, string[]>>;
+}
+
+/** Where a launch's further repo's numbers are kept: beside the primary repo's `github`, never added to it */
+export const furtherRepoSource = (repo: string) => `github:${repo}`;
+
+/**
+ * Reads each further repo of the launches once and records its counts on every launch that has it.
+ * `isDue` lets the hourly read keep to the counts' cadence; the counts come from the hourly split
+ * where there is one, else from the whole stats.
+ */
+async function readFurtherRepos(
+  launches: readonly Launch[],
+  sources: MetricSources,
+  attempt: (what: string, fn: () => Promise<void>) => Promise<void>,
+  record: (launchId: number, source: string, values: Record<string, number | undefined>) => Promise<void>,
+  isDue: (launchId: number, source: string) => boolean = () => true,
+): Promise<void> {
+  if (!sources.furtherRepos || (!sources.githubRepo && !sources.github)) return;
+  const further = await sources.furtherRepos(launches.map((l) => l.id));
+  const byRepo = new Map<string, number[]>();
+  for (const [id, repos] of further) for (const repo of repos) byRepo.set(repo, [...(byRepo.get(repo) ?? []), id]);
+  for (const [repo, ids] of byRepo) {
+    const source = furtherRepoSource(repo);
+    if (!ids.some((id) => isDue(id, source))) continue;
+    await attempt(`${repo} GitHub`, async () => {
+      const counts = sources.githubRepo ? await sources.githubRepo.counts(repo) : await sources.github!.repoStats(repo);
+      for (const id of ids) await record(id, source, { stars: counts.stars, forks: counts.forks, watchers: counts.watchers });
+    });
+  }
 }
 
 export interface CollectResult {
@@ -399,6 +434,7 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
       });
     }
   }
+  await readFurtherRepos(launches, sources, attempt, record);
   // An article Google still lacks is the one case where asking it to read the sitemap again helps
   if (unindexed && sources.search) await attempt('sitemap', async () => void (await resubmitSitemap(registry, brand.site, sources.search!, now)));
   return { readings, problems };
@@ -746,6 +782,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       });
     }
   }
+  await readFurtherRepos(launches, sources, attempt, record, (id, source) => siteDue(id, source, 'stars', SITE_CADENCES.githubCounts.hours));
   if (unindexed && sources.search) await attempt('sitemap', async () => void (await resubmitSitemap(registry, brand.site, sources.search!, now)));
   return { readings, problems };
 }

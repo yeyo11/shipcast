@@ -5,7 +5,7 @@ import { jobsFeed } from './jobs.server';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { editingDeps } from './posts.server';
 import { profileApi } from './profiles.server';
-import { approve, armSchedule, startArticle, startLaunch, startPublishing } from './work.server';
+import { approve, armSchedule, startArticle, startLaunch, startPublishing, startSources, uploadSource } from './work.server';
 
 /**
  * Shared by /api/v1 and /mcp, so wrong tokens count once whichever door they knock on: per process as
@@ -39,5 +39,6 @@ export async function apiDeps(): Promise<ApiDeps> {
     checkComments,
     redraftComment,
     profiles: profileApi,
+    ...(ctx.flags.on('launch-sources') && { sources: { start: startSources, upload: uploadSource } }),
   };
 }

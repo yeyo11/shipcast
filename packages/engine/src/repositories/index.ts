@@ -11,6 +11,7 @@ import { AccountRepository } from './accounts.ts';
 import { CursorRepository } from './cursors.ts';
 import { DraftSnapshotRepository } from './draft-snapshots.ts';
 import { SettingRepository } from './settings.ts';
+import { LaunchSourceRepository } from './sources.ts';
 import { MetricRepository } from './metrics.ts';
 import { PostRepository } from './posts.ts';
 import { RawQueries } from './sql.ts';
@@ -38,6 +39,7 @@ export * from './accounts.ts';
 export * from './cursors.ts';
 export * from './draft-snapshots.ts';
 export * from './settings.ts';
+export * from './sources.ts';
 export * from './metrics.ts';
 export * from './posts.ts';
 export * from './sql.ts';
@@ -58,6 +60,8 @@ export interface Repositories {
   /** The drafts pull requests as last read from GitHub: what the launch page shows (phase 7) */
   readonly drafts: DraftSnapshotRepository;
   readonly settings: SettingRepository;
+  /** What each launch is about: its sources and the files uploaded for them (launch-sources) */
+  readonly sources: LaunchSourceRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
   /** The posts' publish attempts, the outbox a worker claims a piece in before it calls the network */
@@ -80,6 +84,7 @@ export function repositoriesOn(db: Database): Repositories {
     cursors: new CursorRepository(db),
     drafts: new DraftSnapshotRepository(db),
     settings: new SettingRepository(db),
+    sources: new LaunchSourceRepository(db),
     metrics: new MetricRepository(db),
     posts: new PostRepository(db),
     attempts: new PublishAttempts(db),
