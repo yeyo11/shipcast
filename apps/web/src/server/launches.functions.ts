@@ -217,6 +217,8 @@ export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
     repos: await repoList({ github: ctx.github, cache: ctx.flags.on('realtime-ui') ? ctx.process.shared.cache : undefined }, b.github),
     // Whether a launch can also be made from sources here (launch-sources)
     sources: ctx.flags.on('launch-sources'),
+    // Whether new drafts wait in Shipcast rather than in a pull request (app-review)
+    appReview: ctx.flags.on('app-review'),
   };
 });
 

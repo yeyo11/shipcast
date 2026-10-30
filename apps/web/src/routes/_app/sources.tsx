@@ -47,7 +47,7 @@ function describe(source: Source): string {
 }
 
 function LaunchFromSources() {
-  const { repos, ready, sources: enabled } = Route.useLoaderData();
+  const { repos, ready, sources: enabled, appReview } = Route.useLoaderData();
   const navigate = useNavigate();
   const toast = useToast();
   const [title, setTitle] = useState('');
@@ -221,7 +221,7 @@ function LaunchFromSources() {
             Draft the launch
           </button>
           <span className="muted" style={{ fontSize: 14 }}>
-            The drafts wait in a pull request until you approve them.
+            {appReview ? 'The drafts wait in Shipcast until you approve them.' : 'The drafts wait in a pull request until you approve them.'}
           </span>
         </div>
       </form>

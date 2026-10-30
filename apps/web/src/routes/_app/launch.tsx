@@ -17,7 +17,7 @@ export const Route = createFileRoute('/_app/launch')({
 });
 
 function LaunchARepo() {
-  const { owner, repos, sources } = Route.useLoaderData();
+  const { owner, repos, sources, appReview } = Route.useLoaderData();
   const navigate = useNavigate();
   const [repo, setRepo] = useState('');
   const [releases, setReleases] = useState<Awaited<ReturnType<typeof listReleases>>>([]);
@@ -110,7 +110,7 @@ function LaunchARepo() {
                 <span>Publish without review</span>
               </label>
             </div>
-            <small>{direct ? 'The drafts go straight onto the blog’s main branch and every approved channel publishes once the site is live.' : 'The drafts wait in a pull request until you approve them here or merge it on GitHub.'}</small>
+            <small>{direct ? 'The drafts go straight onto the blog’s main branch and every approved channel publishes once the site is live.' : appReview ? 'The drafts wait in Shipcast until you approve them here.' : 'The drafts wait in a pull request until you approve them here or merge it on GitHub.'}</small>
           </fieldset>
         )}
         <div className="row">
