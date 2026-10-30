@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T06:19:22.606949087Z
-updated_at: 2026-10-30T06:36:30.858864244Z
+updated_at: 2026-10-30T06:59:53.066780487Z
 tags:
     - launches
     - launch-model
@@ -42,8 +42,8 @@ the preview address). The entry points only dispatch on the model:
 
 | Use case | Entry points | With an `app` launch |
 | --- | --- | --- |
-| Edit a draft | the launch page's save, the edit page, `LaunchService.editDraft` | a `draft_versions` row of the owner's (`origin = 'owner'`), checked for its network's length; refused for a path that is not a draft, a piece already out (edited on its channel), or a launch no longer drafted. No GitHub call |
-| Approve | the page's Approve, `POST /launches/{id}/approve` (and MCP's `approve_drafts`), `LaunchService.approve` | an `approvals` row naming the current version of every draft; the approval in force before is revoked. Then publishing is queued, as after a merge |
+| Edit a draft | the launch page's save, the edit page, `LaunchService.editDraft` | a `draft_versions` row of the owner's (`origin = 'owner'`, `author` the signed-in login), checked for its network's length; refused for a path that is not a draft, a piece already out (edited on its channel), or a launch no longer drafted. No GitHub call |
+| Approve | the page's Approve, `POST /launches/{id}/approve` (and MCP's `approve_drafts`), `LaunchService.approve` | an `approvals` row naming the current version of every draft, `by` the signed-in login (`api` from the REST API, `owner` when a caller says nothing); the approval in force before is revoked. Then publishing is queued, as after a merge |
 | Read the review | the launch page, `GET /launches/{id}`, through `LaunchReadService.review` | from the rows only (below) |
 | Whether anything can go out | the round, a draft's end, `approval()` | `AppReviewService.approval` |
 | Publish | `publishLaunch` through every entry point | reads the approved versions; the site commit first |
@@ -134,8 +134,7 @@ run on a preview.
 
 ## Known limits
 
-- Who approved is recorded as `owner` from the app and the API (`shipcast` for "publish directly"):
-  the session's login is not passed down yet.
+- A REST approval is recorded as `api`, not the token's name, which the routes are not handed.
 - A crash between the commit and its cursor would commit the same files again on the next try (an
   empty change on GitHub, a second deploy); the window is one database write.
 - A draft pull request of a preview merged by hand on GitHub would put the article on the site
@@ -151,7 +150,7 @@ a failed media store failing the draft, the review and the article preview's esc
 publishing before the article's approval, one commit with the article and media then every channel,
 an edit after approving holding one channel, a failed commit tried again with nothing out before the
 article is live, `auto` channels without approval (and a media-only commit with the blog off),
-"publish directly", the real site's preview, and a process without the flag.
+"publish directly", the real site's preview, a process without the flag, and who edited and approved.
 `packages/runtime/test/runtime.test.ts`: the start refuses `app-review` without `launch-store-read`
 or `launch-media`, and builds no service (the pipeline opens pull requests) unless it is named.
 
