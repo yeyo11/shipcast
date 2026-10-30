@@ -27,7 +27,13 @@ function differencesOf(value: string): string[] {
   }
 }
 
-async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
+/** What this process runs with that changes what the bell reads */
+export interface AttentionOptions {
+  /** The shadow write (`launch-store`) is on: only it writes the cursors whose differences the bell shows */
+  launchStore?: boolean;
+}
+
+async function readInput(registry: AttentionRegistry, options: AttentionOptions): Promise<AttentionInput> {
   const [launches, failures, metricProblems, accounts, facets, newest, scheduled, canonicals, stored] = await Promise.all([
     registry.launches.recent(60),
     registry.cursors.cursorsWithPrefix(failurePrefix()),
@@ -37,7 +43,8 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
     registry.comments.newestWaitingCommentId(false),
     registry.posts.scheduledPosts(),
     registry.cursors.cursorsWithPrefix(CANONICAL_PREFIX),
-    registry.cursors.cursorsWithPrefix(LAUNCH_STORE_PREFIX),
+    // Every page asks for the bell: with the flag off, the query is not made at all
+    options.launchStore ? registry.cursors.cursorsWithPrefix(LAUNCH_STORE_PREFIX) : Promise.resolve([]),
   ]);
   return {
     launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt })),
@@ -60,8 +67,8 @@ async function readInput(registry: AttentionRegistry): Promise<AttentionInput> {
  * The dismissals of lines no longer there are forgotten here, so a condition that comes back after
  * it ended is shown again (see attention.ts).
  */
-export async function attentionFor(registry: AttentionRegistry): Promise<Attention> {
-  const input = await readInput(registry);
+export async function attentionFor(registry: AttentionRegistry, options: AttentionOptions = {}): Promise<Attention> {
+  const input = await readInput(registry, options);
   const keys = attentionItems(input).map((i) => i.key);
   await registry.attention.clearAttentionDismissals(keys);
   return buildAttention({ ...input, dismissed: await registry.attention.dismissedAttention(keys) });

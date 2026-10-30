@@ -157,7 +157,24 @@ test("with launch-store, a launch whose copy in Shipcast differs from its pull r
   const second = await aPublishedLaunch(registry, [], { ref: 'v2.0.0' });
   await registry.cursors.setCursor(launchStoreKey(launch.id), JSON.stringify({ at: now.toISOString(), differences: ['og.png: no media in the database'] }));
   await registry.cursors.setCursor(launchStoreKey(second.launch.id), 'not json');
-  const drift = (await attentionFor(registry)).items.filter((i) => i.kind === 'drift');
+  const drift = (await attentionFor(registry, { launchStore: true })).items.filter((i) => i.kind === 'drift');
   assert.equal(drift.length, 1);
   assert.match(drift[0]!.text, /og\.png: no media in the database/);
+});
+
+test('without launch-store the bell never reads the launch-store cursors: one query less on every page', async () => {
+  // Until the fix the bell read them on every load, flag on or off, though only the shadow write writes them
+  const registry = await memoryRegistry();
+  const { launch } = await aPublishedLaunch(registry, []);
+  await registry.cursors.setCursor(launchStoreKey(launch.id), JSON.stringify({ at: now.toISOString(), differences: ['pack.json: no pack in the database'] }));
+  const asked: string[] = [];
+  const cursors = registry.cursors;
+  const spied = { ...registry, cursors: Object.assign(Object.create(cursors) as typeof cursors, { cursorsWithPrefix: (prefix: string) => (asked.push(prefix), cursors.cursorsWithPrefix(prefix)) }) };
+  const off = await attentionFor(spied);
+  assert.ok(!asked.includes('launch-store:'));
+  assert.equal(off.items.filter((i) => i.kind === 'drift').length, 0);
+  asked.length = 0;
+  const on = await attentionFor(spied, { launchStore: true });
+  assert.ok(asked.includes('launch-store:'));
+  assert.equal(on.items.filter((i) => i.kind === 'drift').length, 1);
 });

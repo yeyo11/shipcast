@@ -8,7 +8,10 @@ import { InvalidInput, list, object } from './input';
 const MAX_KEYS = 100;
 
 /** The bell's list, from the registry alone (attention.server.ts) */
-export const getAttention = createServerFn({ method: 'GET' }).handler(async () => attentionFor((await appContext()).registry));
+export const getAttention = createServerFn({ method: 'GET' }).handler(async () => {
+  const ctx = await appContext();
+  return attentionFor(ctx.registry, { launchStore: ctx.launchStore !== undefined });
+});
 
 function keysInput(input: unknown): { keys: string[] } {
   const keys = list(object(input, 'input').keys, 'keys');
