@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, max, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, max, or } from 'drizzle-orm';
 import type { Database } from '../db/connect.ts';
 import { approvals, drafts, draftVersions, launchChannels, launches, launchSources, media, nowIso, packs, posts } from '../db/schema.ts';
 import { lockFor, transaction } from './transaction.ts';
@@ -151,6 +151,19 @@ export class LaunchStoreRepository {
       this.#db.select({ source: launches.channelsSource }).from(launches).where(eq(launches.id, launchId)),
     ]);
     return { rows, source: launch?.source ?? null };
+  }
+
+  /**
+   * Whether the launch's channel rows were written by the import (docs/launch-import.md), which turns
+   * off the channels a launch never published on: what publishing then goes by instead of launch.yml
+   */
+  async importedChannels(launchId: number): Promise<boolean> {
+    const [row] = await this.#db
+      .select({ channel: launchChannels.channel })
+      .from(launchChannels)
+      .where(and(eq(launchChannels.launchId, launchId), isNotNull(launchChannels.importBatch)))
+      .limit(1);
+    return row !== undefined;
   }
 
   /** Every draft of the launch with its current version, by channel and piece */

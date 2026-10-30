@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
 import { Brand, parseLaunchConfig, draftBody, type Channel } from '@shipcast/schema';
-import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, reschedulePost, scheduleLaunch, ScheduleRefused, type Repositories, type Publishers } from '../src/index.ts';
+import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, PublishingService, reschedulePost, scheduleLaunch, ScheduleRefused, type Repositories, type Publishers } from '../src/index.ts';
 import { FakeConnectors, FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -732,4 +732,41 @@ test('an article body sent to dev.to and Hashnode has its root-relative links on
       '```',
     ].join('\n'),
   );
+});
+
+test('an imported launch publishes by its channel rows: a channel the import turned off never goes out, on a round or a retry', async () => {
+  // The import turns off every channel the launch never published on (docs/launch-import.md). Until the
+  // fix publishing still read launch.yml at the tag, so a round or a Try again sent that channel after all
+  const registry = await memoryRegistry();
+  const launch = await drafted(registry);
+  const launchYml = merged['yeyo11/claudio/.github/launch.yml@v0.8.2']!;
+  await registry.launchStore.addPack(launch.id, pack as unknown as Record<string, unknown>, { importBatch: 'batch-1' });
+  await registry.launchStore.replaceChannels(
+    launch.id,
+    [
+      { channel: 'blog', mode: 'approval' },
+      { channel: 'devto', mode: 'approval' },
+      { channel: 'bluesky', mode: 'off', note: 'never published: turned off by the import' },
+      { channel: 'mastodon', mode: 'approval' },
+      { channel: 'instagram', mode: 'approval' },
+    ],
+    launchYml,
+    'batch-1',
+  );
+  const service = new PublishingService({ registry, github: gh('merged'), launchesRepo: 'yeyo11/launches' });
+  const { calls, publishers } = recorder();
+
+  const round = await service.publish(launch, brand, { publishers, fetch: site(true) }, 'job-1');
+  assert.equal(round.state, 'published');
+  assert.deepEqual(calls.map((c) => c.channel), ['devto', 'mastodon', 'instagram']);
+
+  await service.retry(launch.id, 'bluesky');
+  await service.publish((await registry.launches.get(launch.id))!, brand, { publishers, fetch: site(true) }, 'job-2');
+  assert.ok(!calls.some((c) => c.channel === 'bluesky'), 'Try again does not turn the channel back on');
+
+  // A launch the shadow write stored (no import) still publishes by launch.yml, as before
+  const other = await registry.launches.setStatus((await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.3', trigger: 'release', kind: 'launch', brand: 'personal' })).launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/4');
+  await registry.launchStore.replaceChannels(other.id, [{ channel: 'bluesky', mode: 'off' }], launchYml);
+  assert.equal(await registry.launchStore.importedChannels(other.id), false);
+  assert.equal(await registry.launchStore.importedChannels(launch.id), true);
 });

@@ -6,6 +6,7 @@ import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
 import { resubmitSitemap, type MetricSources } from './metrics.ts';
+import { storedChannelConfig } from './launch-import.ts';
 import { loadProjects } from './pipeline.ts';
 import { isRetryable, notSentBecause, type PieceGuard } from './publishing/guard.ts';
 import { failureKey as failureKeyOf } from './publishing/retry.ts';
@@ -144,7 +145,11 @@ export function waitsUntil(post: Post, now: Date): string | undefined {
 
 export interface PublishDeps {
   github: GitHubSource;
-  registry: Pick<Repositories, 'launches' | 'posts' | 'cursors'>;
+  /**
+   * `launchStore`, when the registry has it (every real one does), is read for an imported launch's
+   * channel rows; optional so the callers typed on fewer repositories need not change
+   */
+  registry: Pick<Repositories, 'launches' | 'posts' | 'cursors'> & Partial<Pick<Repositories, 'launchStore'>>;
   launchesRepo: string;
   publishers: Publishers;
   /**
@@ -316,7 +321,10 @@ async function mergedContent(launch: Launch, deps: PublishDeps): Promise<LaunchC
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
   if (!packText) return { state: 'waiting', launch, reason: `${dir}/pack.json is not on the default branch yet` };
   const pack = (deps.channels ? contentPackFor(deps.channels) : ContentPack).parse(JSON.parse(packText));
-  const config = await launchConfigOf(github, deps.launchesRepo, launch);
+  // An imported launch goes by its channel rows: the import turned off the channels it never published
+  // on, and launch.yml at the tag still has them on, so a round or a Try again would send them after all
+  const imported = registry.launchStore && (await registry.launchStore.importedChannels(launch.id)) ? storedChannelConfig(await registry.launchStore.channels(launch.id)) : undefined;
+  const config = imported ?? (await launchConfigOf(github, deps.launchesRepo, launch));
   if (!config) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
   return { pack, config, read: (path) => github.fileAt(deps.launchesRepo, path, 'HEAD'), waits: new Map() };
 }
