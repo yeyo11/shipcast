@@ -149,237 +149,240 @@ async function visit(context: BrowserContext, path: string, name: string, width:
 }
 
 const browser = await chromium.launch({ executablePath: values.browser });
-const context = await browser.newContext({ storageState: values.state && !values.link ? values.state : undefined, reducedMotion: 'reduce' });
-if (values.link) {
-  const page = await context.newPage();
-  await page.goto(values.link, { waitUntil: 'networkidle' });
-  if (new URL(page.url()).pathname === '/login') throw new Error('the sign-in link did not sign in: it works once and for 15 minutes');
-  await page.close();
-  if (values.state) await context.storageState({ path: values.state });
-}
-
-// A launch's page: the first launch on the list
-const first = await context.newPage();
-await first.goto(`${base}/`, { waitUntil: 'networkidle' });
-const launchHref = await first.locator('a[href^="/launches/"]').first().getAttribute('href').catch(() => null);
-await first.close();
-
-const PAGES: Array<[string, string]> = [
-  ['/', 'launches'],
-  ...(launchHref ? ([[launchHref, 'launch']] as Array<[string, string]>) : []),
-  ['/launch', 'launch-a-repo'],
-  ['/write', 'write'],
-  ['/channels', 'channels'],
-  ['/channels/mastodon', 'connect'],
-  ['/comments', 'comments'],
-  ['/settings', 'settings'],
-  ['/settings/automation', 'automation'],
-  ['/settings/ai', 'ai'],
-  ['/settings/api', 'api'],
-  ['/stats', 'stats'],
-  ['/design/components', 'components'],
-  ['/no-such-page', 'not-found'],
-];
-
-for (const width of widths) {
-  for (const [path, name] of PAGES) (await visit(context, path, name, width)).close();
-
-  // The command palette, opened by its shortcut
-  const palette = await visit(context, '/', 'launches-palette', width);
-  await palette.keyboard.press('Control+K');
-  await palette.getByRole('dialog', { name: 'Command palette' }).waitFor();
-  await palette.keyboard.type('chan');
-  await inspect(palette, 'palette', width);
-  await shot(palette, 'dialog-palette', width, false);
-  await palette.close();
-
-  // An alert dialog, in place of window.confirm
-  const alert = await visit(context, '/design/components', 'components-alert', width);
-  await alert.getByRole('button', { name: 'Disconnect', exact: true }).first().click();
-  await alert.getByRole('alertdialog').waitFor();
-  await inspect(alert, 'alert-dialog', width);
-  await shot(alert, 'dialog-alert', width, false);
-  await alert.close();
-
-  // The phone's More drawer
-  if (width < 860) {
-    const more = await visit(context, '/', 'launches-more', width);
-    await more.getByRole('button', { name: /^More/ }).click();
-    await more.getByRole('dialog', { name: 'More' }).waitFor();
-    await inspect(more, 'more-drawer', width);
-    await shot(more, 'drawer-more', width, false);
-    await more.close();
+// A check that throws (a sign-in that failed, a page that never loads) still closes its browser
+try {
+  const context = await browser.newContext({ storageState: values.state && !values.link ? values.state : undefined, reducedMotion: 'reduce' });
+  if (values.link) {
+    const page = await context.newPage();
+    await page.goto(values.link, { waitUntil: 'networkidle' });
+    if (new URL(page.url()).pathname === '/login') throw new Error('the sign-in link did not sign in: it works once and for 15 minutes');
+    await page.close();
+    if (values.state) await context.storageState({ path: values.state });
   }
 
-  // The writing assistant on Write. On a phone (ChatPanel's PHONE, 760 px) it is a floating bubble
-  // that opens a full-screen sheet; wider, a panel beside the text that starts open. Only the
-  // history is opened, and a past session read back: nothing is sent to the assistant.
-  {
-    const write = await visit(context, '/write', 'write-assistant', width);
-    const bubble = write.getByRole('button', { name: 'Open the assistant’s chat' });
-    let chat: Locator | null = write.locator('.chat-panel');
-    if (width <= 760) {
-      if (await shows(bubble)) {
-        await inspectPopup(write, bubble, 'assistant-bubble', width);
-        await bubble.first().click();
-        chat = write.getByRole('dialog', { name: 'The assistant’s chat' });
-        if (!(await shows(chat))) chat = null;
-      } else chat = null;
-    } else if (!(await shows(chat, 2000))) {
-      // Closed to its icon (the panel may stop starting open): the icon opens it
-      if (await shows(bubble, 2000)) {
-        await bubble.first().click();
-        if (!(await shows(chat))) chat = null;
-      } else chat = null;
-    }
-    if (!chat) skip('assistant', width, 'no assistant bubble or panel on /write');
-    else {
-      await inspectPopup(write, chat, width <= 760 ? 'assistant-sheet' : 'assistant-panel', width);
-      await chat.getByRole('button', { name: 'Past sessions' }).click();
-      const history = chat.locator('.chat-history');
-      await history.waitFor();
-      // The first page of sessions has loaded, or failed, once "Loading…" is gone
-      await history.getByRole('status').filter({ hasText: 'Loading' }).waitFor({ state: 'detached', timeout: 10000 }).catch(() => undefined);
-      await inspectPopup(write, chat, 'assistant-history', width);
-      const session = chat.locator('.chat-session');
-      if (await shows(session, 1000)) {
-        // Reading a session back is a GET; Accept and Reject in it are left alone
-        await session.first().click();
-        await chat.locator('.chat-history').waitFor({ state: 'detached', timeout: 10000 }).catch(() => undefined);
-        await inspectPopup(write, chat, 'assistant-session', width);
-      } else skip('assistant-session', width, 'no saved assistant session to read back');
-      await chat.getByRole('button', { name: 'Close the chat' }).click();
-    }
-    await write.close();
-  }
+  // A launch's page: the first launch on the list
+  const first = await context.newPage();
+  await first.goto(`${base}/`, { waitUntil: 'networkidle' });
+  const launchHref = await first.locator('a[href^="/launches/"]').first().getAttribute('href').catch(() => null);
+  await first.close();
 
-  // The tour, started as the owner starts it: "Take the tour" in the user menu, or in More on a
-  // phone. Its first two steps; Next only moves between pages, and Escape ends it.
-  {
-    const home = await visit(context, '/', 'launches-tour', width);
-    let asked = false;
+  const PAGES: Array<[string, string]> = [
+    ['/', 'launches'],
+    ...(launchHref ? ([[launchHref, 'launch']] as Array<[string, string]>) : []),
+    ['/launch', 'launch-a-repo'],
+    ['/write', 'write'],
+    ['/channels', 'channels'],
+    ['/channels/mastodon', 'connect'],
+    ['/comments', 'comments'],
+    ['/settings', 'settings'],
+    ['/settings/automation', 'automation'],
+    ['/settings/ai', 'ai'],
+    ['/settings/api', 'api'],
+    ['/stats', 'stats'],
+    ['/design/components', 'components'],
+    ['/no-such-page', 'not-found'],
+  ];
+
+  for (const width of widths) {
+    for (const [path, name] of PAGES) (await visit(context, path, name, width)).close();
+
+    // The command palette, opened by its shortcut
+    const palette = await visit(context, '/', 'launches-palette', width);
+    await palette.keyboard.press('Control+K');
+    await palette.getByRole('dialog', { name: 'Command palette' }).waitFor();
+    await palette.keyboard.type('chan');
+    await inspect(palette, 'palette', width);
+    await shot(palette, 'dialog-palette', width, false);
+    await palette.close();
+
+    // An alert dialog, in place of window.confirm
+    const alert = await visit(context, '/design/components', 'components-alert', width);
+    await alert.getByRole('button', { name: 'Disconnect', exact: true }).first().click();
+    await alert.getByRole('alertdialog').waitFor();
+    await inspect(alert, 'alert-dialog', width);
+    await shot(alert, 'dialog-alert', width, false);
+    await alert.close();
+
+    // The phone's More drawer
     if (width < 860) {
-      await home.getByRole('button', { name: /^More/ }).click();
-      const take = home.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Take the tour' });
-      if (await shows(take)) {
-        await take.click();
-        asked = true;
+      const more = await visit(context, '/', 'launches-more', width);
+      await more.getByRole('button', { name: /^More/ }).click();
+      await more.getByRole('dialog', { name: 'More' }).waitFor();
+      await inspect(more, 'more-drawer', width);
+      await shot(more, 'drawer-more', width, false);
+      await more.close();
+    }
+
+    // The writing assistant on Write. On a phone (ChatPanel's PHONE, 760 px) it is a floating bubble
+    // that opens a full-screen sheet; wider, a panel beside the text that starts open. Only the
+    // history is opened, and a past session read back: nothing is sent to the assistant.
+    {
+      const write = await visit(context, '/write', 'write-assistant', width);
+      const bubble = write.getByRole('button', { name: 'Open the assistant’s chat' });
+      let chat: Locator | null = write.locator('.chat-panel');
+      if (width <= 760) {
+        if (await shows(bubble)) {
+          await inspectPopup(write, bubble, 'assistant-bubble', width);
+          await bubble.first().click();
+          chat = write.getByRole('dialog', { name: 'The assistant’s chat' });
+          if (!(await shows(chat))) chat = null;
+        } else chat = null;
+      } else if (!(await shows(chat, 2000))) {
+        // Closed to its icon (the panel may stop starting open): the icon opens it
+        if (await shows(bubble, 2000)) {
+          await bubble.first().click();
+          if (!(await shows(chat))) chat = null;
+        } else chat = null;
       }
-    } else {
-      await home.getByRole('button', { name: /^Signed in as / }).click();
-      const take = home.getByRole('menuitem', { name: 'Take the tour' });
-      if (await shows(take)) {
-        await take.click();
-        asked = true;
+      if (!chat) skip('assistant', width, 'no assistant bubble or panel on /write');
+      else {
+        await inspectPopup(write, chat, width <= 760 ? 'assistant-sheet' : 'assistant-panel', width);
+        await chat.getByRole('button', { name: 'Past sessions' }).click();
+        const history = chat.locator('.chat-history');
+        await history.waitFor();
+        // The first page of sessions has loaded, or failed, once "Loading…" is gone
+        await history.getByRole('status').filter({ hasText: 'Loading' }).waitFor({ state: 'detached', timeout: 10000 }).catch(() => undefined);
+        await inspectPopup(write, chat, 'assistant-history', width);
+        const session = chat.locator('.chat-session');
+        if (await shows(session, 1000)) {
+          // Reading a session back is a GET; Accept and Reject in it are left alone
+          await session.first().click();
+          await chat.locator('.chat-history').waitFor({ state: 'detached', timeout: 10000 }).catch(() => undefined);
+          await inspectPopup(write, chat, 'assistant-session', width);
+        } else skip('assistant-session', width, 'no saved assistant session to read back');
+        await chat.getByRole('button', { name: 'Close the chat' }).click();
       }
+      await write.close();
     }
-    const card = home.locator('.tour-card');
-    if (!asked) skip('tour', width, 'no "Take the tour" entry');
-    else if (!(await shows(card, 15000))) skip('tour', width, 'the tour asked for opened no card');
-    else {
-      for (const n of [1, 2]) {
-        // A step is shown once its count reads it and the card is no longer moving to it
-        await card.locator('.tour-count').filter({ hasText: new RegExp(`^\\s*${n}\\s*/`) }).waitFor({ timeout: 15000 });
-        await home.locator('.tour-card:not([aria-busy="true"])').waitFor({ timeout: 15000 });
-        await inspectPopup(home, card, `tour-step-${n}`, width);
-        if (n === 1) await card.getByRole('button', { name: 'Next' }).click();
+
+    // The tour, started as the owner starts it: "Take the tour" in the user menu, or in More on a
+    // phone. Its first two steps; Next only moves between pages, and Escape ends it.
+    {
+      const home = await visit(context, '/', 'launches-tour', width);
+      let asked = false;
+      if (width < 860) {
+        await home.getByRole('button', { name: /^More/ }).click();
+        const take = home.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Take the tour' });
+        if (await shows(take)) {
+          await take.click();
+          asked = true;
+        }
+      } else {
+        await home.getByRole('button', { name: /^Signed in as / }).click();
+        const take = home.getByRole('menuitem', { name: 'Take the tour' });
+        if (await shows(take)) {
+          await take.click();
+          asked = true;
+        }
       }
-      await home.keyboard.press('Escape');
+      const card = home.locator('.tour-card');
+      if (!asked) skip('tour', width, 'no "Take the tour" entry');
+      else if (!(await shows(card, 15000))) skip('tour', width, 'the tour asked for opened no card');
+      else {
+        for (const n of [1, 2]) {
+          // A step is shown once its count reads it and the card is no longer moving to it
+          await card.locator('.tour-count').filter({ hasText: new RegExp(`^\\s*${n}\\s*/`) }).waitFor({ timeout: 15000 });
+          await home.locator('.tour-card:not([aria-busy="true"])').waitFor({ timeout: 15000 });
+          await inspectPopup(home, card, `tour-step-${n}`, width);
+          if (n === 1) await card.getByRole('button', { name: 'Next' }).click();
+        }
+        await home.keyboard.press('Escape');
+      }
+      await home.close();
     }
-    await home.close();
-  }
 
-  // The calendar as Stats opens it: Chart, then the custom range's day picker (a popover in a
-  // popover, a sheet over a sheet on a phone). Days are not picked and the range is not shown.
-  {
-    const stats = await visit(context, '/stats', 'stats-picker', width);
-    const chartButton = stats.locator('.stats-filterbar').getByRole('button', { name: /^Chart/ });
-    if (!(await shows(chartButton))) skip('stats-date-picker', width, 'no Chart filter on /stats');
+    // The calendar as Stats opens it: Chart, then the custom range's day picker (a popover in a
+    // popover, a sheet over a sheet on a phone). Days are not picked and the range is not shown.
+    {
+      const stats = await visit(context, '/stats', 'stats-picker', width);
+      const chartButton = stats.locator('.stats-filterbar').getByRole('button', { name: /^Chart/ });
+      if (!(await shows(chartButton))) skip('stats-date-picker', width, 'no Chart filter on /stats');
+      else {
+        await chartButton.click();
+        const chart = stats.getByRole('dialog', { name: 'The chart' });
+        await chart.waitFor();
+        await inspectPopup(stats, chart, 'stats-chart', width);
+        await chart.getByRole('button', { name: /^Custom range:/ }).click();
+        const calendar = stats.getByRole('dialog', { name: 'Custom range' });
+        await calendar.waitFor();
+        await inspectPopup(stats, calendar, 'stats-date-picker', width);
+        await stats.keyboard.press('Escape');
+      }
+      await stats.close();
+    }
+
+    // The same day picker and the time field on a launch's schedule, which only a launch with a
+    // channel left to schedule shows. The calendar opens and closes; Schedule is never pressed.
+    if (!launchHref) skip('schedule', width, 'no launch to open');
     else {
-      await chartButton.click();
-      const chart = stats.getByRole('dialog', { name: 'The chart' });
-      await chart.waitFor();
-      await inspectPopup(stats, chart, 'stats-chart', width);
-      await chart.getByRole('button', { name: /^Custom range:/ }).click();
-      const calendar = stats.getByRole('dialog', { name: 'Custom range' });
-      await calendar.waitFor();
-      await inspectPopup(stats, calendar, 'stats-date-picker', width);
-      await stats.keyboard.press('Escape');
+      const launch = await visit(context, launchHref, 'launch-schedule', width);
+      const day = launch.getByRole('button', { name: /^Day for / });
+      if (!(await shows(day, 2000))) skip('schedule', width, 'the first launch has no channel to schedule');
+      else {
+        await inspectPopup(launch, launch.locator('.sched-pick'), 'schedule-fields', width);
+        await day.first().click();
+        const calendar = launch.getByRole('dialog', { name: /^Day for / });
+        await calendar.waitFor();
+        await inspectPopup(launch, calendar, 'schedule-date-picker', width);
+        await launch.keyboard.press('Escape');
+      }
+      await launch.close();
     }
-    await stats.close();
-  }
 
-  // The same day picker and the time field on a launch's schedule, which only a launch with a
-  // channel left to schedule shows. The calendar opens and closes; Schedule is never pressed.
-  if (!launchHref) skip('schedule', width, 'no launch to open');
-  else {
-    const launch = await visit(context, launchHref, 'launch-schedule', width);
-    const day = launch.getByRole('button', { name: /^Day for / });
-    if (!(await shows(day, 2000))) skip('schedule', width, 'the first launch has no channel to schedule');
-    else {
-      await inspectPopup(launch, launch.locator('.sched-pick'), 'schedule-fields', width);
-      await day.first().click();
-      const calendar = launch.getByRole('dialog', { name: /^Day for / });
-      await calendar.waitFor();
-      await inspectPopup(launch, calendar, 'schedule-date-picker', width);
-      await launch.keyboard.press('Escape');
+    // The Comments filters: a popover on a desktop, a bottom sheet on a phone, and a Select's list
+    // opened inside it. Choosing an option would only filter, but none is chosen: Escape closes it.
+    {
+      const comments = await visit(context, '/comments', 'comments-filters', width);
+      const button = comments.getByRole('search', { name: 'Filter the comments' }).getByRole('button', { name: /^Filters/ });
+      if (!(await shows(button))) skip('comments-filters', width, 'no Filters button on /comments');
+      else {
+        await button.click();
+        const filters = comments.getByRole('dialog', { name: 'Filters' });
+        await filters.waitFor();
+        await inspectPopup(comments, filters, 'comments-filters', width);
+        const state = filters.getByRole('combobox', { name: 'State' });
+        if (await shows(state, 1000)) {
+          await state.click();
+          const list = comments.getByRole('listbox');
+          if (await shows(list)) {
+            await inspectPopup(comments, list, 'comments-filter-list', width);
+            await comments.keyboard.press('Escape');
+          } else skip('comments-filter-list', width, 'the State select opened no list');
+        } else skip('comments-filter-list', width, 'no State select in the filters');
+        await comments.keyboard.press('Escape');
+      }
+      await comments.close();
     }
-    await launch.close();
-  }
 
-  // The Comments filters: a popover on a desktop, a bottom sheet on a phone, and a Select's list
-  // opened inside it. Choosing an option would only filter, but none is chosen: Escape closes it.
-  {
-    const comments = await visit(context, '/comments', 'comments-filters', width);
-    const button = comments.getByRole('search', { name: 'Filter the comments' }).getByRole('button', { name: /^Filters/ });
-    if (!(await shows(button))) skip('comments-filters', width, 'no Filters button on /comments');
-    else {
-      await button.click();
-      const filters = comments.getByRole('dialog', { name: 'Filters' });
-      await filters.waitFor();
-      await inspectPopup(comments, filters, 'comments-filters', width);
-      const state = filters.getByRole('combobox', { name: 'State' });
-      if (await shows(state, 1000)) {
-        await state.click();
-        const list = comments.getByRole('listbox');
-        if (await shows(list)) {
-          await inspectPopup(comments, list, 'comments-filter-list', width);
-          await comments.keyboard.press('Escape');
-        } else skip('comments-filter-list', width, 'the State select opened no list');
-      } else skip('comments-filter-list', width, 'no State select in the filters');
-      await comments.keyboard.press('Escape');
+    // Every Channels tab, one per group of networks (server/network-groups.ts), read off the tab
+    // list so a new group is checked without touching this script. A tab only changes the address.
+    {
+      const channels = await visit(context, '/channels', 'channels-tabs', width);
+      const list = channels.getByRole('tablist', { name: 'Kinds of channel' });
+      const tabs = list.getByRole('tab');
+      const count = await tabs.count();
+      if (count === 0) skip('channels-tabs', width, 'no tabs on /channels');
+      else await inspectPopup(channels, list, 'channels-tab-list', width);
+      for (let i = 0; i < count; i++) {
+        const tab = tabs.nth(i);
+        // Named by the group, without the count of accounts the tab carries
+        const name = `channels-tab-${((await tab.textContent()) ?? String(i)).replace(/\d+/g, '').trim().toLowerCase().replace(/[^a-z]+/g, '-').replace(/-+$/, '')}`;
+        await tab.click();
+        await tab.and(channels.locator('[aria-selected="true"]')).waitFor();
+        await channels.waitForLoadState('networkidle');
+        await inspectPopup(channels, channels.locator('[role="tabpanel"]:visible'), name, width);
+      }
+      await channels.close();
     }
-    await comments.close();
-  }
 
-  // Every Channels tab, one per group of networks (server/network-groups.ts), read off the tab
-  // list so a new group is checked without touching this script. A tab only changes the address.
-  {
-    const channels = await visit(context, '/channels', 'channels-tabs', width);
-    const list = channels.getByRole('tablist', { name: 'Kinds of channel' });
-    const tabs = list.getByRole('tab');
-    const count = await tabs.count();
-    if (count === 0) skip('channels-tabs', width, 'no tabs on /channels');
-    else await inspectPopup(channels, list, 'channels-tab-list', width);
-    for (let i = 0; i < count; i++) {
-      const tab = tabs.nth(i);
-      // Named by the group, without the count of accounts the tab carries
-      const name = `channels-tab-${((await tab.textContent()) ?? String(i)).replace(/\d+/g, '').trim().toLowerCase().replace(/[^a-z]+/g, '-').replace(/-+$/, '')}`;
-      await tab.click();
-      await tab.and(channels.locator('[aria-selected="true"]')).waitFor();
-      await channels.waitForLoadState('networkidle');
-      await inspectPopup(channels, channels.locator('[role="tabpanel"]:visible'), name, width);
-    }
-    await channels.close();
+    // The sign-in page, without a session
+    const signedOut = await browser.newContext({ reducedMotion: 'reduce' });
+    (await visit(signedOut, '/login', 'sign-in', width)).close();
+    await signedOut.close();
   }
-
-  // The sign-in page, without a session
-  const signedOut = await browser.newContext({ reducedMotion: 'reduce' });
-  (await visit(signedOut, '/login', 'sign-in', width)).close();
-  await signedOut.close();
+} finally {
+  await browser.close();
 }
-
-await browser.close();
 
 // Counted as they are inspected: how many there are depends on what the app has to open
 const skips = skipped.length > 0 ? ` (${skipped.length} skipped)` : '';
