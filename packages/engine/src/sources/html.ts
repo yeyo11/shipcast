@@ -200,7 +200,8 @@ function mark(text: string, marker: string): string {
   const inner = text.trim();
   if (inner === '') return text;
   const lead = /^\s*/.exec(text)?.[0] ?? '';
-  const trail = /\s*$/.exec(text)?.[0] ?? '';
+  // trimEnd, not /\s*$/: that regex retries from every space of a long run, quadratic on a hostile page
+  const trail = text.slice(text.trimEnd().length);
   return `${lead}${marker}${inner}${marker}${trail}`;
 }
 
@@ -290,7 +291,7 @@ class Renderer {
       case 'pre': {
         const code = node.children.find((c): c is Element => typeof c !== 'string' && c.tag === 'code');
         const language = /(?:^|\s)(?:language|lang)-([\w+#-]+)/.exec(code?.attrs.class ?? '')?.[1] ?? '';
-        const text = textContent(node).replace(/^\n/, '').replace(/\s+$/, '');
+        const text = textContent(node).replace(/^\n/, '').trimEnd(); // not /\s+$/, quadratic on a long run of spaces
         if (text === '') return [];
         const fence = text.includes('```') ? '~~~' : '```';
         return [`${fence}${language}\n${text}\n${fence}`];

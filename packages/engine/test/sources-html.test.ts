@@ -113,3 +113,13 @@ if (a &lt; 2) {
     ].join('\n\n'),
   );
 });
+
+test('a page made to slow the converter down does not: a long run of spaces before text converts in linear time', () => {
+  // A trailing-whitespace regex (/\s+$/) retries from every space of the run: 80k of them took seconds
+  const run = ' '.repeat(80_000);
+  const started = performance.now();
+  const { markdown } = htmlToMarkdown(`<main><pre>${run}x${run}x</pre><p><strong>${run}y${run}</strong></p></main>`, BASE);
+  assert.ok(performance.now() - started < 1000, `took ${Math.round(performance.now() - started)} ms`);
+  assert.ok(markdown.startsWith('```\n'));
+  assert.ok(markdown.includes('**y**'));
+});
