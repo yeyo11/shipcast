@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-30T13:06:20.652967468Z
-updated_at: 2026-10-30T21:31:55.438054306Z
+created_at: 2026-10-30T21:53:57.185424866Z
+updated_at: 2026-10-30T21:54:26.449260682Z
 tags:
     - umami
     - tracking
@@ -8,6 +8,7 @@ tags:
     - metrics
     - connectors
     - feature-flags
+    - youtube
 ---
 # Umami: the blog's visits per launch and channel, from the links' UTM tags
 
@@ -27,11 +28,12 @@ self-hosted instance):
 | --- | --- |
 | `GET /websites/{id}/metrics/expanded?type=utmSource&utmCampaign=<campaign>&startAt&endAt` | each source of the campaign over the launch: page views, visits, unique visitors |
 | `GET /websites/{id}/pageviews?unit=day&timezone=UTC&utmCampaign=<campaign>&utmSource=<source>&startAt&endAt` | one source's page views and visitors (Umami's `sessions` series) per UTC day |
+| `GET /websites/{id}/metrics/expanded?type=utmContent&utmCampaign=<campaign>&utmSource=<source>&startAt&endAt` | a format source's visits by `utm_content` (YouTube's `short`, `video`); checked against Umami v3.4.1's route, which takes any UTM column as `type` and as a filter |
 | `GET /websites/{id}/stats` | the site's visits of the last seven days, for the account's card |
 | `GET /websites/{id}` | the account's check: the website's name and domain |
 
-A launch costs one call, plus one per source that sent visits: a launch nobody visited from a
-tagged link costs one. The period is the launch's day to today, read whole each time, like the
+A launch costs one call, plus one per source that sent visits, plus one for each format source
+(`FORMAT_SOURCES`: YouTube) that sent any: a launch nobody visited from a tagged link costs one. The period is the launch's day to today, read whole each time, like the
 other dated sources ([decisions/dated-metrics.md](decisions/dated-metrics.md)).
 
 **Credentials.** An API key (`umami_…`, Umami → Settings → API keys), sent as `Authorization:
@@ -44,8 +46,10 @@ two-factor sign-in gets no token from the login, so the check says to use an API
 Source `umami`, site-level (no piece), per launch:
 
 - **Readings** (`metrics`), since the launch: `views` and `visits` of the campaign, and for each
-  source `views_<utm_source>`, `visits_<utm_source>`, `visitors_<utm_source>`. The sources' unique
-  visitors are not added up: one person can come from two networks.
+  source `views_<utm_source>`, `visits_<utm_source>`, `visitors_<utm_source>`; for a format source,
+  each format's too (`views_youtube_short`, `visits_youtube_short`, `visitors_youtube_short`, the
+  same for `video`). The sources' unique visitors are not added up: one person can come from two
+  networks.
 - **Days** (`metric_days`): `views` of the campaign, and for each source `views_<utm_source>` and
   `visitors_<utm_source>`, each under its UTC day. A day read again takes the newest value.
 
@@ -66,8 +70,10 @@ numbers answer "which channel brought readers", per launch.
   page views in its tooltip), from `visits_<utm_source>` mapped back to the channel through
   `UTM_CHANNELS` (`UTM_SOURCES` in `apps/web/src/server/launch-summary.server.ts`; `github` is GitHub
   Discussions, `youtube` YouTube since its links are tagged, 2026-10-30). A channel Umami counted
-  nothing for shows nothing. A channel's pieces count together: YouTube's Short and video are one
-  line, since `utm_content` is not read.
+  nothing for shows nothing. For a format source the channel's line stays the source's total, and
+  each piece's row shows its own "N site visits" (its page views in the tooltip): YouTube's Short
+  (`post:short`) from `visits_youtube_short`, its video (`post:video`) from `visits_youtube_video`
+  (`channelSiteVisits` with `FORMAT_SOURCES` and `formatPiece`).
 - **Details, every number**: the `umami` readings under "Umami", like any source.
 - **The Channels page, Measurement**: the "Blog analytics (Umami)" account, its card showing the
   site's visits of the last seven days.
@@ -108,8 +114,11 @@ in `collectHourly`), `packages/schema/src/channels/cadence.ts` (`SITE_CADENCES.u
   sends them yet.
 - Hand-written `utm_source` values outside `UTM_CHANNELS` are kept (`views_<source>`) but belong to
   no channel on the page.
-- `utm_content` (a subreddit, an issue's language, YouTube's `short` or `video`) is not read: the
-  page cannot yet compare a channel's pieces.
+- `utm_content` is read only for the format sources (YouTube). Reddit's subreddits and the
+  newsletter's languages are not split: each would cost a call per launch and source, and their
+  pieces already have numbers of their own on their networks; they can join the same way if wanted.
+- A format's visits are totals over the launch, not days: `metric_days` keeps each source's days
+  only.
 - Umami's time zone is UTC for the days, as Cloudflare's and GitHub's.
 
 ## Related

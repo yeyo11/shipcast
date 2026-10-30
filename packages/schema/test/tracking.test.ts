@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { campaignOf, sourceOfReferrer, tagHtmlLinks, tagLinks, track, trackedUrl, trackUrl, trackWithinLimit, UTM_CHANNELS, utmFor } from '../src/index.ts';
+import { campaignOf, FORMAT_SOURCES, formatPiece, sourceOfReferrer, tagHtmlLinks, tagLinks, track, trackedUrl, trackUrl, trackWithinLimit, UTM_CHANNELS, utmFor } from '../src/index.ts';
 
 const SITE = 'https://josegarrido.dev';
 const utm = utmFor('bluesky', 'claudio-v1-0-0');
@@ -127,4 +127,10 @@ test('a source named after a tagged channel is its utm_source: one name for a vi
     if (channel === 'newsletter' || channel === 'githubDiscussions') continue;
     assert.equal(tags.source, channel, channel);
   }
+});
+
+test('the sources whose utm_content names a piece’s format, and the piece each format names', () => {
+  assert.deepEqual(FORMAT_SOURCES, ['youtube'], 'a subreddit and an issue’s language are not formats');
+  assert.equal(formatPiece('short'), 'post:short');
+  assert.equal(formatPiece('video'), 'post:video');
 });

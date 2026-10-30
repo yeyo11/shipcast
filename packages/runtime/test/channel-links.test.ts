@@ -130,3 +130,29 @@ test('YouTube: the description’s links are tagged with the video’s format, u
     description,
   ]);
 });
+
+test('edits: each channel that edits tags the edited text as its post was, with the same limits and format', async () => {
+  const editorOf = (channel: string, connector: unknown) => adapterOf(channel)!.editor!(connector as never) as { edit(id: string, e: unknown, tracking?: unknown): Promise<void> };
+  const sent: Array<[string, unknown]> = [];
+  const keep = (channel: string) => ({ edit: async (_id: string, e: unknown) => void sent.push([channel, e]), delete: async () => undefined });
+  const edit = { ...tracking, kind: 'post' };
+  await editorOf('mastodon', keep('mastodon')).edit('m', { text: `Fixed ${ARTICLE}?ref=mastodon` }, edit);
+  await editorOf('telegram', keep('telegram')).edit('t', { text: `Fixed ${ARTICLE}?ref=telegram` }, edit);
+  const full = `${'a'.repeat(900 - `${ARTICLE}?ref=telegram`.length - 1)} ${ARTICLE}?ref=telegram`;
+  await editorOf('telegram', keep('telegram')).edit('t', { text: full }, edit);
+  await editorOf('discord', keep('discord')).edit('d', { content: `Fixed ${ARTICLE}?ref=discord` }, edit);
+  await editorOf('githubDiscussions', keep('githubDiscussions')).edit('g', { title: 'T', body: `Read [it](${ARTICLE}?ref=github).` }, edit);
+  await editorOf('mastodon', keep('mastodon')).edit('m', { text: `As written ${ARTICLE}?ref=mastodon` });
+  await editorOf('youtube', { youtube: keep('youtube') }).edit('y', { text: `${ARTICLE}?ref=youtube\n\nWhat it shows.` }, { ...tracking, kind: 'post:short' });
+  await editorOf('youtube', { youtube: keep('youtube') }).edit('y', { title: 'Only the title' }, { ...tracking, kind: 'post:video' });
+  assert.deepEqual(sent, [
+    ['mastodon', { text: `Fixed ${tagged('mastodon')}` }],
+    ['telegram', { text: `Fixed ${tagged('telegram')}` }],
+    ['telegram', { text: full }],
+    ['discord', { content: `Fixed ${tagged('discord')}` }],
+    ['githubDiscussions', { title: 'T', body: `Read [it](${tagged('github')}).` }],
+    ['mastodon', { text: `As written ${ARTICLE}?ref=mastodon` }],
+    ['youtube', { description: `${tagged('youtube', 'social', 'short')}\n\nWhat it shows.` }],
+    ['youtube', { title: 'Only the title' }],
+  ]);
+});

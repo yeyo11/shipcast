@@ -97,3 +97,40 @@ test('Umami’s check names the website, and says what is wrong in words', async
   assert.match(!second.ok ? second.problem : '', /API key/);
   assert.throws(() => new UmamiAnalytics({ url: 'https://umami.example', websiteId: 'w1', username: 'only' }), /API key, or a username and a password/);
 });
+
+test('Umami splits a format source by utm_content in one more call, and only that source', async () => {
+  const calls: Call[] = [];
+  const umami = new UmamiAnalytics({
+    url: 'https://umami.example',
+    websiteId: 'w1',
+    apiKey: 'k',
+    fetch: fakeFetch(
+      [
+        [
+          `GET ${SITE}/metrics/expanded`,
+          // The call being answered is the last one recorded
+          () =>
+            new URL(calls.at(-1)!.url).searchParams.get('type') === 'utmContent'
+              ? Response.json([
+                  { name: 'short', pageviews: 8, visits: 6, visitors: 6 },
+                  { name: 'video', pageviews: 4, visits: 3, visitors: 3 },
+                  { name: null, pageviews: 1, visits: 1, visitors: 1 },
+                ])
+              : Response.json([
+                  { name: 'youtube', pageviews: 13, visits: 10, visitors: 9 },
+                  { name: 'reddit', pageviews: 5, visits: 4, visitors: 4 },
+                ]),
+        ],
+        [`GET ${SITE}/pageviews`, () => Response.json({ pageviews: [], sessions: [] })],
+      ],
+      calls,
+    ),
+  });
+  const visits = await umami.campaignVisits('claudio-v1-0-0', '2026-10-25', '2026-10-30');
+  assert.deepEqual(visits.byContent, { youtube: { short: { views: 8, visits: 6, visitors: 6 }, video: { views: 4, visits: 3, visitors: 3 } } });
+  const split = calls.map((c) => new URL(c.url).searchParams).filter((p) => p.get('type') === 'utmContent');
+  assert.equal(split.length, 1, 'Reddit’s subreddits are not split');
+  assert.equal(split[0]!.get('utmSource'), 'youtube');
+  assert.equal(split[0]!.get('utmCampaign'), 'claudio-v1-0-0');
+  assert.equal(calls.length, 4, 'the totals, the format split and each source’s days');
+});

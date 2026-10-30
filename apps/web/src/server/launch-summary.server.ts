@@ -1,5 +1,5 @@
 import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Repositories } from '@shipcast/engine';
-import { UTM_CHANNELS } from '@shipcast/schema';
+import { FORMAT_SOURCES, formatPiece, UTM_CHANNELS } from '@shipcast/schema';
 import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /** Each tagged channel's `utm_source`, which names its visits in Umami's readings */
@@ -56,7 +56,7 @@ export async function launchNumbers(registry: Pick<Repositories, 'posts' | 'metr
     launches.map((l, i) => {
       const mine = readings[i]?.counters ?? [];
       const perChannel = channelTotals(mine, METRIC_FAMILIES);
-      const site = channelSiteVisits(readings[i]?.umami ?? [], UTM_SOURCES);
+      const site = channelSiteVisits(readings[i]?.umami ?? [], UTM_SOURCES, { sources: FORMAT_SOURCES, piece: formatPiece });
       const days = series.channels.get(l.id) ?? new Map<string, ReadonlyArray<{ bucket: string; increase: number }>>();
       const names = new Set([...Object.keys(perChannel), ...days.keys(), ...Object.keys(site)]);
       const channels = Object.fromEntries(

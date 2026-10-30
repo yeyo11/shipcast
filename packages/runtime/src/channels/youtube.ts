@@ -1,7 +1,7 @@
 import { youtubeFeed } from './feeds.ts';
 import { ConnectorError, exchangeYouTubeCode, PostGone, YouTube, youtubeAuthorizeUrl, youtubeBucketOf, YOUTUBE_DAILY_UNITS, YOUTUBE_DAILY_UPLOADS, YOUTUBE_UNITS, type YouTubeCall, type YouTubeVideo } from '@shipcast/connectors';
 import { batchReader, youtubeStrategy, type ChangeEditor, type YouTubePublisher } from '@shipcast/engine';
-import { LIMITS, trackWithinLimit, youtube } from '@shipcast/schema';
+import { LIMITS, trackWithinLimit, youtube, type LinkTracking } from '@shipcast/schema';
 import { MemoryTokenBucket } from '../redis/memory.ts';
 import type { BucketSpec, TokenBucket } from '../redis/ports.ts';
 import { channelAdapter, type Credentials, type OAuthApp } from './adapter.ts';
@@ -74,6 +74,14 @@ export class YouTubeQuota {
   }
 }
 
+/**
+ * A description with its links to the site tagged, the video's format (`short`, `video`) as their
+ * `utm_content`; one the tags would push over YouTube's 5000 characters keeps its `?ref=youtube`
+ */
+function taggedDescription(text: string, tracking: LinkTracking | undefined, format: string | undefined): string {
+  return trackWithinLimit('youtube', text, tracking, { ...(format && { content: format }), max: LIMITS.youtubeDescription });
+}
+
 /** What the adapter builds: the connector and the quota its calls are counted against */
 export interface YouTubeConnection {
   youtube: YouTube;
@@ -125,15 +133,19 @@ export const youtubeAdapter = channelAdapter({
     // tags would push over YouTube's limit keeps its `?ref=youtube`
     publish: async (video, tracking) => {
       await quota.ensureUpload(video);
-      const description = trackWithinLimit('youtube', video.description, tracking, { content: video.short ? 'short' : 'video', max: LIMITS.youtubeDescription });
-      return connector.publish({ ...video, description });
+      return connector.publish({ ...video, description: taggedDescription(video.description, tracking, video.short ? 'short' : 'video') });
     },
   }),
   strategy: youtubeStrategy(),
   editor: ({ youtube: connector }: YouTubeConnection): ChangeEditor => ({
     // The description is the post's text; the title and tags are the video's own
-    edit: (id, changes) =>
-      connector.edit(id, { ...(changes.title !== undefined && { title: changes.title }), ...(changes.text !== undefined && { description: changes.text }), ...(changes.tags !== undefined && { tags: changes.tags }) }),
+    // An edited description is tagged as the uploaded one was, with the video's format from its piece
+    edit: (id, changes, tracking) =>
+      connector.edit(id, {
+        ...(changes.title !== undefined && { title: changes.title }),
+        ...(changes.text !== undefined && { description: taggedDescription(changes.text, tracking, tracking?.kind.replace(/^post:/, '')) }),
+        ...(changes.tags !== undefined && { tags: changes.tags }),
+      }),
     delete: (id) => connector.delete(id),
   }),
   metrics: ({ youtube: connector }: YouTubeConnection) => ({

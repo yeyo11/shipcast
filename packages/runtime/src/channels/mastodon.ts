@@ -55,7 +55,8 @@ export const mastodonAdapter = channelAdapter({
   },
   // Mastodon counts every link as 23 characters, so the tags never cost the post its limit
   publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: track('mastodon', post.text, tracking) }) }),
-  editor: (c) => c,
+  // An edit's text is tagged as the post's was
+  editor: (c) => ({ edit: (id, e, tracking) => c.edit(id, { ...e, ...(e.text !== undefined && { text: track('mastodon', e.text, tracking) }) }), delete: (id) => c.delete(id) }),
   // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   comments: (c) => ({ reader: c, replier: c, feed: mastodonFeed(c) }),

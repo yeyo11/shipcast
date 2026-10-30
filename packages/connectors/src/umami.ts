@@ -1,3 +1,4 @@
+import { FORMAT_SOURCES } from '@shipcast/schema';
 import { checkProblem, ConnectorError, json, okCheck, statsOf, type Check, type ProfileStats } from './http.ts';
 
 /** One source's share of a campaign over a period, as Umami counts it */
@@ -13,6 +14,11 @@ export interface SourceVisits {
 /** A campaign's visits by `utm_source`: over the period, and day by day (UTC days) */
 export interface CampaignVisits {
   bySource: Record<string, SourceVisits>;
+  /**
+   * The sources whose `utm_content` names a piece's format (FORMAT_SOURCES), split by it over the
+   * period: `youtube` → `short`, `video`. A source with no visits has no entry.
+   */
+  byContent?: Record<string, Record<string, SourceVisits>>;
   /** Each source's page views and unique visitors of each day, keyed by YYYY-MM-DD */
   days: Record<string, Record<string, { views: number; visitors: number }>>;
 }
@@ -46,9 +52,10 @@ export class UmamiAnalytics {
   readonly #apiKey: string | undefined;
   readonly #login: { username: string; password: string } | undefined;
   readonly #fetch: typeof fetch;
+  readonly #contentSources: readonly string[];
   #token: string | undefined;
 
-  constructor(options: { url: string; websiteId: string; apiKey?: string; username?: string; password?: string; fetch?: typeof fetch }) {
+  constructor(options: { url: string; websiteId: string; apiKey?: string; username?: string; password?: string; fetch?: typeof fetch; contentSources?: readonly string[] }) {
     const base = options.url.trim().replace(/\/+$/, '');
     // The instance's address or its API's: a self-hosted API is under /api, Umami Cloud's under /v1
     this.#api = /\/(api|v1)$/.test(base) ? base : `${base}/api`;
@@ -57,6 +64,7 @@ export class UmamiAnalytics {
     this.#login = !this.#apiKey && options.username && options.password ? { username: options.username, password: options.password } : undefined;
     if (!this.#apiKey && !this.#login) throw new ConnectorError('Umami', 'needs an API key, or a username and a password', undefined, false);
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#contentSources = options.contentSources ?? FORMAT_SOURCES;
   }
 
   /** The website by its id: proves the address, the credential and the website together */
@@ -77,8 +85,9 @@ export class UmamiAnalytics {
 
   /**
    * A campaign's visits from each source between two dates (YYYY-MM-DD, inclusive, UTC): the totals of
-   * every source in one call, then each source's days in one call each. A source with no visits in
-   * the period is not in Umami's answer, so it costs nothing.
+   * every source in one call, then each source's days in one call each, and for a source whose
+   * `utm_content` names a piece's format (YouTube) its totals by content in one more. A source with no
+   * visits in the period is not in Umami's answer, so it costs nothing.
    */
   async campaignVisits(campaign: string, since: string, until: string): Promise<CampaignVisits> {
     const range = { startAt: String(Date.parse(`${since}T00:00:00Z`)), endAt: String(Date.parse(`${until}T00:00:00Z`) + DAY_MS - 1) };
@@ -89,6 +98,17 @@ export class UmamiAnalytics {
       bySource[row.name] = { views: row.pageviews ?? 0, visits: row.visits ?? 0, visitors: row.visitors ?? 0 };
     }
     const days: CampaignVisits['days'] = {};
+    const byContent: NonNullable<CampaignVisits['byContent']> = {};
+    // Umami v3.4.1's /metrics/expanded takes any UTM column as its `type` and any as a filter
+    await Promise.all(
+      Object.keys(bySource)
+        .filter((source) => this.#contentSources.includes(source))
+        .map(async (source) => {
+          const split = await this.#get<ExpandedRow[]>(`/websites/${this.#websiteId}/metrics/expanded`, { ...range, type: 'utmContent', utmCampaign: campaign, utmSource: source }, 'visits by content');
+          const of = (byContent[source] = {} as Record<string, SourceVisits>);
+          for (const row of split) if (row.name) of[row.name] = { views: row.pageviews ?? 0, visits: row.visits ?? 0, visitors: row.visitors ?? 0 };
+        }),
+    );
     await Promise.all(
       Object.keys(bySource).map(async (source) => {
         const series = await this.#get<{ pageviews?: Point[]; sessions?: Point[] }>(
@@ -103,7 +123,7 @@ export class UmamiAnalytics {
         for (const p of series.sessions ?? []) (of[p.x.slice(0, 10)] ??= { views: 0, visitors: 0 }).visitors += p.y;
       }),
     );
-    return { bySource, days };
+    return { bySource, days, ...(Object.keys(byContent).length > 0 && { byContent }) };
   }
 
   async #get<T>(path: string, params: Record<string, string>, what: string): Promise<T> {

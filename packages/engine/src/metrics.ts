@@ -316,8 +316,9 @@ export function blogValues(pages: ReadonlyArray<PageVisits & { lang: Language }>
 
 /**
  * A launch's visits from its tagged links as readings: the campaign's page views and visits, and each
- * source's (`views_<utm_source>`, `visits_<utm_source>`, `visitors_<utm_source>`). The sources' unique
- * visitors are not added up: one person can come from two networks.
+ * source's (`views_<utm_source>`, `visits_<utm_source>`, `visitors_<utm_source>`), and where a source's
+ * `utm_content` names a piece's format, each format's (`views_youtube_short`, `visits_youtube_short`…).
+ * The sources' unique visitors are not added up: one person can come from two networks.
  */
 export function campaignValues(visits: CampaignVisits): Record<string, number> {
   const sources = Object.entries(visits.bySource);
@@ -326,6 +327,13 @@ export function campaignValues(visits: CampaignVisits): Record<string, number> {
     values[`views_${source}`] = v.views;
     values[`visits_${source}`] = v.visits;
     values[`visitors_${source}`] = v.visitors;
+  }
+  for (const [source, contents] of Object.entries(visits.byContent ?? {})) {
+    for (const [content, v] of Object.entries(contents)) {
+      values[`views_${source}_${content}`] = v.views;
+      values[`visits_${source}_${content}`] = v.visits;
+      values[`visitors_${source}_${content}`] = v.visitors;
+    }
   }
   return values;
 }

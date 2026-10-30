@@ -67,6 +67,27 @@ test('a campaign’s visits become readings per source and days per source', () 
   assert.deepEqual(campaignValues({ bySource: {}, days: {} }), { views: 0, visits: 0 });
 });
 
+test('a format source’s split becomes readings per format, beside the source’s own', () => {
+  const values = campaignValues({
+    bySource: { youtube: { views: 13, visits: 10, visitors: 9 } },
+    byContent: { youtube: { short: { views: 8, visits: 6, visitors: 6 }, video: { views: 4, visits: 3, visitors: 3 } } },
+    days: {},
+  });
+  assert.deepEqual(values, {
+    views: 13,
+    visits: 10,
+    views_youtube: 13,
+    visits_youtube: 10,
+    visitors_youtube: 9,
+    views_youtube_short: 8,
+    visits_youtube_short: 6,
+    visitors_youtube_short: 6,
+    views_youtube_video: 4,
+    visits_youtube_video: 3,
+    visitors_youtube_video: 3,
+  });
+});
+
 test('every published launch is read by its campaign, from its day, and kept with its days', async () => {
   const { registry, release, article } = await twoLaunches();
   const { umami, asked } = fakeUmami();

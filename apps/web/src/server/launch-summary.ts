@@ -89,20 +89,41 @@ export interface ChannelNumbers {
 export interface SiteVisits {
   views: number;
   visits: number;
+  /** Each piece's share, where the channel's `utm_content` names its format: YouTube's `post:short` and `post:video` */
+  pieces?: Record<string, { views: number; visits: number }>;
 }
 
 /**
  * Each tagged channel's visits from a launch's Umami readings (`views_<utm_source>`,
  * `visits_<utm_source>`), under the channel whose links carry that source; `sources` is each tagged
- * channel's `utm_source` (UTM_CHANNELS). A channel Umami has not counted is absent.
+ * channel's `utm_source` (UTM_CHANNELS). A channel Umami has not counted is absent. For a source in
+ * `formats.sources` (FORMAT_SOURCES), each format's readings (`visits_youtube_short`) are the share of
+ * the piece `formats.piece` names (`post:short`); the channel's own numbers stay the source's.
  */
-export function channelSiteVisits(readings: readonly CounterReading[], sources: Readonly<Record<string, string>>): Record<string, SiteVisits> {
+export function channelSiteVisits(
+  readings: readonly CounterReading[],
+  sources: Readonly<Record<string, string>>,
+  formats: { sources: readonly string[]; piece(format: string): string } = { sources: [], piece: (f) => f },
+): Record<string, SiteVisits> {
   const out: Record<string, SiteVisits> = {};
-  const value = (name: string) => readings.find((r) => r.source === 'umami' && r.name === name)?.value;
+  const umami = readings.filter((r) => r.source === 'umami');
+  const value = (name: string) => umami.find((r) => r.name === name)?.value;
   for (const [channel, source] of Object.entries(sources)) {
     const views = value(`views_${source}`);
     const visits = value(`visits_${source}`);
-    if (views !== undefined || visits !== undefined) out[channel] = { views: views ?? 0, visits: visits ?? 0 };
+    if (views === undefined && visits === undefined) continue;
+    const site: SiteVisits = { views: views ?? 0, visits: visits ?? 0 };
+    if (formats.sources.includes(source)) {
+      const pieces: NonNullable<SiteVisits['pieces']> = {};
+      for (const r of umami) {
+        const match = /^(views|visits)_(.+)$/.exec(r.name);
+        if (!match?.[2]?.startsWith(`${source}_`)) continue;
+        const piece = (pieces[formats.piece(match[2].slice(source.length + 1))] ??= { views: 0, visits: 0 });
+        piece[match[1] as 'views' | 'visits'] = r.value;
+      }
+      if (Object.keys(pieces).length > 0) site.pieces = pieces;
+    }
+    out[channel] = site;
   }
   return out;
 }

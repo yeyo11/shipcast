@@ -10,9 +10,10 @@ import {
   editPosts,
   PostRefused,
   type EditDeps,
+  type Editors,
   type Repositories,
 } from '../src/index.ts';
-import type { Channel } from '@shipcast/schema';
+import { campaignOf, type Channel } from '@shipcast/schema';
 import { FakeConnectors, FakeGitHub, memoryRegistry, type ConnectorCall } from '../src/testing/index.ts';
 
 type Sent = ConnectorCall;
@@ -234,4 +235,28 @@ test('a discussion takes a new title and body; Threads and LinkedIn delete but n
     [['githubDiscussions', 'D_1'], ['threads', 't1'], ['linkedin', 'urn:li:share:1']],
   );
   assert.match(CAPABILITIES.linkedin.note, /Community Management API/);
+});
+
+test('an edit hands its editor the launch’s tracking and the piece’s kind, for its adapter to tag the links as publishing does', async () => {
+  const registry = await memoryRegistry();
+  const { launch, posts } = await launchWith(registry, [
+    { channel: 'mastodon', externalId: 'm1' },
+    { channel: 'discord', externalId: 'd1' },
+    { channel: 'githubDiscussions', externalId: 'g1' },
+    { channel: 'youtube', kind: 'post:short', externalId: 'yt1' },
+  ]);
+  const got: Array<[string, unknown]> = [];
+  const editor = (channel: string) => ({ edit: async (_id: string, _e: unknown, tracking?: unknown) => void got.push([channel, tracking]), delete: async () => undefined });
+  const editors: EditDeps['editors'] = async (channel) => ({ [channel]: editor(channel) }) as Editors;
+  for (const post of posts) await editPost(post.id, { text: 'New https://site.dev/en/x/?ref=x' }, { registry, editors, site: 'https://site.dev' }, { strict: false });
+  const campaign = campaignOf(launch);
+  assert.deepEqual(got, [
+    ['mastodon', { site: 'https://site.dev', campaign, kind: 'post' }],
+    ['discord', { site: 'https://site.dev', campaign, kind: 'post' }],
+    ['githubDiscussions', { site: 'https://site.dev', campaign, kind: 'post' }],
+    ['youtube', { site: 'https://site.dev', campaign, kind: 'post:short' }],
+  ]);
+  got.length = 0;
+  await editPost(posts[0]!.id, { text: 'Again' }, { registry, editors });
+  assert.deepEqual(got, [['mastodon', undefined]], 'without the site an edit goes out as written');
 });

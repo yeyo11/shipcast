@@ -195,3 +195,23 @@ test('the launch page maps every tagged channel’s utm_source back to it, YouTu
   const readings = [{ source: 'umami', name: 'views_youtube', value: 12 }, { source: 'umami', name: 'visits_youtube', value: 9 }];
   assert.deepEqual(channelSiteVisits(readings, UTM_SOURCES), { youtube: { views: 12, visits: 9 } });
 });
+
+test('a format source’s visits are also each piece’s, the channel’s total unchanged', async () => {
+  const { UTM_SOURCES } = await import('../src/server/launch-summary.server.ts');
+  const { FORMAT_SOURCES, formatPiece } = await import('@shipcast/schema');
+  const readings = [
+    { source: 'umami', name: 'views_youtube', value: 13 },
+    { source: 'umami', name: 'visits_youtube', value: 10 },
+    { source: 'umami', name: 'views_youtube_short', value: 8 },
+    { source: 'umami', name: 'visits_youtube_short', value: 6 },
+    { source: 'umami', name: 'visitors_youtube_short', value: 6 },
+    { source: 'umami', name: 'views_youtube_video', value: 4 },
+    { source: 'umami', name: 'visits_youtube_video', value: 3 },
+    { source: 'umami', name: 'views_reddit', value: 5 },
+    { source: 'umami', name: 'visits_reddit', value: 4 },
+  ];
+  assert.deepEqual(channelSiteVisits(readings, UTM_SOURCES, { sources: FORMAT_SOURCES, piece: formatPiece }), {
+    youtube: { views: 13, visits: 10, pieces: { 'post:short': { views: 8, visits: 6 }, 'post:video': { views: 4, visits: 3 } } },
+    reddit: { views: 5, visits: 4 },
+  });
+});

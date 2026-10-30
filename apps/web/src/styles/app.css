@@ -437,6 +437,7 @@ h2.ph.chan-title { display: inline-flex; align-items: center; gap: 12px; margin:
 .post-what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: 700 15px/1.2 var(--sc-font-text); }
 .post-what .pill { height: 24px; font-size: 11.5px; padding: 0 9px; }
 .post-account { font-size: 13px; overflow-wrap: anywhere; }
+.post-site { font-size: 13px; }
 .post-link { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sc-muted); }
 a.post-link:hover { color: var(--sc-text); }
 .post-actions { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }

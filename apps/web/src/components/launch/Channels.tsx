@@ -84,6 +84,7 @@ const STATUS_WORD: Partial<Record<PieceRow['status'], { label: string; tone: 'pu
 
 function PieceItem({
   row,
+  site,
   selected,
   onSelect,
   onEdit,
@@ -91,6 +92,8 @@ function PieceItem({
   onRetry,
 }: {
   row: PieceRow;
+  /** The site's visits from this piece's own links, where its channel tells its pieces apart (YouTube's two videos) */
+  site: { views: number; visits: number } | undefined;
   selected: boolean;
   onSelect: (on: boolean) => void;
   onEdit: () => void;
@@ -107,6 +110,11 @@ function PieceItem({
           {status && <Pill tone={status.tone}>{status.label}</Pill>}
         </span>
         {row.account && <span className="muted post-account">{row.account.handle ?? row.account.label}</span>}
+        {site && (
+          <span className="muted post-site" title={`${number(site.views)} page views on the site from this piece’s links, counted by Umami`}>
+            <strong>{number(site.visits)}</strong> site visits
+          </span>
+        )}
         {row.url ? (
           <a className="post-link" href={row.url} target="_blank" rel="noreferrer">
             {address(row.url)}
@@ -221,6 +229,7 @@ function ChannelPanel({
             <PieceItem
               key={row.id}
               row={row}
+              site={site?.pieces?.[row.kind]}
               selected={selected.has(row.id)}
               onSelect={(on) => onSelect(row.id, on)}
               onEdit={() => onEdit(row)}

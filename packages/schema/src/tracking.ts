@@ -38,6 +38,15 @@ export const UTM_CHANNELS = {
 
 export type TrackedChannel = keyof typeof UTM_CHANNELS;
 
+/**
+ * The `utm_source` of each channel whose `utm_content` names a piece's format (YouTube's `short` and
+ * `video`): the analytics that read the tags split these by content, so a channel's pieces compare
+ */
+export const FORMAT_SOURCES: readonly string[] = Object.values(UTM_CHANNELS as Record<string, UtmChannel>).flatMap((c) => (c.content === 'format' ? [c.source] : []));
+
+/** The piece a format names: YouTube's `short` is its `post:short` piece (docs/decisions/post-model.md) */
+export const formatPiece = (format: string): `post:${string}` => `post:${format}`;
+
 /** The tags one link gets */
 export interface Utm {
   source: string;

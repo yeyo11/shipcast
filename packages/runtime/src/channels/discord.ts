@@ -44,7 +44,8 @@ export const discordAdapter = channelAdapter({
     publish: (post, tracking) =>
       c.publish({ ...post, content: trackWithinLimit('discord', post.content, tracking), ...(post.embed && { embed: { ...post.embed, url: trackUrl('discord', post.embed.url, tracking) } }) }),
   }),
-  editor: (c) => c,
+  // An edit's message is tagged as the post's was, within the same limit
+  editor: (c) => ({ edit: (id, e, tracking) => c.edit(id, { content: trackWithinLimit('discord', e.content, tracking) }), delete: (id) => c.delete(id) }),
   // One message a call, every due one in a round; a message deleted on Discord is left out
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
 });

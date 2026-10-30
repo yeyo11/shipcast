@@ -30,7 +30,8 @@ export const telegramAdapter = channelAdapter({
   },
   // Telegram counts a link's every character: a text the tags would push over the limit keeps its ?ref=
   publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('telegram', post.text, tracking) }) }),
-  editor: (c) => c,
+  // An edit's text is tagged as the post's was, within the same limit
+  editor: (c) => ({ edit: (id, e, tracking) => c.edit(id, { ...e, text: trackWithinLimit('telegram', e.text, tracking) }), delete: (id) => c.delete(id) }),
   // Only from the changes Telegram pushed, every post at once, each page kept before it is confirmed:
   // a post with none kept its reactions, and one never told about has no reading. There is no read of
   // one post, since reading the changes for one would confirm, and lose, every other post's

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ConnectorError } from '@shipcast/connectors';
-import { CAPABILITIES, channelAtStart, isMainPiece, Refused, splitFrontMatter, type Channel, type EditField } from '@shipcast/schema';
+import { CAPABILITIES, campaignOf, channelAtStart, isMainPiece, Refused, splitFrontMatter, type Channel, type EditField, type LinkTracking } from '@shipcast/schema';
 import { isScalar, parseDocument } from 'yaml';
 import { launchDir } from './drafts.ts';
 import type { CommitFile } from './github.ts';
@@ -44,11 +44,22 @@ export interface PostChanges {
 
 type Image = { bytes: Uint8Array; mimeType: string; filename: string; description: string };
 
-/** What the engine needs from each network's connector to change what it published; `@shipcast/connectors` fits. */
+/**
+ * What an edit's links are tagged with, as publishing tags them (docs/tracking.md): the launch's
+ * tracking and the piece's kind, which names its `utm_content` where a channel tells its pieces apart
+ * (YouTube's `post:short` and `post:video`)
+ */
+export type EditTracking = LinkTracking & { kind: string };
+
+/**
+ * What the engine needs from each network's connector to change what it published; `@shipcast/connectors`
+ * fits. A channel whose links are tagged is handed the edit's `tracking`: its adapter tags the links as
+ * it does when publishing, the connector never sees it.
+ */
 export interface Editors {
-  mastodon?: { edit(id: string, e: { text?: string; image?: Image }): Promise<void>; delete(id: string): Promise<void> };
-  telegram?: { edit(id: string, e: { text: string; imageUrl?: string }): Promise<void>; delete(id: string): Promise<void> };
-  discord?: { edit(id: string, e: { content: string }): Promise<void>; delete(id: string): Promise<void> };
+  mastodon?: { edit(id: string, e: { text?: string; image?: Image }, tracking?: EditTracking): Promise<void>; delete(id: string): Promise<void> };
+  telegram?: { edit(id: string, e: { text: string; imageUrl?: string }, tracking?: EditTracking): Promise<void>; delete(id: string): Promise<void> };
+  discord?: { edit(id: string, e: { content: string }, tracking?: EditTracking): Promise<void>; delete(id: string): Promise<void> };
   devto?: {
     edit(id: string, e: { title?: string; markdown?: string; tags?: string[]; canonicalUrl?: string; mainImage?: string }): Promise<void>;
     delete(id: string): Promise<void>;
@@ -58,7 +69,7 @@ export interface Editors {
     delete(id: string): Promise<void>;
   };
   bluesky?: { delete(id: string): Promise<void> };
-  githubDiscussions?: { edit(id: string, e: { title?: string; body?: string }): Promise<void>; delete(id: string): Promise<void> };
+  githubDiscussions?: { edit(id: string, e: { title?: string; body?: string }, tracking?: EditTracking): Promise<void>; delete(id: string): Promise<void> };
   threads?: { delete(id: string): Promise<void> };
   linkedin?: { delete(id: string): Promise<void> };
   reddit?: { delete(id: string): Promise<void> };
@@ -70,7 +81,7 @@ export interface Editors {
  * network edits through this instead of a branch here.
  */
 export interface ChangeEditor {
-  edit?(id: string, changes: PostChanges): Promise<void>;
+  edit?(id: string, changes: PostChanges, tracking?: EditTracking): Promise<void>;
   delete?(id: string): Promise<void>;
 }
 
@@ -103,6 +114,8 @@ export interface EditDeps {
   /** For an image Mastodon needs as bytes */
   fetch?: typeof fetch;
   now?: () => Date;
+  /** The brand's site, whose links an edit tags as publishing does; without it an edit goes out as written */
+  site?: string;
 }
 
 /** The hash of what an edit sent, so a later reader can tell which version is out */
@@ -244,27 +257,35 @@ function applicable(post: Post, changes: PostChanges, strict: boolean): PostChan
   return kept;
 }
 
+/** The tags an edit of the piece carries: its launch's campaign on the brand's site, and its kind */
+async function trackingOf(post: Post, deps: EditDeps): Promise<EditTracking | undefined> {
+  if (!deps.site) return undefined;
+  const launch = await deps.registry.launches.get(post.launchId).catch(() => undefined);
+  return launch ? { site: deps.site, campaign: campaignOf(launch), kind: post.kind } : undefined;
+}
+
 /** Sends the change to the network, mapped to what its API calls each field */
 async function send(post: Post, changes: PostChanges, deps: EditDeps): Promise<void> {
   if (post.channel === 'blog') return editArticle(post, changes, deps);
   const id = post.externalId!;
   const editors = await deps.editors(post.channel, post.accountId);
+  const tracking = await trackingOf(post, deps);
   switch (post.channel) {
     case 'mastodon': {
       const text = textWithLink('mastodon', changes);
       const image = changes.imageUrl ? await imageBytes(changes.imageUrl, changes.imageAlt, deps.fetch ?? globalThis.fetch) : undefined;
-      return editorOf(editors, 'mastodon', post).edit(id, { ...(text !== undefined && { text }), ...(image && { image }) });
+      return editorOf(editors, 'mastodon', post).edit(id, { ...(text !== undefined && { text }), ...(image && { image }) }, tracking);
     }
     case 'telegram': {
       const text = textWithLink('telegram', changes);
       // The Bot API cannot read the caption back, so a new photo needs its caption with it
       if (text === undefined) throw new PostRefused('invalid', 'Telegram replaces the text or caption whole: send the text');
-      return editorOf(editors, 'telegram', post).edit(id, { text, ...(changes.imageUrl && { imageUrl: changes.imageUrl }) });
+      return editorOf(editors, 'telegram', post).edit(id, { text, ...(changes.imageUrl && { imageUrl: changes.imageUrl }) }, tracking);
     }
     case 'discord': {
       const content = textWithLink('discord', changes);
       if (content === undefined) throw new PostRefused('invalid', 'Discord replaces the message’s text whole: send the text');
-      return editorOf(editors, 'discord', post).edit(id, { content });
+      return editorOf(editors, 'discord', post).edit(id, { content }, tracking);
     }
     case 'devto':
       return editorOf(editors, 'devto', post).edit(id, {
@@ -286,10 +307,10 @@ async function send(post: Post, changes: PostChanges, deps: EditDeps): Promise<v
       return editorOf(editors, 'githubDiscussions', post).edit(id, {
         ...(changes.title !== undefined && { title: changes.title }),
         ...(changes.text !== undefined && { body: changes.text }),
-      });
+      }, tracking);
     default: {
       const editor = changeEditorOf(editors, post.channel);
-      if (editor?.edit) return editor.edit(id, changes);
+      if (editor?.edit) return editor.edit(id, changes, tracking);
       // A channel that edits but whose editor is missing went out with credentials that are gone
       if (CAPABILITIES[post.channel].edit !== 'no') editorOf(editors, post.channel as keyof Editors, post);
       throw new PostRefused('unsupported', `${nameOf(post.channel)} cannot edit a published post`);

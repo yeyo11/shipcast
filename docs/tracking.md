@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-30T13:06:18.012917751Z
-updated_at: 2026-10-30T21:31:46.507869137Z
+created_at: 2026-10-30T21:53:50.371749325Z
+updated_at: 2026-10-30T21:54:09.429056116Z
 tags:
     - tracking
     - utm
@@ -8,6 +8,7 @@ tags:
     - channels
     - metrics
     - youtube
+    - edit-delete
 ---
 # Link tracking: UTM tags on every published link
 
@@ -75,7 +76,8 @@ rather than a repo and a tag (epic SHP-5, later).
 ## Where it lives
 
 - `packages/schema/src/tracking.ts`, the one place the tags are decided: `UTM_CHANNELS` (the table
-  above), `campaignOf`, `utmFor`, `trackedUrl`, `tagLinks` (plain text and Markdown), `tagHtmlLinks`
+  above), `FORMAT_SOURCES` (the sources whose `utm_content` is a format) and `formatPiece` (the piece
+  a format names), `campaignOf`, `utmFor`, `trackedUrl`, `tagLinks` (plain text and Markdown), `tagHtmlLinks`
   (the newsletter's `href`s, with their `&` kept escaped), and the calls the adapters make: `track`,
   `trackUrl`, `trackWithinLimit` (with the piece's `content`, and a `max` for a text that is not
   the channel's piece).
@@ -91,10 +93,19 @@ rather than a repo and a tag (epic SHP-5, later).
   body, every link of the newsletter's issue (its button, its image and its body) with its
   language, and each YouTube video's description with its format (`short` for the Short, `video`
   for the horizontal one, from the upload's `short`). The connectors never see the tracking.
+- **Edits are tagged as the piece was published** (2026-10-30). `editPost` and `editPosts`
+  (`packages/engine/src/edit.ts`) hand each editor an `EditTracking`: the launch's `{ site, campaign }`
+  and the piece's kind, given the brand's `site` in `EditDeps` (the app's `editingDeps` sets it).
+  Each adapter's editor tags its text as its publisher does: Mastodon's text and GitHub
+  Discussions' body with `track`, Telegram's text and Discord's message with `trackWithinLimit`, and
+  a YouTube video's description with its format from the piece's kind (`post:short` → `short`)
+  within 5000 characters. A link the owner tagged by hand, or one already tagged, is left as it is.
+  Without a `site` an edit goes out as written.
 - Tests: `packages/schema/test/tracking.test.ts`, `packages/runtime/test/channel-links.test.ts` (what
   each adapter hands its network), the `richText` test in `packages/connectors/test/connectors.test.ts`,
-  the newsletter's tracking in `packages/engine/test/publish.test.ts`, and the YouTube strategy
-  handing the tracking to its publisher in `packages/engine/test/youtube.test.ts`.
+  the newsletter's tracking in `packages/engine/test/publish.test.ts`, the YouTube strategy
+  handing the tracking to its publisher in `packages/engine/test/youtube.test.ts`, and the edits'
+  tracking in `packages/engine/test/edit.test.ts` and `channel-links.test.ts`.
 
 ## The other half: where a visit came from
 
@@ -125,12 +136,9 @@ were the other options, not built.
 
 ## Not covered
 
-- **Edits.** Editing a live post (Mastodon, Telegram, Discord, GitHub Discussions, a YouTube video's
-  description) sends the text as edited, untagged: an edit that touches a link brings its `?ref=`
-  back.
-- **`utm_content` in Umami.** The Umami connector reads a campaign by `utm_source` only, so the
-  launch page shows YouTube's visits as one channel, the Short's and the video's together; telling
-  them apart there means reading `utm_content` as well ([umami.md](umami.md)).
+- **Other `utm_content` in Umami.** Umami's read splits only the format sources (YouTube) by
+  `utm_content`; Reddit's subreddits and the newsletter's languages stay one number per channel
+  ([umami.md](umami.md)).
 - **New text-post channels** published through `textPostStrategy` keep `?ref=<channel>` until their
   adapter tags them and they join `UTM_CHANNELS`.
 - **The site side** (phase 2, SHP-4): the tool that reads the tags is Umami, and its read connector

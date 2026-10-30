@@ -12,7 +12,8 @@ export const githubDiscussionsAdapter = channelAdapter({
   definition: githubDiscussions,
   connect: { kind: 'engine', configured: 'github discussions', build: ({ auth, fetch }) => new GitHubDiscussions({ auth, ...(fetch && { fetch }) }) },
   publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, body: track('githubDiscussions', post.body, tracking) }) }),
-  editor: (c) => c,
+  // An edit's body is tagged as the discussion's was
+  editor: (c) => ({ edit: (id, e, tracking) => c.edit(id, { ...e, ...(e.body !== undefined && { body: track('githubDiscussions', e.body, tracking) }) }), delete: (id) => c.delete(id) }),
   // One piece a call for the six-hourly reads as they were; many per call for the hourly ones
   metrics: (c) => ({ metrics: (id: string) => c.metrics(id), read: batchReader((ids) => c.metricsMany(ids)).read }),
   comments: (c) => ({ reader: c, replier: c, feed: threadsFeed((ids) => c.commentsMany(ids)) }),
