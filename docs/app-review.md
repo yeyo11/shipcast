@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T06:19:22.606949087Z
-updated_at: 2026-10-30T06:59:53.066780487Z
+updated_at: 2026-10-30T07:22:22.83449267Z
 tags:
     - launches
     - launch-model
@@ -79,10 +79,13 @@ so every channel's run (and a strategy's `read`, YouTube's) is unchanged. Then:
    `projects.yml`. No `pack.json` and no channel drafts: those stay in Shipcast. With the blog off,
    the media alone are committed, for the networks that fetch them.
 3. The commit is recorded under the cursor `app-blog:<launch id>` (its sha and time), so **a retry
-   never commits twice**. A branch that moved meanwhile (409/422) is tried once more on its new head;
-   any other failure answers "waiting", the publish job tries again 30 seconds later (up to 40 times,
-   then the next round), and **nothing else goes out until the commit is made and the article is
-   live** (today's `HEAD` on the article; with the blog off, on `og.jpg`).
+   never commits twice**. Before committing, the article being committed is noted under the same
+   cursor (`pending`): a run that stopped between GitHub's answer and the record finds that article
+   on main as noted on its next try, and records the commit (`found on main`) instead of making it
+   again. A branch that moved meanwhile (409/422) is tried once more on its new head; any other
+   failure answers "waiting", the publish job tries again 30 seconds later (up to 40 times, then the
+   next round), and **nothing else goes out until the commit is made and the article is live**
+   (today's `HEAD` on the article; with the blog off, on `og.jpg`).
 4. Every channel not waiting goes out as before, under the same claims. A channel still waiting
    leaves the launch `drafted` (reported as partial) until it is approved.
 5. Each published piece's `posts.draft_version_id` names the version it went out with.
@@ -135,8 +138,8 @@ run on a preview.
 ## Known limits
 
 - A REST approval is recorded as `api`, not the token's name, which the routes are not handed.
-- A crash between the commit and its cursor would commit the same files again on the next try (an
-  empty change on GitHub, a second deploy); the window is one database write.
+- A media-only commit (the blog off) has no article to note before it, so a stop between it and its
+  record commits the same files again (an empty change on GitHub).
 - A draft pull request of a preview merged by hand on GitHub would put the article on the site
   outside Shipcast; a draft cannot be merged without being marked ready first.
 - Scheduling the blog itself, and channels scheduled before the article's slot, are not handled
@@ -149,10 +152,11 @@ run on a preview.
 a failed media store failing the draft, the review and the article preview's escaping, edits, no
 publishing before the article's approval, one commit with the article and media then every channel,
 an edit after approving holding one channel, a failed commit tried again with nothing out before the
-article is live, `auto` channels without approval (and a media-only commit with the blog off),
-"publish directly", the real site's preview, a process without the flag, and who edited and approved.
-`packages/runtime/test/runtime.test.ts`: the start refuses `app-review` without `launch-store-read`
-or `launch-media`, and builds no service (the pipeline opens pull requests) unless it is named.
+article is live, a stop between the commit and its record, `auto` channels without approval (and a
+media-only commit with the blog off), "publish directly", the real site's preview, a process without
+the flag, and who edited and approved. `packages/runtime/test/runtime.test.ts`: the start refuses
+`app-review` without `launch-store-read` or `launch-media`, and builds no service (the pipeline opens
+pull requests) unless it is named.
 
 ## Related
 
