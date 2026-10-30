@@ -105,7 +105,8 @@ export class LaunchReadService {
           // A channel with no draft has nothing to show the owner, though it waits too
           waiting: Object.fromEntries([...waits].filter(([channel]) => drafts.some((d) => d.channel === channel))),
           preview: preview ? (JSON.parse(preview) as SitePreview) : null,
-          published: published ? (JSON.parse(published) as BlogCommit) : null,
+          // A commit still pending (its record not written yet) is not one the launch was published with
+          published: published && (JSON.parse(published) as Partial<BlogCommit>).sha ? (JSON.parse(published) as BlogCommit) : null,
         },
       },
       launchMediaPath,

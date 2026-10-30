@@ -154,16 +154,28 @@ export class AppReviewService {
    */
   async publishSite(launch: Launch, options: { article: boolean; title: string }): Promise<BlogCommit | undefined> {
     const kept = await this.#deps.registry.cursors.cursor(appBlogKey(launch.id));
-    if (kept) return JSON.parse(kept) as BlogCommit;
+    const prior = kept ? (JSON.parse(kept) as BlogCommit | { pending: { path: string; content: string } }) : undefined;
+    if (prior && 'sha' in prior) return prior;
+    const { launchesRepo, github } = this.#deps;
+    // A run that stopped between its commit and its record left the article it was committing: on
+    // main as it was, the commit was made, and it is not made twice
+    if (prior && (await github.fileAt(launchesRepo, prior.pending.path, 'HEAD')) === prior.pending.content) {
+      return this.#published(launch, { sha: 'found on main', at: this.#now().toISOString() });
+    }
     const files = await this.#siteFiles(launch, options.article);
     if (files.length === 0) return undefined;
+    const article = files.find((f): f is { path: string; content: string } => 'content' in f && f.path.startsWith('src/content/posts/'));
+    if (article) await this.#deps.registry.cursors.setCursor(appBlogKey(launch.id), JSON.stringify({ pending: { path: article.path, content: article.content } }));
     const message = `publish: ${options.title}\n\nPublished by Shipcast, launch #${launch.id}.`;
     const commit = await this.#deps.github.commitToBranch(this.#deps.launchesRepo, SITE_BRANCH, message, files).catch((error: unknown) => {
       // Another commit landed between reading the head and moving it: once more, on the new head
       if (error instanceof GitHubError && (error.status === 409 || error.status === 422)) return this.#deps.github.commitToBranch(this.#deps.launchesRepo, SITE_BRANCH, message, files);
       throw error;
     });
-    const record: BlogCommit = { sha: commit.sha, at: this.#now().toISOString() };
+    return this.#published(launch, { sha: commit.sha, at: this.#now().toISOString() });
+  }
+
+  async #published(launch: Launch, record: BlogCommit): Promise<BlogCommit> {
     await this.#deps.registry.cursors.setCursor(appBlogKey(launch.id), JSON.stringify(record));
     // The preview has served its purpose; a failure to close it never holds the launch back
     await this.#closePreview(launch).catch(() => undefined);
@@ -173,7 +185,8 @@ export class AppReviewService {
   /** The commit the launch was published with, once made */
   async published(launchId: number): Promise<BlogCommit | undefined> {
     const kept = await this.#deps.registry.cursors.cursor(appBlogKey(launchId));
-    return kept ? (JSON.parse(kept) as BlogCommit) : undefined;
+    const record = kept ? (JSON.parse(kept) as Partial<BlogCommit>) : undefined;
+    return record?.sha ? (record as BlogCommit) : undefined;
   }
 
   /** Each published piece names the version of its draft it went out with */

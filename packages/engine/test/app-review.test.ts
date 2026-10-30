@@ -228,7 +228,7 @@ test('an edit after the approval holds back that channel alone, until it is appr
 });
 
 test('a failed commit is tried again, and nothing goes out before the article is committed and live', async () => {
-  const { registry, github, fake, launch, deliver, launches, publish, setLive } = await setup();
+  const { github, fake, launch, deliver, launches, publish, setLive, app } = await setup();
   await deliver();
   await launches.approve(launch.id);
   github.failOn('commitToBranch', new Error('GitHub is down'));
@@ -236,7 +236,7 @@ test('a failed commit is tried again, and nothing goes out before the article is
   assert.equal(failed.state, 'waiting');
   assert.match(failed.state === 'waiting' ? failed.reason : '', /could not be committed.*GitHub is down/);
   assert.deepEqual(sent(fake), []);
-  assert.equal(await registry.cursors.cursor(appBlogKey(launch.id)), undefined);
+  assert.equal(await app.published(launch.id), undefined);
 
   github.failOn('commitToBranch');
   setLive(false);
@@ -250,6 +250,34 @@ test('a failed commit is tried again, and nothing goes out before the article is
   assert.equal((await publish()).state, 'published');
   assert.equal(github.commits.length, 1);
   assert.deepEqual(sent(fake).sort(), ['bluesky', 'mastodon']);
+});
+
+test('a run that stopped between its commit and its record does not commit again', async () => {
+  const { registry, github, media, launch, deliver, launches } = await setup();
+  await deliver();
+  await launches.approve(launch.id);
+  const held = (await registry.launches.get(launch.id))!;
+  // The record of the commit is lost, as when the process stops right after GitHub answered
+  let lose = true;
+  const cursors = {
+    cursor: (key: string) => registry.cursors.cursor(key),
+    deleteCursor: (key: string) => registry.cursors.deleteCursor(key),
+    setCursor: async (key: string, value: string) => {
+      if (lose && value.includes('"sha"')) {
+        lose = false;
+        throw new Error('the process stopped');
+      }
+      return registry.cursors.setCursor(key, value);
+    },
+  } as unknown as typeof registry.cursors;
+  const store = new LaunchStoreService({ registry, media, github, launchesRepo: LAUNCHES });
+  const stopping = new AppReviewService({ registry: { ...registry, cursors }, media, github, launchesRepo: LAUNCHES, store, now: () => NOW });
+  await assert.rejects(stopping.publishSite(held, { article: true, title: 'Claudio' }), /the process stopped/);
+  assert.equal(github.commits.length, 1);
+  const again = await stopping.publishSite(held, { article: true, title: 'Claudio' });
+  assert.equal(again?.sha, 'found on main');
+  assert.equal(github.commits.length, 1);
+  assert.equal((await stopping.published(launch.id))?.sha, 'found on main');
 });
 
 test('auto channels go out without approval as soon as the drafts are ready; without the article the media alone are committed', async () => {
