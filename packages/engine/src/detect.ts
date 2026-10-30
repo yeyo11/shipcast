@@ -1,8 +1,8 @@
 import { formatIssues, matchingRule, parseLaunchConfig, resolvePack, type Brand, type PackKind } from '@shipcast/schema';
 import type { GitHubEvent, GitHubSource } from './github.ts';
-import { dedupeKeyOf } from './launch-import.ts';
+import { dedupeKeyOf, ruleLaunchYml } from './launch-keys.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
-import { ruleLaunchYml, type TriggerService } from './services/triggers.ts';
+import type { TriggerService } from './services/triggers.ts';
 
 export const LAUNCH_CONFIG_PATH = '.github/launch.yml';
 

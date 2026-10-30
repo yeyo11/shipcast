@@ -1,20 +1,12 @@
-import { CHANNELS, DEFAULT_TRIGGER_RULES, InvalidRequest, parseLaunchConfig, TriggerRule, TriggerRules, type Brand, type Channel } from '@shipcast/schema';
-import { stringify } from 'yaml';
+import { DEFAULT_TRIGGER_RULES, InvalidRequest, parseLaunchConfig, TriggerRule, TriggerRules } from '@shipcast/schema';
 import { channelRows } from '../launch-store.ts';
 import type { Launch, Repositories } from '../repositories/index.ts';
 
 /** The setting the owner's trigger rules are kept under */
 export const TRIGGERS_SETTING = 'triggers';
 
-/**
- * The launch.yml a rule stands in for when the repo has none: every channel the rule names waits
- * for approval, every other is off. Kept as the launch's channels (`channels_source`), so the draft,
- * the review and publishing read it as they read a repo's own.
- */
-export function ruleLaunchYml(brand: Pick<Brand, 'id'>, channels: readonly Channel[]): string {
-  const publishing = Object.fromEntries(CHANNELS.map((c) => [c, channels.includes(c) ? 'approval' : 'off']));
-  return stringify({ enabled: true, brand: brand.id, publishing });
-}
+/** Moved to launch-keys.ts, so detect.ts does not import a service; re-exported for its callers */
+export { ruleLaunchYml } from '../launch-keys.ts';
 
 export interface TriggerServiceDeps {
   registry: Pick<Repositories, 'settings' | 'launchStore'>;
