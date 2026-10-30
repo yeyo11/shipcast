@@ -21,13 +21,23 @@ export class PublishingService {
   readonly #launchesRepo: string;
   readonly #attempts: PublishAttempts;
   readonly #launchStore: PublishDeps['launchStore'];
+  readonly #appReview: PublishDeps['appReview'];
 
-  constructor(deps: { registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>; github: GitHubSource; launchesRepo: string; attempts?: PublishAttempts; launchStore?: PublishDeps['launchStore'] }) {
+  constructor(deps: {
+    registry: Pick<Repositories, 'launches' | 'posts' | 'attempts' | 'cursors'>;
+    github: GitHubSource;
+    launchesRepo: string;
+    attempts?: PublishAttempts;
+    launchStore?: PublishDeps['launchStore'];
+    /** With `app-review`: launches Shipcast holds, approved in the app (docs/app-review.md) */
+    appReview?: PublishDeps['appReview'];
+  }) {
     this.#registry = deps.registry;
     this.#github = deps.github;
     this.#launchesRepo = deps.launchesRepo;
     this.#attempts = deps.attempts ?? deps.registry.attempts;
     this.#launchStore = deps.launchStore;
+    this.#appReview = deps.appReview;
   }
 
   get attempts(): PublishAttempts {
@@ -36,7 +46,7 @@ export class PublishingService {
 
   /** Whether the launch's drafts are approved (merged, or published straight), without publishing anything */
   approval(launch: Launch) {
-    return approval(launch, { github: this.#github, launchesRepo: this.#launchesRepo });
+    return approval(launch, { github: this.#github, launchesRepo: this.#launchesRepo, ...(this.#appReview && { appReview: this.#appReview }) });
   }
 
   /** One run of a launch's publishing by `holder` (a job's id): what is due goes out, once */
@@ -49,6 +59,7 @@ export class PublishingService {
       guard: new PieceGuard(this.#attempts, holder),
       keepUnpublishable: true,
       ...(this.#launchStore && { launchStore: this.#launchStore }),
+      ...(this.#appReview && { appReview: this.#appReview }),
     });
   }
 

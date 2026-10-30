@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-10-30T04:37:44.608835139Z
+updated_at: 2026-10-30T06:20:39.544117893Z
 tags:
     - server
     - deploy
@@ -210,10 +210,11 @@ one at a time once each phase is verified:
 | `github-events` | pages read the drafts snapshot; GitHub is read on events and hourly |
 | `batched-metrics` | hourly, batched metrics and comment feeds |
 | `realtime-ui` | pages updated over server-sent events instead of polling |
-| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. The shadow write (`launch-store`), the import (`launch-import`) and `/media/<id>` (`launch-store-read`) call it |
+| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. The shadow write (`launch-store`), the import (`launch-import`), `/media/<id>` (`launch-store-read`) and the launches Shipcast holds (`app-review`) call it |
 | `launch-store` | the launch model's shadow write: each drafts pull request's pack, channels, drafts (as versions), media and merge also written to the launch model's tables and checked against it, differences in the attention bell ([launch-store.md](launch-store.md)); the rows are read only with `launch-store-read`. Its media need `launch-media` on too |
 | `launch-import` | lets `scripts/import-launches.ts` write: import the launches drafted before the shadow write, delete the ones decided away, roll a batch back ([launch-import.md](launch-import.md)). Off, the script only plans and verifies; the app never reads it. Turned on only for the run, with `launch-media` |
 | `launch-store-read` | the launch page, `GET /launches/{id}` (and MCP's `get_launch`), scheduling's channels and the reply and writing assistants' grounding read the launch model's tables instead of GitHub; a launch they do not hold is read as before ([launch-store-read.md](launch-store-read.md)). Needs `launch-store` (the start refuses without it) and `launch-media` for its files; turned on after the import is verified, with `github-events` |
+| `app-review` | a new launch has no pull request: its drafts are held by Shipcast, edited (as versions), previewed (in the app, and on the real site on demand) and approved in the app; `auto` channels go out without approval; the article and its media reach the launches repo as one commit at publishing, before anything links them ([app-review.md](app-review.md)). A process without it leaves such launches waiting. Needs `launch-store-read` (with `launch-store`) and `launch-media`: the start refuses without them |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
@@ -235,4 +236,4 @@ drafts snapshot.
 
 ## Related
 
-[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]]
+[[install.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[claudio.md]] · [[measurement.md]] · [[status.md]] · [[decisions/web-app-stack.md]] · [[decisions/redis.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[plans/performance-refactor.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[launch-store.md]] · [[launch-import.md]] · [[launch-store-read.md]] · [[app-review.md]]

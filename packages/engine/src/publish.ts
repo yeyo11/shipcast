@@ -11,7 +11,9 @@ import { isRetryable, notSentBecause, type PieceGuard } from './publishing/guard
 import { failureKey as failureKeyOf } from './publishing/retry.ts';
 
 const failureKey = (launch: Launch, channel: Channel) => failureKeyOf(launch.id, channel);
+import { isAppLaunch } from './app-review.ts';
 import type { Launch, Post, Repositories } from './repositories/index.ts';
+import type { AppReviewService } from './services/app-review.ts';
 import type { LaunchStoreService } from './services/launch-store.ts';
 
 /**
@@ -177,6 +179,11 @@ export interface PublishDeps {
   keepUnpublishable?: boolean;
   /** With `launch-store`: told once the drafts are found approved, so the merge is also an approval row (services/launch-store.ts) */
   launchStore?: Pick<LaunchStoreService, 'merged'>;
+  /**
+   * With `app-review`: a launch Shipcast holds is published from its approved versions, its site files
+   * committed to the launches repo first (docs/app-review.md). Without it such a launch waits
+   */
+  appReview?: Pick<AppReviewService, 'approval' | 'publishing' | 'publishSite' | 'linkPublished'>;
 }
 
 /**
@@ -253,7 +260,9 @@ export function launchConfigFrom(configText: string | null | undefined): LaunchC
  * or through a pull request that was merged. What a round asks before it queues the publishing, and
  * what the publishing asks first.
  */
-export async function approval(launch: Launch, deps: Pick<PublishDeps, 'github' | 'launchesRepo'>): Promise<{ state: 'approved' } | { state: 'waiting'; reason: string } | { state: 'closed' }> {
+export async function approval(launch: Launch, deps: Pick<PublishDeps, 'github' | 'launchesRepo' | 'appReview'>): Promise<{ state: 'approved' } | { state: 'waiting'; reason: string } | { state: 'closed' }> {
+  // Held by Shipcast: approved in the app, and its `auto` channels need no approval (docs/app-review.md)
+  if (isAppLaunch(launch)) return deps.appReview ? deps.appReview.approval(launch) : { state: 'waiting', reason: APP_REVIEW_OFF };
   // Published without a pull request: the drafts went straight onto the launches repo's main branch
   if (launch.detail?.startsWith('direct:') ?? false) return { state: 'approved' };
   const number = pullRequestNumber(launch);
@@ -282,9 +291,21 @@ export const BUILT_IN_PUBLISHING: Readonly<Record<keyof Publishers, true>> = {
   newsletter: true,
 };
 
-export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {
+/** Why a launch Shipcast holds does not publish in a process without the flag */
+const APP_REVIEW_OFF = 'the launch is held by Shipcast and the app-review flag is off';
+
+/** What a launch is published from: its pack, its channels and its drafts' texts by path, read as merged or as approved */
+interface LaunchContent {
+  pack: ContentPack;
+  config: LaunchConfig;
+  read: (path: string) => Promise<string | undefined>;
+  /** A launch Shipcast holds: why each channel may not go out yet; none for a merged pull request */
+  waits: ReadonlyMap<string, string>;
+}
+
+/** A launch reviewed in its pull request: approved by the merge, every text read from the launches repo's main */
+async function mergedContent(launch: Launch, deps: PublishDeps): Promise<LaunchContent | Extract<PublishResult, { state: 'waiting' | 'skipped' }>> {
   const { github, registry } = deps;
-  const http = deps.fetch ?? globalThis.fetch;
   const approved = await approval(launch, deps);
   if (approved.state === 'waiting') return { state: 'waiting', launch, reason: approved.reason };
   if (approved.state === 'closed') return { state: 'skipped', launch: await registry.launches.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
@@ -297,13 +318,49 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const pack = (deps.channels ? contentPackFor(deps.channels) : ContentPack).parse(JSON.parse(packText));
   const config = await launchConfigOf(github, deps.launchesRepo, launch);
   if (!config) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
+  return { pack, config, read: (path) => github.fileAt(deps.launchesRepo, path, 'HEAD'), waits: new Map() };
+}
+
+export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {
+  const { github, registry } = deps;
+  const http = deps.fetch ?? globalThis.fetch;
+  // A launch Shipcast holds is read from its rows, each channel cleared by its mode and the approval (docs/app-review.md)
+  const app = isAppLaunch(launch) ? deps.appReview : undefined;
+  if (isAppLaunch(launch) && !app) return { state: 'waiting', launch, reason: APP_REVIEW_OFF };
+  const content = app ? await app.publishing(launch, deps.channels) : await mergedContent(launch, deps);
+  if ('waiting' in content) return { state: 'waiting', launch, reason: content.waiting };
+  if ('state' in content) return content;
+  const { pack, config, read, waits } = content;
+  const dir = launchDir(launch);
 
   // English is the canonical version every channel links to; Spanish only where that is the only one
   const lead: 'en' | 'es' = pack.article?.en ? 'en' : 'es';
   const slug = pack.article?.[lead]?.slug;
   const articleUrl = articleLink(pack, brand.site, lead);
-  // The merge starts the deploy: wait until the article (and so the media) is live
-  if (slug && config.publishing.blog !== 'off') {
+  const channels = (deps.channels ?? CHANNEL_DEFINITIONS).filter((d) => d.publishedBy === 'engine');
+  // A channel the registry of this run adds (a test's) and launch.yml cannot name yet runs in its default mode
+  const modeOf = (d: ChannelDefinition) => config.publishing[d.id as Channel] ?? d.defaultMode;
+  const blogOn = Boolean(slug) && config.publishing.blog !== 'off';
+  if (app) {
+    // Every channel links the article: while it waits for approval, nothing goes
+    const blogWaits = blogOn ? waits.get('blog') : undefined;
+    if (blogWaits) return { state: 'waiting', launch, reason: `the article ${blogWaits}; every channel links it` };
+    // The site gets the article and the media in one commit before anything links them; a failed commit is tried again, and nothing goes out meanwhile
+    if (blogOn || channels.some((d) => modeOf(d) !== 'off' && !waits.has(d.id))) {
+      try {
+        await app.publishSite(launch, { article: blogOn, title: pack.article?.[lead]?.title ?? pack.project.name });
+      } catch (error) {
+        return { state: 'waiting', launch, reason: `the article and its media could not be committed to ${deps.launchesRepo}, tried again shortly: ${error instanceof Error ? error.message : String(error)}` };
+      }
+      // Without the article, the media alone were committed: the channels wait until they are served
+      if (!blogOn) {
+        const image = `${brand.site}${mediaPath(launch, 'og.jpg')}`;
+        if (!(await http(image, { method: 'HEAD' }).then((r) => r.ok, () => false))) return { state: 'waiting', launch, reason: `${image} is not live yet` };
+      }
+    }
+  }
+  // The merge (or Shipcast's commit) starts the deploy: wait until the article (and so the media) is live
+  if (blogOn) {
     const live = await http(articleUrl, { method: 'HEAD' }).then((r) => r.ok, () => false);
     if (!live) return { state: 'waiting', launch, reason: `${articleUrl} is not live yet` };
     if ((await registry.posts.posts(launch.id, { channel: 'blog' })).length === 0 && deps.search) {
@@ -318,7 +375,6 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     }
   }
 
-  const read = (path: string) => github.fileAt(deps.launchesRepo, path, 'HEAD');
   const article = slug ? await read(`src/content/posts/${lead}/${slug}.md`) : undefined;
   const { data: front, body: articleBody } = article ? parseFrontMatter(article) : { data: {}, body: '' };
   const title = typeof front.title === 'string' ? front.title : pack.article?.en?.title ?? pack.project.name;
@@ -621,9 +677,6 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
         : undefined,
   };
 
-  const channels = (deps.channels ?? CHANNEL_DEFINITIONS).filter((d) => d.publishedBy === 'engine');
-  // A channel the registry of this run adds (a test's) and launch.yml cannot name yet runs in its default mode
-  const modeOf = (d: ChannelDefinition) => config.publishing[d.id as Channel] ?? d.defaultMode;
   const runs = new Map<string, PublishRun | undefined>();
   for (const d of channels) {
     const own = strategyOf(d.id);
@@ -634,6 +687,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     const channel = definition.id as EngineChannel;
     const mode = modeOf(definition);
     if (mode === 'off' || done(pieces, channel)) continue;
+    // Held by Shipcast and not approved (or edited since): pending until it is
+    if (waits.has(channel)) continue;
     if ((await registry.cursors.cursor(failureKey(launch, channel))) || (await registry.cursors.cursor(cancelledKey(launch.id, channel)))) continue;
     const at = later(pieces, channel);
     if (at) {
@@ -675,6 +730,8 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     }
   }
 
+  // What each piece went out with, for a launch Shipcast holds; never worth failing the run for
+  await app?.linkPublished(launch).catch(() => undefined);
   const piecesNow = await registry.posts.posts(launch.id);
   const pending: string[] = [];
   for (const definition of channels) {

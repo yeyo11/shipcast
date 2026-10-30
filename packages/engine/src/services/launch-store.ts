@@ -67,48 +67,62 @@ export class LaunchStoreService {
    */
   drafted(launch: Launch, delivery: Delivery): Promise<string[]> {
     return this.#checked(launch, async () => {
-      const problems: string[] = [];
-      const { id: packId } = await this.#store.addPack(launch.id, delivery.pack as unknown as Record<string, unknown>, { aiTask: launch.ref.startsWith('article:') ? 'article' : 'pack' });
-      const config = parseLaunchConfig(delivery.configText);
-      if (config.ok) await this.#store.replaceChannels(launch.id, channelRows(config.value), delivery.configText);
-      else problems.push('launch.yml does not parse: no channels written');
-
-      const current = await this.#store.drafts(launch.id);
-      const files: PullRequestFile[] = [];
-      const failed = new Map<string, string[]>();
-      for (const file of delivery.files) {
-        const stored = storedFile(launch, file.path);
-        if ('content' in file) {
-          files.push({ path: file.path, content: file.content });
-          if (stored.kind === 'draft') await this.#version(launch.id, current, { ...stored, path: file.path, body: file.content, origin: 'ai', packId });
-          continue;
-        }
-        const sha256 = sha256Hex(file.bytes);
-        files.push({ path: file.path, content: null, sha256 });
-        if (stored.kind !== 'media') continue;
-        try {
-          const put = await this.#deps.media.put(file.bytes, mimeOf(file.path));
-          await this.#store.addMedia({
-            launchId: stored.shared ? null : launch.id,
-            sha256: put.sha256,
-            kind: mediaKind(put.mime),
-            mime: put.mime,
-            bytes: put.bytes,
-            storage: this.#deps.media.storage,
-            path: put.key,
-            role: stored.role,
-            publicPath: stored.publicPath,
-          });
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : String(error);
-          failed.set(reason, [...(failed.get(reason) ?? []), file.path]);
-        }
-      }
-      for (const [reason, paths] of failed) problems.push(`${paths.length === 1 ? paths[0] : `${paths.length} media files`} not stored: ${reason}`);
-
+      const { problems, files } = await this.#write(launch, delivery);
       if (delivery.direct) await this.#approve(launch, { by: 'shipcast', note: `committed straight onto main as ${delivery.direct.sha}` });
       return [...problems, ...storeDifferences(launch, await this.#copy(launch, files), files)];
     });
+  }
+
+  /**
+   * A launch Shipcast holds itself (docs/app-review.md): the shadow write's own write, with no pull
+   * request to compare it with and no report: what could not be stored is answered for the caller to
+   * fail the draft with, since these rows are all there is of the launch.
+   */
+  async held(launch: Launch, delivery: Omit<Delivery, 'direct'>): Promise<string[]> {
+    return (await this.#write(launch, delivery)).problems;
+  }
+
+  /** The pack, the channels, a version of each draft and every file, as the drafts were handed over */
+  async #write(launch: Launch, delivery: Omit<Delivery, 'direct'>): Promise<{ problems: string[]; files: PullRequestFile[] }> {
+    const problems: string[] = [];
+    const { id: packId } = await this.#store.addPack(launch.id, delivery.pack as unknown as Record<string, unknown>, { aiTask: launch.ref.startsWith('article:') ? 'article' : 'pack' });
+    const config = parseLaunchConfig(delivery.configText);
+    if (config.ok) await this.#store.replaceChannels(launch.id, channelRows(config.value), delivery.configText);
+    else problems.push('launch.yml does not parse: no channels written');
+
+    const current = await this.#store.drafts(launch.id);
+    const files: PullRequestFile[] = [];
+    const failed = new Map<string, string[]>();
+    for (const file of delivery.files) {
+      const stored = storedFile(launch, file.path);
+      if ('content' in file) {
+        files.push({ path: file.path, content: file.content });
+        if (stored.kind === 'draft') await this.#version(launch.id, current, { ...stored, path: file.path, body: file.content, origin: 'ai', packId });
+        continue;
+      }
+      const sha256 = sha256Hex(file.bytes);
+      files.push({ path: file.path, content: null, sha256 });
+      if (stored.kind !== 'media') continue;
+      try {
+        const put = await this.#deps.media.put(file.bytes, mimeOf(file.path));
+        await this.#store.addMedia({
+          launchId: stored.shared ? null : launch.id,
+          sha256: put.sha256,
+          kind: mediaKind(put.mime),
+          mime: put.mime,
+          bytes: put.bytes,
+          storage: this.#deps.media.storage,
+          path: put.key,
+          role: stored.role,
+          publicPath: stored.publicPath,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        failed.set(reason, [...(failed.get(reason) ?? []), file.path]);
+      }
+    }
+    for (const [reason, paths] of failed) problems.push(`${paths.length === 1 ? paths[0] : `${paths.length} media files`} not stored: ${reason}`);
+    return { problems, files };
   }
 
   /**

@@ -13,6 +13,13 @@ export type Trigger = 'release' | 'manual' | 'public' | 'enabled' | 'article';
  */
 export type LaunchStatus = 'detected' | 'generating' | 'drafted' | 'published' | 'skipped' | 'failed';
 
+/**
+ * Who holds a launch's drafts (docs/decisions/launch-model.md): `legacy`, a pull request in the
+ * launches repo that is approved by its merge; `app`, Shipcast itself, reviewed and approved in the
+ * app (docs/app-review.md)
+ */
+export type LaunchModel = 'legacy' | 'app';
+
 export interface Launch {
   id: number;
   /** `owner/name` */
@@ -27,6 +34,8 @@ export interface Launch {
   detail: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Always set on a launch read from the registry; a launch built without it is `legacy` */
+  model?: LaunchModel;
 }
 
 export const LAUNCH_STATUSES: readonly LaunchStatus[] = ['detected', 'generating', 'drafted', 'published', 'skipped', 'failed'];
@@ -105,6 +114,7 @@ function toLaunch(row: typeof launches.$inferSelect): Launch {
     detail: row.detail,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    model: row.model === 'app' ? 'app' : 'legacy',
   };
 }
 
@@ -156,6 +166,13 @@ export class LaunchRepository {
 
   async setStatus(id: number, status: LaunchStatus, detail: string | null = null): Promise<Launch> {
     const [row] = await this.#db.update(launches).set({ status, detail, updatedAt: nowIso }).where(eq(launches.id, id)).returning();
+    if (!row) throw new Error(`no launch with id ${id}`);
+    return toLaunch(row);
+  }
+
+  /** The launch's drafts are held by `model` from now on (docs/app-review.md) */
+  async setModel(id: number, model: LaunchModel): Promise<Launch> {
+    const [row] = await this.#db.update(launches).set({ model, updatedAt: nowIso }).where(eq(launches.id, id)).returning();
     if (!row) throw new Error(`no launch with id ${id}`);
     return toLaunch(row);
   }

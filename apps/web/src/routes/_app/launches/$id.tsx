@@ -14,7 +14,7 @@ import { Notice, number, Pill, when } from '../../../components/ui';
 import { Accordion, AccordionItem, Collapsible } from '../../../components/ui/Collapsible';
 import { Tabs } from '../../../components/ui/Tabs';
 import { launchDateLabel } from '../../../server/launch-summary';
-import { approveDrafts, getLaunch, launchRepo, publishAgain, refreshDrafts, saveDraft } from '../../../server/launches.functions';
+import { approveDrafts, findSitePreview, getLaunch, launchRepo, previewOnSite, publishAgain, refreshDrafts, saveDraft } from '../../../server/launches.functions';
 import { zonedLabel } from '../../../server/pieces';
 import { CHANNEL_NAMES } from '../../../server/view';
 
@@ -57,12 +57,31 @@ type Data = Awaited<ReturnType<typeof getLaunch>> & {};
 type Review = Exclude<Data['review'], null | { error: string }>;
 type DraftView = Review['drafts'][number];
 
-/** One text of the launch as a folded row, opened on demand; editable while its pull request is open */
-function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: DraftView; editable: boolean }) {
+/**
+ * An article as the blog would show it (docs/app-review.md): its title, description and launch image
+ * over the body, rendered on the server with any HTML in it shown as text
+ */
+function ArticlePreview({ preview }: { preview: NonNullable<DraftView['preview']> }) {
+  return (
+    <article className="article-preview" aria-label="The article as the blog shows it">
+      <h3 className="article-preview-title">{preview.title}</h3>
+      {preview.description && <p className="article-preview-lead">{preview.description}</p>}
+      {preview.image && <img className="article-preview-image" src={preview.image} alt={preview.imageAlt ?? ''} loading="lazy" />}
+      <div className="article-preview-body" dangerouslySetInnerHTML={{ __html: preview.html }} />
+    </article>
+  );
+}
+
+/**
+ * One text of the launch as a folded row, opened on demand; editable while its pull request is open,
+ * or for a launch Shipcast holds while it is drafted (`app`), where an article opens on its preview
+ */
+function DraftEditor({ launchId, draft, editable, app }: { launchId: number; draft: DraftView; editable: boolean; app: boolean }) {
   const router = useRouter();
   const [content, setContent] = useState(draft.content ?? '');
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(!draft.preview);
   const changed = content !== (draft.content ?? '');
   return (
     <AccordionItem
@@ -72,11 +91,24 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
       summary={
         <>
           <span className="draft-title">{draft.label}</span>
+          {draft.approved !== undefined && <Pill tone={draft.approved ? 'published' : 'waiting'}>{draft.approved ? 'Approved' : 'Not approved'}</Pill>}
           <span className="muted mono break draft-path">{draft.path}</span>
         </>
       }
     >
-      {editable ? (
+      {draft.preview && (
+        <div className="row">
+          <button type="button" className="btn btn-small" aria-pressed={!editing} onClick={() => setEditing(false)}>
+            Preview
+          </button>
+          <button type="button" className="btn btn-small" aria-pressed={editing} onClick={() => setEditing(true)}>
+            {editable ? 'Edit the text' : 'The text'}
+          </button>
+        </div>
+      )}
+      {draft.preview && !editing ? (
+        <ArticlePreview preview={draft.preview} />
+      ) : editable ? (
         <>
           <label className="visually-hidden" htmlFor={draft.path}>
             {draft.label}
@@ -90,7 +122,7 @@ function DraftEditor({ launchId, draft, editable }: { launchId: number; draft: D
                 setBusy(true);
                 const answer = await saveDraft({ data: { id: launchId, path: draft.path, content } });
                 setBusy(false);
-                if (answer.ok) toast.done(`${draft.label} saved`, 'The edit is a commit on the pull request: it is what gets published.');
+                if (answer.ok) toast.done(`${draft.label} saved`, app ? 'Saved as a new version: it goes out once it is approved.' : 'The edit is a commit on the pull request: it is what gets published.');
                 else toast.fail(answer.problem);
                 if (answer.ok) await router.invalidate();
               }}
@@ -122,6 +154,7 @@ const TRIGGER_WORDS: Record<string, string> = {
  */
 function Details({ data }: { data: Data }) {
   const { launch, pieces, metrics, jobs } = data;
+  const review = data.review && !('error' in data.review) ? data.review : undefined;
   const replies = Object.values(pieces.replies).reduce((a, b) => a + b, 0);
   const bySource = new Map<string, typeof metrics>();
   for (const m of metrics) bySource.set(m.source, [...(bySource.get(m.source) ?? []), m]);
@@ -157,6 +190,15 @@ function Details({ data }: { data: Data }) {
             <dt>Started</dt>
             <dd>{when(launch.createdAt)}</dd>
           </div>
+          {review?.app && (
+            <div>
+              <dt>Drafts</dt>
+              <dd>
+                Kept in Shipcast
+                {review.app.approval ? `, approved by ${review.app.approval.by} ${when(review.app.approval.at)}` : ', not approved yet'}
+              </dd>
+            </div>
+          )}
           {launch.pullRequest && (
             <div>
               <dt>Drafts</dt>
@@ -274,7 +316,12 @@ function LaunchPage() {
   }, [live, running, router]);
 
   const reviewOk = review && !('error' in review) ? review : undefined;
-  const open = reviewOk?.pullRequest.state === 'open';
+  // A launch Shipcast holds is reviewed here (docs/app-review.md): editable while drafted, waiting for
+  // the owner while nothing is approved or something changed since the approval
+  const app = reviewOk?.app;
+  const waitingChannels = app ? Object.keys(app.waiting) : [];
+  const editable = app ? app.open : reviewOk?.pullRequest?.state === 'open';
+  const open = app ? app.open && (app.approval === null || waitingChannels.length > 0) : editable;
   const texts = reviewOk?.drafts.filter((d) => d.kind === 'article' || d.kind === 'channel') ?? [];
   const media = reviewOk?.drafts.filter((d) => d.kind === 'image' || d.kind === 'video') ?? [];
   const timezone = pieces.scheduling.timezone;
@@ -340,10 +387,23 @@ function LaunchPage() {
     setBusy(true);
     const answer = await approveDrafts({ data: launch.id });
     setBusy(false);
-    if (answer.ok) toast.done('Approved', 'The pull request is merged; the blog deploys, then every channel publishes.');
+    if (answer.ok) toast.done('Approved', app ? 'The article and its media go to the site in one commit; once it is live, every approved channel publishes.' : 'The pull request is merged; the blog deploys, then every channel publishes.');
     else toast.fail(answer.problem);
     await router.invalidate();
   };
+
+  // The real site's preview: asked for on demand, its address read from its pull request when the owner asks
+  const sitePreview = async (find: boolean) => {
+    setBusy(true);
+    const answer = await (find ? findSitePreview : previewOnSite)({ data: launch.id }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
+    setBusy(false);
+    if (!answer.ok) toast.fail(answer.problem);
+    else if (!find) toast.done('Preview asked for', 'The site builds it in a few minutes; its address shows here once it is up.');
+    else if (!answer.preview.url) toast.done('Not up yet', 'The site is still building the preview.');
+    await router.invalidate();
+  };
+  const preview = app?.preview;
+  const previewReady = Boolean(preview?.url && preview.urlSha && preview.sha.startsWith(preview.urlSha));
 
   return (
     <>
@@ -414,13 +474,28 @@ function LaunchPage() {
       {open && (
         <div className="strip strip-yellow" role="region" aria-label="Waiting for you">
           <strong className="strip-title">Waiting for you</strong>
+          {app?.approval && waitingChannels.length > 0 && (
+            <p className="strip-text">
+              Changed since it was approved: {waitingChannels.map((c) => CHANNEL_NAMES[c] ?? c).join(', ')}. Approve again to send {waitingChannels.length === 1 ? 'it' : 'them'}.
+            </p>
+          )}
           <div className="row">
-            {reviewOk && (
+            {app && (
+              <button className="btn btn-small" disabled={busy} onClick={() => sitePreview(false)} title="Puts the article and its media on a preview branch of the launches repo, which the site deploys to its own address">
+                {preview ? 'Update the site preview' : 'Preview on the real site'}
+              </button>
+            )}
+            {reviewOk?.pullRequest && (
               <a className="btn btn-small" href={reviewOk.pullRequest.url} target="_blank" rel="noreferrer" style={{ color: '#000', borderColor: '#000' }}>
                 Open the pull request
               </a>
             )}
-            <button className="btn btn-primary btn-small" disabled={busy} onClick={approve} title="Approving merges the pull request: the blog publishes, then every approved channel">
+            <button
+              className="btn btn-primary btn-small"
+              disabled={busy}
+              onClick={approve}
+              title={app ? 'Approving records the drafts as they are now: the article goes to the site, then every approved channel' : 'Approving merges the pull request: the blog publishes, then every approved channel'}
+            >
               {busy ? 'Approving…' : `Approve and publish ${texts.filter((t) => t.kind === 'channel').length + 1} pieces`}
             </button>
           </div>
@@ -483,6 +558,22 @@ function LaunchPage() {
                   </p>
                 )}
                 {review && 'error' in review && <Notice tone="bad">Could not read the drafts: {review.error}</Notice>}
+                {preview && (
+                  <p className="quiet">
+                    {previewReady && preview.url ? (
+                      <a href={preview.url} target="_blank" rel="noreferrer">
+                        The preview on the real site
+                        <span className="visually-hidden"> (opens in a new tab)</span>
+                      </a>
+                    ) : (
+                      <span>Site preview asked for {when(preview.at)}; the site builds it in a few minutes</span>
+                    )}
+                    <span aria-hidden="true">·</span>
+                    <button className="btn btn-small" disabled={busy} onClick={() => sitePreview(true)}>
+                      {previewReady ? 'Check again' : 'Find its address'}
+                    </button>
+                  </p>
+                )}
                 {failedEmpty && (
                   <Empty art={<EmptyDrafts width={220} />} title="Nothing was drafted">
                     The launch failed before its drafts were written: the reason is above, and the job’s log is in Details.
@@ -500,11 +591,11 @@ function LaunchPage() {
                 {texts.length > 0 && (
                   <section aria-labelledby="texts-title">
                     <h2 className="tab-title" id="texts-title">
-                      {open ? 'The drafts' : 'What went out'}
+                      {editable ? 'The drafts' : 'What went out'}
                     </h2>
                     <Accordion className="drafts">
                       {texts.map((d) => (
-                        <DraftEditor key={d.path} launchId={launch.id} draft={d} editable={open} />
+                        <DraftEditor key={d.path} launchId={launch.id} draft={d} editable={editable} app={Boolean(app)} />
                       ))}
                     </Accordion>
                   </section>

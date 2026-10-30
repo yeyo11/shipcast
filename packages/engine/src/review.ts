@@ -1,4 +1,5 @@
 import { draftBody, draftFile, draftOf, pieceLimitProblem, pullRequestNumber } from '@shipcast/schema';
+import type { ArticlePreview, BlogCommit, SitePreview } from './app-review.ts';
 import { draftsBranch, isArticle, launchDir, type DraftFile } from './drafts.ts';
 import { draftPath } from './launch-store.ts';
 import { launchConfigText } from './publish.ts';
@@ -28,10 +29,30 @@ export interface Draft {
   content?: string;
   /** Media only: where its bytes can be seen on the pull request's branch */
   url?: string;
+  /** A launch Shipcast holds: whether this version is the one approved */
+  approved?: boolean;
+  /** A launch Shipcast holds, an article: as the blog would show it */
+  preview?: ArticlePreview;
+}
+
+/** A launch Shipcast holds (docs/app-review.md): where its review stands, in place of a pull request */
+export interface AppReview {
+  /** Its drafts can be edited and approved: drafted and not out */
+  open: boolean;
+  /** The approval in force */
+  approval: { by: string; at: string } | null;
+  /** Why each channel may not go out yet, by channel */
+  waiting: Record<string, string>;
+  /** Its preview on the real site, as last asked for */
+  preview: SitePreview | null;
+  /** The commit that put its article and media on the site */
+  published: BlogCommit | null;
 }
 
 export interface Review {
-  pullRequest: { number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string };
+  /** The drafts pull request; none for a launch Shipcast holds, which has `app` */
+  pullRequest?: { number: number; url: string; state: 'open' | 'merged' | 'closed'; branch: string };
+  app?: AppReview;
   drafts: Draft[];
 }
 
@@ -120,6 +141,13 @@ export function reviewFromStore(launch: Launch, stored: StoredReviewInput, media
   const url = /https:\/\/github\.com\/\S+\/pull\/\d+/.exec(launch.detail ?? '')?.[0] ?? '';
   const state = stored.approved || launch.status === 'published' ? 'merged' : launch.status === 'skipped' && (launch.detail ?? '').includes('closed without merging') ? 'closed' : 'open';
   const dir = launchDir(launch);
+  const data = [...(stored.hasPack ? [`${dir}/pack.json`] : []), ...(isArticle(launch) && stored.channelsSource !== null ? [`${dir}/launch.yml`] : [])].map((path) => describe(path, dir));
+  return { pullRequest: { number, url, state, branch: draftsBranch(launch) }, drafts: sorted([...storedDrafts(launch, stored, mediaUrl), ...data]) };
+}
+
+/** Each stored text at its current version under the path it came from, and the launch's files served by the app */
+function storedDrafts(launch: Launch, stored: Pick<StoredReviewInput, 'drafts' | 'media'>, mediaUrl: (row: StoredMediaRow) => string): Draft[] {
+  const dir = launchDir(launch);
   const texts = stored.drafts.map((d) => {
     const draft: Draft = describe(draftPath(d) ?? `${dir}/${d.channel}-${d.piece}.md`, dir);
     draft.content = d.body;
@@ -131,8 +159,24 @@ export function reviewFromStore(launch: Launch, stored: StoredReviewInput, media
     if (draft.kind === 'image' || draft.kind === 'video') draft.url = mediaUrl(row);
     return [draft];
   });
-  const data = [...(stored.hasPack ? [`${dir}/pack.json`] : []), ...(isArticle(launch) && stored.channelsSource !== null ? [`${dir}/launch.yml`] : [])].map((path) => describe(path, dir));
-  return { pullRequest: { number, url, state, branch: draftsBranch(launch) }, drafts: sorted([...texts, ...files, ...data]) };
+  return [...texts, ...files];
+}
+
+/**
+ * The review of a launch Shipcast holds (docs/app-review.md), from its rows alone: each draft's
+ * current version, whether it is the approved one, and each article as the blog would show it.
+ */
+export function reviewForApp(
+  launch: Launch,
+  stored: Pick<StoredReviewInput, 'drafts' | 'media'> & { app: AppReview; approvedPaths: ReadonlyMap<string, boolean>; previews: ReadonlyMap<string, ArticlePreview> },
+  mediaUrl: (row: StoredMediaRow) => string,
+): Review {
+  const drafts = storedDrafts(launch, stored, mediaUrl).map((d) => {
+    const approved = stored.approvedPaths.get(d.path);
+    const preview = stored.previews.get(d.path);
+    return { ...d, ...(approved !== undefined && { approved }), ...(preview && { preview }) };
+  });
+  return { app: stored.app, drafts: sorted(drafts) };
 }
 
 /**
@@ -186,7 +230,7 @@ export class ReviewError extends Error {}
 export async function editDraft(launch: Launch, path: string, content: string, deps: { github: ReviewGitHub; launchesRepo: string }): Promise<void> {
   const review = await readReview(launch, deps);
   if (!review) throw new ReviewError('this launch has no drafts pull request');
-  if (review.pullRequest.state !== 'open') throw new ReviewError('the pull request is no longer open: its drafts were already decided');
+  if (review.pullRequest?.state !== 'open') throw new ReviewError('the pull request is no longer open: its drafts were already decided');
   const draft = review.drafts.find((d) => d.path === path);
   if (!draft || (draft.kind !== 'article' && draft.kind !== 'channel')) throw new ReviewError(`${path} is not a draft of this launch`);
   // The network would refuse it at publishing time, after the merge: refused here, while it can still be fixed

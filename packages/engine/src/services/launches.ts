@@ -3,8 +3,10 @@ import { claimArticle, type ArticleInput } from '../article.ts';
 import { claimManual, type PipelineDeps } from '../pipeline.ts';
 import type { LaunchCatalog } from '../ports.ts';
 import { preflight, type Preflight, type PreflightSource } from '../preflight.ts';
+import { isAppLaunch } from '../app-review.ts';
 import type { Launch, LaunchFilter } from '../repositories/index.ts';
 import { approveLaunch, editDraft, type ReviewGitHub } from '../review.ts';
+import type { AppReviewService } from './app-review.ts';
 import type { DraftSnapshotService } from './drafts.ts';
 import type { LaunchStoreService } from './launch-store.ts';
 
@@ -33,6 +35,8 @@ export interface LaunchServiceDeps {
   drafts?: Pick<DraftSnapshotService, 'edited'>;
   /** With `launch-store`: an edit is also a version in the launch model's tables */
   launchStore?: Pick<LaunchStoreService, 'edited'>;
+  /** With `app-review`: a launch Shipcast holds is edited and approved in the app, not on a pull request (docs/app-review.md) */
+  appReview?: Pick<AppReviewService, 'edit' | 'approve'>;
 }
 
 /**
@@ -53,6 +57,12 @@ export class LaunchService {
     const launch = await this.#deps.launches.get(launchId);
     if (!launch) throw new LaunchRefused('not_found', 'no such launch');
     return launch;
+  }
+
+  /** A launch Shipcast holds is reviewed only where the app-review flag is on */
+  #app(): Pick<AppReviewService, 'edit' | 'approve'> {
+    if (!this.#deps.appReview) throw new LaunchRefused('state', 'this launch is reviewed in Shipcast, and the app-review flag is off here');
+    return this.#deps.appReview;
   }
 
   get(launchId: number): Promise<Launch | undefined> {
@@ -105,8 +115,10 @@ export class LaunchService {
    * long for its network), then tells the snapshot and the launch model's copy, neither of which can
    * fail the edit.
    */
-  async editDraft(launchId: number, path: string, content: string): Promise<void> {
+  async editDraft(launchId: number, path: string, content: string, author: string | null = null): Promise<void> {
     const launch = await this.#launch(launchId);
+    // Who wrote it (a login, `api`) is kept on the version of a launch Shipcast holds
+    if (isAppLaunch(launch)) return this.#app().edit(launch, path, content, author);
     await editDraft(launch, path, content, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });
     const committed = content.endsWith('\n') ? content : `${content}\n`;
     // The page reads the snapshot: the edit shows at once, before GitHub's delivery confirms it
@@ -114,9 +126,16 @@ export class LaunchService {
     await this.#deps.launchStore?.edited(launch, path, committed).catch(() => undefined);
   }
 
-  /** Approves the drafts: merges their pull request, after which the caller queues the publishing */
-  async approve(launchId: number): Promise<Launch> {
+  /**
+   * Approves the drafts: merges their pull request, or for a launch Shipcast holds records the
+   * approval of every draft as it is now; the caller queues the publishing after either
+   */
+  async approve(launchId: number, by = 'owner'): Promise<Launch> {
     const launch = await this.#launch(launchId);
+    if (isAppLaunch(launch)) {
+      await this.#app().approve(launch, by);
+      return launch;
+    }
     await approveLaunch(launch, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });
     return launch;
   }
