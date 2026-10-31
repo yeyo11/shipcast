@@ -94,7 +94,9 @@ const DAY = 86_400_000;
 
 
 export function launchName(repo: string, ref: string): string {
-  return ref.startsWith('article:') ? 'An article' : `${repo.split('/')[1] ?? repo} ${ref}`;
+  const name = repo.split('/')[1] ?? repo;
+  // A project's name opens a line, as a title does
+  return ref.startsWith('article:') ? 'An article' : `${name.charAt(0).toUpperCase()}${name.slice(1)} ${ref}`;
 }
 
 export function soonIn(ms: number): string {
@@ -153,7 +155,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
     items.push({ key: `launch:${d.launchId}:store:${digest(d.differences.join('\n'))}`, kind: 'drift', text: `${launchName(l.repo, l.ref)}: Shipcast's copy differs from the pull request (${d.differences[0]}${more})`, action: 'See the launch', target: { to: '/launches/$id', params: { id: String(d.launchId) } } });
   }
   for (const a of input.brokenAccounts) {
-    items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${a.network}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } }, subject: a.label, channel: a.network });
+    items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${channelName(a.network)}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } }, subject: a.label, channel: a.network });
   }
   for (const { key, value } of input.metricProblems ?? []) {
     const [, source = '', ...rest] = key.split(':');
@@ -180,7 +182,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
     if (!l) continue;
     const wait = at - input.now.getTime();
     const when = wait <= 0 ? 'any minute now' : `in ${soonIn(wait)}`;
-    items.push({ key: `launch:${id}:scheduled:${at}:${n}`, kind: 'scheduled', text: `${n === 1 ? '1 post' : `${n} posts`} of ${launchName(l.repo, l.ref)} go out ${when}`, action: 'See it', target: { to: '/launches/$id', params: { id: String(id) } } });
+    items.push({ key: `launch:${id}:scheduled:${at}:${n}`, kind: 'scheduled', text: `${n === 1 ? '1 post' : `${n} posts`} of ${launchName(l.repo, l.ref)} ${n === 1 ? 'goes' : 'go'} out ${when}`, action: 'See it', target: { to: '/launches/$id', params: { id: String(id) } } });
   }
   return items;
 }
