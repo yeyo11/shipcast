@@ -29,6 +29,8 @@
 
 /* ---------- Nothing here, That did not load, No connection ---------- */
 main.acc-problem-main { padding-block: 0; }
+/* In the shell: the old main padding (app.css) would push the top bar down */
+main.k-main:has(> .k-topbar + .acc-problem) { padding-top: 0; }
 .acc-problem { align-items: center; text-align: center; padding-top: 36px; padding-bottom: 32px; max-width: 560px; margin: 0 auto; }
 .acc-problem-art { width: 250px; max-width: 100%; flex: none; }
 .acc-problem-lead { margin: 0; max-width: 330px; }
@@ -43,6 +45,7 @@ main.acc-problem-main { padding-block: 0; }
 .acc-problem-bare-bar { position: static; }
 @media (min-width: 960px) {
   .acc-problem { padding-top: 64px; }
+  .acc-problem-actions, .acc-problem-details, .acc-problem-raw { max-width: 400px; }
   .acc-problem-bare-bar { display: flex; padding: 12px 32px; }
 }
 
@@ -114,3 +117,7 @@ a.acc-onb-input:hover { color: var(--sc-text); border-color: var(--sc-text); }
   .acc-onb-top { padding: 0 32px; }
   .acc-onb-bar.k-bar { padding-left: max(16px, calc(50% - 280px + 16px)); padding-right: max(16px, calc(50% - 280px + 16px)); }
 }
+
+/* The offline gate keeps the page mounted, hidden; shown, its box is not one */
+.acc-gate { display: contents; }
+.acc-gate[hidden] { display: none; }

@@ -1,4 +1,4 @@
-import { Link, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { Link, useBlocker, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { explain } from './errors';
 import { isOffline } from './offline';
@@ -171,7 +171,7 @@ function BrokenPage({ error, reset, place }: { error: unknown; reset: () => void
  * No connection (board Offline): said instead of an error, since nothing is wrong with the page. It
  * tries again by itself as soon as the browser is back online, and on the button any time.
  */
-export function OfflinePage({ reset, place = 'shell' }: { reset: () => void; place?: ProblemPlace }) {
+export function OfflinePage({ reset, place = 'shell', kept = false }: { reset: () => void; place?: ProblemPlace; kept?: boolean }) {
   const retry = useRetry(reset);
   useEffect(() => {
     window.addEventListener('online', retry);
@@ -183,7 +183,11 @@ export function OfflinePage({ reset, place = 'shell' }: { reset: () => void; pla
         alert
         art={<Offline />}
         title="No connection"
-        lead="This device is offline, or Shipcast is not reachable. It tries again on its own as soon as the connection is back."
+        lead={
+          kept
+            ? 'This device is offline, or Shipcast is not reachable. What you were writing is kept here until the connection is back.'
+            : 'This device is offline, or Shipcast is not reachable. It tries again on its own as soon as the connection is back.'
+        }
         actions={
           <button type="button" className="k-btn k-pri k-full" onClick={retry}>
             <Icon name="retry" size={18} />
@@ -192,5 +196,40 @@ export function OfflinePage({ reset, place = 'shell' }: { reset: () => void; pla
         }
       />
     </Frame>
+  );
+}
+
+/**
+ * The shell's page while the browser is offline (board Offline). The page itself stays mounted under
+ * it, hidden, so whatever was being written is still there when the connection is back; going to
+ * another page waits too, since its code and data could not load (and a part of the app that fails
+ * to load makes the router reload the whole page, which offline is the browser's own error). Back
+ * online, the page is read again.
+ */
+export function OfflineGate({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const on = () => {
+      setOnline(true);
+      void router.invalidate();
+    };
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, [router]);
+  useBlocker({ shouldBlockFn: () => !navigator.onLine, enableBeforeUnload: false });
+  return (
+    <>
+      <div hidden={!online} className="acc-gate">
+        {children}
+      </div>
+      {!online && <OfflinePage reset={() => undefined} kept />}
+    </>
   );
 }
