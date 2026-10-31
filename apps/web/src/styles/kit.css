@@ -168,8 +168,10 @@ button.k-mi, button.k-row { width: 100%; background: none; border: 0; font: inhe
   .k-topbar, .k-bottombar, .k-phone { display: none; }
   .k-desktop { display: block; }
 }
+/* Every screen draws its own top: the shell's main adds nothing above it, only room for the bottom bar */
+main.k-main { padding: 0; }
 @media (max-width: 959px) {
-  .k-main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  main.k-main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
 /* A desktop page's column (boards Desktop*): 1200 px with 32 px sides */
 .k-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
