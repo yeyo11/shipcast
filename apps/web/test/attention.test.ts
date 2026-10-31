@@ -26,7 +26,7 @@ test('a drafted launch waits for approval, unless it already failed somewhere', 
   assert.deepEqual(a.items.map((i) => i.kind), ['approve', 'retry']);
   assert.equal(a.items[0]?.key, 'launch:1:waiting:2026-10-26T10:00:00.000Z');
   assert.match(a.items[1]?.key ?? '', /^launch:2:failed:[0-9a-z]+$/);
-  assert.match(a.items[1]?.text ?? '', /beta v2\.0\.0 failed on devto, mastodon/);
+  assert.match(a.items[1]?.text ?? '', /beta v2\.0\.0 failed on dev\.to, Mastodon/);
 });
 
 test('failure keys of unknown launches or of another shape are ignored', () => {
@@ -177,4 +177,24 @@ test('without launch-store the bell never reads the launch-store cursors: one qu
   const on = await attentionFor(spied, { launchStore: true });
   assert.ok(asked.includes('launch-store:'));
   assert.equal(on.items.filter((i) => i.kind === 'drift').length, 1);
+});
+
+test('a launch that failed before anything went out is a line to retry, with why, its subject set apart', () => {
+  const failed = { id: 4, repo: 'me/delta', ref: 'v4.0.0', status: 'failed', updatedAt: '2026-10-26T08:00:00.000Z', detail: 'claudio was overloaded\nstack…' };
+  const a = buildAttention({ ...base, launches: [launches[2]!, failed] });
+  assert.equal(a.count, 1);
+  assert.deepEqual(
+    a.items.map((i) => [i.kind, i.text, i.subject, i.action]),
+    [['retry', 'delta v4.0.0 failed: claudio was overloaded', 'delta v4.0.0', 'Retry']],
+  );
+  assert.match(a.items[0]?.key ?? '', ATTENTION_KEY);
+  // Failing again after a retry is a new line, so a dismissal does not hide it
+  const again = buildAttention({ ...base, launches: [{ ...failed, updatedAt: '2026-10-26T09:00:00.000Z' }] });
+  assert.notEqual(again.items[0]?.key, a.items[0]?.key);
+});
+
+test('an account to reconnect names its network, for the mark beside the line', () => {
+  const a = buildAttention({ ...base, launches: [], brokenAccounts: [{ id: 5, label: 'José', network: 'linkedin', problem: 'expired' }] });
+  assert.equal(a.items[0]?.channel, 'linkedin');
+  assert.equal(a.items[0]?.subject, 'José');
 });

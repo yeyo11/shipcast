@@ -1,301 +1,40 @@
 import { Link } from '@tanstack/react-router';
-import { animate, AnimatePresence, motion, useMotionValue, useTransform } from 'motion/react';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { cardChannels, foldMarks, launchDateLabel, markCapacity, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Totals } from '../server/launch-summary';
-import { zonedLabel } from '../server/pieces';
-import { CHANNEL_NAMES, type LaunchView } from '../server/view';
-import { ChannelIcon, StateDot } from './launch/Glance';
-import { ProjectAvatar } from './ProjectAvatar';
-import { number, Pill } from './ui';
-import { ResponsiveMenu } from './ui/ResponsiveMenu';
+import { useState } from 'react';
+import { agoLabel, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
+import { cardChannels, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
+import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
+import { Icon } from './kit/Icon';
+import { Sheet, SheetClose } from './kit/Sheet';
+import { NetworkGlyph } from './NetworkGlyph';
+import { number } from './ui';
 
 /*
- * A launch as a summary card (docs/web-app.md): how it did (its totals and the views per day) and
- * where it went (one mark per channel with its state dot). Every mark opens the same menu, a line
- * per post, so the owner opens the one they want, never all. While a channel's menu is open, the
- * numbers and the chart turn to that channel against the launch's own scale; closing it turns them
- * back. Motion counts and morphs the change, instantly for whoever asks for reduced motion.
+ * A launch as a card on the Launches page (boards Main and DesktopHome): its name and state, where it
+ * came from, then what it is doing. Drafting, a bar and what the drafting is doing now; failed before
+ * anything went out, why; out, its numbers and one mark per channel with its state dot. A mark opens
+ * that channel's peek (board ChannelPeek): its own numbers and a line per post, so the owner opens the
+ * one they want, never all.
  */
 
-/** A mark's width and the gap after it, as in app.css (.mark: 36px, .marks: gap 8px) */
-const EASE = { duration: 0.25, ease: 'easeOut' } as const;
+export type HomeLaunch = LaunchView & {
+  numbers: LaunchNumbers | null;
+  postAccounts: Record<number, string>;
+  updatedAt: string;
+  held: boolean;
+  ready: { count: number; text: string } | null;
+  drafting: string | null;
+};
 
 const networkOf = (channel: string) => CHANNEL_NAMES[channel] ?? channel;
-const host = (url: string) => url.replace(/^https?:\/\//, '').split('/')[0] ?? url;
 
-const markName = (c: CardChannel) =>
-  `${networkOf(c.channel)}: ${MARK_WORD[c.mark].toLowerCase()}${c.accounts.length > 1 ? `, on ${c.accounts.length} accounts (${c.accounts.join(', ')})` : ''}`;
+/** A state as the board's pill: a word and a shape */
+const PILL: Record<Tone, string> = { published: 'k-p-pub', waiting: 'k-p-wait', failed: 'k-p-fail', draft: 'k-p-run', quiet: 'k-p-quiet' };
 
-/** A post's line in its channel's menu: `Open the post` when it is the only one */
-const lineLabel = (p: CardPost, c: CardChannel) => (c.posts.length === 1 && p.label === 'Post' ? 'Open the post' : p.label);
-const opens = (p: CardPost): p is CardPost & { url: string } => p.url !== null && p.status !== 'deleted';
+/** A channel's state as the board's dot */
+const DOT: Record<Mark, string> = { published: 'k-dot-pub', scheduled: 'k-dot-sched', failed: 'k-dot-fail', off: 'k-dot-quiet' };
 
-/** What the tile shows: the glyph, the state dot on its top corner, the accounts count on its bottom one */
-function MarkFace({ c }: { c: CardChannel }) {
-  return (
-    <>
-      <ChannelIcon channel={c.channel} size={18} />
-      <span className={`dot d-${c.mark}`} aria-hidden="true">
-        <i />
-      </span>
-      {c.accounts.length > 1 && (
-        <span className="mark-accounts" aria-hidden="true">
-          {c.accounts.length}
-        </span>
-      )}
-    </>
-  );
-}
-
-/** A post without an address says where it stands instead */
-function postState(p: CardPost, timezone: string): string {
-  if (p.status === 'scheduled' && p.scheduledAt) return `Goes out ${zonedLabel(p.scheduledAt, timezone)}`;
-  if (p.status === 'failed') return 'Failed';
-  if (p.status === 'deleted') return 'Deleted';
-  return 'No link';
-}
-
-function PostLine({ p, c, timezone, onChoose }: { p: CardPost; c: CardChannel; timezone: string; onChoose: () => void }) {
-  if (opens(p)) {
-    return (
-      <a className="pop-line" href={p.url} target="_blank" rel="noopener noreferrer" onClick={onChoose}>
-        <span>{lineLabel(p, c)}</span>
-        <span className="pop-host">{host(p.url)}</span>
-        <span className="visually-hidden"> (opens in a new tab)</span>
-      </a>
-    );
-  }
-  return (
-    <span className="pop-line is-quiet">
-      <span>{p.label}</span>
-      <span>{postState(p, timezone)}</span>
-    </span>
-  );
-}
-
-/** A channel's own numbers, at the top of its sheet on a phone, where the card behind is covered */
-function SheetNumbers({ numbers }: { numbers: Partial<Totals> | undefined }) {
-  return (
-    <dl className="pop-numbers">
-      {(['views', 'reactions', 'comments', 'clicks'] as const).map((k) => (
-        <div key={k}>
-          <dt>{k.charAt(0).toUpperCase() + k.slice(1)}</dt>
-          <dd>{numbers?.[k] === undefined ? '—' : number(numbers[k])}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function Mark({
-  c,
-  launchId,
-  timezone,
-  numbers,
-  onPeek,
-}: {
-  c: CardChannel;
-  launchId: number;
-  timezone: string;
-  numbers: Partial<Totals> | undefined;
-  onPeek: (channel: string, open: boolean) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const name = markName(c);
-  const count = c.posts.length;
-  const change = (next: boolean) => {
-    setOpen(next);
-    onPeek(c.channel, next);
-  };
-  return (
-    <li className={`mark m-${c.mark} is-link`} data-active={open || undefined}>
-      <ResponsiveMenu
-        label={networkOf(c.channel)}
-        className="pop"
-        open={open}
-        onOpenChange={change}
-        sheetLead={<SheetNumbers numbers={numbers} />}
-        trigger={
-          <button type="button" title={name} aria-label={`${name}. ${count === 0 ? 'Nothing went out' : count === 1 ? '1 post' : `${count} posts`}`}>
-            <MarkFace c={c} />
-          </button>
-        }
-      >
-        <p className="pop-head">
-          <span className="pop-net">
-            <ChannelIcon channel={c.channel} size={16} /> {networkOf(c.channel)}
-          </span>
-          <StateDot mark={c.mark} word />
-        </p>
-        {c.posts.map((p) => (
-          <PostLine key={p.id} p={p} c={c} timezone={timezone} onChoose={() => change(false)} />
-        ))}
-        {count === 0 && <span className="pop-line is-quiet">It failed before anything went out</span>}
-        <Link className="pop-foot" to="/launches/$id" params={{ id: String(launchId) }} search={{ tab: 'channels', channel: c.channel }}>
-          See it on the launch page
-        </Link>
-      </ResponsiveMenu>
-    </li>
-  );
-}
-
-/** The "+n" menu: each folded channel is its mark, followed by one chip per post */
-function MoreMarks({ folded, timezone }: { folded: CardChannel[]; timezone: string }) {
-  return (
-    <li className="marks-more">
-      <ResponsiveMenu
-        label={`${folded.length} more channels`}
-        align="end"
-        className="pop"
-        trigger={
-          <button type="button" aria-label={`${folded.length} more channels: ${folded.map(markName).join('; ')}`}>
-            +{folded.length}
-          </button>
-        }
-      >
-        <ul className="pop-channels">
-          {folded.map((c) => (
-            <li key={c.channel}>
-              <span className={`mark m-${c.mark}`} role="img" aria-label={markName(c)} title={markName(c)}>
-                <MarkFace c={c} />
-              </span>
-              <span className="pop-chips">
-                {c.posts.length === 0 && <span className="is-quiet">Failed</span>}
-                {c.posts.map((p) =>
-                  opens(p) ? (
-                    <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
-                      {lineLabel(p, c)}
-                      <span className="visually-hidden"> on {networkOf(c.channel)} (opens in a new tab)</span>
-                    </a>
-                  ) : (
-                    <span key={p.id} className="is-quiet">
-                      {c.posts.length === 1 && p.label === 'Post' ? postState(p, timezone) : `${p.label} · ${postState(p, timezone)}`}
-                    </span>
-                  ),
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </ResponsiveMenu>
-    </li>
-  );
-}
-
-/**
- * The channel marks on one row, problems first. As many as the row's own width holds; when they do
- * not all fit, the rest (the channels that went fine, first) fold behind "+n".
- */
-function Marks({
-  channels,
-  launchId,
-  timezone,
-  numbers,
-  onPeek,
-}: {
-  channels: CardChannel[];
-  launchId: number;
-  timezone: string;
-  numbers: LaunchNumbers | null;
-  onPeek: (channel: string, open: boolean) => void;
-}) {
-  const ref = useRef<HTMLUListElement>(null);
-  const [fit, setFit] = useState(channels.length);
-  // Measured again whenever the card resizes: its width depends on the grid and the screen
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setFit(markCapacity(el.clientWidth));
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  const { shown, folded } = foldMarks(channels, fit);
-  // A full row spreads edge to edge, so no gap is left at its end; a short one stays under the text
-  const used = shown.length + (folded.length > 0 ? 1 : 0);
-  const full = used > 2 && used >= fit - 1;
-  return (
-    <ul className="marks" aria-label="Channels" ref={ref} data-full={full || undefined}>
-      {shown.map((c) => (
-        <Mark key={c.channel} c={c} launchId={launchId} timezone={timezone} numbers={numbers?.channels[c.channel]?.totals} onPeek={onPeek} />
-      ))}
-      {folded.length > 0 && <MoreMarks folded={folded} timezone={timezone} />}
-    </ul>
-  );
-}
-
-/**
- * Views per day since the launch, the card's whole width: an area with its line, the days under it.
- * Paths with the same commands and as many points for every series, so Motion morphs one into the
- * next point by point; a polyline's points cannot be interpolated and would jump.
- */
-function DailyArea({ values, max }: { values: number[]; max: number }) {
-  const w = 320;
-  const h = 96;
-  const step = w / Math.max(1, values.length - 1);
-  const line = values.map((v, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - 4 - (v / Math.max(1, max)) * (h - 12)).toFixed(1)}`).join(' ');
-  const area = `${line} L${w} ${h} L0 ${h} Z`;
-  // One gradient per card, as ids are document-wide; React's id marks (`:`, `«`) do not survive url(#…)
-  const fade = `darea-fade-${useId().replace(/[^\w-]/g, '')}`;
-  return (
-    <figure className="darea">
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          {/* In the box of the whole chart, not of the path, so the fade stays put while the path morphs */}
-          <linearGradient id={fade} x1="0" y1="0" x2="0" y2={h} gradientUnits="userSpaceOnUse">
-            <stop offset="0" className="darea-stop-top" />
-            <stop offset="1" className="darea-stop-bottom" />
-          </linearGradient>
-        </defs>
-        <motion.path initial={false} animate={{ d: area }} transition={EASE} className="darea-fill" fill={`url(#${fade})`} />
-        <motion.path initial={false} animate={{ d: line }} transition={EASE} fill="none" className="darea-line" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-      </svg>
-      <figcaption>
-        <span className="visually-hidden">Views per day since the launch: {values.map(number).join(', ')}. </span>
-        <span aria-hidden="true">Launch day</span>
-        <span aria-hidden="true">
-          +{values.length - 1} {values.length === 2 ? 'day' : 'days'}
-        </span>
-      </figcaption>
-    </figure>
-  );
-}
-
-/** A number that counts to its new value instead of swapping; whole numbers, `—` where a network counts none */
-function Count({ value }: { value: number | undefined }) {
-  const mv = useMotionValue(value ?? 0);
-  const text = useTransform(mv, (v) => Math.round(v).toLocaleString('en'));
-  useEffect(() => {
-    if (value === undefined) return;
-    const controls = animate(mv, value, EASE);
-    return () => controls.stop();
-  }, [mv, value]);
-  return value === undefined ? <span title="This network does not count it">—</span> : <motion.span>{text}</motion.span>;
-}
-
-/**
- * Which channel the numbers are for, in a quiet pill: its width follows the new name while the name
- * cross-fades inside it, all within a line of fixed height so the card never moves.
- */
-function Scope({ channel }: { channel: string | null }) {
-  return (
-    <p className="lcard-scope" aria-live="polite">
-      <motion.span layout transition={{ layout: { duration: 0.25, ease: [0.2, 0.8, 0.2, 1] } }} className={`lcard-pill${channel ? ' is-on' : ''}`}>
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span key={channel ?? 'all'} className="lcard-pill-name" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-            {channel ? (
-              <>
-                <ChannelIcon channel={channel} size={14} /> {networkOf(channel)} only
-              </>
-            ) : (
-              'All channels'
-            )}
-          </motion.span>
-        </AnimatePresence>
-      </motion.span>
-    </p>
-  );
+export function StatePill({ tone, label }: { tone: Tone; label: string }) {
+  return <span className={`k-pill ${PILL[tone]}`}>{label}</span>;
 }
 
 const STATS: ReadonlyArray<[keyof Totals, string]> = [
@@ -305,79 +44,159 @@ const STATS: ReadonlyArray<[keyof Totals, string]> = [
   ['clicks', 'Clicks'],
 ];
 
-export function LaunchCard({
-  launch,
-  numbers,
-  postAccounts,
-  timezone,
-  avatarUrl = null,
-}: {
-  launch: LaunchView;
-  numbers: LaunchNumbers | null;
-  postAccounts: Record<number, string>;
-  timezone: string;
-  /** The project's picture (the repo owner's GitHub avatar); null shows our own scene */
-  avatarUrl?: string | null;
-}) {
-  const channels = cardChannels({ posts: launch.posts, failures: launch.failures, postAccounts });
-  const [peek, setPeek] = useState<string | null>(null);
-  const waiting = launch.state.tone === 'waiting';
-  const article = launch.ref.startsWith('article:');
-  // A menu closing as another opens must not undo the new one's peek
-  const onPeek = (channel: string, open: boolean) => setPeek((now) => (open ? channel : now === channel ? null : now));
-  const days = numbers?.daily ?? [];
-  const peeked = peek ? numbers?.channels[peek] : undefined;
-  const shown: Partial<Totals> = peek ? (peeked?.totals ?? {}) : (numbers?.totals ?? {});
-  const byDay = new Map((peeked?.daily ?? []).map((d) => [d.day, d.views]));
-  const values = peek ? days.map((d) => byDay.get(d.day) ?? 0) : days.map((d) => d.views);
+/** The numbers in a row: those the launch (or the channel) counts; clicks only once there are some */
+function Numbers({ totals }: { totals: Partial<Totals> }) {
+  const shown = STATS.filter(([key]) => totals[key] !== undefined && (key !== 'clicks' || (totals.clicks ?? 0) > 0));
+  if (shown.length === 0) return null;
   return (
-    <article className={`lcard${waiting ? ' waiting' : ''}`} data-peek={peek ? '' : undefined}>
-      <header>
-        <ProjectAvatar src={avatarUrl} article={article} />
-        <h2>
-          <Link to="/launches/$id" params={{ id: String(launch.id) }}>
-            {article ? 'Article' : launch.repo.split('/')[1]} {!article && <span className="lcard-ref">{launch.ref}</span>}
+    <dl className="k-hrow k-g24 home-numbers">
+      {shown.map(([key, label]) => (
+        <div key={key} className="k-stack">
+          <dt className="k-xs k-muted">{label}</dt>
+          <dd className="k-d k-d30">{number(totals[key] ?? 0)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** A post's line in the peek: what it is, when, and the way to it */
+function PeekLine({ post, first, when, timezone }: { post: CardPost; first: boolean; when: string | null; timezone: string }) {
+  const opens = post.url !== null && post.status !== 'deleted';
+  const state = post.status === 'scheduled' && post.scheduledAt ? `Goes out ${shortDateTime(post.scheduledAt, timezone)}` : post.status === 'failed' ? 'Failed' : post.status === 'deleted' ? 'Deleted' : 'No link';
+  const body = (
+    <>
+      <span className="k-grow">
+        <strong className="k-sm">{post.label}</strong>
+        <br />
+        <span className="k-xs k-muted">{opens ? when : state}</span>
+      </span>
+      {opens && (
+        <span className="k-hrow k-g6 k-sm">
+          {first ? 'Open the post' : 'Open'} <Icon name="external" size={16} />
+        </span>
+      )}
+    </>
+  );
+  if (!opens) return <div className="k-row">{body}</div>;
+  return (
+    <a className="k-row home-peek-line" href={post.url ?? undefined} target="_blank" rel="noopener noreferrer">
+      {body}
+      <span className="visually-hidden"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
+/** A channel's mark: the network and its state dot; it opens the channel's peek */
+function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch; timezone: string }) {
+  const [open, setOpen] = useState(false);
+  const word = MARK_WORD[c.mark];
+  const name = `${networkOf(c.channel)}: ${word.toLowerCase()}`;
+  const totals = launch.numbers?.channels[c.channel]?.totals ?? {};
+  const at = (id: number) => {
+    const post = launch.posts.find((p) => p.id === id);
+    return post?.publishedAt ? shortDateTime(post.publishedAt, timezone) : null;
+  };
+  const lines = c.posts.filter((p) => p.status !== 'deleted' || p.url === null);
+  return (
+    <Sheet
+      label={`${networkOf(c.channel)} on this launch`}
+      open={open}
+      onOpenChange={setOpen}
+      className="home-peek"
+      trigger={
+        <button type="button" className="home-mark" title={name} aria-label={`${name}. ${c.posts.length === 1 ? '1 post' : `${c.posts.length} posts`}`}>
+          <NetworkGlyph channel={c.channel} size={15} />
+          <span className={`k-dot ${DOT[c.mark]}`} aria-hidden="true" />
+        </button>
+      }
+    >
+      <div className="k-hrow k-between">
+        <span className="k-hrow k-g10 home-peek-net">
+          <NetworkGlyph channel={c.channel} size={22} /> {networkOf(c.channel)}
+        </span>
+        <span className="k-hrow k-g6 k-sm">
+          <span className={`k-dot ${DOT[c.mark]}`} aria-hidden="true" /> {word}
+        </span>
+      </div>
+      <Numbers totals={totals} />
+      <div className="k-stack">
+        {lines.map((p, i) => (
+          <PeekLine key={p.id} post={p} first={i === 0} when={at(p.id)} timezone={timezone} />
+        ))}
+        {c.posts.length === 0 && (
+          <div className="k-row">
+            <span className="k-grow k-sm">{launch.failures.find((f) => f.channel === c.channel)?.message.split('\n')[0] ?? 'It failed before anything went out.'}</span>
+          </div>
+        )}
+      </div>
+      <SheetClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels', channel: c.channel }} />}>See it on the launch page</SheetClose>
+    </Sheet>
+  );
+}
+
+/** What the card's line under the name says: the repo (or Article) and the day, or since when it drafts */
+function metaOf(launch: HomeLaunch, timezone: string, article: boolean): string {
+  const where = article ? 'Article' : launch.repo;
+  if (launch.status === 'detected' || launch.status === 'generating') return `${where} · started ${agoLabel(launch.createdAt)} by ${TRIGGER_BY[launch.trigger] ?? 'you'}`;
+  return `${where} · ${shortDate(launch.createdAt, timezone)}`;
+}
+
+export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone: string }) {
+  const { title, version, article } = launchTitle(launch);
+  const channels = cardChannels({ posts: launch.posts, failures: launch.failures, postAccounts: launch.postAccounts });
+  const drafting = launch.status === 'detected' || launch.status === 'generating';
+  const failedEmpty = launch.status === 'failed' && launch.posts.length === 0;
+  const tone = launch.state.tone;
+  const problem = launch.problem?.split('\n')[0]?.trim().replace(/\.$/, '');
+  return (
+    <article className={`k-card home-card${tone === 'failed' ? ' k-fail' : ''}`}>
+      <div className="k-hrow k-between k-g8 home-card-head">
+        <h3 className="home-card-title">
+          <Link to="/launches/$id" params={{ id: String(launch.id) }} className="home-card-link">
+            {article ? (
+              <span className="k-d k-d24 k-clamp2 home-card-article">{title}</span>
+            ) : (
+              <span className="k-hrow k-g8 home-card-name">
+                <span className="k-d k-d30">{title}</span>
+                <span className="k-mono k-sm k-muted">{version}</span>
+              </span>
+            )}
           </Link>
-        </h2>
-        <Pill tone={launch.state.tone}>{launch.state.label}</Pill>
-      </header>
-      <p className="lcard-meta">
-        {launch.repo} · {launchDateLabel(launch.createdAt, timezone)}
-      </p>
-      {numbers && channels.length > 0 && (
+        </h3>
+        <StatePill tone={tone} label={launch.state.label} />
+      </div>
+      <p className="k-xs k-muted home-card-meta">{metaOf(launch, timezone, article)}</p>
+      {drafting ? (
+        <div className="k-hrow k-g8 k-sm">
+          <span className="k-grow home-progress" role="progressbar" aria-label="Drafting" aria-valuetext={launch.drafting ?? 'Drafting'}>
+            <span />
+          </span>
+          <span className="k-muted k-xs">{launch.drafting}</span>
+        </div>
+      ) : failedEmpty ? (
+        <p className="k-sm home-card-text">It failed before anything went out{problem ? `: ${problem}` : ''}.</p>
+      ) : (
         <>
-          <Scope channel={peek} />
-          <dl className="lcard-stats">
-            {STATS.map(([key, label], i) => (
-              <div key={key} className={i === 0 ? 'is-lead' : undefined}>
-                <dt>{label}</dt>
-                <dd>
-                  <Count value={shown[key]} />
-                </dd>
-              </div>
-            ))}
-          </dl>
-          {days.length > 1 ? (
-            <DailyArea values={values} max={Math.max(1, ...days.map((d) => d.views))} />
+          {launch.numbers && channels.length > 0 && <Numbers totals={launch.numbers.totals} />}
+          {channels.length > 0 ? (
+            <ul className="k-hrow k-g6 k-wrap home-marks" aria-label="Channels">
+              {channels.map((c) => (
+                <li key={c.channel}>
+                  <ChannelMark c={c} launch={launch} timezone={timezone} />
+                </li>
+              ))}
+            </ul>
           ) : (
-            <p className="lcard-none">{days.length === 0 ? 'No views read yet.' : `${number(days[0]?.views ?? 0)} views on the launch day so far.`}</p>
+            <p className="k-sm k-muted home-card-text">
+              {launch.status === 'skipped'
+                ? 'Nothing was published for this release.'
+                : launch.status === 'drafted' && !launch.held && launch.pullRequest
+                  ? 'Drafts are waiting in the pull request.'
+                  : 'Nothing published yet.'}
+            </p>
           )}
         </>
-      )}
-      {channels.length > 0 ? (
-        <Marks channels={channels} launchId={launch.id} timezone={timezone} numbers={numbers} onPeek={onPeek} />
-      ) : (
-        <p className="lcard-none">
-          {launch.problem ? launch.problem.split('\n')[0] : launch.pullRequest ? 'Drafts are waiting in the pull request.' : 'Nothing published yet.'}
-          {launch.status === 'drafted' && launch.pullRequest && (
-            <>
-              {' '}
-              <Link to="/launches/$id/edit" params={{ id: String(launch.id) }}>
-                Edit the drafts
-              </Link>
-            </>
-          )}
-        </p>
       )}
     </article>
   );
