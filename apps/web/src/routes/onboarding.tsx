@@ -268,7 +268,7 @@ function TextField({ id, label, problem, mono, ...input }: { id: string; label: 
       <label className="k-lbl" htmlFor={id}>
         {label}
       </label>
-      <input id={id} className={`k-input acc-onb-input${mono ? ' k-mono' : ''}`} {...input} {...invalid(problem)} />
+      <input id={id} {...input} className={`k-input acc-onb-input${mono ? ' k-mono' : ''}${input.className ? ` ${input.className}` : ''}`} {...invalid(problem)} />
       <FieldError problem={problem} />
     </div>
   );
@@ -458,7 +458,7 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
             </div>
             <div className="k-hrow k-g10">
               <SheetClose className="k-btn">Not now</SheetClose>
-              <button type="button" id="b-commit" className="k-btn k-pri acc-onb-grow" disabled={busy} onClick={commit}>
+              <button type="button" id="b-commit" className="k-btn k-pri k-grow" disabled={busy} onClick={commit}>
                 {busy ? 'Committing…' : 'Commit brand.yml'}
               </button>
             </div>
@@ -499,7 +499,6 @@ function ChoiceField<V extends string>({ id, label, value, options, onChange }: 
             </option>
           ))}
         </select>
-        <Icon name="chevronDown" size={18} />
       </span>
     </div>
   );
@@ -575,6 +574,7 @@ function AiStep({ data, saver, report, attempted }: StepProps) {
             onChange={(e) => setToken(e.target.value)}
             onBlur={() => leave('c-token')}
             placeholder={data.ai.claudio.tokenSet ? 'Its token is in the keychain.' : 'Paste claudio’s token'}
+            {...(data.ai.claudio.tokenSet && { className: 'acc-onb-kept' })}
             problem={shown('c-token')}
           />
         </>
@@ -873,7 +873,7 @@ function Onboarding() {
           Back
         </button>
         {/* aria-disabled, not disabled: it stays focusable, and pressing it says what is missing */}
-        <button type="submit" form="onb-form" className="k-btn k-pri acc-onb-grow" disabled={busy} aria-disabled={blocked || undefined} aria-describedby={blocked ? 'onb-hint' : undefined}>
+        <button type="submit" form="onb-form" className="k-btn k-pri k-grow" disabled={busy} aria-disabled={blocked || undefined} aria-describedby={blocked ? 'onb-hint' : undefined}>
           {busy ? 'Saving…' : last ? 'Finish' : 'Continue'}
         </button>
       </div>
