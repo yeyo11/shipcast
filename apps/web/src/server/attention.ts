@@ -30,6 +30,8 @@ export interface AttentionItem {
   /** The link's own words: the verb the owner will do */
   action: string;
   target: AttentionTarget;
+  /** How many things the line stands for (the waiting comments), for a section's own badge */
+  count?: number;
 }
 
 export interface AttentionInput {
@@ -121,7 +123,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   }
   if (input.commentsWaiting > 0) {
     const n = input.commentsWaiting;
-    items.push({ key: `comments:waiting:${input.newestWaitingComment ?? n}`, kind: 'reply', text: n === 1 ? '1 comment waits for a reply' : `${n} comments wait for a reply`, action: 'Answer', target: { to: '/comments', search: { state: 'waiting' } } });
+    items.push({ key: `comments:waiting:${input.newestWaitingComment ?? n}`, kind: 'reply', text: n === 1 ? '1 comment waits for a reply' : `${n} comments wait for a reply`, action: 'Answer', target: { to: '/comments', search: { state: 'waiting' } }, count: n });
   }
   for (const c of input.canonicals ?? []) {
     const l = byId.get(c.launchId);

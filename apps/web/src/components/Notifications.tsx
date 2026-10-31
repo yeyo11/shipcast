@@ -1,13 +1,10 @@
-import { Link, useRouterState } from '@tanstack/react-router';
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { attentionLabel, countOf, type Attention, type AttentionItem } from '../server/attention';
-import { clearAttention, dismissAttention, getAttention } from '../server/attention.functions';
-import { useLiveEnabled, useLiveInterest } from './live/Live';
-import { BellIcon, CloseIcon } from './ui/icons';
-import { ResponsiveMenu } from './ui/ResponsiveMenu';
-
-/** Fresh enough that a failure shows without a click, calm enough not to hammer the engine */
-const REFRESH_MS = 3 * 60_000;
+import { Link } from '@tanstack/react-router';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { countOf, type AttentionItem } from '../server/attention';
+import { clearAttention, dismissAttention } from '../server/attention.functions';
+import { Sheet } from './kit/Sheet';
+import { useShell } from './kit/shell';
+import { CloseIcon } from './ui/icons';
 
 interface ItemLinkProps {
   item: AttentionItem;
@@ -52,48 +49,25 @@ function ItemLink({ item, onGo, onKeyDown }: ItemLinkProps) {
 }
 
 /**
- * The top bar's bell: a yellow count when something needs the owner, and what, one link per line, in
- * a popover on a desktop or the bottom sheet on a phone. Each line can be dismissed (its × or Delete
+ * What needs the owner (board Notifications), opened by the bars' bell: one link per line, in
+ * the bottom sheet. Each line can be dismissed (its × or Delete
  * on the line) and the panel cleared at once; the registry keeps the dismissals, so they hold on
- * every device until the condition behind a line changes. The list is read again on every
- * navigation, when it opens and every few minutes.
+ * every device until the condition behind a line changes. The shell reads the list (kit/shell.tsx);
+ * it is read again when the sheet opens.
  */
-export function AttentionBell() {
-  const [attention, setAttention] = useState<Attention | null>(null);
-  const [open, setOpen] = useState(false);
+export function Notifications() {
+  const { attention, setAttention, reloadAttention: load, notificationsOpen: open, setNotificationsOpen: setOpen } = useShell();
   const [said, setSaid] = useState('');
-  const path = useRouterState({ select: (s) => s.location.pathname });
   const panel = useRef<HTMLDivElement>(null);
   /** Where focus goes once a dismissed line has left the list: the line now at that place */
   const focusAt = useRef<number | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setAttention(await getAttention());
-    } catch {
-      // A failed read keeps what was shown: the bell must never turn into an error of its own
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load, path]);
-  // Live (realtime-ui): read again when something its lines come from changes, never on a timer
-  const live = useLiveEnabled();
-  useLiveInterest(live ? ['attention', 'launch', 'post', 'comment', 'account'] : null, { reload: () => void load(), debounceMs: 1000 });
-  useEffect(() => {
-    if (live) return;
-    const timer = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [live, load]);
   useEffect(() => {
     if (open) void load();
     else setSaid('');
   }, [open, load]);
 
   const items = attention?.items ?? [];
-  const count = attention?.count ?? 0;
-  const label = attentionLabel(count);
 
   // The focused line (or its ×) is gone: focus the next line, the last one, or the empty panel,
   // never the page behind the popup
@@ -133,23 +107,7 @@ export function AttentionBell() {
   }
 
   return (
-    <ResponsiveMenu
-      label="What needs you"
-      align="end"
-      className="attention-popup"
-      open={open}
-      onOpenChange={setOpen}
-      trigger={
-        <button type="button" className="ui-icon-button attention-button" aria-label={label}>
-          <BellIcon size={22} />
-          {count > 0 && (
-            <span className="attention-badge" aria-hidden="true">
-              {count > 9 ? '9+' : count}
-            </span>
-          )}
-        </button>
-      }
-    >
+    <Sheet label="What needs you" open={open} onOpenChange={setOpen}>
       <div className="attention-panel" ref={panel}>
         {items.length === 0 ? (
           <p className="attention-empty muted" tabIndex={-1}>
@@ -178,6 +136,6 @@ export function AttentionBell() {
           {said}
         </p>
       </div>
-    </ResponsiveMenu>
+    </Sheet>
   );
 }

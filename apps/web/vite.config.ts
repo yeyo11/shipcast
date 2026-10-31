@@ -26,6 +26,9 @@ const NATIVE = ['@resvg/resvg-js', 'satori'];
  */
 const BASE_UI = ['accordion', 'alert-dialog', 'autocomplete', 'collapsible', 'combobox', 'dialog', 'drawer', 'menu', 'popover', 'scroll-area', 'select', 'tabs', 'toast', 'tooltip'].map((c) => `@base-ui/react/${c}`);
 
+/** visx's packages import classnames (CommonJS), which the browser only loads pre-bundled in development */
+const VISX = ['axis', 'curve', 'grid', 'group', 'scale', 'shape'].map((p) => `@visx/${p}`);
+
 /**
  * Discovery would crawl from the routes into the engine's source (a linked package) and try to
  * pre-bundle its native renderers for the browser. Start sets the client's dependency options itself,
@@ -35,7 +38,7 @@ const serverOnlyDeps = (): Plugin => ({
   name: 'shipcast-server-only-deps',
   enforce: 'post',
   configEnvironment(name) {
-    if (name === 'client') return { optimizeDeps: { noDiscovery: true, include: BASE_UI, exclude: [...WORKSPACE, ...NATIVE] } };
+    if (name === 'client') return { optimizeDeps: { noDiscovery: true, include: [...BASE_UI, ...VISX], exclude: [...WORKSPACE, ...NATIVE] } };
     return undefined;
   },
 });
