@@ -130,7 +130,7 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
             )}
             <g className="stats-chart-days">
               {ticks.map((i, k) => (
-                <text key={i} x={x(i)} y={height - 2} textAnchor={k === 0 ? 'start' : k === ticks.length - 1 ? 'end' : 'middle'}>
+                <text key={i} x={x(i)} y={height - 2} textAnchor={k === ticks.length - 1 && k > 0 ? 'end' : 'start'}>
                   {shortDay(buckets[i] ?? '')}
                 </text>
               ))}

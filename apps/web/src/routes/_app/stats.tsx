@@ -207,7 +207,13 @@ function Stats() {
   ) : (
     <>
       <div className="k-phone">
-        <div className="k-px k-hrow k-g8 k-wrap stats-gap14">{periodChips}</div>
+        <div className="k-px k-hrow k-wrap stats-gap14 stats-period-row">
+          {periodChips}
+          {/* The board's row has room for one more: the way to a custom range and the channels on a phone */}
+          <button type="button" className={`k-chip stats-filter-icon${filtered || search.period === 'custom' ? ' k-pick' : ''}`} aria-label={filtered || search.period === 'custom' ? `Filters: ${chip}, ${channelsChip}` : 'Filters'} onClick={() => setFiltersOpen(true)}>
+            <Icon name="filter" size={16} />
+          </button>
+        </div>
       </div>
       <div className="k-px stats-gap14">
         <Kpis totals={stats.totals.metrics} previous={stats.totals.previous} days={stats.period.days} metric={search.metric} onPick={(metric) => change({ metric })} />
