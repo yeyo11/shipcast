@@ -96,7 +96,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           data.launches.map((l) => {
             const t = launchTitle(l);
             const name = t.title.charAt(0).toUpperCase() + t.title.slice(1);
-            return { id: l.id, label: t.version ? `${name} ${t.version}` : name, state: l.state.label.toLowerCase() };
+            return { id: l.id, label: t.version ? `${name} ${t.version}` : name, state: l.state.tone === 'waiting' ? 'waiting' : l.state.label.toLowerCase() };
           }),
         );
       })
