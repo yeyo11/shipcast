@@ -119,7 +119,13 @@ a:hover { color: var(--sc-yellow); }
 .k-diamond { display: inline-block; flex: none; background: var(--sc-failure); transform: rotate(45deg); }
 .k-mark { width: 32px; height: 32px; border-radius: 10px; background: var(--sc-yellow); border: 2.5px solid var(--sc-black); box-shadow: 3px 3px 0 var(--sc-stamp); display: flex; align-items: center; justify-content: center; flex: none; }
 .k-mark > span { width: 11px; height: 11px; border-radius: 50%; background: var(--sc-black); }
-button.k-mi, button.k-row { width: 100%; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+:where(button.k-mi, button.k-row) { width: 100%; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.k-btn.k-grow { flex: 1; }
+/* Real form controls wearing the kit's input */
+:where(textarea, input, select).k-input { font: inherit; font-size: 16px; color: var(--sc-text); width: 100%; }
+textarea.k-input { resize: vertical; align-items: flex-start; }
+.k-input:focus-visible, .k-input:focus-within:not(:where(button, a)) { outline: none; border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255,212,59,.25); }
+.k-input::placeholder { color: var(--sc-rail); }
 .k-btn > .k-badge { position: absolute; top: -5px; right: -5px; }
 
 /* The sheet in a portal: fixed to the window rather than to a board's frame */
@@ -147,8 +153,8 @@ button.k-mi, button.k-row { width: 100%; background: none; border: 0; font: inhe
 .k-bottombar-item { display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; position: relative; color: var(--sc-muted); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; line-height: 1.5; }
 .k-bottombar-item:hover { color: var(--sc-text); }
 .k-bottombar-chip { display: flex; padding: 4px 16px; border-radius: 160px; }
-.k-bottombar-item[aria-current="page"] { color: var(--sc-text); }
-.k-bottombar-item[aria-current="page"] .k-bottombar-chip { background: var(--sc-text); color: var(--sc-ground); }
+.k-bottombar-item[data-on] { color: var(--sc-text); }
+.k-bottombar-item[data-on] .k-bottombar-chip { background: var(--sc-text); color: var(--sc-ground); }
 .k-bottombar-badge { position: absolute; top: -3px; left: calc(50% + 8px); }
 
 .k-dheader { border-bottom: 1px solid var(--sc-hairline); position: sticky; top: 0; background: var(--sc-ground); z-index: 40; }
@@ -166,7 +172,7 @@ button.k-mi, button.k-row { width: 100%; background: none; border: 0; font: inhe
 .k-desktop { display: none; }
 @media (min-width: 960px) {
   .k-topbar, .k-bottombar, .k-phone { display: none; }
-  .k-desktop { display: block; }
+  .k-desktop { display: contents; }
 }
 /* Every screen draws its own top: the shell's main adds nothing above it, only room for the bottom bar */
 main.k-main { padding: 0; }

@@ -32,7 +32,7 @@ export function MoreSheet({ owner }: { owner: Owner }) {
   return (
     <Sheet label="More" open={moreOpen} onOpenChange={setMoreOpen} bottom={76}>
       <nav aria-label="More" className="k-stack">
-        <SheetClose render={<Link to="/channels" className="k-mi k-more-item" />}>
+        <SheetClose nativeButton={false} render={<Link to="/channels" className="k-mi k-more-item" />}>
           <Icon name="channels" size={22} />
           <span className="k-grow">
             <strong>Channels</strong>
@@ -47,7 +47,7 @@ export function MoreSheet({ owner }: { owner: Owner }) {
             <Icon name="chevronRight" size={18} />
           )}
         </SheetClose>
-        <SheetClose render={<Link to="/launch" className="k-mi k-more-item" />}>
+        <SheetClose nativeButton={false} render={<Link to="/launch" className="k-mi k-more-item" />}>
           <Icon name="launches" size={22} />
           <span className="k-grow">
             <strong>Launch a repo</strong>
@@ -56,7 +56,7 @@ export function MoreSheet({ owner }: { owner: Owner }) {
           </span>
           <Icon name="chevronRight" size={18} />
         </SheetClose>
-        <SheetClose render={<Link to="/settings" className="k-mi k-more-item" />}>
+        <SheetClose nativeButton={false} render={<Link to="/settings" className="k-mi k-more-item" />}>
           <Icon name="menu" size={22} />
           <span className="k-grow">
             <strong>Settings</strong>

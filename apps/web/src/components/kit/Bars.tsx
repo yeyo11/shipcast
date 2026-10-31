@@ -116,7 +116,8 @@ export function BottomBar() {
         const on = s.match(path) && !moreOpen;
         const badge = s.id === 'comments' && commentsWaiting > 0 ? badgeText(commentsWaiting) : null;
         return (
-          <Link key={s.id} to={s.to} aria-current={on ? 'page' : undefined} activeOptions={EXACT} className="k-bottombar-item">
+          // The router marks an active link current on its own: both states are set here, so More open wins
+          <Link key={s.id} to={s.to} activeProps={{ 'aria-current': on ? 'page' : undefined }} inactiveProps={{ 'aria-current': on ? 'page' : undefined }} data-on={on ? '' : undefined} activeOptions={EXACT} className="k-bottombar-item">
             <span className="k-bottombar-chip">
               <Icon name={s.icon} size={22} />
             </span>
@@ -129,7 +130,7 @@ export function BottomBar() {
           </Link>
         );
       })}
-      <button type="button" className="k-bottombar-item" aria-current={moreOpen || (inMore && !BOTTOM.some((b) => b.match(path))) ? 'page' : undefined} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
+      <button type="button" className="k-bottombar-item" data-on={moreOpen || inMore ? '' : undefined} aria-current={moreOpen || inMore ? 'page' : undefined} aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
         <span className="k-bottombar-chip">
           <Icon name="menu" size={22} />
         </span>
