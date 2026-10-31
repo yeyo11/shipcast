@@ -48,6 +48,7 @@ main.acc-problem-main { padding-block: 0; }
 
 /* ---------- Set up (the onboarding) ---------- */
 .acc-onb { min-height: 100vh; min-height: 100dvh; background: var(--sc-ground); }
+main.acc-onb { padding: 0; }
 .acc-onb-top { height: 64px; padding: 0 16px; border-bottom: 1px solid var(--sc-hairline); }
 .acc-onb-mark { width: 28px; height: 28px; border-radius: 9px; background: var(--sc-yellow); border: 2.5px solid var(--sc-black); box-shadow: 3px 3px 0 var(--sc-stamp); flex: none; }
 .acc-onb-leave { background: none; border: 0; padding: 10px 0; font-family: inherit; font-weight: 600; color: var(--sc-text); cursor: pointer; }
@@ -65,7 +66,7 @@ main.acc-onb-main { gap: 14px; padding-top: 16px; padding-bottom: 120px; }
 .acc-onb-art-svg { width: 190px; max-width: 100%; flex: none; }
 .acc-onb-title { outline: none; overflow-wrap: anywhere; }
 .acc-onb-form { gap: 14px; }
-.acc-onb-input { width: 100%; font-family: var(--sc-font-text); text-align: left; text-decoration: none; outline: none; }
+.acc-onb-input { width: 100%; font: 400 16px/1.5 var(--sc-font-text); text-align: left; text-decoration: none; outline: none; }
 .acc-onb-input.k-mono { font-family: var(--sc-font-mono); }
 .acc-onb-input:focus-visible, .acc-onb-input:focus { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
 .acc-onb-input::placeholder { color: var(--sc-muted); }
@@ -91,13 +92,13 @@ a.acc-onb-input:hover { color: var(--sc-text); border-color: var(--sc-text); }
 /* The Combobox (ui/Combobox) in the board's field shape */
 .acc-onb .field { gap: 6px; }
 .acc-onb .field > .label { font: 600 14px/1.5 var(--sc-font-text); color: var(--sc-muted); }
-.acc-onb .ui-combo { border: 2px solid var(--sc-rail); padding-left: 14px; }
+.acc-onb .ui-combo { border: 2px solid var(--sc-rail); padding-left: 14px; min-height: 52px; }
 .acc-onb .ui-combo:focus-within { outline: none; border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
 .acc-onb .field small { font-size: 13px; }
 /* The sheets of the set-up: brand.yml before it is committed, and the blog's languages */
 .acc-onb-sheet-lead { margin: 0; }
 .acc-onb-yaml { font-size: 13px; line-height: 1.7; align-items: flex-start; flex-direction: column; gap: 0; background: var(--sc-ground); overflow-x: auto; }
-.acc-onb-yaml .k-diff-add { white-space: pre; }
+.acc-onb-yaml .k-diff-add { white-space: pre-wrap; overflow-wrap: anywhere; }
 .acc-onb-check-row { min-height: 56px; }
 
 /* All set */
