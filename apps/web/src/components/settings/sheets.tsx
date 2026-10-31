@@ -41,7 +41,7 @@ export function ConfirmSheet({
         </button>
         <button
           type="button"
-          className={`k-btn st-flex1 ${danger ? 'k-danger' : 'k-pri'}`}
+          className={`k-btn k-grow ${danger ? 'k-danger' : 'k-pri'}`}
           disabled={busy}
           onClick={async () => {
             setBusy(true);

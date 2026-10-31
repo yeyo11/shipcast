@@ -86,7 +86,7 @@ export function RuleEditor({
           <Icon name="trash" size={18} />
           Remove
         </button>
-        <button type="button" className="k-btn st-flex1" onClick={onDone}>
+        <button type="button" className="k-btn k-grow" onClick={onDone}>
           Done
         </button>
       </div>

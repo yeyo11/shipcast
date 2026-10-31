@@ -3,10 +3,6 @@
  * DesktopSettings): the board's inline styles as named classes, on the kit. Role tokens only.
  */
 
-/* The old shell's padding around main (app.css) is not the board's: Settings draws its own */
-.k-main:has(.st-page, .st-sub) { padding-top: 0; }
-@media (min-width: 960px) { .k-main:has(.st-page, .st-sub) { padding-bottom: 0; } }
-
 /* ---------- The area: title, tabs (phone) or a column of sections (desktop), the page's body ---------- */
 .st-page { padding-bottom: 24px; }
 .st-page:has(.st-savebar) { padding-bottom: 94px; }
@@ -41,7 +37,7 @@
 .st-g8 { gap: 8px; }
 .st-g12 { gap: 12px; }
 .st-g14 { gap: 14px; }
-.st-flex1 { flex: 1; }
+.k-grow { flex: 1; }
 .st-start { align-self: flex-start; }
 .st-mono { font-size: 14px; }
 .st-bad { color: var(--sc-failure); }
@@ -56,13 +52,11 @@ a.k-card:hover, button.k-card:hover { color: inherit; border-color: var(--sc-rai
 
 /* ---------- Fields: the kit's input as a real control ---------- */
 .st-form { display: flex; flex-direction: column; gap: 14px; }
-.st-input { width: 100%; font-family: var(--sc-font-mono); font-size: 14px; outline: none; }
+/* Doubled class: other sections' global `input.k-input` rules must not reach Settings' fields */
+.st-input.st-input { width: 100%; font-family: var(--sc-font-mono); font-size: 14px; outline: none; }
 .st-input.st-text { font-family: var(--sc-font-text); font-size: 16px; }
-.st-input::placeholder { color: var(--sc-rail); opacity: 1; }
-.st-input:focus-visible, .st-select:focus-within, textarea.k-input:focus-visible { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, 0.25); outline: none; }
 .st-input.k-bad:not(:focus-visible) { border-color: var(--sc-failure); }
 .st-kept { justify-content: space-between; }
-textarea.k-input { width: 100%; resize: vertical; font: inherit; line-height: 1.5; outline: none; }
 
 /* A native select drawn as the kit's input, with the board's chevron */
 .st-select { position: relative; padding: 0; min-height: 44px; }
@@ -79,8 +73,8 @@ textarea.k-input { width: 100%; resize: vertical; font: inherit; line-height: 1.
 .st-mt6 { margin-top: 6px; }
 .st-task { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--sc-hairline); }
 .st-task:last-child { border-bottom: 0; padding-bottom: 0; }
-.st-model { width: 120px; flex: none; min-height: 44px; font-size: 13px; }
-.st-cell { min-height: 44px; font-size: 13px; }
+.st-model.st-model { width: 120px; flex: none; min-height: 44px; font-size: 13px; }
+.st-cell.st-cell { min-height: 44px; font-size: 13px; }
 .st-taskgrid { display: grid; grid-template-columns: 1.2fr 1fr 1fr 120px; gap: 12px; align-items: center; }
 .st-taskgrid-row { display: contents; }
 .st-taskgrid-note { margin: 12px 0 0; }
@@ -141,7 +135,4 @@ textarea.st-prompt { font-family: var(--sc-font-mono); font-size: 13px; line-hei
 .st-vars > summary { cursor: pointer; }
 .st-vars > p { margin: 6px 0 0; overflow-wrap: anywhere; }
 .st-copy { height: 24px; align-items: center; }
-/* The kit's button reset (button.k-row) drops the row's rule and its size class: put both back here */
-.st-page button.k-row:not(:last-child), .st-sub button.k-row:not(:last-child) { border-bottom: 1px solid var(--sc-hairline); }
-.st-page button.k-row.k-sm { font-size: 14px; }
 .st-checkrow.k-row { border-bottom: 0; }
