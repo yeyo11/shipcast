@@ -77,7 +77,7 @@ export function UnpublishSheet({
         </button>
         <button
           type="button"
-          className="k-btn k-danger pub-fill"
+          className="k-btn k-danger k-grow"
           disabled={chosen.length === 0 || busy}
           onClick={async () => {
             setBusy(true);

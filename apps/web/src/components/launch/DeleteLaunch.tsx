@@ -115,7 +115,7 @@ export function DeleteLaunch({ launchId, open, onOpenChange, onDeleted }: { laun
         <button type="button" className="k-btn" onClick={() => onOpenChange(false)} disabled={busy}>
           Keep it
         </button>
-        <button type="button" className="k-btn k-danger pub-fill" disabled={!plan || Boolean(plan.refused) || busy} onClick={confirm}>
+        <button type="button" className="k-btn k-danger k-grow" disabled={!plan || Boolean(plan.refused) || busy} onClick={confirm}>
           {busy ? 'Deleting…' : hidden ? 'Delete the launch' : 'Delete it'}
         </button>
       </div>
