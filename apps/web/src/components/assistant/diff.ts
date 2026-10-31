@@ -153,3 +153,70 @@ export function applyProposal(document: string, range: { start: number; end: num
   if (!range || range.start === range.end) return proposal;
   return document.slice(0, range.start) + proposal + document.slice(range.end);
 }
+
+/**
+ * The words around a selection, within its sentence: what the proposal card shows before and after
+ * the change so a reader sees it in place ("They were never where the code was, [change]"). A
+ * sentence ends at . ! ? followed by a space, or at a line break; each side is capped at `max`
+ * characters, cut at a word and marked with an ellipsis.
+ */
+export function sentenceContext(document: string, range: { start: number; end: number }, max = 120): { before: string; after: string } {
+  let start = range.start;
+  while (start > 0) {
+    const c = document[start - 1]!;
+    if (c === '\n' || (/\s/.test(c) && start >= 2 && /[.!?]/.test(document[start - 2]!))) break;
+    start--;
+  }
+  let end = range.end;
+  while (end < document.length) {
+    const c = document[end]!;
+    if (c === '\n') break;
+    end++;
+    if (/[.!?]/.test(c) && (end === document.length || /\s/.test(document[end]!))) break;
+  }
+  let before = document.slice(start, range.start).replace(/^\s+/, '');
+  let after = document.slice(range.end, end).replace(/\s+$/, '');
+  if (before.length > max) before = `…${before.slice(before.length - max).replace(/^\S*\s/, '')}`;
+  if (after.length > max) after = `${after.slice(0, max).replace(/\s\S*$/, '')}…`;
+  return { before, after };
+}
+
+/**
+ * A diff as a person reads it: changes separated by only a few equal words (`gap` or fewer) read as
+ * one deletion and one insertion, rather than a confetti of struck and added words ("went stale"
+ * and "the week" and "wrote" each changed). Both texts still rebuild exactly.
+ */
+export function readableDiff(parts: Part[], gap = 3): Part[] {
+  const wordsIn = (text: string) => tokens(text).filter((t) => /[\p{L}\p{N}]/u.test(t)).length;
+  const out: Part[] = [];
+  let i = 0;
+  while (i < parts.length) {
+    const part = parts[i]!;
+    if (part.type === 'equal') {
+      push(out, 'equal', part.text);
+      i++;
+      continue;
+    }
+    // A run of changes, swallowing the short equal stretches between them
+    let deleted = '';
+    let inserted = '';
+    let j = i;
+    for (;;) {
+      const p = parts[j];
+      if (!p) break;
+      if (p.type === 'delete') deleted += p.text;
+      else if (p.type === 'insert') inserted += p.text;
+      else {
+        const next = parts[j + 1];
+        if (!next || next.type === 'equal' || wordsIn(p.text) > gap) break;
+        deleted += p.text;
+        inserted += p.text;
+      }
+      j++;
+    }
+    push(out, 'delete', deleted);
+    push(out, 'insert', inserted);
+    i = j;
+  }
+  return out;
+}
