@@ -1,17 +1,14 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { channelName } from '@shipcast/schema/channels';
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { PageToolbar } from '../../../components/PageToolbar';
+import { Icon } from '../../../components/kit/Icon';
+import { Sheet } from '../../../components/kit/Sheet';
 import { SaveBar } from '../../../components/SaveBar';
-import { SectionHead } from '../../../components/SectionHead';
-import { AI_SETTING_NAMES, SettingsForm } from '../../../components/SettingsForm';
+import { BUDGETS_OF, lockedRuleCount, promptEdited, promptLabel as promptName, TASK_TEXT, usd } from '../../../components/settings/ai';
+import { changesText, hostOf } from '../../../components/settings/view';
+import { AI_SETTING_NAMES, SettingsForm, type SettingView } from '../../../components/SettingsForm';
 import { useToast } from '../../../components/Toasts';
-import { Pill, when } from '../../../components/ui';
-import { Accordion, AccordionItem } from '../../../components/ui/Collapsible';
-import { ScrollArea } from '../../../components/ui/ScrollArea';
-import { Select } from '../../../components/ui/Select';
 import { getSettings } from '../../../server/settings.functions';
-import { getAiSettings, previewAiPrompt, restoreAiPrompt, saveAiPrompt, saveAiSettings } from '../../../server/ai.functions';
+import { getAiSettings, previewAiPrompt, saveAiSettings } from '../../../server/ai.functions';
 
 export const Route = createFileRoute('/_app/settings/ai')({
   head: () => ({ meta: [{ title: 'AI · Shipcast' }] }),
@@ -22,75 +19,193 @@ export const Route = createFileRoute('/_app/settings/ai')({
   component: AiSettingsPage,
 });
 
-type Data = Awaited<ReturnType<typeof getAiSettings>> & { runtime: Parameters<typeof SettingsForm>[0]['settings'] };
+type Data = Awaited<ReturnType<typeof getAiSettings>> & { runtime: SettingView[] };
 type Task = Data['tasks'][number];
 type ProviderId = Data['providers'][number]['id'];
-type PromptView = Data['prompts'][number];
-type BudgetTask = Data['budgets']['tasks'][number];
 /** The limits as typed: an empty field keeps the task's default */
-type BudgetFields = Partial<Record<BudgetTask, string>>;
+type BudgetFields = Record<string, string>;
 
-const TASKS: Record<Task, { label: string; text: string }> = {
-  pack: { label: 'Launch content pack', text: 'Reads the released repo and writes every channel’s piece. claudio’s Claude Code explores the clone itself; the others get read-only tools over it.' },
-  article: { label: 'Article distribution', text: 'Translates an article you wrote and writes each channel’s piece from it.' },
-  assistant: { label: 'Writing assistant', text: 'The streamed suggestions beside Write and each draft (coming next).' },
-  replies: { label: 'Comment replies', text: 'Drafts a reply to each comment on your posts, grounded in the repo and the launch’s analysis; it reads the code when a comment asks about it.' },
-  profile: { label: 'Profile review', text: 'Reviews an account’s profile against its numbers and the brand, and proposes each field’s new text; nothing changes until you apply a proposal.' },
-};
-
-/** Which limits sit beside each task's model: the assistant's check against the code has its own */
-const BUDGETS_OF: Record<Task, Array<{ task: BudgetTask; label: string }>> = {
-  pack: [{ task: 'pack', label: 'Spend limit, USD' }],
-  article: [{ task: 'article', label: 'Spend limit, USD' }],
-  assistant: [
-    { task: 'assistant', label: 'Spend limit per suggestion, USD' },
-    { task: 'assistant-check', label: 'Spend limit per check against the code, USD' },
-  ],
-  replies: [{ task: 'replies', label: 'Spend limit, USD' }],
-  profile: [{ task: 'profile', label: 'Spend limit, USD' }],
-};
-
-const budgetFields = (budgets: Data['settings']['budgets']): BudgetFields =>
-  Object.fromEntries(Object.entries(budgets ?? {}).map(([task, usd]) => [task, String(usd)]));
-
-function promptLabel(id: string): string {
-  if (id === 'article') return 'Article: the translation';
-  if (id === 'reply') return 'Comment reply';
-  if (id === 'profile') return 'Profile review';
-  const [group, name = ''] = id.split('.');
-  if (group === 'pack') return `Pack brief: ${name === 'launch' ? 'first launch' : `${name} version`}`;
-  return `Channel brief: ${channelName(name)}`;
-}
-
-/** A long read-only text on black, bounded in height and scrolled with Cartel's scrollbar */
-function Log({ text }: { text: string }) {
-  return (
-    <ScrollArea maxHeight="320px" className="log-area" label="Text, scrollable">
-      <div className="log">{text}</div>
-    </ScrollArea>
-  );
-}
+const budgetFields = (budgets: Data['settings']['budgets']): BudgetFields => Object.fromEntries(Object.entries(budgets ?? {}).map(([task, n]) => [task, String(n)]));
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function Tasks({ data }: { data: Data }) {
+/** A native select drawn as the kit's input with the board's chevron */
+function ProviderSelect({ data, value, label, onChange }: { data: Data; value: ProviderId; label: string; onChange: (p: ProviderId) => void }) {
+  return (
+    <span className="k-input k-grow st-select">
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as ProviderId)}>
+        {data.providers.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+            {p.connected ? '' : ' (not connected)'}
+          </option>
+        ))}
+      </select>
+      <Icon name="chevronDown" size={16} />
+    </span>
+  );
+}
+
+function Providers({ data }: { data: Data }) {
+  const [open, setOpen] = useState(false);
+  const url = data.runtime.find((s) => s.name === 'claudioUrl');
+  const token = data.runtime.find((s) => s.name === 'claudioToken');
+  return (
+    <section className="k-card st-g0 st-providers" aria-labelledby="st-providers">
+      <h2 id="st-providers" className="k-d k-d30 st-mb6">
+        Providers
+      </h2>
+      {data.providers.map((p) =>
+        p.id === 'claudio' ? (
+          <button key={p.id} type="button" className="k-row" onClick={() => setOpen(true)}>
+            <span className="k-grow">
+              <strong className="k-sm">{p.name}</strong>
+              <br />
+              <span className="k-xs k-muted">
+                {url?.value ? hostOf(url.value) : 'Its address is not set'} · {token?.set ? 'token kept' : 'no token'}
+              </span>
+            </span>
+            {url?.set ? <span className="k-pill k-p-pub">Connected</span> : <span className="k-pill k-p-fail">Not set</span>}
+          </button>
+        ) : (
+          <Link key={p.id} to="/channels" className="k-row st-rowlink">
+            <span className="k-grow">
+              <strong className="k-sm">{p.name}</strong>
+              <br />
+              <span className="k-xs k-muted">{p.connected ? 'A connected account in Channels' : 'Connect it in Channels'}</span>
+            </span>
+            {p.connected ? <span className="k-pill k-p-pub">Connected</span> : <span className="k-pill k-p-quiet">Not connected</span>}
+          </Link>
+        ),
+      )}
+      <Sheet label="claudio" open={open} onOpenChange={setOpen}>
+        <h2 className="k-d k-d30">claudio</h2>
+        <p className="k-sm k-muted st-m0">Shipcast calls claudio’s OpenAI-compatible API, and Claude Code reads each release in a workspace claudio makes for it.</p>
+        <SettingsForm settings={data.runtime} onSaved={() => setOpen(false)} />
+      </Sheet>
+    </section>
+  );
+}
+
+/** One task's limits, edited in a sheet on a phone (the board shows them as words under the task) */
+function LimitsSheet({ data, task, budgets, onChange, onClose }: { data: Data; task: Task | null; budgets: BudgetFields; onChange: (b: BudgetFields) => void; onClose: () => void }) {
+  const list = task ? (BUDGETS_OF[task] ?? []) : [];
+  return (
+    <Sheet label="Spend limits" open={task !== null} onOpenChange={(open) => !open && onClose()}>
+      <h2 className="k-d k-d30">{task ? TASK_TEXT[task]?.label : ''}</h2>
+      <p className="k-sm k-muted st-m0">
+        What one run may spend, in USD, up to {data.budgets.max}. Empty keeps the default. Only claudio takes a limit today: the providers billed per token are bounded by steps and time.
+      </p>
+      {list.map((b) => (
+        <label className="k-field" key={b.task}>
+          <span className="k-lbl">{b.label}</span>
+          <input
+            className="k-input st-input"
+            type="number"
+            inputMode="decimal"
+            min={0.01}
+            max={data.budgets.max}
+            step={0.01}
+            placeholder={`${(data.budgets.defaults as Record<string, number>)[b.task]?.toFixed(2)} (default)`}
+            value={budgets[b.task] ?? ''}
+            onChange={(e) => onChange({ ...budgets, [b.task]: e.target.value })}
+          />
+        </label>
+      ))}
+      <button type="button" className="k-btn k-full" onClick={onClose}>
+        Done
+      </button>
+    </Sheet>
+  );
+}
+
+function Preview({ data }: { data: Data }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [launchId, setLaunchId] = useState(data.launches[0]?.id);
+  const [shown, setShown] = useState<{ system: string; prompt: string } | null>(null);
+  return (
+    <>
+      <button type="button" className="k-card k-flat st-rowcard st-g0 st-preview" onClick={() => setOpen(true)}>
+        <span className="k-grow">
+          <strong>Preview a prompt</strong>
+          <br />
+          <span className="k-xs k-muted">With the saved prompts and tone. Nothing is sent to an AI.</span>
+        </span>
+        <Icon name="chevronRight" />
+      </button>
+      <Sheet label="Preview a prompt" open={open} onOpenChange={setOpen}>
+        <h2 className="k-d k-d30">Preview a prompt</h2>
+        {data.launches.length === 0 ? (
+          <p className="k-sm k-muted st-m0">No launches yet: a preview renders the prompt a past launch would get.</p>
+        ) : (
+          <>
+            <label className="k-field">
+              <span className="k-lbl">The prompt a launch would get</span>
+              <span className="k-input st-select">
+                <select value={launchId === undefined ? '' : String(launchId)} onChange={(e) => setLaunchId(Number(e.target.value))}>
+                  {data.launches.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+                <Icon name="chevronDown" size={16} />
+              </span>
+            </label>
+            <button
+              type="button"
+              className="k-btn k-full"
+              onClick={async () => {
+                if (launchId === undefined) return;
+                try {
+                  setShown(await previewAiPrompt({ data: { launchId } }));
+                } catch (error) {
+                  toast.fail(errorText(error));
+                }
+              }}
+            >
+              <Icon name="eye" size={18} />
+              Preview
+            </button>
+            {shown && (
+              <>
+                <span className="k-lbl">System</span>
+                <pre className="st-log">{shown.system}</pre>
+                <span className="k-lbl">Prompt</span>
+                <pre className="st-log">{shown.prompt}</pre>
+              </>
+            )}
+          </>
+        )}
+      </Sheet>
+    </>
+  );
+}
+
+function AiSettingsPage() {
+  const data = Route.useLoaderData();
   const router = useRouter();
   const toast = useToast();
   const [tasks, setTasks] = useState(data.settings.tasks);
   const [tone, setTone] = useState(data.settings.tone ?? '');
   const [budgets, setBudgets] = useState<BudgetFields>(budgetFields(data.settings.budgets));
+  const [limitsOf, setLimitsOf] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (task: Task, change: { provider?: ProviderId; model?: string }) => setTasks((all) => ({ ...all, [task]: { ...all[task], ...change } }));
-  // What was saved comes back from the server: the form starts again from it, so the save bar closes.
-  // Keyed on the saved values, not the object: saving a prompt reloads the page's data too
-  const saved = JSON.stringify([data.settings.tasks, data.settings.tone ?? '', data.settings.budgets ?? {}]);
-  useEffect(() => {
+  const reset = () => {
     setTasks(data.settings.tasks);
     setTone(data.settings.tone ?? '');
     setBudgets(budgetFields(data.settings.budgets));
-  }, [saved]);
+  };
+  // What was saved comes back from the server: the form starts again from it, so the save bar closes.
+  // Keyed on the saved values, not the object: saving a prompt reloads the page's data too
+  const saved = JSON.stringify([data.settings.tasks, data.settings.tone ?? '', data.settings.budgets ?? {}]);
+  useEffect(reset, [saved]);
+
+  const defaults = data.budgets.defaults as Record<string, number>;
   // Only the limits that were set: the server validates them and an empty one keeps the default
   const typedBudgets = Object.fromEntries(
     data.budgets.tasks.flatMap((task) => {
@@ -98,7 +213,12 @@ function Tasks({ data }: { data: Data }) {
       return typed ? [[task, Number(typed)]] : [];
     }),
   );
-  const budgetsDirty = JSON.stringify(typedBudgets) !== JSON.stringify(data.settings.budgets ?? {});
+  const savedBudgets = (data.settings.budgets ?? {}) as Record<string, number>;
+  const count =
+    data.tasks.filter((t) => JSON.stringify(tasks[t]) !== JSON.stringify(data.settings.tasks[t])).length +
+    (tone !== (data.settings.tone ?? '') ? 1 : 0) +
+    data.budgets.tasks.filter((t) => typedBudgets[t] !== savedBudgets[t]).length;
+  const limitOf = (task: string) => typedBudgets[task] ?? defaults[task];
 
   const save = async () => {
     setBusy(true);
@@ -119,240 +239,129 @@ function Tasks({ data }: { data: Data }) {
     }
   };
 
+  const edited = data.prompts.filter(promptEdited).length;
+  const lockedRules = lockedRuleCount(data.locked);
+
   return (
-    <form
-      id="ai-tasks-form"
-      className="form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save();
-      }}
-    >
-      {/* Every Settings section keeps the same bar, so the content does not jump between them; the
-          section's own form saves from the save bar, which shows only while it has changes */}
-      <PageToolbar label="AI" />
-      <SaveBar
-        form="ai-tasks-form"
-        dirty={JSON.stringify(tasks) !== JSON.stringify(data.settings.tasks) || tone !== (data.settings.tone ?? '') || budgetsDirty}
-        busy={busy}
-        save="Save AI settings"
-        onDiscard={() => {
-          setTasks(data.settings.tasks);
-          setTone(data.settings.tone ?? '');
-          setBudgets(budgetFields(data.settings.budgets));
+    <div className="st-content">
+      {/* The fields are kept in state; the save bar's Save submits this form (sheets' own forms stay apart from it) */}
+      <form
+        id="ai-form"
+        hidden
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
         }}
       />
-      {data.tasks.map((task) => {
-        const chosen = data.providers.find((p) => p.id === tasks[task].provider);
-        return (
-          <fieldset key={task} className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="label">{TASKS[task].label}</legend>
-            <div className="row">
-              <Select
-                label="Provider"
-                options={data.providers.map((p) => ({ value: p.id, label: p.name, hint: p.connected ? undefined : 'not connected' }))}
-                value={tasks[task].provider}
-                onValueChange={(provider) => set(task, { provider })}
-              />
-              <input
-                className="input mono"
-                placeholder="the provider’s default model"
-                value={tasks[task].model ?? ''}
-                onChange={(e) => set(task, { model: e.target.value })}
-                aria-label={`${TASKS[task].label}: model`}
-              />
-              {BUDGETS_OF[task].map((budget) => (
-                <input
-                  key={budget.task}
-                  className="input mono"
-                  type="number"
-                  inputMode="decimal"
-                  min={0.01}
-                  max={data.budgets.max}
-                  step={0.01}
-                  placeholder={`limit ${data.budgets.defaults[budget.task]} (default)`}
-                  value={budgets[budget.task] ?? ''}
-                  onChange={(e) => setBudgets((all) => ({ ...all, [budget.task]: e.target.value }))}
-                  aria-label={`${TASKS[task].label}: ${budget.label}`}
-                  title={budget.label}
-                  style={{ maxWidth: 200 }}
-                />
-              ))}
-            </div>
-            <small>
-              {TASKS[task].text}
-              {task === 'assistant' ? ' The first limit caps a suggestion, the second a check against the code.' : ''}
-              {chosen && !chosen.connected ? ' Connect it on the Channels page first, or this task fails.' : ''}
-            </small>
-          </fieldset>
-        );
-      })}
-      <div className="field">
-        <label htmlFor="tone">Tone</label>
-        <textarea id="tone" className="input" rows={3} value={tone} placeholder={data.brandTone ?? 'first person, direct and technical, no hype.'} onChange={(e) => setTone(e.target.value)} />
-        <small>Replaces brand.yml’s tone in every prompt. Empty keeps brand.yml’s{data.brandTone ? '' : ' (it has none: the default above applies)'}.</small>
-      </div>
-    </form>
-  );
-}
+      <p className="st-lead">Which AI writes each task, in what tone and with which prompts.</p>
+      <div className="st-cards">
+        <Providers data={data} />
 
-function PromptEditor({ prompt }: { prompt: PromptView }) {
-  const router = useRouter();
-  const toast = useToast();
-  const current = prompt.versions.at(-1)?.text ?? prompt.default;
-  const [draft, setDraft] = useState(current);
-  const edited = prompt.versions.length > 0 && current !== prompt.default;
-
-  const run = async (action: () => Promise<unknown>, done: string) => {
-    try {
-      await action();
-      toast.done(done);
-      await router.invalidate();
-    } catch (error) {
-      toast.fail(errorText(error));
-    }
-  };
-
-  return (
-    <AccordionItem
-      value={prompt.id}
-      className="card"
-      summary={
-        <>
-          <span>{promptLabel(prompt.id)}</span>
-          {edited ? <Pill tone="draft">Edited</Pill> : <Pill tone="quiet">Default</Pill>}
-        </>
-      }
-    >
-      <div className="form">
-        <textarea className="input mono" rows={6} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={promptLabel(prompt.id)} />
-        <div className="row">
-          <button className="btn btn-small btn-primary" type="button" disabled={draft === current} onClick={() => void run(() => saveAiPrompt({ data: { id: prompt.id, text: draft } }), 'Prompt saved')}>
-            Save a new version
-          </button>
-          <button className="btn btn-small" type="button" disabled={current === prompt.default} onClick={() => void run(() => restoreAiPrompt({ data: { id: prompt.id, savedAt: 'default' } }), 'Default restored')}>
-            Restore the default
-          </button>
-        </div>
-        {prompt.versions.length > 0 && (
-          <ol className="muted" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }} reversed>
-            {[...prompt.versions].reverse().map((v, i) => (
-              <li key={`${v.savedAt}-${i}`}>
-                {v.savedAt === 'default' ? 'The default' : when(v.savedAt)}
-                {i === 0 ? ' · in use' : ''}{' '}
-                {i > 0 && (
-                  <button className="btn btn-small" type="button" onClick={() => void run(() => restoreAiPrompt({ data: { id: prompt.id, savedAt: v.savedAt } }), 'Version restored')}>
-                    Restore
+        <section className="k-card st-g0 st-tasks k-phone" aria-labelledby="st-tasks">
+          <h2 id="st-tasks" className="k-d k-d30">
+            Tasks
+          </h2>
+          {data.tasks.map((task) => {
+            const text = TASK_TEXT[task] ?? { label: task, text: '' };
+            return (
+              <div key={task} className="st-task">
+                <strong className="k-sm">{text.label}</strong>
+                <div className="k-hrow k-g8">
+                  <ProviderSelect data={data} label={`${text.label}: provider`} value={tasks[task].provider} onChange={(provider) => set(task, { provider })} />
+                  <input className="k-input st-input st-model" placeholder="default" aria-label={`${text.label}: model`} value={tasks[task].model ?? ''} onChange={(e) => set(task, { model: e.target.value })} />
+                </div>
+                <span className="k-xs k-muted">
+                  {text.text} ·{' '}
+                  <button type="button" className="st-link st-plain" onClick={() => setLimitsOf(task)} aria-label={`${text.label}: spend limit, ${usd(limitOf(task) ?? 0)}`}>
+                    limit {usd(limitOf(task) ?? 0)}
                   </button>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-    </AccordionItem>
-  );
-}
+                </span>
+              </div>
+            );
+          })}
+        </section>
 
-function Preview({ data }: { data: Data }) {
-  const toast = useToast();
-  const [launchId, setLaunchId] = useState(data.launches[0]?.id);
-  const [shown, setShown] = useState<{ system: string; prompt: string } | null>(null);
-  if (data.launches.length === 0) return <p className="muted">No launches yet: a preview renders the prompt a past launch would get.</p>;
-  return (
-    <div className="form">
-      <div className="row">
-        <Select
-          label="Launch"
-          options={data.launches.map((l) => ({ value: String(l.id), label: l.label }))}
-          value={launchId === undefined ? null : String(launchId)}
-          onValueChange={(id) => setLaunchId(Number(id))}
-        />
-        <button
-          className="btn"
-          type="button"
-          onClick={async () => {
-            if (launchId === undefined) return;
-            try {
-              setShown(await previewAiPrompt({ data: { launchId } }));
-            } catch (error) {
-              toast.fail(errorText(error));
-            }
-          }}
-        >
-          Preview
-        </button>
+        <section className="k-card st-g0 k-desktop" aria-labelledby="st-tasks-d">
+          <h2 id="st-tasks-d" className="k-d k-d30 st-mb8">
+            Tasks
+          </h2>
+          <div className="st-taskgrid k-sm">
+            <span className="k-lbl">Task</span>
+            <span className="k-lbl">Provider</span>
+            <span className="k-lbl">Model</span>
+            <span className="k-lbl">Limit, USD</span>
+            {data.tasks.map((task) => {
+              const text = TASK_TEXT[task] ?? { label: task, text: '' };
+              const main = BUDGETS_OF[task]?.[0]?.task ?? task;
+              return (
+                <div key={task} className="st-taskgrid-row">
+                  <strong>{text.label}</strong>
+                  <ProviderSelect data={data} label={`${text.label}: provider`} value={tasks[task].provider} onChange={(provider) => set(task, { provider })} />
+                  <input className="k-input st-input st-cell" placeholder="default" aria-label={`${text.label}: model`} value={tasks[task].model ?? ''} onChange={(e) => set(task, { model: e.target.value })} />
+                  <input
+                    className="k-input st-input st-cell"
+                    type="number"
+                    inputMode="decimal"
+                    min={0.01}
+                    max={data.budgets.max}
+                    step={0.01}
+                    aria-label={`${text.label}: spend limit, USD`}
+                    placeholder={defaults[main]?.toFixed(2)}
+                    value={budgets[main] ?? ''}
+                    onChange={(e) => setBudgets({ ...budgets, [main]: e.target.value })}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <p className="k-xs k-muted st-taskgrid-note">
+            Up to {data.budgets.max} USD a run; empty keeps the default. The writing assistant’s check against the code has its own,{' '}
+            <button type="button" className="st-link" onClick={() => setLimitsOf('assistant')}>
+              {usd(limitOf('assistant-check') ?? 0)}
+            </button>
+            .
+          </p>
+        </section>
+
+        <section className="k-card st-g8" aria-labelledby="st-tone">
+          <h2 id="st-tone" className="k-d k-d30">
+            <label htmlFor="st-tone-text">Tone</label>
+          </h2>
+          <textarea id="st-tone-text" className="k-input st-tone" value={tone} placeholder={data.brandTone ?? 'First person, direct and technical, no hype.'} onChange={(e) => setTone(e.target.value)} />
+          <span className="k-help">Replaces brand.yml’s tone in every prompt. Empty keeps brand.yml’s{data.brandTone ? '' : ' (it has none: the default applies)'}.</span>
+        </section>
+
+        <Link to="/settings/ai/prompts" className="k-card st-g0 k-phone">
+          <span className="k-hrow k-between">
+            <h2 className="k-d k-d30">Prompts</h2>
+            <Icon name="chevronRight" />
+          </span>
+          <span className="k-sm k-muted st-mt6">
+            {data.prompts.length} prompts · {edited} edited · {lockedRules} locked rules
+          </span>
+        </Link>
+
+        <section className="k-card st-g0 k-desktop" aria-labelledby="st-prompts-d">
+          <div className="k-hrow k-between st-mb8">
+            <h2 id="st-prompts-d" className="k-d k-d30">
+              Prompts
+            </h2>
+            <Link to="/settings/ai/prompts" className="k-sm">
+              Edit
+            </Link>
+          </div>
+          {data.prompts.map((p) => (
+            <div key={p.id} className="k-row">
+              <span className="k-grow">{promptName(p.id)}</span>
+              {promptEdited(p) ? <span className="k-pill k-p-draft">Edited</span> : <span className="k-pill k-p-quiet">Default</span>}
+            </div>
+          ))}
+        </section>
+
+        <Preview data={data} />
       </div>
-      <small>With the saved prompts and tone. Nothing is sent to an AI.</small>
-      {shown && (
-        <>
-          <span className="label">System</span>
-          <Log text={shown.system} />
-          <span className="label">Prompt</span>
-          <Log text={shown.prompt} />
-        </>
-      )}
+      <LimitsSheet data={data} task={limitsOf} budgets={budgets} onChange={setBudgets} onClose={() => setLimitsOf(null)} />
+      <SaveBar form="ai-form" dirty={count > 0} busy={busy} text={changesText(count)} onUndo={reset} />
     </div>
-  );
-}
-
-function AiSettingsPage() {
-  const data = Route.useLoaderData();
-  return (
-    <>
-      <SectionHead title="AI">Which AI writes each task, in what tone and with which prompts, and how Shipcast reaches claudio.</SectionHead>
-
-      <h2 className="ph">claudio</h2>
-      <p className="muted">
-        claudio is a provider of its own: Shipcast calls its OpenAI-compatible API, and Claude Code reads each release in a workspace claudio makes for it.
-      </p>
-      <SettingsForm settings={data.runtime} submit="Save claudio settings" />
-
-      <h2 className="ph">Providers</h2>
-      <p className="muted">
-        Each task’s limit caps what one run may spend, up to {data.budgets.max} USD; empty keeps the default shown in the field.
-        Only claudio takes a limit today: the providers billed per token have no spend ceiling of their own, so their runs are bounded by steps and time instead.
-      </p>
-      <Tasks data={data} />
-
-      <h2 className="ph">Prompts</h2>
-      <p className="muted">
-        Each edit is a new version; earlier ones stay and can be restored. Variables: {data.variables.map((v) => `{{${v}}}`).join(' ')}
-      </p>
-      <Accordion className="cards">
-        {data.prompts.map((p) => (
-          <PromptEditor key={`${p.id}-${p.versions.length}`} prompt={p} />
-        ))}
-      </Accordion>
-
-      <h2 className="ph">Locked</h2>
-      <p className="muted">What keeps generated text true to the code, and the pack’s schema. Always added after your prompts; never editable.</p>
-      <Accordion className="cards">
-        <AccordionItem value="Rules for a launch" className="card" summary={<span>Rules for a launch</span>}>
-          <Log text={data.locked.launchRules.join('\n')} />
-        </AccordionItem>
-        <AccordionItem value="Rules for an article" className="card" summary={<span>Rules for an article</span>}>
-          <Log text={data.locked.articleRules.join('\n')} />
-        </AccordionItem>
-        <AccordionItem value="Rules for a reply to a comment" className="card" summary={<span>Rules for a reply to a comment</span>}>
-          <Log text={data.locked.replyRules.join('\n')} />
-        </AccordionItem>
-        <AccordionItem value="Rules for a profile review" className="card" summary={<span>Rules for a profile review</span>}>
-          <Log text={data.locked.profileRules.join('\n')} />
-        </AccordionItem>
-        <AccordionItem value="Rules for the writing assistant, on a launch’s pieces" className="card" summary={<span>Rules for the writing assistant, on a launch’s pieces</span>}>
-          <Log text={data.locked.assistantLaunchRules.join('\n')} />
-        </AccordionItem>
-        <AccordionItem value="Rules for the writing assistant, on an article" className="card" summary={<span>Rules for the writing assistant, on an article</span>}>
-          <Log text={data.locked.assistantArticleRules.join('\n')} />
-        </AccordionItem>
-        <AccordionItem value="The content pack’s schema" className="card" summary={<span>The content pack’s schema</span>}>
-          <Log text={data.locked.packSchema} />
-        </AccordionItem>
-      </Accordion>
-
-      <h2 className="ph">Preview</h2>
-      <Preview data={data} />
-    </>
   );
 }
