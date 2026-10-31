@@ -13,8 +13,6 @@
   .k-desktop-inline { display: inline-block; }
 }
 
-/* The page starts under the top bar, not under the old shell's padding */
-main.k-main:has(> .home), main.k-main:has(> * > .home) { padding-top: 0; }
 .home h1, .home h2, .home h3, .home p, .home dl, .home dd, .home ul, .home fieldset { margin: 0; }
 .home ul { list-style: none; padding: 0; }
 .home fieldset { border: 0; padding: 0; min-width: 0; }
@@ -116,7 +114,6 @@ main.k-main:has(> .home), main.k-main:has(> * > .home) { padding-top: 0; }
 .home-select:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
 .home-order { width: 220px; }
 .home-filters-foot { margin-top: 4px; }
-.home-filters-foot .k-pri { flex: 1; }
 .home-filters-foot .k-btn:disabled { opacity: 1; cursor: default; }
 
 /* The first run (board LaunchesEmpty) */
