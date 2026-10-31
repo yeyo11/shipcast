@@ -33,8 +33,15 @@ function Api() {
   const [created, setCreated] = useState<{ name: string; scopes: Scope[]; token: string } | null>(null);
   const [revoking, setRevoking] = useState<{ id: number; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [unnamed, setUnnamed] = useState(false);
 
   const create = async () => {
+    // The button stays live (one clear primary action): an empty name is asked for here
+    if (!name.trim()) {
+      setUnnamed(true);
+      document.getElementById('st-token-name')?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const answer = await createToken({ data: { name, scopes } });
@@ -51,8 +58,7 @@ function Api() {
   return (
     <div className="st-content">
       <p className="st-lead">
-        For a script or an agent: every call carries <span className="k-mono k-xs">Authorization: Bearer …</span> to <span className="k-mono k-xs st-anywhere">{data.apiUrl}</span>, described in{' '}
-        <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
+        For a script or an agent: every call carries <span className="k-mono k-xs">Authorization: Bearer …</span>
       </p>
       <div className="st-cards">
         <form
@@ -68,7 +74,7 @@ function Api() {
           </h2>
           <label className="k-field">
             <span className="k-lbl">Name</span>
-            <input className="k-input st-input st-text" value={name} maxLength={100} placeholder="Who will use it, so you know what to revoke" onChange={(e) => setName(e.target.value)} />
+            <input id="st-token-name" className={`k-input st-input st-text${unnamed && !name.trim() ? ' k-bad' : ''}`} value={name} maxLength={100} placeholder="Who will use it, so you know what to revoke" onChange={(e) => setName(e.target.value)} />
           </label>
           <div className="k-stack" role="group" aria-labelledby="st-scopes">
             <span id="st-scopes" className="k-lbl">
@@ -95,7 +101,7 @@ function Api() {
               );
             })}
           </div>
-          <button type="submit" className="k-btn k-pri st-start" disabled={busy || !name.trim() || scopes.length === 0}>
+          <button type="submit" className="k-btn k-pri st-start" disabled={busy || scopes.length === 0}>
             <Icon name="key" size={18} />
             {busy ? 'Creating…' : 'Create the token'}
           </button>
@@ -127,11 +133,15 @@ function Api() {
           )}
         </section>
 
+        <p className="k-xs k-muted st-m0 st-apinote">
+          The API is at <span className="k-mono st-anywhere">{data.apiUrl}</span>, described in <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
+        </p>
+
         <section className="k-card st-rowcard" aria-label="WebMCP">
           <span className="k-grow">
             <strong id="st-webmcp">WebMCP</strong>
             <br />
-            <span className="k-xs k-muted">An agent in this browser uses the app’s tools while you are signed in. Turning it off also makes the API refuse those calls.</span>
+            <span className="k-xs k-muted">An agent in this browser uses the app’s tools while you are signed in.</span>
           </span>
           <button
             type="button"

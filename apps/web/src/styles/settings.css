@@ -114,7 +114,7 @@ a.k-row:hover { color: inherit; }
 .st-rule { border: 2px solid var(--sc-hairline); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .st-rule.st-off { opacity: 0.55; }
 .st-rule-n { width: 22px; flex: none; }
-.st-rule-title { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer; }
+.st-rule-title { background: none; border: 0; padding: 0; font-family: inherit; line-height: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer; }
 .st-key { width: 110px; flex: none; }
 .st-dot-run { border-radius: 50%; border: 2.5px solid var(--sc-yellow); border-right-color: transparent; }
 .st-checkrow { padding: 10px 0; border-bottom: 0; }
@@ -133,3 +133,15 @@ a.k-row:hover { color: inherit; }
 /* The slot has no box of its own: the bar sticks along the whole Settings page */
 .st-savebar-slot { display: contents; }
 textarea.st-tone { resize: none; field-sizing: content; }
+.st-link.k-xs { font-size: 13px; }
+.st-link.k-sm { font-size: 14px; }
+.st-input.st-text { text-overflow: ellipsis; }
+.st-apinote { order: 1; }
+textarea.st-prompt { font-family: var(--sc-font-mono); font-size: 13px; line-height: 1.6; resize: none; field-sizing: content; }
+.st-vars > summary { cursor: pointer; }
+.st-vars > p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.st-copy { height: 24px; align-items: center; }
+/* The kit's button reset (button.k-row) drops the row's rule and its size class: put both back here */
+.st-page button.k-row:not(:last-child), .st-sub button.k-row:not(:last-child) { border-bottom: 1px solid var(--sc-hairline); }
+.st-page button.k-row.k-sm { font-size: 14px; }
+.st-checkrow.k-row { border-bottom: 0; }

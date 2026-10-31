@@ -61,7 +61,6 @@ function PromptCard({ prompt, variables }: { prompt: PromptView; variables: read
         <StatePill prompt={prompt} />
       </div>
       <textarea className="k-input k-mono st-prompt" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={label} spellCheck={false} />
-      <span className="k-help">Variables: {variables.map((v) => `{{${v}}}`).join(' ')}</span>
       <div className="k-hrow k-g8 k-wrap">
         <button className="k-btn k-pri k-sm" type="button" disabled={draft === current} onClick={() => void run(() => saveAiPrompt({ data: { id: prompt.id, text: draft } }), 'Prompt saved')}>
           Save a new version
@@ -89,6 +88,10 @@ function PromptCard({ prompt, variables }: { prompt: PromptView; variables: read
           </div>
         </div>
       )}
+      <details className="k-help st-vars">
+        <summary>The variables a prompt can use</summary>
+        <p className="k-mono">{variables.map((v) => `{{${v}}}`).join(' ')}</p>
+      </details>
     </section>
   );
 }

@@ -23,16 +23,18 @@ const MODES: Array<{ id: Mode; label: string; text: string }> = [
 ];
 
 /** A value to paste into GitHub, in the kit's input with a copy button (board Webhooks) */
-function Copyable({ label, value }: { label: string; value: string }) {
+function Copyable({ label, value, copy = true }: { label: string; value: string; copy?: boolean }) {
   const toast = useToast();
   return (
     <div className="k-field">
       <span className="k-lbl">{label}</span>
       <span className="k-input st-mono-input">
         <span className="k-grow k-ellipsis">{value}</span>
+        {copy && (
         <button type="button" className="st-copy" aria-label={`Copy the ${label.toLowerCase()}`} onClick={() => void navigator.clipboard.writeText(value).then(() => toast.done(`${label} copied`))}>
           <Icon name="copy" size={18} />
         </button>
+        )}
       </span>
     </div>
   );
@@ -93,7 +95,7 @@ function Webhooks() {
         <h1 className="k-d st-subtitle">Webhooks</h1>
         <p className="k-sm k-muted st-m0">With webhooks GitHub tells Shipcast at once; without them, it polls every {everyText(data.intervalSeconds)}.</p>
         <Copyable label="Payload URL" value={data.webhookUrl} />
-        <Copyable label="Content type" value="application/json" />
+        <Copyable label="Content type" value="application/json" copy={false} />
         <div className="k-field">
           <span className="k-lbl">Secret</span>
           <span className="k-input st-kept">
