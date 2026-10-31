@@ -60,6 +60,8 @@ import { Route as AuthRedditCallbackRouteImport } from './routes/auth/reddit.cal
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
 import { Route as AuthYoutubeCallbackRouteImport } from './routes/auth/youtube.callback'
 import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
+import { Route as AppSettingsAiPromptsRouteImport } from './routes/_app/settings_.ai.prompts'
+import { Route as AppSettingsAutomationWebhooksRouteImport } from './routes/_app/settings_.automation.webhooks'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -315,6 +317,17 @@ const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
   path: '/launches/$id/edit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsAiPromptsRoute = AppSettingsAiPromptsRouteImport.update({
+  id: '/settings_/ai/prompts',
+  path: '/settings/ai/prompts',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsAutomationWebhooksRoute =
+  AppSettingsAutomationWebhooksRouteImport.update({
+    id: '/settings_/automation/webhooks',
+    path: '/settings/automation/webhooks',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -367,6 +380,8 @@ export interface FileRoutesByFullPath {
   '/channels/': typeof AppChannelsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/settings/ai/prompts': typeof AppSettingsAiPromptsRoute
+  '/settings/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
 export interface FileRoutesByTo {
   '/livez': typeof LivezRoute
@@ -418,6 +433,8 @@ export interface FileRoutesByTo {
   '/channels': typeof AppChannelsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/settings/ai/prompts': typeof AppSettingsAiPromptsRoute
+  '/settings/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -472,6 +489,8 @@ export interface FileRoutesById {
   '/_app/channels/': typeof AppChannelsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
+  '/_app/settings_/ai/prompts': typeof AppSettingsAiPromptsRoute
+  '/_app/settings_/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -526,6 +545,8 @@ export interface FileRouteTypes {
     | '/channels/'
     | '/settings/'
     | '/launches/$id/edit'
+    | '/settings/ai/prompts'
+    | '/settings/automation/webhooks'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/livez'
@@ -577,6 +598,8 @@ export interface FileRouteTypes {
     | '/channels'
     | '/settings'
     | '/launches/$id/edit'
+    | '/settings/ai/prompts'
+    | '/settings/automation/webhooks'
   id:
     | '__root__'
     | '/_app'
@@ -630,6 +653,8 @@ export interface FileRouteTypes {
     | '/_app/channels/'
     | '/_app/settings/'
     | '/_app/launches/$id_/edit'
+    | '/_app/settings_/ai/prompts'
+    | '/_app/settings_/automation/webhooks'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1018,6 +1043,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchesIdEditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings_/ai/prompts': {
+      id: '/_app/settings_/ai/prompts'
+      path: '/settings/ai/prompts'
+      fullPath: '/settings/ai/prompts'
+      preLoaderRoute: typeof AppSettingsAiPromptsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings_/automation/webhooks': {
+      id: '/_app/settings_/automation/webhooks'
+      path: '/settings/automation/webhooks'
+      fullPath: '/settings/automation/webhooks'
+      preLoaderRoute: typeof AppSettingsAutomationWebhooksRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -1056,6 +1095,8 @@ interface AppRouteChildren {
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
   AppLaunchesIdEditRoute: typeof AppLaunchesIdEditRoute
+  AppSettingsAiPromptsRoute: typeof AppSettingsAiPromptsRoute
+  AppSettingsAutomationWebhooksRoute: typeof AppSettingsAutomationWebhooksRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1075,6 +1116,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
   AppLaunchesIdEditRoute: AppLaunchesIdEditRoute,
+  AppSettingsAiPromptsRoute: AppSettingsAiPromptsRoute,
+  AppSettingsAutomationWebhooksRoute: AppSettingsAutomationWebhooksRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

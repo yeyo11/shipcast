@@ -1,37 +1,52 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
-import { Toolbox } from '../../components/illustrations';
-import { PageHead } from '../../components/PageHead';
-import { PageToolbarHost } from '../../components/PageToolbar';
+import { TopBar } from '../../components/kit/Bars';
+import { SaveBarSlot } from '../../components/SaveBar';
 
 export const Route = createFileRoute('/_app/settings')({
   component: SettingsLayout,
 });
 
+const SECTIONS = [
+  { to: '/settings', label: 'General', exact: true },
+  { to: '/settings/ai', label: 'AI', exact: false },
+  { to: '/settings/automation', label: 'Automation', exact: false },
+  { to: '/settings/api', label: 'API', exact: false },
+] as const;
+
 /**
- * Settings is one area with a submenu: a column beside the page on wide screens, tabs that scroll
- * sideways on phones. Links rather than Tabs, since each section is a route of its own with its own
- * data and its own address.
+ * Settings is one area of four sections (boards Settings*, DesktopSettings): on a phone, inside More,
+ * the title and tabs under a way back to More; from 960 px the title over a column of the sections.
+ * Links rather than tabs, since each section is a route with its own data and address.
  */
 function SettingsLayout() {
   return (
-    <>
-      <PageHead title="Settings" art={<Toolbox width={200} />}>Everything that is configured, in one place: the app, the AI, how releases are noticed and the API.</PageHead>
-      {/* Each section brings its own toolbar, drawn here under the banner */}
-      <PageToolbarHost>
-      <div className="settings-shell">
-        <nav className="settings-nav" aria-label="Settings sections">
-          <Link to="/settings" activeOptions={{ exact: true }}>
-            General
-          </Link>
-          <Link to="/settings/ai">AI</Link>
-          <Link to="/settings/automation">Automation</Link>
-          <Link to="/settings/api">API</Link>
-        </nav>
-        <div className="settings-body">
-          <Outlet />
+    <SaveBarSlot>
+      {(slot) => (
+        <div className="st-page">
+          <TopBar back={{ label: 'More', more: true }} />
+          <h1 className="k-d st-title">Settings</h1>
+          <nav className="k-tabs st-tabs" aria-label="Settings sections">
+            {SECTIONS.map((s) => (
+              <Link key={s.to} to={s.to} className="k-tab" activeOptions={{ exact: s.exact }} activeProps={{ className: 'k-on' }}>
+                {s.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="st-grid">
+            <nav className="st-nav" aria-label="Settings sections">
+              {SECTIONS.map((s) => (
+                <Link key={s.to} to={s.to} className="k-mi" activeOptions={{ exact: s.exact }} activeProps={{ className: 'k-on' }}>
+                  {s.label}
+                </Link>
+              ))}
+            </nav>
+            <div className="st-body">
+              <Outlet />
+            </div>
+          </div>
+          <div ref={slot} className="st-savebar-slot" />
         </div>
-      </div>
-      </PageToolbarHost>
-    </>
+      )}
+    </SaveBarSlot>
   );
 }

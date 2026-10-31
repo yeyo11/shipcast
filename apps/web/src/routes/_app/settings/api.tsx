@@ -1,11 +1,9 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
-import { SectionHead } from '../../../components/SectionHead';
-import { PlusIcon } from '../../../components/ui/icons';
+import { Icon } from '../../../components/kit/Icon';
+import { ConfirmSheet, OnceSheet } from '../../../components/settings/sheets';
+import { shortDay, tokenUse } from '../../../components/settings/view';
 import { useToast } from '../../../components/Toasts';
-import { Pill, when } from '../../../components/ui';
-import { ConfirmButton } from '../../../components/ui/ConfirmButton';
 import { createToken, listTokens, revokeToken } from '../../../server/tokens.functions';
 import { getWebMcp, setWebMcp } from '../../../server/webmcp.functions';
 
@@ -20,9 +18,9 @@ export const Route = createFileRoute('/_app/settings/api')({
 
 type Scope = 'read' | 'write';
 
-const SCOPES: Array<{ id: Scope; text: string }> = [
-  { id: 'read', text: 'Read launches, posts, numbers, accounts (without secrets) and jobs' },
-  { id: 'write', text: 'Launch a repo, approve drafts, write an article, retry a channel' },
+const SCOPES: Array<{ id: Scope; label: string; text: string }> = [
+  { id: 'read', label: 'Read', text: 'Launches, posts, numbers, accounts (without secrets) and jobs' },
+  { id: 'write', label: 'Write', text: 'Launch a repo, approve drafts, write an article, retry a channel' },
 ];
 
 function Api() {
@@ -31,16 +29,24 @@ function Api() {
   const toast = useToast();
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<Scope[]>(['read']);
-  const [created, setCreated] = useState<{ name: string; token: string } | null>(null);
+  // The token in the page's memory only, for the one time it is shown
+  const [created, setCreated] = useState<{ name: string; scopes: Scope[]; token: string } | null>(null);
+  const [revoking, setRevoking] = useState<{ id: number; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [unnamed, setUnnamed] = useState(false);
 
   const create = async () => {
+    // The button stays live (one clear primary action): an empty name is asked for here
+    if (!name.trim()) {
+      setUnnamed(true);
+      document.getElementById('st-token-name')?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const answer = await createToken({ data: { name, scopes } });
-      setCreated({ name: name.trim(), token: answer.token });
+      setCreated({ name: name.trim(), scopes, token: answer.token });
       setName('');
-      toast.show({ tone: 'wait', title: 'Copy the token now', text: 'It is shown only this once; Shipcast keeps only a hash of it.' });
       await router.invalidate();
     } catch (error) {
       toast.fail(error instanceof Error ? error.message : String(error));
@@ -50,123 +56,132 @@ function Api() {
   };
 
   return (
-    <>
-      <SectionHead title="API">
-        Tokens for scripts, the MCP server and other clients of the REST API at <code className="break">{data.apiUrl}</code>. Its routes are described in{' '}
-        <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
-      </SectionHead>
-      <PageToolbar
-        label="API"
-        actions={<ToolbarAction primary type="submit" form="token-form" label="Create a token" busyLabel={busy && 'Creating…'} icon={<PlusIcon />} disabled={busy || !name.trim() || scopes.length === 0} />}
-      />
-
-      {created && (
-        <div className="form" style={{ marginBottom: 36 }}>
-          <div className="field">
-            <span className="label">New token, {created.name}</span>
-            <div className="row">
-              <code className="input mono copyable">
-                {created.token}
-              </code>
-              <button className="btn btn-small" type="button" onClick={() => void navigator.clipboard.writeText(created.token).then(() => toast.done('Token copied'))}>
-                Copy
-              </button>
-            </div>
-            <small>
-              Send it as <code>Authorization: Bearer …</code>. It is not shown again: if it is lost, revoke it and make another.
-            </small>
+    <div className="st-content">
+      <p className="st-lead">
+        For a script or an agent: every call carries <span className="k-mono k-xs">Authorization: Bearer …</span>
+      </p>
+      <div className="st-cards">
+        <form
+          className="k-card st-g12"
+          aria-labelledby="st-create"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void create();
+          }}
+        >
+          <h2 id="st-create" className="k-d k-d30">
+            Create a token
+          </h2>
+          <label className="k-field">
+            <span className="k-lbl">Name</span>
+            <input id="st-token-name" className={`k-input st-input st-text${unnamed && !name.trim() ? ' k-bad' : ''}`} value={name} maxLength={100} placeholder="Who will use it, so you know what to revoke" onChange={(e) => setName(e.target.value)} />
+          </label>
+          <div className="k-stack" role="group" aria-labelledby="st-scopes">
+            <span id="st-scopes" className="k-lbl">
+              Scopes
+            </span>
+            {SCOPES.map((s) => {
+              const on = scopes.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="k-row"
+                  role="checkbox"
+                  aria-checked={on}
+                  onClick={() => setScopes(on ? scopes.filter((x) => x !== s.id) : [...scopes, s.id])}
+                >
+                  <span className={`k-check${on ? ' k-on' : ''}`}>{on && <Icon name="check" size={16} strokeWidth={3} />}</span>
+                  <span className="k-grow">
+                    {s.label}
+                    <br />
+                    <span className="k-xs k-muted">{s.text}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
+          <button type="submit" className="k-btn k-pri st-start" disabled={busy || scopes.length === 0}>
+            <Icon name="key" size={18} />
+            {busy ? 'Creating…' : 'Create the token'}
+          </button>
+        </form>
 
-      <form
-        id="token-form"
-        className="form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void create();
-        }}
-      >
-        <div className="field">
-          <label htmlFor="token-name">Name</label>
-          <input id="token-name" className="input" value={name} maxLength={100} placeholder="MCP on my laptop" onChange={(e) => setName(e.target.value)} />
-          <small>Who will use it, so you know what to revoke.</small>
-        </div>
-        <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="label">Scopes</legend>
-          <div className="checks">
-            {SCOPES.map((s) => (
-              <label className="check" key={s.id}>
-                <input
-                  type="checkbox"
-                  checked={scopes.includes(s.id)}
-                  onChange={(e) => setScopes(e.target.checked ? [...scopes, s.id] : scopes.filter((x) => x !== s.id))}
-                />
-                {s.id}
-              </label>
-            ))}
-          </div>
-          <small>{SCOPES.map((s) => `${s.id}: ${s.text}.`).join(' ')} One does not include the other.</small>
-        </fieldset>
-      </form>
+        <section className="k-card st-g0" aria-labelledby="st-tokens">
+          <h2 id="st-tokens" className="k-d k-d30 st-mb6">
+            Tokens
+          </h2>
+          {data.tokens.length === 0 ? (
+            <p className="k-sm k-muted st-m0">No tokens yet.</p>
+          ) : (
+            data.tokens.map((t) => (
+              <div key={t.id} className={`k-row${t.revokedAt ? ' st-revoked' : ''}`}>
+                <span className="k-grow">
+                  <strong className="k-sm">{t.name}</strong>
+                  <br />
+                  <span className="k-xs k-muted">{tokenUse(t)}</span>
+                </span>
+                {t.revokedAt ? (
+                  <span className="k-pill k-p-quiet">Revoked {shortDay(t.revokedAt)}</span>
+                ) : (
+                  <button type="button" className="k-btn k-sm" onClick={() => setRevoking({ id: t.id, name: t.name })}>
+                    Revoke
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </section>
 
-      <h2 className="ph">Tokens</h2>
-      {data.tokens.length === 0 ? (
-        <p className="muted">No tokens yet.</p>
-      ) : (
-        <table className="table table-stack">
-          <tbody>
-            {data.tokens.map((t) => (
-              <tr key={t.id}>
-                <th scope="row">{t.name}</th>
-                <td>{t.scopes.join(', ')}</td>
-                <td className="muted">
-                  created {when(t.createdAt)} · {t.lastUsedAt ? `last used ${when(t.lastUsedAt)}` : 'never used'}
-                </td>
-                <td>
-                  {t.revokedAt ? (
-                    <Pill tone="quiet">Revoked {when(t.revokedAt)}</Pill>
-                  ) : (
-                    <ConfirmButton
-                      className="btn btn-small btn-danger"
-                      title={`Revoke “${t.name}”?`}
-                      description="Anything using it stops working at once. A revoked token cannot be brought back; make a new one instead."
-                      confirm="Revoke"
-                      onConfirm={async () => {
-                        await revokeToken({ data: t.id });
-                        toast.done('Token revoked', `${t.name} no longer opens the API.`);
-                        await router.invalidate();
-                      }}
-                    >
-                      Revoke
-                    </ConfirmButton>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        <p className="k-xs k-muted st-m0 st-apinote">
+          The API is at <span className="k-mono st-anywhere">{data.apiUrl}</span>, described in <a href={`${data.apiUrl}/openapi.json`}>openapi.json</a>.
+        </p>
 
-      <h2 className="ph">WebMCP</h2>
-      <div className="form">
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={data.webMcp}
-            onChange={async (e) => {
-              const answer = await setWebMcp({ data: { enabled: e.target.checked } });
+        <section className="k-card st-rowcard" aria-label="WebMCP">
+          <span className="k-grow">
+            <strong id="st-webmcp">WebMCP</strong>
+            <br />
+            <span className="k-xs k-muted">An agent in this browser uses the app’s tools while you are signed in.</span>
+          </span>
+          <button
+            type="button"
+            className={`k-sw${data.webMcp ? ' k-on' : ''}`}
+            role="switch"
+            aria-checked={data.webMcp}
+            aria-labelledby="st-webmcp"
+            onClick={async () => {
+              const answer = await setWebMcp({ data: { enabled: !data.webMcp } });
               toast.done(answer.enabled ? 'WebMCP on' : 'WebMCP off', answer.enabled ? 'Reload the app for an agent in this browser to see the tools.' : 'The tools are no longer offered, and the API refuses their calls.');
               await router.invalidate();
             }}
           />
-          Offer Shipcast’s tools to an agent built into this browser
-        </label>
-        <small>
-          An experiment that follows a draft standard: while the app is open, a browser with WebMCP can call the same tools as the MCP server, with your session and
-          both scopes. Off by default; turning it off also makes the API refuse those calls.
-        </small>
+        </section>
       </div>
-    </>
+
+      <ConfirmSheet
+        open={revoking !== null}
+        onOpenChange={(open) => !open && setRevoking(null)}
+        title={`Revoke “${revoking?.name ?? ''}”?`}
+        keep="Keep it"
+        confirm="Revoke"
+        danger
+        onConfirm={async () => {
+          if (!revoking) return;
+          await revokeToken({ data: revoking.id });
+          toast.done('Token revoked', `${revoking.name} no longer opens the API.`);
+          await router.invalidate();
+        }}
+      >
+        Anything using it stops working at once. A revoked token cannot be brought back; make a new one instead.
+      </ConfirmSheet>
+
+      <OnceSheet
+        value={created?.token ?? null}
+        title="Copy the token now"
+        text="It is shown only this once; Shipcast keeps only a hash of it."
+        note={created ? `“${created.name}” · ${created.scopes.map((s) => SCOPES.find((x) => x.id === s)?.label ?? s).join(', ')}` : ''}
+        onDone={() => setCreated(null)}
+      />
+    </div>
   );
 }

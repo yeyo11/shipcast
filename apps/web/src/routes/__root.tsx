@@ -13,6 +13,7 @@ import layoutCss from '../styles/layout.css?url';
 import publishedCss from '../styles/published.css?url';
 import statsCss from '../styles/stats.css?url';
 import writeCss from '../styles/write.css?url';
+import settingsCss from '../styles/settings.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -31,6 +32,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: commentsCss },
       { rel: 'stylesheet', href: statsCss },
       { rel: 'stylesheet', href: writeCss },
+      { rel: 'stylesheet', href: settingsCss },
     ],
   }),
   shellComponent: Document,

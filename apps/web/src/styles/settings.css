@@ -1,0 +1,147 @@
+/*
+ * Settings (boards MoreSheet › Settings*, PromptEditor, Webhooks, RotateSecret, TokenCreated and
+ * DesktopSettings): the board's inline styles as named classes, on the kit. Role tokens only.
+ */
+
+/* The old shell's padding around main (app.css) is not the board's: Settings draws its own */
+.k-main:has(.st-page, .st-sub) { padding-top: 0; }
+@media (min-width: 960px) { .k-main:has(.st-page, .st-sub) { padding-bottom: 0; } }
+
+/* ---------- The area: title, tabs (phone) or a column of sections (desktop), the page's body ---------- */
+.st-page { padding-bottom: 24px; }
+.st-page:has(.st-savebar) { padding-bottom: 94px; }
+.st-title { font-size: 48px; padding: 18px 16px 0; }
+.st-tabs { margin: 12px 16px 0; padding: 0; }
+.st-nav { display: none; }
+.st-content { display: flex; flex-direction: column; }
+.st-lead { margin: 14px 16px 0; font-size: 14px; color: var(--sc-muted); }
+.st-cards { display: flex; flex-direction: column; gap: 14px; padding: 0 16px; margin-top: 14px; }
+.st-cards.st-first { margin-top: 16px; }
+
+/* Settings' save bar: above the bottom bar on a phone */
+.st-savebar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
+
+@media (min-width: 960px) {
+  .st-page, .st-sub { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
+  .st-page:has(.st-savebar) { padding-bottom: 64px; }
+  .st-title { font-size: 96px; padding: 0; }
+  .st-tabs { display: none; }
+  .st-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; margin-top: 24px; align-items: start; }
+  .st-nav { display: flex; flex-direction: column; gap: 4px; }
+  .st-content { gap: 20px; }
+  .st-lead { margin: 0; font-size: 20px; line-height: 1.4; }
+  .st-cards, .st-cards.st-first { padding: 0; margin: 0; gap: 20px; }
+  .st-savebar { position: sticky; bottom: 0; margin-top: 24px; border-radius: 20px; border: 2px solid var(--sc-rail); }
+}
+
+/* ---------- Small pieces the boards set inline ---------- */
+.st-m0 { margin: 0; }
+.st-mb6 { margin-bottom: 6px; }
+.st-g4 { gap: 4px; }
+.st-g8 { gap: 8px; }
+.st-g12 { gap: 12px; }
+.st-g14 { gap: 14px; }
+.st-flex1 { flex: 1; }
+.st-start { align-self: flex-start; }
+.st-mono { font-size: 14px; }
+.st-bad { color: var(--sc-failure); }
+.st-rowcard { flex-direction: row; align-items: center; gap: 12px; }
+.st-kv { grid-template-columns: 110px 1fr; }
+.st-sheet-text { margin: 0; }
+.st-link { background: none; border: 0; padding: 0; font: inherit; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.st-link:hover { color: var(--sc-yellow); }
+a.k-card, button.k-card { text-decoration: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+a.k-card:hover, button.k-card:hover { color: inherit; border-color: var(--sc-rail); }
+.st-chevron { flex: none; }
+
+/* ---------- Fields: the kit's input as a real control ---------- */
+.st-form { display: flex; flex-direction: column; gap: 14px; }
+.st-input { width: 100%; font-family: var(--sc-font-mono); font-size: 14px; outline: none; }
+.st-input.st-text { font-family: var(--sc-font-text); font-size: 16px; }
+.st-input::placeholder { color: var(--sc-rail); opacity: 1; }
+.st-input:focus-visible, .st-select:focus-within, textarea.k-input:focus-visible { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, 0.25); outline: none; }
+.st-input.k-bad:not(:focus-visible) { border-color: var(--sc-failure); }
+.st-kept { justify-content: space-between; }
+textarea.k-input { width: 100%; resize: vertical; font: inherit; line-height: 1.5; outline: none; }
+
+/* A native select drawn as the kit's input, with the board's chevron */
+.st-select { position: relative; padding: 0; min-height: 44px; }
+.st-select select { appearance: none; -webkit-appearance: none; width: 100%; min-height: 40px; padding: 0 40px 0 14px; background: transparent; border: 0; color: inherit; font: inherit; font-size: 16px; outline: none; cursor: pointer; }
+.st-select select option { background: var(--sc-raised); color: var(--sc-text); }
+.st-select > svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--sc-muted); }
+
+/* ---------- Sheets ---------- */
+.st-once-value { font-size: 13px; word-break: break-all; border-color: var(--sc-yellow); }
+
+/* ---------- AI (boards SettingsAI and DesktopSettings) ---------- */
+.st-g0 { gap: 0; }
+.st-mb8 { margin-bottom: 8px; }
+.st-mt6 { margin-top: 6px; }
+.st-task { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--sc-hairline); }
+.st-task:last-child { border-bottom: 0; padding-bottom: 0; }
+.st-model { width: 120px; flex: none; min-height: 44px; font-size: 13px; }
+.st-cell { min-height: 44px; font-size: 13px; }
+.st-taskgrid { display: grid; grid-template-columns: 1.2fr 1fr 1fr 120px; gap: 12px; align-items: center; }
+.st-taskgrid-row { display: contents; }
+.st-taskgrid-note { margin: 12px 0 0; }
+.st-tone { min-height: 90px; }
+.st-log { margin: 0; max-height: 320px; overflow: auto; padding: 12px 14px; border-radius: 14px; background: var(--sc-black); font: 12px/1.6 var(--sc-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+a.k-row, .st-rowlink { text-decoration: none; color: inherit; }
+a.k-row:hover { color: inherit; }
+@media (min-width: 960px) {
+  .k-card.k-desktop { display: flex; }
+  .st-tone { min-height: 80px; }
+  .st-providers, .st-preview { order: 1; }
+}
+
+/* ---------- A page under a section (boards PromptEditor, Webhooks): its own title, no tabs ---------- */
+.st-sub { padding-bottom: 24px; }
+.st-subbody { display: flex; flex-direction: column; padding: 18px 16px 0; }
+.st-subtitle { font-size: 48px; }
+.st-g6 { gap: 6px; }
+.st-open { border-color: var(--sc-rail); }
+.st-prompt { min-height: 220px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.st-version { padding: 8px 0; }
+.st-backlink { align-items: center; gap: 4px; font-weight: 600; text-decoration: none; }
+@media (min-width: 960px) {
+  .st-subbody { max-width: 760px; padding: 0; }
+  .st-subtitle { font-size: 96px; }
+  a.st-backlink.k-desktop { display: inline-flex; align-self: flex-start; }
+}
+.st-anywhere { overflow-wrap: anywhere; }
+
+/* ---------- Automation (boards SettingsAutomation, Webhooks) ---------- */
+.st-rule { border: 2px solid var(--sc-hairline); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.st-rule.st-off { opacity: 0.55; }
+.st-rule-n { width: 22px; flex: none; }
+.st-rule-title { background: none; border: 0; padding: 0; font-family: inherit; line-height: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer; }
+.st-key { width: 110px; flex: none; }
+.st-dot-run { border-radius: 50%; border: 2.5px solid var(--sc-yellow); border-right-color: transparent; }
+.st-checkrow { padding: 10px 0; border-bottom: 0; }
+.st-copy { background: none; border: 0; padding: 0; color: var(--sc-muted); cursor: pointer; display: flex; }
+.st-copy:hover { color: var(--sc-text); }
+.st-steps { margin: 0; padding-left: 18px; line-height: 1.7; }
+.st-mono-input { font-family: var(--sc-font-mono); font-size: 14px; }
+.st-mb4 { margin-bottom: 4px; }
+.st-revoked { opacity: 0.55; }
+.st-link.st-plain { text-decoration: none; color: inherit; }
+.st-link.st-plain:hover { color: var(--sc-yellow); }
+.st-tone { resize: none; }
+/* The board's inputs are spans whose height comes from their text: the same height for the real controls */
+.st-input { line-height: 1.5; }
+.st-select select { min-height: 48px; }
+/* The slot has no box of its own: the bar sticks along the whole Settings page */
+.st-savebar-slot { display: contents; }
+textarea.st-tone { resize: none; field-sizing: content; }
+.st-link.k-xs { font-size: 13px; }
+.st-link.k-sm { font-size: 14px; }
+.st-input.st-text { text-overflow: ellipsis; }
+.st-apinote { order: 1; }
+textarea.st-prompt { font-family: var(--sc-font-mono); font-size: 13px; line-height: 1.6; resize: none; field-sizing: content; }
+.st-vars > summary { cursor: pointer; }
+.st-vars > p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.st-copy { height: 24px; align-items: center; }
+/* The kit's button reset (button.k-row) drops the row's rule and its size class: put both back here */
+.st-page button.k-row:not(:last-child), .st-sub button.k-row:not(:last-child) { border-bottom: 1px solid var(--sc-hairline); }
+.st-page button.k-row.k-sm { font-size: 14px; }
+.st-checkrow.k-row { border-bottom: 0; }
