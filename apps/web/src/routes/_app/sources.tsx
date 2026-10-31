@@ -91,8 +91,6 @@ function LaunchFromSources() {
     );
   }
 
-  const ready_ = (kind === 'text' && draft.text.trim()) || (kind === 'url' && draft.url.trim()) || (kind === 'repo' && draft.repo) || (kind === 'media' && file);
-
   const add = async () => {
     if (kind === 'text' && draft.text.trim()) setSources([...sources, { kind, text: draft.text, ...(draft.title.trim() && { title: draft.title.trim() }) }]);
     else if (kind === 'url' && draft.url.trim()) setSources([...sources, { kind, url: draft.url.trim() }]);
@@ -105,7 +103,11 @@ function LaunchFromSources() {
       const size = answer.file.width && answer.file.height ? `${answer.file.width}×${answer.file.height}` : answer.file.mime;
       setSources([...sources, { kind, sha256: answer.file.sha256, name: file.name, size, ...(draft.alt.trim() && { alt: draft.alt.trim() }) }]);
       setFile(null);
-    } else return;
+    } else {
+      // Nothing to add yet: the field it needs is where the owner goes
+      document.querySelector<HTMLElement>('.wr-add .k-input, .wr-add input')?.focus();
+      return;
+    }
     setDraft(EMPTY);
   };
 
@@ -204,7 +206,7 @@ function LaunchFromSources() {
               </>
             )}
             <span className="k-help">{KINDS[kind].help}</span>
-            <button type="button" className="k-btn k-sm wr-add-button" onClick={() => void add()} disabled={busy !== null || !ready_}>
+            <button type="button" className="k-btn k-sm wr-add-button" onClick={() => void add()} disabled={busy !== null}>
               <Icon name="plus" size={16} />
               Add
             </button>
@@ -214,7 +216,7 @@ function LaunchFromSources() {
             <span className="k-lbl">
               Also on <span className="wr-normal">· besides the blog</span>
             </span>
-            <ChannelChips ready={ready} chosen={channels} onChange={setChannels} disabled={Boolean(primary)} />
+            <ChannelChips ready={ready} chosen={channels} onChange={setChannels} />
             <span className="k-help">
               {primary ? (
                 'With a repo, its launch.yml chooses the channels instead.'

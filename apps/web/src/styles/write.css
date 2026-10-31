@@ -5,9 +5,6 @@
  */
 
 /* ---------- The page ---------- */
-/* The old layout pads every <main> (layout.css); these screens start under their top bar, as the board */
-.k-main:has(.wr-page) { padding-top: 0; }
-@media (min-width: 960px) { .k-main:has(.wr-page) { padding-bottom: 0; } }
 .wr-page { padding: 18px 16px 0; }
 .wr-form { gap: 14px; }
 .wr-flush { margin: 0; }
@@ -29,9 +26,9 @@
 }
 
 /* ---------- Inputs ---------- */
-input.k-input, textarea.k-input { width: 100%; font-family: inherit; line-height: 1.5; outline: none; }
-.k-input:focus-visible, .k-input:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
-.k-input::placeholder, .wr-placeholder { color: var(--sc-rail); }
+/* Scoped to these screens: other sections set their own fields (Settings' mono ones) */
+.wr-page :where(input, textarea).k-input { width: 100%; line-height: 1.5; outline: none; }
+.wr-placeholder { color: var(--sc-rail); }
 .wr-picker { line-height: 1.5; }
 .wr-picker-input { flex: 1; min-width: 0; height: 24px; line-height: 1.5; border: 0; background: none; color: inherit; font: inherit; outline: none; padding: 0; }
 .wr-picker-button { width: 100%; cursor: pointer; font: inherit; text-align: left; }
@@ -87,7 +84,7 @@ input.k-input, textarea.k-input { width: 100%; font-family: inherit; line-height
 .wr-write-sub { margin: 8px 0 0; }
 .wr-write-grid { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .wr-write-side { display: contents; }
-.wr-title-input { font-size: 20px; font-weight: 700; }
+.wr-title-field .wr-title-input { font-size: 20px; font-weight: 700; }
 .wr-write-note { display: none; }
 
 .wr-out { gap: 0; padding: 0; }
@@ -111,8 +108,8 @@ input.k-input, textarea.k-input { width: 100%; font-family: inherit; line-height
   .wr-write-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; margin-top: 24px; align-items: start; }
   .wr-write-main { gap: 16px; }
   .wr-title-label { display: none; }
-  .wr-title-input { font-size: 30px; min-height: 64px; border-color: transparent; border-bottom-color: var(--sc-rail); border-radius: 0; padding-left: 0; }
-  .wr-title-input:focus-visible { box-shadow: none; border-color: transparent; border-bottom-color: var(--sc-yellow); }
+  .wr-title-field .wr-title-input { font-size: 30px; min-height: 64px; border-color: transparent; border-bottom-color: var(--sc-rail); border-radius: 0; padding-left: 0; }
+  .wr-title-field .wr-title-input:focus-visible { box-shadow: none; border-color: transparent; border-bottom-color: var(--sc-yellow); }
   .wr-write-editor .wr-assisted-label, .wr-write-editor .wr-assisted-help { display: none; }
   .wr-write-editor .wr-assisted-meta { margin-left: auto; }
   .wr-write-editor .wr-textarea.wr-tall { min-height: 460px; }
@@ -128,7 +125,7 @@ input.k-input, textarea.k-input { width: 100%; font-family: inherit; line-height
 
 /* ---------- The assisted editor ---------- */
 .wr-assisted-bar { min-height: 36px; }
-.wr-assist-button { min-height: 36px; }
+@media (max-width: 959px) { .k-btn.wr-assist-button { min-height: 36px; } }
 .wr-assisted-box { position: relative; }
 .wr-textarea { display: block; min-height: 160px; resize: vertical; font-size: 16px; line-height: 1.6; }
 .wr-textarea.wr-tall { min-height: 260px; }
@@ -145,7 +142,7 @@ button.k-mi:disabled { opacity: .45; cursor: not-allowed; }
 .wr-sheet-back { font-weight: 600; }
 
 /* The proposal (board AssistProposal): a stamped card in the yellow of what waits for you */
-.wr-proposal { gap: 12px; border-color: var(--sc-yellow); box-shadow: 6px 6px 0 var(--sc-yellow); }
+.wr-proposal { margin-bottom: 6px; gap: 12px; border-color: var(--sc-yellow); box-shadow: 6px 6px 0 var(--sc-yellow); }
 .wr-diff { margin: 0; display: flex; flex-direction: column; gap: 12px; }
 .wr-diff-text { font-size: 16px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; }
 .wr-diff-text:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 4px; border-radius: 4px; }
@@ -186,7 +183,7 @@ ins.k-diff-add { text-decoration: none; }
 .wr-chat-pending { opacity: .75; }
 .wr-chat-accept { border-color: var(--sc-text); }
 .wr-chat-form { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); border-top: 1px solid var(--sc-hairline); }
-.wr-chat-input { min-height: 48px; max-height: 160px; resize: none; line-height: 1.5; }
+.wr-chat-form textarea.wr-chat-input { min-height: 48px; max-height: 160px; resize: none; line-height: 1.5; }
 .wr-chat-sessions { list-style: none; margin: 0; padding: 0; }
 button.wr-chat-session { padding: 12px 0; }
 .wr-chat-session[aria-current="true"] strong { color: var(--sc-yellow); }
@@ -196,9 +193,10 @@ button.wr-chat-session { padding: 12px 0; }
 .wr-chat-card .wr-chat-form { padding: 0; border-top: 0; }
 .wr-chat-fab { position: fixed; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 44; background: var(--sc-raised); }
 @media (min-width: 960px) { .wr-chat-fab { bottom: 24px; right: 24px; } }
-.k-btn.wr-grow-btn { flex: 1; }
-textarea.wr-textarea { line-height: 1.6; }
+/* Above other sheets' `textarea.k-input` (settings.css resets the font on every one) */
+.wr-assisted textarea.wr-textarea { font-size: 16px; line-height: 1.6; }
 @media (min-width: 960px) {
   .wr-write-editor { gap: 16px; }
   .wr-out-help { display: none; }
 }
+.wr-title-field textarea.wr-title-input { resize: none; overflow: hidden; line-height: 1.5; display: block; }

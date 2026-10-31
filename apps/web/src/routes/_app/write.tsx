@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AssistedEditor } from '../../components/assistant/AssistedEditor';
 import { ChatPanel } from '../../components/assistant/ChatPanel';
 import { useAssistant } from '../../components/assistant/session';
@@ -94,6 +94,19 @@ function Write() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [restored, setRestored] = useState(false);
   const now = useTick(30_000);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  // The title's box grows to its lines, again when the window's width changes them
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [title]);
   const assistant = useAssistant({
     value: markdown,
     onChange: setMarkdown,
@@ -168,7 +181,20 @@ function Write() {
               <label className="k-lbl wr-title-label" htmlFor="title">
                 Title
               </label>
-              <input id="title" className="k-input wr-title-input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
+              <textarea
+                id="title"
+                ref={titleRef}
+                rows={1}
+                className="k-input wr-title-input"
+                value={title}
+                // One line of text that wraps as the board's title does: a line break would end up in the heading
+                onChange={(e) => setTitle(e.target.value.replace(/\s*\n\s*/g, ' '))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.preventDefault();
+                }}
+                required
+                maxLength={200}
+              />
             </div>
             <AssistedEditor
               id="body"

@@ -103,8 +103,8 @@ function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant:
     assistant.run(action, adaptTo);
     onOpenChange(false);
   };
-  const row = (action: Action, label: string, disabled?: boolean) => (
-    <button type="button" className="k-mi" onClick={() => act(action)} disabled={disabled}>
+  const row = (action: Action, label: string, disabled?: boolean, why?: string) => (
+    <button type="button" className="k-mi" onClick={() => act(action)} disabled={disabled} aria-describedby={why ? 'assist-sheet-why' : undefined} title={why}>
       {label}
     </button>
   );
@@ -144,8 +144,13 @@ function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant:
             <Icon name="chevronRight" size={18} />
           </button>
           <div className="k-sep" />
-          {row('check', 'Check against the repo’s code', Boolean(assistant.target.checkDisabled))}
-          {assistant.target.checkDisabled && <span className="k-xs k-muted wr-menu-note">{assistant.target.checkDisabled}</span>}
+          {row('check', 'Check against the repo’s code', Boolean(assistant.target.checkDisabled), assistant.target.checkDisabled)}
+          {/* Why it cannot run here, for a screen reader; the sheet keeps the board's list */}
+          {assistant.target.checkDisabled && (
+            <span id="assist-sheet-why" className="visually-hidden">
+              {assistant.target.checkDisabled}
+            </span>
+          )}
           {onOpenChat && (
             <button
               type="button"
@@ -230,7 +235,7 @@ function ProposalCard({ assistant, onAccept }: { assistant: Assistant; onAccept:
         <button type="button" className="k-btn k-sm" onClick={assistant.rejectProposal}>
           {proposal.streaming ? 'Stop' : 'Reject'}
         </button>
-        <button type="button" className="k-btn k-pri k-sm wr-grow-btn" onClick={onAccept} disabled={proposal.streaming || !proposal.text || Boolean(proposal.problem)}>
+        <button type="button" className="k-btn k-pri k-sm k-grow" onClick={onAccept} disabled={proposal.streaming || !proposal.text || Boolean(proposal.problem)}>
           <Icon name="check" size={18} />
           Accept
         </button>
@@ -291,9 +296,10 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
-  }, [target.value]);
+    el.style.height = '';
+    // Only past its minimum: below it the stylesheet's height holds, whatever the layout (a proposal shrinks it)
+    if (el.scrollHeight > el.clientHeight) el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [target.value, proposal]);
 
   useEffect(() => {
     const el = ref.current;

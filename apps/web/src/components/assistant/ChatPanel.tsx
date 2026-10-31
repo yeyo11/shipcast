@@ -48,7 +48,7 @@ function Answer({ message, assistant }: { message: ChatMessage; assistant: Assis
                 </button>
                 <button
                   type="button"
-                  className="k-btn k-sm wr-grow-btn wr-chat-accept"
+                  className="k-btn k-sm k-grow wr-chat-accept"
                   onClick={() => {
                     const ok = assistant.accept({ range: message.range, original: before, text: piece.text });
                     if (ok) assistant.settle(message, n, 'accepted');
