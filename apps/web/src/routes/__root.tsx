@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SessionExpiry } from '../components/SessionExpiry';
 import appCss from '../styles/app.css?url';
+import channelsCss from '../styles/channels.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
 import homeCss from '../styles/home.css?url';
@@ -23,6 +24,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: kitCss },
       { rel: 'stylesheet', href: homeCss },
       { rel: 'stylesheet', href: publishedCss },
+      { rel: 'stylesheet', href: channelsCss },
     ],
   }),
   shellComponent: Document,

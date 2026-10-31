@@ -30,6 +30,8 @@ export async function channelsViewOf(ctx: { registry: Repositories; secrets: Sec
     if (found?.origin.kind === 'env') fromEnv.push(network.id);
   }
   return {
+    /** When the view was read: the cards say "synced 2 h ago" from it, the same on the server and in the browser */
+    now: now.toISOString(),
     brands: [{ id: current.id, name: current.displayName }],
     secretsKind: secrets.kind,
     instagramOAuth: ctx.settings.oauthApp('instagram') !== undefined,
