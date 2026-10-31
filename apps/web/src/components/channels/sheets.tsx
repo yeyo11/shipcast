@@ -122,7 +122,7 @@ export function AccountSheet({
             <button type="button" className="k-btn" onClick={close}>
               Keep it
             </button>
-            <button type="button" className="k-btn k-danger ch-fill" disabled={busy} onClick={() => run(() => actions.disconnect(target.account))}>
+            <button type="button" className="k-btn k-danger k-grow" disabled={busy} onClick={() => run(() => actions.disconnect(target.account))}>
               Disconnect
             </button>
           </div>
@@ -146,7 +146,7 @@ export function AccountSheet({
             <button type="button" className="k-btn" onClick={() => go('menu')}>
               Back
             </button>
-            <button type="submit" className="k-btn k-pri ch-fill" disabled={busy || !label.trim()}>
+            <button type="submit" className="k-btn k-pri k-grow" disabled={busy || !label.trim()}>
               Save the name
             </button>
           </div>

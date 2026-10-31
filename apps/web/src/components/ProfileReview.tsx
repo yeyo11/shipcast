@@ -42,7 +42,7 @@ function ConfirmSheet({ open, onOpenChange, title, children, confirm, onConfirm 
         </button>
         <button
           type="button"
-          className="k-btn k-pri ch-fill"
+          className="k-btn k-pri k-grow"
           onClick={() => {
             onOpenChange(false);
             onConfirm();
@@ -283,9 +283,9 @@ export function ProfileReview({ account, network, initial, now }: { account: { i
   return (
     <div className="k-stack k-g12">
       <h1 className="k-d k-d48">Profile review</h1>
-      <p className="k-sm k-muted ch-flush">
+      <p className="k-sm k-muted ch-flush" title={review?.summary}>
         {review
-          ? `For ${account.label}, read ${dayWord(review.reviewedAt, now)}. ${review.summary.trim().replace(/\.?$/, '.')} Each field on its own; nothing changes until you apply it.`
+          ? `For ${account.label}, read ${dayWord(review.reviewedAt, now)}. Each field on its own; nothing changes until you apply it.`
           : `For ${account.label}. The AI reads the profile, how the account grew and your brand, and proposes each field’s new text. Nothing changes until you apply a proposal.`}
       </p>
       {job && (
