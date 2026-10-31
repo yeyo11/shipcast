@@ -1,5 +1,7 @@
 import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
+import { ApprovalMenu } from '../../../components/approve/ApprovalMenu';
+import { LaunchApproval } from '../../../components/approve/LaunchApproval';
 import { Jobs } from '../../../components/Jobs';
 import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { Channels, metricWords } from '../../../components/launch/Channels';
@@ -406,6 +408,35 @@ function LaunchPage() {
     else if (!answer.preview.url) toast.done('Not up yet', 'The site is still building the preview.');
     await router.invalidate();
   };
+  // Waiting for the owner (section approve): its own screen; Search engines and Details stay this page's
+  if (launch.status === 'drafted' && open && !launch.deletedAt) {
+    return (
+      <>
+        <LaunchApproval
+          data={data}
+          tab={tab}
+          onTab={(next) => go({ tab: next })}
+          channel={search.channel}
+          onChannel={(channel) => go({ tab: 'channels', channel })}
+          search={<SearchEngines index={index} />}
+          details={<Details data={data} />}
+          menu={<ApprovalMenu launchId={launch.id} held={Boolean(app)} {...(data.deletable && { onDelete: () => setDeleting(true) })} />}
+        />
+        {data.deletable && (
+          <DeleteLaunch
+            launchId={launch.id}
+            open={deleting}
+            onOpenChange={setDeleting}
+            onDeleted={async () => {
+              await router.invalidate();
+              await router.navigate({ to: '/' });
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   const preview = app?.preview;
   const previewReady = Boolean(preview?.url && preview.urlSha && preview.sha.startsWith(preview.urlSha));
 

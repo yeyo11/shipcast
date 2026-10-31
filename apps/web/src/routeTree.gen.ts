@@ -60,6 +60,7 @@ import { Route as AuthRedditCallbackRouteImport } from './routes/auth/reddit.cal
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
 import { Route as AuthYoutubeCallbackRouteImport } from './routes/auth/youtube.callback'
 import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
+import { Route as AppLaunchesIdPreviewRouteImport } from './routes/_app/launches/$id_.preview'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -315,6 +316,11 @@ const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
   path: '/launches/$id/edit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLaunchesIdPreviewRoute = AppLaunchesIdPreviewRouteImport.update({
+  id: '/launches/$id_/preview',
+  path: '/launches/$id/preview',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -367,6 +373,7 @@ export interface FileRoutesByFullPath {
   '/channels/': typeof AppChannelsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
 }
 export interface FileRoutesByTo {
   '/livez': typeof LivezRoute
@@ -418,6 +425,7 @@ export interface FileRoutesByTo {
   '/channels': typeof AppChannelsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -472,6 +480,7 @@ export interface FileRoutesById {
   '/_app/channels/': typeof AppChannelsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
+  '/_app/launches/$id_/preview': typeof AppLaunchesIdPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -526,6 +535,7 @@ export interface FileRouteTypes {
     | '/channels/'
     | '/settings/'
     | '/launches/$id/edit'
+    | '/launches/$id/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/livez'
@@ -577,6 +587,7 @@ export interface FileRouteTypes {
     | '/channels'
     | '/settings'
     | '/launches/$id/edit'
+    | '/launches/$id/preview'
   id:
     | '__root__'
     | '/_app'
@@ -630,6 +641,7 @@ export interface FileRouteTypes {
     | '/_app/channels/'
     | '/_app/settings/'
     | '/_app/launches/$id_/edit'
+    | '/_app/launches/$id_/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1018,6 +1030,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchesIdEditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/launches/$id_/preview': {
+      id: '/_app/launches/$id_/preview'
+      path: '/launches/$id/preview'
+      fullPath: '/launches/$id/preview'
+      preLoaderRoute: typeof AppLaunchesIdPreviewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -1056,6 +1075,7 @@ interface AppRouteChildren {
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
   AppLaunchesIdEditRoute: typeof AppLaunchesIdEditRoute
+  AppLaunchesIdPreviewRoute: typeof AppLaunchesIdPreviewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1075,6 +1095,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
   AppLaunchesIdEditRoute: AppLaunchesIdEditRoute,
+  AppLaunchesIdPreviewRoute: AppLaunchesIdPreviewRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

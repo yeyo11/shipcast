@@ -18,6 +18,10 @@ interface PiecesDeps {
 export interface SchedulingChannel {
   channel: Channel;
   scheduled: PieceState | null;
+  /** launch.yml's mode for it, when launch.yml could be read: `auto` goes out on its own at its time */
+  mode?: 'auto' | 'approval';
+  /** Its network's account when the last check of it failed: the piece waits until it is reconnected */
+  broken?: { id: number; label: string; problem: string | null };
 }
 
 /**
@@ -42,7 +46,7 @@ export async function launchPieces(registry: Pick<Repositories, 'posts' | 'metri
   const usedIds = [...new Set(out.flatMap((p) => (p.accountId === null ? [] : [p.accountId])))];
   const snapshots: SnapshotInput[] = (await Promise.all(usedIds.map((id) => registry.accounts.accountSnapshots(id, { since })))).flat();
   const accountNumbers = accountRows({ posts: out, accounts: shaped, snapshots, launchedAt: launch.createdAt });
-  return { rows, replies, accounts: accountNumbers, capabilities: CAPABILITIES, scheduling: await schedulingChannels(registry, launch, posts, deps) };
+  return { rows, replies, accounts: accountNumbers, capabilities: CAPABILITIES, scheduling: await schedulingChannels(registry, launch, posts, accounts, deps) };
 }
 
 /**
@@ -54,6 +58,7 @@ async function schedulingChannels(
   registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'settings'>,
   launch: Launch,
   posts: Awaited<ReturnType<Repositories['posts']['posts']>>,
+  accounts: Awaited<ReturnType<Repositories['accounts']['accounts']>>,
   deps: PiecesDeps,
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);
@@ -72,7 +77,16 @@ async function schedulingChannels(
     const mine = posts.filter((p) => p.channel === channel);
     if (mine.some((p) => p.status !== 'scheduled')) continue;
     const scheduled = mine.find((p) => p.status === 'scheduled');
-    channels.push({ channel, scheduled: scheduled ? { id: scheduled.id, status: scheduled.status, updatedAt: scheduled.updatedAt, scheduledAt: scheduled.scheduledAt } : null });
+    const mode = config?.publishing[channel];
+    // The account a piece goes out with: the network's primary one (a channel's network shares its id)
+    const own = accounts.filter((a) => a.network === channel);
+    const account = own.find((a) => a.primary) ?? own[0];
+    channels.push({
+      channel,
+      scheduled: scheduled ? { id: scheduled.id, status: scheduled.status, updatedAt: scheduled.updatedAt, scheduledAt: scheduled.scheduledAt } : null,
+      ...((mode === 'auto' || mode === 'approval') && { mode }),
+      ...(account?.status === 'failed' && { broken: { id: account.id, label: account.label, problem: account.problem } }),
+    });
   }
   return { timezone, channels };
 }
