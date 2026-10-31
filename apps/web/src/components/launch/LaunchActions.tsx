@@ -1,4 +1,4 @@
-import { useRouter } from '@tanstack/react-router';
+import { Link, useRouter } from '@tanstack/react-router';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Diamond, Icon } from '../kit/Icon';
 import { Sheet, SheetClose } from '../kit/Sheet';
@@ -64,12 +64,14 @@ export interface LaunchActionsProps {
   deletable: boolean;
   /** A drafted launch whose approved pieces did not all go out: Publish what is pending */
   pending: boolean;
+  /** Waiting for the owner's approval: its text to edit and, for a launch Shipcast holds, the article's preview */
+  waiting?: boolean;
   running: boolean;
   onDeleted: () => Promise<void>;
   children: ReactNode;
 }
 
-export function LaunchActionsProvider({ launchId, name, version, rows, drafts, timezone, held, articleUrl, deletable, pending, running, onDeleted, children }: LaunchActionsProps) {
+export function LaunchActionsProvider({ launchId, name, version, rows, drafts, timezone, held, articleUrl, deletable, pending, waiting = false, running, onDeleted, children }: LaunchActionsProps) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState<Open>(null);
@@ -118,6 +120,18 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
           {version && <span className="k-mono k-sm k-muted">{version}</span>}
         </div>
         <div className="k-stack">
+          {waiting && (
+            <SheetClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id/edit" params={{ id: String(launchId) }} />}>
+              <Icon name="write" />
+              Edit the text
+            </SheetClose>
+          )}
+          {waiting && held && (
+            <SheetClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id/preview" params={{ id: String(launchId) }} />}>
+              <Icon name="eye" />
+              Preview the article
+            </SheetClose>
+          )}
           {articleUrl && (
             <SheetClose nativeButton={false} render={<a className="k-mi" href={articleUrl} target="_blank" rel="noreferrer" />}>
               <Icon name="external" />
@@ -145,7 +159,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
           )}
           {deletable && (
             <>
-              {(articleUrl || editable.length > 0 || removable.length > 0 || pending) && <div className="k-sep" />}
+              {(waiting || articleUrl || editable.length > 0 || removable.length > 0 || pending) && <div className="k-sep" />}
               <button type="button" className="k-mi k-bad" disabled={running} onClick={() => setOpen({ kind: 'delete' })}>
                 <span className="pub-mi-diamond">
                   <Diamond size={10} />
@@ -154,7 +168,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
               </button>
             </>
           )}
-          {!articleUrl && editable.length === 0 && removable.length === 0 && !deletable && !(pending && !running) && <p className="k-sm k-muted pub-menu-none">Nothing to do to this launch from here yet.</p>}
+          {!waiting && !articleUrl && editable.length === 0 && removable.length === 0 && !deletable && !(pending && !running) && <p className="k-sm k-muted pub-menu-none">Nothing to do to this launch from here yet.</p>}
         </div>
         <SheetClose className="k-btn k-full">Close</SheetClose>
       </Sheet>

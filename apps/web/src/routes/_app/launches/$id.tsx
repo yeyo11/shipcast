@@ -141,6 +141,7 @@ function LaunchPage() {
       articleUrl={articleUrl?.url ?? null}
       deletable={data.deletable && !launch.deletedAt}
       pending={launch.status === 'drafted' && !open}
+      waiting={waiting}
       running={running}
       onDeleted={async () => {
         await router.invalidate();
