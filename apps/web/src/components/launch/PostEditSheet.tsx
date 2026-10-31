@@ -136,7 +136,7 @@ export function PostEditSheet({
         </button>
         <button
           type="button"
-          className="k-btn k-pri pub-fill"
+          className="k-btn k-pri k-grow"
           disabled={!changes || busy || over}
           onClick={async () => {
             if (!changes) return;
@@ -210,7 +210,7 @@ export function EditManySheet({ rows, onClose, onApply }: { rows: PieceRow[]; on
         </button>
         <button
           type="button"
-          className="k-btn k-pri pub-fill"
+          className="k-btn k-pri k-grow"
           disabled={doable === 0 || Object.keys(changes).length === 0 || busy}
           onClick={async () => {
             setBusy(true);

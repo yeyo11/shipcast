@@ -6,9 +6,6 @@
 
 /* The page: the phone's column; on a desktop the same content in the page column, not stretched */
 .pub-page { padding-bottom: 24px; }
-/* The older main's padding (app.css) is not this page's: the top bar sits at the very top */
-main:has(> .pub-page) { padding-top: 0; }
-@media (min-width: 960px) { main:has(> .pub-page) { padding-bottom: 0; } }
 @media (min-width: 960px) {
   .pub-page { max-width: 880px; margin: 0 auto; padding: 16px 32px 64px; }
 }
@@ -56,12 +53,9 @@ main:has(> .pub-page) { padding-top: 0; }
 
 /* ---------- Sheets: the menu, editing, unpublishing, deleting ---------- */
 .pub-flush { margin: 0; }
-.k-btn.pub-fill { flex: 1; min-width: 0; }
 .pub-menu-head { align-items: baseline; padding: 0 4px; }
 .pub-menu-none { margin: 4px 12px; }
 .pub-mi-diamond { display: inline-flex; margin: 0 5px; }
-/* The kit's `button.k-mi` resets the font; the menu's entries keep the board's weight */
-.k-sheet button.k-mi { font-size: 16px; font-weight: 500; }
 button.k-mi[disabled] { opacity: .45; cursor: not-allowed; }
 .pub-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pub-legend { padding: 0; }
@@ -79,7 +73,7 @@ button.k-mi[disabled] { opacity: .45; cursor: not-allowed; }
 .pub-diffarea-behind, .pub-diffarea textarea { margin: 0; padding: 12px 14px; font: inherit; font-size: 15px; line-height: 1.55; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
 .pub-diffarea-behind { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; }
 .pub-diffarea-behind mark { background: rgba(111, 213, 142, .16); color: transparent; border-radius: 4px; }
-.pub-diffarea textarea { position: relative; display: block; width: 100%; min-height: 146px; height: 146px; border: 0; background: transparent; color: var(--sc-text); resize: vertical; outline: none; }
+.pub-diffarea textarea { position: relative; display: block; width: 100%; min-height: 146px; height: 146px; border: 0; background: transparent; color: var(--sc-text); resize: none; outline: none; }
 
 /* ---------- Search ---------- */
 .pub-intro { margin: 14px 0 0; }
@@ -117,7 +111,3 @@ button.k-mi[disabled] { opacity: .45; cursor: not-allowed; }
 .pub-problem { background: var(--sc-ground); border-radius: 12px; padding: 10px 12px; color: color-mix(in srgb, var(--sc-failure) 55%, var(--sc-text)); overflow-wrap: anywhere; }
 .pub-failed-log { align-self: center; padding-top: 0; }
 
-/* The content tab and the approval strip keep their older look until the approval's redesign lands */
-.pub-legacy { margin-top: 16px; }
-/* The approval strip (its redesign is the approval section's) keeps clear of the heading */
-.pub-page > .strip { margin: 14px 16px 0; }
