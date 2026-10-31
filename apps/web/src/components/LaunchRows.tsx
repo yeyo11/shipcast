@@ -46,7 +46,7 @@ export function ApprovalCard({ launch }: { launch: HomeLaunch }) {
           Review the drafts
         </Link>
         {article && (
-          <Link className="k-btn k-onyel k-desktop-flex" to="/launches/$id" params={{ id }} search={{ tab: 'content' }}>
+          <Link className="k-btn k-onyel k-desktop-flex" to="/launches/$id/preview" params={{ id }}>
             <Icon name="eye" size={18} />
             Preview the article
           </Link>
