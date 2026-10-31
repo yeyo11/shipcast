@@ -268,8 +268,9 @@ export function LaunchApproval({ data, tab, onTab, channel, onChannel, search, d
           </div>
           <div className="k-hrow k-g10">
             {previewLink}
-            <button type="button" className="k-btn k-blk ap-grow-btn" disabled={busy} onClick={approve}>
-              <Icon name="check" size={18} />
+            <button type="button" className="k-btn k-blk k-grow" disabled={busy} onClick={approve}>
+              {/* The boards draw the check on the Channels tab's bar only */}
+              {tab !== 'content' && <Icon name="check" size={18} />}
               {busy ? 'Approving…' : cta}
             </button>
           </div>

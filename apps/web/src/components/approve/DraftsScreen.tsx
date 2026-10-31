@@ -1,14 +1,14 @@
 import { Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { saveDraft } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
 import { channelOfDraft } from '../assistant/protocol';
 import { useAssistant, type Assistant } from '../assistant/session';
 import { TopBar } from '../kit/Bars';
 import { Icon } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
 import { useToast } from '../Toasts';
-import { AssistSheet, ChatCard, ProposalCard } from './assist';
+import { AssistedEditor } from '../assistant/AssistedEditor';
+import { ChatPanel } from '../assistant/ChatPanel';
 import { checkSummary, joinDraft, langName, langOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
 import { Glyph, type DraftView, type LaunchData } from './parts';
 
@@ -112,9 +112,9 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
   const value = body ?? parts.body;
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [assistOpen, setAssistOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatFocus, setChatFocus] = useState(0);
+  // From 960 px the chat sits beside the text until it is closed; then the editor offers it again
+  const [deskChat, setDeskChat] = useState(true);
   const channel = draft.kind === 'article' ? 'blog' : (channelOfDraft(draft.path) ?? pieceId);
   const lang = langOf(draft.path);
   const article = launch.ref.startsWith('article:');
@@ -170,57 +170,29 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
 
   const pill = waiting ? <span className="k-pill k-p-wait">Waiting for you</span> : <span className="k-pill k-p-line">{launch.state.label}</span>;
 
-  const fieldHead = (where: string) => (
-    <div className="k-hrow k-between k-g8">
-      <span className="k-hrow k-g8">
+  const langSeg = langs.length > 1 && (
+    <span className="k-seg ap-lang" role="group" aria-label="Language">
+      {langs.map((l) => (
+        <button key={l} type="button" className={l === lang ? 'k-on' : undefined} aria-pressed={l === lang} aria-label={langName(l)} onClick={() => onSearch({ draft: pieceId, lang: l })}>
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </span>
+  );
+  // The writing assistant's own editor (section write): label, Assist, the proposal over the text;
+  // once the launch has gone out the text is only read
+  const editor = (where: 'phone' | 'desk', help: ReactNode) =>
+    editable ? (
+      <AssistedEditor id={`ap-draft-${where}`} label={label} assistant={assistant} help={help} className="ap-assisted" {...(where === 'phone' ? { onOpenChat: () => setChatOpen(true) } : !deskChat ? { onOpenChat: () => setDeskChat(true) } : {})} />
+    ) : (
+      <div className="k-field">
         <label className="k-lbl" htmlFor={`ap-draft-${where}`}>
           {label}
         </label>
-        {langs.length > 1 && (
-          <span className="k-seg ap-lang" role="group" aria-label="Language">
-            {langs.map((l) => (
-              <button key={l} type="button" className={l === lang ? 'k-on' : undefined} aria-pressed={l === lang} aria-label={langName(l)} onClick={() => onSearch({ draft: pieceId, lang: l })}>
-                {l.toUpperCase()}
-              </button>
-            ))}
-          </span>
-        )}
-      </span>
-      <button type="button" className="k-btn k-sm ap-assist" onClick={() => setAssistOpen(true)} aria-keyshortcuts="Alt+J" disabled={!editable}>
-        <Icon name="assist" size={16} />
-        Assist
-      </button>
-    </div>
-  );
-  const readSelection = (el: HTMLTextAreaElement) => assistant.setSelection({ start: el.selectionStart, end: el.selectionEnd });
-  const editor = (where: string) => (
-    <>
-      <ProposalCard assistant={assistant} onProblem={() => toast.fail('The text changed under the proposal: ask again on the text as it is now.')} />
-      <div className="k-input ap-editor">
-        <textarea
-          id={`ap-draft-${where}`}
-          value={value}
-          readOnly={!editable}
-          lang={lang}
-          onChange={(e) => {
-            setBody(e.target.value);
-            setSaved(false);
-            readSelection(e.currentTarget);
-          }}
-          onSelect={(e) => readSelection(e.currentTarget)}
-          onKeyUp={(e) => readSelection(e.currentTarget)}
-          onMouseUp={(e) => readSelection(e.currentTarget)}
-          onKeyDown={(e) => {
-            if (e.altKey && e.key.toLowerCase() === 'j') {
-              e.preventDefault();
-              setAssistOpen(true);
-            }
-          }}
-          aria-describedby={`ap-count-${where}`}
-        />
+        <textarea id={`ap-draft-${where}`} className="k-input ap-readonly" value={value} readOnly lang={lang} />
+        {help && <span className="k-help">{help}</span>}
       </div>
-    </>
-  );
+    );
   const countLine = (where: string) => (
     <span id={`ap-count-${where}`} className={`k-mono${over ? ' ap-bad-text' : ''}`}>
       {count}
@@ -236,25 +208,8 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
       <Icon name="chevronRight" size={18} />
     </button>
   );
-  const sheets = (
-    <>
-      <AssistSheet
-        assistant={assistant}
-        open={assistOpen}
-        onOpenChange={setAssistOpen}
-        onCheck={openCheck}
-        onChat={() => {
-          setChatOpen(true);
-          setChatFocus((n) => n + 1);
-        }}
-      />
-      <div className="k-phone">
-        <Sheet label="The assistant’s chat" open={chatOpen} onOpenChange={setChatOpen} className="ap-sheet">
-          <ChatCard assistant={assistant} focusKey={chatFocus} />
-        </Sheet>
-      </div>
-    </>
-  );
+  // One chat: beside the text from 960 px, a sheet opened from Assist's "Open the chat" on a phone
+  const chat = <ChatPanel assistant={assistant} open={deskChat} onOpenChange={setDeskChat} sheetOpen={chatOpen} onSheetOpenChange={setChatOpen} about={`${pieceName} draft`} />;
 
   if (search.check) {
     return (
@@ -273,7 +228,7 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
         <div className="ap-check-body">
           <CheckView launch={launch} name={pieceName} assistant={assistant} check={check} value={value} checking={checking} problem={checkProblem} onBack={backToDraft} onRetry={() => assistant.run('check')} />
         </div>
-        {sheets}
+        {chat}
       </div>
     );
   }
@@ -295,14 +250,14 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
               </button>
             ))}
           </div>
-          <div className="k-field">
-            {fieldHead('phone')}
-            {editor('phone')}
-            <div className="k-hrow k-between k-help">
+          {langSeg}
+          {editor(
+            'phone',
+            <span className="k-hrow k-between ap-help-row">
               <span>The edit is what gets published.</span>
               {countLine('phone')}
-            </div>
-          </div>
+            </span>,
+          )}
           {checkCard}
         </div>
         <div className="ap-save-space" aria-hidden="true" />
@@ -334,8 +289,8 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
               ))}
             </nav>
             <div className="k-stack k-g12">
-              {fieldHead('desk')}
-              {editor('desk')}
+              {langSeg}
+              {editor('desk', null)}
               <div className="k-hrow k-between">
                 <span className="k-xs k-muted">
                   {changed ? 'Not saved yet' : saved ? `✓ ${pieceName} saved` : 'The edit is what gets published'} · {countLine('desk')}
@@ -346,11 +301,10 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
               </div>
               {checkCard}
             </div>
-            <ChatCard assistant={assistant} focusKey={chatFocus} />
+            {chat}
           </div>
         </div>
       </div>
-      {sheets}
     </div>
   );
 }

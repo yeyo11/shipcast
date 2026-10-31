@@ -4,9 +4,6 @@
  * named classes, on top of the kit. Role tokens only.
  */
 
-/* The screen owns its spacing: the old main's top padding does not apply */
-.k-main:has(.ap-screen) { padding-top: 0; }
-@media (min-width: 960px) { .k-main:has(.ap-screen) { padding-bottom: 0; } }
 
 .ap-m0 { margin: 0; }
 .ap-mt6 { margin-top: 6px; }
@@ -155,7 +152,7 @@
 .ap-mi-note { padding: 0 12px 6px; }
 .k-btn.ap-title-pick { white-space: normal; text-align: left; justify-content: flex-start; padding: 8px 16px; line-height: 1.35; }
 button.k-mi:disabled { opacity: .5; cursor: default; }
-.ap-card-name { font-weight: 500; }
+.ap-card-name { font-weight: 700; }
 /* The page scrolls inside its frame, so the frame keeps the board's size and the actions stay in reach */
 .ap-browser-page { height: 400px; overflow-y: auto; overscroll-behavior: contain; outline: none; }
 @media (min-width: 960px) { .ap-browser-page { height: min(640px, calc(100vh - 320px)); } }
@@ -163,3 +160,13 @@ button.k-mi:disabled { opacity: .5; cursor: default; }
 ins.k-diff-add { text-decoration: none; }
 .ap-dcards-flex { display: flex; flex-direction: column; gap: 12px; }
 @media (min-width: 960px) { .ap-dcards-flex { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }
+/* The write section's editor in the drafts editor: the board's box (300 px on a phone, 420 at 1440) */
+.ap-assisted .wr-textarea { min-height: 300px; resize: none; padding: 12px 14px; }
+.ap-assisted .wr-assisted-bar { min-height: 36px; }
+.ap-assisted .k-btn.wr-assist-button { min-height: 36px; }
+@media (min-width: 960px) {
+  .ap-assisted .wr-textarea { min-height: 420px; font-size: 17px; line-height: 1.65; }
+  .ap-assisted .k-btn.wr-assist-button { min-height: 40px; }
+}
+.ap-help-row { width: 100%; }
+.k-input.ap-readonly { min-height: 300px; resize: none; font-size: 16px; line-height: 1.6; }
