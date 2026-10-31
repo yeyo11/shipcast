@@ -82,3 +82,10 @@ test('the search tab takes the period and, when filtered, the launches', () => {
   assert.deepEqual(parseSearchInput({ from: '2026-10-01', to: '2026-10-05', launches: [3] }), { from: '2026-10-01', to: '2026-10-05', launches: [3] });
   assert.throws(() => parseSearchInput({ from: '2026-10-01', to: '2026-10-05', launches: ['3'] }), InvalidInput);
 });
+
+test('the chart groups by total unless the address says otherwise', () => {
+  assert.equal(DEFAULTS.groupBy, 'total');
+  assert.deepEqual(readStatsSearch({ groupBy: 'channel' }), { groupBy: 'channel' });
+  assert.deepEqual(compactSearch(withDefaults({ groupBy: 'total' })), {});
+  assert.equal(parseStatsInput({ groupBy: 'total' }).groupBy, 'total');
+});

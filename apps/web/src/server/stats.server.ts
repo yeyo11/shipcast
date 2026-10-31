@@ -14,7 +14,9 @@ import {
   type MetricTotals,
   type Repositories,
   type SeriesGroup,
+  type SeriesGroupBy,
   type StatsMetric,
+  STATS_METRICS,
 } from '@shipcast/engine';
 import { isStale, lastSynced } from '@shipcast/runtime';
 import { effectiveBucket, resolvePeriod, type StatsSearch } from './stats-search.ts';
@@ -68,24 +70,15 @@ export interface StatsView {
   /** The averages and ratios as the period ends, by source: never added up */
   averages: Array<{ source: string; label: string; metric: AverageMetric; value: number; pieces: number }>;
   chart: { buckets: string[]; groups: ChartGroup[] };
+  /** The launch that did best in the period (by score), with the charted number and the day it went out */
+  best: { launchId: number; title: string; name: string; ref: string | null; value: number; publishedOn: string | null } | null;
+  /** The three most popular pieces of the period, by score: the desktop's "Top this period" */
+  top: RankedEntry[];
   ranking: {
     total: number;
     page: number;
     pages: number;
-    entries: Array<{
-      rank: number;
-      score: number;
-      metrics: MetricTotals;
-      lifetime: MetricTotals;
-      pieces: number;
-      channel: string | null;
-      launchId: number | null;
-      postId: number | null;
-      accountId: number | null;
-      label: string;
-      url: string | null;
-      kind: string | null;
-    }>;
+    entries: RankedEntry[];
   };
   options: {
     channels: Array<{ value: string; label: string }>;
@@ -94,15 +87,67 @@ export interface StatsView {
   };
 }
 
+export interface RankedEntry {
+  rank: number;
+  score: number;
+  metrics: MetricTotals;
+  lifetime: MetricTotals;
+  pieces: number;
+  channel: string | null;
+  launchId: number | null;
+  postId: number | null;
+  accountId: number | null;
+  label: string;
+  /** The launch's own name (its title, or the project and its tag) for a piece or a launch; the account for an account */
+  title: string;
+  /** What the piece's network calls each family ("likes", "favourites", "reposts"), where it names it */
+  words: Partial<Record<StatsMetric, string>>;
+  url: string | null;
+  kind: string | null;
+}
+
+/** What a network calls a family: the first of its raw counters ("likes" for Bluesky's reactions) */
+export function familyWords(channel: string | null): Partial<Record<StatsMetric, string>> {
+  const families = channel ? METRIC_FAMILIES[channel] : undefined;
+  if (!families) return {};
+  const out: Partial<Record<StatsMetric, string>> = {};
+  for (const [family, raw] of Object.entries(families)) {
+    const first = raw?.[0];
+    if (first && (STATS_METRICS as readonly string[]).includes(family)) out[family as StatsMetric] = first.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  }
+  return out;
+}
+
+/** A launch's name as the owner reads it: its title, an article's slug in words, or the project and its tag */
+export function launchTitle(launch: { repo: string; ref: string }, title: string | null | undefined): { title: string; name: string; ref: string | null } {
+  if (title) return { title, name: title, ref: null };
+  if (launch.ref.startsWith('article:')) {
+    const words = launch.ref.slice('article:'.length).replace(/-/g, ' ');
+    const text = words.charAt(0).toUpperCase() + words.slice(1);
+    return { title: text, name: text, ref: null };
+  }
+  const name = launch.repo.split('/')[1] ?? launch.repo;
+  return { title: `${name} ${launch.ref}`, name, ref: launch.ref };
+}
+
+/** The day of a launch's first live piece: where the chart marks it went out */
+async function firstPublished(registry: Pick<Repositories, 'posts'>, launchId: number): Promise<string | null> {
+  const days = (await registry.posts.posts(launchId))
+    .filter((p) => p.status === 'live' || p.status === 'edited')
+    .map((p) => p.publishedAt.slice(0, 10))
+    .sort();
+  return days[0] ?? null;
+}
+
 /** The day the first published launch was made: where "all" starts */
-const firstPublished = (launches: ReadonlyArray<{ status: string; createdAt: string }>): string | undefined =>
+const firstLaunchDay = (launches: ReadonlyArray<{ status: string; createdAt: string }>): string | undefined =>
   launches.reduce<string | undefined>((first, l) => (l.status === 'published' && (first === undefined || l.createdAt.slice(0, 10) < first) ? l.createdAt.slice(0, 10) : first), undefined);
 
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
 
-export async function loadStats(registry: Pick<Repositories, 'launches' | 'accounts' | 'queries'>, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
+export async function loadStats(registry: Pick<Repositories, 'launches' | 'accounts' | 'posts' | 'queries'>, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
   const [accounts, launches] = await Promise.all([registry.accounts.accounts(), registry.launches.recent(LAUNCH_OPTIONS)]);
-  const period = resolvePeriod(search, today, firstPublished(launches));
+  const period = resolvePeriod(search, today, firstLaunchDay(launches));
   const bucket = effectiveBucket(search.bucket, period.days);
   const filters = {
     ...(search.channels && { channels: search.channels }),
@@ -111,12 +156,17 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
   };
   const previous = search.compare ? previousWindow(statsWindow(period.from, period.to)) : null;
   const accountById = new Map(accounts.map((a) => [a.id, a]));
+  // The total is every channel's line added up: read by channel with room for all of them
+  const total = search.groupBy === 'total';
+  const groupBy: SeriesGroupBy = search.groupBy === 'total' ? 'channel' : search.groupBy;
+  const seriesLimit = total ? 50 : SERIES_LIMIT;
 
-  const [overview, series, before, ranking] = await Promise.all([
-    statsOverview(registry, { from: period.from, to: period.to, ...filters, ...(search.compare && { compareTo: 'previous' as const }) }),
-    statsSeries(registry, { metric: search.metric, groupBy: search.groupBy, from: period.from, to: period.to, bucket, limit: SERIES_LIMIT, ...filters }),
+  const [overview, series, before, ranking, bestLaunch] = await Promise.all([
+    // The totals always carry the previous period: each number says how it moved (the board's KPIs)
+    statsOverview(registry, { from: period.from, to: period.to, ...filters, compareTo: 'previous' as const }),
+    statsSeries(registry, { metric: search.metric, groupBy, from: period.from, to: period.to, bucket, limit: seriesLimit, ...filters }),
     // The previous period with room for every group, so a series that was small then still finds its line
-    previous ? statsSeries(registry, { metric: search.metric, groupBy: search.groupBy, from: previous.from, to: previous.to, bucket, limit: 50, ...filters }) : null,
+    previous ? statsSeries(registry, { metric: search.metric, groupBy, from: previous.from, to: previous.to, bucket, limit: 50, ...filters }) : null,
     statsRanking(registry, { by: search.rank, from: period.from, to: period.to, limit: 100, ...filters }).then(async (first) => {
       const entries = [...first.entries];
       for (let next = first.next; next !== null && entries.length < RANKING_CAP; ) {
@@ -126,17 +176,18 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
       }
       return entries;
     }),
+    statsRanking(registry, { by: 'launch', from: period.from, to: period.to, limit: 1, ...filters }).then((r) => r.entries[0] ?? null),
   ]);
 
   const previousByKey = new Map<string, SeriesGroup>((before ? [...before.groups, ...(before.other ? [before.other] : [])] : []).map((g) => [g.key, g]));
   const toGroup = (g: SeriesGroup, extra: { groups?: number } = {}): ChartGroup => {
-    const id = search.groupBy === 'channel' || g.key === 'other' || g.key === 'none' ? null : Number(g.key);
-    const account = search.groupBy === 'account' && id !== null ? accountById.get(id) : undefined;
-    const channel = search.groupBy === 'channel' ? g.key : account ? channelOfNetwork(account.network) : null;
+    const id = groupBy === 'channel' || g.key === 'other' || g.key === 'none' ? null : Number(g.key);
+    const account = groupBy === 'account' && id !== null ? accountById.get(id) : undefined;
+    const channel = groupBy === 'channel' ? g.key : account ? channelOfNetwork(account.network) : null;
     const was = previousByKey.get(g.key);
     return {
       key: g.key,
-      label: search.groupBy === 'channel' ? (CHANNEL_NAMES[g.key] ?? g.label) : g.key === 'other' ? `${extra.groups ?? 0} more` : g.label,
+      label: groupBy === 'channel' ? (CHANNEL_NAMES[g.key] ?? g.label) : g.key === 'other' ? `${extra.groups ?? 0} more` : g.label,
       channel,
       id,
       total: g.total,
@@ -148,12 +199,38 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
   };
   // A series that stayed at zero is a flat line on the axis that only crowds the legend
   const moving = series.groups.filter((g) => g.total > 0);
-  const groups = (moving.length > 0 ? moving : series.groups).map((g) => toGroup(g));
+  let groups = (moving.length > 0 ? moving : series.groups).map((g) => toGroup(g));
   if (series.other) groups.push(toGroup(series.other, { groups: series.other.groups }));
+  if (total) groups = groups.length > 0 ? [sumGroups(groups, series.buckets.length)] : [];
+
+  // The launches named on the page, by their own titles: one read each, only for the few shown
+  const launchById = new Map(launches.map((l) => [l.id, l]));
+  const titleCache = new Map<number, Promise<string | null>>();
+  const titleOf = (id: number) => {
+    if (!titleCache.has(id)) titleCache.set(id, registry.launches.modelFields(id).then((f) => f?.title ?? null));
+    return titleCache.get(id)!;
+  };
+  const named = async (e: Omit<RankedEntry, 'title' | 'words' | 'rank'> & { rank?: number }, rank: number): Promise<RankedEntry> => {
+    const launch = e.launchId !== null ? launchById.get(e.launchId) : undefined;
+    const account = e.accountId !== null ? accountById.get(e.accountId) : undefined;
+    const title = launch ? launchTitle(launch, await titleOf(launch.id)).title : account ? account.label : e.label;
+    return { ...e, rank, title, words: familyWords(e.channel) };
+  };
 
   const sorted = sortRanking(ranking, search.sort, search.order);
   const pages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(search.page, pages);
+  const topPieces = search.rank === 'post' ? sortRanking(ranking, 'score', 'desc').slice(0, 3) : (await statsRanking(registry, { by: 'post', from: period.from, to: period.to, limit: 3, ...filters })).entries;
+  const [entries, top, best] = await Promise.all([
+    Promise.all(sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((e, i) => named(e, (page - 1) * PAGE_SIZE + i + 1))),
+    Promise.all(topPieces.map((e, i) => named(e, i + 1))),
+    (async () => {
+      const launch = bestLaunch?.launchId != null ? launchById.get(bestLaunch.launchId) : undefined;
+      if (!bestLaunch || !launch) return null;
+      const [title, publishedOn] = await Promise.all([titleOf(launch.id), firstPublished(registry, launch.id)]);
+      return { launchId: launch.id, ...launchTitle(launch, title), value: bestLaunch.metrics[search.metric] ?? 0, publishedOn };
+    })(),
+  ]);
 
   return {
     search,
@@ -170,14 +247,14 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
     }),
     averages: overview.averages.map((a) => ({ ...a, label: CHANNEL_NAMES[a.source] ?? a.source })),
     chart: { buckets: series.buckets, groups },
-    ranking: {
-      total: sorted.length,
-      page,
-      pages,
-      entries: sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((e, i) => ({ ...e, rank: (page - 1) * PAGE_SIZE + i + 1 })),
-    },
+    best,
+    top,
+    ranking: { total: sorted.length, page, pages, entries },
     options: {
-      channels: Object.keys(METRIC_FAMILIES).map((c) => ({ value: c, label: CHANNEL_NAMES[c] ?? c })),
+      // The channels there is something to count on: an account's network, the blog, and any already picked
+      channels: Object.keys(METRIC_FAMILIES)
+        .filter((c) => c === 'blog' || accounts.some((a) => channelOfNetwork(a.network) === c) || search.channels?.includes(c))
+        .map((c) => ({ value: c, label: CHANNEL_NAMES[c] ?? c })),
       accounts: accounts
         .filter((a) => MEASURED_NETWORKS.has(a.network))
         .map((a) => {
@@ -188,6 +265,13 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
       launches: launches.filter((l) => l.status === 'published').map((l) => ({ value: String(l.id), label: `${l.repo} ${l.ref}`, hint: l.createdAt.slice(0, 10), group: l.repo })),
     },
   };
+}
+
+/** Every series added up, bucket by bucket: the chart's Total line */
+export function sumGroups(groups: readonly ChartGroup[], length: number): ChartGroup {
+  const add = (pick: (g: ChartGroup) => readonly number[] | null) => Array.from({ length }, (_, i) => groups.reduce((sum, g) => sum + (pick(g)?.[i] ?? 0), 0));
+  const comparing = groups.some((g) => g.comparison !== null);
+  return { key: 'total', label: 'Total', channel: null, id: null, total: groups.reduce((sum, g) => sum + g.total, 0), values: add((g) => g.values), comparison: comparing ? add((g) => g.comparison) : null };
 }
 
 /**
@@ -212,6 +296,8 @@ export interface GrowthView {
     avatarUrl: string | null;
     syncedAt: string | null;
     stale: boolean;
+    /** Its credential failed its last check: the numbers stop until it is connected again */
+    failing: boolean;
     latest: { followers: number | null; following: number | null; posts: number | null } | null;
     change: { followers: number | null; following: number | null; posts: number | null };
     points: Array<{ day: string; followers: number | null; following: number | null; posts: number | null }>;
@@ -242,6 +328,7 @@ export async function loadGrowth(registry: Pick<Repositories, 'accounts' | 'quer
         avatarUrl: accountAvatar(a),
         syncedAt,
         stale: isStale(syncedAt, now),
+        failing: a.status === 'failed',
         latest: snapshot ? { followers: snapshot.followers ?? null, following: snapshot.following ?? null, posts: snapshot.posts ?? null } : null,
         change: g.change,
         points: g.points.map((p) => ({ day: p.day, followers: p.followers, following: p.following, posts: p.posts })),
@@ -271,6 +358,10 @@ export interface SearchView {
   launches: Array<{
     id: number;
     label: string;
+    /** The launch's own name (its title, or the project and its tag) */
+    title: string;
+    /** The day its article went out; null for a launch that published no article (nothing to index) */
+    publishedOn: string | null;
     /** What grew in the period per engine, and where it stood at the period's end; null when the engine has no reading for the launch */
     google: EngineNumbers | null;
     bing: EngineNumbers | null;
@@ -296,8 +387,12 @@ export async function loadSearch(registry: Pick<Repositories, 'launches' | 'post
   };
   const launches = await Promise.all(
     published.map(async (l) => {
-      const urls = articleUrls(await registry.posts.posts(l.id, { channel: 'blog' }));
-      if (urls.length === 0) return null;
+      const [articles, title] = await Promise.all([registry.posts.posts(l.id, { channel: 'blog' }), registry.launches.modelFields(l.id).then((f) => f?.title ?? null)]);
+      const urls = articleUrls(articles);
+      const named = { id: l.id, label: `${l.repo} ${l.ref}`, title: launchTitle(l, title).title };
+      // A launch without an article stays on the list: there is simply nothing of it to index
+      if (urls.length === 0) return { ...named, publishedOn: null, google: null, bing: null, pages: [] };
+      const publishedOn = articles.map((a) => a.publishedAt.slice(0, 10)).sort()[0] ?? null;
       const [pages, overview] = await Promise.all([
         Promise.all(urls.map(async ({ lang, url }) => ({ lang, url, google: await read(url, 'google'), bing: await read(url, 'bing') }))),
         statsOverview(registry, { from: range.from, to: range.to, channels: ['search', 'bing'], launches: [l.id] }),
@@ -308,8 +403,8 @@ export async function loadSearch(registry: Pick<Repositories, 'launches' | 'post
           ? { impressions: found.metrics.impressions ?? 0, clicks: found.metrics.clicks ?? 0, lifetime: { impressions: found.lifetime.impressions ?? 0, clicks: found.lifetime.clicks ?? 0 } }
           : null;
       };
-      return { id: l.id, label: `${l.repo} ${l.ref}`, google: engine('search'), bing: engine('bing'), pages };
+      return { ...named, publishedOn, google: engine('search'), bing: engine('bing'), pages };
     }),
   );
-  return { from: range.from, to: range.to, launches: launches.filter((l) => l !== null) };
+  return { from: range.from, to: range.to, launches };
 }

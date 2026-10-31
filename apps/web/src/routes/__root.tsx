@@ -11,6 +11,7 @@ import commentsCss from '../styles/comments.css?url';
 import kitCss from '../styles/kit.css?url';
 import layoutCss from '../styles/layout.css?url';
 import publishedCss from '../styles/published.css?url';
+import statsCss from '../styles/stats.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -27,6 +28,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: publishedCss },
       { rel: 'stylesheet', href: channelsCss },
       { rel: 'stylesheet', href: commentsCss },
+      { rel: 'stylesheet', href: statsCss },
     ],
   }),
   shellComponent: Document,

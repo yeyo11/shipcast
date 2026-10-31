@@ -1,19 +1,17 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { deltaLabel, full } from '../charts/data';
 import { METRICS, type Metric } from '../../server/stats-search';
-import { METRIC_NAMES } from './FilterBar';
+import { METRIC_NAMES } from './parts';
 
 type Totals = Partial<Record<Metric, number>>;
 
 /**
- * The period's totals, one per family the sources count, with the change against the previous
- * period when comparing, and the lifetime beside it: where the same numbers stood at the period's
- * end, what a network's own screen shows. The strip is also the chart's metric switch, so it is a radio group: one
- * family is charted at a time, arrows move between them as in any radio group. The change is a word
- * and an arrow, never a colour: green and red would read as good and bad, and in Cartel red only
- * means failure.
+ * The period's totals (board StatsOverview and DesktopStats): a card per family the sources count,
+ * each with how it moved against the period before. The cards are also the chart's metric switch,
+ * so they are a radio group: the charted one is the light card, arrows move between them. The change
+ * is a sign and a number, never a colour: in Cartel red only means failure.
  */
-export function Kpis({ totals, previous, lifetime, metric, onPick }: { totals: Totals; previous: Totals | null; lifetime: Totals; metric: Metric; onPick: (m: Metric) => void }) {
+export function Kpis({ totals, previous, days, metric, onPick }: { totals: Totals; previous: Totals | null; days: number; metric: Metric; onPick: (m: Metric) => void }) {
   const list = useRef<HTMLDivElement>(null);
   const shown = METRICS.filter((m) => totals[m] !== undefined);
   if (shown.length === 0) return null;
@@ -30,21 +28,20 @@ export function Kpis({ totals, previous, lifetime, metric, onPick }: { totals: T
     list.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[to]?.focus();
   };
   return (
-    <div ref={list} className="kpis" role="radiogroup" aria-label="Metric shown in the chart">
+    <div ref={list} className="stats-kpis" role="radiogroup" aria-label="Number shown in the chart">
       {shown.map((m, i) => {
         const value = totals[m] ?? 0;
         const delta = previous ? deltaLabel(value, previous[m] ?? 0) : null;
+        const on = metric === m;
         return (
-          <button key={m} type="button" role="radio" className="kpi" aria-checked={metric === m} tabIndex={m === focusable ? 0 : -1} onClick={() => onPick(m)} onKeyDown={(e) => onKeyDown(e, i)}>
-            <span className="kpi-label">{METRIC_NAMES[m]}</span>
-            <span className="kpi-value">{full(value)}</span>
-            <span className="stats-life">{full(lifetime[m] ?? 0)} lifetime</span>
-            {delta && (
-              <span className={`kpi-delta ${delta.direction}`}>
-                <span aria-hidden="true">{delta.direction === 'up' ? '▲' : delta.direction === 'down' ? '▼' : '■'}</span> {delta.text}
-                <span className="visually-hidden"> against the previous period ({full(previous?.[m] ?? 0)})</span>
-              </span>
-            )}
+          <button key={m} type="button" role="radio" className="stats-kpi" aria-checked={on} tabIndex={m === focusable ? 0 : -1} onClick={() => onPick(m)} onKeyDown={(e) => onKeyDown(e, i)}>
+            <span className="stats-kpi-label">{METRIC_NAMES[m]}</span>
+            <span className="k-d stats-kpi-value">{full(value)}</span>
+            <span className="k-xs stats-kpi-delta">
+              {delta ? delta.text : '—'}
+              {on && delta && delta.text !== 'new' && delta.text !== '—' && ` on the ${days} days before`}
+              <span className="visually-hidden"> against the period before ({full(previous?.[m] ?? 0)})</span>
+            </span>
           </button>
         );
       })}
