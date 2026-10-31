@@ -1,0 +1,204 @@
+/*
+ * Launch a repo, Launch from sources, Write and the writing assistant (boards LaunchRepo,
+ * LaunchRepoBlocked, LaunchSources, Write, AssistMenu, AssistProposal, AssistChat, DesktopWrite):
+ * the boards' inline styles as named classes, on the kit's role tokens.
+ */
+
+/* ---------- The page ---------- */
+/* The old layout pads every <main> (layout.css); these screens start under their top bar, as the board */
+.k-main:has(.wr-page) { padding-top: 0; }
+@media (min-width: 960px) { .k-main:has(.wr-page) { padding-bottom: 0; } }
+.wr-page { padding: 18px 16px 0; }
+.wr-form { gap: 14px; }
+.wr-flush { margin: 0; }
+.wr-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.wr-legend { padding: 0; margin: 0; float: left; width: 100%; }
+.wr-legend + * { clear: both; }
+@media (max-width: 959px) {
+  /* Room under the form for the bar and the bottom bar it sits on (the board's 170 px) */
+  .wr-page { padding-bottom: 96px; }
+}
+@media (min-width: 960px) {
+  .wr-page { max-width: 640px; margin: 0 auto; padding: 32px 32px 64px; }
+}
+
+/* The one yellow action: fixed above the bottom bar on a phone, in the flow from 960 px */
+.wr-actionbar { position: fixed; z-index: 45; bottom: calc(76px + env(safe-area-inset-bottom)); }
+@media (min-width: 960px) {
+  .wr-actionbar { position: static; padding: 24px 0 0; border-top: 0; background: none; }
+}
+
+/* ---------- Inputs ---------- */
+input.k-input, textarea.k-input { width: 100%; font-family: inherit; line-height: 1.5; outline: none; }
+.k-input:focus-visible, .k-input:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.k-input::placeholder, .wr-placeholder { color: var(--sc-rail); }
+.wr-picker { line-height: 1.5; }
+.wr-picker-input { flex: 1; min-width: 0; height: 24px; line-height: 1.5; border: 0; background: none; color: inherit; font: inherit; outline: none; padding: 0; }
+.wr-picker-button { width: 100%; cursor: pointer; font: inherit; text-align: left; }
+.wr-picker-button[data-disabled] { cursor: not-allowed; opacity: .6; }
+.wr-picker-chevron { display: flex; align-items: center; color: var(--sc-muted); background: none; border: 0; padding: 0; cursor: pointer; flex: none; }
+.wr-tag { font-size: 14px; }
+
+.wr-positioner { z-index: 70; outline: none; }
+.wr-popup { min-width: var(--anchor-width, 200px); max-width: calc(100vw - 16px); max-height: min(var(--available-height, 420px), 420px); overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.wr-option { cursor: default; user-select: none; outline: none; justify-content: space-between; }
+.wr-option[data-highlighted] { background: var(--sc-hairline); }
+.wr-option[data-disabled] { opacity: .45; }
+.wr-option-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.wr-option-hint { font-size: 13px; color: var(--sc-muted); }
+.wr-option-check { display: flex; color: var(--sc-yellow); }
+.wr-empty { padding: 12px; font-size: 14px; color: var(--sc-muted); }
+.wr-empty:empty { display: none; }
+
+/* Radios drawn as the board's rings, over the native input that keeps the keyboard */
+.wr-radio-input:focus-visible + .k-radio { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.wr-radio-row { cursor: pointer; }
+.wr-radio-card { flex-direction: row; gap: 12px; padding: 14px; cursor: pointer; }
+.wr-radio-card.wr-on { border-color: var(--sc-text); }
+.k-chip:disabled { opacity: .45; cursor: not-allowed; }
+.k-seg.wr-seg-text .k-on { background: var(--sc-text); color: var(--sc-ground); }
+.k-seg button:focus-visible, .k-chip:focus-visible, .k-btn:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+
+/* ---------- Launch a repo: the pre-flight checks ---------- */
+.wr-checks { list-style: none; margin: 0; gap: 0; padding: 6px 16px; }
+.wr-check { align-items: flex-start; padding: 10px 0; }
+
+/* ---------- Launch from sources ---------- */
+.wr-sources { list-style: none; margin: 0; padding: 0; }
+.wr-source { flex-direction: row; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 18px; }
+.wr-add { gap: 10px; }
+.wr-add-button { align-self: flex-start; }
+.wr-add-text { min-height: 120px; resize: vertical; line-height: 1.5; }
+.wr-file { cursor: pointer; }
+.wr-file:focus-within { border-color: var(--sc-yellow); }
+.wr-normal { font-weight: 400; }
+.wr-textbutton { background: none; border: 0; padding: 0; color: var(--sc-muted); font-family: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.wr-textbutton:hover { color: var(--sc-text); }
+
+/* ---------- Shared bits ---------- */
+.wr-strong { font-weight: 700; }
+.wr-problem { color: var(--sc-failure); }
+.wr-desk-inline { display: none; }
+@media (min-width: 960px) { .wr-desk-inline { display: inline-flex; } }
+
+/* ---------- Write (boards Write and DesktopWrite) ---------- */
+.wr-page.wr-write { padding-top: 20px; }
+.wr-write-head { align-items: flex-end; }
+.wr-write-sub { margin: 8px 0 0; }
+.wr-write-grid { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.wr-write-side { display: contents; }
+.wr-title-input { font-size: 20px; font-weight: 700; }
+.wr-write-note { display: none; }
+
+.wr-out { gap: 0; padding: 0; }
+.wr-out-toggle { width: 100%; padding: 14px 16px; background: none; border: 0; color: var(--sc-text); text-align: left; font: 15px var(--sc-font-text); cursor: pointer; min-height: 56px; border-radius: 22px; }
+.wr-out-toggle:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.wr-out-heading { display: none; }
+.wr-out-body { padding: 14px 16px 16px; border-top: 1px solid var(--sc-hairline); }
+@media (max-width: 959px) {
+  .wr-out-body[data-open="false"] { display: none; }
+  /* Board AssistProposal: while a proposal waits, the screen is the proposal and the text under it */
+  .wr-reviewing .wr-write-sub, .wr-reviewing .wr-kept, .wr-reviewing .wr-title-field, .wr-reviewing .wr-assisted-bar, .wr-reviewing .wr-assisted-help, .wr-reviewing .wr-out, .wr-reviewing .wr-write-bar { display: none; }
+  .wr-reviewing .wr-textarea.wr-tall { min-height: 200px; }
+  .wr-page.wr-write { padding-bottom: 106px; }
+}
+
+@media (min-width: 960px) {
+  .wr-page.wr-write { max-width: 1200px; padding: 32px 32px 64px; }
+  .wr-write-title { font-size: 96px; }
+  .wr-kept { font-size: 14px; }
+  .wr-write-sub { display: none; }
+  .wr-write-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; margin-top: 24px; align-items: start; }
+  .wr-write-main { gap: 16px; }
+  .wr-title-label { display: none; }
+  .wr-title-input { font-size: 30px; min-height: 64px; border-color: transparent; border-bottom-color: var(--sc-rail); border-radius: 0; padding-left: 0; }
+  .wr-title-input:focus-visible { box-shadow: none; border-color: transparent; border-bottom-color: var(--sc-yellow); }
+  .wr-write-editor .wr-assisted-label, .wr-write-editor .wr-assisted-help { display: none; }
+  .wr-write-editor .wr-assisted-meta { margin-left: auto; }
+  .wr-write-editor .wr-textarea.wr-tall { min-height: 460px; }
+  .wr-write-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 96px; }
+  .wr-write-side.wr-chat-open .wr-out { display: none; }
+  .wr-out { gap: 14px; padding: 16px; }
+  .wr-out-toggle { display: none; }
+  .wr-out-heading { display: block; }
+  .wr-out-body { padding: 0; border-top: 0; gap: 14px; }
+  .wr-write-bar { padding: 0; }
+  .wr-write-note { display: block; }
+}
+
+/* ---------- The assisted editor ---------- */
+.wr-assisted-bar { min-height: 36px; }
+.wr-assist-button { min-height: 36px; }
+.wr-assisted-box { position: relative; }
+.wr-textarea { display: block; min-height: 160px; resize: vertical; font-size: 16px; line-height: 1.6; }
+.wr-textarea.wr-tall { min-height: 260px; }
+.wr-textarea::selection { background: rgba(255, 212, 59, .35); }
+.wr-has-proposal .wr-textarea { opacity: .55; }
+.wr-assist-float { position: absolute; z-index: 2; }
+.wr-assist-float-button { background: var(--sc-raised); border-color: var(--sc-text); min-height: 36px; }
+@media (pointer: coarse) { .wr-assist-float-button { min-height: 44px; } }
+.wr-menu-note { padding: 4px 12px 6px; max-width: 320px; }
+.wr-assist-menu { min-width: 260px; }
+button.k-mi:disabled { opacity: .45; cursor: not-allowed; }
+.wr-sheet-head { padding: 0 4px; }
+.wr-sheet-title { font-weight: 700; font-size: 18px; }
+.wr-sheet-back { font-weight: 600; }
+
+/* The proposal (board AssistProposal): a stamped card in the yellow of what waits for you */
+.wr-proposal { gap: 12px; border-color: var(--sc-yellow); box-shadow: 6px 6px 0 var(--sc-yellow); }
+.wr-diff { margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.wr-diff-text { font-size: 16px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; }
+.wr-diff-text:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 4px; border-radius: 4px; }
+.wr-diff.k-sm .wr-diff-text { font-size: 14px; line-height: 1.5; }
+.wr-diff-whole .wr-diff-text { max-height: 50vh; overflow-y: auto; }
+ins.k-diff-add { text-decoration: none; }
+.wr-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.wr-swatch-add { background: rgba(111, 213, 142, .5); }
+.wr-swatch-del { background: rgba(255, 107, 91, .45); }
+.wr-titles { list-style: none; margin: 0; padding: 0; }
+.wr-title-choice { white-space: normal; text-align: left; min-height: 40px; padding: 8px 15px; }
+.wr-findings { list-style: none; margin: 0; padding: 0; }
+.wr-finding { align-items: flex-start; }
+.wr-finding-dot { margin-top: 6px; }
+.wr-verdict { font-weight: 700; color: var(--sc-muted); }
+.wr-finding[data-verdict="backed"] .wr-verdict { color: var(--sc-success); }
+.wr-finding[data-verdict="contradicted"] .wr-verdict { color: var(--sc-failure); }
+
+/* ---------- The assistant's chat (board AssistChat; the desktop editors' side card) ---------- */
+.wr-chat-scrim { position: fixed; z-index: 60; }
+.wr-chat-sheet { position: fixed; left: 0; right: 0; bottom: 0; top: 52px; z-index: 61; background: var(--sc-raised); border-top: 2.5px solid var(--sc-rail); border-radius: 30px 30px 0 0; display: flex; flex-direction: column; outline: none; overflow: hidden; }
+@media (prefers-reduced-motion: no-preference) {
+  .wr-chat-sheet { transition: transform calc(var(--ui-move) * 1.6) var(--ui-ease); }
+  .wr-chat-sheet[data-starting-style], .wr-chat-sheet[data-ending-style] { transform: translateY(100%); }
+  .wr-chat-scrim { transition: opacity var(--ui-move) var(--ui-ease); }
+  .wr-chat-scrim[data-starting-style], .wr-chat-scrim[data-ending-style] { opacity: 0; }
+}
+.wr-chat { display: flex; flex-direction: column; min-height: 0; }
+.wr-chat-in-sheet { flex: 1; }
+.wr-chat-in-sheet .wr-chat-head { padding: 12px 12px 10px 18px; border-bottom: 1px solid var(--sc-hairline); }
+.wr-chat-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.wr-chat-in-sheet .wr-chat-list { padding: 16px; }
+.wr-chat-about { text-align: center; }
+.wr-chat-mine { align-self: flex-end; max-width: 85%; margin: 0; background: var(--sc-hairline); border-radius: 18px 18px 4px 18px; padding: 10px 14px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wr-chat-prose { max-width: 92%; margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wr-chat-proposal { padding: 12px; gap: 8px; border-radius: 18px; }
+.wr-chat-proposal .wr-diff { gap: 8px; }
+.wr-chat-pending { opacity: .75; }
+.wr-chat-accept { border-color: var(--sc-text); }
+.wr-chat-form { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); border-top: 1px solid var(--sc-hairline); }
+.wr-chat-input { min-height: 48px; max-height: 160px; resize: none; line-height: 1.5; }
+.wr-chat-sessions { list-style: none; margin: 0; padding: 0; }
+button.wr-chat-session { padding: 12px 0; }
+.wr-chat-session[aria-current="true"] strong { color: var(--sc-yellow); }
+.wr-chat-more { align-self: flex-start; }
+.wr-chat-card { gap: 12px; position: sticky; top: 96px; min-height: 560px; max-height: calc(100vh - 120px); }
+.wr-chat-card .wr-chat-proposal { background: var(--sc-ground); }
+.wr-chat-card .wr-chat-form { padding: 0; border-top: 0; }
+.wr-chat-fab { position: fixed; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 44; background: var(--sc-raised); }
+@media (min-width: 960px) { .wr-chat-fab { bottom: 24px; right: 24px; } }
+.k-btn.wr-grow-btn { flex: 1; }
+textarea.wr-textarea { line-height: 1.6; }
+@media (min-width: 960px) {
+  .wr-write-editor { gap: 16px; }
+  .wr-out-help { display: none; }
+}
