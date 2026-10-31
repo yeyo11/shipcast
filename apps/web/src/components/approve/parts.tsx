@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GLYPHS } from '../kit/glyphs';
+import { ChannelGlyph } from '../launch/ChannelGlyph';
 import { wordDiff } from '../assistant/diff';
 import type { getLaunch } from '../../server/launches.functions';
 import type { Piece } from './model';
@@ -13,14 +13,9 @@ export type LaunchData = NonNullable<Awaited<ReturnType<typeof getLaunch>>>;
 export type ReviewOk = Exclude<LaunchData['review'], null | { error: string }>;
 export type DraftView = ReviewOk['drafts'][number];
 
-/** A network's own mark, inline so it takes the text's colour as the board draws it */
+/** A network's own mark, in the text's colour (the launch page's shared glyph) */
 export function Glyph({ name, size = 19 }: { name: string; size?: number }) {
-  const d = GLYPHS[name] ?? GLYPHS.blog;
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true" focusable="false" style={{ flex: 'none' }}>
-      <path d={d} />
-    </svg>
-  );
+  return <ChannelGlyph channel={name} size={size} />;
 }
 
 /** How much unchanged text stays on each side of a change in a compact diff */

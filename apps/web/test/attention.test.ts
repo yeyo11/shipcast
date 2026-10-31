@@ -26,7 +26,7 @@ test('a drafted launch waits for approval, unless it already failed somewhere', 
   assert.deepEqual(a.items.map((i) => i.kind), ['approve', 'retry']);
   assert.equal(a.items[0]?.key, 'launch:1:waiting:2026-10-26T10:00:00.000Z');
   assert.match(a.items[1]?.key ?? '', /^launch:2:failed:[0-9a-z]+$/);
-  assert.match(a.items[1]?.text ?? '', /beta v2\.0\.0 failed on devto, mastodon/);
+  assert.match(a.items[1]?.text ?? '', /Beta v2\.0\.0 failed on dev\.to, Mastodon/);
 });
 
 test('failure keys of unknown launches or of another shape are ignored', () => {
@@ -60,7 +60,7 @@ test('only posts going out within a day are listed, grouped by launch, and they 
   });
   assert.equal(a.count, 0);
   assert.equal(a.items.length, 1);
-  assert.match(a.items[0]?.text ?? '', /2 posts of gamma v3\.0\.0 go out in 1 h/);
+  assert.match(a.items[0]?.text ?? '', /2 posts of Gamma v3\.0\.0 go out in 1 h/);
 });
 
 test('the label says how many', () => {
@@ -73,7 +73,7 @@ test('a dismissed line leaves the list and the count; the others stay', () => {
   assert.deepEqual(all.map((i) => i.key), ['launch:1:waiting:2026-10-26T10:00:00.000Z', 'launch:2:waiting:2026-10-26T11:00:00.000Z', 'comments:waiting:41']);
   const a = buildAttention({ ...base, commentsWaiting: 2, newestWaitingComment: 41, dismissed: new Set(['launch:1:waiting:2026-10-26T10:00:00.000Z', 'comments:waiting:41']) });
   assert.equal(a.count, 1);
-  assert.deepEqual(a.items.map((i) => i.text), ['beta v2.0.0 waits for your approval']);
+  assert.deepEqual(a.items.map((i) => i.text), ['Beta v2.0.0 waits for your approval']);
 });
 
 test('a dismissal holds while the condition lasts and a changed condition is a new line', () => {
@@ -144,7 +144,7 @@ test('a canonical cursor that is not a list of pages is skipped, and the bell st
 test("with launch-store, a launch whose copy in Shipcast differs from its pull request is a line, new again when something else differs", async () => {
   const storeDifferences = [{ launchId: 1, differences: ['launches/alpha/v1.0.0/bluesky.md: no draft in the database', 'pack.json: no pack in the database'] }];
   const line = attentionItems({ ...base, storeDifferences }).find((i) => i.kind === 'drift');
-  assert.match(line!.text, /alpha v1\.0\.0: Shipcast's copy differs from the pull request \(launches\/alpha\/v1\.0\.0\/bluesky\.md: no draft in the database and 1 more\)/);
+  assert.match(line!.text, /Alpha v1\.0\.0: Shipcast's copy differs from the pull request \(launches\/alpha\/v1\.0\.0\/bluesky\.md: no draft in the database and 1 more\)/);
   assert.deepEqual(line?.target, { to: '/launches/$id', params: { id: '1' } });
   assert.match(line!.key, ATTENTION_KEY);
   const other = attentionItems({ ...base, storeDifferences: [{ launchId: 1, differences: ['pack.json: no pack in the database'] }] }).find((i) => i.kind === 'drift');
@@ -177,4 +177,24 @@ test('without launch-store the bell never reads the launch-store cursors: one qu
   const on = await attentionFor(spied, { launchStore: true });
   assert.ok(asked.includes('launch-store:'));
   assert.equal(on.items.filter((i) => i.kind === 'drift').length, 1);
+});
+
+test('a launch that failed before anything went out is a line to retry, with why, its subject set apart', () => {
+  const failed = { id: 4, repo: 'me/delta', ref: 'v4.0.0', status: 'failed', updatedAt: '2026-10-26T08:00:00.000Z', detail: 'claudio was overloaded\nstack…' };
+  const a = buildAttention({ ...base, launches: [launches[2]!, failed] });
+  assert.equal(a.count, 1);
+  assert.deepEqual(
+    a.items.map((i) => [i.kind, i.text, i.subject, i.action]),
+    [['retry', 'Delta v4.0.0 failed: claudio was overloaded', 'Delta v4.0.0', 'Retry']],
+  );
+  assert.match(a.items[0]?.key ?? '', ATTENTION_KEY);
+  // Failing again after a retry is a new line, so a dismissal does not hide it
+  const again = buildAttention({ ...base, launches: [{ ...failed, updatedAt: '2026-10-26T09:00:00.000Z' }] });
+  assert.notEqual(again.items[0]?.key, a.items[0]?.key);
+});
+
+test('an account to reconnect names its network, for the mark beside the line', () => {
+  const a = buildAttention({ ...base, launches: [], brokenAccounts: [{ id: 5, label: 'José', network: 'linkedin', problem: 'expired' }] });
+  assert.equal(a.items[0]?.channel, 'linkedin');
+  assert.equal(a.items[0]?.subject, 'José');
 });

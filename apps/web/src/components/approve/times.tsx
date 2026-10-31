@@ -139,7 +139,9 @@ export function ScheduleSheet({
   name,
   timezone,
   chips,
+  title = 'Another day',
 }: {
+  title?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   launchId: number;
@@ -182,8 +184,8 @@ export function ScheduleSheet({
   };
 
   return (
-    <Sheet label={`Another day for ${name}`} open={open} onOpenChange={onOpenChange} className="ap-sheet">
-      <h2 className="k-d k-d30">Another day</h2>
+    <Sheet label={`${title} for ${name}`} open={open} onOpenChange={onOpenChange} className="ap-sheet">
+      <h2 className="k-d k-d30">{title}</h2>
       <p className="k-sm k-muted ap-m0">
         For {name}, in {timezone}. The launch keeps its other times.
       </p>
@@ -276,4 +278,10 @@ export function ScheduleSheet({
       </div>
     </Sheet>
   );
+}
+
+/** A scheduled piece's Move, from the launch's actions: the same sheet, with the channel's own recommendations */
+export function MoveSheet({ launchId, item, name, timezone, onClose }: { launchId: number; item: SchedulingChannel; name: string; timezone: string; onClose: () => void }) {
+  const chipsOf = useChipsFor([item.channel]);
+  return <ScheduleSheet open onOpenChange={(o) => !o && onClose()} launchId={launchId} item={item} name={name} timezone={timezone} chips={chipsOf(item.channel).chips} title={`Move ${name}`} />;
 }

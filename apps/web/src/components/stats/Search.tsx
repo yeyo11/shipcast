@@ -1,121 +1,113 @@
 import { Link } from '@tanstack/react-router';
-import { Fragment } from 'react';
-import { full } from '../charts/data';
+import { full, shortDay } from '../charts/data';
 import { OnboardMeasure } from '../illustrations';
-import { Empty } from '../PageHead';
-import { when } from '../ui';
 import type { getSearch } from '../../server/stats.functions';
+import { StatsEmpty } from './parts';
 
 type SearchData = Awaited<ReturnType<typeof getSearch>>;
-type Engine = SearchData['launches'][number]['pages'][number]['google'];
+type LaunchRow = SearchData['launches'][number];
+type Engine = 'google' | 'bing';
 
 /**
- * The blog's articles in Google and Bing (docs/search-indexing.md): a row per article page with
- * what each engine last said of it, and the impressions and clicks each engine counted for the
- * launch in the period. The engines count a launch's pages together, so the numbers span its rows.
+ * The blog's articles in Google and Bing (board StatsSearch, docs/search-indexing.md): a row per
+ * published launch with an engine pill each, light when every page of its article is indexed, yellow
+ * while one waits, dashed before the engine was asked; then what each engine counted in the period.
+ * The engines count a launch's pages together, so their numbers are added up over the launches.
  */
-export function Search({ data }: { data: SearchData }) {
+export function Search({ data, period, position }: { data: SearchData; period: string; position: number | null }) {
   if (data.launches.length === 0) {
     return (
-      <Empty art={<OnboardMeasure width={240} />} title="No articles in search yet" action={<Link className="btn" to="/channels">Go to Channels</Link>}>
+      <StatsEmpty
+        art={<OnboardMeasure width={240} />}
+        title="No articles in search yet"
+        actions={
+          <Link className="k-btn" to="/channels">
+            Go to Channels
+          </Link>
+        }
+      >
         Once a launch publishes its blog article, Google Search Console and Bing Webmaster Tools are asked about each language's page every few hours. Connect them in Channels.
-      </Empty>
+      </StatsEmpty>
     );
   }
+  const sum = (engine: Engine) => {
+    const read = data.launches.flatMap((l) => (l[engine] ? [l[engine]] : []));
+    return read.length === 0 ? null : read.reduce((a, n) => ({ impressions: a.impressions + n.impressions, clicks: a.clicks + n.clicks }), { impressions: 0, clicks: 0 });
+  };
+  const google = sum('google');
+  const bing = sum('bing');
   return (
-    <section className="stats-panel" aria-labelledby="search-title">
-      <div className="section-head">
-        <h2 id="search-title" className="stats-panel-title">
-          Articles in search engines
-        </h2>
-      </div>
-      <p className="muted section-lead">Whether each article is indexed is what the engine said at its last check; impressions and clicks are what each engine counted in the period, for all of a launch's pages, with their lifetime as the period ends under them.</p>
-      <div className="stats-scroll" role="region" aria-labelledby="search-title" tabIndex={0}>
-        <table className="table stats-table search-table">
-          <thead>
-            <tr>
-              <th scope="col">Page</th>
-              <th scope="col">Google</th>
-              <th scope="col">Bing</th>
-              <th scope="col" className="num">
-                Google impressions
-              </th>
-              <th scope="col" className="num">
-                Google clicks
-              </th>
-              <th scope="col" className="num">
-                Bing impressions
-              </th>
-              <th scope="col" className="num">
-                Bing clicks
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.launches.map((l) => (
-              <Fragment key={l.id}>
-                {l.pages.map((p, i) => (
-                  <tr key={p.url} className={i === 0 ? 'search-first' : undefined}>
-                    <th scope="row">
-                      <span className="search-page">
-                        {i === 0 && (
-                          <Link className="search-launch" to="/launches/$id" params={{ id: String(l.id) }}>
-                            {l.label}
-                          </Link>
-                        )}
-                        <a className="search-url" href={p.url} target="_blank" rel="noreferrer noopener">
-                          {new URL(p.url).pathname}
-                          <span className="visually-hidden"> (opens the article)</span>
-                        </a>
-                        <span className="stats-lang">{p.lang.toUpperCase()}</span>
-                      </span>
-                    </th>
-                    <td>
-                      <IndexState engine={p.google} yes="Indexed" no="Not indexed yet" />
-                    </td>
-                    <td>
-                      <IndexState engine={p.bing} yes="Crawled" no="Not crawled yet" />
-                    </td>
-                    {i === 0 && (
-                      <>
-                        <Count rows={l.pages.length} value={l.google?.impressions} lifetime={l.google?.lifetime.impressions} />
-                        <Count rows={l.pages.length} value={l.google?.clicks} lifetime={l.google?.lifetime.clicks} />
-                        <Count rows={l.pages.length} value={l.bing?.impressions} lifetime={l.bing?.lifetime.impressions} />
-                        <Count rows={l.pages.length} value={l.bing?.clicks} lifetime={l.bing?.lifetime.clicks} />
-                      </>
-                    )}
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <section aria-label="Articles in search engines">
+      <ul className="k-px k-stack stats-gap12 stats-search">
+        {data.launches.map((l) => (
+          <li key={l.id} className="k-row">
+            <div className="k-grow k-stack">
+              <Link className="k-sm stats-link stats-strong" to="/launches/$id" params={{ id: String(l.id) }}>
+                {l.title}
+              </Link>
+              <span className="k-xs k-muted">{l.pages.length === 0 ? 'No article' : `${l.publishedOn ? `${shortDay(l.publishedOn)} · ` : ''}${languages(l)}`}</span>
+            </div>
+            {l.pages.length === 0 ? (
+              <span className="k-xs k-muted">Nothing to index</span>
+            ) : (
+              <div className="k-hrow k-g6">
+                <EnginePill row={l} engine="google" />
+                <EnginePill row={l} engine="bing" />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {google && <Numbers title={`From Search Console, ${period.toLowerCase()}`} clicks={google.clicks} impressions={google.impressions} position={position} />}
+      {bing && <Numbers title={`From Bing Webmaster Tools, ${period.toLowerCase()}`} clicks={bing.clicks} impressions={bing.impressions} position={null} />}
     </section>
   );
 }
 
-function IndexState({ engine, yes, no }: { engine: Engine; yes: string; no: string }) {
-  if (!engine) return <span className="muted">Not checked</span>;
+function languages(l: LaunchRow): string {
+  const langs = [...new Set(l.pages.map((p) => p.lang.toUpperCase()))];
+  return langs.length <= 1 ? (langs[0] ?? '') : `${langs.slice(0, -1).join(', ')} and ${langs.at(-1)}`;
+}
+
+const ENGINE_NAMES: Record<Engine, string> = { google: 'Google', bing: 'Bing' };
+
+/** One engine for one article: indexed everywhere (light), waiting on a page (yellow), not asked yet (dashed) */
+function EnginePill({ row, engine }: { row: LaunchRow; engine: Engine }) {
+  const reads = row.pages.map((p) => p[engine]);
+  const indexed = reads.length > 0 && reads.every((r) => r?.indexed);
+  const unchecked = reads.every((r) => r === null);
+  const state = indexed ? 'indexed' : unchecked ? 'not checked yet' : 'waiting to be indexed';
+  const said = reads.flatMap((r, i) => (r ? [`${row.pages[i]?.lang.toUpperCase()}: ${r.coverage}`] : [])).join('; ');
   return (
-    <span className="search-state" title={`${engine.coverage} · checked ${when(engine.checkedAt)} UTC`}>
-      <span className={engine.indexed ? 'search-yes' : 'muted'}>{engine.indexed ? yes : no}</span>
-      <small className="muted">{engine.coverage}</small>
+    <span className={`k-pill ${indexed ? 'k-p-pub' : unchecked ? 'k-p-quiet' : 'k-p-wait'}`} title={said || undefined}>
+      {ENGINE_NAMES[engine]}
+      <span className="visually-hidden">: {state}</span>
     </span>
   );
 }
 
-function Count({ rows, value, lifetime }: { rows: number; value: number | undefined; lifetime: number | undefined }) {
+function Numbers({ title, clicks, impressions, position }: { title: string; clicks: number; impressions: number; position: number | null }) {
   return (
-    <td className="num" rowSpan={rows}>
-      {value === undefined ? (
-        <span aria-label="not read">—</span>
-      ) : (
-        <>
-          {full(value)}
-          <span className="stats-life">{full(lifetime ?? 0)} lifetime</span>
-        </>
-      )}
-    </td>
+    <div className="k-px stats-gap14">
+      <section className="k-card stats-search-card" aria-label={title}>
+        <span className="k-lbl">{title}</span>
+        <div className="k-hrow k-g24">
+          <div className="k-stack">
+            <span className="k-d k-d30">{full(clicks)}</span>
+            <span className="k-xs k-muted">Clicks</span>
+          </div>
+          <div className="k-stack">
+            <span className="k-d k-d30">{full(impressions)}</span>
+            <span className="k-xs k-muted">Impressions</span>
+          </div>
+          {position !== null && (
+            <div className="k-stack">
+              <span className="k-d k-d30">{position.toFixed(1)}</span>
+              <span className="k-xs k-muted">Avg. position</span>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }

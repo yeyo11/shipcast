@@ -161,3 +161,5 @@ button.k-mi:disabled { opacity: .5; cursor: default; }
 @media (min-width: 960px) { .ap-browser-page { height: min(640px, calc(100vh - 320px)); } }
 .ap-ddrafts .k-btn.ap-assist { min-height: 40px; }
 ins.k-diff-add { text-decoration: none; }
+.ap-dcards-flex { display: flex; flex-direction: column; gap: 12px; }
+@media (min-width: 960px) { .ap-dcards-flex { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }

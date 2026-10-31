@@ -11,7 +11,8 @@ import { InvalidInput } from './input.ts';
 
 export const METRICS = ['views', 'reactions', 'comments', 'shares', 'clicks', 'impressions'] as const;
 export const PERIODS = ['7d', '30d', '90d', 'all', 'custom'] as const;
-export const GROUPS = ['channel', 'account', 'launch'] as const;
+/** `total` is every series added up into one line, the chart's first view (the redesign's board) */
+export const GROUPS = ['total', 'channel', 'account', 'launch'] as const;
 export const KINDS = ['line', 'area', 'bar'] as const;
 export const BUCKETS = ['day', 'week'] as const;
 export const RANK_BY = ['post', 'launch', 'account'] as const;
@@ -44,7 +45,7 @@ export interface StatsSearch {
   page: number;
 }
 
-export const DEFAULTS: StatsSearch = { period: '30d', metric: 'views', groupBy: 'channel', chart: 'line', bucket: 'day', compare: false, rank: 'post', sort: 'score', order: 'desc', page: 1 };
+export const DEFAULTS: StatsSearch = { period: '30d', metric: 'views', groupBy: 'total', chart: 'line', bucket: 'day', compare: false, rank: 'post', sort: 'score', order: 'desc', page: 1 };
 
 /** The longest custom period, two years: past that a chart of weeks gets too dense to read */
 export const MAX_DAYS = 731;

@@ -10,11 +10,12 @@ import { LONG_FORM_CHANNELS } from '@shipcast/schema/channels';
 
 export type NetworkGroup = 'social' | 'blog' | 'measurement' | 'ai';
 
-export const NETWORK_GROUPS: ReadonlyArray<{ id: NetworkGroup; name: string }> = [
-  { id: 'social', name: 'Social networks' },
-  { id: 'blog', name: 'Blog & newsletter' },
-  { id: 'measurement', name: 'Measurement' },
-  { id: 'ai', name: 'AI providers' },
+/** `short` is the tab's name on a phone, where the four must fit one line */
+export const NETWORK_GROUPS: ReadonlyArray<{ id: NetworkGroup; name: string; short: string }> = [
+  { id: 'social', name: 'Social networks', short: 'Social' },
+  { id: 'blog', name: 'Blog & newsletter', short: 'Blog' },
+  { id: 'measurement', name: 'Measurement', short: 'Measurement' },
+  { id: 'ai', name: 'AI providers', short: 'AI' },
 ];
 
 /** The channels that carry an article or a newsletter rather than a short post */

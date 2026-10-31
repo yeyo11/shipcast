@@ -4,10 +4,15 @@ import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SessionExpiry } from '../components/SessionExpiry';
 import appCss from '../styles/app.css?url';
 import approveCss from '../styles/approve.css?url';
+import channelsCss from '../styles/channels.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
+import homeCss from '../styles/home.css?url';
+import commentsCss from '../styles/comments.css?url';
 import kitCss from '../styles/kit.css?url';
 import layoutCss from '../styles/layout.css?url';
+import publishedCss from '../styles/published.css?url';
+import statsCss from '../styles/stats.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -21,6 +26,11 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: layoutCss },
       { rel: 'stylesheet', href: kitCss },
       { rel: 'stylesheet', href: approveCss },
+      { rel: 'stylesheet', href: homeCss },
+      { rel: 'stylesheet', href: publishedCss },
+      { rel: 'stylesheet', href: channelsCss },
+      { rel: 'stylesheet', href: commentsCss },
+      { rel: 'stylesheet', href: statsCss },
     ],
   }),
   shellComponent: Document,

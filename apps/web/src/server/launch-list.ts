@@ -42,3 +42,75 @@ export function ownerAvatarUrl(repo: string): string | null {
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/.test(owner)) return null;
   return `https://avatars.githubusercontent.com/${owner}?size=80`;
 }
+
+/** The name a launch goes by on the list: the project, or an article's title as its slug spells it */
+export function launchTitle(launch: { repo: string; ref: string }): { title: string; version: string | null; article: boolean } {
+  if (launch.ref.startsWith('article:')) {
+    const words = launch.ref.slice('article:'.length).replace(/[-_]+/g, ' ').trim();
+    return { title: words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Article', version: null, article: true };
+  }
+  return { title: launch.repo.split('/')[1] ?? launch.repo, version: launch.ref, article: false };
+}
+
+/** A list in words: "a, b and c" */
+export function wordList(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+}
+
+/**
+ * What a launch waiting for approval has ready, by channel, in the order a reader takes them: the
+ * article first (its languages are one piece to the owner), then each network as its drafts list it.
+ * `names` turns a channel into its network's name.
+ */
+export function readyPieces(channels: readonly string[], names: (channel: string) => string): { count: number; text: string } {
+  const unique = [...new Set(channels)];
+  const ordered = [...unique.filter((c) => c === 'blog'), ...unique.filter((c) => c !== 'blog')];
+  const words = ordered.map((c) => (c === 'blog' ? 'the article' : names(c)));
+  return { count: ordered.length, text: wordList(words) };
+}
+
+/** How long ago, as the cards say it: "3 min ago", "2 h ago", "yesterday", then the days */
+export function agoLabel(iso: string, now: Date = new Date()): string {
+  const ms = Math.max(0, now.getTime() - new Date(iso).getTime());
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+/** Who started a launch, after "started … by": the release, or the owner */
+export const TRIGGER_BY: Record<string, string> = {
+  release: 'the release',
+  manual: 'you',
+  public: 'the repo going public',
+  enabled: 'Shipcast being enabled',
+  article: 'you',
+};
+
+/**
+ * What a launch being drafted is doing now, from its job's last line: the clause before any aside
+ * ("Reading the code and writing the pack; this takes…" reads "Reading the code and writing the pack").
+ */
+export function draftingNote(log: readonly string[]): string {
+  const last = log.at(-1)?.trim() ?? '';
+  const clause = last.split(/[;:…]/)[0]?.trim().replace(/\.+$/, '') ?? '';
+  return clause || 'Drafting';
+}
+
+/** A day as the cards say it, in the owner's time zone: "20 Oct", with the year when it is not this one */
+export function shortDate(iso: string, timeZone: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  const year = (d: Date) => new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric' }).format(d);
+  const sameYear = year(at) === year(now);
+  return new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short', ...(!sameYear && { year: 'numeric' }) }).format(at);
+}
+
+/** A day and a time as the peek's lines say them: "20 Oct, 12:00" */
+export function shortDateTime(iso: string, timeZone: string, now: Date = new Date()): string {
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+  return `${shortDate(iso, timeZone, now)}, ${time}`;
+}
