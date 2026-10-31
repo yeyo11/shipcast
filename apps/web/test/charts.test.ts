@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   alignToBuckets,
+  shortDay,
   brushRange,
   compact,
   deltaLabel,
@@ -90,4 +91,9 @@ test('a series keeps its colour whatever else is filtered, and nobody shares one
   assert.equal(all.get('other'), 'var(--sc-muted)');
   const accounts = assignColours([1, 2, 3].map((id) => ({ key: String(id), channel: 'bluesky', id })));
   assert.equal(new Set(accounts.values()).size, 3, 'three accounts of one network take three colours');
+});
+
+test('the redesign writes a day first: 1 Oct, with the year when asked', () => {
+  assert.equal(shortDay('2026-10-01'), '1 Oct');
+  assert.equal(shortDay('2026-12-25', true), '25 Dec 2026');
 });

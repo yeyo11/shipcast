@@ -174,6 +174,12 @@ export function dayLabel(day: string, withYear = false): string {
   return `${month} ${Number(d)}${withYear ? `, ${y}` : ''}`;
 }
 
+/** A day as the redesign writes it, day first: `1 Oct`, or `1 Oct 2026` when asked for the year */
+export function shortDay(day: string, withYear = false): string {
+  const [y, m, d] = day.split('-');
+  return `${Number(d)} ${MONTHS[Number(m) - 1] ?? m}${withYear ? ` ${y}` : ''}`;
+}
+
 /** What a bucket is called in a tooltip or the table */
 export function bucketLabel(bucket: string, unit: 'day' | 'week'): string {
   return unit === 'week' ? `Week of ${dayLabel(bucket)}` : dayLabel(bucket, false);

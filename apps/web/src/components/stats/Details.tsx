@@ -34,88 +34,47 @@ const SITE_WIDE = new Set(['search', 'bing']);
 
 /**
  * The numbers past the six families: the second tier (saves, reach, watch time…), added up like the
- * six but neither charted nor scored, with what grew in the period beside where it stood at its end;
- * then the averages and ratios, which are never added up, as the period ends (docs/stats.md).
+ * six but neither charted nor scored, with what grew in the period and where it stood at its end;
+ * then the averages and ratios, which are never added up, as the period ends (docs/stats.md). Not on
+ * the board: kept under the overview as one more card, in the board's rows.
  */
-export function Details({ details, averages, comparing }: { details: StatsView['details']; averages: StatsView['averages']; comparing: boolean }) {
+export function Details({ details, averages }: { details: StatsView['details']; averages: StatsView['averages'] }) {
   if (details.length === 0 && averages.length === 0) return null;
   return (
-    <section className="stats-panel stats-details" aria-labelledby="details-title">
-      <div className="section-head">
-        <h2 id="details-title" className="stats-panel-title">
-          More numbers
-        </h2>
-      </div>
-      <p className="muted section-lead">What only some networks count. Lifetime is where each number stood at the period’s end, as the network’s own screen shows it.</p>
-      {details.length > 0 && (
-        <div className="stats-scroll" role="region" aria-label="More numbers, added up" tabIndex={0}>
-          <table className="table stats-table">
-            <thead>
-              <tr>
-                <th scope="col">Number</th>
-                <th scope="col">From</th>
-                <th scope="col" className="num">
-                  This period
-                </th>
-                <th scope="col" className="num">
-                  Lifetime
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {details.map((d) => {
-                const delta = comparing && d.previous !== null ? deltaLabel(d.value, d.previous) : null;
-                return (
-                  <tr key={d.metric}>
-                    <th scope="row">{DETAIL_NAMES[d.metric]}</th>
-                    <td className="stats-details-from">{d.channels.map((c) => `${c.label} ${full(c.value)}`).join(' · ')}</td>
-                    <td className="num">
-                      {full(d.value)}
-                      {delta && (
-                        <span className="stats-life">
-                          <span aria-hidden="true">{delta.direction === 'up' ? '▲' : delta.direction === 'down' ? '▼' : '■'}</span> {delta.text}
-                          <span className="visually-hidden"> against the previous period ({full(d.previous ?? 0)})</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="num">{full(d.lifetime)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {averages.length > 0 && (
-        <div className="stats-scroll" role="region" aria-label="Averages as the period ends" tabIndex={0}>
-          <table className="table stats-table">
-            <thead>
-              <tr>
-                <th scope="col">Average</th>
-                <th scope="col">From</th>
-                <th scope="col" className="num">
-                  At the period’s end
-                </th>
-                <th scope="col" className="num">
-                  Over
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {averages.map((a) => (
-                <tr key={`${a.source}.${a.metric}`}>
-                  <th scope="row">{AVERAGES[a.metric].name}</th>
-                  <td>{a.label}</td>
-                  <td className="num">{AVERAGES[a.metric].format(a.value)}</td>
-                  <td className="num">
-                    {a.pieces} {SITE_WIDE.has(a.source) ? (a.pieces === 1 ? 'launch' : 'launches') : a.pieces === 1 ? 'piece' : 'pieces'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <section className="k-card stats-details" aria-labelledby="details-title">
+      <strong id="details-title">More numbers</strong>
+      <p className="k-xs k-muted stats-details-lead">What only some networks count, in this period and in all.</p>
+      <ul className="stats-details-list">
+        {details.map((d) => {
+          const delta = d.previous !== null ? deltaLabel(d.value, d.previous) : null;
+          return (
+            <li key={d.metric} className="k-row">
+              <div className="k-grow k-stack">
+                <span className="k-sm">{DETAIL_NAMES[d.metric]}</span>
+                <span className="k-xs k-muted">{d.channels.map((c) => `${c.label} ${full(c.value)}`).join(' · ')}</span>
+              </div>
+              <div className="k-stack stats-details-num">
+                <span className="k-mono k-sm">
+                  {full(d.value)}
+                  {delta && <span className="k-xs k-muted"> {delta.text}</span>}
+                </span>
+                <span className="k-xs k-muted">{full(d.lifetime)} in all</span>
+              </div>
+            </li>
+          );
+        })}
+        {averages.map((a) => (
+          <li key={`${a.source}.${a.metric}`} className="k-row">
+            <div className="k-grow k-stack">
+              <span className="k-sm">{AVERAGES[a.metric].name}</span>
+              <span className="k-xs k-muted">
+                {a.label} · over {a.pieces} {SITE_WIDE.has(a.source) ? (a.pieces === 1 ? 'launch' : 'launches') : a.pieces === 1 ? 'piece' : 'pieces'}
+              </span>
+            </div>
+            <span className="k-mono k-sm">{AVERAGES[a.metric].format(a.value)}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

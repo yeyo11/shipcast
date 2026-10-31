@@ -1,231 +1,139 @@
 /*
- * The charts and the Stats page (docs/decisions/charts.md): poster in the header, calm and dense in
- * the work area. Role tokens only; the series colours are the --chart-* properties palette.ts writes,
- * night on the root and day under [data-theme="day"].
+ * The Stats section on the redesign's kit (boards StatsOverview, StatsRanking, StatsAccounts,
+ * StatsSearch, StatsEmpty, StatsFilters and DesktopStats): only what the boards draw inline, as named
+ * classes over kit.css. Phone first; from 960 px the desktop board's column, header and grid.
  */
 
-/* The page's banner is the app's own .page-band (app.css), the same as every section's: no override here */
+/* ---------- Page, header and tabs ---------- */
+/* The old app.css pads every main by 32 px; the boards start the top bar at the very top (shell gap: for the kit) */
+main.k-main:has(.stats) { padding-top: 0; }
+.stats-head { padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.stats-title { font-size: 48px; }
+.stats-lead { display: none; margin: 0; }
+.stats-tools { flex: none; }
+.stats-tabs-wrap { margin-top: 14px; }
+.stats-tabs { margin: 0 16px; padding: 0; }
+.stats-tabs .k-tab { cursor: pointer; }
+.stats-tabs .k-tab:focus-visible { outline: 2px solid var(--sc-yellow); outline-offset: 2px; }
+.stats-gap12 { margin-top: 12px; }
+.stats-gap14 { margin-top: 14px; }
+.stats-chips .k-chip { min-width: 0; }
+.stats-chips .k-chip:nth-child(2) { max-width: 160px; }
+.stats-only-desktop { display: none; }
+.stats-link { color: inherit; text-decoration: none; }
+.stats-link:hover { color: var(--sc-yellow); }
+.stats-strong { font-weight: 700; }
 
-/* ---------- The filter bar: the period, a pill per thing to narrow to, and Chart ---------- */
+/* ---------- Overview: the KPIs ---------- */
+.stats-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stats-kpi { display: flex; flex-direction: column; align-items: flex-start; text-align: left; border-radius: 20px; padding: 12px 14px; cursor: pointer; font: inherit; line-height: 1.5; background: var(--sc-raised); color: var(--sc-text); border: 2.5px solid var(--sc-hairline); min-width: 0; }
+.stats-kpi[aria-checked="true"] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
+.stats-kpi:focus-visible { outline: 2px solid var(--sc-yellow); outline-offset: 2px; }
+.stats-kpi-label { font-size: 13px; font-weight: 600; }
+.stats-kpi-value { font-size: 36px; }
+.stats-kpi-delta { font-size: 13px; }
+.stats-skel-kpi { height: 100px; border-radius: 20px; }
+.stats-skel-chart { height: 260px; border-radius: 24px; }
 
-.stats-filterbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; min-width: 0; }
-.stats-period { border-width: var(--sc-border-control); border-color: var(--sc-rail); padding: 3px; gap: 2px; border-radius: var(--sc-radius-pill); }
-.stats-period span { min-height: 36px; padding: 0 14px; border-radius: var(--sc-radius-pill); font-size: 13.5px; font-weight: 700; color: var(--sc-muted); }
-.stats-period input:checked + span { color: var(--sc-ground); }
-/* Comments' Filters button wears the same count */
-.stats-filters-button { gap: 8px; }
-.stats-filters-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--sc-radius-pill); background: var(--sc-yellow); color: var(--sc-on-yellow); font: 700 12px/1 var(--sc-font-text); }
-.stats-range { margin: -14px 0 12px; font-size: 13.5px; }
+/* ---------- Overview: the chart ---------- */
+.stats-chart-card { gap: 8px; }
+.stats-chart-title { font-size: 14px; }
+.stats-chart-none { margin: 0; }
+.stats-chart { position: relative; }
+.stats-chart-plot { position: relative; height: 170px; }
+.stats-chart-plot svg { display: block; outline: none; touch-action: pan-y; }
+.stats-chart-plot svg:focus-visible { outline: 2px solid var(--sc-yellow); outline-offset: 4px; border-radius: 4px; }
+.stats-chart-grid line { stroke: var(--sc-hairline); }
+.stats-chart-axis { stroke: var(--sc-rail); }
+.stats-chart-days text { fill: var(--sc-muted); font: 11px var(--sc-font-text); }
+.stats-chart-mark circle { fill: var(--sc-yellow); }
+.stats-chart-mark text { fill: var(--sc-text); font: 12px var(--sc-font-text); }
+.stats-chart-active line { stroke: var(--sc-rail); stroke-dasharray: 3 3; }
+.stats-chart-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--sc-raised); border: 2px solid var(--sc-rail); border-radius: 10px; padding: 1px 8px; font-size: 12px; white-space: nowrap; pointer-events: none; }
+.stats-chart-legend { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--sc-muted); }
+.stats-chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.stats-chart-swatch { width: 12px; height: 3px; border-radius: 2px; }
+.stats-groupby { gap: 8px; }
+.stats-groupby-chip.k-chip { min-height: 32px; font-size: 12px; }
 
-/* A pill says what it holds: quiet while it holds everything, outlined in the text colour once set */
-.stats-pill-wrap { display: inline-flex; align-items: stretch; flex: none; }
-.stats-pill { gap: 6px; border-color: var(--sc-hairline); white-space: nowrap; }
-.stats-pill[data-set] { border-color: var(--sc-text); }
-.stats-pill-name { color: var(--sc-muted); }
-.stats-pill[data-set] .stats-pill-name::after { content: ':'; }
-.stats-pill-value { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: var(--sc-text); }
-/* Set, the pill and its clear are one shape: the clear is the pill's right end */
-.stats-pill-wrap[data-set] .stats-pill { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right-width: 0; padding-right: 6px; }
-.stats-pill-clear { display: inline-grid; place-items: center; width: 34px; padding: 0; border: var(--sc-border-control) solid var(--sc-text); border-left: 0; border-radius: 0 var(--sc-radius-pill) var(--sc-radius-pill) 0; background: transparent; color: var(--sc-muted); cursor: pointer; }
-.stats-pill-clear:hover { color: var(--sc-text); background: var(--sc-raised); }
-.stats-pill-clear:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
-.stats-clear { white-space: nowrap; }
-
-/* The list behind a pill: a search, the count and the bulk actions, then the choices by group */
-.stats-sheet { width: min(var(--available-width, 560px), calc(100vw - 16px), 560px); max-width: none; max-height: min(var(--available-height, 680px), 680px); }
-.stats-sheet-list { width: min(var(--available-width, 380px), calc(100vw - 16px), 380px); }
-.stats-checklist { display: grid; gap: 10px; min-width: 0; }
-.stats-checklist-search { width: 100%; }
-.stats-checklist-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13.5px; }
-.stats-checklist-actions { display: flex; gap: 14px; }
-.stats-checklist-group { display: grid; gap: 2px; padding-bottom: 8px; }
-.stats-checklist-heading { margin: 6px 0 2px; padding-inline: 8px; font: var(--sc-label); color: var(--sc-muted); }
-.stats-checklist-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 40px; padding: 4px 8px; border-radius: 12px; cursor: pointer; }
-.stats-checklist-item:hover { background: var(--sc-raised); }
-.stats-checklist-item:has(input:checked) .stats-checklist-label { font-weight: 700; }
-.stats-checklist-label { overflow-wrap: anywhere; }
-.stats-checklist-hint { font-size: 12.5px; white-space: nowrap; }
-.stats-checklist-empty { margin: 8px; }
-@media (pointer: coarse) { .stats-checklist-item { min-height: 48px; } }
-
-/* Chart: how the numbers are drawn, then a custom range across the bottom */
-.stats-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 18px 24px; padding-top: 6px; }
-.stats-filters-group { display: grid; gap: 12px; align-content: start; min-width: 0; }
-.stats-filters-seg { grid-template-columns: max-content; }
-.stats-filters-range { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: end; padding-top: 14px; border-top: 1px solid var(--sc-hairline); }
-.stats-filters-range > .label, .stats-filters-range > small { grid-column: 1 / -1; }
-/* The period as a Select is the phone's shape (below); the desktop keeps the segmented control */
-.stats-period-select { display: none; }
-/* The app's segmented controls stack on a phone; these have a few short words, which fit side by side */
-@media (max-width: 560px) {
-  .stats-period, .stats-filters .seg, .section-head .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); justify-self: stretch; border-radius: var(--sc-radius-pill); }
-  .stats-period { flex: 1 1 100%; }
-  .stats-period span, .stats-filters .seg span, .section-head .seg span { justify-content: center; padding-inline: 6px; }
-  .stats-filters .seg label + label span, .section-head .seg label + label span { border-top: 0; border-left: 1px solid var(--sc-rail); }
-  .stats-period label + label span { border-top: 0; }
-  .section-head .seg { flex: 1 1 100%; }
-}
-/*
- * A phone: the toolbar's one row holds the period (a Select) and the pills, which scroll sideways with
- * the toolbar's controls, and the range is the small caption under the bar
- */
-@media (max-width: 640px) {
-  .stats-filterbar { flex-wrap: nowrap; gap: 6px 8px; }
-  .stats-filterbar .stats-period { display: none; }
-  .stats-period-select { display: block; min-width: 140px; }
-  .stats-period-select .field { gap: 0; }
-  .stats-period-select .ui-trigger { min-height: 44px; }
-  .stats-filterbar .stats-pill, .stats-filterbar .stats-pill-clear { min-height: 44px; }
-  .stats-range { margin-top: -18px; font-size: 13px; }
-}
-
-/* ---------- KPIs: one strip that is also the chart's metric switch ---------- */
-
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(50%, 150px), 1fr)); margin: 0 0 16px; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); overflow: hidden; background: var(--sc-hairline); gap: 1px; }
-.kpi { position: relative; display: grid; align-content: start; gap: 6px; width: 100%; padding: 14px 18px 16px; text-align: left; border: 0; background: var(--sc-raised); color: var(--sc-text); cursor: pointer; font: inherit; }
-.kpi:hover { background: color-mix(in srgb, var(--sc-raised) 70%, var(--sc-ground)); }
-/* The charted family: the page colour and Cartel's yellow line under it, as the current tab */
-.kpi[aria-checked="true"] { background: var(--sc-ground); }
-.kpi[aria-checked="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--sc-yellow); }
-.kpi:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: -3px; }
-.kpi-label { font: var(--sc-label); color: var(--sc-muted); }
-.kpi-value { font: 900 34px/0.95 var(--sc-font-display); letter-spacing: var(--sc-tracking-title); overflow-wrap: anywhere; }
-.kpi-delta { font: 600 13px/1.2 var(--sc-font-text); color: var(--sc-muted); }
-.kpi-delta.up, .kpi-delta.down { color: var(--sc-text); }
-.kpi-delta [aria-hidden] { font-size: 10px; }
-/* The lifetime under a period's number: where it stood at the period's end, quieter than the number */
-.stats-life { display: block; font: 600 12px/1.3 var(--sc-font-text); color: var(--sc-muted); white-space: nowrap; }
-.stats-life [aria-hidden] { font-size: 9px; }
-@media (max-width: 560px) { .kpi { padding: 12px 14px 14px; } .kpi-value { font-size: 28px; } }
-
-/* ---------- The chart ---------- */
-
-.chart-card { padding: 18px 20px 14px; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); min-width: 0; }
-.chart-title { margin: 0 0 12px; font: 700 18px/1.3 var(--sc-font-text); }
-.chart-note { margin: 10px 0 0; font-size: 13px; }
-@media (max-width: 560px) { .chart-card { padding: 16px 12px 12px; border-radius: 18px; } }
-@media (pointer: coarse) { .chart-note { display: none; } }
-
-.chart { margin: 0; min-width: 0; }
-.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-bottom: 10px; }
-.chart-tools { display: flex; gap: 8px; margin-left: auto; }
-.chart-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; min-width: 0; }
-.chart-legend li { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow-wrap: anywhere; }
-.chart-swatch { flex: none; display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
-.chart-swatch-line { flex: none; }
-.chart-box { position: relative; width: 100%; min-width: 0; }
-.chart-plot { position: relative; border-radius: 8px; user-select: none; -webkit-user-select: none; }
-.chart-plot:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 4px; }
-.chart-svg { display: block; overflow: visible; }
-/* Horizontal drags brush and vertical ones still scroll the page on a phone */
-.chart-hit { touch-action: pan-y; }
-.chart-hit.zoomable { cursor: crosshair; }
-.chart-brush { fill: var(--sc-text); fill-opacity: .1; stroke: var(--sc-text); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
-.chart-crosshair { pointer-events: none; }
-
-/* The tooltip: the popups' look (page colour, text-colour outline, small stamp), dense */
-.chart-tooltip { position: absolute; top: 4px; z-index: 5; width: max-content; max-width: min(260px, calc(100% - 8px)); padding: 10px 12px; background: var(--sc-ground); color: var(--sc-text); border: 2px solid var(--sc-text); border-radius: 14px; box-shadow: var(--sc-stamp-sm) var(--sc-stamp); pointer-events: none; font-size: 13px; }
-.chart-tooltip-title { margin: 0 0 6px; font: 700 13.5px/1.2 var(--sc-font-text); }
-.chart-tooltip ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.chart-tooltip li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; }
-.chart-tooltip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chart-tooltip-value { font-family: var(--sc-font-mono); font-size: 12.5px; text-align: right; }
-.chart-tooltip-prev { grid-column: 2 / 4; color: var(--sc-muted); font-size: 12px; text-align: right; }
-.chart-tooltip-total { padding-top: 4px; border-top: 1px solid var(--sc-hairline); font-weight: 700; }
-
-/* The values as a table, on demand: it scrolls in its own box so a long period never widens the page */
-.chart-table { margin-top: 14px; max-height: 360px; overflow: auto; border: 1px solid var(--sc-hairline); border-radius: 12px; overscroll-behavior: contain; }
-.chart-table:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
-.chart-table .table { font-size: 13.5px; }
-.chart-table th, .chart-table td { white-space: nowrap; }
-.chart-table td { font-family: var(--sc-font-mono); font-size: 12.5px; text-align: right; }
-.chart-table thead th { position: sticky; top: 0; background: var(--sc-raised); }
+/* ---------- Overview: best launch, top, more numbers ---------- */
+.stats-best { gap: 4px; text-decoration: none; color: inherit; }
+.stats-best:hover { color: inherit; border-color: var(--sc-rail); }
+.stats-best-name { align-items: baseline; min-width: 0; }
+.stats-best-value { flex: none; }
+.stats-top { gap: 0; }
+.stats-top-title { margin-bottom: 6px; }
+.stats-top-list { list-style: none; margin: 0; padding: 0; }
+.stats-top-all { margin-top: 12px; align-self: flex-start; background: none; border: 0; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.stats-top-all:hover { color: var(--sc-yellow); }
+.stats-details { gap: 4px; }
+.stats-details-lead { margin: 0; }
+.stats-details-list { list-style: none; margin: 0; padding: 0; }
+.stats-details-num { align-items: flex-end; text-align: right; }
 
 /* ---------- Ranking ---------- */
+.stats-rank-note { margin: 10px 0 0; }
+.stats-rank { list-style: none; margin: 4px 0 0; }
+.stats-rank-n { width: 28px; flex: none; }
+.stats-rank-first { color: var(--sc-yellow); }
+.stats-rank-score { align-items: flex-end; flex: none; }
+.k-seg button[role="radio"]:focus-visible { outline: 2px solid var(--sc-yellow); outline-offset: 2px; }
 
-.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 20px; margin: 0 0 10px; }
-.stats-panel-title { margin: 0; font: 700 18px/1.3 var(--sc-font-text); }
-.section-lead { margin: 0 0 14px; font-size: 14.5px; max-width: 720px; }
-.table-card { border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); padding: 6px 14px; min-width: 0; }
-.ranking-table th.num, .ranking-table td.num { text-align: right; white-space: nowrap; }
-.ranking-table td { vertical-align: middle; }
-.ranking-score { font-weight: 700; }
-.sort { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 2px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.sort:hover { color: var(--sc-text); }
-th[aria-sort] .sort { color: var(--sc-text); }
-.sort-mark { font-size: 12px; opacity: .8; }
-.who-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
-.who-channel { display: inline-flex; align-items: center; gap: 6px; font: var(--sc-label); }
-.who-channel .icon { width: 18px; height: 18px; }
-.who-cell a { display: inline-flex; align-items: center; min-height: 44px; }
-.who-out { font: var(--sc-label); color: var(--sc-muted); }
-.who-pieces { font-size: 13px; }
-.pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 14px; }
-/* A phone: each row a small block, the numbers in a grid of labelled cells under the name */
-@media (max-width: 760px) {
-  .table-card { padding: 4px 14px; }
-  .ranking-table, .ranking-table tbody, .ranking-table tr { display: block; }
-  .ranking-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .ranking-table tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--sc-hairline); }
-  .ranking-table tr:last-child { border-bottom: 0; }
-  .ranking-table td { display: block; border: 0; padding: 0; }
-  .ranking-table td.num { text-align: left; font-size: 14px; }
-  .ranking-table td.num::before { content: attr(data-label); display: block; font: 600 12px/1.3 var(--sc-font-text); color: var(--sc-muted); }
-  .ranking-table td.ranking-who { grid-column: 1 / -1; grid-row: 1; }
+/* ---------- Accounts ---------- */
+.stats-accounts { list-style: none; margin-bottom: 0; }
+.stats-account { gap: 8px; padding: 14px; }
+.stats-account-ic.k-ic { width: 36px; height: 36px; }
+.stats-account.k-fail .stats-account-ic { border-color: var(--sc-failure); color: var(--sc-failure); }
+.stats-account-bad { color: var(--sc-failure); display: inline-flex; align-items: center; gap: 6px; }
+.stats-account-numbers { align-items: flex-end; gap: 12px; }
+.stats-spark { flex: none; }
+
+/* ---------- Search ---------- */
+.stats-search { list-style: none; margin-bottom: 0; }
+.stats-search-card { gap: 6px; }
+
+/* ---------- Empty ---------- */
+.stats-empty { align-items: center; text-align: center; margin-top: 30px; }
+.stats-empty-art { width: 240px; max-width: 100%; flex: none; }
+.stats-empty-text { margin: 0; max-width: 320px; }
+.stats-empty-actions { justify-content: center; }
+
+/* ---------- The filters sheet ---------- */
+.stats-filters-form { gap: 14px; }
+.stats-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.stats-fieldset legend { padding: 0; margin-bottom: 8px; }
+.stats-filters-problem { margin: 0; color: var(--sc-failure); }
+.stats-day { position: relative; }
+.stats-day input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.stats-day:focus-within, .stats-select:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.stats-select { position: relative; padding: 0; }
+.stats-select select { appearance: none; flex: 1; min-width: 0; min-height: 44px; padding: 0 44px 0 14px; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; outline: none; }
+.stats-select select option { background: var(--sc-raised); color: var(--sc-text); }
+.stats-select-mark { position: absolute; right: 14px; pointer-events: none; display: flex; }
+.stats-filters-apply { flex: 1; }
+
+/* ---------- Desktop (board DesktopStats) ---------- */
+@media (min-width: 960px) {
+  .stats-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
+  .stats-page .k-px { padding-left: 0; padding-right: 0; }
+  .stats-head { padding-top: 0; flex-wrap: wrap; }
+  .stats-title { font-size: 96px; }
+  .stats-lead { display: block; }
+  .stats-only-phone { display: none; }
+  .stats-only-desktop { display: block; }
+  .stats-tabs-wrap { margin-top: 24px; }
+  .stats-tabs { margin: 0; }
+  .stats-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .stats-panel > .stats-gap14:has(> .stats-kpis), .stats-panel > .k-px:has(> .stats-kpis) { margin-top: 24px; }
+  .stats-kpi { border-radius: 24px; padding: 16px; }
+  .stats-kpi-label { font-size: 14px; }
+  .stats-kpi-value { font-size: 48px; }
+  .stats-kpi[aria-checked="false"] .stats-kpi-delta { color: var(--sc-muted); }
+  .stats-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 16px; }
+  .stats-chart-card { gap: 10px; }
+  .stats-chart-title { font-size: 16px; }
+  .stats-chart-plot { height: 280px; }
+  .stats-groupby { gap: 6px; }
+  .stats-groupby-chip.k-chip { min-height: 30px; }
+  .stats-filters.k-sheet { max-width: 560px; margin: 0 auto; }
 }
-
-/* ---------- The tables of the Accounts and Search tabs ---------- */
-
-/* A wide table scrolls inside its own box, so the page never scrolls sideways on a phone; positioned, so the visually hidden labels in it are clipped with it rather than widening the page */
-.stats-scroll { position: relative; overflow-x: auto; border: var(--sc-border-control) solid var(--sc-hairline); border-radius: var(--sc-radius-card); background: var(--sc-raised); padding: 4px 14px; overscroll-behavior-x: contain; }
-.stats-scroll:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
-.stats-table th, .stats-table td { vertical-align: middle; white-space: nowrap; overflow-wrap: normal; }
-.stats-table tbody tr:last-child > * { border-bottom: 0; }
-.stats-table thead th.num { text-align: right; }
-.stats-table tbody th { font: inherit; color: var(--sc-text); }
-.stats-who { display: inline-flex; align-items: center; gap: 10px; max-width: 28ch; }
-.stats-who .icon { width: 20px; height: 20px; flex: none; }
-.stats-who-name { overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
-.stats-change { font: 600 13px/1 var(--sc-font-text); color: var(--sc-muted); }
-.stats-spark { display: block; color: var(--sc-text); }
-.stats-synced { font-size: 13.5px; color: var(--sc-muted); }
-.stats-row-action { text-align: right; }
-.stats-panel-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
-.stats-lang { display: inline-block; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--sc-rail); font: 700 11px/1.2 var(--sc-font-text); color: var(--sc-muted); }
-.search-table tbody tr > * { border-bottom: 0; border-top: 1px solid var(--sc-hairline); }
-/* A launch's pages share its numbers, so the heavier line is between launches */
-.search-table tbody tr.search-first > * { border-top-width: 2px; }
-.search-table tbody tr:first-child > * { border-top: 0; }
-.search-table td[rowspan] { vertical-align: top; }
-.search-page { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.search-launch { flex-basis: 100%; font-weight: 700; }
-.search-url { color: var(--sc-muted); max-width: 36ch; overflow: hidden; text-overflow: ellipsis; }
-.search-state { display: grid; gap: 2px; }
-.search-state small { font-size: 12.5px; min-width: 22ch; max-width: 30ch; white-space: normal; line-height: 1.3; }
-.search-yes { font-weight: 700; }
-
-/* The second tier sits under the chart: its two tables apart, its sources free to wrap */
-.stats-details { margin-top: 16px; }
-.stats-details .stats-scroll + .stats-scroll { margin-top: 12px; }
-.stats-table td.stats-details-from { white-space: normal; min-width: 18ch; color: var(--sc-muted); }
-
-.stats-loading { display: grid; justify-items: center; gap: 12px; padding: 48px 16px; }
-
-/* ---------- Dense enough for a tab to fit one screen ---------- */
-
-/* The section toggles (rank by, measure) at the period control's size */
-.stats-panel .section-head .seg { border-width: var(--sc-border-control); border-color: var(--sc-rail); padding: 3px; gap: 2px; }
-.stats-panel .section-head .seg span { min-height: 34px; padding: 0 14px; border-radius: var(--sc-radius-pill); font-size: 13.5px; font-weight: 700; }
-.stats-panel .section-lead { max-width: none; font-size: 14px; margin-bottom: 10px; }
-.ranking-table thead th { vertical-align: middle; }
-.ranking-table td { padding-block: 6px; }
-.stats-table td, .stats-table tbody th { padding-block: 8px; }
-/* A mouse needs no 44 px row; touch screens keep it */
-@media (pointer: fine) {
-  .ranking-table .who-cell a { min-height: 32px; }
-  .ranking-table .sort { min-height: 32px; }
-}
-@media (pointer: coarse) { .stats-period span, .stats-panel .section-head .seg span { min-height: 44px; } }
-.stats-filters .check { justify-self: start; }
-/* The padded pill toggles separate their options by the fill alone, without the stacked control's rules */
-@media (max-width: 560px) { .stats-panel .section-head .seg label + label span { border-left: 0; } }
