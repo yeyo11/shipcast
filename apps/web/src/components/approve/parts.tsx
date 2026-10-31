@@ -26,6 +26,15 @@ export function Glyph({ name, size = 19 }: { name: string; size?: number }) {
 /** How much unchanged text stays on each side of a change in a compact diff */
 const CONTEXT = 60;
 
+/** The unchanged text around a change, cut back to whole words */
+function context(text: string, first: boolean, last: boolean): string {
+  const head = (t: string) => (t.length <= CONTEXT ? t : `${t.slice(0, CONTEXT).replace(/\s+\S*$/, '')} …`);
+  const tail = (t: string) => (t.length <= CONTEXT ? t : `… ${t.slice(-CONTEXT).replace(/^\S*\s+/, '')}`);
+  if (first) return tail(text);
+  if (last) return head(text);
+  return text.length <= CONTEXT * 2 ? text : `${head(text.slice(0, CONTEXT + 20))} ${tail(text.slice(-CONTEXT - 20))}`;
+}
+
 /**
  * A proposal against what it replaces, word by word, in the board's red and green; `compact` keeps
  * only the changes and a little of the text around them. Deletions are struck through as well as
@@ -40,8 +49,7 @@ export function InlineDiff({ before, after, compact }: { before: string; after: 
           if (!compact) return <span key={i}>{part.text}</span>;
           const first = i === 0;
           const last = i === parts.length - 1;
-          if (part.text.length <= CONTEXT * 2) return <span key={i}>{first ? part.text.slice(-CONTEXT) : last ? part.text.slice(0, CONTEXT) : part.text}</span>;
-          return <span key={i}>{first ? `…${part.text.slice(-CONTEXT)}` : last ? `${part.text.slice(0, CONTEXT)}…` : `${part.text.slice(0, CONTEXT)} … ${part.text.slice(-CONTEXT)}`}</span>;
+          return <span key={i}>{context(part.text, first, last)}</span>;
         }
         return part.type === 'delete' ? (
           <del key={i} className="k-diff-del">

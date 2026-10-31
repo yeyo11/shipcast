@@ -159,3 +159,5 @@ button.k-mi:disabled { opacity: .5; cursor: default; }
 /* The page scrolls inside its frame, so the frame keeps the board's size and the actions stay in reach */
 .ap-browser-page { height: 400px; overflow-y: auto; overscroll-behavior: contain; outline: none; }
 @media (min-width: 960px) { .ap-browser-page { height: min(640px, calc(100vh - 320px)); } }
+.ap-ddrafts .k-btn.ap-assist { min-height: 40px; }
+ins.k-diff-add { text-decoration: none; }
