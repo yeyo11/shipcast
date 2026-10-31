@@ -30,7 +30,7 @@
 /* ---------- Nothing here, That did not load, No connection ---------- */
 main.acc-problem-main { padding-block: 0; }
 /* In the shell: the old main padding (app.css) would push the top bar down */
-main.k-main:has(> .k-topbar + .acc-problem) { padding-top: 0; }
+main.k-main:has(.k-topbar + .acc-problem) { padding-top: 0; }
 .acc-problem { align-items: center; text-align: center; padding-top: 36px; padding-bottom: 32px; max-width: 560px; margin: 0 auto; }
 .acc-problem-art { width: 250px; max-width: 100%; flex: none; }
 .acc-problem-lead { margin: 0; max-width: 330px; }
