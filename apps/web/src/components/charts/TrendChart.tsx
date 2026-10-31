@@ -28,6 +28,12 @@ export interface TrendChartProps {
 /** Room under the axis for the days, and where the tallest value reaches (as on the board) */
 const AXIS_GAP = 18;
 const PEAK = 0.36;
+/**
+ * The boards draw the chart in a fixed frame (358 wide on a phone, 720 on a desktop) scaled down to
+ * the card: narrower than that, the drawing shrinks and centres vertically. Its rows follow the same
+ * scale here, so the axis and the days sit where the board puts them.
+ */
+const frameWidth = (height: number) => (height < 200 ? 358 : 720);
 
 export function TrendChart({ title, buckets, unit, series, noun, mark, className }: TrendChartProps) {
   const [box, { width, height }] = useElementSize<HTMLDivElement>();
@@ -38,10 +44,13 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
   useEffect(() => setActive(null), [signature]);
 
   const single = series.length === 1;
-  const base = height - AXIS_GAP;
+  const scale = Math.min(1, width / frameWidth(height));
+  const top = (height - height * scale) / 2;
+  const row = (v: number) => top + v * scale;
+  const base = row(height - AXIS_GAP);
   const max = Math.max(0, ...series.flatMap((s) => s.values.map((v) => v ?? 0)));
   const x = (i: number) => (n <= 1 ? width / 2 : (i / (n - 1)) * width);
-  const y = (v: number) => (max === 0 ? base : base - (v / max) * (base - height * PEAK));
+  const y = (v: number) => (max === 0 ? base : base - (v / max) * (base - row(height * PEAK)));
   const points = (s: ChartSeries) => s.values.map((v, i) => `${x(i).toFixed(1)},${y(v ?? 0).toFixed(1)}`).join(' ');
   const totalAt = (i: number) => series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
   const middle = Math.floor((n - 1) / 2);
@@ -70,8 +79,8 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
   const markX = markText ? x(markText.index) : 0;
   // Inter Tight at 12 px is about 6.2 px a character: the label goes to the side with more room, cut to fit it
   const room = { right: width - markX - 10, left: markX - 10 };
-  const markFlip = markText ? markText.label.length * 6.2 > room.right && room.left > room.right : false;
-  const fits = Math.max(4, Math.floor((markFlip ? room.left : room.right) / 6.2));
+  const markFlip = markText ? markText.label.length * (6.2 * scale) > room.right && room.left > room.right : false;
+  const fits = Math.max(4, Math.floor((markFlip ? room.left : room.right) / (6.2 * scale)));
   const markLabel = markText ? (markText.label.length > fits ? `${markText.label.slice(0, fits - 1).trimEnd()}…` : markText.label) : '';
 
   return (
@@ -101,8 +110,8 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
               </linearGradient>
             </defs>
             <g className="stats-chart-grid">
-              <line x1={0} y1={height / 4} x2={width} y2={height / 4} />
-              <line x1={0} y1={height / 2} x2={width} y2={height / 2} />
+              <line x1={0} y1={row(height / 4)} x2={width} y2={row(height / 4)} />
+              <line x1={0} y1={row(height / 2)} x2={width} y2={row(height / 2)} />
             </g>
             {single && series[0] && (
               <>
@@ -113,7 +122,7 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
             {!single && series.map((s) => <polyline key={s.key} points={points(s)} fill="none" stroke={s.colour} strokeWidth={2.5} strokeLinejoin="round" />)}
             <line className="stats-chart-axis" x1={0} y1={base} x2={width} y2={base} />
             {markText && (
-              <g className="stats-chart-mark">
+              <g className="stats-chart-mark" style={{ fontSize: 12 * scale }}>
                 <circle cx={markX} cy={y(single ? (series[0]?.values[markText.index] ?? 0) : Math.max(...series.map((s) => s.values[markText.index] ?? 0)))} r={5} />
                 <text x={markFlip ? markX - 10 : markX + 10} y={y(single ? (series[0]?.values[markText.index] ?? 0) : Math.max(...series.map((s) => s.values[markText.index] ?? 0))) + 4} textAnchor={markFlip ? 'end' : 'start'}>
                   {markLabel}
@@ -128,9 +137,9 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
                 ))}
               </g>
             )}
-            <g className="stats-chart-days">
+            <g className="stats-chart-days" style={{ fontSize: 11 * scale }}>
               {ticks.map((i, k) => (
-                <text key={i} x={x(i)} y={height - 2} textAnchor={k === ticks.length - 1 && k > 0 ? 'end' : 'start'}>
+                <text key={i} x={x(i)} y={row(height - 2)} textAnchor={k === ticks.length - 1 && k > 0 ? 'end' : 'start'}>
                   {shortDay(buckets[i] ?? '')}
                 </text>
               ))}
