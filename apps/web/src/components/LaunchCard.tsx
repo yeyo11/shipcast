@@ -5,6 +5,7 @@ import { cardChannels, MARK_WORD, type CardChannel, type CardPost, type LaunchNu
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
 import { Sheet, SheetClose } from './kit/Sheet';
+import { readyText } from './LaunchRows';
 import { NetworkGlyph } from './NetworkGlyph';
 import { number } from './ui';
 
@@ -189,11 +190,7 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
             </ul>
           ) : (
             <p className="k-sm k-muted home-card-text">
-              {launch.status === 'skipped'
-                ? 'Nothing was published for this release.'
-                : launch.status === 'drafted' && !launch.held && launch.pullRequest
-                  ? 'Drafts are waiting in the pull request.'
-                  : 'Nothing published yet.'}
+              {launch.status === 'skipped' ? 'Nothing was published for this release.' : tone === 'waiting' ? readyText(launch) : 'Nothing published yet.'}
             </p>
           )}
         </>

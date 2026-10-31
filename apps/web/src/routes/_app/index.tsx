@@ -29,9 +29,9 @@ export const Route = createFileRoute('/_app/')({
 
 const network = (channel: string) => CHANNEL_NAMES[channel] ?? channel;
 
-function Head({ empty }: { empty: boolean }) {
+function Head({ empty, tour }: { empty: boolean; tour: boolean }) {
   return (
-    <div className="home-head">
+    <div className="home-head" data-tour={tour ? 'launches' : undefined}>
       <div className="k-stack k-g12">
         <h1 className="k-d home-title">Launches</h1>
         <p className="k-lead k-muted k-desktop">Every release Shipcast noticed, where it went and how it did.</p>
@@ -92,11 +92,12 @@ function Launches() {
   const { attention } = useShell();
   const list = launches as HomeLaunch[];
   const busy = list.some((l) => l.status === 'generating' || l.status === 'detected');
-  const lanes = splitLaunches(list);
-  const rest = list.filter((l) => !lanes.approval.includes(l));
   // Every launch there is, whatever the filters: an empty registry is the first run, not a search with no match
   const any = facets.statuses.some((s) => s.count > 0);
   const narrowed = Object.keys(search).some((k) => k !== 'page' && k !== 'sort');
+  // A search or a filter is about the list: what waits for approval shows among its cards then
+  const approvals = narrowed ? [] : splitLaunches(list).approval;
+  const rest = list.filter((l) => !approvals.includes(l));
   const rows = attentionRows(attention?.items ?? []);
   const count = attention?.count ?? 0;
   // Live (realtime-ui): the list is read again when a launch, a piece or a launch's numbers change
@@ -109,32 +110,34 @@ function Launches() {
     return () => clearInterval(timer);
   }, [live, busy, router]);
 
-  const needs = lanes.approval.length > 0 || rows.length > 0;
+  const needs = approvals.length > 0 || rows.length > 0;
   return (
     <div className="home">
       <TopBar />
       <div className="home-page">
-        <Head empty={!any} />
+        <Head empty={!any} tour={!needs || !any} />
         {!any ? (
           <FirstRun />
         ) : (
           <>
             {needs && (
-              <section className={`home-needs${lanes.approval.length > 0 ? '' : ' home-needs-rows'}`} aria-labelledby="home-needs">
-                <h2 id="home-needs" className="k-hrow k-g8 k-lbl home-needs-head k-phone-flex">
+              <section data-tour={approvals.length > 0 ? undefined : 'launches'} className={`home-needs${approvals.length > 0 ? '' : ' home-needs-rows'}`} aria-labelledby="home-needs">
+                <div className="home-needs-top" data-tour={approvals.length > 0 ? 'launches' : undefined}>
+                  <h2 id="home-needs" className="k-hrow k-g8 k-lbl home-needs-head k-phone-flex">
                   Waiting for you {count > 0 && <span className="k-badge">{badgeText(count)}</span>}
                 </h2>
-                {lanes.approval.length > 0 && (
+                {approvals.length > 0 && (
                   <div className="k-stack k-g16 home-approvals">
-                    {lanes.approval.map((l) => (
+                    {approvals.map((l) => (
                       <ApprovalCard key={l.id} launch={l} />
                     ))}
                   </div>
                 )}
+                </div>
                 {rows.length > 0 && (
                   <div className="home-also">
                     <div className="k-hrow k-between k-desktop-flex">
-                      <h2 className="k-d k-d30">{lanes.approval.length > 0 ? 'Also needs you' : 'Needs you'}</h2>
+                      <h2 className="k-d k-d30">{approvals.length > 0 ? 'Also needs you' : 'Needs you'}</h2>
                       <span className="k-badge">{badgeText(rows.length)}</span>
                     </div>
                     <ul className="k-stack home-rows">
@@ -168,7 +171,7 @@ function Launches() {
               </div>
               {rest.length === 0 ? (
                 <div className="k-stack k-g12 home-nomatch">
-                  <p className="k-muted">{narrowed ? 'No launch matches these filters.' : lanes.approval.length > 0 ? 'Nothing else yet.' : 'No launches on this page.'}</p>
+                  <p className="k-muted">{narrowed ? 'No launch matches these filters.' : approvals.length > 0 ? 'Nothing else yet.' : 'No launches on this page.'}</p>
                   {narrowed && (
                     <button type="button" className="k-btn k-sm" onClick={() => go({ q: undefined, status: undefined, trigger: undefined, kind: undefined, repo: undefined })}>
                       Show every launch
