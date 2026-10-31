@@ -42,10 +42,11 @@ export function tourSteps({ launchId, phone = false }: { launchId: number | null
   const steps: Array<Omit<TourStep, 'nextRoute' | 'prevRoute'>> = [
     {
       route: '/',
-      selector: on('/'),
+      // What waits for the owner when something does, else the page's title (routes/_app/index.tsx)
+      selector: on('/', '[data-tour="launches"]'),
       side: 'bottom-left',
       title: 'Launches',
-      content: 'Every release Shipcast noticed, or one you launched by hand: where it went and how it did. A launch waiting for you is a yellow row above the cards, and the bell in the top bar counts what needs you.',
+      content: 'Every release Shipcast noticed, or one you launched by hand. A launch waiting for you is the yellow card on top, and the bell counts what needs you.',
     },
     ...(launch
       ? [
@@ -98,8 +99,8 @@ export function tourSteps({ launchId, phone = false }: { launchId: number | null
     const next = steps[i + 1];
     const prev = steps[i - 1];
     return {
-      pointerPadding: 12,
-      pointerRadius: 18,
+      pointerPadding: 6,
+      pointerRadius: 30,
       selectorRetryAttempts: 10,
       ...step,
       ...(phone && step.side && { side: phoneSide(step.side) }),
