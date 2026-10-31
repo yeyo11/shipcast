@@ -1,0 +1,117 @@
+/*
+ * Channels (boards Channels, ChannelsEmpty, AddNetwork, ChannelConnect, ChannelNetwork,
+ * ProfileReview, AccountMenu, Disconnect and DesktopChannels): the boards' inline styles as named
+ * classes over the kit. Phone first; the desktop shape from 960 px.
+ */
+
+.ch-flush { margin: 0; }
+.k-btn.ch-fill { flex: 1; }
+.ch-bad { color: var(--sc-failure); }
+.ch-stale { color: var(--sc-failure); }
+.ch-dt { display: none; }
+.ch-link { background: none; border: 0; padding: 0; font: inherit; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ch-link:hover { color: var(--sc-yellow); }
+
+/* The page's column: the phone's sides come from k-px, the desktop's from the column. The old
+   stylesheet's main padding (app.css) is not the boards': these screens start under the bar */
+.k-main:has(.ch-page) { padding-top: 0; }
+.ch-page { padding-bottom: 24px; }
+.ch-head { padding-top: 18px; align-items: flex-end; }
+.ch-title { font-size: 48px; }
+.ch-connect { min-height: 40px; padding: 0 16px; font-size: 14px; }
+
+.ch-tabs-wrap { margin: 14px 16px 0; }
+.ch-tabs { padding: 0; }
+.ch-tabs .k-tab { cursor: pointer; }
+.ch-tabs .k-tab:focus-visible { outline: 2px solid var(--sc-yellow); outline-offset: -2px; }
+.ch-panel { margin-top: 16px; display: flex; flex-direction: column; gap: 16px; outline: none; }
+.ch-panel[hidden] { display: none; }
+
+.ch-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.ch-card { gap: 12px; }
+.ch-card:focus-visible { outline: 2px solid var(--sc-yellow); outline-offset: 2px; }
+.ch-ic-fail { border-color: var(--sc-failure); color: var(--sc-failure); }
+.ch-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; row-gap: 12px; column-gap: 12px; }
+.ch-num { grid-column: 1; }
+.ch-big { font-size: 30px; }
+.ch-synced { grid-column: 2; grid-row: 1; justify-self: end; }
+.ch-actions { grid-column: 1 / -1; }
+/* A broken account says what it stops on a phone; its number waits for the desktop */
+.ch-card.is-failed .ch-num, .ch-card.is-failed .ch-synced { display: none; }
+
+.ch-another { flex-direction: row; align-items: center; gap: 12px; text-decoration: none; text-align: left; font: inherit; color: var(--sc-text); cursor: pointer; width: 100%; }
+.ch-another:hover { border-color: var(--sc-text); color: var(--sc-text); }
+.ch-another-text { font-size: 14px; display: flex; flex-direction: column; }
+
+.ch-notice-icon { color: var(--sc-muted); margin-top: 1px; display: flex; }
+
+/* The empty state (board ChannelsEmpty) */
+.ch-empty { align-items: center; text-align: center; margin-top: 30px; }
+.ch-empty-art { width: 260px; max-width: 100%; flex: none; }
+.ch-empty-text { max-width: 320px; }
+.ch-empty-actions { width: 100%; }
+.ch-empty .k-notice { text-align: left; }
+
+/* The sheets (boards AddNetwork, AccountMenu, Disconnect) */
+.ch-sheet-who { padding: 0 4px; font-size: 18px; }
+.ch-sheet .k-mi { width: 100%; background: none; border: 0; font: inherit; font-size: 16px; font-weight: 500; color: var(--sc-text); text-align: left; cursor: pointer; }
+.ch-sheet .k-mi:hover, .ch-sheet .k-mi:focus-visible { background: var(--sc-hairline); outline: none; color: var(--sc-text); }
+.ch-sheet .k-mi.k-bad, .ch-sheet .k-mi.k-bad:hover { color: var(--sc-failure); }
+.ch-mi-diamond { display: flex; margin: 0 5px; }
+.ch-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ch-tiles > li { display: flex; }
+.ch-tile { flex: 1; display: flex; flex-direction: column; gap: 6px; align-items: center; text-decoration: none; padding: 12px 4px; border-radius: 18px; border: 2px solid var(--sc-rail); color: var(--sc-text); text-align: center; }
+.ch-tile.is-connected { border-color: var(--sc-hairline); }
+.ch-tile:hover { border-color: var(--sc-text); color: var(--sc-text); }
+.ch-tile-name { font-weight: 600; line-height: 1.5; }
+.ch-tile-word { font-size: 11px; line-height: 1.5; }
+
+/* A network's page (boards ChannelConnect and ChannelNetwork) and a profile's review */
+.ch-net { padding-top: 18px; }
+.ch-net-ic { width: 52px; height: 52px; }
+.ch-input { width: 100%; font: inherit; font-size: 16px; outline: none; }
+.ch-input::placeholder { color: var(--sc-rail); }
+.ch-input:focus { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, 0.25); }
+.ch-input.k-mono { font-family: var(--sc-font-mono); font-size: 14px; }
+textarea.ch-input { display: block; resize: vertical; line-height: 1.5; }
+.ch-perms { margin: 0; padding-left: 18px; line-height: 1.7; }
+.ch-white { color: var(--sc-text); }
+.ch-center { text-align: center; }
+.ch-details > summary { cursor: pointer; list-style: none; min-height: 28px; }
+.ch-details > summary::-webkit-details-marker { display: none; }
+.ch-details[open] > summary svg { transform: rotate(180deg); }
+.ch-details[open] { gap: 12px; }
+.ch-diff { font-size: 16px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ch-diff.is-long { font-size: 14px; }
+.ch-ins { text-decoration: none; }
+.ch-diff-toggle { display: block; -webkit-box-orient: vertical; width: 100%; background: none; border: 0; padding: 0; text-align: left; color: inherit; font-family: inherit; cursor: pointer; }
+.ch-diff-toggle.k-clamp3 { display: -webkit-box; }
+.k-btn.ch-apply { flex: 1; border-color: var(--sc-text); }
+
+/* The desktop: the page column and the board's bigger type */
+@media (min-width: 960px) {
+  .ch-ph { display: none; }
+  .ch-dt { display: inline; }
+  .ch-dt.k-stack, strong.ch-dt, span.ch-dt.k-ellipsis, p.ch-dt { display: block; }
+  .ch-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
+  .ch-page .k-px { padding-left: 0; padding-right: 0; }
+  .ch-head { padding-top: 0; }
+  .ch-title { font-size: 96px; }
+  .ch-connect { min-height: 48px; padding: 0 20px; font-size: 16px; }
+  .ch-tabs-wrap { margin: 24px 0 0; }
+  .ch-panel { margin-top: 24px; gap: 20px; }
+  .ch-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .ch-big { font-size: 48px; }
+  .ch-synced { display: none; }
+  .ch-actions { grid-column: 2; grid-row: 1; }
+  .ch-card.is-failed .ch-num { display: flex; }
+  .ch-another-text { display: block; font-size: 16px; }
+  .ch-empty { margin-top: 48px; }
+  .ch-empty-actions { width: auto; }
+  /* A screen with no desktop board: the phone's content, in a readable column */
+  .ch-narrow { max-width: 640px; }
+  .ch-sheet { max-width: 560px; margin: 0 auto; }
+}
+.ch-perms-card { gap: 8px; }
+/* The board's heading keeps an h2's own margins */
+.ch-perms-card > h2 { margin: 0.83em 0; }

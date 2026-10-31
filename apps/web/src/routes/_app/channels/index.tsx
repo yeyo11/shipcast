@@ -1,19 +1,17 @@
+import { Tabs } from '@base-ui/react/tabs';
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
 import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
-import { NoAccounts, Pigeonholes } from '../../../components/illustrations';
+import { AccountSheet, AddNetworkSheet, kindOf, type AccountActions, type AccountView, type ChannelsData, type NetworkView } from '../../../components/channels/sheets';
+import { NetworkGlyph } from '../../../components/channels/NetworkGlyph';
+import { ago, brokenLine, keyMetric, namesToConnect, shortDay, stateOf, STATE_PILL, STATE_WORD } from '../../../components/channels/view';
+import { NoAccounts } from '../../../components/illustrations';
+import { TopBar } from '../../../components/kit/Bars';
+import { Icon } from '../../../components/kit/Icon';
 import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
-import { ChannelIcon } from '../../../components/launch/Glance';
-import { Empty, PageHead } from '../../../components/PageHead';
-import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { useToast } from '../../../components/Toasts';
-import { Avatar, number, Pill, Problem, when } from '../../../components/ui';
-import { ConfirmDialog } from '../../../components/ui/ConfirmButton';
-import { DotsIcon, ImportIcon, PlusIcon } from '../../../components/ui/icons';
-import { Menu } from '../../../components/ui/Menu';
-import { Tabs } from '../../../components/ui/Tabs';
+import { number } from '../../../components/ui';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount, syncAccountNow } from '../../../server/channels.functions';
-import type { Mark } from '../../../server/launch-summary';
 import { groupOf, NETWORK_GROUPS, readGroup, type NetworkGroup } from '../../../server/network-groups';
 
 export const Route = createFileRoute('/_app/channels/')({
@@ -27,260 +25,154 @@ export const Route = createFileRoute('/_app/channels/')({
   component: Channels,
 });
 
-type Data = Awaited<ReturnType<typeof getChannels>>;
-type NetworkView = Data['networks'][number];
-type AccountView = NetworkView['accounts'][number];
+type Target = { network: NetworkView; account: AccountView };
 
-/**
- * The number an account's card leads with: what its network counts that matters (followers on a
- * social network, a channel's members, Reddit's karma, the newsletter's subscribers, the blog's
- * visits, search clicks), under its own name, with the network's other counts on a line below.
- * Null where the network gives nothing to read (Discord, LinkedIn): the card shows its activity only.
- */
-export function keyMetric(network: string, snapshot: AccountView['snapshot']): { value: number | null; label: string; others: string | null; followers: boolean } | null {
-  const extra = (snapshot?.extra ?? {}) as Record<string, number | undefined>;
-  const n = (v: number | null | undefined, word: string) => (v === null || v === undefined ? null : `${number(v)} ${word}`);
-  const line = (...parts: Array<string | null>) => parts.filter(Boolean).join(' · ') || null;
-  switch (network) {
-    case 'linkedin':
-      return null;
-    // Counted only when the account has the server's invite
-    case 'discord':
-      return snapshot?.followers == null ? null : { value: snapshot.followers, label: 'Members', others: line(n(extra.online, 'online')), followers: true };
-    case 'github':
-      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(extra.repos, 'public repos')), followers: true };
-    case 'telegram':
-      return { value: snapshot?.followers ?? null, label: 'Members', others: null, followers: true };
-    case 'reddit':
-      return { value: extra.karma ?? null, label: 'Karma', others: line(n(snapshot?.followers, 'followers')), followers: false };
-    case 'brevo':
-      return { value: snapshot?.followers ?? null, label: 'Subscribers', others: null, followers: true };
-    case 'cloudflare':
-    case 'umami':
-      return { value: extra.visits7d ?? null, label: 'Visits, last 7 days', others: null, followers: false };
-    case 'searchConsole':
-    case 'bingWebmaster':
-      return { value: extra.clicks28d ?? null, label: 'Clicks, last 28 days', others: line(n(extra.impressions28d, 'impressions')), followers: false };
-    // The account's own insights of the last day, from the daily snapshot
-    case 'instagram':
-      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(snapshot?.posts, 'posts'), n(extra.views1d, 'views, last day'), n(extra.reach1d, 'accounts reached, last day')), followers: true };
-    case 'threads':
-      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(extra.profileViews1d, 'profile views, last day')), followers: true };
-    case 'devto':
-    case 'hashnode':
-      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.posts, 'articles')), followers: true };
-    default:
-      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(snapshot?.posts, 'posts')), followers: true };
-  }
-}
-
-/** What Shipcast published with an account, for a network it publishes on */
-function activityLine(activity: AccountView['activity']): string {
-  if (activity.count === 0) return 'Nothing published with it yet';
-  return `${number(activity.count)} ${activity.count === 1 ? 'piece' : 'pieces'} published by Shipcast, the last on ${(activity.last ?? '').slice(0, 10)}`;
-}
-
-/** The card's dot: green when its check passed, red when it failed, the dotted ring while it is unchecked */
-const markOf = (status: AccountView['status'] | undefined): Mark => (status === 'ok' ? 'published' : status === 'failed' ? 'failed' : 'off');
-
-/** The glyph tile of a channel card: the network's glyph with its state dot, as on a launch card */
-function Tile({ network, mark, word }: { network: NetworkView; mark: Mark; word: string }) {
-  return (
-    <span className={`mark m-${mark}`} role="img" aria-label={`${network.name}: ${word}`}>
-      <ChannelIcon channel={network.channel ?? network.id} size={18} />
-      <span className={`dot d-${mark}`} aria-hidden="true">
-        <i />
-      </span>
-    </span>
-  );
-}
-
-function AccountCard({ network, account, brands }: { network: NetworkView; account: AccountView; brands: Data['brands'] }) {
+/** The account actions, each a toast when it ends and a fresh read of the page */
+function useAccountActions(setBusy: (id: number | null) => void): AccountActions {
   const router = useRouter();
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const [label, setLabel] = useState(account.label);
-  /** Runs an action; a thrown error becomes a toast instead of a silent failure */
-  const act = async (fn: () => Promise<unknown>, done?: string) => {
-    setBusy(true);
+  const act = async (account: AccountView, fn: () => Promise<unknown>, done?: string): Promise<boolean> => {
+    setBusy(account.id);
     try {
       await fn();
       if (done) toast.done(done);
       await router.invalidate();
+      return true;
     } catch (error) {
       toast.fail(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
-  const check = () =>
-    act(async () => {
-      const result = await recheckAccount({ data: account.id });
-      if (result.status === 'ok') toast.done(`${account.label} works`, result.identity ? `Signed in as ${result.identity}.` : undefined);
-      else toast.fail(result.problem ?? `${account.label} did not answer its check`);
-    });
-  const sync = () =>
-    act(async () => {
-      const result = await syncAccountNow({ data: account.id });
-      const details = result.lines.join('\n') || undefined;
-      if (result.state === 'completed') toast.done(`${account.label} synced`, details);
-      else if (result.state === 'failed') toast.fail(result.lines[0] ?? `${account.label} could not be synced`);
-      else toast.done(`Syncing ${account.label}`, 'It is still running: reload the page in a minute to see it.');
-    });
-  const brand = brands.find((b) => b.id === account.brand)?.name ?? account.brand;
+  return {
+    sync: async (account) => {
+      await act(account, async () => {
+        const result = await syncAccountNow({ data: account.id });
+        const details = result.lines.join('\n') || undefined;
+        if (result.state === 'completed') toast.done(`${account.label} synced`, details);
+        else if (result.state === 'failed') toast.fail(result.lines[0] ?? `${account.label} could not be synced`);
+        else toast.done(`Syncing ${account.label}`, 'It is still running: reload the page in a minute to see it.');
+      });
+    },
+    check: async (account) => {
+      await act(account, async () => {
+        const result = await recheckAccount({ data: account.id });
+        if (result.status === 'ok') toast.done(`${account.label} works`, result.identity ? `Signed in as ${result.identity}.` : undefined);
+        else toast.fail(result.problem ?? `${account.label} did not answer its check`);
+      });
+    },
+    rename: (account, label) => act(account, () => renameAccount({ data: { id: account.id, label } }), `Renamed to ${label}`),
+    makePrimary: async (account) => {
+      await act(account, () => makePrimary({ data: account.id }), `${account.label} now publishes for its brand`);
+    },
+    disconnect: async (account) => {
+      await act(account, () => disconnect({ data: account.id }), `${account.label} disconnected`);
+    },
+  };
+}
+
+/**
+ * One account's card (boards Channels and DesktopChannels). One markup for both shapes: on a phone
+ * the network leads and a broken account says what it stops; on a desktop the account leads, the
+ * number grows and the actions sit beside it.
+ */
+function AccountCard({ network, account, now, siblings, busy, onMore, onSync }: { network: NetworkView; account: AccountView; now: string; siblings: number; busy: boolean; onMore: () => void; onSync: () => void }) {
+  const state = stateOf(account.status);
+  const failed = state === 'failed';
   const key = keyMetric(network.id, account.snapshot);
-  const status = account.status === 'ok' ? 'Connected' : account.status === 'failed' ? 'Not working' : 'Not checked';
+  const synced = account.syncedAt ? `Synced ${ago(account.syncedAt, now)}` : 'Never synced';
+  const sub = [account.syncedAt ? synced : 'Never synced', siblings > 1 && account.primary ? 'publishes for this brand' : null].filter(Boolean).join(' · ');
+  const label = key && [failed && account.syncedAt ? `${key.label}, last read ${shortDay(account.syncedAt)}` : key.label, failed ? null : key.others].filter(Boolean).join(' · ');
+  const activity = account.activity.count === 0 ? 'Nothing published with it yet' : `${number(account.activity.count)} ${account.activity.count === 1 ? 'piece' : 'pieces'} published by Shipcast`;
   return (
-    <li id={`account-${account.id}`} tabIndex={-1} className={`lcard ccard${account.status === 'failed' ? ' is-failed' : ''}`}>
-      <header>
-        <div className="ccard-title">
-          <Tile network={network} mark={markOf(account.status)} word={status} />
-          <h2>{network.name}</h2>
-        </div>
-        <Pill tone={account.status === 'ok' ? 'published' : account.status === 'failed' ? 'failed' : 'draft'}>{status}</Pill>
-      </header>
-      <div className="ccard-who">
-        <Avatar src={account.avatarUrl} alt="" size={40} />
-        <div className="ccard-name">
-          {renaming ? (
-            <form
-              className="row"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act(async () => {
-                  await renameAccount({ data: { id: account.id, label } });
-                  toast.done(`Renamed to ${label}`);
-                  setRenaming(false);
-                });
-              }}
-            >
-              <label className="visually-hidden" htmlFor={`label-${account.id}`}>
-                Name
-              </label>
-              <input id={`label-${account.id}`} className="input" style={{ maxWidth: 240 }} value={label} onChange={(e) => setLabel(e.target.value)} />
-              <button className="btn btn-small" disabled={busy} type="submit">
-                Save
-              </button>
-            </form>
+    <li id={`account-${account.id}`} tabIndex={-1} className={`k-card ch-card${failed ? ' k-fail is-failed' : ''}`}>
+      <div className="k-hrow k-g10">
+        <span className={`k-ic${failed ? ' ch-ic-fail' : ''}`}>
+          <NetworkGlyph network={network} />
+        </span>
+        <div className="k-grow k-stack">
+          <strong className="ch-ph k-ellipsis">{network.name}</strong>
+          <strong className="ch-dt k-ellipsis">{account.label}</strong>
+          <span className="k-xs k-muted k-ellipsis ch-ph">{account.label}</span>
+          {failed ? (
+            <span className="k-xs ch-dt ch-bad k-ellipsis">◆ {account.problem ?? 'Its last check failed'}</span>
           ) : (
-            <strong>{account.label}</strong>
+            <span className={`k-xs k-muted k-ellipsis ch-dt${account.stale ? ' ch-stale' : ''}`}>{sub}</span>
           )}
-          <p className="lcard-meta">
-            {account.identity && account.identity !== account.label ? `${account.identity} · ` : ''}
-            {brand}
-            {account.primary ? ' · publishes for this brand' : ''}
-          </p>
         </div>
+        <span className={`k-pill ${STATE_PILL[state]}`}>{STATE_WORD[state]}</span>
       </div>
-      {key && (
-        <dl className="lcard-stats ccard-stats">
-          <div className="is-lead">
-            <dt>{key.label}</dt>
-            <dd title={key.value === null ? 'Not read yet: Sync now reads it' : undefined}>
-              {key.value === null ? '—' : number(key.value)}
-              {key.followers && account.weekChange !== null && account.weekChange !== 0 && (
-                <span className={`ccard-delta${account.weekChange > 0 ? ' is-up' : ''}`}>
-                  {account.weekChange > 0 ? '+' : ''}
-                  {number(account.weekChange)} this week
-                </span>
-              )}
-            </dd>
-          </div>
-        </dl>
-      )}
-      {key?.others && <p className="lcard-meta">{key.others}</p>}
-      {network.channel && <p className="ccard-activity">{activityLine(account.activity)}</p>}
-      <p className="lcard-meta">
-        {account.syncedAt ? `synced ${when(account.syncedAt)}` : 'never synced'}
-        {account.stale && <span className="stale"> · not synced for over 36 hours</span>}
-      </p>
-      {account.problem && <Problem text={account.problem} />}
-      <div className="ccard-actions">
-        <button className="btn btn-small" disabled={busy} onClick={() => void sync()}>
-          {busy ? 'Working…' : 'Sync now'}
-        </button>
-        <Menu
-          trigger={
-            <button type="button" className="btn btn-small" disabled={busy} aria-label={`More for ${account.label}`}>
-              <DotsIcon />
+      {failed && <p className="k-sm ch-flush ch-ph">{brokenLine(network, account.problem)}</p>}
+      <div className="ch-body">
+        <div className="k-stack ch-num">
+          {key ? (
+            <>
+              <span className="k-d ch-big" title={key.value === null ? 'Not read yet: Sync now reads it' : undefined}>
+                {key.value === null ? '—' : number(key.value)}
+              </span>
+              <span className="k-xs k-muted">{label}</span>
+            </>
+          ) : (
+            <span className="k-sm k-muted">{network.channel ? activity : 'Nothing to count on this network'}</span>
+          )}
+        </div>
+        <span className={`k-xs k-muted ch-synced${account.stale ? ' ch-stale' : ''}`} title={account.stale ? 'Not synced for over 36 hours' : undefined}>
+          {synced}
+        </span>
+        <div className="k-hrow k-g8 ch-actions">
+          {failed ? (
+            <Link className="k-btn k-sm" to="/channels/$network" params={{ network: network.id }}>
+              Reconnect
+            </Link>
+          ) : (
+            <button type="button" className="k-btn k-sm" disabled={busy} onClick={onSync}>
+              <Icon name="retry" size={18} />
+              {busy ? 'Syncing…' : 'Sync now'}
             </button>
-          }
-          entries={[
-            { label: 'Check the credential', onSelect: () => void check() },
-            ...(account.primary ? [] : [{ label: 'Publish with this one', onSelect: () => void act(() => makePrimary({ data: account.id }), `${account.label} now publishes for ${brand}`) }]),
-            { label: renaming ? 'Stop renaming' : 'Rename', onSelect: () => setRenaming((r) => !r) },
-            { kind: 'link' as const, label: 'Connect another account', href: `/channels/${network.id}` },
-            { kind: 'separator' as const },
-            { label: 'Disconnect', tone: 'danger' as const, onSelect: () => setLeaving(true) },
-          ]}
-        />
-      </div>
-      <ConfirmDialog
-        open={leaving}
-        onOpenChange={setLeaving}
-        title={`Disconnect ${account.label}?`}
-        description="Its credential is deleted from the keychain and it stops publishing and reading numbers. Connecting it again needs a new credential."
-        confirm="Disconnect"
-        onConfirm={() => act(() => disconnect({ data: account.id }), `${account.label} disconnected`)}
-      />
-    </li>
-  );
-}
-
-/** A network with no account yet: what it does and how to connect it */
-function NetworkCard({ network }: { network: NetworkView }) {
-  const uses = network.ai
-    ? 'AI provider, chosen per task in the AI settings'
-    : [network.channel ? 'publishes' : null, network.metrics ? 'reads numbers' : null].filter(Boolean).join(' · ');
-  const state = network.usesEnv ? 'From .env' : 'Not connected';
-  return (
-    <li className="lcard ccard ccard-add">
-      <header>
-        <div className="ccard-title">
-          <Tile network={network} mark="off" word={state} />
-          <h2>{network.name}</h2>
+          )}
+          <button type="button" className="k-btn k-icon k-sm" aria-label={`More for ${account.label}`} aria-haspopup="menu" onClick={onMore}>
+            <Icon name="more" />
+          </button>
         </div>
-        <Pill tone={network.usesEnv ? 'draft' : 'quiet'}>{state}</Pill>
-      </header>
-      <p className="lcard-meta">{uses}</p>
-      {network.usesEnv && <p className="lcard-meta">Working from the credentials in .env. Import them to keep them in the keychain instead.</p>}
-      <div className="ccard-actions">
-        <Link className="btn btn-small" to="/channels/$network" params={{ network: network.id }}>
-          Connect an account
-        </Link>
       </div>
     </li>
   );
 }
 
-function Group({ networks, brands }: { networks: NetworkView[]; brands: Data['brands'] }) {
-  const connected = networks.filter((n) => n.accounts.length > 0);
-  const rest = networks.filter((n) => n.accounts.length === 0);
+function ConnectAnother({ names, onOpen }: { names: string[]; onOpen: () => void }) {
   return (
-    <>
-      {connected.length > 0 && (
-        <>
-          <h2 className="ph">Connected</h2>
-          <ul className="ccards" aria-label="Connected accounts">
-            {connected.flatMap((n) => n.accounts.map((a) => <AccountCard key={a.id} network={n} account={a} brands={brands} />))}
-          </ul>
-        </>
-      )}
-      {rest.length > 0 && (
-        <>
-          <h2 className="ph" id="add" tabIndex={-1}>
-            {connected.length > 0 ? 'Add a network' : 'Networks'}
-          </h2>
-          <ul className="ccards" aria-label="Networks to connect">
-            {rest.map((n) => (
-              <NetworkCard key={n.id} network={n} />
-            ))}
-          </ul>
-        </>
-      )}
-    </>
+    <button type="button" className="k-card k-quiet ch-another" onClick={onOpen}>
+      <span className="k-ic">
+        <Icon name="plus" />
+      </span>
+      <span className="k-grow ch-another-text">
+        <strong>Connect another network</strong>
+        <span className="k-muted">
+          <span className="ch-dt"> · </span>
+          {namesToConnect(names)}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function ImportNotice({ count, busy, onImport }: { count: number; busy: boolean; onImport: () => void }) {
+  return (
+    <div className="k-notice k-wait ch-notice">
+      <span className="ch-notice-icon">
+        <Icon name="download" size={18} />
+      </span>
+      <div className="k-grow">
+        <strong>
+          {count} {count === 1 ? 'credential' : 'credentials'} in .env.
+        </strong>{' '}
+        Import {count === 1 ? 'it' : 'them'} to keep {count === 1 ? 'it' : 'them'} in the keychain instead.{' '}
+        <button type="button" className="ch-link" disabled={busy} onClick={onImport}>
+          {busy ? 'Importing…' : `Import ${count} from .env`}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -296,7 +188,16 @@ function Channels() {
   const smooth = useLenis();
   const lenis = useRef(smooth);
   lenis.current = smooth;
-  const [busy, setBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [target, setTarget] = useState<Target | null>(null);
+  const [view, setView] = useState<'menu' | 'rename' | 'disconnect'>('menu');
+  const actions = useAccountActions(setBusy);
+  const open = (t: Target) => {
+    setView('menu');
+    setTarget(t);
+  };
   // The tab in the address; a new account's arrival opens the tab its network is in
   const focused = search.focus ? data.networks.find((n) => n.accounts.some((a) => String(a.id) === search.focus)) : undefined;
   const tab: NetworkGroup = search.tab ?? (focused ? groupOf(focused) : (NETWORK_GROUPS.find((g) => data.networks.some((n) => groupOf(n) === g.id && n.accounts.length > 0))?.id ?? 'social'));
@@ -318,12 +219,12 @@ function Channels() {
   const connected = data.networks.filter((n) => n.accounts.length > 0);
   const envCount = data.networks.filter((n) => n.usesEnv).length;
   const importFromEnv = async () => {
-    setBusy(true);
+    setImporting(true);
     const results = await importEnv().catch((error: unknown) => {
       toast.fail(error instanceof Error ? error.message : String(error));
       return null;
     });
-    setBusy(false);
+    setImporting(false);
     if (results) {
       const imported = results.filter((r) => r.ok).map((r) => r.network);
       if (imported.length > 0) toast.done(`Imported ${imported.length} from .env`, imported.join(', '));
@@ -332,64 +233,116 @@ function Channels() {
     }
     await router.invalidate();
   };
+  const sheets = (
+    <>
+      <AddNetworkSheet networks={data.networks} open={adding} onOpenChange={setAdding} initialKind={kindOf(tab)} />
+      <AccountSheet target={target} view={view} onViewChange={setView} onClose={() => setTarget(null)} actions={actions} busy={busy !== null} />
+    </>
+  );
+  const connectButton = (
+    <button type="button" className="k-btn ch-connect" onClick={() => setAdding(true)}>
+      <Icon name="plus" size={18} />
+      <span className="ch-ph">Connect</span>
+      <span className="ch-dt">Connect a network</span>
+    </button>
+  );
+
+  if (connected.length === 0)
+    return (
+      <>
+        <TopBar back={{ label: 'More', more: true }} />
+        <div className="ch-page">
+          <div className="k-px ch-head">
+            <div className="k-stack k-g12">
+              <h1 className="k-d ch-title">Channels</h1>
+              <p className="k-lead k-muted ch-flush ch-dt">Where your launches go, and how each account grows.</p>
+            </div>
+          </div>
+          <div className="k-px k-stack k-g16 ch-empty">
+            <div className="ch-empty-art" aria-hidden="true">
+              <NoAccounts width="100%" />
+            </div>
+            <h2 className="k-d k-d30">No accounts yet</h2>
+            <p className="k-muted ch-flush ch-empty-text">Nothing is connected, so a launch only makes drafts. Connect a network and Shipcast publishes there with your approval.</p>
+            <div className="k-stack k-g10 ch-empty-actions">
+              <button type="button" className="k-btn k-pri k-full" onClick={() => setAdding(true)}>
+                <Icon name="plus" size={18} />
+                Connect a network
+              </button>
+            </div>
+            {envCount > 0 && <ImportNotice count={envCount} busy={importing} onImport={() => void importFromEnv()} />}
+          </div>
+        </div>
+        {sheets}
+      </>
+    );
+
   return (
     <>
-      <PageHead title="Channels" art={<Pigeonholes width={200} />}>
-        Every network Shipcast can publish to or read from, the accounts connected to each, and what they may do. Credentials are kept in {data.secretsKind}.
-      </PageHead>
-      <PageToolbar
-        label="Channels"
-        actions={
-          <>
-            {envCount > 0 && <ToolbarAction label={busy ? 'Importing…' : `Import ${envCount} from .env`} icon={<ImportIcon />} disabled={busy} onClick={importFromEnv} />}
-            <Menu
-              align="end"
-              entries={data.networks.map((n) => ({ kind: 'link' as const, label: n.accounts.length > 0 ? `${n.name} (another account)` : n.name, href: `/channels/${n.id}` }))}
-              trigger={
-                <button type="button" className="btn btn-small btn-primary tb-action">
-                  <PlusIcon />
-                  <span className="tb-label">Connect a network</span>
-                </button>
-              }
-            />
-          </>
-        }
-      />
-      {envCount > 0 && (
-        <div className="strip strip-yellow">
-          <p className="strip-text">
-            <strong>
-              {envCount} {envCount === 1 ? 'network still works' : 'networks still work'} from .env.
-            </strong>{' '}
-            Import in the bar above checks each credential and moves it into the keychain; your .env stays as it is.
-          </p>
+      <TopBar back={{ label: 'More', more: true }} />
+      <div className="ch-page">
+        <div className="k-px k-hrow k-between ch-head">
+          <div className="k-stack k-g12">
+            <h1 className="k-d ch-title">Channels</h1>
+            <p className="k-lead k-muted ch-flush ch-dt">Where your launches go, and how each account grows.</p>
+          </div>
+          {connectButton}
         </div>
-      )}
-      {connected.length === 0 && (
-        <Empty art={<NoAccounts width={280} />} title="No accounts yet">
-          Nothing is connected, so a launch only makes drafts. Connect a network below and Shipcast publishes there with your approval.
-        </Empty>
-      )}
-      <Tabs<NetworkGroup>
-        label="Kinds of channel"
-        variant="underline"
-        value={tab}
-        onValueChange={(next) => void navigate({ to: '/channels', search: { tab: next }, resetScroll: false })}
-        tabs={NETWORK_GROUPS.map((g) => {
-          const networks = data.networks.filter((n) => groupOf(n) === g.id);
-          const count = networks.reduce((sum, n) => sum + n.accounts.length, 0);
-          return {
-            value: g.id,
-            label: (
-              <>
-                {g.name}
-                {count > 0 && <span className="ui-tab-count"> {count}</span>}
-              </>
-            ),
-            panel: <Group networks={networks} brands={data.brands} />,
-          };
-        })}
-      />
+        <Tabs.Root value={tab} onValueChange={(next) => void navigate({ to: '/channels', search: { tab: next as NetworkGroup }, resetScroll: false })}>
+          <div className="ch-tabs-wrap">
+            <Tabs.List className="k-tabs ch-tabs" aria-label="Kinds of channel" activateOnFocus>
+              {NETWORK_GROUPS.map((g) => {
+                const count = data.networks.filter((n) => groupOf(n) === g.id).reduce((sum, n) => sum + n.accounts.length, 0);
+                return (
+                  <Tabs.Tab key={g.id} value={g.id} className={(s) => `k-tab${s.active ? ' k-on' : ''}`}>
+                    <span className="ch-ph">{g.short}</span>
+                    <span className="ch-dt">{g.name}</span>
+                    {count > 0 && (
+                      <span className="k-n" aria-label={`, ${count} connected`}>
+                        {count}
+                      </span>
+                    )}
+                  </Tabs.Tab>
+                );
+              })}
+            </Tabs.List>
+          </div>
+          {NETWORK_GROUPS.map((g) => {
+            const networks = data.networks.filter((n) => groupOf(n) === g.id);
+            const withAccounts = networks.filter((n) => n.accounts.length > 0);
+            const rest = networks.filter((n) => n.accounts.length === 0);
+            return (
+              <Tabs.Panel key={g.id} value={g.id} className="k-px ch-panel">
+                {envCount > 0 && <ImportNotice count={envCount} busy={importing} onImport={() => void importFromEnv()} />}
+                {withAccounts.length > 0 ? (
+                  <ul className="ch-cards" aria-label={`${g.name}: connected accounts`}>
+                    {withAccounts
+                      .flatMap((n) => n.accounts.map((a) => ({ n, a })))
+                      // What needs the owner first: a broken account leads its tab
+                      .sort((x, y) => Number(stateOf(y.a.status) === 'failed') - Number(stateOf(x.a.status) === 'failed'))
+                      .map(({ n, a }) => (
+                        <AccountCard
+                          key={a.id}
+                          network={n}
+                          account={a}
+                          now={data.now}
+                          siblings={n.accounts.length}
+                          busy={busy === a.id}
+                          onMore={() => open({ network: n, account: a })}
+                          onSync={() => void actions.sync(a)}
+                        />
+                      ))}
+                  </ul>
+                ) : (
+                  <p className="k-muted ch-flush">Nothing connected here yet.</p>
+                )}
+                <ConnectAnother names={rest.map((n) => n.name)} onOpen={() => setAdding(true)} />
+              </Tabs.Panel>
+            );
+          })}
+        </Tabs.Root>
+      </div>
+      {sheets}
     </>
   );
 }
