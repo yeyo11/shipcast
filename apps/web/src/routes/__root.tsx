@@ -7,6 +7,7 @@ import channelsCss from '../styles/channels.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
 import homeCss from '../styles/home.css?url';
+import commentsCss from '../styles/comments.css?url';
 import kitCss from '../styles/kit.css?url';
 import layoutCss from '../styles/layout.css?url';
 import publishedCss from '../styles/published.css?url';
@@ -25,6 +26,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: homeCss },
       { rel: 'stylesheet', href: publishedCss },
       { rel: 'stylesheet', href: channelsCss },
+      { rel: 'stylesheet', href: commentsCss },
     ],
   }),
   shellComponent: Document,
