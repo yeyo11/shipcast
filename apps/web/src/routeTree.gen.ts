@@ -16,6 +16,7 @@ import { Route as McpRouteImport } from './routes/mcp'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ReadyzRouteImport } from './routes/readyz'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSplatRouteImport } from './routes/_app/$'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppCommentsRouteImport } from './routes/_app/comments'
@@ -95,6 +96,11 @@ const ReadyzRoute = ReadyzRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSplatRoute = AppSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAiRoute = AppAiRouteImport.update({
@@ -336,6 +342,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/onboarding': typeof OnboardingRoute
   '/readyz': typeof ReadyzRoute
+  '/$': typeof AppSplatRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -389,6 +396,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/onboarding': typeof OnboardingRoute
   '/readyz': typeof ReadyzRoute
+  '/$': typeof AppSplatRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -444,6 +452,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/onboarding': typeof OnboardingRoute
   '/readyz': typeof ReadyzRoute
+  '/_app/$': typeof AppSplatRoute
   '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
@@ -501,6 +510,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/onboarding'
     | '/readyz'
+    | '/$'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -554,6 +564,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/onboarding'
     | '/readyz'
+    | '/$'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -608,6 +619,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/onboarding'
     | '/readyz'
+    | '/_app/$'
     | '/_app/ai'
     | '/_app/automation'
     | '/_app/comments'
@@ -733,6 +745,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/$': {
+      id: '/_app/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AppSplatRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/ai': {
@@ -1079,6 +1098,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppSplatRoute: typeof AppSplatRoute
   AppAiRoute: typeof AppAiRoute
   AppAutomationRoute: typeof AppAutomationRoute
   AppCommentsRoute: typeof AppCommentsRoute
@@ -1100,6 +1120,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppSplatRoute: AppSplatRoute,
   AppAiRoute: AppAiRoute,
   AppAutomationRoute: AppAutomationRoute,
   AppCommentsRoute: AppCommentsRoute,

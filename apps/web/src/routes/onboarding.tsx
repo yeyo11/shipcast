@@ -1,12 +1,10 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
-import { DiffView } from '../components/assistant/DiffView';
+import { useEffect, useRef, useState, type ComponentType, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
 import { OnboardAI, OnboardAutomation, OnboardBrand, OnboardChannels, OnboardMeasure, Shipped, type IllustrationProps } from '../components/illustrations';
+import { Diamond, Icon } from '../components/kit/Icon';
+import { Sheet, SheetClose } from '../components/kit/Sheet';
 import { ToastProvider, useToast } from '../components/Toasts';
-import { Notice, Pill } from '../components/ui';
-import { Collapsible } from '../components/ui/Collapsible';
 import { Combobox } from '../components/ui/Combobox';
-import { CheckIcon } from '../components/ui/icons';
 import { TooltipProvider } from '../components/ui/Tooltip';
 import { requestTour } from '../components/tour/request';
 import { saveAutomation } from '../server/automation.functions';
@@ -27,10 +25,11 @@ import {
 import { checkBrandForm, STEP_TITLES, STEPS, type BrandField, type BrandFieldProblems, type Step } from '../server/onboarding';
 
 /*
- * The onboarding, a centred wizard: one step per screen, a thin progress bar, and one primary button
- * that saves the step's choice and moves on. Only the optional steps (Channels, Measurement) offer
- * "Skip this step"; "Finish later" sets the whole thing aside, resumable from Settings. What is
- * already configured shows as done. See docs/decisions/onboarding.md
+ * The onboarding (boards Onboarding, OnboardingBrandYml and OnboardingDone): one step per screen, a
+ * bar per step on top, and one primary button at the thumb that saves the step's choice and moves on.
+ * An optional step (Channels, Measurement) left empty is skipped for now; "Set up for now" sets the
+ * whole thing aside, resumable from Settings. What is already configured shows as done.
+ * See docs/decisions/onboarding.md
  */
 
 type Search = { step?: Step | 'end' };
@@ -65,7 +64,7 @@ const LEADS: Record<Step, string> = {
   brand: 'The launches repo holds your blog, the drafts and brand.yml: who your launches speak for.',
   ai: 'Who reads your code and writes the drafts: claudio, the Anthropic API, or an OpenAI-compatible server.',
   channels: 'Where your launches go. Connect the accounts you post from; the rest can wait.',
-  measure: 'How the numbers come back: search engines and the blog’s visits.',
+  measure: 'How the numbers come back: search engines and the blog’s visits. Each source is optional.',
   automation: 'How Shipcast notices a release on its own, and how often it looks.',
 };
 
@@ -128,7 +127,7 @@ function pointAt(problem: Problem | undefined) {
 function FieldError({ problem }: { problem: Problem | undefined }) {
   if (!problem) return null;
   return (
-    <p className="field-error" id={`${problem.id}-error`}>
+    <p className="k-xs acc-onb-error" id={`${problem.id}-error`}>
       {problem.message}
     </p>
   );
@@ -177,13 +176,23 @@ function useTouched() {
 
 function Done({ children }: { children: ReactNode }) {
   return (
-    <p className="onb-done">
-      <CheckIcon size={18} /> {children}
+    <p className="k-notice acc-onb-done" role="status">
+      <Icon name="check" size={18} />
+      <span className="k-grow">{children}</span>
     </p>
   );
 }
 
-const BRAND_IDS: Record<BrandField, string> = { displayName: 'b-name', site: 'b-site', github: 'b-gh', languages: 'b-lang-en' };
+function Trouble({ children }: { children: ReactNode }) {
+  return (
+    <div className="k-notice k-bad" role="alert">
+      <Diamond size={9} />
+      <span className="k-grow">{children}</span>
+    </div>
+  );
+}
+
+const BRAND_IDS: Record<BrandField, string> = { displayName: 'b-name', site: 'b-site', github: 'b-gh', languages: 'b-lang' };
 const BRAND_SHORT: Record<BrandField, string> = {
   displayName: 'add your name',
   site: 'add your blog’s full address',
@@ -192,6 +201,79 @@ const BRAND_SHORT: Record<BrandField, string> = {
 };
 const BRAND_ORDER: BrandField[] = ['displayName', 'site', 'github', 'languages'];
 
+const LANGUAGES = [
+  { id: 'es', name: 'Spanish' },
+  { id: 'en', name: 'English' },
+] as const;
+
+/** "Spanish, English": the blog's languages as a field shows them */
+const languageWords = (chosen: readonly string[]) => LANGUAGES.filter((l) => chosen.includes(l.id)).map((l) => l.name).join(', ');
+
+/**
+ * The blog's languages: a field that reads like the others ("Spanish, English") and opens a sheet with
+ * one check per language, so a phone gets big targets rather than a cramped multi-select.
+ */
+function LanguagesField({ value, onChange, problem, onLeave }: { value: string[]; onChange: (next: string[]) => void; problem: Problem | undefined; onLeave: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="k-field">
+      <span className="k-lbl" id="b-lang-label">
+        The blog’s languages
+      </span>
+      <button
+        type="button"
+        id="b-lang"
+        className={`k-input acc-onb-input acc-onb-pick${value.length === 0 ? ' k-ph' : ''}`}
+        aria-labelledby="b-lang-label b-lang"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+        {...invalid(problem)}
+      >
+        {value.length ? languageWords(value) : 'Choose the languages'}
+      </button>
+      <FieldError problem={problem} />
+      <Sheet
+        label="The blog’s languages"
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) onLeave();
+        }}
+      >
+        <h2 className="k-d k-d30">Languages</h2>
+        <p className="k-sm k-muted acc-onb-sheet-lead">The blog is written in these; every article comes in each of them.</p>
+        <div className="k-stack" role="group" aria-label="The blog’s languages">
+          {LANGUAGES.map((l) => {
+            const on = value.includes(l.id);
+            return (
+              <button key={l.id} type="button" className="k-row acc-onb-check-row" role="checkbox" aria-checked={on} onClick={() => onChange(on ? value.filter((x) => x !== l.id) : [...value, l.id])}>
+                <span className={`k-check${on ? ' k-on' : ''}`} aria-hidden="true">
+                  {on && <Icon name="check" size={16} strokeWidth={3} />}
+                </span>
+                <span className="k-grow">{l.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <SheetClose className="k-btn k-pri k-full">Done</SheetClose>
+      </Sheet>
+    </div>
+  );
+}
+
+/** One text field in the board's shape: the label above, the input in its rounded box, the problem under it */
+function TextField({ id, label, problem, mono, ...input }: { id: string; label: string; problem: Problem | undefined; mono?: boolean } & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div className="k-field">
+      <label className="k-lbl" htmlFor={id}>
+        {label}
+      </label>
+      <input id={id} className={`k-input acc-onb-input${mono ? ' k-mono' : ''}`} {...input} {...invalid(problem)} />
+      <FieldError problem={problem} />
+    </div>
+  );
+}
+
 function BrandStep({ data, saver, report, attempted }: StepProps) {
   const router = useRouter();
   const toast = useToast();
@@ -199,7 +281,7 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
   const [reposProblem, setReposProblem] = useState<string | null>(null);
   const [repo, setRepo] = useState<string | null>(data.brand.launchesRepo);
   const [brandFile, setBrandFile] = useState<{ state: 'missing' | 'valid' | 'invalid'; problems?: string } | null>(null);
-  const [form, setForm] = useState({ displayName: '', site: 'https://', github: data.login ?? '', languages: ['en', 'es'] });
+  const [form, setForm] = useState({ displayName: '', site: 'https://', github: data.login ?? '', languages: ['es', 'en'] });
   const [serverFields, setServerFields] = useState<BrandFieldProblems>({});
   const [yaml, setYaml] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -230,12 +312,12 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
         : brandFile?.state === 'missing'
           ? formProblems.length > 0
             ? formProblems
-            : [{ id: yaml ? 'b-commit' : 'b-show', message: yaml ? 'Commit brand.yml to use this repo.' : 'Look at the file, then commit it.', short: 'commit brand.yml' }]
+            : [{ id: 'b-show', message: 'Look at brand.yml, then commit it.', short: 'commit brand.yml' }]
           : [];
   useReport(report, problems);
   const shown = (p: Problem | undefined) => (p && (attempted || touched.has(p.id)) ? p : undefined);
   const repoProblem = shown(problems.find((p) => p.id === 'b-repo'));
-  const commitProblem = shown(problems.find((p) => p.id === 'b-show' || p.id === 'b-commit'));
+  const commitProblem = shown(problems.find((p) => p.id === 'b-show'));
 
   const edit = (field: BrandField, value: Partial<typeof form>) => {
     setForm({ ...form, ...value });
@@ -261,7 +343,7 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
     }
     await router.invalidate();
     return answer.brand.state === 'missing'
-      ? [{ id: 'b-name', message: 'This repo has no brand.yml yet: fill in the form below to add one.', short: 'add a brand.yml to this repo' }]
+      ? [{ id: 'b-name', message: 'This repo has no brand.yml yet: fill in the fields to add one.', short: 'add a brand.yml to this repo' }]
       : [{ id: 'b-repo', message: 'This repo’s brand.yml does not validate: fix it on GitHub, or choose another repo.', short: 'fix brand.yml on GitHub' }];
   };
 
@@ -269,6 +351,11 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
   useSaver(saver, async () => (saved || !repo ? true : brandFile?.state === 'valid' ? true : choose(repo)));
 
   const body = { repo: repo ?? '', ...form };
+  const pointAtFields = (fields: BrandFieldProblems) => {
+    all(Object.values(BRAND_IDS));
+    const first = BRAND_ORDER.find((f) => fields[f]);
+    if (first) pointAt({ id: BRAND_IDS[first], message: '', short: '' });
+  };
   const showFile = async () => {
     if (formProblems.length > 0) {
       all(formProblems.map((p) => p.id));
@@ -279,21 +366,42 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
     if (answer.ok) return setYaml(answer.yaml);
     if (Object.keys(answer.fields).length > 0) {
       setServerFields(answer.fields);
-      const first = BRAND_ORDER.find((f) => answer.fields[f]);
-      all(Object.values(BRAND_IDS));
-      if (first) pointAt({ id: BRAND_IDS[first], message: '', short: '' });
+      pointAtFields(answer.fields);
     } else toast.fail(answer.problem);
   };
 
+  const commit = async () => {
+    setBusy(true);
+    const answer = await createBrand({ data: body }).catch((error: unknown) => ({ ok: false as const, problem: message(error) }));
+    setBusy(false);
+    if (!answer.ok) {
+      if ('fields' in answer && Object.keys(answer.fields).length > 0) {
+        setServerFields(answer.fields);
+        setYaml(null);
+        pointAtFields(answer.fields);
+      } else toast.fail(answer.problem);
+      return;
+    }
+    toast.done('brand.yml committed', `It is on ${repo}’s default branch.`);
+    setBrandFile({ state: 'valid' });
+    setYaml(null);
+    await router.invalidate();
+  };
+
+  const missing = brandFile?.state === 'missing';
   const nameProblem = shown(fieldProblem('displayName'));
   const siteProblem = shown(fieldProblem('site'));
   const ghProblem = shown(fieldProblem('github'));
   const langProblem = shown(fieldProblem('languages'));
   return (
     <>
-      {data.brand.ok && <Done>{data.brand.launchesRepo} is your launches repo, speaking for {data.brand.name}.</Done>}
-      {data.brand.problem && <Notice tone="bad">{data.brand.problem}</Notice>}
-      {reposProblem && <Notice tone="bad">The repos could not be listed: {reposProblem}</Notice>}
+      {data.brand.ok && (
+        <Done>
+          {data.brand.launchesRepo} is your launches repo, speaking for {data.brand.name}.
+        </Done>
+      )}
+      {data.brand.problem && <Trouble>{data.brand.problem}</Trouble>}
+      {reposProblem && <Trouble>The repos could not be listed: {reposProblem}</Trouble>}
       <Combobox
         id="b-repo"
         label="The launches repo"
@@ -306,103 +414,56 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
           setYaml(null);
         }}
         placeholder={repos.length ? 'Search your repos' : 'Loading the repos…'}
-        help={data.viaApp ? 'The repos the GitHub App is installed on. Missing one? Add it to the App’s installation on GitHub.' : 'Your public repos.'}
+        {...(missing || repoProblem ? {} : { help: data.viaApp ? 'The repos the GitHub App is installed on. Missing one? Add it to the App’s installation on GitHub.' : 'Your public repos.' })}
         {...(repoProblem && { error: repoProblem.message })}
       />
       {brandFile?.state === 'invalid' && (
-        <Notice tone="bad">
-          brand.yml is there but does not validate; fix it on GitHub:
-          <pre className="log">{brandFile.problems}</pre>
-        </Notice>
+        <Trouble>
+          <strong>brand.yml is there but does not validate;</strong> fix it on GitHub:
+          <pre className="k-mono k-xs acc-onb-log">{brandFile.problems}</pre>
+        </Trouble>
       )}
-      {brandFile?.state === 'missing' && (
-        <section className="onb-sub" aria-label="Create brand.yml">
-          <h3>This repo has no brand.yml</h3>
-          <p className="muted">Shipcast can add a minimal one, committed through the GitHub App to the default branch. You see it first.</p>
-          <div className="field">
-            <label htmlFor="b-name">Your name, as it signs the launches</label>
-            <input id="b-name" className="input" value={form.displayName} onChange={(e) => edit('displayName', { displayName: e.target.value })} onBlur={() => leave('b-name')} {...invalid(nameProblem)} />
-            <FieldError problem={nameProblem} />
+      {missing && (
+        <>
+          <TextField id="b-name" label="Your name, as it signs the launches" value={form.displayName} onChange={(e) => edit('displayName', { displayName: e.target.value })} onBlur={() => leave('b-name')} problem={nameProblem} autoComplete="name" />
+          <TextField id="b-site" label="Your blog’s address" inputMode="url" value={form.site} onChange={(e) => edit('site', { site: e.target.value })} onBlur={() => leave('b-site')} problem={siteProblem} />
+          {/* The login is the one signed in: asked only when the page could not tell it */}
+          {(!data.login || ghProblem) && <TextField id="b-gh" label="Your GitHub login" value={form.github} onChange={(e) => edit('github', { github: e.target.value })} onBlur={() => leave('b-gh')} problem={ghProblem} />}
+          <LanguagesField value={form.languages} onChange={(languages) => edit('languages', { languages })} problem={langProblem} onLeave={() => leave('b-lang')} />
+          <div className="k-notice k-bad acc-onb-missing" onMouseDown={holdFocus}>
+            <Diamond size={9} />
+            <span className="k-grow">
+              <strong>This repo has no brand.yml.</strong> Shipcast can add a minimal one, committed to the default branch. You see it first.{' '}
+              <button type="button" id="b-show" className="acc-onb-link" onClick={showFile} {...invalid(commitProblem)}>
+                Show it
+              </button>
+            </span>
           </div>
-          <div className="field">
-            <label htmlFor="b-site">Your blog’s address</label>
-            <input id="b-site" className="input mono" inputMode="url" value={form.site} onChange={(e) => edit('site', { site: e.target.value })} onBlur={() => leave('b-site')} {...invalid(siteProblem)} />
-            <FieldError problem={siteProblem} />
-          </div>
-          <div className="field">
-            <label htmlFor="b-gh">Your GitHub login</label>
-            <input id="b-gh" className="input mono" value={form.github} onChange={(e) => edit('github', { github: e.target.value })} onBlur={() => leave('b-gh')} {...invalid(ghProblem)} />
-            <FieldError problem={ghProblem} />
-          </div>
-          <fieldset className="field onb-fieldset">
-            <legend className="label">The blog’s languages</legend>
-            <div className="checks">
-              {(['en', 'es'] as const).map((l) => (
-                <label className="check" key={l}>
-                  <input
-                    id={`b-lang-${l}`}
-                    type="checkbox"
-                    checked={form.languages.includes(l)}
-                    {...invalid(langProblem)}
-                    onChange={(e) => {
-                      leave('b-lang-en');
-                      edit('languages', { languages: e.target.checked ? [...form.languages, l] : form.languages.filter((x) => x !== l) });
-                    }}
-                  />
-                  {l === 'en' ? 'English' : 'Spanish'}
-                </label>
-              ))}
+          <FieldError problem={commitProblem} />
+          <Sheet label="Add brand.yml?" open={yaml !== null} onOpenChange={(open) => !open && setYaml(null)}>
+            <h2 className="k-d k-d30">Add brand.yml?</h2>
+            <p className="k-sm k-muted acc-onb-sheet-lead">
+              Committed {data.viaApp ? 'through the GitHub App ' : ''}to the default branch of {repo}.
+            </p>
+            <div className="k-input k-mono acc-onb-yaml" role="region" aria-label="brand.yml, as it would be committed" tabIndex={0}>
+              {(yaml ?? '')
+                .split('\n')
+                .filter((line) => line.trim() !== '')
+                .map((line, i) => (
+                  <span key={i} className="k-diff-add">
+                    <span className="visually-hidden">added: </span>
+                    {line}
+                  </span>
+                ))}
             </div>
-            <FieldError problem={langProblem} />
-          </fieldset>
-          {!yaml && (
-            <div className="row" onMouseDown={holdFocus}>
-              <button type="button" id="b-show" className="btn" onClick={showFile} {...invalid(commitProblem?.id === 'b-show' ? commitProblem : undefined)}>
-                Show the file
+            <div className="k-hrow k-g10">
+              <SheetClose className="k-btn">Not now</SheetClose>
+              <button type="button" id="b-commit" className="k-btn k-pri acc-onb-grow" disabled={busy} onClick={commit}>
+                {busy ? 'Committing…' : 'Commit brand.yml'}
               </button>
             </div>
-          )}
-          {!yaml && <FieldError problem={commitProblem?.id === 'b-show' ? commitProblem : undefined} />}
-          {yaml && (
-            <>
-              <DiffView before="" after={yaml} label="brand.yml, as it would be committed" />
-              <div className="row">
-                <button
-                  type="button"
-                  id="b-commit"
-                  className="btn btn-primary"
-                  disabled={busy}
-                  {...invalid(commitProblem?.id === 'b-commit' ? commitProblem : undefined)}
-                  onClick={async () => {
-                    setBusy(true);
-                    const answer = await createBrand({ data: body }).catch((error: unknown) => ({ ok: false as const, problem: message(error) }));
-                    setBusy(false);
-                    if (!answer.ok) {
-                      if ('fields' in answer && Object.keys(answer.fields).length > 0) {
-                        setServerFields(answer.fields);
-                        setYaml(null);
-                        all(Object.values(BRAND_IDS));
-                        const first = BRAND_ORDER.find((f) => answer.fields[f]);
-                        if (first) pointAt({ id: BRAND_IDS[first], message: '', short: '' });
-                      } else toast.fail(answer.problem);
-                      return;
-                    }
-                    toast.done('brand.yml committed', `It is on ${repo}’s default branch.`);
-                    setBrandFile({ state: 'valid' });
-                    setYaml(null);
-                    await router.invalidate();
-                  }}
-                >
-                  Commit brand.yml
-                </button>
-                <button type="button" className="btn" onClick={() => setYaml(null)}>
-                  Not now
-                </button>
-              </div>
-              <FieldError problem={commitProblem?.id === 'b-commit' ? commitProblem : undefined} />
-            </>
-          )}
-        </section>
+          </Sheet>
+        </>
       )}
     </>
   );
@@ -421,6 +482,27 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** A choice of a few, drawn as the board's field: the value in the rounded box, a chevron to say it opens */
+function ChoiceField<V extends string>({ id, label, value, options, onChange }: { id: string; label: string; value: V; options: ReadonlyArray<{ id: V; name: string }>; onChange: (value: V) => void }) {
+  return (
+    <div className="k-field">
+      <label className="k-lbl" htmlFor={id}>
+        {label}
+      </label>
+      <span className="acc-onb-select">
+        <select id={id} className="k-input acc-onb-input" value={value} onChange={(e) => onChange(e.target.value as V)}>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+        <Icon name="chevronDown" size={18} />
+      </span>
+    </div>
+  );
 }
 
 function AiStep({ data, saver, report, attempted }: StepProps) {
@@ -477,91 +559,81 @@ function AiStep({ data, saver, report, attempted }: StepProps) {
     setResult(answer.ok ? { ok: true, text: `Connected: ${answer.detail}.` } : { ok: false, text: answer.problem });
   };
 
-  const urlProblem = shown('c-url');
-  const tokenProblem = shown('c-token');
   const connectProblem = shown('ai-connect');
   return (
     <>
-      {data.detected.ai && <Done>Every task has a provider that is set up.</Done>}
-      <fieldset className="field onb-fieldset">
-        <legend className="label">Provider</legend>
-        <div className="seg">
-          {PROVIDERS.map((p) => (
-            <label key={p.id}>
-              <input type="radio" name="provider" checked={provider === p.id} onChange={() => setProvider(p.id)} />
-              <span>
-                {p.name}
-                {data.ai.ready[p.id] ? ' ✓' : ''}
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ChoiceField id="ai-provider" label="Provider" value={provider} options={PROVIDERS} onChange={setProvider} />
       {provider === 'claudio' ? (
-        <div className="form">
-          <div className="field">
-            <label htmlFor="c-url">claudio’s URL</label>
-            <input id="c-url" className="input mono" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} onBlur={() => leave('c-url')} placeholder="http://localhost:8798" {...invalid(urlProblem)} />
-            <FieldError problem={urlProblem} />
-          </div>
-          <div className="field">
-            <label htmlFor="c-token">claudio’s token</label>
-            <input
-              id="c-token"
-              className="input mono"
-              type="password"
-              autoComplete="off"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              onBlur={() => leave('c-token')}
-              placeholder={data.ai.claudio.tokenSet ? 'Set; type a new one to replace it' : 'Not set'}
-              {...invalid(tokenProblem)}
-            />
-            <FieldError problem={tokenProblem} />
-          </div>
-        </div>
-      ) : (
         <>
-          <p>
-            {ready ? 'An account is connected.' : 'Its key is a connected account, kept in the keychain like any network’s.'}{' '}
-            <Link id="ai-connect" to="/channels/$network" params={{ network: provider }} aria-describedby={connectProblem ? 'ai-connect-error' : undefined}>
-              {ready ? 'Manage it in Channels' : 'Connect it in Channels'}
-            </Link>
-            .
-          </p>
-          <FieldError problem={connectProblem} />
+          <TextField id="c-url" label="claudio’s URL" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} onBlur={() => leave('c-url')} placeholder="http://localhost:8798" problem={shown('c-url')} />
+          <TextField
+            id="c-token"
+            label="claudio’s token"
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            onBlur={() => leave('c-token')}
+            placeholder={data.ai.claudio.tokenSet ? 'Its token is in the keychain.' : 'Paste claudio’s token'}
+            problem={shown('c-token')}
+          />
         </>
+      ) : (
+        <div className="k-field">
+          <span className="k-lbl">The account</span>
+          {ready ? (
+            <Link id="ai-connect" className="k-input acc-onb-input" to="/channels/$network" params={{ network: provider }}>
+              Connected · manage it in Channels
+            </Link>
+          ) : (
+            <Link id="ai-connect" className="k-input acc-onb-input acc-onb-connect" to="/channels/$network" params={{ network: provider }} aria-describedby={connectProblem ? 'ai-connect-error' : undefined}>
+              Connect it
+            </Link>
+          )}
+          <FieldError problem={connectProblem} />
+        </div>
       )}
-      <div className="row">
-        <button type="button" className="btn" disabled={busy || !ready} onClick={test}>
+      <div className="k-hrow k-g10 k-wrap">
+        <button type="button" className="k-btn k-sm" disabled={busy || !ready} onClick={test}>
           {busy ? 'Testing…' : 'Test the connection'}
         </button>
+        {data.detected.ai && <span className="k-sm k-muted">Every task has a provider that is set up.</span>}
       </div>
-      {result && <Notice tone={result.ok ? 'ok' : 'bad'}>{result.text}</Notice>}
-      {!everyTask && <p className="muted">Each task has its own provider in AI settings; choosing another one here gives it every task.</p>}
+      {result && (result.ok ? <Done>{result.text}</Done> : <Trouble>{result.text}</Trouble>)}
+      {!everyTask && <p className="k-xs k-muted acc-onb-note">Each task has its own provider in AI settings; choosing another one here gives it every task.</p>}
     </>
   );
 }
 
-function AccountsStep({ networks, kind }: { networks: Data['channels']; kind: 'channels' | 'measure' }) {
+/** Channels and Measurement: each network with its connected accounts, or the way to connect one */
+function AccountsStep({ networks }: { networks: Data['channels'] }) {
   return (
-    <ul className="onb-networks">
+    <>
       {networks.map((n) => (
-        <li key={n.id}>
-          <span className="onb-network-name">{n.name}</span>
+        <div className="k-field" key={n.id}>
+          <span className="k-lbl" id={`net-${n.id}`}>
+            {n.name}
+          </span>
           {n.accounts.length > 0 ? (
-            <Pill tone="published">{n.accounts.map((a) => a.label).join(', ')}</Pill>
+            <Link className="k-input acc-onb-input" to="/channels/$network" params={{ network: n.id }} aria-describedby={`net-${n.id}`}>
+              <span className="k-ellipsis">{n.accounts.map((a) => a.label).join(', ')} · connected</span>
+            </Link>
           ) : (
-            <Link className="btn btn-small" to="/channels/$network" params={{ network: n.id }}>
-              Connect
+            <Link className="k-input acc-onb-input acc-onb-connect" to="/channels/$network" params={{ network: n.id }} aria-describedby={`net-${n.id}`}>
+              Connect it
             </Link>
           )}
-        </li>
+        </div>
       ))}
-      {kind === 'measure' && <li className="muted">Each source is optional; the numbers simply start once one is connected.</li>}
-    </ul>
+    </>
   );
 }
+
+const MODES = [
+  { id: 'poll', name: 'Rounds: it looks at your GitHub activity every interval' },
+  { id: 'webhook', name: 'GitHub webhooks: GitHub tells Shipcast as it happens' },
+  { id: 'off', name: 'Off: only what you start by hand' },
+] as const;
 
 function AutomationStep({ data, saver, report, attempted }: StepProps) {
   const toast = useToast();
@@ -585,60 +657,26 @@ function AutomationStep({ data, saver, report, attempted }: StepProps) {
   });
   return (
     <>
-      <fieldset className="field onb-fieldset">
-        <legend className="label">Mode</legend>
-        <div className="seg">
-          {(
-            [
-              ['poll', 'Rounds'],
-              ['webhook', 'GitHub webhooks'],
-              ['off', 'Off'],
-            ] as const
-          ).map(([id, label]) => (
-            <label key={id}>
-              <input type="radio" name="mode" checked={mode === id} onChange={() => setMode(id)} />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-        <small>{mode === 'poll' ? 'Shipcast looks at your GitHub activity every interval.' : mode === 'webhook' ? 'GitHub tells Shipcast as it happens; it needs the app reachable from GitHub.' : 'Only what you start by hand.'}</small>
-      </fieldset>
+      <ChoiceField id="o-mode" label="Mode" value={mode} options={MODES} onChange={setMode} />
+      {mode === 'webhook' && <p className="k-xs k-muted acc-onb-note">GitHub webhooks need the app reachable from GitHub.</p>}
       {mode !== 'off' && (
-        <div className="field">
-          <label htmlFor="o-interval">Seconds between rounds</label>
-          <input
-            id="o-interval"
-            className="input mono"
-            type="number"
-            min={60}
-            step={30}
-            value={interval}
-            onChange={(e) => setIntervalText(e.target.value)}
-            onBlur={() => leave('o-interval')}
-            style={{ maxWidth: 200 }}
-            {...invalid(intervalProblem)}
-          />
-          <FieldError problem={intervalProblem} />
-        </div>
+        <TextField id="o-interval" label="Seconds between rounds" type="number" min={60} step={30} value={interval} onChange={(e) => setIntervalText(e.target.value)} onBlur={() => leave('o-interval')} problem={intervalProblem} />
       )}
     </>
   );
 }
 
-/** The top bar: the lockup, how far the set-up has come, and the way out */
-function Top({ at, current, onLeave }: { at: number; current: string; onLeave?: () => void }) {
+/** The top bar: the mark and the set-up's name, and the way out */
+function Top({ onLeave }: { onLeave?: () => void }) {
   return (
-    <header className="onb-top">
-      <span className="lockup">
-        <img src="/logo/mark.svg" alt="" />
-        <span>Shipcast</span>
+    <header className="k-hrow k-between acc-onb-top">
+      <span className="k-hrow k-g10">
+        <span className="acc-onb-mark" aria-hidden="true" />
+        <span className="k-d k-d24">Set up</span>
       </span>
-      <div className="onb-bar" role="progressbar" aria-label="Set-up progress" aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuenow={at} aria-valuetext={current}>
-        <span style={{ width: `${(at / STEPS.length) * 100}%` }} />
-      </div>
       {onLeave && (
-        <button type="button" className="btn-link onb-leave" onClick={onLeave}>
-          Finish later
+        <button type="button" className="k-sm acc-onb-leave" onClick={onLeave}>
+          Set up for now
         </button>
       )}
     </header>
@@ -648,53 +686,35 @@ function Top({ at, current, onLeave }: { at: number; current: string; onLeave?: 
 const STATE_WORDS = { done: 'done', skipped: 'skipped for now', pending: 'to do' } as const;
 
 /**
- * "Step n of 5" opens the list of the steps, each with its state: any step up to the furthest one
- * reached is a link, so going back never depends on pressing Back step by step.
+ * How far the set-up has come, one bar per step: any step up to the furthest one reached is a link,
+ * so going back never depends on pressing Back step by step.
  */
-function StepList({ data, current, seen }: { data: Data; current: Step; seen: number }) {
+function Progress({ data, current, seen }: { data: Data; current: Step; seen: number }) {
   const index = STEPS.indexOf(current);
   const furthest = Math.max(index, seen, ...STEPS.map((s, i) => (data.state.steps[s] === 'pending' ? -1 : i)));
-  const state = data.state.steps[current];
   return (
-    <Collapsible
-      className="onb-steps"
-      triggerClassName="onb-count"
-      summary={
-        <>
-          Step {index + 1} of {STEPS.length}
-          {state === 'done' ? ' · done' : state === 'skipped' ? ' · skipped for now' : OPTIONAL.has(current) ? ' · optional' : ''}
-          <span className="visually-hidden">; show every step</span>
-        </>
-      }
-    >
-      <ol aria-label="Set-up steps">
+    <nav aria-label="Set-up steps">
+      <ol className="k-hrow k-g6 acc-onb-progress">
         {STEPS.map((s, i) => {
-          const label = (
-            <>
-              <span className="onb-steps-num" aria-hidden="true">
-                {data.state.steps[s] === 'done' ? '✓' : i + 1}
-              </span>
-              <span>
-                {STEP_TITLES[s]}
-                <small className="muted"> · {STATE_WORDS[data.state.steps[s]]}</small>
-              </span>
-            </>
-          );
+          const label = `Step ${i + 1}: ${STEP_TITLES[s]}, ${STATE_WORDS[data.state.steps[s]]}`;
+          const bar = <span className={`acc-onb-seg${i <= index ? ' k-on' : ''}`} />;
           return (
-            <li key={s} data-state={data.state.steps[s]}>
+            <li key={s}>
               {/* The router marks the open step's link aria-current="page" itself, the search included */}
               {i <= furthest ? (
-                <Link to="/onboarding" search={{ step: s }} activeOptions={{ includeSearch: true }}>
-                  {label}
+                <Link to="/onboarding" search={{ step: s }} activeOptions={{ includeSearch: true }} aria-label={label}>
+                  {bar}
                 </Link>
               ) : (
-                <span className="onb-steps-later">{label}</span>
+                <span aria-label={label} role="img">
+                  {bar}
+                </span>
               )}
             </li>
           );
         })}
       </ol>
-    </Collapsible>
+    </nav>
   );
 }
 
@@ -713,7 +733,7 @@ function Onboarding() {
   const current: Step | 'end' = step ?? first;
 
   const problems = reported.step === current ? reported.list : [];
-  // The furthest step opened in this visit: Back to the first step still leaves the way forward in the list
+  // The furthest step opened in this visit: Back to the first step still leaves the way forward in the bars
   const [seen, setSeen] = useState(0);
   const at = current === 'end' ? STEPS.length - 1 : STEPS.indexOf(current);
   useEffect(() => setSeen((s) => Math.max(s, at)), [at]);
@@ -735,49 +755,43 @@ function Onboarding() {
   if (current === 'end') {
     const left = STEPS.filter((s) => data.state.steps[s] !== 'done');
     return (
-      <div className="onb">
-        <Top at={STEPS.length} current="Set-up finished" />
-        <main className="onb-main" id="main">
-          <div className="onb-art">
-            <Shipped width={220} />
-          </div>
-          <h1 className="ph onb-title" id="onb-title" tabIndex={-1}>
+      <main className="acc-onb acc-onb-end" id="main">
+        <div className="acc-onb-band">
+          <Shipped className="acc-onb-end-art" />
+        </div>
+        <div className="k-px k-stack k-g16 acc-onb-end-body">
+          <h1 className="k-d acc-onb-end-title" id="onb-title" tabIndex={-1}>
             {left.length === 0 ? 'All set' : 'Set up for now'}
           </h1>
-          <p className="onb-lead">
+          <p className="k-lead acc-onb-end-lead">
             {left.length === 0
               ? 'Shipcast has what it needs. A short tour shows where things are; it takes a minute.'
               : `Still to do when you like: ${left.map((s) => STEP_TITLES[s]).join(', ')}. Settings has “Finish setting up”.`}
           </p>
-          <div className="onb-actions">
-            <button type="button" className="btn" onClick={() => go(STEPS[STEPS.length - 1]!)}>
-              Back
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={async () => {
-                await answerTourOffer({ data: 'declined' });
-                await navigate({ to: '/' });
-              }}
-            >
-              Not now, go to Launches
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={async () => {
-                await answerTourOffer({ data: 'taken' });
-                requestTour();
-                await navigate({ to: '/' });
-              }}
-            >
-              Take the tour
-            </button>
-          </div>
-          <p className="muted onb-note">The tour is always in the menu under your name, and in the search (⌘K or Ctrl K).</p>
-        </main>
-      </div>
+          <button
+            type="button"
+            className="k-btn k-pri k-full"
+            onClick={async () => {
+              await answerTourOffer({ data: 'taken' });
+              requestTour();
+              await navigate({ to: '/' });
+            }}
+          >
+            Take the tour
+          </button>
+          <button
+            type="button"
+            className="k-btn k-full"
+            onClick={async () => {
+              await answerTourOffer({ data: 'declined' });
+              await navigate({ to: '/' });
+            }}
+          >
+            Go to Launches
+          </button>
+          <p className="k-xs k-muted acc-onb-end-note">The tour is always in More, and in the search.</p>
+        </div>
+      </main>
     );
   }
 
@@ -822,59 +836,47 @@ function Onboarding() {
   };
 
   const stepProps = { data, saver, report: (list: Problem[]) => setReported({ step: current, list }), attempted };
+  const state = data.state.steps[current];
   return (
-    <div className="onb">
-      <Top at={index + 1} current={`Step ${index + 1} of ${STEPS.length}: ${STEP_TITLES[current]}`} onLeave={leave} />
-      <main className="onb-main" id="main">
-        <div className="onb-art">
-          <Art width={220} />
+    <div className="acc-onb">
+      <Top onLeave={leave} />
+      <main id="main" className="k-px k-stack acc-onb-main">
+        <Progress key={current} data={data} current={current} seen={seen} />
+        <p className="k-xs k-muted acc-onb-count" aria-live="polite">
+          Step {index + 1} of {STEPS.length}: {STEP_TITLES[current]}
+          {state === 'done' ? ' · done' : state === 'skipped' ? ' · skipped for now' : optional ? ' · optional' : ''}
+        </p>
+        <div className="acc-onb-art">
+          <Art className="acc-onb-art-svg" />
         </div>
-        <StepList key={current} data={data} current={current} seen={seen} />
-        <h1 className="ph onb-title" id="onb-title" tabIndex={-1}>
+        <h1 className="k-d k-d48 acc-onb-title" id="onb-title" tabIndex={-1}>
           {STEP_TITLES[current]}
         </h1>
-        <p className="onb-lead">{LEADS[current]}</p>
+        <p className="k-muted acc-onb-lead">{LEADS[current]}</p>
         {/* One form per step, so Enter in any of its fields is Continue */}
-        <form className="onb-form" onSubmit={proceed} noValidate>
-          <div className="onb-step">
-            {current === 'brand' && <BrandStep key="brand" {...stepProps} />}
-            {current === 'ai' && <AiStep key="ai" {...stepProps} />}
-            {current === 'channels' && <AccountsStep networks={data.channels} kind="channels" />}
-            {current === 'measure' && <AccountsStep networks={data.measure} kind="measure" />}
-            {current === 'automation' && <AutomationStep key="automation" {...stepProps} />}
-          </div>
-          <div className="onb-actions" onMouseDown={holdFocus}>
-            {/* Never disabled: a slow save must not trap anyone on a step */}
-            {index > 0 && (
-              <button type="button" className="btn" onClick={() => go(STEPS[index - 1]!)}>
-                Back
-              </button>
-            )}
-            {/* aria-disabled, not disabled: it stays focusable, and pressing it says what is missing */}
-            <button type="submit" className="btn btn-primary" disabled={busy} aria-disabled={blocked || undefined} aria-describedby={blocked ? 'onb-hint' : undefined}>
-              {busy ? 'Saving…' : last ? 'Finish' : 'Continue'}
-            </button>
-            {optional && !data.detected[current] && data.state.steps[current] !== 'done' && (
-              <button
-                type="button"
-                className="btn-link onb-skip"
-                disabled={busy}
-                onClick={async () => {
-                  await markStep({ data: { step: current, as: 'skipped' } });
-                  await go(nextOf(current));
-                }}
-              >
-                Skip this step
-              </button>
-            )}
-            {blocked && (
-              <p className="onb-hint" id="onb-hint">
-                To continue: {listed(problems)}.
-              </p>
-            )}
-          </div>
+        <form className="k-stack acc-onb-form" id="onb-form" onSubmit={proceed} noValidate>
+          {current === 'brand' && <BrandStep key="brand" {...stepProps} />}
+          {current === 'ai' && <AiStep key="ai" {...stepProps} />}
+          {current === 'channels' && <AccountsStep networks={data.channels} />}
+          {current === 'measure' && <AccountsStep networks={data.measure} />}
+          {current === 'automation' && <AutomationStep key="automation" {...stepProps} />}
+          {blocked && (
+            <p className={`k-xs k-muted acc-onb-hint${attempted ? '' : ' visually-hidden'}`} id="onb-hint">
+              To continue: {listed(problems)}.
+            </p>
+          )}
         </form>
       </main>
+      <div className="k-bar acc-onb-bar" onMouseDown={holdFocus}>
+        {/* Never disabled: a slow save must not trap anyone on a step */}
+        <button type="button" className="k-btn" onClick={() => index > 0 && go(STEPS[index - 1]!)} style={index === 0 ? { visibility: 'hidden' } : undefined} aria-hidden={index === 0 || undefined} tabIndex={index === 0 ? -1 : undefined}>
+          Back
+        </button>
+        {/* aria-disabled, not disabled: it stays focusable, and pressing it says what is missing */}
+        <button type="submit" form="onb-form" className="k-btn k-pri acc-onb-grow" disabled={busy} aria-disabled={blocked || undefined} aria-describedby={blocked ? 'onb-hint' : undefined}>
+          {busy ? 'Saving…' : last ? 'Finish' : 'Continue'}
+        </button>
+      </div>
     </div>
   );
 }

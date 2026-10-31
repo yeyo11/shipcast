@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { loginPath, SESSION_HEADER } from '../server/next-path';
+import { SESSION_HEADER } from '../server/next-path';
+import { expiredPath } from './where-from';
 
 /** The app's own calls a session guards: server functions and pages, not the token-checked API or MCP */
 const guarded = (url: URL) => url.origin === location.origin && !url.pathname.startsWith('/api/v1/') && url.pathname !== '/mcp';
@@ -20,7 +21,7 @@ export function SessionExpiry() {
         const url = new URL(input instanceof Request ? input.url : String(input), location.href);
         if (guarded(url)) {
           leaving = true;
-          location.assign(loginPath(`${location.pathname}${location.search}${location.hash}`));
+          location.assign(expiredPath(`${location.pathname}${location.search}${location.hash}`, document.title));
         }
       }
       return response;

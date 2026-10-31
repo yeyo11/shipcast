@@ -7,7 +7,7 @@ import { MoreSheet, OwnerAvatar, type Owner } from '../components/kit/MoreSheet'
 import { ShellProvider, useShell } from '../components/kit/shell';
 import { LiveProvider, LiveStatusNote } from '../components/live/Live';
 import { Notifications } from '../components/Notifications';
-import { ErrorPage, NotFoundPage } from '../components/Problems';
+import { ErrorPage, NotFoundPage, OfflineGate } from '../components/Problems';
 import { SmoothScroll } from '../components/SmoothScroll';
 import { requestTour } from '../components/tour/request';
 import { TourHost } from '../components/tour/TourHost';
@@ -30,8 +30,11 @@ export const Route = createFileRoute('/_app')({
     return { ...who, banner, webMcp: webMcp.enabled };
   },
   component: Shell,
-  notFoundComponent: NotFoundPage,
-  errorComponent: ErrorPage,
+  // One chunk with the shell: the error and not-found pages must render when nothing more can be loaded (offline)
+  codeSplitGroupings: [['component', 'errorComponent', 'notFoundComponent']],
+  // A section's failure takes the shell with it (no section has its own boundary): the page draws the bars itself
+  notFoundComponent: () => <NotFoundPage place="app" />,
+  errorComponent: (props) => <ErrorPage {...props} place="app" />,
 });
 
 /** Settings is one group of four, behind the owner's menu on a desktop */
@@ -60,7 +63,9 @@ function Shell() {
             <ShellMain>
               <LiveStatusNote />
               <BannerProvider initial={banner}>
-                <Outlet />
+                <OfflineGate>
+                  <Outlet />
+                </OfflineGate>
               </BannerProvider>
             </ShellMain>
             <BottomBar />
