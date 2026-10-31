@@ -1,0 +1,165 @@
+/*
+ * The launch to approve (boards LaunchReview, LaunchContent, LaunchSchedule, LaunchPreview,
+ * DraftEditor, CodeCheck, DesktopLaunchReview and DesktopDraftEditor): the board's inline styles as
+ * named classes, on top of the kit. Role tokens only.
+ */
+
+/* The screen owns its spacing: the old main's top padding does not apply */
+.k-main:has(.ap-screen) { padding-top: 0; }
+@media (min-width: 960px) { .k-main:has(.ap-screen) { padding-bottom: 0; } }
+
+.ap-m0 { margin: 0; }
+.ap-mt6 { margin-top: 6px; }
+.ap-mt12 { margin-top: 12px; }
+.ap-mt14 { margin-top: 14px; }
+.ap-strong { font-weight: 600; }
+.ap-grow-btn { flex: 1; padding: 0 12px; }
+.ap-bad-text { color: var(--sc-failure); }
+.ap-link { background: none; border: 0; padding: 0; font: inherit; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ap-link:hover { color: var(--sc-yellow); }
+
+/* ---------- Header and tabs (phone) ---------- */
+.ap-head { padding-top: 18px; }
+.ap-top { align-items: flex-start; }
+.ap-base { align-items: baseline; }
+.ap-tabs-wrap { margin-top: 16px; }
+.k-tabs.ap-tabs { margin: 0 16px; padding: 0; }
+.k-tab { cursor: pointer; }
+.ap-notice-icon { margin-top: 1px; display: flex; }
+
+/* ---------- Channels (board LaunchReview) ---------- */
+.ap-chrow { align-items: flex-start; flex-wrap: wrap; }
+.ap-chrow:last-child { border-bottom: 0; }
+.k-ic.ap-ic-bad { border-color: var(--sc-failure); color: var(--sc-failure); }
+.ap-indent { width: 100%; padding-left: 52px; }
+.ap-diamond { width: 9px; height: 9px; background: var(--sc-failure); transform: rotate(45deg); margin-top: 6px; flex: none; }
+.k-card.ap-times { width: 100%; margin-top: 4px; padding: 14px; border-radius: 20px; gap: 10px; }
+.k-chip:disabled { opacity: .55; cursor: default; }
+.ap-chips-wait { min-height: 40px; display: inline-flex; align-items: center; }
+
+/* ---------- Content (board LaunchContent) ---------- */
+.k-card.ap-card-open { border-color: var(--sc-rail); }
+.k-btn.ap-toggle { flex: 1; border-color: var(--sc-text); }
+.k-btn.ap-toggle.ap-undo { border-color: transparent; }
+.ap-media { gap: 8px; }
+.ap-thumb { flex: 1; height: 96px; border-radius: 14px; border: 2px solid var(--sc-hairline); overflow: hidden; display: block; object-fit: cover; }
+.ap-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------- The yellow bar over the bottom bar (phone) ---------- */
+.ap-bar-space { height: 160px; }
+.k-bar.ap-bar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); flex-direction: column; align-items: stretch; gap: 10px; z-index: 45; }
+
+/* ---------- Desktop (board DesktopLaunchReview) ---------- */
+.ap-crumb { text-decoration: none; color: var(--sc-muted); }
+.ap-dtitle { margin-top: 12px; align-items: flex-end; gap: 16px; }
+.ap-dversion { font-size: 22px; }
+.ap-dgrid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; margin-top: 28px; align-items: start; }
+.ap-dcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.k-card.ap-dcard { gap: 10px; }
+.k-card.ap-aside { position: sticky; top: 96px; gap: 14px; padding: 24px; }
+.ap-ticks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-weight: 600; }
+.ap-ring { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--sc-black); flex: none; }
+
+/* ---------- Another day (board LaunchSchedule) ---------- */
+.k-sheet.ap-sheet { max-width: 560px; margin: 0 auto; }
+.k-card.ap-cal { padding: 12px; gap: 8px; border-radius: 20px; }
+.ap-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 4px; }
+.ap-cal-head { padding: 4px 0; }
+.ap-cal-day { height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: none; border: 0; color: var(--sc-text); font: inherit; cursor: pointer; padding: 0; }
+.ap-cal-day:disabled { color: var(--sc-rail); cursor: default; }
+.ap-cal-day.ap-on { background: var(--sc-yellow); color: var(--sc-black); font-weight: 700; }
+.ap-time input { background: none; border: 0; color: inherit; font: inherit; padding: 0; outline: none; min-width: 0; }
+.ap-time input::-webkit-calendar-picker-indicator { display: none; }
+.ap-time:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+
+/* ---------- Preview (board LaunchPreview) ---------- */
+.ap-seg { width: 150px; }
+/* The card is the blog's page, not the app: the site's own paper and ink, named once here */
+.ap-browser { --ap-site-paper: #FFFFFF; --ap-site-ink: #111111; --ap-site-chrome: #EDEEF0; --ap-site-quiet: #555555; --ap-site-code: #F1F1F1;
+  border: 2.5px solid var(--sc-rail); border-radius: 24px; overflow: hidden; background: var(--ap-site-paper); color: var(--ap-site-ink); }
+.ap-browser-bar { background: var(--ap-site-chrome); padding: 8px 12px; font: 12px var(--sc-font-mono); color: var(--ap-site-quiet); }
+.ap-browser-page { padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ap-browser-date { font: 12px var(--sc-font-mono); color: var(--ap-site-quiet); }
+.ap-browser-title { font: 800 28px/1.1 var(--sc-font-text); letter-spacing: -.02em; margin: 0; }
+.ap-browser-lead { margin: 0; font-size: 15px; line-height: 1.6; color: var(--ap-site-quiet); }
+.ap-browser-image { width: 100%; border-radius: 12px; border: 2px solid var(--sc-black); display: block; }
+.ap-browser-body { font-size: 15px; line-height: 1.6; }
+.ap-browser-body > :first-child { margin-top: 0; }
+.ap-browser-body p { margin: 0 0 12px; }
+.ap-browser-body h2 { font: 800 21px/1.2 var(--sc-font-text); margin: 20px 0 8px; }
+.ap-browser-body h3 { font: 700 18px/1.25 var(--sc-font-text); margin: 16px 0 6px; }
+.ap-browser-body a { color: var(--ap-site-ink); }
+.ap-browser-body code { font: 13px var(--sc-font-mono); background: var(--ap-site-code); border-radius: 4px; padding: 1px 4px; }
+.ap-browser-body pre { background: var(--ap-site-code); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 13px; }
+.ap-browser-body pre code { background: none; padding: 0; }
+.ap-browser-body ul, .ap-browser-body ol { padding-left: 20px; margin: 0 0 12px; }
+.ap-browser-body img { max-width: 100%; }
+
+/* ---------- Drafts (boards DraftEditor and DesktopDraftEditor) ---------- */
+.ap-editor { min-height: 300px; align-items: stretch; font-size: 16px; line-height: 1.6; padding: 12px 14px; }
+.ap-editor textarea { flex: 1; width: 100%; min-height: 272px; background: none; border: 0; color: inherit; font: inherit; line-height: inherit; resize: none; outline: none; padding: 0; }
+.ap-editor:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.k-btn.ap-assist { min-height: 36px; }
+.ap-chip-on { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
+.ap-check-card { flex-direction: row; align-items: center; text-decoration: none; padding: 12px 14px; border-radius: 18px; color: var(--sc-text); }
+.ap-check-card:hover { color: var(--sc-text); border-color: var(--sc-rail); }
+.k-bar.ap-save { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
+.ap-save-space { height: 110px; }
+.ap-lang { width: 110px; }
+.ap-lang button { min-height: 30px; }
+
+.ap-proposal { border-color: var(--sc-black); box-shadow: 6px 6px 0 var(--sc-yellow); gap: 12px; }
+.ap-proposal-text { white-space: pre-wrap; font-size: 16px; line-height: 1.6; max-height: 260px; overflow-y: auto; }
+.ap-legend { display: inline-flex; align-items: center; gap: 6px; }
+.ap-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ap-legend .ap-add { background: rgba(111, 213, 142, .5); }
+.ap-legend .ap-del { background: rgba(255, 107, 91, .5); }
+
+.ap-ddrafts { display: grid; grid-template-columns: 220px minmax(0, 1fr) 380px; gap: 24px; margin-top: 16px; align-items: start; }
+.ap-ddrafts .k-mi { cursor: pointer; }
+.ap-ddrafts .ap-editor { min-height: 420px; font-size: 17px; line-height: 1.65; }
+.ap-ddrafts .ap-editor textarea { min-height: 392px; }
+.k-card.ap-chat { gap: 12px; position: sticky; top: 96px; min-height: 560px; max-height: calc(100vh - 128px); }
+.ap-chat-list { flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }
+.ap-mine { align-self: flex-end; max-width: 85%; background: var(--sc-hairline); border-radius: 18px 18px 4px 18px; padding: 10px 14px; font-size: 15px; white-space: pre-wrap; }
+.ap-answer { white-space: pre-wrap; }
+.k-card.ap-chat-proposal { padding: 12px; gap: 8px; border-radius: 18px; background: var(--sc-ground); }
+.k-btn.ap-accept { flex: 1; border-color: var(--sc-text); }
+.ap-chat-form textarea { flex: 1; min-height: 48px; resize: none; background: var(--sc-ground); color: var(--sc-text); border: 2px solid var(--sc-rail); border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 16px; outline: none; }
+.ap-chat-form textarea:focus { border-color: var(--sc-yellow); }
+.ap-chat-form textarea::placeholder { color: var(--sc-rail); }
+.ap-session { text-align: left; width: 100%; background: none; border: 0; color: inherit; font: inherit; padding: 10px 12px; border-radius: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.ap-session:hover, .ap-session[aria-current="true"] { background: var(--sc-hairline); }
+.k-sheet .k-card.ap-chat { position: static; min-height: 60vh; max-height: none; border: 0; padding: 0; background: none; }
+
+/* ---------- Check against the code (board CodeCheck) ---------- */
+.ap-verdict-dot { margin-top: 6px; display: block; }
+.ap-v-backed { color: var(--sc-success); }
+.ap-v-contradicted { color: var(--sc-failure); }
+.ap-v-planned, .ap-v-not-found { color: var(--sc-muted); }
+.ap-check-wait { display: flex; align-items: center; gap: 10px; }
+.ap-preview-phone { padding-top: 16px; }
+.k-page.ap-preview-desk, .k-page.ap-check-desk { max-width: 760px; }
+.ap-left { text-align: left; }
+.ap-check-card { font: inherit; cursor: pointer; width: 100%; }
+.k-d.ap-dh1 { margin-bottom: 10px; }
+.ap-strong7 { font-weight: 700; }
+.ap-finding { align-items: flex-start; }
+.ap-link-plain { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; cursor: pointer; }
+.ap-link-plain:hover { color: var(--sc-text); }
+.k-page.ap-crumb-page { padding-bottom: 0; }
+@media (min-width: 960px) { .ap-check-body { max-width: 760px; margin: 0 auto; padding: 0 16px; } .ap-check-body .ap-head { padding-top: 12px; } }
+.ap-empty { padding-bottom: 32px; }
+@media (min-width: 960px) { .ap-empty { max-width: 1200px; margin: 0 auto; padding: 32px; } }
+.ap-sheet-title { font-size: 18px; }
+.ap-mi-note { padding: 0 12px 6px; }
+.k-btn.ap-title-pick { white-space: normal; text-align: left; justify-content: flex-start; padding: 8px 16px; line-height: 1.35; }
+button.k-mi:disabled { opacity: .5; cursor: default; }
+.ap-card-name { font-weight: 500; }
+/* The page scrolls inside its frame, so the frame keeps the board's size and the actions stay in reach */
+.ap-browser-page { height: 400px; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+@media (min-width: 960px) { .ap-browser-page { height: min(640px, calc(100vh - 320px)); } }
+.ap-ddrafts .k-btn.ap-assist { min-height: 40px; }
+ins.k-diff-add { text-decoration: none; }
+.ap-dcards-flex { display: flex; flex-direction: column; gap: 12px; }
+@media (min-width: 960px) { .ap-dcards-flex { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }

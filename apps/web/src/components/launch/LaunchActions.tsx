@@ -10,7 +10,7 @@ import { useToast } from '../Toasts';
 import { ChannelGlyph, channelTitle } from './ChannelGlyph';
 import { DeleteLaunch } from './DeleteLaunch';
 import { EditManySheet, PostEditSheet } from './PostEditSheet';
-import { ChannelSchedule } from './Schedule';
+import { MoveSheet } from '../approve/times';
 import { UnpublishSheet } from './UnpublishSheet';
 
 /*
@@ -229,13 +229,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
 
       {deletable && <DeleteLaunch launchId={launchId} open={open?.kind === 'delete'} onOpenChange={(next) => !next && close()} onDeleted={onDeleted} />}
 
-      {moving && (
-        <Sheet label={`Move ${channelTitle(moving.channel)}`} open onOpenChange={(next) => !next && close()}>
-          <h2 className="k-d k-d30">Move {channelTitle(moving.channel)}</h2>
-          <ChannelSchedule launchId={launchId} item={moving} timezone={timezone} held={held} />
-          <SheetClose className="k-btn k-full">Close</SheetClose>
-        </Sheet>
-      )}
+      {moving && <MoveSheet launchId={launchId} item={moving} name={channelTitle(moving.channel)} timezone={timezone} onClose={close} />}
     </Context.Provider>
   );
 }

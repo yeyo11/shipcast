@@ -1,0 +1,462 @@
+import { Link, useRouter } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { saveDraft } from '../../server/launches.functions';
+import { CHANNEL_NAMES } from '../../server/view';
+import { channelOfDraft } from '../assistant/protocol';
+import { useAssistant, type Assistant } from '../assistant/session';
+import { TopBar } from '../kit/Bars';
+import { Icon } from '../kit/Icon';
+import { Sheet } from '../kit/Sheet';
+import { useToast } from '../Toasts';
+import { AssistSheet, ChatCard, ProposalCard } from './assist';
+import { checkSummary, joinDraft, langName, langOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
+import { Glyph, type DraftView, type LaunchData } from './parts';
+
+/*
+ * The drafts editor (boards DraftEditor, DesktopDraftEditor and CodeCheck). The text edited is the
+ * draft's body: an article's front matter and a channel draft's heading and mode line are the file's
+ * and go back around it on a save. Unsaved edits survive moving between pieces.
+ */
+
+export interface EditSearch {
+  draft?: string;
+  lang?: 'en' | 'es';
+  check?: true;
+}
+
+const nameOf = (channel: string) => CHANNEL_NAMES[channel] ?? channel;
+
+interface CheckResult {
+  /** The text the check read: a later edit makes it the last check, not the current one */
+  text: string;
+  findings: Array<{ claim: string; verdict: Verdict; evidence: string }>;
+}
+
+export function DraftsScreen({ data, search, onSearch }: { data: LaunchData; search: EditSearch; onSearch: (next: EditSearch) => void }) {
+  const { launch, review } = data;
+  const reviewOk = review && !('error' in review) ? review : undefined;
+  const texts = useMemo(() => reviewOk?.drafts.filter((d) => d.kind === 'article' || d.kind === 'channel') ?? [], [reviewOk]);
+  const pieces = useMemo(() => piecesOf(texts, channelOfDraft, nameOf), [texts]);
+  const piece = pieces.find((p) => p.id === search.draft) ?? pieces[0];
+  const draft = piece ? (piece.drafts.find((d) => langOf(d.path) === search.lang) ?? piece.drafts[0]) : undefined;
+  // A launch Shipcast holds is edited while drafted (docs/app-review.md); one in a pull request while it is open
+  const editable = reviewOk?.app ? reviewOk.app.open : reviewOk?.pullRequest?.state === 'open';
+  const waiting = launch.status === 'drafted' && editable;
+  const [bodies, setBodies] = useState<Record<string, string>>({});
+  const [checks, setChecks] = useState<Record<string, CheckResult>>({});
+  const project = launch.ref.startsWith('article:') ? 'The article' : `${(launch.repo.split('/')[1] ?? launch.repo).replace(/^./, (c) => c.toUpperCase())} ${launch.ref}`;
+  const params = { id: String(launch.id) };
+
+  if (!piece || !draft) {
+    return (
+      <div className="ap-screen">
+        <div className="k-phone">
+          <TopBar back={{ label: project, to: `/launches/${launch.id}` }} />
+        </div>
+        <div className="k-px ap-head k-stack k-g12 ap-empty">
+          <h1 className="k-d k-d48">Drafts</h1>
+          {review && 'error' in review && <div className="k-notice k-bad">The drafts could not be read: {review.error}</div>}
+          <div className="k-card k-quiet">
+            <strong>No drafts to edit</strong>
+            <span className="k-sm k-muted">This launch has no text drafts to edit.</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <PieceEditor
+      key={draft.path}
+      launch={launch}
+      params={params}
+      project={project}
+      pieces={pieces}
+      pieceId={piece.id}
+      draft={draft}
+      langs={piece.drafts.map((d) => langOf(d.path)).filter((l): l is 'en' | 'es' => Boolean(l))}
+      editable={Boolean(editable)}
+      waiting={Boolean(waiting)}
+      body={bodies[draft.path]}
+      setBody={(text) => setBodies((b) => ({ ...b, [draft.path]: text }))}
+      check={checks[draft.path]}
+      setCheck={(c) => setChecks((all) => ({ ...all, [draft.path]: c }))}
+      search={search}
+      onSearch={onSearch}
+    />
+  );
+}
+
+interface PieceEditorProps {
+  launch: LaunchData['launch'];
+  params: { id: string };
+  project: string;
+  pieces: Piece<DraftView>[];
+  pieceId: string;
+  draft: DraftView;
+  langs: Array<'en' | 'es'>;
+  editable: boolean;
+  waiting: boolean;
+  body: string | undefined;
+  setBody: (text: string) => void;
+  check: CheckResult | undefined;
+  setCheck: (check: CheckResult) => void;
+  search: EditSearch;
+  onSearch: (next: EditSearch) => void;
+}
+
+function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, editable, waiting, body, setBody, check, setCheck, search, onSearch }: PieceEditorProps) {
+  const router = useRouter();
+  const toast = useToast();
+  const parts = useMemo(() => splitDraft(draft.content ?? '', draft.kind), [draft.content, draft.kind]);
+  const value = body ?? parts.body;
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [assistOpen, setAssistOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatFocus, setChatFocus] = useState(0);
+  const channel = draft.kind === 'article' ? 'blog' : (channelOfDraft(draft.path) ?? pieceId);
+  const lang = langOf(draft.path);
+  const article = launch.ref.startsWith('article:');
+  const assistant = useAssistant({
+    value,
+    onChange: (next) => {
+      setBody(next);
+      setSaved(false);
+    },
+    launchId: launch.id,
+    draftPath: draft.path,
+    draftLabel: draft.label,
+    ...(lang && { lang }),
+    ...(draft.kind !== 'article' && { channel }),
+    ...(article && { checkDisabled: 'This launch is an article you wrote: there is no code to check it against, the article is the truth.' }),
+  });
+  const changed = value !== parts.body;
+  const pieceName = pieces.find((p) => p.id === pieceId)?.name ?? draft.label;
+  const label = draft.kind === 'article' ? `Article · ${langName(lang) || 'the text'}` : `${nameOf(channel)} post`;
+  const m = draft.kind === 'article' ? undefined : measure(channel, value);
+  const count = m ? `${m.length.toLocaleString('en')} / ${m.max.toLocaleString('en')}` : `${words(plainText(value)).toLocaleString('en')} words`;
+  const over = m ? m.length > m.max : false;
+
+  // The check's answer is the proposal with findings: kept as this text's last check once it is in
+  const p = assistant.proposal;
+  useEffect(() => {
+    if (p?.findings && !p.streaming && !p.problem) setCheck({ text: p.original, findings: p.findings });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p?.findings, p?.streaming, p?.problem]);
+  const checking = Boolean(p && p.label === 'Check against the code' && p.streaming);
+  const checkProblem = p && p.label === 'Check against the code' ? p.problem : undefined;
+
+  // Opening the check runs it when the text has none yet
+  useEffect(() => {
+    if (search.check && !article && !checking && (!check || check.text !== value) && !checkProblem) assistant.run('check');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.check]);
+
+  const save = async () => {
+    setBusy(true);
+    const answer = await saveDraft({ data: { id: launch.id, path: draft.path, content: joinDraft(parts, value) } }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
+    setBusy(false);
+    if (answer.ok) {
+      setSaved(true);
+      toast.done(`${pieceName} saved`, reviewHeld(launch) ? 'Saved as a new version: it goes out once it is approved.' : 'The edit is a commit on the pull request: it is what gets published.');
+      await router.invalidate();
+    } else toast.fail(answer.problem);
+  };
+  const status = saved && !changed ? `✓ ${pieceName} saved` : !editable ? 'Read-only: the launch is no longer waiting' : changed ? 'Not saved yet' : 'No changes';
+  const pick = (id: string) => onSearch({ draft: id });
+  const openCheck = () => onSearch({ draft: pieceId, ...(lang && langs.length > 1 && { lang }), check: true });
+  const backToDraft = () => onSearch({ draft: pieceId, ...(lang && langs.length > 1 && { lang }) });
+
+  const pill = waiting ? <span className="k-pill k-p-wait">Waiting for you</span> : <span className="k-pill k-p-line">{launch.state.label}</span>;
+
+  const fieldHead = (where: string) => (
+    <div className="k-hrow k-between k-g8">
+      <span className="k-hrow k-g8">
+        <label className="k-lbl" htmlFor={`ap-draft-${where}`}>
+          {label}
+        </label>
+        {langs.length > 1 && (
+          <span className="k-seg ap-lang" role="group" aria-label="Language">
+            {langs.map((l) => (
+              <button key={l} type="button" className={l === lang ? 'k-on' : undefined} aria-pressed={l === lang} aria-label={langName(l)} onClick={() => onSearch({ draft: pieceId, lang: l })}>
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </span>
+        )}
+      </span>
+      <button type="button" className="k-btn k-sm ap-assist" onClick={() => setAssistOpen(true)} aria-keyshortcuts="Alt+J" disabled={!editable}>
+        <Icon name="assist" size={16} />
+        Assist
+      </button>
+    </div>
+  );
+  const readSelection = (el: HTMLTextAreaElement) => assistant.setSelection({ start: el.selectionStart, end: el.selectionEnd });
+  const editor = (where: string) => (
+    <>
+      <ProposalCard assistant={assistant} onProblem={() => toast.fail('The text changed under the proposal: ask again on the text as it is now.')} />
+      <div className="k-input ap-editor">
+        <textarea
+          id={`ap-draft-${where}`}
+          value={value}
+          readOnly={!editable}
+          lang={lang}
+          onChange={(e) => {
+            setBody(e.target.value);
+            setSaved(false);
+            readSelection(e.currentTarget);
+          }}
+          onSelect={(e) => readSelection(e.currentTarget)}
+          onKeyUp={(e) => readSelection(e.currentTarget)}
+          onMouseUp={(e) => readSelection(e.currentTarget)}
+          onKeyDown={(e) => {
+            if (e.altKey && e.key.toLowerCase() === 'j') {
+              e.preventDefault();
+              setAssistOpen(true);
+            }
+          }}
+          aria-describedby={`ap-count-${where}`}
+        />
+      </div>
+    </>
+  );
+  const countLine = (where: string) => (
+    <span id={`ap-count-${where}`} className={`k-mono${over ? ' ap-bad-text' : ''}`}>
+      {count}
+    </span>
+  );
+  const checkCard = !article && (
+    <button type="button" className="k-card k-flat ap-check-card" onClick={openCheck}>
+      <span className="k-grow k-sm ap-left">
+        <strong>Check against the code</strong>
+        <br />
+        <span className="k-muted k-xs">{check ? (check.text === value ? checkSummary(check.findings) : `${checkSummary(check.findings)} (the text changed since)`) : 'Each claim of the text, against the repo’s code'}</span>
+      </span>
+      <Icon name="chevronRight" size={18} />
+    </button>
+  );
+  const sheets = (
+    <>
+      <AssistSheet
+        assistant={assistant}
+        open={assistOpen}
+        onOpenChange={setAssistOpen}
+        onCheck={openCheck}
+        onChat={() => {
+          setChatOpen(true);
+          setChatFocus((n) => n + 1);
+        }}
+      />
+      <div className="k-phone">
+        <Sheet label="The assistant’s chat" open={chatOpen} onOpenChange={setChatOpen} className="ap-sheet">
+          <ChatCard assistant={assistant} focusKey={chatFocus} />
+        </Sheet>
+      </div>
+    </>
+  );
+
+  if (search.check) {
+    return (
+      <div className="ap-screen">
+        <div className="k-phone">
+          <TopBar back={{ label: project, to: `/launches/${launch.id}/edit`, search: { draft: pieceId } }} />
+        </div>
+        <div className="k-desktop">
+          <div className="k-page ap-check-desk ap-crumb-page">
+            <button type="button" className="k-hrow k-g4 k-sm ap-crumb ap-link-plain" onClick={backToDraft}>
+              <Icon name="chevronLeft" size={16} />
+              {pieceName} draft
+            </button>
+          </div>
+        </div>
+        <div className="ap-check-body">
+          <CheckView launch={launch} name={pieceName} assistant={assistant} check={check} value={value} checking={checking} problem={checkProblem} onBack={backToDraft} onRetry={() => assistant.run('check')} />
+        </div>
+        {sheets}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ap-screen">
+      {/* ---------- Phone (board DraftEditor) ---------- */}
+      <div className="k-phone">
+        <TopBar back={{ label: project, to: `/launches/${launch.id}`, search: { tab: 'content' } }} />
+        <div className="k-px k-stack k-g12 ap-head">
+          <div className="k-hrow k-between">
+            <h1 className="k-d k-d48">Drafts</h1>
+            {pill}
+          </div>
+          <div className="k-chips" role="tablist" aria-label="Drafts">
+            {pieces.map((x) => (
+              <button key={x.id} type="button" role="tab" aria-selected={x.id === pieceId} className={`k-chip${x.id === pieceId ? ' ap-chip-on' : ''}`} onClick={() => pick(x.id)}>
+                {x.name}
+              </button>
+            ))}
+          </div>
+          <div className="k-field">
+            {fieldHead('phone')}
+            {editor('phone')}
+            <div className="k-hrow k-between k-help">
+              <span>The edit is what gets published.</span>
+              {countLine('phone')}
+            </div>
+          </div>
+          {checkCard}
+        </div>
+        <div className="ap-save-space" aria-hidden="true" />
+        <div className="k-bar ap-save">
+          <span className="k-sm k-muted k-grow" role="status">
+            {status}
+          </span>
+          <button type="button" className="k-btn k-pri" disabled={!editable || busy || !changed} onClick={save}>
+            {busy ? 'Saving…' : 'Save this edit'}
+          </button>
+        </div>
+      </div>
+
+      {/* ---------- Desktop (board DesktopDraftEditor) ---------- */}
+      <div className="k-desktop">
+        <div className="k-page">
+          <Link to="/launches/$id" params={params} search={{ tab: 'content' }} className="k-hrow k-g4 k-sm ap-crumb">
+            <Icon name="chevronLeft" size={16} />
+            {project}
+          </Link>
+          <div className="ap-ddrafts">
+            <nav className="k-stack k-g4" aria-label="Drafts">
+              <h1 className="k-d k-d48 ap-dh1">Drafts</h1>
+              {pieces.map((x) => (
+                <button key={x.id} type="button" className={`k-mi${x.id === pieceId ? ' k-on' : ''}`} aria-current={x.id === pieceId ? 'true' : undefined} onClick={() => pick(x.id)}>
+                  <Glyph name={x.id} size={18} />
+                  {x.name}
+                </button>
+              ))}
+            </nav>
+            <div className="k-stack k-g12">
+              {fieldHead('desk')}
+              {editor('desk')}
+              <div className="k-hrow k-between">
+                <span className="k-xs k-muted">
+                  {changed ? 'Not saved yet' : saved ? `✓ ${pieceName} saved` : 'The edit is what gets published'} · {countLine('desk')}
+                </span>
+                <button type="button" className="k-btn k-pri" disabled={!editable || busy || !changed} onClick={save}>
+                  {busy ? 'Saving…' : 'Save this edit'}
+                </button>
+              </div>
+              {checkCard}
+            </div>
+            <ChatCard assistant={assistant} focusKey={chatFocus} />
+          </div>
+        </div>
+      </div>
+      {sheets}
+    </div>
+  );
+}
+
+const reviewHeld = (launch: LaunchData['launch']) => !launch.pullRequest;
+
+const DOT: Record<Verdict, string> = { backed: 'k-dot-pub', planned: 'k-dot-quiet', 'not-found': 'k-dot-quiet', contradicted: 'k-dot-fail' };
+const PILL: Record<Verdict, string> = { backed: 'k-p-pub', planned: 'k-p-quiet', 'not-found': 'k-p-quiet', contradicted: 'k-p-fail' };
+
+/** Each claim of a draft against the repo's code (board CodeCheck) */
+function CheckView({
+  launch,
+  name,
+  check,
+  value,
+  checking,
+  problem,
+  onBack,
+  onRetry,
+}: {
+  launch: LaunchData['launch'];
+  name: string;
+  assistant: Assistant;
+  check: CheckResult | undefined;
+  value: string;
+  checking: boolean;
+  problem: string | undefined;
+  onBack: () => void;
+  onRetry: () => void;
+}) {
+  const stale = check && check.text !== value;
+  return (
+    <>
+      <div className="k-px k-stack k-g8 ap-head">
+        <h1 className="k-d k-d30">Checked against the code</h1>
+        <p className="k-sm k-muted ap-m0">
+          Each claim of the {name} draft, against {launch.repo} at {launch.ref}. The code is the source of truth, not the README.
+        </p>
+      </div>
+      {checking && (
+        <div className="k-px ap-mt14">
+          <div className="k-notice k-wait ap-check-wait" role="status">
+            <span className="k-pill k-p-run">Checking</span>
+            <span>Reading the code for each claim; the answer arrives all at once.</span>
+          </div>
+        </div>
+      )}
+      {problem && !checking && (
+        <div className="k-px ap-mt14 k-stack k-g10">
+          <div className="k-notice k-bad" role="alert">
+            <span className="ap-diamond" aria-hidden="true" />
+            <div className="k-grow">
+              <strong>The check did not finish.</strong> {problem}
+            </div>
+          </div>
+          <button type="button" className="k-btn k-sm" onClick={onRetry}>
+            <Icon name="retry" size={18} />
+            Check again
+          </button>
+        </div>
+      )}
+      {check && !checking && (
+        <>
+          {stale && (
+            <div className="k-px ap-mt12">
+              <div className="k-notice k-wait">
+                <div className="k-grow">
+                  The text changed since this check.{' '}
+                  <button type="button" className="ap-link" onClick={onRetry}>
+                    Check it again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="k-px k-hrow k-g8 k-wrap ap-mt12">
+            {verdictCounts(check.findings).map((c) => (
+              <span key={c.verdict} className={`k-pill ${PILL[c.verdict]}`}>
+                {c.words}
+              </span>
+            ))}
+          </div>
+          <div className="k-px k-stack ap-mt6">
+            {check.findings.length === 0 && <p className="k-sm k-muted">The text makes no claim the code could back or contradict.</p>}
+            {check.findings.map((f, i) => (
+              <div key={i} className="k-row ap-finding">
+                <span className="ap-verdict-dot">
+                  <span className={`k-dot ${DOT[f.verdict]}`} />
+                </span>
+                <div className="k-grow k-stack k-g4">
+                  <span className={`k-sm ap-strong7 ap-v-${f.verdict}`}>{VERDICT_WORDS[f.verdict].title}</span>
+                  <span className="k-sm">“{f.claim}”</span>
+                  <span className="k-xs k-muted">{f.evidence}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="k-px k-hrow k-g10 ap-mt14">
+        <button type="button" className="k-btn k-full" onClick={onBack}>
+          <Icon name="chevronLeft" size={18} />
+          Back to the draft
+        </button>
+      </div>
+      <div className="ap-save-space" aria-hidden="true" />
+    </>
+  );
+}

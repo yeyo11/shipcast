@@ -61,6 +61,7 @@ import { Route as AuthRedditCallbackRouteImport } from './routes/auth/reddit.cal
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
 import { Route as AuthYoutubeCallbackRouteImport } from './routes/auth/youtube.callback'
 import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
+import { Route as AppLaunchesIdPreviewRouteImport } from './routes/_app/launches/$id_.preview'
 import { Route as AppSettingsAiPromptsRouteImport } from './routes/_app/settings_.ai.prompts'
 import { Route as AppSettingsAutomationWebhooksRouteImport } from './routes/_app/settings_.automation.webhooks'
 
@@ -323,6 +324,11 @@ const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
   path: '/launches/$id/edit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLaunchesIdPreviewRoute = AppLaunchesIdPreviewRouteImport.update({
+  id: '/launches/$id_/preview',
+  path: '/launches/$id/preview',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsAiPromptsRoute = AppSettingsAiPromptsRouteImport.update({
   id: '/settings_/ai/prompts',
   path: '/settings/ai/prompts',
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/channels/': typeof AppChannelsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
   '/settings/ai/prompts': typeof AppSettingsAiPromptsRoute
   '/settings/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
@@ -441,6 +448,7 @@ export interface FileRoutesByTo {
   '/channels': typeof AppChannelsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
   '/settings/ai/prompts': typeof AppSettingsAiPromptsRoute
   '/settings/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
@@ -498,6 +506,7 @@ export interface FileRoutesById {
   '/_app/channels/': typeof AppChannelsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
+  '/_app/launches/$id_/preview': typeof AppLaunchesIdPreviewRoute
   '/_app/settings_/ai/prompts': typeof AppSettingsAiPromptsRoute
   '/_app/settings_/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
@@ -555,6 +564,7 @@ export interface FileRouteTypes {
     | '/channels/'
     | '/settings/'
     | '/launches/$id/edit'
+    | '/launches/$id/preview'
     | '/settings/ai/prompts'
     | '/settings/automation/webhooks'
   fileRoutesByTo: FileRoutesByTo
@@ -609,6 +619,7 @@ export interface FileRouteTypes {
     | '/channels'
     | '/settings'
     | '/launches/$id/edit'
+    | '/launches/$id/preview'
     | '/settings/ai/prompts'
     | '/settings/automation/webhooks'
   id:
@@ -665,6 +676,7 @@ export interface FileRouteTypes {
     | '/_app/channels/'
     | '/_app/settings/'
     | '/_app/launches/$id_/edit'
+    | '/_app/launches/$id_/preview'
     | '/_app/settings_/ai/prompts'
     | '/_app/settings_/automation/webhooks'
   fileRoutesById: FileRoutesById
@@ -1062,6 +1074,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchesIdEditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/launches/$id_/preview': {
+      id: '/_app/launches/$id_/preview'
+      path: '/launches/$id/preview'
+      fullPath: '/launches/$id/preview'
+      preLoaderRoute: typeof AppLaunchesIdPreviewRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings_/ai/prompts': {
       id: '/_app/settings_/ai/prompts'
       path: '/settings/ai/prompts'
@@ -1115,6 +1134,7 @@ interface AppRouteChildren {
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
   AppLaunchesIdEditRoute: typeof AppLaunchesIdEditRoute
+  AppLaunchesIdPreviewRoute: typeof AppLaunchesIdPreviewRoute
   AppSettingsAiPromptsRoute: typeof AppSettingsAiPromptsRoute
   AppSettingsAutomationWebhooksRoute: typeof AppSettingsAutomationWebhooksRoute
 }
@@ -1137,6 +1157,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
   AppLaunchesIdEditRoute: AppLaunchesIdEditRoute,
+  AppLaunchesIdPreviewRoute: AppLaunchesIdPreviewRoute,
   AppSettingsAiPromptsRoute: AppSettingsAiPromptsRoute,
   AppSettingsAutomationWebhooksRoute: AppSettingsAutomationWebhooksRoute,
 }

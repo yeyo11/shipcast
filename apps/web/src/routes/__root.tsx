@@ -4,6 +4,7 @@ import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SessionExpiry } from '../components/SessionExpiry';
 import accessCss from '../styles/access.css?url';
 import appCss from '../styles/app.css?url';
+import approveCss from '../styles/approve.css?url';
 import channelsCss from '../styles/channels.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
@@ -27,6 +28,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: featuresCss },
       { rel: 'stylesheet', href: layoutCss },
       { rel: 'stylesheet', href: kitCss },
+      { rel: 'stylesheet', href: approveCss },
       { rel: 'stylesheet', href: homeCss },
       { rel: 'stylesheet', href: publishedCss },
       { rel: 'stylesheet', href: channelsCss },
