@@ -56,7 +56,6 @@
 .pub-menu-head { align-items: baseline; padding: 0 4px; }
 .pub-menu-none { margin: 4px 12px; }
 .pub-mi-diamond { display: inline-flex; margin: 0 5px; }
-button.k-mi[disabled] { opacity: .45; cursor: not-allowed; }
 .pub-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pub-legend { padding: 0; }
 .pub-pick { cursor: pointer; }

@@ -136,7 +136,6 @@
 @media (pointer: coarse) { .wr-assist-float-button { min-height: 44px; } }
 .wr-menu-note { padding: 4px 12px 6px; max-width: 320px; }
 .wr-assist-menu { min-width: 260px; }
-button.k-mi:disabled { opacity: .45; cursor: not-allowed; }
 .wr-sheet-head { padding: 0 4px; }
 .wr-sheet-title { font-weight: 700; font-size: 18px; }
 .wr-sheet-back { font-weight: 600; }
@@ -148,7 +147,6 @@ button.k-mi:disabled { opacity: .45; cursor: not-allowed; }
 .wr-diff-text:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 4px; border-radius: 4px; }
 .wr-diff.k-sm .wr-diff-text { font-size: 14px; line-height: 1.5; }
 .wr-diff-whole .wr-diff-text { max-height: 50vh; overflow-y: auto; }
-ins.k-diff-add { text-decoration: none; }
 .wr-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .wr-swatch-add { background: rgba(111, 213, 142, .5); }
 .wr-swatch-del { background: rgba(255, 107, 91, .45); }

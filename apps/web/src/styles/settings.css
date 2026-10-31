@@ -46,8 +46,6 @@
 .st-sheet-text { margin: 0; }
 .st-link { background: none; border: 0; padding: 0; font: inherit; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .st-link:hover { color: var(--sc-yellow); }
-a.k-card, button.k-card { text-decoration: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-a.k-card:hover, button.k-card:hover { color: inherit; border-color: var(--sc-rail); }
 .st-chevron { flex: none; }
 
 /* ---------- Fields: the kit's input as a real control ---------- */
@@ -80,8 +78,7 @@ a.k-card:hover, button.k-card:hover { color: inherit; border-color: var(--sc-rai
 .st-taskgrid-note { margin: 12px 0 0; }
 .st-tone { min-height: 90px; }
 .st-log { margin: 0; max-height: 320px; overflow: auto; padding: 12px 14px; border-radius: 14px; background: var(--sc-black); font: 12px/1.6 var(--sc-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-a.k-row, .st-rowlink { text-decoration: none; color: inherit; }
-a.k-row:hover { color: inherit; }
+.st-rowlink { text-decoration: none; color: inherit; }
 @media (min-width: 960px) {
   .k-card.k-desktop { display: flex; }
   .st-tone { min-height: 80px; }
