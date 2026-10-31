@@ -3,10 +3,6 @@
  * and DesktopComments): the board's inline styles as named classes, on top of the kit. Role tokens only.
  */
 
-/* The old app.css pads every main; the redesign's screens start under their own bars (shell gap: fold into the kit) */
-main.k-main[data-path^="/comments"] { padding-top: 0; }
-@media (min-width: 960px) { main.k-main[data-path^="/comments"] { padding-bottom: 0; } }
-
 /* ---------- The inbox, phone ---------- */
 .cm-head { padding-top: 20px; align-items: flex-end; }
 .cm-head-tools { position: relative; }
@@ -43,24 +39,19 @@ main.k-main[data-path^="/comments"] { padding-top: 0; }
 .k-btn.cm-draft-again { min-height: 36px; }
 .cm-editor {
   min-height: 150px; width: 100%; resize: vertical; display: block;
-  font: inherit; font-size: 16px; line-height: 1.55; outline: none;
+  line-height: 1.55;
 }
-.cm-editor:focus { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
 .cm-editor[readonly] { resize: none; }
-.cm-editor::placeholder { color: var(--sc-rail); }
 .cm-over { color: var(--sc-failure); }
 .cm-bar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
-.cm-bar .k-pri { flex: 1; }
 .cm-after-reply { height: 94px; }
 
 /* ---------- The sheets ---------- */
 .cm-sheet-text { margin: 0; }
 .cm-sheet-quote { padding: 12px 14px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.cm-sheet-actions .k-pri { flex: 1; }
 .cm-search-input { flex: 1; min-width: 0; border: 0; background: none; padding: 0; font: inherit; color: var(--sc-text); outline: none; }
 .cm-search-input::placeholder { color: var(--sc-rail); }
 .cm-search-input::-webkit-search-cancel-button { display: none; }
-.k-input:focus-within { border-color: var(--sc-yellow); }
 .cm-select { position: relative; padding: 0; }
 .cm-select select {
   appearance: none; -webkit-appearance: none; width: 100%; min-height: 48px; padding: 0 44px 0 14px;

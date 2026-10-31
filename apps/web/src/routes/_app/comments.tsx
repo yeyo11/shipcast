@@ -429,30 +429,32 @@ function Actions({ r, sent, desktop }: { r: Reply; sent: boolean; desktop?: bool
   const { comment } = r;
   const tooLong = r.length > r.limit;
   const nothing = !r.draft.trim();
+  // On a phone the yellow action fills what the bar leaves
+  const pri = desktop ? 'k-btn k-pri' : 'k-btn k-pri k-grow';
   let primary: ReactNode;
   if (comment.status === 'sent' || sent) {
     primary = (
-      <button type="button" className="k-btn k-pri" disabled>
+      <button type="button" className={pri} disabled>
         {desktop && <Icon name="check" size={18} />}
         Sent
       </button>
     );
   } else if (comment.status === 'approved') {
     primary = (
-      <button type="button" className="k-btn k-pri" disabled>
+      <button type="button" className={pri} disabled>
         Sending…
       </button>
     );
   } else if (!comment.canReply && comment.replyOn) {
     primary = (
-      <a className="k-btn k-pri" href={comment.replyOn} target="_blank" rel="noreferrer" onClick={() => void navigator.clipboard?.writeText(r.draft).catch(() => undefined)}>
+      <a className={pri} href={comment.replyOn} target="_blank" rel="noreferrer" onClick={() => void navigator.clipboard?.writeText(r.draft).catch(() => undefined)}>
         {desktop && <Icon name="external" size={18} />}
         Reply on {channelName(comment.channel)}
       </a>
     );
   } else {
     primary = (
-      <button type="button" className="k-btn k-pri" disabled={r.busy || nothing || tooLong || !comment.canReply} onClick={() => r.setConfirming(true)}>
+      <button type="button" className={pri} disabled={r.busy || nothing || tooLong || !comment.canReply} onClick={() => r.setConfirming(true)}>
         {desktop && <Icon name="send" size={18} />}
         {comment.status === 'failed' ? 'Send again' : 'Send the reply'}
       </button>
@@ -500,7 +502,7 @@ function SendSheet({ r, open }: { r: Reply; open: Open }) {
         <button type="button" className="k-btn" onClick={() => r.setConfirming(false)}>
           Not yet
         </button>
-        <button type="button" className="k-btn k-pri" disabled={r.busy} onClick={() => void r.send()}>
+        <button type="button" className="k-btn k-pri k-grow" disabled={r.busy} onClick={() => void r.send()}>
           <Icon name="send" size={18} />
           {r.busy ? 'Sending…' : 'Send the reply'}
         </button>
@@ -710,7 +712,7 @@ function FiltersSheet({ data, search, open, onOpenChange, openSettings }: { data
         >
           Clear
         </button>
-        <button type="button" className="k-btn k-pri" onClick={() => onOpenChange(false)}>
+        <button type="button" className="k-btn k-pri k-grow" onClick={() => onOpenChange(false)}>
           Show {data.page.total} {data.page.total === 1 ? 'comment' : 'comments'}
         </button>
       </div>
