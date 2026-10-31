@@ -2,6 +2,7 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-r
 import type { ReactNode } from 'react';
 import { ErrorPage, NotFoundPage } from '../components/Problems';
 import { SessionExpiry } from '../components/SessionExpiry';
+import accessCss from '../styles/access.css?url';
 import appCss from '../styles/app.css?url';
 import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
@@ -19,21 +20,14 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: featuresCss },
       { rel: 'stylesheet', href: layoutCss },
       { rel: 'stylesheet', href: kitCss },
+      { rel: 'stylesheet', href: accessCss },
     ],
   }),
   shellComponent: Document,
   component: Outlet,
   // Outside the shell (an address no section matches): the same pages, on their own
-  notFoundComponent: () => (
-    <main className="wrap bare">
-      <NotFoundPage />
-    </main>
-  ),
-  errorComponent: (props) => (
-    <main className="wrap bare">
-      <ErrorPage {...props} />
-    </main>
-  ),
+  notFoundComponent: () => <NotFoundPage place="bare" />,
+  errorComponent: (props) => <ErrorPage {...props} place="bare" />,
 });
 
 function Document({ children }: { children: ReactNode }) {

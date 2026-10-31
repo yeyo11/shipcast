@@ -30,8 +30,9 @@ export const Route = createFileRoute('/_app')({
     return { ...who, banner, webMcp: webMcp.enabled };
   },
   component: Shell,
-  notFoundComponent: NotFoundPage,
-  errorComponent: ErrorPage,
+  // A section's failure takes the shell with it (no section has its own boundary): the page draws the bars itself
+  notFoundComponent: () => <NotFoundPage place="app" />,
+  errorComponent: (props) => <ErrorPage {...props} place="app" />,
 });
 
 /** Settings is one group of four, behind the owner's menu on a desktop */
