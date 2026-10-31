@@ -7,6 +7,7 @@ import componentsCss from '../styles/components.css?url';
 import featuresCss from '../styles/features.css?url';
 import kitCss from '../styles/kit.css?url';
 import layoutCss from '../styles/layout.css?url';
+import publishedCss from '../styles/published.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -19,6 +20,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: featuresCss },
       { rel: 'stylesheet', href: layoutCss },
       { rel: 'stylesheet', href: kitCss },
+      { rel: 'stylesheet', href: publishedCss },
     ],
   }),
   shellComponent: Document,
