@@ -119,7 +119,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
         </div>
         <div className="k-stack">
           {articleUrl && (
-            <SheetClose render={<a className="k-mi" href={articleUrl} target="_blank" rel="noreferrer" />}>
+            <SheetClose nativeButton={false} render={<a className="k-mi" href={articleUrl} target="_blank" rel="noreferrer" />}>
               <Icon name="external" />
               Open the article
               <span className="visually-hidden"> (opens in a new tab)</span>
