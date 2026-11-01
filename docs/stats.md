@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T13:06:09.095720895Z
-updated_at: 2026-10-30T22:36:09.176150536Z
+updated_at: 2026-11-01T11:57:00.358896431Z
 tags:
     - stats
     - metrics
@@ -225,9 +225,38 @@ one more backwards probe per counter. These were not measured again on 2026-10-2
 | `GET /stats/series` | `metric` (required: `views`, `reactions`, `comments`, `shares`, `clicks`, `impressions`), `groupBy` (`channel`, `account`, `launch`), `bucket` (`day`, `week`), `limit` (1 to 50), the period and the filters |
 | `GET /stats/ranking` | `by` (`post`, `launch`, `account`), `order` (`desc`, `asc`), `limit` (1 to 100), `offset`, the period and the filters |
 | `GET /accounts/{accountId}/growth` | `from`, `to` as days (the last 90 by default); 404 for an account that does not exist |
+| `GET /stats/accounts` | `from`, `to` as days (the last 30 by default): the page's Accounts tab, every account with snapshots |
+| `GET /stats/search` | `from`, `to` as days (the last 30 by default), `launches` (comma-separated, at most 50): the page's Search tab |
 
 A parameter that is not valid is a 400 that says which and why. The overview and the ranking answer
 both tiers and the lifetime; the series charts the first tier only.
+
+The Accounts and Search tabs are not one engine query each, so their routes (added on 2026-11-01, so
+that an agent reads through the API, and the [MCP server](mcp.md), every number the page shows) are
+served by the page's own loaders: `GET /stats/accounts` (`statsAccounts`) answers `loadGrowth` and
+`GET /stats/search` (`statsSearch`) answers `loadSearch`, both in `apps/web/src/server/stats.server.ts`,
+their input checked by the server functions' own `parseGrowthInput` and `parseSearchInput`
+(`stats-search.ts`): days only, at most 731 of them. The page and the API read them one way.
+
+- **`GET /stats/accounts`**: `{ from, to, accounts }`, one entry per account with snapshots (an account
+  on a network that counts no audience has none and is left out): its `id`, `label`, `network`,
+  `channel`, `avatarUrl`, its `latest` followers, following and posts whenever they were read,
+  `syncedAt` (when it was last read) and `stale` (not read in the last 36 hours, the Channels page's
+  rule), its `change` over the period and one `points` entry per day read. Per account, with each
+  point's own change and the days between snapshots, `GET /accounts/{accountId}/growth` says more.
+- **`GET /stats/search`**: `{ from, to, launches }`, the published launches (the newest 100, or those
+  of `launches`) that have blog articles. Each has its `id`, `label`, and per engine (`google`,
+  `bing`) the `impressions` and `clicks` that grew in the period with their `lifetime` at its end,
+  `null` when the engine has no reading for the launch; the engines count a launch's pages together,
+  so these are per launch. Its `pages` are the article pages (`lang`, `url`), each with what `google`
+  and `bing` last said of it (`indexed`, `coverage` in the engine's words, `checkedAt`), `null` until
+  that engine was read for the page ([search-indexing.md](search-indexing.md)).
+
+What the page shows and the routes do not answer as such is presentation over the same numbers: the
+ranking sorted by a raw column (the API ranks by score; every entry carries its raw numbers), the
+previous period laid over the chart (a second series call over the previous window), "All" as a
+period (a `from` on the first published launch's day) and the filters' option lists (`GET /accounts`,
+`GET /launches`).
 
 ## The page
 
@@ -255,10 +284,12 @@ no part needs a long scroll: each tab fits about one screen on a desktop.
   number's lifetime under it, sortable by any column, ten to a page.
 - **Accounts**: one table of the accounts with snapshots: followers, following and posts with their
   change in the period, a sparkline of the chosen measure, when it was last synced, and Sync now.
+  `GET /stats/accounts` answers the same view.
 - **Search**: each published launch's article pages with what Google (URL Inspection) and Bing last
   said of each ([search-indexing.md](search-indexing.md)), and each engine's impressions and clicks
   for the launch in the period, with their lifetime under them, read by `loadSearch` in
-  `apps/web/src/server/stats.server.ts` from what the engine already keeps.
+  `apps/web/src/server/stats.server.ts` from what the engine already keeps. `GET /stats/search`
+  answers the same view.
 - **Live**: with `realtime-ui` the page reloads when a `metrics`, `account` or `post` event arrives
   ([web-app.md](web-app.md#live-pages)).
 
@@ -275,7 +306,9 @@ left unranked, comparison deltas, the filters, ascending order and paging, GitHu
 repo, old launch-wide newsletter readings not counted twice, series labels and `other`, and account
 growth across a missed day. `packages/engine/test/story-metrics.test.ts` covers an Instagram story
 read while it lasts, counted with the post and ranked on its own. `apps/web/test/stats-api.test.ts`
-covers the scopes, the parameters, the 400s and 404, and the OpenAPI document. On 2026-10-25 the
+covers the scopes, the parameters, the 400s and 404, the Accounts and Search routes, and the OpenAPI
+document; `packages/mcp/test/tools-stats.test.ts` covers how the MCP's stats tools map their
+arguments onto these routes and what they refuse. On 2026-10-25 the
 functions ran against a copy of the live registry restored into a throwaway Postgres 17.
 `apps/web/test/stats-search.test.ts` and `apps/web/test/stats-server.test.ts` cover the address, the
 search tab's input and what it lists, the lifetime, the second tier and the averages.
@@ -286,4 +319,4 @@ the averages as a period ends.
 
 ## Related
 
-[[api.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[decisions/youtube.md]] · [[tracking.md]] · [[decisions/dated-metrics.md]]
+[[api.md]] · [[mcp.md]] · [[engine.md]] · [[publishing.md]] · [[web-app.md]] · [[search-indexing.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/post-model.md]] · [[decisions/account-snapshots.md]] · [[decisions/app-design-direction.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[decisions/youtube.md]] · [[tracking.md]] · [[decisions/dated-metrics.md]]

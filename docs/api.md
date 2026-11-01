@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-10-30T07:58:02.65797894Z
+updated_at: 2026-11-01T11:58:30.272132033Z
 tags:
     - api
     - reference
@@ -62,6 +62,8 @@ so it cannot drift.
 | `GET /stats/overview?from=&to=&compare=previous` | read | Totals per family (views, reactions, comments, shares, clicks, impressions) overall, per channel and per account, against the previous period or `compareFrom`/`compareTo`, with deltas ([stats.md](stats.md)) |
 | `GET /stats/series?metric=&groupBy=&bucket=` | read | One series per channel, account or launch, per day or week: the increase per bucket and the running total ([stats.md](stats.md)) |
 | `GET /stats/ranking?by=&order=&limit=&offset=` | read | Posts, launches or accounts ranked by popularity normalised per network, with the raw numbers and each network's yardstick ([stats.md](stats.md)) |
+| `GET /stats/accounts?from=&to=` | read | The Stats page's Accounts tab: every account with snapshots, its latest followers, following and posts, when it was last read and whether that is stale, its change in the period and a point per day ([stats.md](stats.md#routes)) |
+| `GET /stats/search?from=&to=&launches=` | read | The Stats page's Search tab: each published launch's blog article pages with whether Google and Bing indexed each one (`indexed`, `coverage`, `checkedAt`, `null` until read), and each engine's impressions and clicks for the launch in the period with their lifetime ([stats.md](stats.md#routes)) |
 | `GET /jobs?limit=&cursor=` | read | The work running or finished in the last day, newest first, as the app's work list shows it (rounds that ended well and jobs that found automation off are left out), 30 a page (up to 100). `next` is the cursor of the following page, `null` on the last; it is a keyset on the job's creation time and id, so a page never repeats or skips a job when new ones arrive. A launches' cursor is refused here |
 | `GET /capabilities` | read | What each channel can do with a published post: `{ edit, delete, note, fields }` per channel ([decisions/edit-delete.md](decisions/edit-delete.md)) |
 | `GET /recommendations?channel=&days=&count=` | read | The best times to publish on a channel Shipcast publishes, for the next `days` (7, up to 30), `count` of them (5, up to 30), one per day, best first: `{ channel, timezone, slots: [{ at, local, score, basis, reason }], history, audience }` ([scheduling.md](scheduling.md#recommended-times)) |
@@ -95,6 +97,8 @@ so it cannot drift.
 
 The stats routes all take a period (`from`, `to`: days, both included, or ISO timestamps; the last
 30 days by default) and the filters `channels`, `accounts` and `launches`, comma-separated.
+`/stats/accounts` and `/stats/search` are the page's own views: days only, at most 731, and of the
+filters only `launches` (at most 50) on `/stats/search`.
 
 Times are ISO 8601 date-times **with their offset** (`Z` or `+01:00`); one without would be read in
 the server's zone, which is nobody's choice, and is refused.
