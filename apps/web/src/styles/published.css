@@ -32,6 +32,7 @@
 .pub-totals { margin: 0; }
 .pub-totals > div { flex-direction: column-reverse; }
 .pub-totals dd { margin: 0; }
+.pub-views-from { margin: 0; }
 .pub-chart { width: 100%; }
 .pub-chart svg { display: block; overflow: visible; }
 .pub-rows { margin-top: 8px; }

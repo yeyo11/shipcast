@@ -147,3 +147,17 @@ export function chartPoints(days: readonly Day[], width: number, base = 100, top
 
 /** A chart day (`2026-10-21`) as the peak's label reads it: `21 Oct` */
 export const chartDay = (day: string) => dayOnly(`${day}T12:00:00Z`, 'UTC');
+
+/**
+ * Where the launch's Views come from, channel by channel, largest first: the headline adds up every
+ * channel's views (the newsletter's are its opens) while each row leads with its own metric, so the
+ * card names its parts rather than leave a total the rows do not visibly add up to.
+ */
+export function viewSources(channels: Readonly<Record<string, ChannelNumbers>>, nameOf: (channel: string) => string): Array<{ channel: string; label: string; views: number }> {
+  return Object.entries(channels)
+    .flatMap(([channel, n]) => {
+      const views = n.totals.views ?? 0;
+      return views > 0 ? [{ channel, label: channel === 'newsletter' ? `${nameOf(channel)} opens` : nameOf(channel), views }] : [];
+    })
+    .sort((a, b) => b.views - a.views || a.label.localeCompare(b.label));
+}

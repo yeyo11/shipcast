@@ -1,6 +1,6 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { useMemo, useState, type ReactNode } from 'react';
-import { launchTitle } from '../../server/launch-list';
+import { launchSource, launchTitle } from '../../server/launch-list';
 import { approveDrafts } from '../../server/launches.functions';
 import type { SchedulingChannel } from '../../server/pieces.server';
 import { CHANNEL_NAMES } from '../../server/view';
@@ -216,7 +216,7 @@ export function LaunchApproval({ data, tab, onTab, channel, onChannel, search, d
           <div className="k-hrow k-g10 k-wrap">
             <span className="k-pill k-p-wait">Waiting for you</span>
             <span className="k-sm k-muted">
-              {launch.repo} · drafted <span suppressHydrationWarning>{ago(launch.createdAt, now)}</span>
+              {launchSource(launch)} · drafted <span suppressHydrationWarning>{ago(launch.createdAt, now)}</span>
             </span>
           </div>
         </div>
@@ -301,7 +301,7 @@ export function LaunchApproval({ data, tab, onTab, channel, onChannel, search, d
           <div className="k-hrow k-g10 ap-mt12">
             <span className="k-pill k-p-wait">Waiting for you</span>
             <span className="k-muted">
-              {launch.repo} · drafted <span suppressHydrationWarning>{ago(launch.createdAt, now)}</span> · {TRIGGERS[launch.trigger] ?? `started by ${launch.trigger}`}
+              {launchSource(launch)} · drafted <span suppressHydrationWarning>{ago(launch.createdAt, now)}</span> · {TRIGGERS[launch.trigger] ?? `started by ${launch.trigger}`}
             </span>
           </div>
           <div className="ap-dgrid">

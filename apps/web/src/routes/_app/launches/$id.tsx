@@ -11,7 +11,7 @@ import { LaunchHead, LaunchTabs } from '../../../components/launch/LaunchHead';
 import { DetailsPanel, DraftingView, FailedCard, SearchPanel, useNow } from '../../../components/launch/LaunchPanels';
 import { pillClass, withScheduled } from '../../../components/launch/published';
 import { useToast } from '../../../components/Toasts';
-import { launchName, launchTitle } from '../../../server/launch-list';
+import { launchName, launchSource, launchTitle } from '../../../server/launch-list';
 import { getLaunch, launchRepo } from '../../../server/launches.functions';
 import { canRelaunch } from '../../../server/launch-list';
 
@@ -103,11 +103,13 @@ function LaunchPage() {
   const { title: shortName, version } = launchTitle(launch);
   const drafting = (launch.status === 'generating' || launch.status === 'detected') && !search.tab;
   const failedView = failedEmpty && !search.tab;
+  // Where it comes from, as the Launches list says it: an article is an article, never the launches repo it is kept in
+  const where = launchSource(launch);
   const meta = drafting
-    ? `${launch.repo} · started ${ago(launch.createdAt, now, timezone)} ${STARTED_BY[launch.trigger] ?? `by ${launch.trigger}`}`
+    ? `${where} · started ${ago(launch.createdAt, now, timezone)} ${STARTED_BY[launch.trigger] ?? `by ${launch.trigger}`}`
     : open
-      ? `${launch.repo} · drafted ${ago(launch.createdAt, now, timezone)}`
-      : `${launch.repo} · ${dayOnly(launch.createdAt, timezone)}`;
+      ? `${where} · drafted ${ago(launch.createdAt, now, timezone)}`
+      : `${where} · ${dayOnly(launch.createdAt, timezone)}`;
   const out = pieces.rows.filter((r) => r.status === 'live' || r.status === 'edited').length;
 
   // Waiting for the owner (section approve): its own view (boards LaunchReview, LaunchContent and
@@ -207,7 +209,7 @@ function LaunchPage() {
                   label: 'Channels',
                   panel: (
                     <>
-                      {shown && <ViewsCard totals={numbers.totals} days={numbers.daily} waitingComments={data.waitingComments} />}
+                      {shown && <ViewsCard totals={numbers.totals} days={numbers.daily} channels={numbers.channels} waitingComments={data.waitingComments} />}
                       <ChannelList rows={pieces.rows} failures={launch.failures} scheduling={withScheduled(pieces.scheduling.channels, launch.posts)} replies={pieces.replies} numbers={numbers.channels} timezone={timezone} />
                       {data.fakeNetworks && (
                         <div className="k-px pub-notice">

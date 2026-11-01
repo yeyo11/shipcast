@@ -65,6 +65,9 @@ export function launchName(launch: { repo: string; ref: string; title?: string |
   return version ? `${named} ${version}` : named;
 }
 
+/** Where a launch comes from, before its date on a card or a page's meta line: "Article", or the release's repo */
+export const launchSource = (launch: { repo: string; ref: string }): string => (launch.ref.startsWith('article:') ? 'Article' : launch.repo);
+
 /** A list in words: "a, b and c" */
 export function wordList(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? '';

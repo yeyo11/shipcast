@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
+import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchSource, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
 import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
@@ -213,8 +213,8 @@ function Marks({ channels, launch, timezone }: { channels: CardChannel[]; launch
 }
 
 /** What the card's line under the name says: the repo (or Article) and the day, or since when it drafts */
-function metaOf(launch: HomeLaunch, timezone: string, article: boolean): string {
-  const where = article ? 'Article' : launch.repo;
+function metaOf(launch: HomeLaunch, timezone: string): string {
+  const where = launchSource(launch);
   if (launch.status === 'detected' || launch.status === 'generating') return `${where} · started ${agoLabel(launch.createdAt)} by ${TRIGGER_BY[launch.trigger] ?? 'you'}`;
   return `${where} · ${shortDate(launch.createdAt, timezone)}`;
 }
@@ -243,7 +243,7 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
         </h3>
         <StatePill tone={tone} label={launch.state.label} />
       </div>
-      <p className="k-xs k-muted home-card-meta">{metaOf(launch, timezone, article)}</p>
+      <p className="k-xs k-muted home-card-meta">{metaOf(launch, timezone)}</p>
       {drafting ? (
         <div className="k-hrow k-g8 k-sm">
           <span className="k-grow home-progress" role="progressbar" aria-label="Drafting" aria-valuetext={launch.drafting ?? 'Drafting'}>
@@ -273,7 +273,7 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
 
 /** A launch that never went out, as one line in the "Not published" group: its name, where it is from, when, and its state */
 export function QuietRow({ launch, timezone, deletable }: { launch: HomeLaunch; timezone: string; deletable: boolean }) {
-  const { title, version, article } = launchTitle(launch);
+  const { title, version } = launchTitle(launch);
   const name = title.charAt(0).toUpperCase() + title.slice(1);
   return (
     <li className="home-quiet-item">
@@ -284,7 +284,7 @@ export function QuietRow({ launch, timezone, deletable }: { launch: HomeLaunch; 
             {version && <span className="k-mono k-sm k-muted">{version}</span>}
           </span>
           <span className="k-xs k-muted k-ellipsis">
-            {article ? 'Article' : launch.repo} · {shortDate(launch.createdAt, timezone)}
+            {launchSource(launch)} · {shortDate(launch.createdAt, timezone)}
           </span>
         </span>
         <StatePill tone={launch.state.tone} label={launch.state.label} />

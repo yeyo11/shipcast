@@ -23,7 +23,7 @@ export interface LaunchMenuState {
   /** How many pieces that went out a network lets edit, and delete */
   editable: number;
   removable: number;
-  /** With launch-delete, and not deleted already */
+  /** Not deleted already: a launch can always be deleted (the launch-delete flag is retired) */
   deletable: boolean;
 }
 

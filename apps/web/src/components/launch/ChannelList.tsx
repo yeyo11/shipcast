@@ -7,7 +7,7 @@ import type { ChannelNumbers, Day, Totals } from '../../server/launch-summary';
 import { number } from '../ui';
 import { ChannelGlyph, channelTitle } from './ChannelGlyph';
 import { useLaunchActions } from './LaunchActions';
-import { channelRows, chartDay, chartPoints, type ChannelRow } from './published';
+import { channelRows, chartDay, chartPoints, viewSources, type ChannelRow } from './published';
 import { Tick } from './UnpublishSheet';
 
 /*
@@ -73,8 +73,9 @@ function ViewsChart({ days }: { days: Day[] }) {
 }
 
 /** The launch's totals and its views per day, with what waits on the owner under them */
-export function ViewsCard({ totals, days, waitingComments }: { totals: Totals; days: Day[]; waitingComments: number }) {
+export function ViewsCard({ totals, days, channels, waitingComments }: { totals: Totals; days: Day[]; channels: Readonly<Record<string, ChannelNumbers>>; waitingComments: number }) {
   const shown = TOTALS.filter(([key], i) => i < 3 || totals[key] > 0);
+  const sources = viewSources(channels, channelTitle);
   return (
     <div className="k-px pub-views">
       <div className="k-card pub-views-card">
@@ -87,6 +88,11 @@ export function ViewsCard({ totals, days, waitingComments }: { totals: Totals; d
           ))}
         </dl>
         {days.length > 0 && <ViewsChart days={days} />}
+        {sources.length > 1 && (
+          <p className="k-xs k-muted pub-views-from">
+            Views from {sources.map((s) => `${s.label} ${number(s.views)}`).join(' · ')}
+          </p>
+        )}
         <div className="k-xs k-muted">
           {days.length > 0 ? 'Views per day since the launch' : 'No views read yet: the first reading comes within six hours of the launch'}
           {waitingComments > 0 && (

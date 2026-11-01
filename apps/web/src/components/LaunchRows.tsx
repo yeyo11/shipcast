@@ -173,7 +173,7 @@ export function AttentionRow({ item, network, deletable }: { item: AttentionItem
   );
 }
 
-/** What a launch's ⋯ can do from the list: launch it again (a failed release) and delete it (with `launch-delete`) */
+/** What a launch's ⋯ can do from the list: launch it again (a failed release) and delete it */
 export interface RowMenuLaunch {
   id: number;
   /** How the menu names it: `Sluice v2.0.0` */

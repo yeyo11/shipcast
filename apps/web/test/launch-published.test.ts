@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ago, dayOnly, dayTime, elapsed } from '../src/components/launch/dates.ts';
-import { channelRows, chartPoints, listWords, metricCaption, pillClass, unpublishGroups, withScheduled } from '../src/components/launch/published.ts';
+import { channelRows, chartPoints, listWords, metricCaption, pillClass, unpublishGroups, viewSources, withScheduled } from '../src/components/launch/published.ts';
 import { channelEntries, type PieceRow } from '../src/server/pieces.ts';
 
 const TZ = 'Europe/Madrid';
@@ -105,4 +105,28 @@ test('the views chart peaks at its busiest day, the baseline at the bottom', () 
   ]);
   assert.deepEqual(peak, { x: 179, y: 18, views: 252, day: '2026-10-21' });
   assert.deepEqual(chartPoints([], 358), { points: [], peak: null });
+});
+
+test('the views card names where its Views come from, so the total adds up to its parts', () => {
+  const names: Record<string, string> = { blog: 'Blog', devto: 'dev.to', instagram: 'Instagram', newsletter: 'Newsletter', bluesky: 'Bluesky' };
+  const sources = viewSources(
+    {
+      blog: { totals: { views: 20 }, daily: [] },
+      devto: { totals: { views: 13, reactions: 2 }, daily: [] },
+      instagram: { totals: { views: 22 }, daily: [] },
+      newsletter: { totals: { views: 212, clicks: 4 }, daily: [] },
+      // A network that counts no views is no part of them
+      bluesky: { totals: { reactions: 9 }, daily: [] },
+      youtube: { totals: { views: 0 }, daily: [] },
+    },
+    (c) => names[c] ?? c,
+  );
+  assert.deepEqual(
+    sources.map((s) => `${s.label} ${s.views}`),
+    ['Newsletter opens 212', 'Instagram 22', 'Blog 20', 'dev.to 13'],
+  );
+  assert.equal(
+    sources.reduce((n, s) => n + s.views, 0),
+    267,
+  );
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { agoLabel, canRelaunch, deletableFromLine, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchName, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
+import { agoLabel, canRelaunch, deletableFromLine, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchName, launchSource, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
 
 const launch = (id: number, status: string, tone: string) => ({ id, status, state: { tone } });
 
@@ -172,4 +172,9 @@ test('a launch read from the registry carries the title the launch model keeps, 
   assert.equal(view.title, 'Hello, world');
   assert.equal(launchName(view), 'Hello, world');
   assert.equal((await launchView(registry, bare)).title, null);
+});
+
+test('an article comes from "Article" on its meta line, never the launches repo; a release from its repo', () => {
+  assert.equal(launchSource({ repo: 'yeyo11/launches', ref: 'article:why-i-moved' }), 'Article');
+  assert.equal(launchSource({ repo: 'yeyo11/claudio', ref: 'v1.5.0' }), 'yeyo11/claudio');
 });
