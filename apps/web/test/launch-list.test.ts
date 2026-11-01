@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { agoLabel, draftingNote, laneOf, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
+import { memoryRegistry } from '@shipcast/engine/testing';
+import { agoLabel, canRelaunch, deletableFromLine, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
 
 const launch = (id: number, status: string, tone: string) => ({ id, status, state: { tone } });
 
@@ -66,4 +67,89 @@ test('times read as the cards say them', () => {
 test('a drafting launch says what it does now, without the aside', () => {
   assert.equal(draftingNote(['Reading the code and writing the pack; this takes a few minutes…']), 'Reading the code and writing the pack');
   assert.equal(draftingNote([]), 'Drafting');
+});
+
+const calm = (id: number, status: string, tone: string, posts: string[] = [], totals?: { views: number; reactions: number; comments: number; clicks: number }) => ({
+  id,
+  status,
+  state: { tone },
+  posts: posts.map((s) => ({ status: s })),
+  numbers: totals ? { totals } : null,
+});
+const ZERO = { views: 0, reactions: 0, comments: 0, clicks: 0 };
+
+test('what never went out leaves the grid for the "Not published" rows', () => {
+  const ctx = { narrowed: false, listedFailures: new Set<number>() };
+  assert.equal(homeGroupOf(calm(1, 'skipped', 'quiet'), ctx), 'quiet');
+  // Published, but every piece taken down and no numbers: nothing is out there
+  assert.equal(homeGroupOf(calm(2, 'published', 'published', ['deleted', 'deleted'], ZERO), ctx), 'quiet');
+  assert.equal(homeGroupOf(calm(3, 'published', 'published', ['live'], ZERO), ctx), 'card');
+  // Numbers read before the pieces were taken down still make it a card
+  assert.equal(homeGroupOf(calm(4, 'published', 'published', ['deleted'], { ...ZERO, views: 12 }), ctx), 'card');
+  assert.equal(homeGroupOf(calm(5, 'drafted', 'published', ['scheduled']), ctx), 'card');
+  assert.equal(homeGroupOf(calm(6, 'generating', 'draft'), ctx), 'card');
+});
+
+test('a failure shows once: as a line in what needs you, or else as a card', () => {
+  const listed = { narrowed: false, listedFailures: new Set([7]) };
+  assert.equal(homeGroupOf(calm(7, 'failed', 'failed'), listed), 'quiet');
+  assert.equal(homeGroupOf(calm(8, 'failed', 'failed'), listed), 'card');
+  // Partly published: something went out, so its card stays, failures and all
+  assert.equal(homeGroupOf(calm(7, 'drafted', 'failed', ['live', 'failed']), listed), 'card');
+  assert.deepEqual([...listedFailures([{ key: 'launch:7:failed:abc', kind: 'retry' }, { key: 'launch:9:waiting:x', kind: 'approve' }, { key: 'comments:waiting:3', kind: 'reply' }])], [7]);
+});
+
+test('drafts waiting for approval are the yellow card, and a card among the others once the list is narrowed', () => {
+  const waiting = calm(10, 'drafted', 'waiting');
+  assert.equal(homeGroupOf(waiting, { narrowed: false, listedFailures: new Set() }), 'approval');
+  assert.equal(homeGroupOf(waiting, { narrowed: true, listedFailures: new Set() }), 'card');
+  const groups = homeGroups([calm(1, 'skipped', 'quiet'), waiting, calm(3, 'published', 'published', ['live']), calm(4, 'skipped', 'quiet')], { narrowed: false, listedFailures: new Set() });
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.map((l) => l.id)])),
+    { approval: [10], card: [3], quiet: [1, 4] },
+  );
+});
+
+test('a card shows at most six marks on its row, and at least one', () => {
+  assert.equal(homeMarkFit(326), 5);
+  assert.equal(homeMarkFit(2000), 6);
+  assert.equal(homeMarkFit(10), 1);
+});
+
+test('a row offers to launch again only a release that failed before anything went out', () => {
+  assert.equal(canRelaunch({ status: 'failed', ref: 'v2.0.0', posts: [] }), true);
+  assert.equal(canRelaunch({ status: 'failed', ref: 'v2.0.0', posts: [{}] }), false);
+  // An article is written again in Write
+  assert.equal(canRelaunch({ status: 'failed', ref: 'article:notes', posts: [] }), false);
+  assert.equal(canRelaunch({ status: 'skipped', ref: 'v1.4.0', posts: [] }), false);
+});
+
+test('a failed line of what needs you names its launch; other lines name none', () => {
+  assert.equal(failedLaunchOf({ key: 'launch:12:failed:9x', kind: 'retry' }), 12);
+  assert.equal(failedLaunchOf({ key: 'launch:12:waiting:2026', kind: 'approve' }), null);
+  assert.equal(failedLaunchOf({ key: 'comments:waiting:4', kind: 'reply' }), null);
+});
+
+test('only a failure nothing of which went out can be deleted from its warning line', () => {
+  assert.equal(deletableFromLine({ key: 'launch:3:failed:ab', kind: 'retry', nothingOut: true }), 3);
+  // Partly published: its line keeps Retry alone, so deleting from a warning never hides a published launch
+  assert.equal(deletableFromLine({ key: 'launch:2:failed:cd', kind: 'retry' }), null);
+  assert.equal(deletableFromLine({ key: 'comments:waiting:4', kind: 'reply' }), null);
+});
+
+test('an article is named by the title the launch model keeps, its slug only without one', () => {
+  assert.deepEqual(launchTitle({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: 'Why I moved my notes into the repo' }), { title: 'Why I moved my notes into the repo', version: null, article: true });
+  assert.equal(launchTitle({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: '  ' }).title, 'Why i moved');
+  assert.equal(launchTitle({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: null }).title, 'Why i moved');
+  // A release keeps its project's name and version
+  assert.deepEqual(launchTitle({ repo: 'yeyo11/pando', ref: 'v1.0.0', title: 'Something else' }), { title: 'pando', version: 'v1.0.0', article: false });
+});
+
+test('the titles of a page of launches come in one read, only those that have one', async () => {
+  const registry = await memoryRegistry();
+  const { launch: named } = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:hello', trigger: 'article', kind: 'launch', brand: 'josegarridodev', title: 'Hello, world' });
+  const { launch: bare } = await registry.launches.claim({ repo: 'yeyo11/pando', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'josegarridodev' });
+  const titles = await registry.launches.titles([named.id, bare.id]);
+  assert.deepEqual([...titles], [[named.id, 'Hello, world']]);
+  assert.deepEqual([...(await registry.launches.titles([]))], []);
 });

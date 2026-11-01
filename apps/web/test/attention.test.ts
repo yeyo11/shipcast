@@ -27,6 +27,8 @@ test('a drafted launch waits for approval, unless it already failed somewhere', 
   assert.equal(a.items[0]?.key, 'launch:1:waiting:2026-10-26T10:00:00.000Z');
   assert.match(a.items[1]?.key ?? '', /^launch:2:failed:[0-9a-z]+$/);
   assert.match(a.items[1]?.text ?? '', /Beta v2\.0\.0 failed on dev\.to, Mastodon/);
+  // Partly published: its line never offers to delete what went out
+  assert.equal(a.items[1]?.nothingOut, undefined);
 });
 
 test('failure keys of unknown launches or of another shape are ignored', () => {
@@ -188,6 +190,8 @@ test('a launch that failed before anything went out is a line to retry, with why
     [['retry', 'Delta v4.0.0 failed: claudio was overloaded', 'Delta v4.0.0', 'Retry']],
   );
   assert.match(a.items[0]?.key ?? '', ATTENTION_KEY);
+  // Nothing of it went out, so its line may offer to delete it
+  assert.equal(a.items[0]?.nothingOut, true);
   // Failing again after a retry is a new line, so a dismissal does not hide it
   const again = buildAttention({ ...base, launches: [{ ...failed, updatedAt: '2026-10-26T09:00:00.000Z' }] });
   assert.notEqual(again.items[0]?.key, a.items[0]?.key);

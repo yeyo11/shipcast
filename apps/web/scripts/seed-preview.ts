@@ -600,6 +600,21 @@ async function seedLaunches(registry: OpenRepositories, queue: JobQueue, account
   ids.shipcast = shipcast.id;
   await parkDraft(registry, queue, shipcast);
 
+  // 6-8. What never went out, for the Launches page's "Not published" group: an article and a
+  // release not launched, and an article whose pieces were all taken down (no numbers, dotted marks)
+  const draftedAt = madrid('2026-10-26', '18:40');
+  const unsent = await seedLaunch(registry, { repo: LAUNCHES_REPO, ref: 'article:a-draft-i-never-sent', trigger: 'article', kind: 'launch', status: 'skipped', title: 'A draft I never sent', detail: 'Not launched: set aside by the owner', createdAt: draftedAt, updatedAt: draftedAt });
+  ids.unsent = unsent.id;
+  const oldAt = madrid('2026-10-12', '10:05');
+  const oldRelease = await seedLaunch(registry, { repo: 'yeyo11/claudio', ref: 'v1.4.0', trigger: 'release', kind: 'minor', status: 'skipped', detail: 'Not launched: a patch-level change with nothing to announce', createdAt: oldAt, updatedAt: oldAt });
+  ids.oldRelease = oldRelease.id;
+  const hackAt = madrid('2026-10-08', '19:15');
+  const hack = await seedLaunch(registry, { repo: LAUNCHES_REPO, ref: 'article:notes-from-a-weekend-hack', trigger: 'article', kind: 'launch', status: 'published', title: 'Notes from a weekend hack', createdAt: new Date(hackAt.getTime() - 20 * 60_000), updatedAt: hackAt });
+  ids.hack = hack.id;
+  const hackBlog = await seedPiece(registry, hack, { channel: 'blog', kind: 'article:en', url: postUrl.blog('notes-from-a-weekend-hack'), externalId: 'src/content/posts/en/notes-from-a-weekend-hack.md', publishedAt: hackAt });
+  const hackBsky = await seedPiece(registry, hack, { channel: 'bluesky', account: accounts.get('bluesky'), url: postUrl.bluesky('3l5weekendhack1'), externalId: 'at://did:plc:previewjosegarrido/app.bsky.feed.post/3l5weekendhack1', publishedAt: new Date(hackAt.getTime() + 60_000) });
+  await exec(registry, `UPDATE posts SET status = 'deleted' WHERE id IN (${hackBlog.id}, ${hackBsky.id})`);
+
   // Comments: two waiting with a reply drafted, five answered, one dismissed
   const comments: CommentSeed[] = [
     { post: claudioBsky, channel: 'bluesky', id: 'at-ana-1', handle: 'ana.bsky.social', name: 'Ana Ruiz', text: 'This looks great! Does it work with local models too?', at: hoursAgo(2), status: 'draft-ready', classification: 'question', draft: 'Yes: any OpenAI-compatible server works, local ones included. The README has an Ollama example.', note: 'A question the README answers: point to the Ollama example.' },

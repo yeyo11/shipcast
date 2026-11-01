@@ -1,12 +1,12 @@
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
-import { agoLabel, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
-import { cardChannels, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
+import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
 import { Sheet, SheetClose } from './kit/Sheet';
-import { readyText } from './LaunchRows';
-import { NetworkGlyph } from './NetworkGlyph';
+import { readyText, RowMenu } from './LaunchRows';
+import { NetworkGlyph } from './kit/NetworkGlyph';
 import { number } from './ui';
 
 /*
@@ -24,6 +24,8 @@ export type HomeLaunch = LaunchView & {
   held: boolean;
   ready: { count: number; text: string } | null;
   drafting: string | null;
+  /** The title the launch model keeps (an article's), or null */
+  title: string | null;
 };
 
 const networkOf = (channel: string) => CHANNEL_NAMES[channel] ?? channel;
@@ -88,11 +90,9 @@ function PeekLine({ post, first, when, timezone }: { post: CardPost; first: bool
   );
 }
 
-/** A channel's mark: the network and its state dot; it opens the channel's peek */
-function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch; timezone: string }) {
-  const [open, setOpen] = useState(false);
+/** A channel's part of a launch, as its peek shows it: the network and its state, its numbers, a line per post */
+function PeekBody({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch; timezone: string }) {
   const word = MARK_WORD[c.mark];
-  const name = `${networkOf(c.channel)}: ${word.toLowerCase()}`;
   const totals = launch.numbers?.channels[c.channel]?.totals ?? {};
   const at = (id: number) => {
     const post = launch.posts.find((p) => p.id === id);
@@ -100,18 +100,7 @@ function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaun
   };
   const lines = c.posts.filter((p) => p.status !== 'deleted' || p.url === null);
   return (
-    <Sheet
-      label={`${networkOf(c.channel)} on this launch`}
-      open={open}
-      onOpenChange={setOpen}
-      className="home-peek"
-      trigger={
-        <button type="button" className="home-mark" title={name} aria-label={`${name}. ${c.posts.length === 1 ? '1 post' : `${c.posts.length} posts`}`}>
-          <NetworkGlyph channel={c.channel} size={15} />
-          <span className={`k-dot ${DOT[c.mark]}`} aria-hidden="true" />
-        </button>
-      }
-    >
+    <>
       <div className="k-hrow k-between">
         <span className="k-hrow k-g10 home-peek-net">
           <NetworkGlyph channel={c.channel} size={22} /> {networkOf(c.channel)}
@@ -131,8 +120,91 @@ function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaun
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+const markName = (c: CardChannel) => `${networkOf(c.channel)}: ${MARK_WORD[c.mark].toLowerCase()}`;
+
+/** A channel's mark: the network and its state dot; it opens the channel's peek */
+function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch; timezone: string }) {
+  const [open, setOpen] = useState(false);
+  const name = markName(c);
+  return (
+    <Sheet
+      label={`${networkOf(c.channel)} on this launch`}
+      open={open}
+      onOpenChange={setOpen}
+      className="home-peek"
+      trigger={
+        <button type="button" className="home-mark" title={name} aria-label={`${name}. ${c.posts.length === 1 ? '1 post' : `${c.posts.length} posts`}`}>
+          <NetworkGlyph channel={c.channel} size={15} />
+          <span className={`k-dot ${DOT[c.mark]}`} aria-hidden="true" />
+        </button>
+      }
+    >
+      <PeekBody c={c} launch={launch} timezone={timezone} />
       <SheetClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels', channel: c.channel }} />}>See it on the launch page</SheetClose>
     </Sheet>
+  );
+}
+
+/** The "+n" mark: the channels that did not fit the row, each as its peek shows it, in one sheet */
+function MoreMarks({ folded, launch, timezone }: { folded: CardChannel[]; launch: HomeLaunch; timezone: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Sheet
+      label={`${folded.length} more channels on this launch`}
+      open={open}
+      onOpenChange={setOpen}
+      className="home-peek"
+      trigger={
+        <button type="button" className="home-mark home-mark-more" aria-label={`${folded.length} more channels: ${folded.map(markName).join('; ')}`}>
+          +{folded.length}
+        </button>
+      }
+    >
+      {folded.map((c, i) => (
+        <div key={c.channel} className="home-peek-part">
+          {i > 0 && <div className="k-sep" />}
+          <PeekBody c={c} launch={launch} timezone={timezone} />
+        </div>
+      ))}
+      <SheetClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels' }} />}>See it on the launch page</SheetClose>
+    </Sheet>
+  );
+}
+
+/**
+ * The marks on one row, problems first (foldMarks), as many as the row holds and never more than
+ * six; the rest fold behind "+n". Measured again whenever the card resizes.
+ */
+function Marks({ channels, launch, timezone }: { channels: CardChannel[]; launch: HomeLaunch; timezone: string }) {
+  const ref = useRef<HTMLUListElement>(null);
+  const [fit, setFit] = useState(HOME_MARKS_MAX);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setFit(homeMarkFit(el.clientWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const { shown, folded } = foldMarks(channels, fit);
+  return (
+    <ul className="k-hrow k-g6 home-marks" aria-label="Channels" ref={ref}>
+      {shown.map((c) => (
+        <li key={c.channel}>
+          <ChannelMark c={c} launch={launch} timezone={timezone} />
+        </li>
+      ))}
+      {folded.length > 0 && (
+        <li>
+          <MoreMarks folded={folded} launch={launch} timezone={timezone} />
+        </li>
+      )}
+    </ul>
   );
 }
 
@@ -179,15 +251,11 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
         <p className="k-sm home-card-text">It failed before anything went out{problem ? `: ${problem}` : ''}.</p>
       ) : (
         <>
-          {launch.numbers && channels.length > 0 && <Numbers totals={launch.numbers.totals} />}
           {channels.length > 0 ? (
-            <ul className="k-hrow k-g6 k-wrap home-marks" aria-label="Channels">
-              {channels.map((c) => (
-                <li key={c.channel}>
-                  <ChannelMark c={c} launch={launch} timezone={timezone} />
-                </li>
-              ))}
-            </ul>
+            <div className="k-stack k-g10 home-card-foot">
+              {launch.numbers && <Numbers totals={launch.numbers.totals} />}
+              <Marks channels={channels} launch={launch} timezone={timezone} />
+            </div>
           ) : (
             <p className="k-sm k-muted home-card-text">
               {launch.status === 'skipped' ? 'Nothing was published for this release.' : tone === 'waiting' ? readyText(launch) : 'Nothing published yet.'}
@@ -196,5 +264,28 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
         </>
       )}
     </article>
+  );
+}
+
+/** A launch that never went out, as one line in the "Not published" group: its name, where it is from, when, and its state */
+export function QuietRow({ launch, timezone, deletable }: { launch: HomeLaunch; timezone: string; deletable: boolean }) {
+  const { title, version, article } = launchTitle(launch);
+  const name = title.charAt(0).toUpperCase() + title.slice(1);
+  return (
+    <li className="home-quiet-item">
+      <Link to="/launches/$id" params={{ id: String(launch.id) }} className="k-row home-quiet-row">
+        <span className="k-grow k-stack home-quiet-text">
+          <span className="k-hrow k-g8 home-quiet-name">
+            <strong className="k-ellipsis">{name}</strong>
+            {version && <span className="k-mono k-sm k-muted">{version}</span>}
+          </span>
+          <span className="k-xs k-muted k-ellipsis">
+            {article ? 'Article' : launch.repo} · {shortDate(launch.createdAt, timezone)}
+          </span>
+        </span>
+        <StatePill tone={launch.state.tone} label={launch.state.label} />
+      </Link>
+      <RowMenu launch={{ id: launch.id, name: version ? `${name} ${version}` : name }} relaunch={canRelaunch(launch) ? { repo: launch.repo, ref: launch.ref } : null} deletable={deletable} />
+    </li>
   );
 }

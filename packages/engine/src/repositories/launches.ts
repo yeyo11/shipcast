@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { PackKind } from '@shipcast/schema';
 import type { Database } from '../db/connect.ts';
 import { launches, nowIso } from '../db/schema.ts';
@@ -171,6 +171,13 @@ export class LaunchRepository {
   async modelFields(id: number): Promise<{ title: string | null; channelsSource: string | null } | undefined> {
     const [row] = await this.#db.select({ title: launches.title, channelsSource: launches.channelsSource }).from(launches).where(eq(launches.id, id));
     return row;
+  }
+
+  /** The titles the launch model keeps for these launches, in one query: only those that have one */
+  async titles(ids: readonly number[]): Promise<Map<number, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.#db.select({ id: launches.id, title: launches.title }).from(launches).where(inArray(launches.id, [...ids]));
+    return new Map(rows.flatMap((r) => (r.title && r.title.trim() ? [[r.id, r.title.trim()] as const] : [])));
   }
 
   /** Names a launch again and sets the launch.yml it publishes by: a failed launch made from sources, asked for again */

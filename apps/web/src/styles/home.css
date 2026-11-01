@@ -83,8 +83,6 @@
 .home-marks { position: relative; z-index: 1; }
 .home-mark { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 160px; border: 2px solid var(--sc-hairline); background: transparent; color: var(--sc-text); font: 600 13px var(--sc-font-text); cursor: pointer; }
 .home-mark:hover, .home-mark[data-popup-open] { border-color: var(--sc-rail); }
-.home-glyph { flex: none; display: block; }
-.home-glyph-letter { display: inline-flex; align-items: center; justify-content: center; font-weight: 700; line-height: 1; }
 .home-progress { height: 6px; border-radius: 3px; background: var(--sc-hairline); position: relative; overflow: hidden; }
 .home-progress > span { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: var(--sc-yellow); border-radius: 3px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -155,7 +153,7 @@
   .home-all-title h2 { font-size: 48px; }
   .home-search { flex: none; width: 320px; }
   .home-needs-head { margin-block: 0 !important; }
-  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
   .home-peek, .home-bell { max-width: 560px; margin: 0 auto; }
   .home-empty-actions { max-width: 400px; }
 }
@@ -223,3 +221,37 @@
 }
 .home-palette-empty:empty { display: none; }
 .home-toast p, .home-toast h2, .home-toast details { margin: 0; }
+
+/* Calm cards: one row of marks (at most six, then "+n"), the numbers and the marks on the card's bottom
+   edge, so the cards of a grid row are one height */
+.home-card-foot { margin-top: auto; padding-top: 2px; }
+.home-marks { flex-wrap: nowrap; min-width: 0; }
+.home-mark-more { padding: 0 10px; }
+.home-peek-part { display: flex; flex-direction: column; gap: 14px; }
+.home-peek-part .k-sep { margin: 0; }
+
+/* What never went out (the "Not published" group): one line each, below the cards */
+.home-quiet { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.home-quiet-list .home-quiet-row { padding: 12px 0; gap: 12px; text-decoration: none; color: inherit; border-bottom: 1px solid var(--sc-hairline); }
+.home-quiet-list > li:last-child .home-quiet-row { border-bottom: 0; }
+.home-quiet-row:hover { color: inherit; }
+.home-quiet-row:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+.home-quiet-text { gap: 2px; }
+.home-quiet-name { align-items: baseline; min-width: 0; }
+.home-quiet-name strong { font-size: 16px; font-weight: 600; }
+.home-quiet-more { align-self: flex-start; margin-top: 8px; }
+@media (min-width: 960px) {
+  .home-quiet { margin-top: 20px; }
+}
+
+/* A row's ⋯ beside its link: the "Not published" rows and a failed launch's line in what needs you */
+.home-quiet-item, .home-row-item { display: flex; align-items: center; gap: 4px; }
+.home-quiet-item > .k-row, .home-row-item > .k-row { flex: 1; min-width: 0; }
+.home-rows > .home-row-item:last-child .home-row, .home-quiet-list > .home-quiet-item:last-child .home-quiet-row { border-bottom: 0; }
+.home-rows .home-row-item:has(.home-row-menu) { border-bottom: 1px solid var(--sc-hairline); }
+.home-rows .home-row-item:has(.home-row-menu) .home-row { border-bottom: 0; }
+.home-rows > .home-row-item:last-child:has(.home-row-menu) { border-bottom: 0; }
+.home-quiet-list .home-quiet-item:has(.home-row-menu) { border-bottom: 1px solid var(--sc-hairline); }
+.home-quiet-list .home-quiet-item:has(.home-row-menu) .home-quiet-row { border-bottom: 0; }
+.home-quiet-list > .home-quiet-item:last-child:has(.home-row-menu) { border-bottom: 0; }
+.k-btn.k-sm.k-icon.home-row-menu { flex: none; width: 40px; min-height: 40px; margin-right: -8px; }

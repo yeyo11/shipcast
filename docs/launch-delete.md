@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T07:55:43.916970887Z
-updated_at: 2026-10-30T10:47:08.035298122Z
+updated_at: 2026-11-01T14:13:25.386238349Z
 tags:
     - launches
     - launch-model
@@ -91,6 +91,7 @@ still possible.
 | Where | What |
 | --- | --- |
 | The launch page | "Delete launch" in the toolbar (only with the flag), a dialog that reads the plan when it opens: what happens, the channels to tick, the article's warning |
+| The Launches page | A "Not published" row's ⋯ menu, and a failed line in what needs the owner when nothing of that launch went out: "Delete" opens the same sheet (only with the flag) |
 | `GET /api/v1/launches/{id}/deletion` | the plan (`read`) |
 | `DELETE /api/v1/launches/{id}?channels=a,b` | the deletion (`write`), the posts of the channels named deleted on their networks; answers `mode`, the `outcomes`, a `warning` and `problems` (what could not be tidied after) |
 

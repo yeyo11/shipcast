@@ -1,10 +1,17 @@
-import { Link } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
-import { agoLabel, launchTitle } from '../server/launch-list';
+import { Link, useRouter } from '@tanstack/react-router';
+import { useState, type ReactNode } from 'react';
+import { agoLabel, deletableFromLine, launchTitle } from '../server/launch-list';
+import { launchRepo } from '../server/launches.functions';
 import type { AttentionItem } from '../server/attention';
 import { Icon } from './kit/Icon';
+import { Sheet, SheetClose } from './kit/Sheet';
+import { useShell } from './kit/shell';
+import { DeleteLaunch } from './launch/DeleteLaunch';
+import { useToast } from './Toasts';
+import { Menu } from './ui/Menu';
+import { usePhone } from './ui/ResponsiveMenu';
 import type { HomeLaunch } from './LaunchCard';
-import { NetworkGlyph } from './NetworkGlyph';
+import { NetworkGlyph } from './kit/NetworkGlyph';
 
 /*
  * What needs the owner first, on top of the Launches page (boards Main and DesktopHome): the yellow
@@ -147,10 +154,12 @@ function rowItem(item: AttentionItem, network: (channel: string) => string): Att
   return { ...item, subject: name, text: `${name} needs reconnecting` };
 }
 
-export function AttentionRow({ item, network }: { item: AttentionItem; network: (channel: string) => string }) {
+export function AttentionRow({ item, network, deletable }: { item: AttentionItem; network: (channel: string) => string; deletable: boolean }) {
   const shown = rowItem(item, network);
+  // Only a launch that failed before anything went out: deleting from a warning never hides a published one
+  const failed = deletableFromLine(item);
   return (
-    <li>
+    <li className="home-row-item">
       <AttentionLink item={item} className="k-row home-row">
         <AttentionMark item={item} />
         <span className="k-grow home-row-text">
@@ -161,6 +170,97 @@ export function AttentionRow({ item, network }: { item: AttentionItem; network: 
           {item.action}
         </span>
       </AttentionLink>
+      {failed !== null && deletable && <RowMenu launch={{ id: failed, name: item.subject ?? 'this launch' }} relaunch={null} deletable />}
     </li>
+  );
+}
+
+/** What a launch's ⋯ can do from the list: launch it again (a failed release) and delete it (with `launch-delete`) */
+export interface RowMenuLaunch {
+  id: number;
+  /** How the menu names it: `Sluice v2.0.0` */
+  name: string;
+}
+
+/**
+ * A launch row's ⋯ (the "Not published" rows, a failed launch's line in what needs you): a sheet on a
+ * phone, a menu on a desktop. Delete opens the launch page's own confirmation (DeleteLaunch), with
+ * what it would do read first; once it is done the list is read again, so the row leaves in place.
+ * Nothing to offer, no button.
+ */
+export function RowMenu({ launch, relaunch, deletable }: { launch: RowMenuLaunch; relaunch: { repo: string; ref: string } | null; deletable: boolean }) {
+  const phone = usePhone();
+  const router = useRouter();
+  const toast = useToast();
+  const { reloadAttention } = useShell();
+  const [sheet, setSheet] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!relaunch && !deletable) return null;
+
+  const retry = async () => {
+    if (!relaunch) return;
+    setBusy(true);
+    const answer = await launchRepo({ data: { repo: relaunch.repo, ref: relaunch.ref, direct: false } }).catch((error: unknown) => ({
+      ok: false as const,
+      problem: error instanceof Error ? error.message : String(error),
+    }));
+    setBusy(false);
+    if (answer.ok) toast.done(`Drafting ${launch.name}`, 'The analysis takes a few minutes; its card shows it while it runs.');
+    else toast.fail(answer.problem);
+    await Promise.all([router.invalidate(), reloadAttention()]);
+  };
+  const askDelete = () => {
+    setSheet(false);
+    setDeleting(true);
+  };
+  const label = `More for ${launch.name}`;
+  const trigger = (
+    <button type="button" className="k-btn k-sm k-icon k-ghost home-row-menu" aria-label={label} disabled={busy}>
+      <Icon name="more" size={20} />
+    </button>
+  );
+
+  return (
+    <>
+      {phone ? (
+        <Sheet label={label} open={sheet} onOpenChange={setSheet} trigger={trigger}>
+          <h2 className="k-d k-d30">{launch.name}</h2>
+          <div className="k-stack">
+            {relaunch && (
+              <SheetClose render={<button type="button" className="k-mi" onClick={() => void retry()} />}>
+                <Icon name="retry" size={22} />
+                Launch it again
+              </SheetClose>
+            )}
+            {deletable && (
+              <button type="button" className="k-mi k-bad" onClick={askDelete}>
+                <Icon name="trash" size={22} />
+                Delete
+              </button>
+            )}
+          </div>
+        </Sheet>
+      ) : (
+        <Menu
+          align="end"
+          trigger={trigger}
+          entries={[
+            ...(relaunch ? [{ label: 'Launch it again', onSelect: () => void retry() }] : []),
+            ...(deletable ? [{ label: 'Delete', tone: 'danger' as const, onSelect: askDelete }] : []),
+          ]}
+        />
+      )}
+      {deletable && (
+        <DeleteLaunch
+          launchId={launch.id}
+          open={deleting}
+          onOpenChange={setDeleting}
+          onDeleted={async () => {
+            await Promise.all([router.invalidate(), reloadAttention()]);
+          }}
+        />
+      )}
+    </>
   );
 }

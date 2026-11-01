@@ -60,18 +60,21 @@ export const listLaunches = createServerFn({ method: 'GET' })
       ...(data.page && { page: data.page }),
     });
     const launches = page.launches;
-    const [views, numbers, accounts, timezone, glance] = await Promise.all([
+    const [views, numbers, accounts, timezone, glance, titles] = await Promise.all([
       Promise.all(launches.map((l) => launchView(registry, l))),
       launchNumbers(registry, launches),
       postAccounts(registry, launches),
       readTimezone(registry),
       Promise.all(launches.map((l) => listGlance(registry, l))),
+      // The titles the launch model keeps, for the whole page at once: an article is named by its title, not its slug
+      registry.launches.titles(launches.map((l) => l.id)),
     ]);
     // The queue's jobs are Automation's now: the list is launches only
     return {
       launches: views.map((v, i) => ({
         ...v,
         ...glance[i]!,
+        title: titles.get(v.id) ?? null,
         numbers: numbers.get(v.id) ?? null,
         postAccounts: accounts.get(v.id) ?? {},
         avatarUrl: imageUrl(ownerAvatarUrl(v.repo)) ?? null,
@@ -79,6 +82,8 @@ export const listLaunches = createServerFn({ method: 'GET' })
       page: { number: page.page, pages: page.pages, total: page.total, size: page.pageSize },
       facets,
       timezone,
+      /** With `launch-delete`: the list offers to delete a launch from its row's menu (docs/launch-delete.md) */
+      deletable: ctx.flags.on('launch-delete'),
     };
   });
 
