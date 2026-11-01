@@ -1,13 +1,15 @@
 import { useEffect, useId, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { full, moveIndex, nearestIndex, shortDay, type ChartSeries } from './data';
+import { compact, full, moveIndex, nearestIndex, niceTop, placeMarks, shortDay, type ChartSeries } from './data';
 import { PALETTE_CSS } from './palette';
 import { useElementSize } from './useElementWidth';
 
 /*
  * The Stats page's chart as the redesign's board draws it: one line over a fading yellow area when it
- * is the total, a line per series in its channel's colour otherwise; two hairlines for scale, the
- * axis, three days under it and the launch that went out marked on the line. No value axis: the KPI
- * above says the number, the chart says the shape. A pointer or the arrow keys read any point out,
+ * is the total, a line per series in its channel's colour otherwise; the axis and three days under it.
+ * The values fill the plot (the top a round number a little over the highest value), with two
+ * hairlines at the top and the half of that scale, each with its number. The launches that went out
+ * are dots on the line with a thin guide up to their names in a row above the plot, where a name never
+ * crosses the line, the axis or another name (placeMarks). A pointer or the arrow keys read any point out,
  * and a hidden table holds every value for screen readers. Height comes from the stylesheet (170 px
  * on a phone, 280 from 960 px), so the same chart fits both boards.
  */
@@ -20,14 +22,14 @@ export interface TrendChartProps {
   series: readonly ChartSeries[];
   /** What a value is, for the readout: "views" */
   noun: string;
-  /** A launch to mark on the line: the bucket it went out in and its words */
-  mark?: { index: number; label: string } | null;
+  /** Launches to mark on the line: the bucket each went out in and its words */
+  marks?: ReadonlyArray<{ index: number; label: string }>;
   className?: string;
 }
 
-/** Room under the axis for the days, and where the tallest value reaches (as on the board) */
+/** Room under the axis for the days, and the row above the plot for the marks' names */
 const AXIS_GAP = 18;
-const PEAK = 0.36;
+const MARK_ROW = 20;
 /**
  * The boards draw the chart in a fixed frame (358 wide on a phone, 720 on a desktop) scaled down to
  * the card: narrower than that, the drawing shrinks and centres vertically. Its rows follow the same
@@ -35,7 +37,7 @@ const PEAK = 0.36;
  */
 const frameWidth = (height: number) => (height < 200 ? 358 : 720);
 
-export function TrendChart({ title, buckets, unit, series, noun, mark, className }: TrendChartProps) {
+export function TrendChart({ title, buckets, unit, series, noun, marks = [], className }: TrendChartProps) {
   const [box, { width, height }] = useElementSize<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
   const gradient = useId().replace(/:/g, '');
@@ -49,8 +51,11 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
   const row = (v: number) => top + v * scale;
   const base = row(height - AXIS_GAP);
   const max = Math.max(0, ...series.flatMap((s) => s.values.map((v) => v ?? 0)));
+  const domain = niceTop(max);
   const x = (i: number) => (n <= 1 ? width / 2 : (i / (n - 1)) * width);
-  const y = (v: number) => (max === 0 ? base : base - (v / max) * (base - row(height * PEAK)));
+  const shown = marks.filter((m) => m.index >= 0 && m.index < n);
+  const plotTop = row(shown.length > 0 ? MARK_ROW + 6 : 8);
+  const y = (v: number) => base - (v / domain) * (base - plotTop);
   const points = (s: ChartSeries) => s.values.map((v, i) => `${x(i).toFixed(1)},${y(v ?? 0).toFixed(1)}`).join(' ');
   const totalAt = (i: number) => series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
   const middle = Math.floor((n - 1) / 2);
@@ -75,13 +80,10 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
       : single
         ? `${when(active)}: ${full(series[0]?.values[active] ?? 0)} ${noun}`
         : `${when(active)}: ${series.map((s) => `${s.label} ${full(s.values[active] ?? 0)}`).join(', ')}`;
-  const markText = mark && mark.index >= 0 && mark.index < n ? mark : null;
-  const markX = markText ? x(markText.index) : 0;
-  // Inter Tight at 12 px is about 6.2 px a character: the label goes to the side with more room, cut to fit it
-  const room = { right: width - markX - 10, left: markX - 10 };
-  const markFlip = markText ? markText.label.length * (6.2 * scale) > room.right && room.left > room.right : false;
-  const fits = Math.max(4, Math.floor((markFlip ? room.left : room.right) / (6.2 * scale)));
-  const markLabel = markText ? (markText.label.length > fits ? `${markText.label.slice(0, fits - 1).trimEnd()}…` : markText.label) : '';
+  // Inter Tight at 12 px is about 6.2 px a character, scaled with the frame
+  // The row's right end keeps room for the scale's top number
+  const placed = placeMarks(shown.map((m) => ({ index: m.index, x: x(m.index), label: m.label })), width - 28 * scale, 6.2 * scale);
+  const highestAt = (i: number) => Math.max(...series.map((s) => s.values[i] ?? 0));
 
   return (
     <div className={`stats-chart${className ? ` ${className}` : ''}`}>
@@ -110,8 +112,16 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
               </linearGradient>
             </defs>
             <g className="stats-chart-grid">
-              <line x1={0} y1={row(height / 4)} x2={width} y2={row(height / 4)} />
-              <line x1={0} y1={row(height / 2)} x2={width} y2={row(height / 2)} />
+              <line x1={0} y1={plotTop} x2={width} y2={plotTop} />
+              <line x1={0} y1={y(domain / 2)} x2={width} y2={y(domain / 2)} />
+            </g>
+            <g className="stats-chart-values" style={{ fontSize: 10 * scale }} aria-hidden="true">
+              <text x={width} y={plotTop - 3} textAnchor="end">
+                {compact(domain)}
+              </text>
+              <text x={width} y={y(domain / 2) - 3} textAnchor="end">
+                {compact(domain / 2)}
+              </text>
             </g>
             {single && series[0] && (
               <>
@@ -121,12 +131,19 @@ export function TrendChart({ title, buckets, unit, series, noun, mark, className
             )}
             {!single && series.map((s) => <polyline key={s.key} points={points(s)} fill="none" stroke={s.colour} strokeWidth={2.5} strokeLinejoin="round" />)}
             <line className="stats-chart-axis" x1={0} y1={base} x2={width} y2={base} />
-            {markText && (
+            {placed.length > 0 && (
               <g className="stats-chart-mark" style={{ fontSize: 12 * scale }}>
-                <circle cx={markX} cy={y(single ? (series[0]?.values[markText.index] ?? 0) : Math.max(...series.map((s) => s.values[markText.index] ?? 0)))} r={5} />
-                <text x={markFlip ? markX - 10 : markX + 10} y={y(single ? (series[0]?.values[markText.index] ?? 0) : Math.max(...series.map((s) => s.values[markText.index] ?? 0))) + 4} textAnchor={markFlip ? 'end' : 'start'}>
-                  {markLabel}
-                </text>
+                {shown.map((m) => (
+                  <g key={`${m.index}-${m.label}`}>
+                    <line x1={x(m.index)} y1={row(MARK_ROW) + 3} x2={x(m.index)} y2={y(highestAt(m.index)) - 5} />
+                    <circle cx={x(m.index)} cy={y(highestAt(m.index))} r={5} />
+                  </g>
+                ))}
+                {placed.map((p) => (
+                  <text key={`t-${p.index}-${p.text}`} x={p.anchor === 'start' ? p.x - 1 : p.x + 1} y={row(MARK_ROW) - 2} textAnchor={p.anchor}>
+                    {p.text}
+                  </text>
+                ))}
               </g>
             )}
             {active !== null && (

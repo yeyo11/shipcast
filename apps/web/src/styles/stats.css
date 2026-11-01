@@ -24,6 +24,8 @@
 .stats-link { color: inherit; text-decoration: none; }
 .stats-link:hover { color: var(--sc-yellow); }
 .stats-strong { font-weight: 700; }
+.stats-name { display: flex; min-width: 0; }
+.stats-name-rest { flex: none; white-space: pre; }
 
 /* ---------- Overview: the KPIs ---------- */
 .stats-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -48,6 +50,9 @@
 .stats-chart-axis { stroke: var(--sc-rail); }
 .stats-chart-days text { fill: var(--sc-muted); font-family: var(--sc-font-text); }
 .stats-chart-mark circle { fill: var(--sc-yellow); }
+.stats-chart-mark line { stroke: var(--sc-rail); stroke-width: 1; }
+/* The scale's numbers sit on their hairlines with a halo of the card, so a line passing under stays readable */
+.stats-chart-values text { fill: var(--sc-muted); font-family: var(--sc-font-text); paint-order: stroke; stroke: var(--sc-raised); stroke-width: 3px; stroke-linejoin: round; }
 .stats-chart-mark text { fill: var(--sc-text); font-family: var(--sc-font-text); }
 .stats-chart-active line { stroke: var(--sc-rail); stroke-dasharray: 3 3; }
 .stats-chart-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--sc-raised); border: 2px solid var(--sc-rail); border-radius: 10px; padding: 1px 8px; font-size: 12px; white-space: nowrap; pointer-events: none; }

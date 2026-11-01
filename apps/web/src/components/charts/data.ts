@@ -229,3 +229,44 @@ export function seriesCsv(buckets: readonly string[], series: readonly ChartSeri
   const rows = buckets.map((bucket, i) => [bucket, ...series.map((s) => s.values[i] ?? null), ...withComparison.map((s) => s.comparison?.[i] ?? null)]);
   return [head, ...rows].map((row) => row.map(csvCell).join(',')).join('\n') + '\n';
 }
+
+/** A mark's label as a chart sets it above its plot: where it starts, which side of its guide, its words */
+export interface PlacedMark {
+  index: number;
+  x: number;
+  anchor: 'start' | 'end';
+  text: string;
+}
+
+/**
+ * Where the marks' labels go in the row above a plot: each by its own guide, reading right of it, or
+ * left of it near the right edge; cut to the room there is; one that would touch the label before it
+ * is left out, and the one before says how many it stands for ("+2"), so labels never overlap each
+ * other, the line or the axis, whatever the width. `charWidth` is a character's width at the label's
+ * size; a name is cut to at most `maxShare` of the row.
+ */
+export function placeMarks(marks: ReadonlyArray<{ index: number; x: number; label: string }>, width: number, charWidth: number, gap = 8, maxShare = 0.45): PlacedMark[] {
+  const placed: Array<PlacedMark & { left: number; right: number; hidden: number; label: string }> = [];
+  for (const m of [...marks].sort((a, b) => a.x - b.x)) {
+    const full = m.label.length * charWidth;
+    const anchor: 'start' | 'end' = m.x + full <= width ? 'start' : m.x - full >= 0 ? 'end' : width - m.x >= m.x ? 'start' : 'end';
+    // No name takes more than its share of the row, so a long one leaves room for the next
+    const room = Math.min(anchor === 'start' ? width - m.x : m.x, width * maxShare);
+    const fits = Math.max(4, Math.floor(room / charWidth));
+    const label = m.label.length > fits ? `${m.label.slice(0, fits - 1).trimEnd()}…` : m.label;
+    const w = label.length * charWidth;
+    const left = anchor === 'start' ? m.x : m.x - w;
+    const last = placed.at(-1);
+    if (last && left < last.right + gap) {
+      last.hidden += 1;
+      continue;
+    }
+    placed.push({ index: m.index, x: m.x, anchor, text: label, label, left, right: left + w, hidden: 0 });
+  }
+  return placed.map(({ index, x, anchor, text, hidden }) => ({ index, x, anchor, text: hidden > 0 ? `${text} +${hidden}` : text }));
+}
+
+/** A value axis that fits the data: the top a little over the highest value, on a round number */
+export function niceTop(max: number, headroom = 0.08): number {
+  return niceCeiling(max * (1 + headroom));
+}

@@ -44,3 +44,21 @@ export function counted(value: number, word: string): string {
   return `${value.toLocaleString('en')} ${value === 1 ? one : word}`;
 }
 
+
+/**
+ * Rows that would read the same told apart: a repeated name takes its day ("· 20 Oct"), and one still
+ * repeated its place among them ("· 2"), so a list never shows two rows nobody can tell apart.
+ */
+export function distinct(names: readonly string[], days: ReadonlyArray<string | null>): string[] {
+  const count = (list: readonly string[]) => list.reduce((m, t) => m.set(t, (m.get(t) ?? 0) + 1), new Map<string, number>());
+  const first = count(names);
+  const dated = names.map((t, i) => ((first.get(t) ?? 0) > 1 && days[i] ? `${t} · ${shortDay(days[i] ?? '')}` : t));
+  const second = count(dated);
+  const seen = new Map<string, number>();
+  return dated.map((t) => {
+    if ((second.get(t) ?? 0) < 2) return t;
+    const n = (seen.get(t) ?? 0) + 1;
+    seen.set(t, n);
+    return `${t} · ${n}`;
+  });
+}

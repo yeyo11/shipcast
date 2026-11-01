@@ -121,8 +121,8 @@ function Stats() {
   const chip = periodChip(search.period, stats.period.from, stats.period.to);
   const channelsChip = summarize(search.channels ?? [], stats.options.channels, 'channels') ?? 'All channels';
   const best = stats.best;
-  // The bucket the best launch went out in: the last one starting on or before its day
-  const markIndex = best?.publishedOn ? buckets.reduce((at, b, i) => (b <= (best.publishedOn ?? '') ? i : at), -1) : -1;
+  // Each launch that went out, in the bucket it went out in: the last one starting on or before its day
+  const marks = stats.marks.map((m) => ({ index: buckets.reduce((at, b, i) => (b <= m.day ? i : at), -1), label: `${m.title} out` }));
   const position = stats.averages.find((a) => a.source === 'search' && a.metric === 'position')?.value ?? null;
 
   const exportCsv = () => {
@@ -231,7 +231,7 @@ function Stats() {
             {series.length === 0 ? (
               <p className="k-sm k-muted stats-chart-none">No {metricName.toLowerCase()} in this period: the sources picked do not count them, or nothing grew. Pick another number above.</p>
             ) : (
-              <TrendChart title={chartTitle} buckets={buckets} unit={per} series={series} noun={metricName.toLowerCase()} mark={best && markIndex >= 0 ? { index: markIndex, label: `${best.title} out` } : null} />
+              <TrendChart title={chartTitle} buckets={buckets} unit={per} series={series} noun={metricName.toLowerCase()} marks={marks} />
             )}
             <div className="stats-only-phone">{groupChips}</div>
           </section>

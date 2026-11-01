@@ -34,6 +34,8 @@ const SERIES_LIMIT = 8;
 export const PAGE_SIZE = 10;
 /** The ranking is sorted by any column here, so it is read whole up to this many entries */
 const RANKING_CAP = 1000;
+/** How many launches the chart marks at most: the newest; more would be a row of "+N" */
+const MARK_LIMIT = 20;
 /** The launches offered as a filter, newest first: only a published launch has numbers */
 const LAUNCH_OPTIONS = 500;
 
@@ -72,6 +74,8 @@ export interface StatsView {
   chart: { buckets: string[]; groups: ChartGroup[] };
   /** The launch that did best in the period (by score), with the charted number and the day it went out */
   best: { launchId: number; title: string; name: string; ref: string | null; value: number; publishedOn: string | null } | null;
+  /** The launches that went out in the period, by the day of their first live piece: the chart's marks */
+  marks: Array<{ launchId: number; title: string; day: string }>;
   /** The three most popular pieces of the period, by score: the desktop's "Top this period" */
   top: RankedEntry[];
   ranking: {
@@ -104,6 +108,8 @@ export interface RankedEntry {
   words: Partial<Record<StatsMetric, string>>;
   url: string | null;
   kind: string | null;
+  /** The day a piece went out: what tells two pieces of one launch on one channel apart */
+  publishedOn: string | null;
 }
 
 /** What a network calls a family: the first of its raw counters ("likes" for Bluesky's reactions) */
@@ -210,18 +216,26 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
     if (!titleCache.has(id)) titleCache.set(id, registry.launches.modelFields(id).then((f) => f?.title ?? null));
     return titleCache.get(id)!;
   };
-  const named = async (e: Omit<RankedEntry, 'title' | 'words' | 'rank'> & { rank?: number }, rank: number): Promise<RankedEntry> => {
+  const postsCache = new Map<number, Promise<Map<number, string>>>();
+  const postDay = async (launchId: number, postId: number) => {
+    if (!postsCache.has(launchId)) postsCache.set(launchId, registry.posts.posts(launchId).then((ps) => new Map(ps.map((p) => [p.id, p.publishedAt.slice(0, 10)]))));
+    return (await postsCache.get(launchId)!).get(postId) ?? null;
+  };
+  const named = async (e: Omit<RankedEntry, 'title' | 'words' | 'rank' | 'publishedOn'> & { rank?: number }, rank: number): Promise<RankedEntry> => {
     const launch = e.launchId !== null ? launchById.get(e.launchId) : undefined;
     const account = e.accountId !== null ? accountById.get(e.accountId) : undefined;
     const title = launch ? launchTitle(launch, await titleOf(launch.id)).title : account ? account.label : e.label;
-    return { ...e, rank, title, words: familyWords(e.channel) };
+    const publishedOn = e.launchId !== null && e.postId !== null ? await postDay(e.launchId, e.postId) : null;
+    return { ...e, rank, title, words: familyWords(e.channel), publishedOn };
   };
 
   const sorted = sortRanking(ranking, search.sort, search.order);
   const pages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(search.page, pages);
   const topPieces = search.rank === 'post' ? sortRanking(ranking, 'score', 'desc').slice(0, 3) : (await statsRanking(registry, { by: 'post', from: period.from, to: period.to, limit: 3, ...filters })).entries;
-  const [entries, top, best] = await Promise.all([
+  // A launch can only have gone out in the period if it was made before its end; the newest few are enough to mark
+  const candidates = launches.filter((l) => l.status === 'published' && l.createdAt.slice(0, 10) <= period.to).slice(0, MARK_LIMIT);
+  const [entries, top, best, marks] = await Promise.all([
     Promise.all(sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((e, i) => named(e, (page - 1) * PAGE_SIZE + i + 1))),
     Promise.all(topPieces.map((e, i) => named(e, i + 1))),
     (async () => {
@@ -230,6 +244,12 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
       const [title, publishedOn] = await Promise.all([titleOf(launch.id), firstPublished(registry, launch.id)]);
       return { launchId: launch.id, ...launchTitle(launch, title), value: bestLaunch.metrics[search.metric] ?? 0, publishedOn };
     })(),
+    Promise.all(
+      candidates.map(async (l) => {
+        const [title, day] = await Promise.all([titleOf(l.id), firstPublished(registry, l.id)]);
+        return day && day >= period.from && day <= period.to ? [{ launchId: l.id, title: launchTitle(l, title).title, day }] : [];
+      }),
+    ).then((found) => found.flat().sort((a, b) => a.day.localeCompare(b.day))),
   ]);
 
   return {
@@ -248,6 +268,7 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
     averages: overview.averages.map((a) => ({ ...a, label: CHANNEL_NAMES[a.source] ?? a.source })),
     chart: { buckets: series.buckets, groups },
     best,
+    marks,
     top,
     ranking: { total: sorted.length, page, pages, entries },
     options: {

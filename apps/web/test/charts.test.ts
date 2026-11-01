@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   alignToBuckets,
   shortDay,
+  placeMarks,
+  niceTop,
   brushRange,
   compact,
   deltaLabel,
@@ -96,4 +98,29 @@ test('a series keeps its colour whatever else is filtered, and nobody shares one
 test('the redesign writes a day first: 1 Oct, with the year when asked', () => {
   assert.equal(shortDay('2026-10-01'), '1 Oct');
   assert.equal(shortDay('2026-12-25', true), '25 Dec 2026');
+});
+
+test('mark labels sit by their guides, flip near the right edge, are cut to fit and never overlap', () => {
+  const [a] = placeMarks([{ index: 0, x: 10, label: 'claudio v1.5.0 out' }], 300, 6);
+  assert.deepEqual(a, { index: 0, x: 10, anchor: 'start', text: 'claudio v1.5.0 out' });
+  const [b] = placeMarks([{ index: 29, x: 290, label: 'claudio v1.5.0 out' }], 300, 6);
+  assert.equal(b?.anchor, 'end', 'near the right edge it reads left of its guide');
+  const [c] = placeMarks([{ index: 5, x: 150, label: 'Why I moved my notes into the repo, and what it changed out' }], 300, 6);
+  assert.ok((c?.text.length ?? 0) * 6 <= 150 && c?.text.endsWith('…'), 'a long name is cut to the room on its side');
+  const crowded = placeMarks(
+    [
+      { index: 1, x: 20, label: 'one out' },
+      { index: 2, x: 30, label: 'two out' },
+      { index: 3, x: 40, label: 'three out' },
+    ],
+    300,
+    6,
+  );
+  assert.deepEqual(crowded.map((m) => m.text), ['one out +2'], 'the ones that would touch it are counted, not drawn');
+});
+
+test('the value scale fits the data with a little room, on a round number', () => {
+  assert.equal(niceTop(3), 5);
+  assert.equal(niceTop(92), 100);
+  assert.equal(niceTop(0), 1);
 });

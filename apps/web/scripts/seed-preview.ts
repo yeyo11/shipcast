@@ -621,6 +621,19 @@ async function seedLaunches(registry: OpenRepositories, queue: JobQueue, account
   const hackBsky = await seedPiece(registry, hack, { channel: 'bluesky', account: accounts.get('bluesky'), url: postUrl.bluesky('3l5weekendhack1'), externalId: 'at://did:plc:previewjosegarrido/app.bsky.feed.post/3l5weekendhack1', publishedAt: new Date(hackAt.getTime() + 60_000) });
   await exec(registry, `UPDATE posts SET status = 'deleted' WHERE id IN (${hackBlog.id}, ${hackBsky.id})`);
 
+  // 9. A small release that went out two days ago, late in any period: a mark near the chart's right
+  // edge over small numbers, and two newsletter issues that must not read as one row
+  const lateAt = new Date(NOW.getTime() - 2 * 86_400_000);
+  const lateDay = lateAt.toISOString().slice(0, 10);
+  const late = await seedLaunch(registry, { repo: 'yeyo11/claudio', ref: 'v1.5.1', trigger: 'release', kind: 'minor', status: 'published', createdAt: new Date(lateAt.getTime() - 30 * 60_000), updatedAt: lateAt });
+  ids.late = late.id;
+  const lateBsky = await seedPiece(registry, late, { channel: 'bluesky', account: accounts.get('bluesky'), url: postUrl.bluesky('3l5claudio151'), externalId: 'at://did:plc:previewjosegarrido/app.bsky.feed.post/3l5claudio151', publishedAt: lateAt });
+  const lateNewsEn = await seedPiece(registry, late, { channel: 'newsletter', kind: 'issue:en', url: `${SITE}/newsletter/claudio-1-5-1/`, externalId: 'brevo-campaign-901', publishedAt: lateAt });
+  const lateNewsEs = await seedPiece(registry, late, { channel: 'newsletter', kind: 'issue:es', url: `${SITE}/es/newsletter/claudio-1-5-1/`, externalId: 'brevo-campaign-902', publishedAt: lateAt });
+  await seedReadings(registry, late, lateBsky, 'bluesky', lateDay, { likes: 6, replies: 1, reposts: 2 });
+  await seedReadings(registry, late, lateNewsEn, 'newsletter', lateDay, { opens: 41, clicks: 7 });
+  await seedReadings(registry, late, lateNewsEs, 'newsletter', lateDay, { opens: 23, clicks: 4 });
+
   // Comments: two waiting with a reply drafted, five answered, one dismissed
   const comments: CommentSeed[] = [
     { post: claudioBsky, channel: 'bluesky', id: 'at-ana-1', handle: 'ana.bsky.social', name: 'Ana Ruiz', text: 'This looks great! Does it work with local models too?', at: hoursAgo(2), status: 'draft-ready', classification: 'question', draft: 'Yes: any OpenAI-compatible server works, local ones included. The README has an Ollama example.', note: 'A question the README answers: point to the Ollama example.' },

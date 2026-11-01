@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { placeMarks } from '../charts/data';
 import { Icon } from '../kit/Icon';
 import { channelEntries, type PieceRow } from '../../server/pieces';
 import type { SchedulingChannel } from '../../server/pieces.server';
@@ -41,12 +42,13 @@ const TOTALS: Array<[keyof Totals, string]> = [
 function ViewsChart({ days }: { days: Day[] }) {
   const [ref, width] = useWidth<HTMLDivElement>(358);
   const gradient = useId();
-  const { points, peak } = chartPoints(days, width);
+  // The plot starts under a row kept for the peak's words, so they never sit on the line or its dot
+  const { points, peak } = chartPoints(days, width, 100, 30);
   const line = points.map(([x, y]) => `${x},${y}`).join(' ');
   const area = `M0 100 ${points.map(([x, y]) => `L${x} ${y}`).join(' ')} L${width} 100 Z`;
   const label = peak && `${number(peak.views)} on ${chartDay(peak.day)}`;
-  // The peak's words sit right of its dot, or left of it when the dot is near the right edge
-  const flip = peak !== null && peak.x > width - 110;
+  // Right of its guide, or left of it near the right edge, cut to the room there is (placeMarks)
+  const [placed] = peak && label ? placeMarks([{ index: 0, x: peak.x, label }], width, 6.2) : [];
   return (
     <div ref={ref} className="pub-chart">
       <svg viewBox={`0 0 ${width} 110`} width="100%" height="110" role="img" aria-label={`Views per day since the launch${label ? `; the most, ${label}` : ''}`}>
@@ -59,11 +61,12 @@ function ViewsChart({ days }: { days: Day[] }) {
         {points.length > 1 && <path d={area} fill={`url(#${gradient})`} />}
         {points.length > 1 && <polyline points={line} fill="none" stroke="var(--sc-chart)" strokeWidth="3" strokeLinejoin="round" />}
         <line x1="0" y1="100" x2={width} y2="100" stroke="var(--sc-rail)" />
-        {peak && (
+        {peak && placed && (
           <>
+            <line x1={peak.x} y1={16} x2={peak.x} y2={peak.y - 5} stroke="var(--sc-rail)" strokeWidth="1" />
             <circle cx={peak.x} cy={peak.y} r="5" fill="var(--sc-chart)" />
-            <text x={flip ? peak.x - 10 : peak.x + 10} y={Math.max(12, peak.y - 2)} textAnchor={flip ? 'end' : 'start'} fill="var(--sc-text)" fontSize="12" fontFamily="var(--sc-font-text)">
-              {label}
+            <text x={placed.anchor === 'start' ? peak.x - 1 : peak.x + 1} y={12} textAnchor={placed.anchor} fill="var(--sc-text)" fontSize="12" fontFamily="var(--sc-font-text)">
+              {placed.text}
             </text>
           </>
         )}
