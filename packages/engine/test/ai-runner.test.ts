@@ -151,6 +151,72 @@ test('an invalid answer is sent back once with what is wrong, and the repaired o
   assert.equal(stubborn.doStreamCalls.length, 2, 'one repair, no more');
 });
 
+/** A provider that decodes strict schemas within the given limits, as the Anthropic API does */
+function strictProvider(model: MockLanguageModelV4, limits = anthropicAiProvider.capabilities.strictSchemas!): AiProviderDefinition {
+  const base = mockProvider(model);
+  return { ...base, capabilities: { ...base.capabilities, strictSchemas: limits } };
+}
+
+const Tags = z.strictObject({ tags: z.array(z.string().regex(/^[a-z]+$/)).min(1).max(2) });
+const tagsTask = (needsRepo: AiTaskDefinition['needsRepo'] = 'never'): AiTaskDefinition<z.infer<typeof Tags>> => ({
+  id: 'test-tags',
+  settingsTask: 'pack',
+  output: { schema: Tags, jsonSchema: () => z.toJSONSchema(Tags, { target: 'draft-7', io: 'input' }) as Record<string, unknown>, name: 'tags' },
+  needsRepo,
+  limits: { maxSteps: 10, maxOutputTokens: 1000, timeoutMs: 10_000, maxBudgetUsd: 1 },
+});
+const submitToolOf = (call: StreamOptions) => {
+  const submit = (call.tools ?? []).find((t) => t.name === SUBMIT_TOOL);
+  assert.ok(submit && submit.type === 'function', 'the submit tool was offered');
+  return submit;
+};
+
+test('a strict submit tool gets the relaxed schema, and the answer is still held to the full one, through the repair', async () => {
+  const { repo } = await workspace();
+  const model = scripted(toolCall(SUBMIT_TOOL, { tags: ['a', 'b', 'c'] }), toolCall(SUBMIT_TOOL, { tags: ['a', 'b'] }, 'call-2'));
+  const result = await runnerWith({ provider: strictProvider(model), settings: { apiKey: 'k' } }).run(tagsTask('always'), { prompt: 'Tag it.', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } });
+  assert.deepEqual(result.output, { tags: ['a', 'b'] });
+  assert.equal(result.repaired, true, 'three tags break the removed maxItems: refused here, then repaired');
+  assert.match(promptText(model.doStreamCalls[1]!), /not valid: tags:/);
+  for (const call of model.doStreamCalls) {
+    const submit = submitToolOf(call);
+    assert.equal(submit.strict, true, 'within the provider’s limits, the submit tool is strict');
+    const sent = JSON.stringify(submit.inputSchema);
+    assert.doesNotMatch(sent, /"maxItems"|"pattern"|"\$schema"/, 'nothing a strict decoder refuses is sent');
+    assert.match(sent, /"minItems":1/, 'a minItems of 1 is kept');
+    assert.match(sent, /max items: 2/, 'the removed constraint is told in the description');
+  }
+});
+
+test('a response format gets the relaxed schema too, and its answer is validated against the full one', async () => {
+  const model = scripted(textParts('{"tags":["Not-lower"]}'), textParts('{"tags":["fine"]}'));
+  const result = await runnerWith({ provider: strictProvider(model), settings: { apiKey: 'k' } }).run(tagsTask(), { prompt: 'Tag it.' });
+  assert.deepEqual(result.output, { tags: ['fine'] });
+  assert.equal(result.repaired, true, 'the removed pattern is enforced here');
+  const format = model.doStreamCalls[0]!.responseFormat;
+  assert.equal(format?.type, 'json');
+  assert.doesNotMatch(JSON.stringify(format?.type === 'json' ? format.schema : undefined), /"maxItems"|"pattern"/);
+  assert.equal(model.doStreamCalls[0]!.tools, undefined);
+});
+
+test('an answer past the provider’s strict limits goes through a submit tool that is not strict, never the response format', async () => {
+  const model = scripted(toolCall(SUBMIT_TOOL, { tags: ['a'] }));
+  const result = await runnerWith({ provider: strictProvider(model, { optionalParams: 24, unionParams: 0 }), settings: { apiKey: 'k' } }).run(
+    { ...tagsTask(), output: { ...tagsTask().output!, jsonSchema: () => ({ ...z.toJSONSchema(Tags, { target: 'draft-7', io: 'input' }), properties: { tags: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }] } } }) } },
+    { prompt: 'Tag it.' },
+  );
+  assert.deepEqual(result.output, { tags: ['a'] });
+  const call = model.doStreamCalls[0]!;
+  assert.equal(call.responseFormat?.type ?? 'text', 'text', 'a response format is always decoded strictly: not used');
+  assert.equal(submitToolOf(call).strict, false);
+});
+
+test('a provider that does not decode strict schemas gets a submit tool that is not strict', async () => {
+  const model = scripted(toolCall(SUBMIT_TOOL, { answer: 'ok' }));
+  await runnerWith({ provider: mockProvider(model, 'none'), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' });
+  assert.equal(submitToolOf(model.doStreamCalls[0]!).strict, false, 'OpenAI’s strict mode would want every optional field required');
+});
+
 test('a model that only reads until its step ceiling has no answer', async () => {
   const { repo } = await workspace();
   const model = scripted(toolCall('list_files', {}));

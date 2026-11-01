@@ -6,6 +6,7 @@ import { toAiError } from './errors.ts';
 import type { RepoArchiveSource } from '../github.ts';
 import type { AiCallContext, AiMessageOptions, AiProviderDefinition, AiProviderSettings, WorkspaceSource } from './providers/definition.ts';
 import { repoTools } from './repo-tools.ts';
+import { fitsStrictLimits, strictToolSchema } from './strict-schema.ts';
 
 /*
  * Shipcast is the agent: the AI task runner runs every task, whatever the provider, with the AI SDK.
@@ -24,7 +25,8 @@ export const SUBMIT_TOOL = 'submit_answer';
  * How the model is told to finish. Forcing the call (`tool_choice` any/tool, the SDK's 'required')
  * is refused with a 400 by current Claude models (Opus 5.5, Sonnet 5.5, Fable 5.1) and is not
  * portable anyway, so every provider gets `auto` with this instruction, and the submit tool is strict
- * so its input follows the schema where the provider supports strict tools.
+ * where the provider decodes strict schemas and the answer's is within its limits, so its input
+ * follows the schema.
  */
 const SUBMIT_INSTRUCTION = `When you have the answer, call the ${SUBMIT_TOOL} tool exactly once with the whole answer. Do not write the answer as text: only what ${SUBMIT_TOOL} receives is read.`;
 
@@ -126,6 +128,17 @@ function add(sum: AiUsage, usage: LanguageModelUsage | undefined): AiUsage {
 const problemsOf = (issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>): string =>
   issues.map((i) => `${i.path.map(String).join('.') || 'answer'}: ${i.message}`).join('; ');
 
+/**
+ * The answer's schema as the provider is sent it, and how. `sent` is the task's JSON Schema relaxed to
+ * what a strict decoder accepts (strict-schema.ts); the answer is still validated against the task's
+ * zod schema, so what was relaxed is enforced here, through the repair. `strict`: the provider
+ * decodes strict schemas and this one is within its limits.
+ */
+interface AnswerSchema {
+  sent: JSONSchema7;
+  strict: boolean;
+}
+
 /** One prepared run: everything a model call needs, decided once from the task, the provider and the input */
 interface Plan {
   task: AiTaskDefinition<unknown>;
@@ -171,19 +184,26 @@ export class AiTaskRunner {
   /**
    * Runs a task with a structured answer and returns it validated. With client tools (the repo's, on
    * a `local-tools` provider) or a provider with no response format, the answer is the input of the
-   * submit tool, and the loop stops at that call or at the task's step ceiling; otherwise it is the
-   * response format's JSON. An invalid answer is sent back once with what is wrong.
+   * submit tool, and the loop stops at that call or at the task's step ceiling; so too when the
+   * answer's schema is past the provider's strict decoding limits. Otherwise it is the response
+   * format's JSON. The provider is sent the schema relaxed to what strict decoding takes; the answer
+   * is validated against the task's full zod schema, and an invalid one is sent back once with what is wrong.
    */
   async run<T>(task: AiTaskDefinition<T>, input: AiRunInput, setup?: AiRunSetup): Promise<AiRunResult<T>> {
     const output = task.output;
     if (!output) throw new Error(`${task.id} answers with text: stream it`);
     const plan = await this.#plan(task as AiTaskDefinition<unknown>, input, setup);
     return this.#timed(plan, () => this.#prepared(plan, async (plan) => {
-      const submit = Object.keys(plan.tools).length > 0 || plan.setup.provider.capabilities.structuredOutput === 'none';
+      const limits = plan.setup.provider.capabilities.strictSchemas;
+      const sent = strictToolSchema(output.jsonSchema());
+      const answer: AnswerSchema = { sent: sent as JSONSchema7, strict: limits !== undefined && fitsStrictLimits(sent, limits) };
+      // A provider's response format is always decoded strictly: a schema past its limits answers through a non-strict submit tool
+      const tooComplex = limits !== undefined && !answer.strict;
+      const submit = Object.keys(plan.tools).length > 0 || plan.setup.provider.capabilities.structuredOutput === 'none' || tooComplex;
       let usage = NO_USAGE;
       let steps = 0;
 
-      const first = submit ? await this.#submitCall(plan, plan.messages, false) : await this.#nativeCall(plan, plan.messages);
+      const first = submit ? await this.#submitCall(plan, answer, plan.messages, false) : await this.#nativeCall(plan, answer, plan.messages);
       usage = add(usage, first.usage);
       steps += first.steps;
       let last = first.providerMetadata;
@@ -201,7 +221,7 @@ export class AiTaskRunner {
       const conversation: ModelMessage[] = [...plan.messages, ...first.responseMessages];
       if (first.submitted) conversation.push({ role: 'tool', content: [{ type: 'tool-result', toolCallId: first.submitted.toolCallId, toolName: SUBMIT_TOOL, output: { type: 'error-text', value: why } }] });
       else conversation.push({ role: 'user', content: why });
-      const second = submit ? await this.#submitCall(plan, conversation, true) : await this.#nativeCall(plan, conversation);
+      const second = submit ? await this.#submitCall(plan, answer, conversation, true) : await this.#nativeCall(plan, answer, conversation);
       usage = add(usage, second.usage);
       steps += second.steps;
       last = second.providerMetadata ?? last;
@@ -354,21 +374,20 @@ export class AiTaskRunner {
   }
 
   /** The answer in the response format: no client tools, one step */
-  #nativeCall(plan: Plan, messages: ModelMessage[]): Promise<Called> {
+  #nativeCall(plan: Plan, answer: AnswerSchema, messages: ModelMessage[]): Promise<Called> {
     const output = plan.task.output!;
     return this.#call(plan, messages, {
-      output: Output.object({ schema: jsonSchema(output.jsonSchema() as JSONSchema7), name: output.name }),
+      output: Output.object({ schema: jsonSchema(answer.sent), name: output.name }),
       stopWhen: stepCountIs(1),
     });
   }
 
   /** The answer as the submit tool's input, after as many tool rounds as the task allows; a repair may only submit */
-  #submitCall(plan: Plan, messages: ModelMessage[], repair: boolean): Promise<Called> {
-    const output = plan.task.output!;
+  #submitCall(plan: Plan, answer: AnswerSchema, messages: ModelMessage[], repair: boolean): Promise<Called> {
     const submit = tool({
       description: 'Submit the final answer. Call it once, with the whole answer, when you are done; nothing after it is read.',
-      inputSchema: jsonSchema(output.jsonSchema() as JSONSchema7),
-      strict: true,
+      inputSchema: jsonSchema(answer.sent),
+      strict: answer.strict,
     });
     const tools: ToolSet = repair ? { [SUBMIT_TOOL]: submit } : { ...plan.tools, [SUBMIT_TOOL]: submit };
     return this.#call(plan, messages, {

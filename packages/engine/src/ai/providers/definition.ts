@@ -1,5 +1,6 @@
 import type { LanguageModel, SystemModelMessage } from 'ai';
 import type { AiErrorTable } from '../errors.ts';
+import type { StrictSchemaLimits } from '../strict-schema.ts';
 
 /*
  * What Shipcast knows about one AI provider, as one module per provider in this folder, listed once
@@ -56,6 +57,14 @@ export interface AiCapabilities {
   repoAccess: RepoAccess;
   /** Applied by the runner to every run with the repo's tools; none for a provider that caches on its own or not at all */
   promptCaching?: AiPromptCaching;
+  /**
+   * The provider decodes a strict tool's input and its response format against the schema, within
+   * these limits per request (strict-schema.ts). Only such a provider gets a strict submit tool, and
+   * an answer's schema past the limits goes to it through a submit tool that is not strict, never
+   * through the response format. None: no tool is sent strict (OpenAI's strict mode would want every
+   * property required, which an answer with optional fields is not).
+   */
+  strictSchemas?: StrictSchemaLimits;
 }
 
 /** A provider's settings, by its fields' keys; an empty value is as good as none */

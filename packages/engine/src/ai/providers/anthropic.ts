@@ -17,11 +17,17 @@ const self = { id: 'anthropic', name: 'Anthropic API', settings: [{ key: 'apiKey
  */
 const EPHEMERAL = { anthropic: { cacheControl: { type: 'ephemeral' } } };
 
+/**
+ * What Anthropic's structured outputs compile in one request, over every strict tool and the
+ * response format: past it, a 400 "Schema is too complex for compilation".
+ */
+const ANTHROPIC_STRICT_LIMITS = { optionalParams: 24, unionParams: 16 };
+
 /** The Anthropic API; a repo is read through Shipcast's own tools over the checkout */
 export const anthropicAiProvider = aiProvider({
   ...self,
   listed: true,
-  capabilities: { streaming: true, tools: true, structuredOutput: 'native', repoAccess: 'local-tools', promptCaching: { system: EPHEMERAL, call: EPHEMERAL } },
+  capabilities: { streaming: true, tools: true, structuredOutput: 'native', repoAccess: 'local-tools', promptCaching: { system: EPHEMERAL, call: EPHEMERAL }, strictSchemas: ANTHROPIC_STRICT_LIMITS },
   defaultModel: () => DEFAULT_ANTHROPIC_MODEL,
   model(settings: AiProviderSettings, modelId: string | undefined, options: { fetch?: typeof fetch } = {}): LanguageModel {
     const anthropic = createAnthropic({ apiKey: need(self, settings, 'apiKey'), ...(options.fetch && { fetch: options.fetch }) });
