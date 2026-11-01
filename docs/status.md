@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-01T12:50:05.657364096Z
+updated_at: 2026-11-01T14:23:09.376570081Z
 tags:
     - status
     - roadmap
@@ -12,10 +12,11 @@ tags:
 **Production runs on the server `apps-1` since 2026-10-27, and since 2026-10-29 it runs the whole
 performance and architecture refactor**: three processes (`web`, `worker`, `heavy`), BullMQ on Redis,
 PgBouncer, the encrypted secrets table, GitHub by events through a public webhook host, and every AI
-task on the AI task runner with Shipcast's own headless claudio. Every flag of the refactor is on
-([server.md](server.md#what-production-runs-2026-10-29)); the same day `ai-runner` was retired, its
+task on the AI task runner with Shipcast's own headless claudio. Every flag of the refactor was turned
+on ([server.md](server.md#what-production-runs-2026-10-29)); the same day `ai-runner` was retired, its
 runner the only AI path, and the global AI budget went with the first AI layer
-([decisions/ai-layer.md](decisions/ai-layer.md)). Shipcast v0.2.0 was released on 2026-10-27.
+([decisions/ai-layer.md](decisions/ai-layer.md)). On 2026-11-01 the other seven were retired: each new
+path is the only one, and Redis is required by the split processes ([server.md](server.md#the-flags)). Shipcast v0.2.0 was released on 2026-10-27.
 
 **The MVP closed on 2026-10-25: phases 0 to 5 done, and Shipcast v0.1.0 was launched with Shipcast,
 from its app.** The same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app,
@@ -98,7 +99,7 @@ accounts per brand, the phase 5 channels and what the MVP had left
   ffmpeg.
 - **`packages/runtime`** ([accounts.md](accounts.md)): configuration, the secret stores (keychain,
   encrypted file, encrypted table), accounts per brand, the network catalog, process roles, the job
-  queue (pg-boss or BullMQ), Redis, the flags, the shared round, the GitHub webhook handling and the
+  queue (BullMQ with Redis, pg-boss for a single process without it), Redis, the flags, the shared round, the GitHub webhook handling and the
   automation settings, shared by the CLI and the app.
 - **`packages/mcp`** ([mcp.md](mcp.md)): the MCP server over the REST API, one tool per `/api/v1`
   operation since 2026-11-01 (41), kept at parity by a test

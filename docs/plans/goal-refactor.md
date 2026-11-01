@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T10:16:36.869342913Z
-updated_at: 2026-10-29T16:35:00.175916114Z
+updated_at: 2026-11-01T14:22:52.59258736Z
 tags:
     - plan
     - goal
@@ -320,7 +320,7 @@ instead of by hand over SSH; the owner ended both measurement windows early (a 2
 
 | Done when | State | Evidence |
 | --- | --- | --- |
-| Every phase deployed and verified on `apps-1` | Phases 0 to 9 done; 10 in part | The refactor deployed with every flag off (`8bab777`), then its eight flags turned on one at a time, each verified first ([../server.md](../server.md#what-production-runs-2026-10-29)); `ai-runner` then retired |
+| Every phase deployed and verified on `apps-1` | Phases 0 to 9 done; 10 in part | The refactor deployed with every flag off (`8bab777`), then its eight flags turned on one at a time, each verified first ([../server.md](../server.md#what-production-runs-2026-10-29)); `ai-runner` then retired, the other seven on 2026-11-01 ([../server.md](../server.md#the-flags)) |
 | YouTube as one channel module, v0.2.0's videos, the audit form | In part | Built on the channel modules (`f10b939`, [../decisions/youtube.md](../decisions/youtube.md)); the audit form is [youtube-audit.md](youtube-audit.md). v0.2.0's two videos are not up: blocked on epic SHP-5, launches owned by Shipcast. The first uploads were the Sluice article's two videos, which came out public |
 | The before/after report | Done, on a 2-hour after-window | [refactor-report.md](refactor-report.md): the 304 share, `getLaunch`'s external calls, the idle tab, duplicates, missed schedules and quotas met; total and GitHub calls, `getLaunch`'s time and the launch page missed, each explained |
 | The scale and chaos tests | Not run | The driver is written (`scripts/scale-test.ts`); the preview stack waits in [yeyo11/infra#25](https://github.com/yeyo11/infra/pull/25) |

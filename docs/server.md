@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-10-30T07:57:06.439056164Z
+updated_at: 2026-11-01T14:21:59.334459396Z
 tags:
     - server
     - deploy
@@ -23,7 +23,8 @@ environment.
 
 Since 2026-10-28 the code can also run as several processes of different roles, with Redis and
 PgBouncer beside Postgres ([plans/performance-refactor.md](plans/performance-refactor.md)), each part
-behind a flag. On 2026-10-29 all of it was turned on in production.
+behind a flag. On 2026-10-29 all of it was turned on in production, and on 2026-11-01 its flags were
+retired: each path is the only one ([The flags](#the-flags)).
 
 ## What production runs (2026-10-29)
 
@@ -81,7 +82,7 @@ Seen while turning them on:
 
 | On a desktop | On a server | Switch |
 |---|---|---|
-| Secrets in the OS keychain (`secret-tool`, `security`) | **An encrypted file**, `<data dir>/secrets.enc`: AES-256-GCM, the key in the environment only, written atomically, mode 600. With `secrets-table`: **the encrypted `secrets` table** in Postgres (below), which production uses | `SHIPCAST_SECRET_STORE=file` or `table`, `SHIPCAST_SECRETS_KEY` |
+| Secrets in the OS keychain (`secret-tool`, `security`) | **An encrypted file**, `<data dir>/secrets.enc`: AES-256-GCM, the key in the environment only, written atomically, mode 600. Or **the encrypted `secrets` table** in Postgres (below), which production uses | `SHIPCAST_SECRET_STORE=file` or `table`, `SHIPCAST_SECRETS_KEY` |
 | The app does TLS itself (Let's Encrypt over Cloudflare DNS) and asks Tailscale Serve for port 443 | **A reverse proxy does TLS** (Traefik); the app serves plain HTTP inside its container, with `SHIPCAST_PUBLIC_URL` as its origin, so links point where the browser is and cookies keep `Secure` | `SHIPCAST_APP_TLS=proxy`, `SHIPCAST_APP_HOST=0.0.0.0` |
 | The client is the socket's address | The client address is read from `X-Forwarded-For` only when the connection comes from a listed proxy (the API's failure limiter keys on it) | `SHIPCAST_TRUSTED_PROXIES` |
 | Node, pnpm and Chromium installed by hand | **The container image** (`Dockerfile`): Node 24.22.1, pnpm, git, ffmpeg and ffprobe (the videos), Playwright's Chromium with its libraries, run as `node`; published to `ghcr.io/yeyo11/shipcast` (`sha-<12>`, `latest`) by `.github/workflows/image.yml` on every push to main | — |
@@ -110,14 +111,14 @@ already in the table with another value is left alone and reported as a conflict
 read, so it stays the fallback until the table is verified in use. Only key names and counts are
 printed. Production moved this way on 2026-10-29 (22 keys, from the file).
 
-## The encrypted secrets table (`secrets-table`)
+## The encrypted secrets table
 
 `TableStore` keeps one row per secret in the registry: each value is sealed (AES-256-GCM) with a data
 key of its own, and the data key with the master key `SHIPCAST_SECRETS_KEY`, which only the
 environment holds, so a dump of the database opens nothing. A write changes one row atomically and
 bumps its `version`; `compareAndSet` writes only over the version the caller read, which is how a
-GitHub user-token refresh on one replica never overwrites another's. `SHIPCAST_SECRET_STORE=table` is
-refused unless the `secrets-table` flag is on, and needs `SHIPCAST_APP_TLS=proxy` (the app's own
+GitHub user-token refresh on one replica never overwrites another's. `SHIPCAST_SECRET_STORE=table`
+needs `SHIPCAST_APP_TLS=proxy` (the app's own
 certificate key lives in the bootstrap store, not the table).
 
 ## Process roles (`SHIPCAST_ROLE`)
@@ -134,12 +135,13 @@ One image and one entry point (`apps/web/main.ts`); the role decides what a proc
 
 `QUEUE_ROLES` is the one table that defines the split. A `worker` or `heavy` process serves no page:
 it listens in plain HTTP for its orchestrator's `/livez` and `/readyz` only. In a split no process
-reconciles at boot; the worker does it under a lock. `realtime-ui` on split processes requires
-`redis-state`, whose bus carries a job's events from the worker to the web replicas. YouTube's videos
+reconciles at boot; the worker does it under a lock. A split process does not start without
+`SHIPCAST_REDIS_QUEUE_URL`: Redis carries its queue, its locks and a job's events from the worker to
+the web replicas. YouTube's videos
 are rendered inside the `publish` job, so on the `worker` role. The probe runs on `heavy`, so in a
 split `SHIPCAST_PROBE_TARGET` points it at `web`; unset, it times its own process.
 
-## Redis (`redis-state`, `bullmq`)
+## Redis
 
 Two instances, both holding only what can be rebuilt from Postgres
 ([decisions/redis.md](decisions/redis.md)):
@@ -149,12 +151,15 @@ Two instances, both holding only what can be rebuilt from Postgres
 | `SHIPCAST_REDIS_QUEUE_URL` | `redis-queue`: `noeviction`, AOF | BullMQ, locks, one-time values (OAuth state, console sign-in links), the API failure limiter, per-provider quotas, webhook delivery dedupe |
 | `SHIPCAST_REDIS_CACHE_URL` | `redis-cache`: `allkeys-lru`, no persistence | GitHub ETag and file caches, sessions and identities of the hourly reads, pub/sub events |
 
-A process connects to Redis only when `redis-state` or `bullmq` is on; with both off it uses the
-in-memory adapters, as a single process always did. Clients connect lazily and retry for ever with
-backoff, so a Redis restart is waited out. `bullmq` moves every queue from pg-boss to BullMQ on
-`redis-queue` (`jobQueue`, `packages/runtime/src/queue-factory.ts`), for every role at once; a job
-still waiting in pg-boss at the switch is failed as never run, and the work it stood for is rebuilt
-from Postgres.
+A process uses Redis when `SHIPCAST_REDIS_QUEUE_URL` is set (`buildProcessState`,
+`packages/runtime/src/redis/process.ts`): the shared state on the two instances
+(`SHIPCAST_REDIS_CACHE_URL` falls back to the queue's instance when unset) and every queue on BullMQ
+on `redis-queue` (`jobQueue`, `packages/runtime/src/queue-factory.ts`), for every role at once. A
+split process (`SHIPCAST_ROLE` `web`, `worker` or `heavy`) refuses to start without it, and so does
+`SHIPCAST_REDIS_CACHE_URL` alone. A single process without it (a desktop install, the tests) keeps the
+in-memory adapters and pg-boss in the registry's Postgres. Clients connect lazily and retry for ever
+with backoff, so a Redis restart is waited out. A job still waiting in pg-boss when an install moves
+to Redis is failed as never run, and the work it stood for is rebuilt from Postgres.
 
 ## Postgres pools and PgBouncer
 
@@ -197,19 +202,12 @@ transaction mode:
 ## The flags
 
 `SHIPCAST_FLAGS` is a comma-separated list (`packages/runtime/src/flags.ts`); every flag is off
-unless named, and an unknown name stops the start. Production names all of the refactor's. `umami` stays off until the Umami instance exists; the
-launch model's ([decisions/launch-model.md](decisions/launch-model.md)) ship off and are turned on
-one at a time once each phase is verified:
+unless named, and an unknown name stops the start. `umami` stays off until the Umami instance exists;
+the launch model's ([decisions/launch-model.md](decisions/launch-model.md)) ship off and are turned
+on one at a time once each phase is verified:
 
 | Flag | Turns on |
 | --- | --- |
-| `publishing-service` | publishing through `PublishingService` with attempt rows ([decisions/publishing-state.md](decisions/publishing-state.md)) |
-| `secrets-table` | the encrypted `secrets` table |
-| `redis-state` | shared ephemeral state, caches and events in Redis |
-| `bullmq` | jobs on BullMQ instead of pg-boss |
-| `github-events` | pages read the drafts snapshot; GitHub is read on events and hourly |
-| `batched-metrics` | hourly, batched metrics and comment feeds |
-| `realtime-ui` | pages updated over server-sent events instead of polling |
 | `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. The shadow write (`launch-store`), the import (`launch-import`), `/media/<id>` (`launch-store-read`), the launches Shipcast holds (`app-review`) and uploads made for a launch from sources (`launch-sources`) call it; a removed launch's bytes are deleted from it (`launch-delete`) |
 | `launch-store` | the launch model's shadow write: each drafts pull request's pack, channels, drafts (as versions), media and merge also written to the launch model's tables and checked against it, differences in the attention bell ([launch-store.md](launch-store.md)); the rows are read only with `launch-store-read`. Its media need `launch-media` on too |
 | `launch-import` | lets `scripts/import-launches.ts` write: import the launches drafted before the shadow write, delete the ones decided away, roll a batch back ([launch-import.md](launch-import.md)). Off, the script only plans and verifies; the app never reads it. Turned on only for the run, with `launch-media` |
@@ -222,21 +220,29 @@ one at a time once each phase is verified:
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
-A flag whose path became the only one is **retired**: its switch is removed from the code, and its
-name moves to `RETIRED` in `flags.ts`, so an environment that still lists it starts as before (the
-name is accepted and ignored instead of stopping the start as unknown) and retiring a flag never
-needs an environment change first. Retired so far: `ai-runner` (2026-10-29), once the AI task runner
-was verified in production and the first AI layer was deleted ([decisions/ai-layer.md](decisions/ai-layer.md)).
+A flag whose path became the only one is **retired**: its switch is removed from the code, its old
+path deleted, and its name moves to `RETIRED` in `flags.ts`, so an environment that still lists it
+starts as before (the name is accepted and ignored instead of stopping the start as unknown) and
+retiring a flag never needs an environment change first. Retired so far:
+
+| Flag | Retired | What is now the only path |
+| --- | --- | --- |
+| `ai-runner` | 2026-10-29 | the AI task runner; the first AI layer was deleted ([decisions/ai-layer.md](decisions/ai-layer.md)) |
+| `publishing-service` | 2026-11-01 | every publish job through `PublishingService`, with attempt rows and per-piece claims ([decisions/publishing-state.md](decisions/publishing-state.md)); the round only queues publish jobs |
+| `secrets-table` | 2026-11-01 | `SHIPCAST_SECRET_STORE=table` selectable without a flag; the keychain and the file stay for desktop installs |
+| `redis-state`, `bullmq` | 2026-11-01 | Redis and BullMQ whenever `SHIPCAST_REDIS_QUEUE_URL` is set, required by split processes ([Redis](#redis)) |
+| `github-events` | 2026-11-01 | GitHub's ETag and file caches, the drafts snapshot the launch page reads, the hourly poll, webhook size limits and delivery dedupe ([Webhooks](#webhooks)) |
+| `batched-metrics` | 2026-11-01 | the hourly metrics job at each source's cadence and the comment feeds; the six-hourly read is gone |
+| `realtime-ui` | 2026-11-01 | the event stream (`/api/events`) in every process that serves pages |
 
 ## Webhooks
 
 `/api/github/webhook` acts on a delivery only when `X-Hub-Signature-256` matches the GitHub App's
-secret (or the older per-repo one); with `github-events` it also refuses a body over 5 MB before
-reading it and drops a redelivery it already handled. In production GitHub reaches it at
+secret (or the older per-repo one); it also refuses a body over 5 MB before reading it and drops a
+redelivery it already handled. In production GitHub reaches it at
 `shipcast-hooks.josegarrido.dev`, a public hostname that forwards that one path and method and
-nothing else, rate-limited per client; the rest of the app stays on the tailnet. With
-`github-events` the poll is hourly and conditional, and `push`/`pull_request` deliveries refresh the
-drafts snapshot.
+nothing else, rate-limited per client; the rest of the app stays on the tailnet. The poll is hourly
+and conditional, and `push`/`pull_request` deliveries refresh the drafts snapshot.
 
 ## Related
 

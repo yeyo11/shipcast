@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T09:26:08.212715688Z
-updated_at: 2026-10-29T16:36:58.095592249Z
+updated_at: 2026-11-01T14:22:35.393909371Z
 tags:
     - plan
     - performance
@@ -484,7 +484,9 @@ Built, deployed and measured in the run of [goal-refactor.md](goal-refactor.md).
   20 hours, ended early by the owner ([../measurement.md](../measurement.md#the-baseline)). The
   refactor was deployed with every flag off (`8bab777`), then its eight flags were turned on one at a
   time on 2026-10-29, each verified in production first. `ai-runner` was retired the same day, with the
-  first AI layer and the global AI budget removed ([../server.md](../server.md#the-flags)).
+  first AI layer and the global AI budget removed; the other seven (`publishing-service`,
+  `secrets-table`, `redis-state`, `bullmq`, `github-events`, `batched-metrics`, `realtime-ui`) were
+  retired on 2026-11-01, each new path the only one ([../server.md](../server.md#the-flags)).
 - **Phase 10 in part.** The after-window ran 2 hours, 2026-10-29T13:00Z to 15:00Z, before the owner
   stopped the measurement, and it held the Sluice article's publish. The scale and chaos tests were
   not run: their driver is written and the preview stack waits in
