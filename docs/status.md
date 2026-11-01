@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-01T14:23:09.376570081Z
+updated_at: 2026-11-01T16:10:01.633082753Z
 tags:
     - status
     - roadmap
@@ -165,6 +165,17 @@ accounts per brand, the phase 5 channels and what the MVP had left
 
 - **Hashnode is out for now** (the owner's decision, 2026-10-25): its API needs a paid Pro plan since
   2026-05-13; the connector stays ready.
+
+## Launches owned by Shipcast
+
+The launch model ([decisions/launch-model.md](decisions/launch-model.md#where-it-stands)) is built:
+media on R2, every launch held, reviewed and approved in Shipcast, launches from sources, trigger
+rules and deletion. On 2026-11-01 its flags were retired and phase 8 was done in the code: no pull
+request for a new launch in the app, no drafts snapshot, the `pull_request` webhook ignored, launches
+decided in pull requests read and published from their rows. Before that image is deployed the
+import must have run in production ([launch-import.md](launch-import.md#in-production)); the old
+draft folders' deletion from the launches repo and the drop of `draft_snapshots` are later steps the
+owner agrees to.
 
 ## Next
 

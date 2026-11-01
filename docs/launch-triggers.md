@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T07:54:54.962156958Z
-updated_at: 2026-10-30T07:54:54.962156958Z
+updated_at: 2026-11-01T16:05:38.949470453Z
 tags:
     - launches
     - launch-model
@@ -11,10 +11,10 @@ tags:
 # Trigger rules: which GitHub events create a launch
 
 Part of the seventh phase of [decisions/launch-model.md](decisions/launch-model.md) (card SHP-15),
-built on 2026-10-30 behind the `launch-triggers` flag (off by default, and in production until it is
-verified). With the flag on, **the owner's trigger rules decide which GitHub events create a
-launch**, and a repo's `.github/launch.yml` becomes optional input. Without it, each repo's
-launch.yml decides alone, exactly as before. Deleting launches is the other half of the phase:
+built on 2026-10-30 behind the `launch-triggers` flag, retired on 2026-11-01
+([server.md](server.md#the-flags)): **the owner's trigger rules decide which GitHub events create a
+launch**, and a repo's `.github/launch.yml` becomes optional input. In Action mode, which reads no
+setting, each repo's launch.yml decides alone, as before. Deleting launches is the other half of the phase:
 [launch-delete.md](launch-delete.md).
 
 ## The rules
@@ -36,7 +36,7 @@ setting rather than a table, as the research recommended and the project convent
 An event takes **the first enabled rule it matches**, in the owner's order (`matchingRule`); no
 match creates nothing. Until the owner saves rules, the defaults (`DEFAULT_TRIGGER_RULES`) are one
 rule for releases and one for repos made public, every repo, no channels for repos without a
-launch.yml: what launch.yml alone decided, so turning the flag on changes no outcome. Saving an
+launch.yml: what launch.yml alone decided, so turning the rules on changed no outcome. Saving an
 empty list means no event creates a launch. A stored rule a later schema refuses is dropped on
 reading rather than voiding the whole list.
 
@@ -88,8 +88,8 @@ the claim asks `launch_deletions` for the key first (see [launch-delete.md](laun
 | Reading, saving and the kept channels | `TriggerService`, `packages/engine/src/services/triggers.ts` |
 | The claim | `claimEvent`, `packages/engine/src/detect.ts` (options `triggers` and `removed`) |
 | The draft without launch.yml | `draftLaunch`, `packages/engine/src/pipeline.ts` |
-| Wiring | `createRuntime` builds the service with the flag and puts it on `PipelineDeps`; the round's detection and the webhook delivery job pass it to the claim |
-| The page | `TriggerRules` on Settings → Automation (`apps/web/src/components/TriggerRules.tsx`), shown only with the flag; `getAutomation` / `saveTriggers` |
+| Wiring | `createRuntime` always builds the service and puts it on `PipelineDeps`; the round's detection and the webhook delivery job pass it to the claim |
+| The page | `TriggerRules` on Settings → Automation (`apps/web/src/components/TriggerRules.tsx`); `getAutomation` / `saveTriggers` |
 
 ## Tests
 
@@ -99,7 +99,7 @@ repo made public by webhook and poll, rules by event, repo, order and pre-releas
 "no", a removed launch's release, a repo with no launch.yml drafted on its rule's channels, the same
 repo failing as before without the rules, and saving and reading the rules.
 `packages/schema/test/triggers.test.ts`: patterns, matching and the schema.
-`packages/runtime/test/runtime.test.ts`: the flag builds the service, and nothing without it.
+`packages/runtime/test/runtime.test.ts`: the runtime always builds the service.
 
 ## Related
 

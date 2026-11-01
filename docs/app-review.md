@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T06:19:22.606949087Z
-updated_at: 2026-10-30T07:22:22.83449267Z
+updated_at: 2026-11-01T16:04:31.867945991Z
 tags:
     - launches
     - launch-model
@@ -13,26 +13,29 @@ tags:
 # Reviewing and approving launches in the app
 
 The fifth phase of [decisions/launch-model.md](decisions/launch-model.md) (card SHP-13), built on
-2026-10-30 behind the `app-review` flag (off by default, and in production until it is verified).
-With the flag on, **a new launch has no pull request**: Shipcast holds its drafts, the owner edits,
-previews and approves them in the app, and the launches repo receives the article and its media as
-one commit when the launch is published. Launches drafted before (`model = 'legacy'`) keep their
-pull request flow to the end, and Action mode stays on it ([decisions/action-mode.md](decisions/action-mode.md)).
+2026-10-30 behind the `app-review` flag, retired on 2026-11-01 with the pull-request path (phase 8,
+[server.md](server.md#the-flags)): **a new launch has no pull request**. Shipcast holds its drafts,
+the owner edits, previews and approves them in the app, and the launches repo receives the article
+and its media as one commit when the launch is published. Launches drafted before
+(`model = 'legacy'`) were all decided in their pull requests; the app reads them from the rows and
+publishes their retries and scheduled pieces from them ([launch-store-read.md](launch-store-read.md)),
+but neither edits nor approves them. Action mode stays on the pull-request flow
+([decisions/action-mode.md](decisions/action-mode.md)).
 
 ## Which launches
 
 `launches.model` says who holds a launch's drafts: `legacy` (a pull request, approved by its merge)
-or `app` (Shipcast). The pipeline's delivery (`deliverDrafts`, `pipeline.ts`) decides it: with the
-flag, a launch's drafts are kept by `AppReviewService.hold` instead of opening a pull request, and the
+or `app` (Shipcast). The pipeline's delivery (`deliverDrafts`, `pipeline.ts`) decides it: in the app
+a launch's drafts are always kept by `AppReviewService.hold` instead of opening a pull request, and the
 launch becomes `app` and `drafted` with no `detail`. Nothing is written to GitHub. The rows are the
 launch store's own write ([launch-store.md](launch-store.md), `LaunchStoreService.held`), but here
-they are all there is of the launch: a draft or a file that cannot be stored **fails the draft**,
-where the shadow write only reports it. The drafts' mode lines speak of the app ("published once
+they are all there is of the launch: a draft or a file that cannot be stored **fails the draft**. The drafts' mode lines speak of the app ("published once
 approved in Shipcast", "published as soon as it is ready, without waiting for approval").
 "Publish directly" approves the drafts on delivery (by `shipcast`).
 
-Without the flag a process treats an `app` launch as waiting ("the app-review flag is off"), and
-refuses to edit or approve it: turning the flag off strands nothing, it only pauses those launches.
+A pipeline without the service (Action mode's, which holds no launch) treats an `app` launch as
+waiting ("this process does not read the launch model"). `LaunchService` refuses to edit or approve a
+`legacy` launch: its drafts were decided in its pull request.
 
 ## One implementation
 
@@ -127,13 +130,13 @@ something changed since, with Approve and "Preview on the real site"; an article
 preview, with a button to edit the text. `GET /launches/{id}` answers `approval` and `waiting` in
 `drafts` instead of `pullRequest`, and `approved` on each file.
 
-## Turning it on
+## In production
 
-`app-review` needs `launch-store-read` (and so `launch-store`) and `launch-media`: a process with it
-and without them refuses to start (`ConfigError`). The order in production: the fourth phase on and
-verified, then `app-review`. The phase is done when one article launch and one release launch are
-published end to end this way, the launches repo receiving exactly one commit each, with Lighthouse
-run on a preview.
+It was turned on in production after the fourth phase, and retired on 2026-11-01: the runtime always
+builds the service, with the reads and the media store, which a server requires
+([media-store.md](media-store.md)). The phase was done when one article launch and one release launch
+were published end to end this way, the launches repo receiving exactly one commit each, with
+Lighthouse run on a preview.
 
 ## Known limits
 
@@ -148,15 +151,15 @@ run on a preview.
 
 ## Tests
 
-`packages/engine/test/app-review.test.ts`: the flag off (the pull request as before), the delivery,
+`packages/engine/test/app-review.test.ts`: the delivery,
 a failed media store failing the draft, the review and the article preview's escaping, edits, no
 publishing before the article's approval, one commit with the article and media then every channel,
 an edit after approving holding one channel, a failed commit tried again with nothing out before the
 article is live, a stop between the commit and its record, `auto` channels without approval (and a
-media-only commit with the blog off), "publish directly", the real site's preview, a process without
-the flag, and who edited and approved. `packages/runtime/test/runtime.test.ts`: the start refuses
-`app-review` without `launch-store-read` or `launch-media`, and builds no service (the pipeline opens
-pull requests) unless it is named.
+media-only commit with the blog off), "publish directly", the real site's preview, a pipeline without
+the service (Action mode), a legacy launch refused, and who edited and approved.
+`packages/runtime/test/runtime.test.ts`: the runtime always builds the service, and an old
+`SHIPCAST_FLAGS` naming the retired flags still starts.
 
 ## Related
 

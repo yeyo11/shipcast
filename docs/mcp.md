@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T19:31:14.30492503Z
-updated_at: 2026-11-01T12:30:35.775088341Z
+updated_at: 2026-11-01T16:06:51.942009536Z
 tags:
     - mcp
     - api
@@ -176,9 +176,9 @@ it before calling and point to `get_timezone` for the owner's.
 | `plan_launch_deletion` | `planLaunchDeletion` `GET /launches/{id}/deletion` | What `delete_launch` would do, changing nothing | read | |
 | `delete_launch` | `deleteLaunch` `DELETE /launches/{id}` | Removes a launch never published, hides a published one; the `channels` named lose their posts too | write, destructive | yes |
 
-`launch_from_sources` and `upload_media` need the `launch-sources` flag, the deletion tools the
-`launch-delete` flag; while a flag is off the tool answers that the feature is turned off and not to
-retry, rather than the API's bare 409 or 404 ([sources.md](sources.md), [launch-delete.md](launch-delete.md)).
+`launch_from_sources`, `upload_media` and the deletion tools are always served: their flags were
+retired on 2026-11-01 ([sources.md](sources.md), [launch-delete.md](launch-delete.md)), and with them
+the tools' own explanation of a feature turned off.
 
 ### How the tools behave
 
@@ -220,7 +220,7 @@ index, summarised per channel).
 ## Parity and adding a tool
 
 `apps/web/test/mcp-parity.test.ts` reads the API's route table (`ROUTES` in
-`apps/web/src/server/api.ts`, every route whether its flag is on or off) and the tools' `operations`,
+`apps/web/src/server/api.ts`, every route whether this process serves it or not) and the tools' `operations`,
 and fails when:
 
 - an operation has no tool and no entry in its `EXCLUDED` list, which takes the reason a model must

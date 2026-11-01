@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-11-01T14:21:59.334459396Z
+updated_at: 2026-11-01T16:09:22.650375671Z
 tags:
     - server
     - deploy
@@ -85,6 +85,7 @@ Seen while turning them on:
 | Secrets in the OS keychain (`secret-tool`, `security`) | **An encrypted file**, `<data dir>/secrets.enc`: AES-256-GCM, the key in the environment only, written atomically, mode 600. Or **the encrypted `secrets` table** in Postgres (below), which production uses | `SHIPCAST_SECRET_STORE=file` or `table`, `SHIPCAST_SECRETS_KEY` |
 | The app does TLS itself (Let's Encrypt over Cloudflare DNS) and asks Tailscale Serve for port 443 | **A reverse proxy does TLS** (Traefik); the app serves plain HTTP inside its container, with `SHIPCAST_PUBLIC_URL` as its origin, so links point where the browser is and cookies keep `Secure` | `SHIPCAST_APP_TLS=proxy`, `SHIPCAST_APP_HOST=0.0.0.0` |
 | The client is the socket's address | The client address is read from `X-Forwarded-For` only when the connection comes from a listed proxy (the API's failure limiter keys on it) | `SHIPCAST_TRUSTED_PROXIES` |
+| Launch media refused with what is missing when `SHIPCAST_MEDIA_*` is not set | **The start stops** without the media store: every launch keeps its files there ([media-store.md](media-store.md)) | `SHIPCAST_MEDIA_*` |
 | Node, pnpm and Chromium installed by hand | **The container image** (`Dockerfile`): Node 24.22.1, pnpm, git, ffmpeg and ffprobe (the videos), Playwright's Chromium with its libraries, run as `node`; published to `ghcr.io/yeyo11/shipcast` (`sha-<12>`, `latest`) by `.github/workflows/image.yml` on every push to main | — |
 
 `secretStoreFor` (`packages/runtime/src/secrets.ts`) picks the store for the web app, the runtime and
@@ -130,7 +131,7 @@ One image and one entry point (`apps/web/main.ts`); the role decides what a proc
 | --- | --- |
 | `all` (default) | everything in one process, as a local install runs |
 | `web` | HTTP, the pages, the REST API and the event streams; enqueues work, never works a queue |
-| `worker` | the short, network-bound queues (`publish`, `scheduled`, `delivery`, `round`, `metrics`, `snapshots`, `checks`, `drafts-snapshot`, `instagram-tokens`), the crons, the round, and the maintenance that keeps scheduled posts and job rows in line with the queue, under a lock every ten minutes |
+| `worker` | the short, network-bound queues (`publish`, `scheduled`, `delivery`, `round`, `metrics`, `snapshots`, `checks`, `instagram-tokens`), the crons, the round, and the maintenance that keeps scheduled posts and job rows in line with the queue, under a lock every ten minutes |
 | `heavy` | what runs an AI, git, Chromium, ffmpeg or satori: `draft`, `article`, `profile-review`, `assistant-check`, `comments` (it drafts replies with the AI), `probe` |
 
 `QUEUE_ROLES` is the one table that defines the split. A `worker` or `heavy` process serves no page:
@@ -202,21 +203,11 @@ transaction mode:
 ## The flags
 
 `SHIPCAST_FLAGS` is a comma-separated list (`packages/runtime/src/flags.ts`); every flag is off
-unless named, and an unknown name stops the start. `umami` stays off until the Umami instance exists;
-the launch model's ([decisions/launch-model.md](decisions/launch-model.md)) ship off and are turned
-on one at a time once each phase is verified:
+unless named, and an unknown name stops the start. One is left:
 
 | Flag | Turns on |
 | --- | --- |
-| `launch-media` | the launch model's media store on Cloudflare R2, from `SHIPCAST_MEDIA_*` ([media-store.md](media-store.md)); off, it refuses every call. The shadow write (`launch-store`), the import (`launch-import`), `/media/<id>` (`launch-store-read`), the launches Shipcast holds (`app-review`) and uploads made for a launch from sources (`launch-sources`) call it; a removed launch's bytes are deleted from it (`launch-delete`) |
-| `launch-store` | the launch model's shadow write: each drafts pull request's pack, channels, drafts (as versions), media and merge also written to the launch model's tables and checked against it, differences in the attention bell ([launch-store.md](launch-store.md)); the rows are read only with `launch-store-read`. Its media need `launch-media` on too |
-| `launch-import` | lets `scripts/import-launches.ts` write: import the launches drafted before the shadow write, delete the ones decided away, roll a batch back ([launch-import.md](launch-import.md)). Off, the script only plans and verifies; the app never reads it. Turned on only for the run, with `launch-media` |
-| `launch-store-read` | the launch page, `GET /launches/{id}` (and MCP's `get_launch`), scheduling's channels and the reply and writing assistants' grounding read the launch model's tables instead of GitHub; a launch they do not hold is read as before ([launch-store-read.md](launch-store-read.md)). Needs `launch-store` (the start refuses without it) and `launch-media` for its files; turned on after the import is verified, with `github-events` |
-| `app-review` | a new launch has no pull request: its drafts are held by Shipcast, edited (as versions), previewed (in the app, and on the real site on demand) and approved in the app; `auto` channels go out without approval; the article and its media reach the launches repo as one commit at publishing, before anything links them ([app-review.md](app-review.md)). A process without it leaves such launches waiting. Needs `launch-store-read` (with `launch-store`) and `launch-media`: the start refuses without them |
-| `launch-sources` | launches made from sources: text, pages (fetched through the guarded fetcher), several repos and uploaded images, from the app's Launch from sources page and `POST /api/v1/launches/sources`; a launch.yml's `sources` read when its release triggers it; further repos' stars read per repo ([sources.md](sources.md)). Uploads also need `launch-media` |
-| `launch-triggers` | the owner's trigger rules (Settings → Automation) decide which GitHub events create a launch; a repo with no launch.yml can be launched on a rule's channels, and each claim carries its dedupe key, so a second event or a re-run launches nothing ([launch-triggers.md](launch-triggers.md)). Off, each repo's launch.yml decides alone. Until rules are saved, the defaults decide as launch.yml did |
-| `launch-delete` | a launch can be deleted from its page and `DELETE /launches/{id}`: one never published is removed with its rows, a published one hidden with its posts kept on the networks unless channels are named; an event never launches a removed launch's release again ([launch-delete.md](launch-delete.md)). Off, the routes answer 404 and the page offers nothing |
-| `umami` | the blog's visits per launch and channel from Umami ([umami.md](umami.md)); off until the Umami instance exists |
+| `umami` | the blog's visits per launch and channel from Umami ([umami.md](umami.md)); off until the Umami instance exists. It is not part of the refactor or of the launch model |
 
 A flag is turned off again by an environment change and a restart, with no deploy.
 
@@ -231,9 +222,17 @@ retiring a flag never needs an environment change first. Retired so far:
 | `publishing-service` | 2026-11-01 | every publish job through `PublishingService`, with attempt rows and per-piece claims ([decisions/publishing-state.md](decisions/publishing-state.md)); the round only queues publish jobs |
 | `secrets-table` | 2026-11-01 | `SHIPCAST_SECRET_STORE=table` selectable without a flag; the keychain and the file stay for desktop installs |
 | `redis-state`, `bullmq` | 2026-11-01 | Redis and BullMQ whenever `SHIPCAST_REDIS_QUEUE_URL` is set, required by split processes ([Redis](#redis)) |
-| `github-events` | 2026-11-01 | GitHub's ETag and file caches, the drafts snapshot the launch page reads, the hourly poll, webhook size limits and delivery dedupe ([Webhooks](#webhooks)) |
+| `github-events` | 2026-11-01 | GitHub's ETag and file caches, the hourly poll, webhook size limits and delivery dedupe ([Webhooks](#webhooks)); the drafts snapshot it fed went with the pull-request path (`app-review` below) |
 | `batched-metrics` | 2026-11-01 | the hourly metrics job at each source's cadence and the comment feeds; the six-hourly read is gone |
 | `realtime-ui` | 2026-11-01 | the event stream (`/api/events`) in every process that serves pages |
+| `launch-media` | 2026-11-01 | the media store on R2 from `SHIPCAST_MEDIA_*`, which a server requires: the start stops without it ([media-store.md](media-store.md)) |
+| `launch-store` | 2026-11-01 | the launch model's write of every launch Shipcast holds; the shadow write beside the pull request went with the pull-request path ([launch-store.md](launch-store.md)) |
+| `launch-store-read` | 2026-11-01 | every launch read from the launch model's rows, never GitHub; a launch drafted in a pull request and not imported is a `LaunchNotHeld` error ([launch-store-read.md](launch-store-read.md)) |
+| `app-review` | 2026-11-01 | every new launch held by Shipcast, reviewed and approved in the app; no drafts pull request, no drafts snapshot, no publishing on a merge ([app-review.md](app-review.md)) |
+| `launch-sources` | 2026-11-01 | launches made from sources and per-repo stars ([sources.md](sources.md)) |
+| `launch-triggers` | 2026-11-01 | the owner's trigger rules ([launch-triggers.md](launch-triggers.md)) |
+| `launch-delete` | 2026-11-01 | deleting launches from the app, the API and MCP ([launch-delete.md](launch-delete.md)) |
+| `launch-import` | 2026-11-01 | `scripts/import-launches.ts` writes on `--apply` (or `--rollback`) alone ([launch-import.md](launch-import.md)) |
 
 ## Webhooks
 
@@ -242,7 +241,8 @@ secret (or the older per-repo one); it also refuses a body over 5 MB before read
 redelivery it already handled. In production GitHub reaches it at
 `shipcast-hooks.josegarrido.dev`, a public hostname that forwards that one path and method and
 nothing else, rate-limited per client; the rest of the app stays on the tailnet. The poll is hourly
-and conditional, and `push`/`pull_request` deliveries refresh the drafts snapshot.
+and conditional, and a `push` forgets the cached files it touched. A `pull_request` delivery changes
+nothing and publishes nothing since 2026-11-01: launches are approved in Shipcast.
 
 ## Related
 

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T00:39:53.627637481Z
-updated_at: 2026-10-30T02:01:07.927058581Z
+updated_at: 2026-11-01T16:07:16.327928067Z
 tags:
     - media
     - storage
@@ -14,11 +14,12 @@ tags:
 Where a launch's images and videos live once Shipcast, not the launches repo, holds a launch
 ([decisions/launch-model.md](decisions/launch-model.md)). The owner chose **Cloudflare R2** from the
 start: it also covers the video sources that come later, and it keeps media off the server's
-volume. Built on 2026-10-30 as the first phase of the launch model, behind the `launch-media` flag.
-Its only caller is the shadow write of the second phase (`launch-store`,
-[launch-store.md](launch-store.md)), which puts a copy of every file of a drafts pull request in it;
-the launches' media of today still ride in the drafts pull request and are published from there
-([publishing.md](publishing.md#the-launchs-media)).
+volume. Built on 2026-10-30 as the first phase of the launch model, behind the `launch-media` flag,
+which was retired on 2026-11-01 ([server.md](server.md#the-flags)). Every launch Shipcast holds keeps
+its files here ([launch-store.md](launch-store.md), [app-review.md](app-review.md)), the app serves
+them to the owner's pages (`/media/<id>`, [launch-store-read.md](launch-store-read.md)), uploads for a
+launch made from sources land here ([sources.md](sources.md)), and the import put the old launches'
+files here ([launch-import.md](launch-import.md)).
 
 ## The port
 
@@ -54,11 +55,13 @@ whose message can echo the request), and `MediaKeyInvalid` (400).
 
 The runtime builds the store (`packages/runtime/src/media.ts`, `Runtime.media`):
 
-- **`launch-media` off** (the default, and production's): the store refuses every call with "the
-  launch-media flag is off", and `.env` is not read for it.
-- **On, with nothing in `.env`**: it refuses every call, naming the four variables that are missing.
-- **On, with half of them**: the start stops with a `ConfigError`, as half a GitHub App does.
-- **On, with all of them**: R2.
+- **All of them in `.env`**: R2.
+- **Half of them**: the start stops with a `ConfigError`, as half a GitHub App does.
+- **None, on a server** (`SHIPCAST_APP_TLS=proxy`, as production runs, and not a preview with fake
+  networks): the start stops with a `ConfigError` naming the four variables. Every launch keeps its
+  files here, so a server without the store could not hold one.
+- **None, on a desktop install or a preview with fake networks**: the store refuses every call,
+  naming the four variables, so a launch with files fails its draft saying what is missing.
 
 | Variable | What |
 | --- | --- |
@@ -84,8 +87,8 @@ pull-request flow, where its pull request puts it). One launch holds a file once
 
 - Adding the bucket to the server's nightly backup, which today covers Postgres only: part of the
   media phase in the decision.
-- Serving it to the app for review, and handing networks a public address at publish time: later
-  phases of the launch model. Writing to it is done (the shadow write, [launch-store.md](launch-store.md)).
+- Handing networks a public address of their own at publish time: today they fetch the files from
+  the site, where the publish commit puts them ([app-review.md](app-review.md)).
 
 ## Related
 

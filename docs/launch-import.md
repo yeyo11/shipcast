@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T03:59:25.123165739Z
-updated_at: 2026-10-30T03:59:25.123165739Z
+updated_at: 2026-11-01T16:04:59.361816994Z
 tags:
     - launches
     - launch-model
@@ -12,12 +12,15 @@ tags:
 # The import of the existing launches
 
 The third phase of [decisions/launch-model.md](decisions/launch-model.md), built on 2026-10-30
-behind the `launch-import` flag (off by default, and in production). The launches drafted before
+behind the `launch-import` flag, which was retired on 2026-11-01: the script's own `--apply` is the
+only consent to write now (below). The launches drafted before
 Shipcast held them (before the shadow write of [launch-store.md](launch-store.md)) live in the
 launches repo: their pack, every draft, the media, the merge. The import copies each of them into
 the launch model's tables, and deletes the launches the owner decided away (2 and 4, the skipped
-test articles, and 7, the failed v0.2.0). **Nothing reads the imported rows yet**: the launch page,
-publishing, the API and MCP still read GitHub; reading the database is the next phase.
+test articles, and 7, the failed v0.2.0). Since phase 8 of the decision the app reads every launch
+from those rows and nothing else ([launch-store-read.md](launch-store-read.md)): a launch drafted in a
+pull request and not imported shows a `LaunchNotHeld` error naming this script, so **the import is a
+precondition of deploying phase 8**.
 
 ## How it runs
 
@@ -29,7 +32,7 @@ script:
 ```bash
 node scripts/import-launches.ts [--delete 2,4,7] [--at <sha>] [--inputs jobs.jsonl]   # the plan, written nowhere
 node scripts/import-launches.ts --apply [same options]                               # writes it, then verifies
-node scripts/import-launches.ts --verify <batch>
+node scripts/import-launches.ts --verify <batch> --production | --database-is-copy
 node scripts/import-launches.ts --rollback <batch>
 ```
 
@@ -37,10 +40,11 @@ node scripts/import-launches.ts --rollback <batch>
   `GITHUB_TOKEN`: **GETs only** (`commitSha`, `tree`, `blob`, `pullRequest`, `pullRequestFiles`,
   `fileAt` of `GitHubRest`), any token that may read the repos. The launches repo's `main` is
   pinned to one commit for the whole run (`--at`, or its head when the run starts).
-- **Dry run by default**: it prints, per launch, what it would write. `--apply` needs
-  `launch-import` in `SHIPCAST_FLAGS`, and the media store (`launch-media` with `SHIPCAST_MEDIA_*`,
-  [media-store.md](media-store.md)) when a launch has files; without either it refuses before
-  writing anything. `--rollback` needs the flag too.
+- **Dry run by default**: it prints, per launch, what it would write. It writes only when the command
+  line asks: `--apply` for the plan, `--rollback <batch>` for a batch; no flag is involved. A launch
+  with files needs the media store (`SHIPCAST_MEDIA_*`, [media-store.md](media-store.md)); without
+  it the import refuses before writing anything. `--verify` connects (which migrates the database)
+  only when it names the database: `--production`, or `--database-is-copy` on a restored copy.
 - `--delete` defaults to the decision's 2, 4 and 7. A launch is never deleted while a piece of it is
   not `deleted` on its network, nor when it is published, nor when the launch model holds rows of it.
 - `--inputs` adds the owner's article inputs captured outside the database (a BullMQ job per line,
@@ -126,10 +130,19 @@ passed again, and a further run wrote nothing.
 
 ## In production
 
-Not run there yet; the lead runs it after the deploy. A `pg_dump` first; then the dry run, then
-`--apply` with `launch-import` and `launch-media` on and the media store configured, then turn
-`launch-import` off. Capture BullMQ's article jobs before (launch 8's input), and run it before
-pg-boss drops launch 6's job, a week after it completed.
+Not run there yet; the lead runs it before phase 8 is deployed. A `pg_dump` first; then the dry run,
+then `--apply` with the media store configured (`SHIPCAST_MEDIA_*`). Until the image with phase 8 is
+deployed, the running one still wants `launch-import` in `SHIPCAST_FLAGS` for `--apply`; after it, the
+name is ignored and `--apply` alone writes. Capture BullMQ's article jobs before (launch 8's input),
+and run it before pg-boss drops launch 6's job, a week after it completed.
+
+### Why the script stays
+
+Phase 8 of the decision removes the pull-request path, and the import is how a launch of that path
+becomes one the app can read. It has not run in production yet, so the script is kept, working, with
+the command line as its guard instead of a flag. Once it has run and been verified there, and the old
+draft folders are deleted from the launches repo, it has nothing left to read: removing it then is
+part of that later step ([decisions/launch-model.md](decisions/launch-model.md)).
 
 ## Related
 

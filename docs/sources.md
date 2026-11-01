@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T03:13:28.72192183Z
-updated_at: 2026-10-30T03:13:28.72192183Z
+updated_at: 2026-11-01T16:05:29.763021017Z
 tags:
     - launches
     - sources
@@ -12,7 +12,8 @@ tags:
 # Launches made from sources
 
 Phase 6 of the launch model ([decisions/launch-model.md](decisions/launch-model.md)), built on
-2026-10-30 behind the **`launch-sources`** flag, off by default and in production. A launch is no
+2026-10-30 behind the **`launch-sources`** flag, retired on 2026-11-01: it is always on in the app
+([server.md](server.md#the-flags)). A launch is no
 longer only "a repo at a release": it can be made from **sources**, each a row of `launch_sources`
 (migration `0018`, [engine.md](engine.md#the-launch-registry)):
 
@@ -24,13 +25,13 @@ longer only "a repo at a release": it can be made from **sources**, each a row o
 | `text` | the owner's own words: notes, a draft, an opinion | as written |
 | `media` | an uploaded image | listed for the analysis by name and alt text; the bytes stay in the [media store](media-store.md) |
 
-With the flag off nothing of this runs: a launch is its one repo, `sources` in a launch.yml is parsed
-and ignored, and the routes and the page below answer that they are off.
+Action mode (`shipcast ci`), whose pipeline has no sources, reads none: there a launch is its one
+repo and `sources` in a launch.yml is parsed and ignored.
 
 ## Making one
 
 One use case, `SourcesService.create` (`packages/engine/src/services/sources.ts`), reached from the
-app's **Launch from sources** page (`/sources`, linked from Launch a repo when the flag is on) and from
+app's **Launch from sources** page (`/sources`, linked from Launch a repo) and from
 `POST /api/v1/launches/sources` ([api.md](api.md)). The request is checked first
 (`checkSources`, `packages/engine/src/sources/model.ts`: at most 12 sources, 5 repos, 8 pages, 10
 files, 100,000 characters per text), every page is fetched and every upload found **before** the
@@ -130,7 +131,7 @@ an upload answers that the store is off.
 
 ## Stars per repo
 
-With the flag on, the metrics round reads each launch's further repos as well
+The metrics round reads each launch's further repos as well
 (`MetricSources.furtherRepos`, wired in `packages/runtime/src/work.ts`): their stars, forks and
 watchers are kept under `github:<owner/name>` (`furtherRepoSource`), apart from the primary repo's
 `github` numbers, which stay the launch's own and are what the totals and the stats count. A repo

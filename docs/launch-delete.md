@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T07:55:43.916970887Z
-updated_at: 2026-11-01T14:13:25.386238349Z
+updated_at: 2026-11-01T16:05:57.897672605Z
 tags:
     - launches
     - launch-model
@@ -11,8 +11,8 @@ tags:
 # Deleting a launch
 
 Part of the seventh phase of [decisions/launch-model.md](decisions/launch-model.md) (card SHP-15),
-built on 2026-10-30 behind the `launch-delete` flag (off by default, and in production until it is
-verified). Before it a launch could not be deleted at all: its row is the claim that makes "a launch
+built on 2026-10-30 behind the `launch-delete` flag, retired on 2026-11-01: deleting is always
+available ([server.md](server.md#the-flags)). Before it a launch could not be deleted at all: its row is the claim that makes "a launch
 happens once" hold, and `posts`, `metrics`, `publish_attempts` and `draft_snapshots` hang on it with
 no cascade. The owner decided (2026-10-29) that a launch can be deleted, a published one softly, its
 network posts **kept by default** with a per-channel choice to delete them there too, and that the
@@ -32,9 +32,9 @@ phase is [launch-triggers.md](launch-triggers.md).
 `scheduled` or `failed`, an attempt `live`, `unknown` or `attempting`, a `published` status, or the
 article already on the site (a merged drafts pull request, a direct commit, or the site commit of a
 launch Shipcast holds). For a launch Shipcast holds the service reads its `app-blog:<id>` cursor
-itself, recorded or still pending, whatever the `app-review` flag of the process: before the review
-fixes of 2026-10-30 it asked `AppReviewService`, which a process without `app-review` does not have,
-and a launch whose article was on the site could have been removed as never published.
+itself, recorded or still pending: before the review fixes of 2026-10-30 it asked
+`AppReviewService`, which a process without it did not have, and a launch whose article was on the
+site could have been removed as never published.
 
 A launch whose drafts are being written (`detected`, `generating`) is refused until they are, so a
 draft job never finds its launch gone; a hidden launch is refused a second time.
@@ -81,8 +81,8 @@ the networks and the article's links. No foreign key: a removed launch's row is 
 A removed launch's key keeps an event from launching it again: the runtime always hands the claim
 `removed` (`launchDeletions.removed`, one lookup on the `launch_deletions_by_key` index), and
 `claimEvent` ignores an event whose key was removed ("its launch was deleted"), with or without the
-trigger rules. Since 2026-10-30 the check does not depend on the `launch-delete` flag: a process
-started without it (a rollback, another replica) must not relaunch what one with it removed. A
+trigger rules. The check has never depended on the flag: a rollback or another replica must not
+relaunch what was removed. A
 hidden launch needs no check: its row still holds the claim. Launching the same release by hand is
 still possible.
 
@@ -90,13 +90,13 @@ still possible.
 
 | Where | What |
 | --- | --- |
-| The launch page | "Delete launch" in the toolbar (only with the flag), a dialog that reads the plan when it opens: what happens, the channels to tick, the article's warning |
-| The Launches page | A "Not published" row's ⋯ menu, and a failed line in what needs the owner when nothing of that launch went out: "Delete" opens the same sheet (only with the flag) |
+| The launch page | "Delete launch" in the toolbar, a dialog that reads the plan when it opens: what happens, the channels to tick, the article's warning |
+| The Launches page | A "Not published" row's ⋯ menu, and a failed line in what needs the owner when nothing of that launch went out: "Delete" opens the same sheet |
 | `GET /api/v1/launches/{id}/deletion` | the plan (`read`) |
 | `DELETE /api/v1/launches/{id}?channels=a,b` | the deletion (`write`), the posts of the channels named deleted on their networks; answers `mode`, the `outcomes`, a `warning` and `problems` (what could not be tidied after) |
 
-Without the flag both routes answer 404, are left out of the OpenAPI document (`ApiRoute.available`),
-and the page shows no button. One implementation behind them: `LaunchDeletionService`
+The app always serves both routes; deps without the service (a test's) answer 404 and leave them
+out of the OpenAPI document (`ApiRoute.available`). One implementation behind them: `LaunchDeletionService`
 (`packages/engine/src/services/launch-delete.ts`), built once by `deletionService`
 (`apps/web/src/server/deletion.server.ts`). On a preview with fake networks it closes nothing on
 GitHub and drops no media bytes.
@@ -118,8 +118,8 @@ warning, a hidden launch publishing nothing more, a merged pull request counting
 launch Shipcast holds whose article was committed hidden even without `app-review`, a piece sent or
 claimed between the plan and the removal stopping it, hiding as one transaction, a second deletion
 meanwhile refused, and publishing stopping mid-run once the launch is deleted.
-`packages/runtime/test/runtime.test.ts`: the removed releases read without the flag.
-`apps/web/test/api.test.ts`: the routes off without the flag (and out of the OpenAPI document), the
+`packages/runtime/test/runtime.test.ts`: the removed releases read by every runtime.
+`apps/web/test/api.test.ts`: the routes off without the service (and out of the OpenAPI document), the
 plan, the scopes and a deletion.
 
 ## Related

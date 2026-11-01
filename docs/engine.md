@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-10-30T07:59:17.803690004Z
+updated_at: 2026-11-01T16:08:09.41847859Z
 tags:
     - engine
     - registry
@@ -54,8 +54,7 @@ on 2026-10-29.)
 | `ScheduleService` | schedule, move, cancel, recommended times, time zone ([scheduling.md](scheduling.md)) |
 | `CommentService` | list, edit a reply's draft, send, dismiss, settings |
 | `MetricsService` | read now; the hourly reads (`readHourly`) |
-| `DraftSnapshotService` | the drafts pull request as last read: written when opened and on each edit, refreshed on a webhook or by hand |
-| `LaunchStoreService` | with `launch-store`: the launch model's shadow write beside the drafts pull request, and its check ([launch-store.md](launch-store.md)) |
+| `LaunchStoreService` | the launch model's write: a held launch's rows, and a published article's later edits ([launch-store.md](launch-store.md)) |
 | `LaunchImportService` | the import of the launches drafted before the shadow write, and the deletion of the ones decided away: plan, apply (with `launch-import`), verify, roll back; run by `scripts/import-launches.ts` ([launch-import.md](launch-import.md)) |
 | `LaunchReadService` | with `launch-store-read`: a launch's drafts (the review), its channels and its pack read from the launch model's tables for the launch page, the REST API, scheduling and the assistants' grounding, and its stored files for `/media/<id>`; a launch the tables do not hold is read as before ([launch-store-read.md](launch-store-read.md)) |
 | `AppReviewService` | with `app-review`: a new launch held by Shipcast with no pull request (`hold`), its edits as versions, its approval as a row, whether anything can go out, what publishing reads, the one commit of its article and media to the launches repo at publishing, and the preview on the real site ([app-review.md](app-review.md)) |
@@ -85,7 +84,6 @@ uses; `inTransaction` runs a use case over several in one transaction.
 | `attempts` (`PublishAttempts`) | the outbox of publish claims (`publish_attempts`) |
 | `metrics` | readings, history, `lastChecked` |
 | `accounts` | connected accounts and their daily snapshots |
-| `drafts` | the drafts snapshot (`draft_snapshots`) |
 | `launchStore` | the launch model's packs, channel rows, drafts and versions, media and approvals |
 | `launchImports` | the import's batch log (`launch_imports`), the deletion of a launch with every row on it and its restore, a batch's rollback |
 | `launchDeletions` | the launches the owner deleted (`launch_deletions`), and whether a dedupe key's launch was removed |
@@ -280,11 +278,10 @@ steps, output tokens and the timeout.
    media go with them ([publishing.md](publishing.md#the-launchs-media)).
 5. **Delivery** (`deliverDrafts`): a **pull request** in the launches repo (branch
    `launch/<project>-<ref>`, or `article/<slug>`, named by `draftsBranch`; one commit through the Git
-   data API), or, with `direct`, **one commit straight onto `main`**. The drafts snapshot is written
-   as the pull request opens, and with `launch-store` the launch model's copy too
-   ([launch-store.md](launch-store.md)). With `app-review` neither happens: the drafts are kept by
-   Shipcast alone, and nothing reaches the launches repo until the launch is published
-   ([app-review.md](app-review.md)).
+   data API), or, with `direct`, **one commit straight onto `main`**: Action mode's delivery. In the
+   app the drafts are always kept by Shipcast alone, and nothing reaches the launches repo until the
+   launch is published ([app-review.md](app-review.md)); the drafts snapshot went with the app's
+   pull-request path on 2026-11-01, its `draft_snapshots` table left in place until a later drop.
 
 `claimManual(repo, ref?)` starts a launch by hand. In the app and the rounds, drafting is a `draft`
 job (a `heavy` one in a split), never retried on its own since it costs an AI run.

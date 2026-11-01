@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:07:05.847023162Z
-updated_at: 2026-10-31T12:05:12.601960287Z
+updated_at: 2026-11-01T16:07:50.879258773Z
 tags:
     - web-app
     - dashboard
@@ -128,14 +128,13 @@ unchanged unless the redesign document says so.
   `?channel=`): **Channels** (a strip of channel chips; each piece with its link, its numbers over
   time, Edit and Delete or Unpublish where its network allows them, Retry when it failed, its time
   while it is not out yet; Edit selected and Delete everything above the panel), **Content** (what
-  went out, or the drafts, editable while the pull request is open: a save is a commit on its
-  branch), **Search engines** and **Details** (properties, accounts, the last reading of every number,
+  went out, or the drafts, editable while the launch waits for approval: a save is a new version), **Search engines** and **Details** (properties, accounts, the last reading of every number,
   the launch's jobs). A launch that failed before its drafts were written opens on **Details**, and a
-  release with nothing out has **Launch it again**. **Where the drafts come from**: with
-  `github-events` the page reads the drafts snapshot in the registry, never GitHub (the
-  [engine](engine.md#reviewing-and-approving) keeps it current from webhooks and an hourly poll), and
-  **Refresh from GitHub** (`refreshDrafts`) reads the pull request again; without the flag every view
-  reads GitHub, as before.
+  release with nothing out has **Launch it again**. **Where the drafts come from**: the launch
+  model's rows, never GitHub ([launch-store-read.md](launch-store-read.md)); a launch drafted in a pull
+  request and not imported shows the error that names the import. The drafts snapshot and its
+  **Refresh from GitHub** went with the pull-request path on 2026-11-01
+  ([decisions/launch-model.md](decisions/launch-model.md)).
 - **Launch a repo** (`/launch`): the owner's repos (a combobox) and their releases (a select), the
   [pre-flight check](engine.md#the-pre-flight-check) shown as Ready / Blocks / Advice, and the choice
   between reviewing the drafts first or publishing without review. Drafting is a job of the queue.
@@ -276,10 +275,10 @@ a round is a singleton across processes.
   GitHub App's webhook secret or the per-repo secret below; answered at once with the work queued as a
   `delivery` job. A `ping` answers; the App's `installation` events make every replica look its
   installation up again, in any mode; a published release is claimed by the same rules as polling
-  (`claimEvent`); a merged pull request in the launches repo publishes its launch, while webhooks are
-  the chosen mode. With `github-events` bodies over 5 MB are refused before they are read, a
-  redelivery of an id already handled is dropped, a `pull_request` of the launches repo queues its
-  drafts snapshot's refresh and a `push` forgets the cached files it touched, whatever the mode.
+  (`claimEvent`). A `pull_request` publishes nothing: launches are approved in Shipcast, not by a
+  merge (since 2026-11-01; Action mode still publishes on its merge). Bodies over 5 MB are refused
+  before they are read, a redelivery of an id already handled is dropped, and a `push` forgets the
+  cached files it touched, whatever the mode.
 - **The GitHub App delivers for every repo it is installed on**. The per-repo secret from before the
   App is still generated in the page (32 random bytes), kept in the secret store, shown once and
   rotatable.

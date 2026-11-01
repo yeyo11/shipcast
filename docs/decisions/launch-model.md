@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T22:52:52.911566745Z
-updated_at: 2026-10-29T22:52:52.911566745Z
+updated_at: 2026-11-01T16:09:36.762469206Z
 tags:
     - decision
     - launches
@@ -13,7 +13,8 @@ tags:
 # Launches owned by Shipcast, not GitHub
 
 Decided on 2026-10-29 by the owner, after a prior investigation of the implications (kept outside the
-repo). Nothing of it is built yet; this records what was decided and the order it is built in.
+repo). Built from 2026-10-30, each phase behind a flag; on 2026-11-01 every flag was retired and the
+eighth phase, the cleanup, was done in the code (below, [Where it stands](#where-it-stands)).
 
 ## Why
 
@@ -64,6 +65,49 @@ additive migrations only, the current flow working until the last phase):
 7. **Triggers and deletion**.
 8. **Cleanup**: the pull-request path, draft snapshots and the `pull_request` webhook go; the old draft
    folders are deleted from the launches repo.
+
+## Where it stands
+
+Phases 1 to 7 are built ([media-store.md](../media-store.md), [launch-store.md](../launch-store.md),
+[launch-import.md](../launch-import.md), [launch-store-read.md](../launch-store-read.md),
+[app-review.md](../app-review.md), [sources.md](../sources.md),
+[launch-triggers.md](../launch-triggers.md), [launch-delete.md](../launch-delete.md)), and on
+2026-11-01 their flags were retired ([server.md](../server.md#the-flags)). **Phase 8 is done in the
+code**:
+
+- **No pull request for a new launch in the app**: the runtime always holds a launch's drafts in
+  Shipcast. The engine keeps its delivery to a pull request and its publishing from the merged files
+  only for Action mode, which this decision froze on that flow (`shipcast ci` builds no launch model).
+- **The drafts snapshot is gone**: its service, repository and queue, "Refresh from GitHub" and the
+  hourly re-read of open pull requests. Its table stays (below).
+- **The `pull_request` webhook is ignored by the app**: a merge publishes nothing; Action mode still
+  publishes on its workflow's merge.
+- **Launches already in pull requests stay readable** from the rows the import wrote: the launch page,
+  the API and MCP read them with no GitHub call, and a retry or a scheduled piece publishes from the
+  rows too, never from the launches repo's draft folders. A launch the rows do not hold is not read
+  from GitHub: its review is a clear error (`LaunchNotHeld`, 409) that names the import, rather than a
+  read-only fallback that would keep the whole pull-request read path alive. Such a launch is not
+  edited or approved in the app.
+- The shadow write and its check are gone; the import script is kept, writing on `--apply` alone.
+
+What remains, each a separate step the owner must agree to:
+
+1. **Run the import in production** and verify it ([launch-import.md](../launch-import.md#in-production)),
+   before the image with phase 8 is deployed: until then a launch drafted in a pull request shows the
+   `LaunchNotHeld` error.
+2. **Delete the old draft folders from the launches repo** (they stay in git history): every
+   `launches/<project>/<ref>/` folder's drafts and `pack.json` (the channel drafts `*.md`,
+   `release-notes.md`, `pack.json`) and every `articles/<slug>/` folder (its drafts, `pack.json` and
+   `launch.yml`). Not `public/launches/…` (the media the published posts link), `public/covers/`,
+   `projects.yml`, `brand.yml` or the articles under `src/content/posts/`. Publishing reads none of
+   the folders since phase 8; Action mode, if anyone uses it, still reads them for its own launches.
+   With them gone, `scripts/import-launches.ts` has nothing left to read and can be removed.
+3. **Drop what nothing uses any more**, in a migration of its own after a `pg_dump` (migrations stay
+   additive until then): the `draft_snapshots` table, which nothing writes or reads since phase 8
+   (the import's rollback log and the SQLite converter still name it, and go with it). The
+   `launches.model` column keeps telling launches decided in a pull request (`legacy`) from the
+   others, and the `import_batch` columns and `launch_imports` keep the import's rollback until the
+   import is final.
 
 ## Related
 
