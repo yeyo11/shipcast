@@ -9,6 +9,7 @@ import { TopBar } from '../kit/Bars';
 import { Icon } from '../kit/Icon';
 import { useToast } from '../Toasts';
 import { AssistedEditor } from '../assistant/AssistedEditor';
+import { editorProfile } from '@shipcast/schema/channels';
 import { ChatPanel } from '../assistant/ChatPanel';
 import { checkSummary, joinDraft, langName, langOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
 import { Glyph, type DraftView, type LaunchData } from './parts';
@@ -117,6 +118,8 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
   // From 960 px the chat sits beside the text until it is closed; then the editor offers it again
   const [deskChat, setDeskChat] = useState(true);
   const channel = draft.kind === 'article' ? 'blog' : (channelOfDraft(draft.path) ?? pieceId);
+  // What the piece's network shows: its toolbar, its paste and the assistant's rule (docs/decisions/rich-editor.md)
+  const profile = editorProfile(channel);
   const lang = langOf(draft.path);
   const article = launch.ref.startsWith('article:');
   const assistant = useAssistant({
@@ -184,7 +187,7 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
   // once the launch has gone out the text is only read
   const editor = (where: 'phone' | 'desk', help: ReactNode) =>
     editable ? (
-      <AssistedEditor id={`ap-draft-${where}`} label={label} assistant={assistant} help={help} className="ap-assisted" {...(where === 'phone' ? { onOpenChat: () => setChatOpen(true) } : !deskChat ? { onOpenChat: () => setDeskChat(true) } : {})} />
+      <AssistedEditor id={`ap-draft-${where}`} label={label} assistant={assistant} help={help} className="ap-assisted" {...(profile && { profile })} {...(where === 'phone' ? { onOpenChat: () => setChatOpen(true) } : !deskChat ? { onOpenChat: () => setDeskChat(true) } : {})} />
     ) : (
       <div className="k-field">
         <label className="k-lbl" htmlFor={`ap-draft-${where}`}>
