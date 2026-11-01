@@ -3,7 +3,7 @@ import { LANGUAGE_NAMES } from '@shipcast/schema';
 import { z } from 'zod';
 import type { ShipcastApi } from './client.ts';
 import { describeError, invoke } from './errors.ts';
-import { TOOLS } from './tools.ts';
+import { TOOL_GUIDES, TOOLS } from './tools/index.ts';
 
 /*
  * The MCP server: Shipcast's tools, two resources and two prompts over one API client. The client is
@@ -13,8 +13,11 @@ import { TOOLS } from './tools.ts';
 
 export const SERVER_INFO = { name: 'shipcast', version: '1.0.0' };
 
-const INSTRUCTIONS = `Shipcast launches GitHub projects: on a release it analyses the repo, writes a content pack for every channel (blog, dev.to, Bluesky, Mastodon...) into a drafts pull request, and publishes it once the owner approves.
-Read with list_launches, get_launch, list_jobs, list_accounts and get_capabilities. launch_repo, approve_drafts, write_article and retry_channel start background work that publishes publicly: confirm with the user first, then follow the job with list_jobs. edit_post changes a live post; delete_post removes one for good and needs confirm: true after the user agrees.`;
+const INTRO = `Shipcast launches GitHub projects: on a release it analyses the repo, writes a content pack for every channel (blog, dev.to, Bluesky, Mastodon...) into a drafts pull request, and publishes it once the owner approves.
+Read-only tools only look. Confirm with the user before anything that publishes, changes or deletes something public, and follow the background jobs a tool starts with list_jobs.`;
+
+/** The intro, then each area's guide (src/tools/<area>.ts), so an area describes its tools without editing this file */
+export const INSTRUCTIONS = [INTRO, ...TOOL_GUIDES].join('\n');
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 

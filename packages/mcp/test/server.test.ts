@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { InMemoryTransport, type CallToolResult } from '@modelcontextprotocol/server';
-import { checkStdioOptions, createApiClient, createMcpHttpHandler, createShipcastServer, McpSetupError } from '../src/index.ts';
+import { checkStdioOptions, createApiClient, createMcpHttpHandler, createShipcastServer, INSTRUCTIONS, McpSetupError, TOOLS } from '../src/index.ts';
 import { fakeApi, serveFake, TOKEN } from './fake-api.ts';
 
 const BASE = 'https://shipcast.example';
@@ -28,7 +28,8 @@ test('a client lists the tools with their annotations, and calls them', async ()
   const { client, fake } = await connected();
   try {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 11);
+    assert.deepEqual(tools.map((t) => t.name), TOOLS.map((t) => t.name));
+    assert.equal(client.getInstructions(), INSTRUCTIONS);
     const del = tools.find((t) => t.name === 'delete_post');
     assert.equal(del?.annotations?.destructiveHint, true);
     assert.equal(del?.annotations?.readOnlyHint, false);

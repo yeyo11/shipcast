@@ -1,5 +1,5 @@
 import { ShipcastApiError, type ShipcastApi } from './client.ts';
-import { ToolRefused, type ShipcastTool } from './tools.ts';
+import { ToolRefused, type ShipcastTool } from './tools/shared.ts';
 
 export type ToolOutcome = { ok: true; value: unknown } | { ok: false; message: string };
 

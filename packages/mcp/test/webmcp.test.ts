@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
-import { TOOLS } from '../src/tools.ts';
+import { TOOLS } from '../src/tools/index.ts';
 import { findModelContext, mountWebMcp, WEBMCP_HEADER, type ModelContextLike, type WebMcpTool } from '../src/webmcp.ts';
 import { fakeApi, TOKEN } from './fake-api.ts';
 
