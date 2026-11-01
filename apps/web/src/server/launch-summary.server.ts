@@ -1,6 +1,6 @@
 import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Repositories } from '@shipcast/engine';
 import { FORMAT_SOURCES, formatPiece, UTM_CHANNELS } from '@shipcast/schema';
-import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
+import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, launchViewSources, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /** Each tagged channel's `utm_source`, which names its visits in Umami's readings */
 export const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(UTM_CHANNELS).map(([channel, tags]) => [channel, tags.source]));
@@ -25,6 +25,10 @@ const today = () => new Date().toISOString().slice(0, 10);
  * Views per day for several launches and each of their channels in one query: the stats section's
  * daily series keyed by launch and channel, from the oldest launch's day (at most 399 days back, the
  * series' limit) to today. A failure to read it leaves the charts empty rather than the page broken.
+ *
+ * Only the sources the launch's views total counts: the stats' views family also takes the repo's
+ * traffic from its days, which the total leaves out, so a release's (or the launches repo's, for an
+ * article) busiest day of repo views stood above the launch's whole total (launch 1: 98 a day, 79 in all).
  */
 async function seriesOf(registry: Pick<Repositories, 'posts' | 'metrics' | 'accounts' | 'comments' | 'queries'>, launches: readonly Launch[]): Promise<ReturnType<typeof splitSeries>> {
   const empty: ReturnType<typeof splitSeries> = { launches: new Map(), channels: new Map() };
@@ -39,6 +43,7 @@ async function seriesOf(registry: Pick<Repositories, 'posts' | 'metrics' | 'acco
       from: oldest < floor ? floor : oldest,
       to: today(),
       launches: launches.map((l) => l.id),
+      channels: launchViewSources(METRIC_FAMILIES),
       // Every launch's every channel one by one: nothing folds into "other"
       limit: Number.MAX_SAFE_INTEGER,
     });

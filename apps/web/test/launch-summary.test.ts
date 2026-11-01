@@ -215,3 +215,23 @@ test('a format source’s visits are also each piece’s, the channel’s total 
     reddit: { views: 5, visits: 4 },
   });
 });
+
+test('a launch’s views per day count the sources its total counts: the repo’s traffic is in neither', async () => {
+  const { memoryRegistry } = await import('@shipcast/engine/testing');
+  const { launchNumbers } = await import('../src/server/launch-summary.server.ts');
+  const registry = await memoryRegistry();
+  // An article, whose launch reads the launches repo's traffic as every launch of a repo does
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:hello', trigger: 'article', kind: 'launch', brand: 'josegarridodev', title: 'Hello' });
+  const day = launch.createdAt.slice(0, 10);
+  await registry.metrics.recordMetrics(launch.id, 'blog', { views: 79 }, new Date());
+  await registry.metrics.recordDays(launch.id, 'github', { [day]: { views: 98, clones: 3 } }, new Date());
+  await registry.metrics.recordMetrics(launch.id, 'github', { stars: 4, views: 98 }, new Date());
+
+  const numbers = (await launchNumbers(registry, [launch])).get(launch.id)!;
+  assert.equal(numbers.totals.views, 79);
+  assert.equal(numbers.totals.stars, 4);
+  // Production's launch 1 drew a day of 98 views beside 79 in all: the repo's day was in the chart only
+  assert.deepEqual(numbers.daily, [{ day, views: 79 }]);
+  assert.ok(Math.max(...numbers.daily.map((d) => d.views)) <= numbers.totals.views);
+  assert.equal(numbers.channels.github, undefined, 'no channel row for the repo’s traffic');
+});

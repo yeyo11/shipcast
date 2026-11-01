@@ -30,14 +30,29 @@ export interface CounterReading {
 type Families = Readonly<Record<string, Partial<Record<string, readonly string[]>>>>;
 
 /**
+ * The repo's own numbers (`github`): its traffic is the repo's, kept on every launch of it, so it is
+ * no launch's views; only its stars are counted, as a total of their own.
+ */
+export const REPO_SOURCE = 'github';
+
+/**
+ * The sources a launch's views come from: every source of the families but the repo. The totals and
+ * the views per day both read these, so a day of the chart can never stand above the launch's views.
+ */
+export function launchViewSources(families: Families): string[] {
+  return Object.keys(families).filter((source) => source !== REPO_SOURCE && families[source]?.views);
+}
+
+/**
  * The launch's totals from the latest reading of each counter, through the stats section's metric
  * families so a number counts here as it counts on /stats. GitHub's stars are a family's reaction
- * there, but a star is not a reaction to a post: they get their own total.
+ * there, but a star is not a reaction to a post: they get their own total, and the repo's traffic is
+ * no launch's views (REPO_SOURCE).
  */
 export function launchTotals(readings: readonly CounterReading[], families: Families): Totals {
   const totals: Totals = { views: 0, reactions: 0, comments: 0, clicks: 0, stars: 0 };
   for (const r of readings) {
-    if (r.source === 'github') {
+    if (r.source === REPO_SOURCE) {
       if (r.name === 'stars') totals.stars += r.value;
       continue;
     }
