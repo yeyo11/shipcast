@@ -56,10 +56,15 @@ export interface ApiClientOptions {
   fetch?: FetchLike;
 }
 
-export interface CallOptions {
-  query?: Record<string, string | number | undefined>;
-  body?: unknown;
+/** Bytes sent as they are, such as an image for POST /media; the browser and Node's fetch both take them */
+export interface RawBody {
+  bytes: Uint8Array<ArrayBuffer>;
+  /** The body's media type, such as application/octet-stream */
+  contentType: string;
 }
+
+/** A call's query, and at most one body: JSON (the default) or raw bytes */
+export type CallOptions = { query?: Record<string, string | number | undefined> } & ({ body?: unknown; raw?: never } | { raw: RawBody; body?: never });
 
 export interface ShipcastApi {
   call<T = unknown>(method: Method, path: string, options?: CallOptions): Promise<T>;
@@ -73,7 +78,8 @@ function codeFor(status: number): ApiErrorCode {
   if (status === 403) return 'insufficient_scope';
   if (status === 404) return 'not_found';
   if (status === 429) return 'rate_limited';
-  if (status === 400) return 'invalid_input';
+  // POST /media answers 413 `too_large` for a file over its cap: an argument to fix, not a wrong address
+  if (status === 400 || status === 413) return 'invalid_input';
   if (status === 409) return 'refused';
   return status >= 500 ? 'internal' : 'bad_response';
 }
@@ -93,13 +99,20 @@ export function createApiClient(options: ApiClientOptions): ShipcastApi {
       const url = `${base}/api/v1${path}${query.size > 0 ? `?${query}` : ''}`;
       const headers: Record<string, string> = { accept: 'application/json', ...options.headers };
       if (options.token) headers.authorization = `Bearer ${options.token}`;
-      if (call.body !== undefined) headers['content-type'] = 'application/json';
+      let body: string | Uint8Array<ArrayBuffer> | undefined;
+      if (call.raw) {
+        headers['content-type'] = call.raw.contentType;
+        body = call.raw.bytes;
+      } else if (call.body !== undefined) {
+        headers['content-type'] = 'application/json';
+        body = JSON.stringify(call.body);
+      }
       let response: Response;
       try {
         response = await doFetch(url, {
           method,
           headers,
-          ...(call.body !== undefined && { body: JSON.stringify(call.body) }),
+          ...(body !== undefined && { body }),
           ...(options.credentials && { credentials: options.credentials }),
         });
       } catch (error) {
@@ -107,17 +120,17 @@ export function createApiClient(options: ApiClientOptions): ShipcastApi {
         throw new ShipcastApiError(0, 'unreachable', redact(`could not reach Shipcast at ${base || 'this origin'}: ${why}`, options.token));
       }
       const text = await response.text();
-      let body: unknown;
+      let answer: unknown;
       try {
-        body = text === '' ? undefined : (JSON.parse(text) as unknown);
+        answer = text === '' ? undefined : (JSON.parse(text) as unknown);
       } catch {
-        body = undefined;
+        answer = undefined;
       }
       if (response.ok) {
-        if (body === undefined) throw new ShipcastApiError(response.status, 'bad_response', `Shipcast answered ${response.status} without JSON; is ${base || 'this origin'} a Shipcast app?`);
-        return body as T;
+        if (answer === undefined) throw new ShipcastApiError(response.status, 'bad_response', `Shipcast answered ${response.status} without JSON; is ${base || 'this origin'} a Shipcast app?`);
+        return answer as T;
       }
-      const error = typeof body === 'object' && body !== null && 'error' in body ? (body as { error: unknown }).error : undefined;
+      const error = typeof answer === 'object' && answer !== null && 'error' in answer ? (answer as { error: unknown }).error : undefined;
       const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' && CODES.has(error.code) ? (error.code as ApiErrorCode) : codeFor(response.status);
       const message = typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string' ? error.message : `HTTP ${response.status}`;
       const retry = Number(response.headers.get('retry-after'));
