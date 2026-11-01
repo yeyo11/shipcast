@@ -7,7 +7,7 @@ test('API errors become messages that say what to do next', async () => {
   const { api } = fakeClient();
   assert.match(await refusal(api, 'get_launch', { launch_id: 99 }), /no such launch \(404 not_found\)\. .*list_launches/);
   assert.match(await refusal(api, 'launch_repo', { repo: 'yeyo11/old' }), /launched already \(409 refused\)\. .*Do not retry/);
-  assert.match(await refusal(api, 'edit_post', { post_id: 13, text: 'x' }), /Text is too long \(502 upstream\)/);
+  assert.match(await refusal(api, 'edit_post', { post_id: 13, text: 'x', confirm: true }), /Text is too long \(502 upstream\)/);
   assert.match(await refusal(fakeClient({}, READ_ONLY).api, 'launch_repo', { repo: 'yeyo11/claudio' }), /lacks the write scope \(403 insufficient_scope\)\. .*read,write/);
   assert.match(await refusal(fakeClient({}, 'shipcast_1_wrong').api, 'list_jobs', {}), /\(401 unauthorized\)\. .*token create/);
 

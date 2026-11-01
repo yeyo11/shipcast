@@ -5,7 +5,7 @@ import { accepted, confirm, HINTS, launchId, requireConfirm, tool, ToolRefused, 
 /* Comments under the launches' posts: reading and checking them, the assistant's drafted replies, and each channel's reply mode */
 
 export const guide =
-  'Comments under the posts: list_comments reads them with their drafted replies; check_comments and redraft_reply start background jobs to follow with list_jobs. edit_reply rewrites a draft and dismiss_comment drops a comment, both inside Shipcast; approve_reply sends a reply publicly and needs confirm: true after the user agrees. get_comment_settings and set_comment_settings read and set each channel\'s reply mode; setting one to auto needs confirm: true.';
+  'Comments: list_comments reads them with their drafted replies; edit_reply or redraft_reply changes a draft, approve_reply sends it, dismiss_comment drops the comment, and check_comments reads the networks now. get_comment_settings and set_comment_settings hold each channel\'s reply mode (auto replies without asking).';
 
 // The engine's COMMENT_STATUSES and REPLY_MODES, which this browser-safe package cannot import
 const STATUSES = ['new', 'draft-ready', 'approved', 'sent', 'dismissed', 'failed'] as const;
@@ -27,7 +27,7 @@ export const tools: ShipcastTool[] = [
     name: 'list_comments',
     title: 'List comments',
     description:
-      'The comments people left under Shipcast\'s published posts (the owner\'s own left out), newest first, each with its status and the reply the assistant drafted: new (not drafted yet), draft-ready (a reply waits for approval; a null draft means the assistant suggests dismissing it), approved (being sent), sent, dismissed or failed (with its problem). Also answers what each channel can do: `canReply` false (dev.to) means the reply is posted by hand on the network. Filter by status, channel or launch.',
+      'The comments people left under Shipcast\'s published posts (the owner\'s own left out), newest first, each with its status and the reply the assistant drafted: new (not drafted yet), draft-ready (a reply waits for approval; a null draft means the assistant suggests dismissing it), approved (being sent), sent, dismissed or failed (with its problem). Also answers what each channel can do: `canReply` false (dev.to) means the reply is posted by hand on the network. Filter by status, channel or launch. Then edit_reply (or redraft_reply) changes a draft, approve_reply sends it and dismiss_comment drops the comment.',
     operations: ['listComments'],
     input: z.object({
       status: z.enum(STATUSES).optional().describe('Only comments in this state; draft-ready lists the replies waiting for approval'),
@@ -45,7 +45,7 @@ export const tools: ShipcastTool[] = [
     operations: ['checkComments'],
     input: z.object({}),
     hints: HINTS.work,
-    run: async (api) => accepted(await api.call('POST', '/comments/check'), 'Checking the comments (the new drafts then show in list_comments)'),
+    run: async (api) => accepted(await api.call('POST', '/comments/check'), 'Checking the comments', 'list_comments'),
   }),
   tool({
     name: 'redraft_reply',
@@ -54,8 +54,9 @@ export const tools: ShipcastTool[] = [
       'Ask the AI for a fresh draft of one comment\'s reply, replacing the current draft (an edit by hand included). It never sends: the new draft waits for approval, and list_comments shows it once the job is done.',
     operations: ['redraftComment'],
     input: z.object({ comment_id: commentId }),
-    hints: HINTS.work,
-    run: async (api, args) => accepted(await api.call('POST', `/comments/${args.comment_id}/draft`), `Drafting the reply to comment ${args.comment_id} again`),
+    // An AI run whose draft stays in Shipcast: nothing reaches a network
+    hints: HINTS.job,
+    run: async (api, args) => accepted(await api.call('POST', `/comments/${args.comment_id}/draft`), `Drafting the reply to comment ${args.comment_id} again`, 'list_comments'),
   }),
   tool({
     name: 'edit_reply',
@@ -73,7 +74,7 @@ export const tools: ShipcastTool[] = [
     name: 'approve_reply',
     title: 'Approve and send a reply',
     description:
-      'Send one comment\'s drafted reply now, publicly, in the owner\'s name, with the account the post went out with; it goes out once and cannot be taken back from here. Read the draft with list_comments and show it to the user first, then call with `confirm: true`; without it nothing is sent. dev.to cannot send a reply through its API: there the user posts it by hand.',
+      'Send one comment\'s drafted reply now, publicly, in the owner\'s name, with the account the post went out with; it goes out once and cannot be taken back from here. Read the draft with list_comments (change it first with edit_reply) and show it to the user, then call with `confirm: true`; without it nothing is sent. dev.to cannot send a reply through its API: there the user posts it by hand.',
     operations: ['approveReply'],
     input: z.object({ comment_id: commentId, confirm }),
     hints: HINTS.work,

@@ -4,7 +4,7 @@ import { confirm, HINTS, postId, requireConfirm, tool, ToolRefused, type Shipcas
 /* Published posts, one at a time: what each channel can do with one, editing and deleting it on its network */
 
 export const guide =
-  'Published posts: get_capabilities says what each channel can do with one. edit_post changes a live post; delete_post removes one for good and needs confirm: true after the user agrees.';
+  'Posts: get_capabilities says what each channel can edit or delete; edit_post and delete_post change one live post on its network.';
 
 export const tools: ShipcastTool[] = [
   tool({
@@ -20,7 +20,7 @@ export const tools: ShipcastTool[] = [
     name: 'edit_post',
     title: 'Edit a published post',
     description:
-      'Edit one published post on its network, with the account it went out with. Give at least one field; a field the network does not take is refused (see get_capabilities). The change is public at once and replaces what was there; confirm the new text with the user first.',
+      'Edit one published post on its network, with the account it went out with. Give at least one field; a field the network does not take is refused (see get_capabilities). The change is public at once and replaces what was there: show the user the new text, then call with `confirm: true`; without it nothing changes. edit_launch_posts changes every post of a launch at once.',
     operations: ['editPost'],
     input: z.object({
       post_id: postId,
@@ -30,6 +30,7 @@ export const tools: ShipcastTool[] = [
       link: z.url().optional().describe('Added after the text on Mastodon, Telegram and Discord; the canonical URL on dev.to and Hashnode'),
       image_url: z.url().optional().describe('A new image: Mastodon, Telegram, and dev.to and Hashnode covers'),
       image_alt: z.string().optional().describe('What the image shows, where the network keeps it'),
+      confirm,
     }),
     hints: HINTS.destructive,
     run: (api, args) => {
@@ -42,6 +43,7 @@ export const tools: ShipcastTool[] = [
         ...(args.image_alt !== undefined && { imageAlt: args.image_alt }),
       };
       if (Object.keys(changes).length === 0) throw new ToolRefused('edit_post needs at least one field to change: text, title, tags, link, image_url or image_alt');
+      requireConfirm(args.confirm, 'edit_post', `Changing post ${args.post_id} in public`);
       return api.call('PATCH', `/posts/${args.post_id}`, { body: changes });
     },
   }),

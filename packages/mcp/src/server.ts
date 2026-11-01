@@ -6,15 +6,15 @@ import { describeError, invoke } from './errors.ts';
 import { TOOL_GUIDES, TOOLS } from './tools/index.ts';
 
 /*
- * The MCP server: Shipcast's tools, two resources and two prompts over one API client. The client is
+ * The MCP server: Shipcast's tools, two resources and three prompts over one API client. The client is
  * the only thing that differs between stdio (a bearer token, the app's URL) and the app's /mcp (the
  * caller's own token, served in-process), so both expose exactly the same surface.
  */
 
 export const SERVER_INFO = { name: 'shipcast', version: '1.0.0' };
 
-const INTRO = `Shipcast launches GitHub projects: on a release it analyses the repo, writes a content pack for every channel (blog, dev.to, Bluesky, Mastodon...) into a drafts pull request, and publishes it once the owner approves.
-Read-only tools only look. Confirm with the user before anything that publishes, changes or deletes something public, and follow the background jobs a tool starts with list_jobs.`;
+const INTRO = `Shipcast launches GitHub projects and the owner's articles: it writes a content pack for every channel (blog, dev.to, Bluesky, Mastodon...) into a drafts pull request, publishes it once the owner approves, then reads each post's numbers and comments.
+Read-only tools only look. Ask the user before anything that publishes, changes or deletes something public; the tools that do it at once take confirm: true and do nothing without it. A tool that starts work answers a job: follow it with list_jobs until it ends.`;
 
 /** The intro, then each area's guide (src/tools/<area>.ts), so an area describes its tools without editing this file */
 export const INSTRUCTIONS = [INTRO, ...TOOL_GUIDES].join('\n');
@@ -82,7 +82,34 @@ export function createShipcastServer(api: ShipcastApi): McpServer {
 3. Ask me to confirm, then call launch_repo with repo "${repo}"${ref ? ` and ref "${ref}"` : ''} (without direct, so the drafts go to a pull request).
 4. Follow the job with list_jobs until it ends; if the pre-flight failed, tell me which checks to fix.
 5. Call get_launch and summarise the drafts pull request and its files, with its link, so I can review them on GitHub.
-6. Only when I say the drafts are good, call approve_drafts, then follow the job and report each channel's post URL and any failure.`,
+6. Only when I say the drafts are good, call approve_drafts with confirm: true, then follow the job and report each channel's post URL and any failure.`,
+          },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    'launch_report',
+    {
+      title: 'Launch report',
+      description: 'How a launch did on each channel against the period before it, from its posts, numbers, ranking and search index',
+      argsSchema: z.object({ launch_id: z.string().regex(/^\d{1,10}$/, 'a launch id').optional().describe('The launch id; the latest published launch when left out') }),
+    },
+    ({ launch_id }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Report how ${launch_id ? `launch ${launch_id}` : 'my latest published launch'} did, channel by channel. Only read; change nothing.
+1. ${launch_id ? `Call get_launch with launch_id ${launch_id}.` : 'Call list_launches with status "published" and limit 1, then get_launch with its id.'} Note its repo and ref (or title), its posts per channel with their publishedAt and url, and its failures.
+2. The period runs from the day of its first publishedAt to today, as YYYY-MM-DD.
+3. Call get_stats_overview with that period and launch_ids [its id]: what its own posts gathered, per channel.
+4. Call get_stats_overview with the same period, no launch_ids and compare "previous": how each channel did overall against the period of the same length before.
+5. Call get_stats_ranking with by "post", the same period and launch_ids [its id]: its posts from best to worst (a score of 1 is the network's typical piece).
+6. Call get_search_index_status with the same period and launch_ids [its id]: whether Google and Bing indexed its articles, and their impressions and clicks.
+Then summarise: a table with one row per channel (its posts, the launch's views, reactions, comments, shares and clicks, its best post's score, and the channel's change against the previous period), the articles' indexing, the failures, and two or three lines on what worked and what did not. Where a number is missing or not read yet, say so instead of guessing.`,
           },
         },
       ],

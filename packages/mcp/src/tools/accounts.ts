@@ -3,7 +3,7 @@ import { HINTS, tool, type ShipcastTool } from './shared.ts';
 
 /* The connected accounts Shipcast publishes with; their profiles are in profiles.ts, their growth in stats.ts */
 
-export const guide = 'Accounts: list_accounts gives the connected accounts, their ids and whether their last check passed.';
+export const guide = 'Accounts: list_accounts gives the connected accounts, their ids and their last check.';
 
 export const tools: ShipcastTool[] = [
   tool({

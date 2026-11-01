@@ -5,7 +5,7 @@ import { HINTS, launchId, postId, tool, ToolRefused, type ShipcastTool, type Too
 /* Scheduling: when each channel's piece of a launch goes out, the recommended times, and the owner's timezone */
 
 export const guide =
-  'Scheduling: recommend_times ranks the best times for a channel and get_timezone says the owner\'s zone they are told in. schedule_launch sets a time per channel (the drafts still need approve_drafts), reschedule_post moves one (a time now or past publishes it on the next run) and cancel_scheduled_post stops a channel from going out; set_timezone changes the owner\'s zone.';
+  'Scheduling: recommend_times and get_timezone come before schedule_launch, which sets a time per channel (publishing still waits for approve_drafts); reschedule_post and cancel_scheduled_post change one scheduled post; set_timezone sets the owner\'s zone.';
 
 const channels = SCHEDULABLE_CHANNELS.join(', ');
 

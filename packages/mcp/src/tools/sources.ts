@@ -5,7 +5,7 @@ import { accepted, channel, confirm, HINTS, launchId, PUBLISHES, requireConfirm,
 /* Launching from sources (with the media uploaded for it), changing or deleting every post of a launch at once, and deleting a launch */
 
 export const guide =
-  'Sources and whole launches: upload_media stores an image and launch_from_sources drafts a launch from text, pages, repos and those images (it publishes once approved: confirm with the user). edit_launch_posts changes every live post of a launch at once, publicly; delete_launch_posts and delete_launch cannot be undone and need confirm: true after the user agrees, and plan_launch_deletion shows what delete_launch would do before it.';
+  'Sources and whole launches: upload_media stores an image, then launch_from_sources drafts a launch from text, pages, repos and images for approve_drafts. edit_launch_posts and delete_launch_posts change every live post of a launch; plan_launch_deletion shows what delete_launch would do, before it.';
 
 // The engine's limits (MAX_UPLOAD_BYTES, SOURCE_LIMITS), which this browser-safe package cannot import
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -142,7 +142,7 @@ export const tools: ShipcastTool[] = [
     name: 'edit_launch_posts',
     title: 'Edit every post of a launch',
     description:
-      'Edit every live post of a launch at once, on each network, with the same fields; each network takes the fields it has (get_capabilities) and the answer reports each post\'s outcome. Only posts already out are changed: pieces still scheduled are left out (reschedule or cancel them instead), and so are deleted ones. The change is public at once and replaces what was there; confirm the new text with the user first. Use edit_post for one post.',
+      'Edit every live post of a launch at once, on each network, with the same fields; each network takes the fields it has (get_capabilities) and the answer reports each post\'s outcome. Only posts already out are changed: pieces still scheduled are left out (reschedule or cancel them instead), and so are deleted ones. The change is public at once and replaces what was there: show the user the new text, then call with `confirm: true`; without it nothing changes. Use edit_post for one post.',
     operations: ['editLaunchPosts'],
     input: z.object({
       launch_id: launchId,
@@ -153,6 +153,7 @@ export const tools: ShipcastTool[] = [
       link: z.url().optional().describe('Added after the text on Mastodon, Telegram and Discord; the canonical URL on dev.to and Hashnode'),
       image_url: z.url().optional().describe('A new image: Mastodon, Telegram, and dev.to and Hashnode covers'),
       image_alt: z.string().optional().describe('What the image shows, where the network keeps it'),
+      confirm,
     }),
     hints: HINTS.destructive,
     run: (api, args) => {
@@ -165,6 +166,7 @@ export const tools: ShipcastTool[] = [
         ...(args.image_alt !== undefined && { imageAlt: args.image_alt }),
       };
       if (Object.keys(changes).length === 0) throw new ToolRefused('edit_launch_posts needs at least one field to change: text, title, tags, link, image_url or image_alt');
+      requireConfirm(args.confirm, 'edit_launch_posts', `Changing ${args.channels ? `the ${args.channels.join(', ')} posts` : 'every live post'} of launch ${args.launch_id} in public`);
       return api.call('PATCH', `/launches/${args.launch_id}/posts`, { body: { ...changes, ...(args.channels && { channels: args.channels }) } });
     },
   }),

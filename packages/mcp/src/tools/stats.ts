@@ -5,7 +5,7 @@ import { accountId, HINTS, tool, type ShipcastTool } from './shared.ts';
 /* Stats: the Stats page's numbers (overview, series, ranking), an account's growth, and whether search engines have indexed the articles */
 
 export const guide =
-  'Stats: everything the Stats page shows, read-only and free to call. stats_overview gives a period\'s totals (per channel, per account, against another period), stats_series one metric over time, stats_ranking what did best, stats_accounts and account_growth the audience of each account, search_index_status whether Google and Bing indexed the articles. Every period is the last 30 days unless from and to say otherwise.';
+  'Stats, all read-only: get_stats_overview gives a period\'s totals against another period, then get_stats_series follows one metric over time and get_stats_ranking says what did best; get_stats_accounts and get_account_growth give the audience, get_search_index_status what Google and Bing indexed. A period is the last 30 days unless from and to say otherwise.';
 
 // The site's own sources besides the channels (the engine's SITE_SOURCES), which this browser-safe package cannot import
 const SITE_SOURCES = ['search', 'bing', 'github'] as const;
@@ -47,10 +47,10 @@ const filterQuery = (args: Filters) => ({ channels: joined(args.channels), accou
 
 export const tools: ShipcastTool[] = [
   tool({
-    name: 'stats_overview',
+    name: 'get_stats_overview',
     title: 'Stats overview',
     description:
-      'The totals of a period, overall, per channel and per account: what the Stats page\'s overview shows. `metrics` is how much each family (views, reactions, comments, shares, clicks, impressions, and second-tier counters such as saves, reach or watchMinutes) grew between from and to, not a running total; `lifetime` is where the same counters stood at the period\'s end. `averages` are means and ratios (ctr, position, average read or view time) as the period ends, never added up. With `compare: "previous"` (the period of the same length just before) or compare_from and compare_to, each total also has `previous` and `delta` (absolute and relative change). The last 30 days by default.',
+      'The totals of a period, overall, per channel and per account: what the Stats page\'s overview shows. `metrics` is how much each family (views, reactions, comments, shares, clicks, impressions, and second-tier counters such as saves, reach or watchMinutes) grew between from and to, not a running total; `lifetime` is where the same counters stood at the period\'s end. `averages` are means and ratios (ctr, position, average read or view time) as the period ends, never added up. With `compare: "previous"` (the period of the same length just before) or compare_from and compare_to, each total also has `previous` and `delta` (absolute and relative change). The last 30 days by default. Then get_stats_series charts one metric over time and get_stats_ranking says which posts, launches or accounts did best.',
     operations: ['statsOverview'],
     input: z.object({
       ...period,
@@ -66,7 +66,7 @@ export const tools: ShipcastTool[] = [
       }),
   }),
   tool({
-    name: 'stats_series',
+    name: 'get_stats_series',
     title: 'Stats series',
     description:
       'One metric over time, one series per channel (the default), account or launch, per day or per week (weeks start on Monday): the Stats page\'s chart. Each point has `increase` (how much the metric grew in that bucket) and `cumulative` (where it stood at the bucket\'s end, everything before the period included); a series\' `total` is its increase over the period and `baseline` where it stood when the period began. The largest `limit` series come one by one, the rest added up as `other`. At most 400 buckets: ask for weeks over a long period. The last 30 days by default.',
@@ -86,7 +86,7 @@ export const tools: ShipcastTool[] = [
       }),
   }),
   tool({
-    name: 'stats_ranking',
+    name: 'get_stats_ranking',
     title: 'Stats ranking',
     description:
       'Posts (the default), launches or accounts ranked by popularity in a period: the Stats page\'s ranking. Networks count very differently, so the `score` is normalised per network: 1 is that network\'s typical piece in the period (its median increase, given in `medians`), 2 twice that; a launch\'s or an account\'s score is the mean of its pieces\'. Each entry also has the raw increases in the period (`metrics`) and where its counters stood at the period\'s end (`lifetime`), with its post, launch and account ids and its url. Pages with `offset` (the `next` of the previous page, null on the last). The last 30 days by default.',
@@ -106,7 +106,7 @@ export const tools: ShipcastTool[] = [
       }),
   }),
   tool({
-    name: 'stats_accounts',
+    name: 'get_stats_accounts',
     title: 'Accounts\' audience',
     description:
       'Every account Shipcast takes daily snapshots of (followers, following, posts): its latest numbers whenever they were read, when it was last read (`syncedAt`) and whether that is more than 36 hours ago (`stale`, so its numbers may be out of date), its `change` over the period and one point per day read. The Stats page\'s accounts tab. Accounts on networks that count no audience are left out. The last 30 days by default.',
@@ -116,10 +116,10 @@ export const tools: ShipcastTool[] = [
     run: (api, args) => api.call('GET', '/stats/accounts', { query: { from: args.from, to: args.to } }),
   }),
   tool({
-    name: 'account_growth',
+    name: 'get_account_growth',
     title: 'Account growth',
     description:
-      'One account\'s followers, following and posts per day it was read, each point with its `change` since the snapshot before (`days` says how many days apart they are, more than 1 after a missed day), and the `change` over the whole period. Unlike stats_accounts, the last 90 days by default.',
+      'One account\'s followers, following and posts per day it was read, each point with its `change` since the snapshot before (`days` says how many days apart they are, more than 1 after a missed day), and the `change` over the whole period. Unlike get_stats_accounts, the last 90 days by default.',
     operations: ['accountGrowth'],
     input: z.object({
       account_id: accountId,
@@ -130,7 +130,7 @@ export const tools: ShipcastTool[] = [
     run: (api, args) => api.call('GET', `/accounts/${args.account_id}/growth`, { query: { from: args.from, to: args.to } }),
   }),
   tool({
-    name: 'search_index_status',
+    name: 'get_search_index_status',
     title: 'Search index status',
     description:
       'Each published launch\'s blog articles in search engines: the Stats page\'s search tab. For every article page (per language), whether Google and Bing have indexed it, in the engine\'s own words (`coverage`) and when that was checked; null means the engine has not been read for that page yet. Per launch and engine, the impressions and clicks that grew in the period and their `lifetime` at its end; the engines count a launch\'s pages together, so the numbers are per launch, not per page. Up to 100 launches, newest first. The last 30 days by default.',
