@@ -5,7 +5,10 @@
  */
 
 /* ---------- The page ---------- */
-.wr-page { padding: 18px 16px 0; }
+/* The phone's sides; a desktop's come from the app's column (k-page) */
+@media (max-width: 959px) {
+  .wr-page { padding: 18px 16px 0; }
+}
 .wr-form { gap: 14px; }
 .wr-flush { margin: 0; }
 .wr-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -16,7 +19,8 @@
   .wr-page { padding-bottom: 96px; }
 }
 @media (min-width: 960px) {
-  .wr-page { max-width: 640px; margin: 0 auto; padding: 32px 32px 64px; }
+  /* A form keeps its reading width inside the app's column (k-page), left-aligned on the column's edge */
+  .wr-page:not(.wr-write) > * { max-width: 640px; }
 }
 
 /* The one yellow action: fixed above the bottom bar on a phone, in the flow from 960 px */
@@ -84,7 +88,6 @@
 }
 
 @media (min-width: 960px) {
-  .wr-page.wr-write { max-width: 1200px; padding: 32px 32px 64px; }
   .wr-write-title { font-size: 96px; }
   .wr-kept { font-size: 14px; }
   .wr-write-sub { display: none; }

@@ -251,7 +251,7 @@ function Channels() {
     return (
       <>
         <TopBar back={{ label: 'More', more: true }} />
-        <div className="ch-page">
+        <div className="k-page ch-page">
           <div className="k-px ch-head">
             <div className="k-stack k-g12">
               <h1 className="k-d ch-title">Channels</h1>
@@ -280,7 +280,7 @@ function Channels() {
   return (
     <>
       <TopBar back={{ label: 'More', more: true }} />
-      <div className="ch-page">
+      <div className="k-page ch-page">
         <div className="k-px k-hrow k-between ch-head">
           <div className="k-stack k-g12">
             <h1 className="k-d ch-title">Channels</h1>

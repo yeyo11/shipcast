@@ -51,7 +51,7 @@ function NetworkPage() {
     return (
       <>
         <TopBar back={{ label: network.name, to: `/channels/${network.id}` }} />
-        <div className="ch-page">
+        <div className="k-page ch-page">
           <div className="k-px ch-net ch-narrow">
             <ProfileReview key={reviewed.id} account={{ id: reviewed.id, label: reviewed.label, failed: stateOf(reviewed.status) === 'failed' }} network={network} initial={reviews[index] ?? null} now={now} />
           </div>
@@ -129,7 +129,7 @@ function Connect() {
   return (
     <>
       <TopBar back={{ label: 'Channels', to: '/channels', search: { tab: groupOf(network) } }} />
-      <div className="ch-page">
+      <div className="k-page ch-page">
         <div className="k-px k-stack k-g16 ch-net ch-narrow">
           <div className="k-hrow k-g12">
             <span className={`k-ic ch-net-ic${failed.length > 0 ? ' ch-ic-fail' : ''}`}>

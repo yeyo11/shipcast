@@ -134,7 +134,8 @@
 .ap-v-planned, .ap-v-not-found { color: var(--sc-muted); }
 .ap-check-wait { display: flex; align-items: center; gap: 10px; }
 .ap-preview-phone { padding-top: 16px; }
-.k-page.ap-preview-desk, .k-page.ap-check-desk { max-width: 760px; }
+/* A reading width inside the app's one column, left-aligned on its edge: never a smaller centred column */
+.ap-preview-desk > *, .ap-check-desk > * { max-width: 760px; }
 .ap-left { text-align: left; }
 .ap-check-card { font: inherit; cursor: pointer; width: 100%; }
 .k-d.ap-dh1 { margin-bottom: 10px; }

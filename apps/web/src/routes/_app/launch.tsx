@@ -81,7 +81,7 @@ function LaunchARepo() {
   return (
     <>
       <TopBar back={{ label: 'Launches', to: '/' }} />
-      <div className="wr-page">
+      <div className="k-page wr-page">
         <form
           id="launch-form"
           className="k-stack wr-form"

@@ -108,8 +108,6 @@
 
 /* ---------- Desktop (board DesktopStats) ---------- */
 @media (min-width: 960px) {
-  .stats-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
-  .stats-page .k-px { padding-left: 0; padding-right: 0; }
   .stats-head { padding-top: 0; flex-wrap: wrap; }
   .stats-title { font-size: 96px; }
   .stats-lead { display: block; }

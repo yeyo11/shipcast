@@ -78,7 +78,7 @@ function Webhooks() {
   };
 
   return (
-    <div className="st-sub">
+    <div className="k-page st-sub">
       <TopBar back={{ label: 'Automation', to: '/settings/automation' }} />
       <form
         id="listening-form"

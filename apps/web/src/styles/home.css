@@ -18,7 +18,9 @@
 .home fieldset { border: 0; padding: 0; min-width: 0; }
 .home legend { padding: 0; margin-bottom: 8px; }
 
-.home-page { padding: 20px 16px 20px; }
+@media (max-width: 959px) {
+  .home-page { padding: 20px 16px 20px; }
+}
 .home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .home-title { font-size: 48px; }
 
@@ -123,7 +125,6 @@
 
 @media (min-width: 960px) {
   .home > .k-topbar { display: none; }
-  .home-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
   .home-head { gap: 24px; }
   .home-title { font-size: 96px; }
   .home-needs { margin-top: 32px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; }

@@ -241,7 +241,7 @@ button.k-date-trigger { width: 100%; font: inherit; font-size: 16px; text-align:
 .k-bottombar-badge { position: absolute; top: -3px; left: calc(50% + 8px); }
 
 .k-dheader { border-bottom: 1px solid var(--sc-hairline); position: sticky; top: 0; background: var(--sc-ground); z-index: 40; }
-.k-dheader-inner { max-width: 1376px; margin: 0 auto; padding: 12px 32px; display: flex; align-items: center; gap: 20px; }
+.k-dheader-inner { max-width: 1200px; margin: 0 auto; padding: 12px 32px; display: flex; align-items: center; gap: 20px; }
 .k-dheader-brand { text-decoration: none; }
 .k-dheader-brand:hover { color: var(--sc-text); }
 .k-nav .k-badge { margin-left: 0; }
@@ -262,8 +262,12 @@ main.k-main { padding: 0; }
 @media (max-width: 959px) {
   main.k-main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
-/* A desktop page's column (boards Desktop*): 1200 px with 32 px sides */
-.k-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
+/* A desktop page's column (boards Desktop*, v26): 1200 px with 32 px sides, as the header's, so the
+   logo and every page title share one left edge. Narrow content caps its own width inside it, left-aligned */
+@media (min-width: 960px) {
+  .k-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
+  .k-page .k-px { padding-left: 0; padding-right: 0; }
+}
 .k-more-item { min-height: 60px; }
 .k-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .k-av { overflow: hidden; }

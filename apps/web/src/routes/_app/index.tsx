@@ -153,7 +153,7 @@ function Launches() {
   return (
     <div className="home">
       <TopBar />
-      <div className="home-page">
+      <div className="k-page home-page">
         <Head empty={!any} tour={!needs || !any} />
         {!any ? (
           <FirstRun />

@@ -1,4 +1,5 @@
 import { Tabs as Base } from '@base-ui/react/tabs';
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { TopBar } from '../kit/Bars';
 import { Icon } from '../kit/Icon';
@@ -28,11 +29,18 @@ export function LaunchHead({
   return (
     <>
       <TopBar back={{ label: 'Launches', to: '/' }} />
+      {/* A desktop's way back, small above the title (board DesktopLaunchMenu); the phone's is the top bar */}
+      <div className="k-desktop">
+        <Link to="/" className="k-hrow k-g4 k-sm pub-back">
+          <Icon name="chevronLeft" size={16} />
+          All launches
+        </Link>
+      </div>
       <div className="k-px k-stack k-g10 pub-head">
         <div className="k-hrow k-between k-g8 pub-head-top">
           <div className="k-hrow k-g10 k-wrap pub-head-title">
             <h1 className="k-d k-d48">{name}</h1>
-            {version && <span className="k-mono k-muted">{version}</span>}
+            {version && <span className="k-mono k-muted pub-version">{version}</span>}
           </div>
           {(onMenu || primary) && (
             <div className="k-hrow k-g8">
@@ -45,7 +53,7 @@ export function LaunchHead({
             </div>
           )}
         </div>
-        <div className="k-hrow k-g10 k-wrap">
+        <div className="k-hrow k-g10 k-wrap pub-head-state">
           <span className={`k-pill ${pill.className}`}>{pill.label}</span>
           <span className="k-sm k-muted">{meta}</span>
         </div>

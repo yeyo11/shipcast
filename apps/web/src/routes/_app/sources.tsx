@@ -100,7 +100,7 @@ function LaunchFromSources() {
   return (
     <>
       <TopBar back={{ label: 'Launch a repo', to: '/launch' }} />
-      <div className="wr-page">
+      <div className="k-page wr-page">
         <form
           id="sources-form"
           className="k-stack wr-form"

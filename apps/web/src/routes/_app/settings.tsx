@@ -22,7 +22,7 @@ function SettingsLayout() {
   return (
     <SaveBarSlot>
       {(slot) => (
-        <div className="st-page">
+        <div className="k-page st-page">
           <TopBar back={{ label: 'More', more: true }} />
           <h1 className="k-d st-title">Settings</h1>
           <nav className="k-tabs st-tabs" aria-label="Settings sections">

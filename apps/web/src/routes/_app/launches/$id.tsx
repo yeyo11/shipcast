@@ -166,8 +166,8 @@ function LaunchPage() {
           menu={<MenuButton />}
         />
       ) : (
-      <div className="pub-page">
-        <Head name={shortName} version={version} pill={{ label: launch.state.label, className: pillClass(launch.state.tone, launch.status) }} meta={meta} menu={!drafting} primary={!failedView} />
+      <div className="k-page pub-page">
+        <Head name={shortName} version={version} pill={{ label: launch.state.label, className: pillClass(launch.state.tone, launch.status) }} meta={meta} menu={!drafting} primary />
 
         {launch.deletedAt && (
           <div className="k-px pub-notice">
@@ -181,24 +181,39 @@ function LaunchPage() {
 
         {drafting ? (
           <DraftingView jobs={jobs} />
-        ) : failedView && launch.problem ? (
-          <FailedCard
-            problem={launch.problem}
-            posted={launch.posts.length > 0}
-            relaunch={canRelaunch(launch) ? relaunch : null}
-            busy={busy || running}
-            detailsSearch={() => go({ tab: 'details' })}
-          />
         ) : (
           <>
-            {launch.problem && (
-              <div className="k-px pub-notice">
-                <div className="k-notice k-bad">
-                  <span>
-                    <strong>The launch failed.</strong> <span className="k-mono k-xs">{launch.problem}</span>
-                  </span>
-                </div>
+            {/* A launch that failed before anything went out: the phone's card says it all (board
+                LaunchFailed); a desktop keeps its tabs under the failure (board DesktopLaunchMenu),
+                with "Launch it again" in the heading */}
+            {failedView && launch.problem && (
+              <div className="k-phone">
+                <FailedCard
+                  problem={launch.problem}
+                  posted={launch.posts.length > 0}
+                  relaunch={canRelaunch(launch) ? relaunch : null}
+                  busy={busy || running}
+                  detailsSearch={() => go({ tab: 'details' })}
+                />
               </div>
+            )}
+            <div className={failedView && launch.problem ? 'k-desktop' : 'pub-body'}>
+            {launch.problem && (
+              <>
+                <div className="k-px pub-notice k-phone">
+                  <div className="k-notice k-bad">
+                    <span>
+                      <strong>The launch failed.</strong> <span className="k-mono k-xs">{launch.problem}</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="k-desktop">
+                  <div className="k-card k-fail pub-failed-note">
+                    <strong>{launch.posts.length > 0 ? 'The launch failed part of the way.' : 'The launch failed before anything went out.'}</strong>
+                    <span className="k-sm k-mono k-muted">{launch.problem}</span>
+                  </div>
+                </div>
+              </>
             )}
             <LaunchTabs<TabId>
               value={tab}
@@ -236,6 +251,7 @@ function LaunchPage() {
                 },
               ]}
             />
+            </div>
           </>
         )}
       </div>

@@ -185,7 +185,7 @@ function Write() {
   return (
     <>
       <TopBar />
-      <div className={`wr-page wr-write${reviewing ? ' wr-reviewing' : ''}`}>
+      <div className={`k-page wr-page wr-write${reviewing ? ' wr-reviewing' : ''}`}>
         <div className="k-hrow k-between wr-write-head">
           <h1 className="k-d k-d48 wr-write-title">Write</h1>
           {kept}

@@ -59,7 +59,7 @@ function Loading() {
   return (
     <div className="stats">
       <TopBar />
-      <div className="stats-page" role="status" aria-label="Counting the numbers">
+      <div className="k-page stats-page" role="status" aria-label="Counting the numbers">
         <div className="k-px stats-head">
           <h1 className="k-d stats-title">Stats</h1>
         </div>
@@ -287,7 +287,7 @@ function Stats() {
   return (
     <div className="stats">
       <TopBar />
-      <div className="stats-page">
+      <div className="k-page stats-page">
         <div className="k-px stats-head">
           <div className="k-stack k-g12">
             <h1 className="k-d stats-title">Stats</h1>

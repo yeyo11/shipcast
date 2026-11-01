@@ -104,7 +104,7 @@ function PromptsPage() {
   const rules = lockedRuleCount(data.locked);
 
   return (
-    <div className="st-sub">
+    <div className="k-page st-sub">
       <TopBar back={{ label: 'AI', to: '/settings/ai' }} />
       <div className="st-subbody st-g12">
         <Link to="/settings/ai" className="k-desktop st-backlink">

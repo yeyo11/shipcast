@@ -4,11 +4,11 @@
  * inline styles as named classes over the kit. Role tokens only.
  */
 
-/* The page: the phone's column; on a desktop the same content in the page column, not stretched */
-.pub-page { padding-bottom: 24px; }
-@media (min-width: 960px) {
-  .pub-page { max-width: 880px; margin: 0 auto; padding: 16px 32px 64px; }
+/* The page: the phone's column; on a desktop the app's one column (k-page), as board DesktopLaunchMenu draws it */
+@media (max-width: 959px) {
+  .pub-page { padding-bottom: 24px; }
 }
+.pub-back { display: none; }
 
 /* ---------- The heading ---------- */
 .pub-head { padding-top: 18px; }
@@ -110,3 +110,17 @@
 .pub-problem { background: var(--sc-ground); border-radius: 12px; padding: 10px 12px; color: color-mix(in srgb, var(--sc-failure) 55%, var(--sc-text)); overflow-wrap: anywhere; }
 .pub-failed-log { align-self: center; padding-top: 0; }
 
+/* ---------- Desktop (boards DesktopLaunchMenu, DesktopConfirm): last, over the phone's rules ---------- */
+@media (min-width: 960px) {
+  /* Board DesktopLaunchMenu: a small back link, the title in d96 with its version beside it, the actions at the right */
+  .pub-back { display: inline-flex; align-items: center; text-decoration: none; color: var(--sc-muted); }
+  .pub-back:hover { color: var(--sc-text); }
+  .pub-head { padding-top: 0; margin-top: 12px; gap: 12px; }
+  .pub-head-top { align-items: flex-end; gap: 16px; }
+  .pub-head-title { gap: 16px; }
+  .pub-head-title h1 { font-size: 96px; }
+  .pub-version { font-size: 22px; }
+  .pub-failed-note { margin-top: 20px; gap: 6px; }
+  .pub-tabs-wrap { margin-top: 24px; }
+  .pub-tabs { margin: 0; }
+}

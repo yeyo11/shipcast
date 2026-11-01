@@ -77,7 +77,7 @@ export function DeleteLaunch({ launchId, open, onOpenChange, onDeleted }: { laun
       ) : (
         <>
           <p className="pub-flush">
-            Nothing of it was published, so it goes with its drafts. Its drafts pull request, or its preview on the site, is <strong>closed</strong>.
+            Nothing of it ever went out, so it is <strong>removed</strong> with its drafts and jobs, and its preview on the site is closed.
           </p>
           <p className="k-sm k-muted pub-flush">Its release is not launched again by its events.</p>
         </>
@@ -115,7 +115,7 @@ export function DeleteLaunch({ launchId, open, onOpenChange, onDeleted }: { laun
           Keep it
         </button>
         <button type="button" className="k-btn k-danger k-grow" disabled={!plan || Boolean(plan.refused) || busy} onClick={confirm}>
-          {busy ? 'Deleting…' : hidden ? 'Delete the launch' : 'Delete it'}
+          {busy ? 'Deleting…' : 'Delete the launch'}
         </button>
       </div>
     </Overlay>

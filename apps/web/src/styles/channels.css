@@ -12,7 +12,9 @@
 .ch-link:hover { color: var(--sc-yellow); }
 
 /* The page's column: the phone's sides come from k-px, the desktop's from the column */
-.ch-page { padding-bottom: 24px; }
+@media (max-width: 959px) {
+  .ch-page { padding-bottom: 24px; }
+}
 .ch-head { padding-top: 18px; align-items: flex-end; }
 .ch-title { font-size: 48px; }
 .ch-connect { min-height: 40px; padding: 0 16px; font-size: 14px; }
@@ -87,8 +89,6 @@ textarea.ch-input { display: block; resize: vertical; line-height: 1.5; }
   .ch-ph { display: none; }
   .ch-dt { display: inline; }
   .ch-dt.k-stack, strong.ch-dt, span.ch-dt.k-ellipsis, p.ch-dt { display: block; }
-  .ch-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
-  .ch-page .k-px { padding-left: 0; padding-right: 0; }
   .ch-head { padding-top: 0; }
   .ch-title { font-size: 96px; }
   .ch-connect { min-height: 48px; padding: 0 20px; font-size: 16px; }

@@ -4,8 +4,10 @@
  */
 
 /* ---------- The area: title, tabs (phone) or a column of sections (desktop), the page's body ---------- */
-.st-page { padding-bottom: 24px; }
-.st-page:has(.st-savebar) { padding-bottom: 94px; }
+@media (max-width: 959px) {
+  .st-page { padding-bottom: 24px; }
+  .st-page:has(.st-savebar) { padding-bottom: 94px; }
+}
 .st-title { font-size: 48px; padding: 18px 16px 0; }
 .st-tabs { margin: 12px 16px 0; padding: 0; }
 .st-nav { display: none; }
@@ -18,7 +20,6 @@
 .st-savebar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
 
 @media (min-width: 960px) {
-  .st-page, .st-sub { max-width: 1200px; margin: 0 auto; padding: 32px 32px 64px; }
   .st-page:has(.st-savebar) { padding-bottom: 64px; }
   .st-title { font-size: 96px; padding: 0; }
   .st-tabs { display: none; }
@@ -80,7 +81,9 @@
 }
 
 /* ---------- A page under a section (boards PromptEditor, Webhooks): its own title, no tabs ---------- */
-.st-sub { padding-bottom: 24px; }
+@media (max-width: 959px) {
+  .st-sub { padding-bottom: 24px; }
+}
 .st-subbody { display: flex; flex-direction: column; padding: 18px 16px 0; }
 .st-subtitle { font-size: 48px; }
 .st-g6 { gap: 6px; }
