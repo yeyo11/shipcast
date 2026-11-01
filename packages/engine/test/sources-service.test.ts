@@ -127,10 +127,10 @@ test('an upload while the media store is unavailable says why', async () => {
     launches: registry.launches,
     sources: registry.sources,
     launchesRepo: 'yeyo11/launches',
-    media: unavailableMediaStore('the launch-media flag is off (SHIPCAST_FLAGS)'),
+    media: unavailableMediaStore('missing in .env: SHIPCAST_MEDIA_BUCKET'),
     fetchPage: async () => Promise.reject(new Error('unused')),
   });
-  await assert.rejects(service.upload(PNG), /launch-media flag is off/);
+  await assert.rejects(service.upload(PNG), /missing in .env: SHIPCAST_MEDIA_BUCKET/);
   await assert.rejects(service.upload(new Uint8Array(ascii('<svg/>'))), /only PNG/);
 });
 

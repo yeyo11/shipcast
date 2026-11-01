@@ -22,6 +22,7 @@ async function setup(sources?: SourcesApi) {
     secrets,
     github: {} as ReviewGitHub,
     launchesRepo: 'yeyo11/launches',
+    launchRead: { review: async () => undefined, channelConfig: async () => undefined },
     publicUrl: 'https://shipcast.example',
     limiter: new FailureLimiter(),
     jobs: async () => ({ jobs: [], next: null }),
@@ -117,23 +118,19 @@ test('the page’s upload: the flag and the length are checked before a byte is 
       body: new ReadableStream<Uint8Array>({ pull(controller) { pulled += 1; controller.enqueue(new Uint8Array(length)); controller.close(); } }, { highWaterMark: 0 }),
     }) as unknown as Request;
 
-  const off = await pageUpload(watched(10), { enabled: false, upload });
-  assert.equal(off.status, 404);
-  assert.equal(pulled, 0, 'flag off: the body is never read');
-
-  const declared = await pageUpload(watched(10, MAX_UPLOAD_BYTES + 1), { enabled: true, upload });
+  const declared = await pageUpload(watched(10, MAX_UPLOAD_BYTES + 1), { upload });
   assert.equal(declared.status, 413);
   assert.equal(pulled, 0, 'a declared length over the cap: never read');
 
-  const big = await pageUpload(watched(MAX_UPLOAD_BYTES + 1), { enabled: true, upload });
+  const big = await pageUpload(watched(MAX_UPLOAD_BYTES + 1), { upload });
   assert.equal(big.status, 413, 'a body longer than it says is cut at the cap');
 
-  const ok = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1, 2, 3]) }), { enabled: true, upload });
+  const ok = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1, 2, 3]) }), { upload });
   assert.equal(ok.status, 200);
   assert.deepEqual(await ok.json(), { ok: true, file: { sha256: 'b'.repeat(64), mime: 'image/png', width: 2, height: 3 } });
   assert.deepEqual(uploaded, [3]);
 
-  const refused = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1]) }), { enabled: true, upload: async () => ({ ok: false, problem: 'only PNG, JPEG, GIF or WebP' }) });
+  const refused = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1]) }), { upload: async () => ({ ok: false, problem: 'only PNG, JPEG, GIF or WebP' }) });
   assert.equal(refused.status, 409);
   assert.deepEqual(await refused.json(), { ok: false, problem: 'only PNG, JPEG, GIF or WebP' });
 });

@@ -1,19 +1,18 @@
-import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
+import { draftArticle, draftLaunch, draftReply, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
 import { MemoryEtagCache, type EtagCache } from '@shipcast/connectors';
-import { channelCadence, lastMetricsRead, pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
+import { channelCadence, lastMetricsRead, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
-import { Flags } from './flags.ts';
 import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, RECONCILE_GRACE_MS, type Handlers, type JobQueue } from './queue.ts';
 import { handlersOf, runsTheClock, split, type Role } from './roles.ts';
 import type { Cache, Lock } from './redis/ports.ts';
-import { pollGitHub, takeGitHubPoll } from './github-events.ts';
+import { takeGitHubPoll } from './github-events.ts';
 import { notifications, notify, readMetricsHourly, refreshInstagramTokens, runRound } from './rounds.ts';
 import { MemoryCache } from './redis/memory.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
 import { buildServices, publishConnectors, type Services } from './services.ts';
 import { takeSnapshots } from './snapshots.ts';
-import { claimFromWebhook, launchOfPullRequest } from './webhooks.ts';
+import { claimFromWebhook } from './webhooks.ts';
 import { COMMENTS_CRON, COMMENTS_KEY, commentsNotice, replyDeps } from './comments.ts';
 import { runProfileReview } from './profiles.ts';
 import { runAssistantCheck } from './assistant-check.ts';
@@ -32,10 +31,6 @@ export interface WorkDeps {
   fetch?: typeof fetch;
   /** Reads the settings again, before each round, so a change made in the app reaches every worker */
   refresh?: () => Promise<void>;
-  /** The switches (SHIPCAST_FLAGS); all off when not given */
-  flags?: Flags;
-  /** The drafts snapshots deliveries and the hourly poll keep current */
-  drafts?: DraftSnapshotService;
   /**
    * Where the hourly reads keep accounts' identities and sessions between runs:
    * Redis's cache where the process has one, else this process's memory
@@ -122,8 +117,7 @@ export async function roundRunning(registry: Pick<Repositories, 'jobs'>): Promis
 /** The handlers of every queue; the app and `shipcast watch` run the same ones */
 export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const { registry } = d;
-  const flags = d.flags ?? new Flags();
-  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }), ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
+  const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo, ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
   // The hourly reads, with what they keep between runs, which lives as long as the process
   const cache = d.cache ?? new MemoryCache();
@@ -141,9 +135,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const publishWhatIsReady = async (drafted: Launch) => {
     if (drafted.model === 'app' && (await publishing.approval(drafted)).state === 'approved') await startPublishing(queue, drafted);
   };
-  // With launch-sources, a launch's further repos have their numbers read too, apart from its primary repo's
-  const withRepos = (services: Services): Services =>
-    flags.on('launch-sources') ? { ...services, sources: { ...services.sources, furtherRepos: (ids) => registry.sources.furtherRepos(ids) } } : services;
+  // A launch's further repos have their numbers read too, apart from its primary repo's
+  const withRepos = (services: Services): Services => ({ ...services, sources: { ...services.sources, furtherRepos: (ids) => registry.sources.furtherRepos(ids) } });
   // Work nobody started by hand waits while automation is off; the same job sent by hand runs
   const off = async (reason: string) => reason !== BY_HAND && (await readAutomation(registry)).mode === 'off';
 
@@ -230,8 +223,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     /*
      * A scheduled piece's time has come: the launch's publishing is queued, and the publish step
      * sends what is due. The post row is the truth, so a job for a piece cancelled, moved later or
-     * already out does nothing; a launch whose drafts still wait for approval waits, and its merge
-     * publishes what is overdue by then.
+     * already out does nothing; a launch whose drafts still wait for approval waits in its publish
+     * job, and its approval publishes what is overdue by then.
      */
     async scheduled({ postId, launchId }, job) {
       job.link(pageOf(launchId));
@@ -251,32 +244,11 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         job.log(`Waiting: the launch is ${current.status}; its publishing sends what is due`);
         return;
       }
-      const number = pullRequestNumber(current);
-      if (number && (await d.github.pullRequestState(d.pipeline.launchesRepo, number)) === 'open') {
-        job.log('Waiting for approval: it goes out once the drafts are merged');
-        return;
-      }
       job.log(`${post.channel} is due: publishing ${nameOf(current)}`);
       await startPublishing(queue, current);
     },
 
-    /** GitHub said a drafts pull request changed: its snapshot is read again, off the webhook's request */
-    async 'drafts-snapshot'({ pullRequest }, job) {
-      if (!d.drafts) {
-        job.log('This process keeps no drafts snapshot: nothing to read');
-        return;
-      }
-      const launch = await d.drafts.launchOf(pullRequest);
-      if (!launch) {
-        job.log(`Pull request #${pullRequest} is not one of Shipcast's launches`);
-        return;
-      }
-      job.link(pageOf(launch.id));
-      const snapshot = await d.drafts.refresh(launch);
-      job.log(snapshot ? `Read #${pullRequest}: ${snapshot.pullRequest.state}, ${snapshot.files.length} files` : 'The launch has no drafts pull request');
-    },
-
-    /** A delivery's work: what GitHub announced is claimed and drafted, or a merged launch published */
+    /** A delivery's work: what GitHub announced is claimed and drafted */
     async delivery({ action }, job) {
       if (action.kind === 'claim') {
         const outcome = await claimFromWebhook({ github: d.github, registry, brand: await d.brand(), pipeline: d.pipeline }, action.event);
@@ -289,14 +261,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         await startDrafting(queue, outcome.launch);
         return;
       }
-      const merged = await launchOfPullRequest({ registry }, action.pullRequestUrl);
-      if (!merged) {
-        job.log('A merge Shipcast has no drafted launch for');
-        return;
-      }
-      job.log(`Publishing ${nameOf(merged)}`);
-      job.link(pageOf(merged.id));
-      await startPublishing(queue, merged);
+      // A merge queued before the app stopped publishing on pull requests: launches are approved in Shipcast
+      job.log('Ignored: a merged pull request publishes nothing; launches are approved in Shipcast');
     },
 
     /*
@@ -343,7 +309,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
             },
           },
         );
-        if (polling && d.drafts) for (const line of await pollGitHub({ drafts: d.drafts, files: d.github.files, launchesRepo: d.pipeline.launchesRepo })) log(line);
+        // The poll's own read: the launches repo's kept files forgotten, so a missed push is caught within the hour
+        if (polling && d.pipeline.launchesRepo) await d.github.files?.forget(d.pipeline.launchesRepo);
       } finally {
         await record(registry, LAST_ROUND_KEY, {
           at: new Date().toISOString(),

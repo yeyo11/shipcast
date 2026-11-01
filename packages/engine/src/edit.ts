@@ -107,8 +107,8 @@ export interface EditDeps {
   editors(channel: Channel, accountId: number | null): Promise<Editors>;
   blog?: { github: BlogRepo; launchesRepo: string };
   /**
-   * With `launch-store`: an article edited after publishing is also a version in the launch model,
-   * so what the launch page reads from it (`launch-store-read`) is the article as the site shows it
+   * An article edited after publishing is also a version in the launch model, so what the launch
+   * page reads from it is the article as the site shows it
    */
   launchStore?: Pick<LaunchStoreService, 'articleEdited'> | undefined;
   /** For an image Mastodon needs as bytes */

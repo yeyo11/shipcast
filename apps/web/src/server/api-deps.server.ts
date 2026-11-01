@@ -41,7 +41,7 @@ export async function apiDeps(): Promise<ApiDeps> {
     checkComments,
     redraftComment,
     profiles: profileApi,
-    ...(ctx.flags.on('launch-sources') && { sources: { start: startSources, upload: uploadSource } }),
+    sources: { start: startSources, upload: uploadSource },
     deletion: deletionService(ctx),
   };
 }

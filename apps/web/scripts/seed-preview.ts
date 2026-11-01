@@ -59,8 +59,7 @@ import { answerTour, complete, finish, initialState, ONBOARDING_KEY, STEPS, type
  *
  * pando v1.0.0 and claudio v1.5.0 are launches Shipcast holds (the launch model, docs/app-review.md):
  * their content packs go through the pipeline's own delivery (renderDrafts, then AppReviewService.hold),
- * so the review, content and preview screens show real drafts when the app runs with
- * SHIPCAST_FLAGS=launch-store,launch-store-read,launch-media,app-review. With SHIPCAST_PREVIEW_FIXTURES
+ * so the review, content and preview screens show real drafts. With SHIPCAST_PREVIEW_FIXTURES
  * set, it also writes the files the app reads from GitHub there: the brand.yml, each repo's
  * .github/launch.yml and each held launch's drafts on the launches repo.
  *
@@ -107,7 +106,7 @@ const TABLES = [
   'media',
   'launch_channels',
   'launch_sources',
-  'draft_snapshots',
+  'draft_snapshots', // no longer written (docs/decisions/launch-model.md, phase 8); cleared for an old seed's rows
   'assistant_messages',
   'assistant_sessions',
   'jobs',
@@ -430,7 +429,7 @@ function configOf(repo: string): { text: string; config: LaunchConfig } {
 const heldFiles: DraftFile[] = [];
 
 /**
- * A launch Shipcast holds, delivered as the pipeline delivers one under app-review: the pack's drafts
+ * A launch Shipcast holds, delivered as the pipeline delivers one: the pack's drafts
  * rendered (renderDrafts, as the drafts pull request would carry them), then AppReviewService.hold,
  * which writes the pack, the channels and a version of each draft, and makes the launch an `app` one.
  * Approved when `approvedAt` is given. The launch keeps the status and times it was seeded with.

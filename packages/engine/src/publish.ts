@@ -6,7 +6,8 @@ import type { GitHubSource } from './github.ts';
 import { carouselPieces, mediaPath, STORY_FILE } from './launch-assets.ts';
 import { parseIssueDraft, renderIssueHtml } from './newsletter.ts';
 import { resubmitSitemap, type MetricSources } from './metrics.ts';
-import { storedChannelConfig } from './launch-import.ts';
+import { readPack, storedChannelConfig } from './launch-import.ts';
+import { draftPath } from './launch-store.ts';
 import { loadProjects } from './pipeline.ts';
 import { isRetryable, notSentBecause, type PieceGuard } from './publishing/guard.ts';
 import { failureKey as failureKeyOf } from './publishing/retry.ts';
@@ -15,7 +16,6 @@ const failureKey = (launch: Launch, channel: Channel) => failureKeyOf(launch.id,
 import { isAppLaunch } from './app-review.ts';
 import type { Launch, Post, Repositories } from './repositories/index.ts';
 import type { AppReviewService } from './services/app-review.ts';
-import type { LaunchStoreService } from './services/launch-store.ts';
 
 /**
  * What the engine needs from each network's connector: the connectors in `@shipcast/connectors`
@@ -184,11 +184,10 @@ export interface PublishDeps {
    * the characterisation tests found (publish.characterisation.test.ts). The publishing service's rule.
    */
   keepUnpublishable?: boolean;
-  /** With `launch-store`: told once the drafts are found approved, so the merge is also an approval row (services/launch-store.ts) */
-  launchStore?: Pick<LaunchStoreService, 'merged'>;
   /**
-   * With `app-review`: a launch Shipcast holds is published from its approved versions, its site files
-   * committed to the launches repo first (docs/app-review.md). Without it such a launch waits
+   * A launch Shipcast holds is published from its approved versions, its site files committed to the
+   * launches repo first (docs/app-review.md). The app always has it; Action mode, which holds no
+   * launch, does not, and such a launch would wait
    */
   appReview?: Pick<AppReviewService, 'approval' | 'publishing' | 'publishSite' | 'linkPublished'>;
 }
@@ -298,8 +297,8 @@ export const BUILT_IN_PUBLISHING: Readonly<Record<keyof Publishers, true>> = {
   newsletter: true,
 };
 
-/** Why a launch Shipcast holds does not publish in a process without the flag */
-const APP_REVIEW_OFF = 'the launch is held by Shipcast and the app-review flag is off';
+/** Why a launch Shipcast holds does not publish where nothing reads the launch model (Action mode) */
+const APP_REVIEW_OFF = 'the launch is held by Shipcast, and this process does not read the launch model';
 
 /** What a launch is published from: its pack, its channels and its drafts' texts by path, read as merged or as approved */
 interface LaunchContent {
@@ -310,25 +309,41 @@ interface LaunchContent {
   waits: ReadonlyMap<string, string>;
 }
 
-/** A launch reviewed in its pull request: approved by the merge, every text read from the launches repo's main */
+/**
+ * A launch reviewed in its pull request: approved by the merge. Once the launch model holds it (the
+ * import, or the shadow write while it ran) its pack, channel rows and texts are read from the rows,
+ * so a retry or a scheduled piece never needs the launches repo's old draft folders; Action mode,
+ * which keeps no rows, reads every text from the launches repo's main.
+ */
 async function mergedContent(launch: Launch, deps: PublishDeps): Promise<LaunchContent | Extract<PublishResult, { state: 'waiting' | 'skipped' }>> {
   const { github, registry } = deps;
   const approved = await approval(launch, deps);
   if (approved.state === 'waiting') return { state: 'waiting', launch, reason: approved.reason };
   if (approved.state === 'closed') return { state: 'skipped', launch: await registry.launches.setStatus(launch.id, 'skipped', `${launch.detail}: closed without merging`) };
-  // It reports on its own and never throws: publishing goes on whatever the shadow write found
-  await deps.launchStore?.merged(launch).catch(() => undefined);
 
+  const held = await heldContent(launch, deps);
+  if (held) return held;
   const dir = launchDir(launch);
   const packText = await github.fileAt(deps.launchesRepo, `${dir}/pack.json`, 'HEAD');
   if (!packText) return { state: 'waiting', launch, reason: `${dir}/pack.json is not on the default branch yet` };
   const pack = (deps.channels ? contentPackFor(deps.channels) : ContentPack).parse(JSON.parse(packText));
-  // An imported launch goes by its channel rows: the import turned off the channels it never published
-  // on, and launch.yml at the tag still has them on, so a round or a Try again would send them after all
-  const imported = registry.launchStore && (await registry.launchStore.importedChannels(launch.id)) ? storedChannelConfig(await registry.launchStore.channels(launch.id)) : undefined;
-  const config = imported ?? (await launchConfigOf(github, deps.launchesRepo, launch));
+  const config = await launchConfigOf(github, deps.launchesRepo, launch);
   if (!config) return { state: 'waiting', launch, reason: `${LAUNCH_CONFIG_PATH} of ${launch.repo} cannot be read` };
   return { pack, config, read: (path) => github.fileAt(deps.launchesRepo, path, 'HEAD'), waits: new Map() };
+}
+
+/** A merged launch as the launch model's rows hold it; undefined when they hold no pack of it */
+async function heldContent(launch: Launch, deps: PublishDeps): Promise<LaunchContent | Extract<PublishResult, { state: 'waiting' }> | undefined> {
+  const store = deps.registry.launchStore;
+  const stored = store && (await store.currentPack(launch.id));
+  if (!store || !stored) return undefined;
+  const parsed = (deps.channels ? contentPackFor(deps.channels) : ContentPack).safeParse(readPack(stored.pack).pack);
+  if (!parsed.success) return { state: 'waiting', launch, reason: 'the launch’s pack does not parse' };
+  const [channels, drafts] = await Promise.all([store.channels(launch.id), store.drafts(launch.id)]);
+  const config = storedChannelConfig(channels);
+  if (!config) return { state: 'waiting', launch, reason: 'the launch’s channels cannot be read' };
+  const byPath = new Map(drafts.flatMap((d) => (draftPath(d) ? [[draftPath(d)!, d.body] as const] : [])));
+  return { pack: parsed.data, config, read: async (path) => byPath.get(path), waits: new Map() };
 }
 
 export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishDeps): Promise<PublishResult> {

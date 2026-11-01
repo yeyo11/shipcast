@@ -5,9 +5,9 @@ import { collectHourly, collectMetrics, furtherRepoSource, type MetricSources, t
 import { memoryRegistry } from '../src/testing/index.ts';
 
 /*
- * A launch about several repos (launch-sources): each further repo's stars, forks and watchers are
+ * A launch about several repos (docs/sources.md): each further repo's stars, forks and watchers are
  * read and kept apart under `github:<owner/name>`, so the launch's own `github` numbers stay its
- * primary repo's. Without `furtherRepos` (the flag off) nothing changes.
+ * primary repo's. Without `furtherRepos` (Action mode) nothing changes.
  */
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
@@ -60,7 +60,7 @@ test('the hourly reads take a further repo’s counts from the split reader', as
   assert.equal((await latest(registry, launch.id))['github:yeyo11/claudio-web.stars'], 7);
 });
 
-test('without furtherRepos (the flag off) only the primary repo is read', async () => {
+test('without furtherRepos (Action mode) only the primary repo is read', async () => {
   const registry = await memoryRegistry();
   const launch = await published(registry);
   const asked: string[] = [];

@@ -32,9 +32,8 @@ async function setup() {
     armSchedule: async (posts) => {
       for (const p of posts) armed.push(`${p.channel} ${p.scheduledAt}`);
     },
-    // No launch.yml to read: scheduling leaves that check to the publish step
-    github: new FakeGitHub().failOn('fileAt', new Error('404')),
-    launchesRepo: 'yeyo11/launches',
+    // No channels to read: scheduling leaves that check to the publish step
+    launchRead: { channelConfig: async () => undefined },
   };
   return { registry, deps, sent, armed };
 }

@@ -4,7 +4,7 @@ import { checkSources, InvalidSources, primaryRepoOf, SOURCE_LIMITS, sourceRepos
 import { aLaunch, memoryRegistry } from '../src/testing/index.ts';
 
 /*
- * A launch made from sources (launch-sources): what a request may hold, which repo is the primary
+ * A launch made from sources (docs/sources.md): what a request may hold, which repo is the primary
  * one, and the rows the registry keeps for it.
  */
 

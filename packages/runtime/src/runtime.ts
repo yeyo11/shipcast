@@ -11,7 +11,6 @@ import {
   inTransaction,
   loadBrand,
   connectRepositories,
-  DraftSnapshotService,
   LaunchReadService,
   LaunchStoreService,
   PostgresLock,
@@ -25,7 +24,7 @@ import {
 import type { Brand } from '@shipcast/schema';
 import { aiRunnerFor } from './ai.ts';
 import { provisionAppKeys } from './app-keys.ts';
-import { ConfigError, loadConfig, type Config } from './config.ts';
+import { loadConfig, type Config } from './config.ts';
 import { Flags } from './flags.ts';
 import { poolOptions, roleFromEnv, split } from './roles.ts';
 import { githubCaches, type GitHubCaches } from './github-events.ts';
@@ -63,20 +62,18 @@ export interface Runtime {
   invalidateBrand(): void;
   /** The GitHub client's ETag and file caches, which webhooks and the hourly poll invalidate */
   githubCaches: GitHubCaches;
-  /** The drafts snapshots the launch page reads instead of GitHub */
-  drafts: DraftSnapshotService;
   /** With a bus: sends the registry's coalesced events still waiting, part of a stop */
   flushEvents(): Promise<void>;
-  /** With `launch-media` and its bucket in .env: where launch media are kept; otherwise it refuses every call */
+  /** Where launch media are kept (docs/media-store.md): R2 from SHIPCAST_MEDIA_* (media.ts) */
   media: MediaStore;
-  /** With `launch-store`: the launch model's shadow write beside the drafts pull request (docs/launch-store.md) */
-  launchStore: LaunchStoreService | undefined;
-  /** With `launch-store-read`: launches read from the launch model's tables instead of GitHub (docs/launch-store-read.md) */
-  launchRead: LaunchReadService | undefined;
-  /** With `app-review`: new launches reviewed, approved and published from Shipcast, with no pull request (docs/app-review.md) */
-  appReview: AppReviewService | undefined;
-  /** With `launch-triggers`: the owner's trigger rules, which every claim of a GitHub event goes by (docs/launch-triggers.md) */
-  triggers: TriggerService | undefined;
+  /** The launch model's write: every launch's pack, channels, drafts and media in Shipcast's tables (docs/launch-store.md) */
+  launchStore: LaunchStoreService;
+  /** Launches read from the launch model's tables (docs/launch-store-read.md) */
+  launchRead: LaunchReadService;
+  /** Launches reviewed, approved and published from Shipcast, with no pull request (docs/app-review.md) */
+  appReview: AppReviewService;
+  /** The owner's trigger rules, which every claim of a GitHub event goes by (docs/launch-triggers.md) */
+  triggers: TriggerService;
 }
 
 export interface RuntimeOptions {
@@ -93,7 +90,7 @@ export interface RuntimeOptions {
    * repos. Not the App's token minting or the sign-in, whose POSTs must stay real to read at all.
    */
   githubFetch?: typeof fetch;
-  /** The switches (SHIPCAST_FLAGS); read from `env` when not given */
+  /** The switches still in use (SHIPCAST_FLAGS); read from `env` when not given */
   flags?: Flags;
   /**
    * The shared Cache (Redis) the GitHub caches live in, so every replica's 304 serves the others;
@@ -105,13 +102,16 @@ export interface RuntimeOptions {
    * serves pages or works jobs, so every change a page shows reaches it
    */
   events?: EventBus;
+  /** For tests: a media store of their own instead of the one SHIPCAST_MEDIA_* builds */
+  media?: MediaStore;
 }
 
 export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const env = options.env ?? process.env;
   const log = options.log ?? (() => undefined);
   const config = loadConfig(env, options.root);
-  const flags = options.flags ?? Flags.fromEnv(env);
+  // Read so an unknown name stops the start; no switch of the runtime's is left (umami is the services')
+  void (options.flags ?? Flags.fromEnv(env));
   const opened = options.registry ?? (await connectRepositories(config.databaseUrl, poolOptions(env)));
   // Wrapped before anything is built on it, so every writer below (the pipeline, the drafts, the jobs) announces
   const announced = options.events ? withEvents(opened, options.events) : undefined;
@@ -145,55 +145,33 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   // The refresh is locked across every process on the registry: two replicas never spend one refresh token
   const userTokens = app ? new GitHubUserTokens({ secrets, lock: new PostgresLock(registry.database), client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
 
-  // Through the file cache brand.yml is read from GitHub once, then again only after a push to it
+  // With the file cache brand.yml is read from GitHub once, then again only after a push to it
   const brand = async (): Promise<Brand> => loadBrand(github, settings.launchesRepo());
 
-  const media = mediaStoreFor(flags, env, { ...(options.fetch && { fetch: options.fetch }) });
-  // Its media go to the media store, which refuses while launch-media is off: the check reports that
-  const launchStore = flags.on('launch-store')
-    ? new LaunchStoreService({
-        registry,
-        media,
-        github,
-        get launchesRepo() {
-          return settings.current().launchesRepo ?? '';
-        },
-      })
-    : undefined;
-
-  // Rows nobody keeps up to date would show a launch as it was when the flag was turned on
-  if (flags.on('launch-store-read') && !launchStore) throw new ConfigError('the launch-store-read flag needs launch-store, which keeps the launch model up to date');
-  const launchRead = flags.on('launch-store-read') ? new LaunchReadService({ registry, media, site: async () => (await brand()).site }) : undefined;
-  // A launch held by Shipcast is nowhere else: its rows must be read back (launch-store-read) and its media kept (launch-media)
-  if (flags.on('app-review') && !launchRead) throw new ConfigError('the app-review flag needs launch-store-read (and launch-store), which keep and read the launches Shipcast holds');
-  if (flags.on('app-review') && !flags.on('launch-media')) throw new ConfigError('the app-review flag needs launch-media: a launch Shipcast holds keeps its media in the media store');
-  const appReview =
-    flags.on('app-review') && launchStore
-      ? new AppReviewService({
-          registry,
-          media,
-          github,
-          store: launchStore,
-          get launchesRepo() {
-            return settings.current().launchesRepo ?? '';
-          },
-        })
-      : undefined;
-
-  const triggers = flags.on('launch-triggers') ? new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) }) : undefined;
-  // A release whose launch the owner removed is never launched again by its events (docs/launch-delete.md),
-  // whatever the flags: a process started without launch-delete (a rollback, another replica) must not
-  // relaunch what one with it removed. One indexed lookup (launch_deletions_by_key) per claim
-  const removed = (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey);
-
-  const drafts = new DraftSnapshotService({
-    github,
+  const media = options.media ?? mediaStoreFor(env, { ...(options.fetch && { fetch: options.fetch }) });
+  const launchStore = new LaunchStoreService({
     registry,
+    media,
+    github,
     get launchesRepo() {
       return settings.current().launchesRepo ?? '';
     },
-    ...(launchStore && { launchStore }),
   });
+  const launchRead = new LaunchReadService({ registry, media, site: async () => (await brand()).site });
+  // Every new launch is held by Shipcast: no drafts pull request (docs/app-review.md)
+  const appReview = new AppReviewService({
+    registry,
+    media,
+    github,
+    store: launchStore,
+    get launchesRepo() {
+      return settings.current().launchesRepo ?? '';
+    },
+  });
+  const triggers = new TriggerService({ registry, inTransaction: (work) => inTransaction(registry, work) });
+  // A release whose launch the owner removed is never launched again by its events (docs/launch-delete.md).
+  // One indexed lookup (launch_deletions_by_key) per claim
+  const removed = (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey);
 
   // What choosing a task's provider needs: read when a task runs, so a change in the app applies to the next one
   const aiDeps = {
@@ -221,22 +199,18 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
-    drafts,
-    ...(launchStore && { launchStore }),
-    ...(launchRead && { launchRead }),
-    ...(appReview && { appReview }),
-    // Phase 6 of the launch model: a launch made from sources, its bundle in a folder of the job's own
-    ...(flags.on('launch-sources') && {
-      sources: {
-        store: registry.sources,
-        launches: registry.launches,
-        folder: (name: string) => jobFolder({ ...workspace, perJob: split(roleFromEnv(env)) }, name),
-        clone: (repo: string, ref: string, hostPath: string, sha?: string) => cloneInto(workspace, repo, ref, hostPath, sha),
-        archive: archiveFolder,
-        fetchPage: pageFetcher(),
-      },
-    }),
-    ...(triggers && { triggers }),
+    launchRead,
+    appReview,
+    // A launch made from sources, its bundle in a folder of the job's own
+    sources: {
+      store: registry.sources,
+      launches: registry.launches,
+      folder: (name: string) => jobFolder({ ...workspace, perJob: split(roleFromEnv(env)) }, name),
+      clone: (repo: string, ref: string, hostPath: string, sha?: string) => cloneInto(workspace, repo, ref, hostPath, sha),
+      archive: archiveFolder,
+      fetchPage: pageFetcher(),
+    },
+    triggers,
     removed,
   };
 
@@ -258,7 +232,6 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     // brand.yml is read through the file cache, which a push to it (or the hourly poll) forgets
     invalidateBrand: () => undefined,
     githubCaches: caches,
-    drafts,
     flushEvents: async () => {
       await announced?.flush();
     },

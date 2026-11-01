@@ -1,24 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Brand, channelDefinition, CHANNELS, ContentPack, draftFile, draftOf, LaunchConfig } from '@shipcast/schema';
+import { Brand, channelDefinition, CHANNELS, ContentPack, draftBody, draftFile, draftOf, LaunchConfig, pieceLimitProblem } from '@shipcast/schema';
 import {
   ADAPT_TARGETS,
   CAPABILITIES,
   COMMENT_CHANNELS,
   DEFAULT_PROMPTS,
-  editDraft,
   IDEMPOTENT_CHANNELS,
   launchDir,
   launchReplyContext,
   METRIC_FAMILIES,
   PUBLISHED_BY_ENGINE,
-  readReview,
+  reviewFromStore,
   renderDrafts,
   REPLY_LIMITS,
-  ReviewError,
   SCHEDULABLE_CHANNELS,
   type Launch,
-  type ReviewGitHub,
 } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
@@ -78,18 +75,10 @@ test('every draft file renderDrafts writes is matched back to its channel and he
 test("the review labels every draft with its heading, GitHub Discussions' and a subreddit's included", async () => {
   const dir = launchDir(launch);
   const files = renderDrafts(pack, launch, everything, brand, new Date('2026-10-28'));
-  const github: ReviewGitHub = {
-    pullRequest: async () => ({ number: 7, url: 'u', state: 'open', branch: 'launch/x', title: 't' }),
-    pullRequestFiles: async () => files.map((f) => f.path),
-    fileAt: async (_repo, path) => {
-      const file = files.find((f) => f.path === path);
-      return file && 'content' in file ? file.content : undefined;
-    },
-    updateFile: async () => {},
-    mergePullRequest: async () => ({ sha: 'x' }),
-  };
   const withPr = { ...launch, detail: 'https://github.com/yeyo11/launches/pull/7' } as Launch;
-  const review = await readReview(withPr, { github, launchesRepo: 'yeyo11/launches' });
+  // Each text as the launch model holds it, under the path it was drafted at
+  const drafts = files.flatMap((f) => ('content' in f ? [{ channel: 'x', piece: f.path, body: f.content, fields: { path: f.path } }] : [])) as never;
+  const review = reviewFromStore(withPr, { drafts, media: [], hasPack: false, channelsSource: null, approved: false }, () => '');
   const label = (name: string) => review?.drafts.find((d) => d.path === `${dir}/${name}`)?.label;
   assert.equal(label('github-discussion.md'), 'GitHub Discussions');
   assert.equal(label('reddit-claudeai.md'), 'Reddit, r/claudeai');
@@ -99,7 +88,7 @@ test("the review labels every draft with its heading, GitHub Discussions' and a 
 
   // The cap is found through the definition's matcher: a Threads draft past 500 is refused
   const tooLong = `# Threads\n\n> **Approval:** x\n\n${'a'.repeat(501)}`;
-  await assert.rejects(editDraft(withPr, `${dir}/threads.md`, tooLong, { github, launchesRepo: 'yeyo11/launches' }), ReviewError);
+  assert.match(pieceLimitProblem(draftOf(`${dir}/threads.md`)!.channel, draftBody(tooLong)) ?? '', /500/);
 });
 
 test('the engine channels, the schedulable and the idempotent ones come from the definitions', () => {
@@ -122,8 +111,7 @@ test('Threads and GitHub Discussions are measured, adapted to and answered like 
   for (const channel of COMMENT_CHANNELS) assert.ok(REPLY_LIMITS[channel] > 0);
 
   const context = await launchReplyContext({
-    github: { fileAt: async () => JSON.stringify(pack) },
-    launchesRepo: 'yeyo11/launches',
+    stored: { pack: async () => pack },
     checkout: async () => ({ hostPath: '/w' }),
   })(launch);
   assert.deepEqual(context.postText, {

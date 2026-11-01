@@ -50,7 +50,7 @@ export async function draftClaimed(launch: Launch, d: RoundDeps, services: Servi
 export async function publishOne(launch: Launch, d: RoundDeps, services: Services): Promise<PublishResult> {
   const log = d.log ?? (() => {});
   const connectors = publishConnectors(services);
-  const result = await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }), ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
+  const result = await publishLaunch(launch, d.brand, { github: d.github, registry: d.registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
   if (result.state === 'published' || result.state === 'partial') {
     for (const p of result.posted) log(`${name(launch)} on ${p.channel}: ${p.url}`);
     for (const p of result.problems) log(`${name(launch)}: ${p}`);

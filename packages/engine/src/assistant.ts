@@ -2,8 +2,7 @@ import { ADAPT_TARGETS, AI_TASK_DEFINITIONS, channelInSentence, languageName, Sh
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiTaskRunner } from './ai/runner.ts';
-import { isArticle, packOnLaunchesRepo } from './drafts.ts';
-import type { GitHubSource } from './github.ts';
+import { isArticle } from './drafts.ts';
 import type { Launch } from './repositories/index.ts';
 import type { LaunchReadService } from './services/launch-read.ts';
 import type { Checkout } from './workspace.ts';
@@ -276,18 +275,13 @@ export async function checkAgainstCode(
 }
 
 /**
- * What a launch's text is grounded in: the analysis from the pack its drafts committed (cheap, read
- * for every request; with `launch-store-read`, the launch model's current pack), and the released
- * code, checked out only when the code itself must be read.
+ * What a launch's text is grounded in: the analysis from the launch model's current pack (cheap,
+ * read for every request), and the released code, checked out only when the code itself must be read.
  */
-export async function launchGrounding(
-  launch: Launch,
-  deps: { github: Pick<GitHubSource, 'fileAt'>; launchesRepo: string; stored?: Pick<LaunchReadService, 'pack'> | undefined },
-): Promise<{ kind: AssistantContext['kind']; launch?: AssistantContext['launch'] }> {
+export async function launchGrounding(launch: Launch, deps: { stored: Pick<LaunchReadService, 'pack'> }): Promise<{ kind: AssistantContext['kind']; launch?: AssistantContext['launch'] }> {
   if (isArticle(launch)) return { kind: 'article' };
   // A pack that cannot be read grounds nothing: the locked rules then allow no new claim at all
-  const fromRepo = () => packOnLaunchesRepo(deps.github, deps.launchesRepo, launch);
-  const analysis: Analysis | undefined = (await (deps.stored ? deps.stored.pack(launch, fromRepo) : fromRepo()).catch(() => undefined))?.analysis;
+  const analysis: Analysis | undefined = (await deps.stored.pack(launch).catch(() => undefined))?.analysis;
   return { kind: 'launch', launch: { repo: launch.repo, ref: launch.ref, ...(analysis && { analysis }) } };
 }
 

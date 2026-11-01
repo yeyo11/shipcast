@@ -61,36 +61,40 @@ async function counted(origin: string, work: () => Promise<unknown>): Promise<Ca
 
 async function seeded() {
   const registry = await memoryRegistry();
+  const media = new MemoryMediaStore();
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const drafted = await registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/7`);
-  await registry.drafts.saveSnapshot({
-    launchId: launch.id,
-    pullRequest: { number: 7, url: `https://github.com/${LAUNCHES}/pull/7`, state: 'open', branch: 'launch/claudio-v1.0.0' },
-    headSha: 'abc',
-    launchYml: 'brand: personal\npublishing:\n  bluesky: approval\n',
-    files: FILES.map((path) => ({ path, sha: `sha-${path}`, content: path.endsWith('.md') ? `# ${path}\n` : null })),
-  });
-  return { registry, launch: drafted };
+  // The launch as the launch model holds it since the import: its texts, its files and its pack
+  const store = registry.launchStore;
+  await store.addPack(launch.id, { schemaVersion: 1 });
+  for (const path of FILES.filter((f) => f.endsWith('.md'))) {
+    const article = /posts\/(en|es)\//.exec(path)?.[1];
+    await store.addVersion(launch.id, { channel: article ? 'blog' : path.split('/').at(-1)!.replace('.md', ''), piece: article ? `article:${article}` : 'post', body: `# ${path}\n`, fields: { path }, origin: 'import' });
+  }
+  for (const [i, path] of FILES.filter((f) => f.startsWith('public/')).entries()) {
+    const put = await media.put(new Uint8Array([i + 1]), path.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg');
+    await store.addMedia({ launchId: launch.id, sha256: put.sha256, kind: path.endsWith('.mp4') ? 'video' : 'image', mime: put.mime, bytes: 1, storage: media.storage, path: put.key, role: 'other', publicPath: path.slice('public'.length) });
+  }
+  return { registry, launch: drafted, read: new LaunchReadService({ registry, media }) };
 }
 
 test('getLaunch with 13 drafts reads only the registry: no outbound call, GitHub never asked', async () => {
-  const { registry, launch } = await seeded();
+  const { registry, launch, read } = await seeded();
   let page: Awaited<ReturnType<typeof launchPage>> | undefined;
   const calls = await counted('fn:getLaunch', async () => {
-    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, drafts: { get: (id) => registry.drafts.snapshot(id) } }, launch);
+    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, stored: read }, launch);
   });
   assert.deepEqual(calls, []);
   assert.ok(page);
-  assert.ok(page.review && !('error' in page.review), 'the drafts came from the snapshot, not from an error');
+  assert.ok(page.review && !('error' in page.review), 'the drafts came from the launch model, not from an error');
   assert.equal(page.review.drafts.length, 13);
   assert.equal(page.review.pullRequest?.state, 'open');
   assert.equal(page.review.drafts.find((d) => d.path === `${D}/bluesky.md`)?.content, `# ${D}/bluesky.md\n`);
-  assert.ok(page.draftsReadAt, 'the page says when the drafts were read');
 });
 
 /*
- * The launch model's fourth phase (docs/launch-store-read.md): with `launch-store-read`, a launch the
- * launch model's tables hold is read from them alone, with no snapshot at all: its drafts, its files
+ * The launch model's fourth phase (docs/launch-store-read.md): a launch the launch model's tables
+ * hold is read from them alone: its drafts, its files
  * served by the app and the channels it can still schedule, as launch.yml's rows say them.
  */
 async function stored() {
@@ -107,26 +111,25 @@ async function stored() {
   return { registry, launch: drafted, read: new LaunchReadService({ registry, media }) };
 }
 
-test('with launch-store-read, getLaunch reads the launch model alone: no outbound call, GitHub never asked', async () => {
+test('getLaunch reads the launch model alone: no outbound call, GitHub never asked', async () => {
   const { registry, launch, read } = await stored();
   let page: Awaited<ReturnType<typeof launchPage>> | undefined;
   const calls = await counted('fn:getLaunch', async () => {
-    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, drafts: { get: (id) => registry.drafts.snapshot(id) }, stored: read }, launch);
+    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, stored: read }, launch);
   });
   assert.deepEqual(calls, []);
   assert.ok(page?.review && !('error' in page.review), 'the drafts came from the tables, not from an error');
   assert.equal(page.review.pullRequest?.state, 'open');
   assert.equal(page.review.drafts.find((d) => d.path === `${D}/bluesky.md`)?.content, '# Bluesky\n\nhello\n');
   assert.match(page.review.drafts.find((d) => d.kind === 'image')?.url ?? '', /^\/media\/\d+$/, 'served by the app, not GitHub');
-  assert.equal(page.draftsReadAt, null, 'no snapshot: nothing was read from GitHub');
   const channels = page.pieces.scheduling.channels.map((c) => c.channel);
   assert.ok(channels.includes('bluesky') && channels.includes('threads'));
   assert.ok(!channels.includes('mastodon'), 'a channel its row turns off cannot be scheduled');
 });
 
-test('with launch-store-read, scheduling reads the channels from the tables', async () => {
+test('scheduling reads the channels from the tables', async () => {
   const { registry, launch, read } = await stored();
-  const schedule = scheduleService({ registry, armSchedule: async () => {}, github: unreachable, launchesRepo: LAUNCHES, launchRead: read });
+  const schedule = scheduleService({ registry, armSchedule: async () => {}, launchRead: read });
   const at = new Date(Date.now() + 86_400_000);
   await assert.rejects(schedule.schedule(launch.id, { mastodon: at }));
   const [post] = await schedule.schedule(launch.id, { bluesky: at });
@@ -137,7 +140,7 @@ test("the launches list and the stats pages' loaders make no outbound call", asy
   const { registry, launch } = await seeded();
   const calls = [
     ...(await counted('fn:listLaunches', async () => {
-      const { page } = await new LaunchService({ launches: registry.launches, claims: undefined as never, github: undefined as never }).page({ pageSize: 24 });
+      const { page } = await new LaunchService({ launches: registry.launches, claims: undefined as never, github: undefined as never, appReview: undefined as never }).page({ pageSize: 24 });
       await Promise.all([Promise.all(page.launches.map((l) => launchView(registry, l))), launchNumbers(registry, page.launches), postAccounts(registry, page.launches), readTimezone(registry)]);
       assert.equal(page.launches[0]?.id, launch.id);
     })),

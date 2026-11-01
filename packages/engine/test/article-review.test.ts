@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { approveLaunch, articleConfig, articleSlug, claimArticle, draftArticle, draftLaunch, editDraft, isArticle, launchDir, loadBrand, readReview, type Repositories } from '../src/index.ts';
+import { articleConfig, articleSlug, claimArticle, draftArticle, draftLaunch, isArticle, launchDir, loadBrand, type Repositories } from '../src/index.ts';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { FakeGitHub, memoryRegistry, mockRunner, promptOf, submitParts, textParts } from '../src/testing/index.ts';
 
@@ -113,33 +113,4 @@ test('an article keeps the owner’s words, gets its translation and pieces, and
   assert.match(config && 'content' in config ? config.content : '', /bluesky: approval/);
   assert.ok(pr.files.some((f) => f.path === 'articles/my-own-title/bluesky.md'));
   assert.ok(!pr.files.some((f) => f.path.startsWith('public/covers/')), 'an article draws no project cover');
-});
-
-test('reviewing reads the drafts from the pull request; edits land on its branch; approving merges it', async () => {
-  const github = fakeGitHub({
-    'yeyo11/launches/launches/claudio/v0.9.0/bluesky.md@launch/claudio-v0.9.0': '# Bluesky\n\nhello',
-    'yeyo11/launches/src/content/posts/en/claudio.md@launch/claudio-v0.9.0': '---\ntitle: x\n---\nbody',
-  });
-  const registry = await memoryRegistry();
-  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
-  const drafted = await registry.launches.setStatus(launch.id, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
-  const d = { github, launchesRepo: 'yeyo11/launches' };
-
-  const review = await readReview(drafted, d);
-  assert.deepEqual(review?.drafts.map((x) => [x.label, x.kind]), [['Article (en)', 'article'], ['Bluesky', 'channel'], ['og', 'image'], ['pack.json', 'data']]);
-  assert.equal(review?.drafts[1]?.content, '# Bluesky\n\nhello');
-  assert.match(review?.drafts[2]?.url ?? '', /raw\.githubusercontent\.com\/yeyo11\/launches\/launch\/claudio-v0\.9\.0\/public\//);
-
-  await editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', '# Bluesky\n\nedited', d);
-  assert.deepEqual(github.updates.map(({ branch, path, content }) => ({ branch, path, content }))[0], { branch: 'launch/claudio-v0.9.0', path: 'launches/claudio/v0.9.0/bluesky.md', content: '# Bluesky\n\nedited\n' });
-  await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/pack.json', '{}', d), /not a draft/);
-  // A post the network would refuse is refused here, before the merge, not when it fails to publish
-  const long = `# Bluesky\n\n> **Approval:** x\n\n${'a'.repeat(280)} https://josegarrido.dev/en/claudio/?ref=bluesky`;
-  await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', long, d), /Bluesky takes at most 300 characters \(the link included\); this is 328/);
-  assert.equal(github.updates.length, 1, 'nothing is committed');
-
-  await approveLaunch(drafted, d);
-  assert.deepEqual(github.merged, [7]);
-  await assert.rejects(approveLaunch(drafted, d), /is merged/);
-  await assert.rejects(editDraft(drafted, 'launches/claudio/v0.9.0/bluesky.md', 'x', d), /no longer open/);
 });

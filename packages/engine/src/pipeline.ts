@@ -11,7 +11,6 @@ import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
 import type { LaunchReadService } from './services/launch-read.ts';
 import type { AppReviewService } from './services/app-review.ts';
-import type { LaunchStoreService } from './services/launch-store.ts';
 import type { TriggerService } from './services/triggers.ts';
 import type { Checkout } from './workspace.ts';
 
@@ -35,32 +34,30 @@ export interface PipelineDeps {
   fetch?: typeof fetch;
   /** Screenshots and the tour of a project's site; headless Chromium by default */
   capture?: SiteCapture;
+  /*
+   * The launch model (docs/decisions/launch-model.md). The app's runtime builds every one of these;
+   * Action mode (`shipcast ci`, frozen on the pull-request flow by that decision) builds none, and
+   * its launches go to a drafts pull request as before.
+   */
   /**
-   * With `launch-sources`: what a launch made from sources is drafted with (its rows, the bundle's
-   * folder and clones, the guarded page fetcher). Absent, every launch is its one repo, as before
+   * What a launch made from sources is drafted with (its rows, the bundle's folder and clones, the
+   * guarded page fetcher). Absent, every launch is its one repo
    */
   sources?: SourcesDeps;
-  /** The drafts snapshot written as the pull request is opened, so the page never reads GitHub */
-  drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
-  /**
-   * With `launch-store`: the launch model's shadow write, which also keeps each delivery's pack,
-   * channels, drafts and media in Shipcast's own tables, and records the approval publishing finds
-   */
-  launchStore?: Pick<LaunchStoreService, 'drafted' | 'merged'>;
-  /** With `launch-store-read`: the pack replies and the writing assistant are grounded in, from the launch model's tables */
+  /** The launch model's current pack, which replies and the writing assistant are grounded in */
   launchRead?: Pick<LaunchReadService, 'pack'>;
   /**
-   * With `app-review`: a new launch's drafts are held by Shipcast, reviewed and approved in the app
-   * (docs/app-review.md), with no pull request and no commit until it is published
+   * A new launch's drafts are held by Shipcast, reviewed and approved in the app (docs/app-review.md),
+   * with no pull request and no commit until it is published. Absent, they go to a pull request
    */
   appReview?: AppReviewService;
   /**
-   * With `launch-triggers` (docs/launch-triggers.md): the owner's trigger rules, which every claim of
-   * a GitHub event goes by, and the channels kept for a launch a rule created for a repo without a
-   * launch.yml, which its draft reads instead
+   * The owner's trigger rules (docs/launch-triggers.md), which every claim of a GitHub event goes by,
+   * and the channels kept for a launch a rule created for a repo without a launch.yml, which its
+   * draft reads instead
    */
   triggers?: Pick<TriggerService, 'rules' | 'claimKeeping' | 'channelsText'>;
-  /** With `launch-delete` (docs/launch-delete.md): whether the owner removed the launch a dedupe key names, so no event launches it again */
+  /** Whether the owner removed the launch a dedupe key names, so no event launches it again (docs/launch-delete.md) */
   removed?: (dedupeKey: string) => Promise<boolean>;
 }
 
@@ -79,10 +76,10 @@ export interface DraftOptions {
 }
 
 /**
- * Hands the drafts over: a pull request to review, or, when publishing directly, one commit on main.
- * The launch records where they went (`direct:<sha>` or the pull request's URL). With `app-review`
- * Shipcast keeps them instead, and publishing directly approves them at once (docs/app-review.md). `source` is what the
- * drafts were made from, for the launch model's shadow write when it is on.
+ * Hands the drafts over. In the app Shipcast keeps them (docs/app-review.md), and publishing directly
+ * approves them at once; `source` is what they were made from. In Action mode they go to a pull
+ * request to review, or, when publishing directly, one commit on main, and the launch records where
+ * (`direct:<sha>` or the pull request's URL).
  */
 export async function deliverDrafts(
   launch: Launch,
@@ -91,10 +88,6 @@ export async function deliverDrafts(
   options: DraftOptions,
 ): Promise<{ ok: true; launch: Launch; where: string } | { ok: false; problem: string }> {
   const { source, ...pull } = drafts;
-  // The shadow write never fails a draft: it reports what it could not store on its own (services/launch-store.ts)
-  const shadow = async (delivered: Launch, files: readonly DraftFile[], direct?: { sha: string }) => {
-    if (source) await deps.launchStore?.drafted(delivered, { ...source, files, ...(direct && { direct }) }).catch(() => undefined);
-  };
   if (deps.appReview && source) {
     try {
       const held = await deps.appReview.hold(launch, { ...source, files: pull.files }, { direct: options.direct ?? false });
@@ -110,14 +103,10 @@ export async function deliverDrafts(
       const commit = await deps.github.commitToBranch(deps.launchesRepo, 'main', pull.message, files);
       const where = `https://github.com/${deps.launchesRepo}/commit/${commit.sha}`;
       const drafted = await deps.registry.launches.setStatus(launch.id, 'drafted', `direct:${commit.sha} ${where}`);
-      await shadow(drafted, files, { sha: commit.sha });
       return { ok: true, launch: drafted, where };
     }
     const pr = await deps.github.openPullRequest({ repo: deps.launchesRepo, base: 'main', ...pull });
     const drafted = await deps.registry.launches.setStatus(launch.id, 'drafted', pr.url);
-    // A snapshot that fails to write is not a failed draft: the next delivery or poll writes it
-    await deps.drafts?.opened(drafted, pr, pull.branch, pull.files).catch(() => undefined);
-    await shadow(drafted, pull.files);
     return { ok: true, launch: drafted, where: pr.url };
   } catch (error) {
     const what = options.direct ? 'commit the drafts to main' : 'open the drafts pull request';
@@ -157,8 +146,7 @@ export type DraftResult =
 /**
  * Takes a claimed launch to its drafts pull request: reads launch.yml at the ref, clones the release,
  * generates and checks the content pack, and opens the pull request in the launches repo. The
- * registry records each step, so a failure says where it stopped and why. With launch-sources
- * (`deps.sources`), a launch made from sources, or whose launch.yml names further sources, is
+ * registry records each step, so a failure says where it stopped and why. With `deps.sources`, a launch made from sources, or whose launch.yml names further sources, is
  * drafted from all of them instead (sources/draft.ts).
  */
 export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDeps, options: DraftOptions = {}): Promise<DraftResult> {

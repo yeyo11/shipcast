@@ -1,59 +1,9 @@
 /**
- * The switches of a phase that changes behaviour (the launch model's in docs/decisions/launch-model.md,
- * Umami's): off until it is turned on, so a phase ships dark, is turned on where it is verified and is
- * turned off again by an environment change and a restart, with no deploy. Set as a list:
- * `SHIPCAST_FLAGS=launch-media,launch-store`. The performance refactor's switches are retired (RETIRED).
+ * The switches still in use: a feature that ships off is turned on or off again by an environment
+ * change and a restart, with no deploy. Set as a list: `SHIPCAST_FLAGS=umami`. Every switch of the
+ * performance refactor and of the launch model was retired once its path was the only one (RETIRED).
  */
 export const FLAGS = {
-  /**
-   * Launch model (docs/decisions/launch-model.md), phase 1: the media store on Cloudflare R2, built
-   * from SHIPCAST_MEDIA_* in .env. Off, the store refuses every call; nothing calls it yet
-   */
-  'launch-media': 'Launch media in the R2 media store',
-  /**
-   * Launch model, phase 2: the drafts pull request's pack, channels, drafts (as versions), media and
-   * merge are also written to the launch model's tables and checked against it (docs/launch-store.md).
-   * Read only with `launch-store-read`; its media need `launch-media` too
-   */
-  'launch-store': 'Launch model shadow write beside the drafts pull request',
-  /**
-   * Launch model, phase 3: scripts/import-launches.ts may write (docs/launch-import.md): import the
-   * launches drafted before the shadow write, delete the ones decided, roll a batch back. Off, it only
-   * plans and verifies; the app never reads it
-   */
-  'launch-import': 'Import of the existing launches into the launch model (scripts/import-launches.ts)',
-  /**
-   * Launch model, phase 4: the launch page, the REST API (and MCP), scheduling's channels and the
-   * reply and writing assistants' grounding read the launch model's tables instead of GitHub
-   * (docs/launch-store-read.md); a launch they do not hold is read as before. Needs `launch-store`,
-   * which keeps them up to date, and `launch-media` for its files
-   */
-  'launch-store-read': 'Launches read from the launch model instead of GitHub',
-  /**
-   * Launch model, phase 5: a new launch has no pull request. Its drafts are reviewed, edited (as
-   * versions), previewed and approved in the app, `auto` channels go out without approval, and the
-   * article and its media reach the launches repo as one commit when it is published
-   * (docs/app-review.md). Needs `launch-store-read` (with `launch-store`) and `launch-media`
-   */
-  'app-review': 'Launches reviewed and approved in the app, with no pull request',
-  /**
-   * Launch model, phase 6: a launch made from sources (text, URLs, several repos, uploaded media),
-   * a launch.yml's `sources` read when its release triggers it, and stars read per repo. Off, a
-   * launch is its one repo as before and `sources` in a launch.yml is parsed and ignored
-   */
-  'launch-sources': 'Launches made from sources: text, URLs, several repos and uploaded media',
-  /**
-   * Launch model, phase 7: the owner's trigger rules (a setting) decide which GitHub events create a
-   * launch, a repo with no launch.yml can be launched on a rule's channels, and each claim carries its
-   * dedupe key (docs/launch-triggers.md). Off, each repo's launch.yml decides alone, as before
-   */
-  'launch-triggers': 'Launches created by the trigger rules in Settings, launch.yml optional',
-  /**
-   * Launch model, phase 7: a launch can be deleted (docs/launch-delete.md): one never published is
-   * removed, a published one hidden, its posts kept on the networks unless the owner picks channels
-   * to delete them on; an event never launches a removed launch's release again
-   */
-  'launch-delete': 'Launches deleted from the app and the API',
   /** SHP-4: the blog's visits per launch and channel from Umami, until the Umami instance exists */
   umami: 'Blog visits by UTM source and campaign from Umami',
 } as const;
@@ -66,9 +16,9 @@ export const FLAGS = {
 const RETIRED: ReadonlySet<string> = new Set([
   // The AI task runner is the only AI layer (docs/decisions/ai-layer.md)
   'ai-runner',
-  // The performance refactor (docs/plans/performance-refactor.md), on in production since 2026-10-29:
-  // every publish through PublishingService, the secrets table selectable, Redis and BullMQ whenever
-  // SHIPCAST_REDIS_QUEUE_URL is set, GitHub by events, the hourly metrics, the pages over server-sent events
+  // The performance refactor (docs/plans/performance-refactor.md): every publish through PublishingService,
+  // the secrets table selectable, Redis and BullMQ whenever SHIPCAST_REDIS_QUEUE_URL is set, GitHub by
+  // events, the hourly metrics and the pages over server-sent events
   'publishing-service',
   'secrets-table',
   'redis-state',
@@ -76,6 +26,17 @@ const RETIRED: ReadonlySet<string> = new Set([
   'github-events',
   'batched-metrics',
   'realtime-ui',
+  // The launch model (docs/decisions/launch-model.md): every launch held by Shipcast, its media in the
+  // media store, made from sources, by the trigger rules, deletable
+  'launch-media',
+  'launch-store',
+  'launch-store-read',
+  'app-review',
+  'launch-sources',
+  'launch-triggers',
+  'launch-delete',
+  // The import's write is `--apply` alone (scripts/import-launches.ts)
+  'launch-import',
 ]);
 
 export type Flag = keyof typeof FLAGS;

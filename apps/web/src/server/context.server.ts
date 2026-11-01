@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
-import { PostgresFakeNetworkLedger, TelemetryStore, type AppReviewService, type DraftSnapshotService, type GitHubApp, type LaunchReadService, type LaunchStoreService, type MediaStore, type TriggerService, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
+import { PostgresFakeNetworkLedger, TelemetryStore, type AppReviewService, type GitHubApp, type LaunchReadService, type LaunchStoreService, type MediaStore, type TriggerService, type GitHubRest, type OpenRepositories, type PipelineDeps, type Repositories } from '@shipcast/engine';
 import {
   assertPreviewSafe,
   attachTelemetryStore,
@@ -69,7 +69,7 @@ export interface AppContext {
   userTokens: GitHubUserTokens | undefined;
   secrets: SecretStore;
   deps: PipelineDeps;
-  /** With `launch-media` and its bucket in .env: where uploads are kept; otherwise it refuses every call, saying why */
+  /** Where launch media and uploads are kept (SHIPCAST_MEDIA_*); without them, off a server, it refuses every call saying why */
   media: MediaStore;
   /** Reads the settings again, after the Settings page saved them */
   refresh(): Promise<void>;
@@ -94,16 +94,15 @@ export interface AppContext {
   brand(): Promise<Brand>;
   /** Every brand, by id; one per launches repo, so one today */
   brands(): Promise<Map<string, Brand>>;
-  /** The drafts snapshots the launch page reads, and the caches deliveries invalidate */
-  drafts: DraftSnapshotService;
-  /** With `launch-store`: the launch model's shadow write beside the drafts pull request */
-  launchStore: LaunchStoreService | undefined;
-  /** With `launch-store-read`: the launch page, the REST API and scheduling read the launch model's tables, not GitHub */
-  launchRead: LaunchReadService | undefined;
-  /** With `app-review`: new launches reviewed, previewed and approved in the app (docs/app-review.md) */
-  appReview: AppReviewService | undefined;
-  /** With `launch-triggers`: the owner's trigger rules, edited in Settings (docs/launch-triggers.md) */
-  triggers: TriggerService | undefined;
+  /** The launch model's write: the rows of the launches Shipcast holds (docs/launch-store.md) */
+  launchStore: LaunchStoreService;
+  /** The launch page, the REST API and scheduling read the launch model's tables, not GitHub */
+  launchRead: LaunchReadService;
+  /** Launches reviewed, previewed and approved in the app (docs/app-review.md) */
+  appReview: AppReviewService;
+  /** The owner's trigger rules, edited in Settings (docs/launch-triggers.md) */
+  triggers: TriggerService;
+  /** The GitHub client's caches, which deliveries invalidate */
   githubCaches: GitHubCaches;
   /** In a process that serves pages: the tabs' event streams (GET /api/events) */
   live: LiveHub | undefined;
@@ -163,8 +162,6 @@ async function createContext(): Promise<AppContext> {
     pipeline: deps,
     brand,
     refresh: runtime.refresh,
-    flags,
-    drafts: runtime.drafts,
     // The hourly reads' identities and sessions, every replica's with Redis
     ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }),
     // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
@@ -200,7 +197,6 @@ async function createContext(): Promise<AppContext> {
       const b = await brand();
       return new Map([[b.id, b]]);
     },
-    drafts: runtime.drafts,
     launchStore: runtime.launchStore,
     launchRead: runtime.launchRead,
     appReview: runtime.appReview,

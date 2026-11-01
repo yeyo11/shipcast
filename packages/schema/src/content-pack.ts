@@ -113,7 +113,7 @@ export type ContentPack = z.infer<typeof ContentPack>;
 export const AiContentPack = packOf(z.strictObject({ name: projectName, repo: z.url(), version: projectVersion }));
 
 /**
- * The pack a launch made from sources is asked for (launch-sources): its project may have no repo or
+ * The pack a launch made from sources is asked for (docs/sources.md): its project may have no repo or
  * several, and its analysis ties every statement to the sources that show it. Every pack it accepts
  * is a ContentPack.
  */

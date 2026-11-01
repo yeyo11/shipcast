@@ -67,7 +67,7 @@ export interface LaunchActionsProps {
   /** A launch Shipcast holds: a time left unset publishes on its approval, not on a merge */
   held: boolean;
   articleUrl: string | null;
-  /** With launch-delete, and not deleted already */
+  /** Not deleted already */
   deletable: boolean;
   /** A drafted launch whose approved pieces did not all go out: Publish what is pending */
   pending: boolean;

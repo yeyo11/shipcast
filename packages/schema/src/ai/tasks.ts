@@ -173,7 +173,7 @@ export const AI_TASK_DEFINITIONS = {
 } as const;
 
 /**
- * A launch made from sources (packages/engine/src/sources/draft.ts, launch-sources): the pack read
+ * A launch made from sources (packages/engine/src/sources/draft.ts, docs/sources.md): the pack read
  * from a bundle of the sources (each repo, the fetched pages, the owner's text) with every statement
  * tied to its sources. It is the pack task, from more than one repo's code, so it runs with the
  * pack's settings, ceilings and budget, and is kept out of AI_TASK_DEFINITIONS, whose ids are one per task.

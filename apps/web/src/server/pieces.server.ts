@@ -1,17 +1,12 @@
-import { CAPABILITIES, launchConfigOf, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
+import { CAPABILITIES, readTimezone, SCHEDULABLE_CHANNELS, type Launch, type Repositories } from '@shipcast/engine';
 import { draftOf, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { accountRows, pieceRows, type PieceState, type SnapshotInput } from './pieces.ts';
 import { accountAvatar } from './pieces.ts';
 
 interface PiecesDeps {
-  github: Pick<ReviewGitHub, 'fileAt'>;
-  launchesRepo: string;
   draftPaths: readonly string[] | Promise<readonly string[]>;
-  /**
-   * launch.yml as the drafts snapshot kept it, instead of a read from GitHub;
-   * with `launch-store-read`, the launch model's channel rows. Asked only for a launch that can still schedule
-   */
-  launchConfig?: () => Promise<LaunchConfig | undefined>;
+  /** The launch model's channel rows, as launch.yml. Asked only for a launch that can still schedule */
+  launchConfig: () => Promise<LaunchConfig | undefined>;
 }
 
 /** A channel a drafted launch can still put on a time, and its scheduled piece when it has one */
@@ -63,8 +58,8 @@ async function schedulingChannels(
 ): Promise<{ timezone: string; channels: SchedulingChannel[] }> {
   const timezone = await readTimezone(registry);
   if (launch.status !== 'drafted' && launch.status !== 'detected' && launch.status !== 'generating') return { timezone, channels: [] };
-  const config = await (deps.launchConfig ? deps.launchConfig() : launchConfigOf(deps.github, deps.launchesRepo, launch)).catch(() => undefined);
-  // Only needed when launch.yml cannot be read; the caller may still be reading them from GitHub
+  const config = await deps.launchConfig().catch(() => undefined);
+  // Only needed when the channels cannot be read
   const draftPaths = config ? [] : await deps.draftPaths;
   // Each channel's drafts found by its own matcher: `github-discussion.md`, `newsletter-<lang>.md`
   const drafted = (channel: Channel) => draftPaths.some((path) => draftOf(path)?.channel === channel);

@@ -1,4 +1,4 @@
-import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, readReview, reviewFromSnapshot, type DraftSnapshot, type Launch, type LaunchReadService, type Repositories, type Review, type ReviewGitHub } from '@shipcast/engine';
+import { articleUrls, failurePrefix, indexStatus, publishAgain as publishAgainIn, PublishRefused, type Launch, type LaunchReadService, type Repositories } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import type { LaunchView, Tone } from './view';
 
@@ -72,18 +72,12 @@ export async function launchDetail(
   registry: Pick<Repositories, 'posts' | 'metrics' | 'comments' | 'cursors'>,
   launch: Launch,
   deps: {
-    github: ReviewGitHub;
-    launchesRepo: string;
-    /** The page's drafts snapshot, read from the registry, instead of the pull request from GitHub; the REST API reads GitHub */
-    snapshot?: Promise<DraftSnapshot | undefined>;
-    /** With `launch-store-read`: the drafts from the launch model's tables, for a launch they hold */
-    stored?: Pick<LaunchReadService, 'review'> | undefined;
+    /** The drafts from the launch model's tables; a launch drafted to a pull request and not imported is an error to show (LaunchNotHeld) */
+    stored: Pick<LaunchReadService, 'review'>;
   },
 ) {
-  const fromSnapshot = deps.snapshot?.then((s) => ({ review: s && reviewFromSnapshot(launch, s, deps.launchesRepo), readAt: s?.readAt ?? null }));
-  const fromPullRequest = (): Promise<Review | undefined> => (fromSnapshot ? fromSnapshot.then((s) => s.review) : readReview(launch, deps));
-  // The pull request is read from GitHub (or the snapshot, or the launch model), the rest from the registry: all at once
-  const reviewing = (deps.stored ? deps.stored.review(launch, fromPullRequest) : fromPullRequest()).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+  // The drafts from the launch model, the rest from the registry: all at once
+  const reviewing = deps.stored.review(launch).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
   const urls = articleUrls(await registry.posts.posts(launch.id, { channel: 'blog' }));
   const views = await Promise.all(
     urls.flatMap(({ lang, url }) =>
@@ -96,9 +90,7 @@ export async function launchDetail(
   const index = views.filter((v) => v.engine === 'google' || v.checkedAt !== null);
   const [review, latest, view] = await Promise.all([reviewing, registry.metrics.latestMetrics(launch.id), launchView(registry, launch)]);
   const metrics = latest.map((m) => ({ source: m.source, name: m.name, value: m.value, takenAt: m.takenAt, checkedAt: m.checkedAt }));
-  // When the drafts were read from GitHub, for the page to say so; only with the snapshot
-  const drafts = fromSnapshot && { draftsReadAt: (await fromSnapshot.catch(() => ({ readAt: null }))).readAt };
-  return { launch: view, detail: launch.detail, review: review ?? null, metrics, index, ...drafts };
+  return { launch: view, detail: launch.detail, review: review ?? null, metrics, index };
 }
 
 /**

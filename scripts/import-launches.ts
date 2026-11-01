@@ -4,14 +4,15 @@
  *
  *   node scripts/import-launches.ts [--delete 2,4,7] [--at <sha>] [--inputs <file.jsonl>]...   the plan, written nowhere
  *   node scripts/import-launches.ts --apply [same options]                                    writes it, then verifies
- *   node scripts/import-launches.ts --verify <batch> [--database-is-copy]
+ *   node scripts/import-launches.ts --verify <batch> --production | --database-is-copy
  *   node scripts/import-launches.ts --rollback <batch>
  *
  * Reads Postgres at SHIPCAST_DATABASE_URL and the launches repo through GitHub's API with
- * GITHUB_TOKEN (GETs only; any token that may read the repos). Writing needs `launch-import` in
- * SHIPCAST_FLAGS, and the media store (`launch-media` with SHIPCAST_MEDIA_*) for the files. Take a
- * pg_dump first. `--verify` runs with `launch-import` on, or with `--database-is-copy` on a restored
- * copy: connecting migrates the database, so it never runs on production by accident. The target
+ * GITHUB_TOKEN (GETs only; any token that may read the repos). It writes only when asked: `--apply`,
+ * or `--rollback`; no flag is involved (`launch-import` was retired: the guard is the command line).
+ * Files need the media store (SHIPCAST_MEDIA_*). Take a pg_dump first. `--verify` alone names the
+ * database it runs on, `--production` or `--database-is-copy`: connecting migrates the database, so it
+ * never runs anywhere by accident. The target
  * (host and database, never the password) is printed before anything connects. `--inputs` adds the
  * owner's article inputs captured outside the database (BullMQ's jobs, one per line); pg-boss's are
  * read from the database itself.
@@ -19,7 +20,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { connectRepositories, databaseTarget, describePlan, GitHubRest, inTransaction, LaunchImportService, parseArticleInputs, type CapturedArticleInput, type Verification, verifyRefusal } from '../packages/engine/src/index.ts';
-import { dryPublishing, Flags, mediaStoreFor } from '../packages/runtime/src/index.ts';
+import { dryPublishing, mediaStoreFor } from '../packages/runtime/src/index.ts';
 
 const root = resolve(import.meta.dirname, '..');
 if (existsSync(resolve(root, '.env'))) process.loadEnvFile(resolve(root, '.env'));
@@ -41,11 +42,13 @@ if (!url || !token) {
   process.exit(2);
 }
 
-const flags = Flags.fromEnv(process.env);
 // Named before connecting, since connecting already migrates it: the owner sees which database this is first
 console.log(`Database ${databaseTarget(url)}`);
 const verifyBatch = option('--verify');
-const refused = verifyBatch ? verifyRefusal({ writable: flags.on('launch-import'), databaseIsCopy: args.includes('--database-is-copy') }) : undefined;
+const rollbackBatch = option('--rollback');
+// The consent to write is the command itself: --apply for the plan, --rollback for a batch
+const writable = args.includes('--apply') || rollbackBatch !== undefined;
+const refused = verifyBatch ? verifyRefusal({ production: args.includes('--production'), databaseIsCopy: args.includes('--database-is-copy') }) : undefined;
 if (refused) {
   console.error(refused);
   process.exit(2);
@@ -59,15 +62,14 @@ try {
     registry,
     inTransaction: (work) => inTransaction(registry, work),
     github: new GitHubRest({ token }),
-    media: mediaStoreFor(flags, process.env),
+    media: mediaStoreFor(process.env),
     launchesRepo,
     inputs,
     dryPublishing: () => dryPublishing(),
-    writable: flags.on('launch-import'),
+    writable,
   });
   console.log(`Launches repo ${launchesRepo}`);
 
-  const rollbackBatch = option('--rollback');
   if (rollbackBatch) {
     const removed = await service.rollback(rollbackBatch);
     console.log(`Rolled back ${rollbackBatch}: ${Object.entries(removed).map(([table, n]) => `${table} ${n}`).join(', ')}`);
@@ -80,7 +82,7 @@ try {
     const plan = await service.plan({ deletions, ...(at && { at }) });
     for (const line of describePlan(plan)) console.log(line);
     if (!args.includes('--apply')) {
-      console.log('\nDry run: nothing was written. Run again with --apply (and launch-import in SHIPCAST_FLAGS) to write it.');
+      console.log('\nDry run: nothing was written. Run again with --apply to write it.');
     } else {
       const batch = await service.apply(plan);
       if (!batch) {

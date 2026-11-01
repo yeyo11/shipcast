@@ -9,13 +9,13 @@ import { getChannels } from '../../server/channels.functions';
 import { launchFromSources, listRepos } from '../../server/launches.functions';
 
 /*
- * A launch made from sources (launch-sources, docs/sources.md): the owner's text, pages, repos and
+ * A launch made from sources (docs/sources.md): the owner's text, pages, repos and
  * images, gathered into one launch (board LaunchSources).
  */
 
 type Uploaded = { ok: true; file: { sha256: string; mime: string; width: number | null; height: number | null } } | { ok: false; problem: string };
 
-/** The file's bytes as the body (routes/api/sources/media.ts): the server checks the flag and the size before reading it */
+/** The file's bytes as the body (routes/api/sources/media.ts): the server checks the size before reading it */
 async function uploadFile(file: File): Promise<Uploaded> {
   try {
     const response = await fetch('/api/sources/media', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file });
@@ -63,7 +63,7 @@ function describe(source: Source): string {
 const EMPTY = { text: '', title: '', url: '', repo: '', ref: '', alt: '' };
 
 function LaunchFromSources() {
-  const { repos, ready, sources: enabled, appReview } = Route.useLoaderData();
+  const { repos, ready } = Route.useLoaderData();
   const navigate = useNavigate();
   const toast = useToast();
   const [title, setTitle] = useState('');
@@ -76,20 +76,6 @@ function LaunchFromSources() {
   const [busy, setBusy] = useState<string | null>(null);
   const repoOptions = useMemo<PickerOption[]>(() => repos.map((r) => ({ value: r.repo, label: r.repo })), [repos]);
   const primary = sources.find((s): s is Extract<Source, { kind: 'repo' }> => s.kind === 'repo' && Boolean(s.primary)) ?? sources.find((s) => s.kind === 'repo');
-
-  if (!enabled) {
-    return (
-      <>
-        <TopBar back={{ label: 'Launch a repo', to: '/launch' }} />
-        <div className="wr-page">
-          <div className="k-stack wr-form">
-            <h1 className="k-d k-d48">From sources</h1>
-            <p className="k-muted wr-flush">Launches made from your text, pages, repos and images are not turned on here: they are behind the launch-sources flag (SHIPCAST_FLAGS).</p>
-          </div>
-        </div>
-      </>
-    );
-  }
 
   const add = async () => {
     if (kind === 'text' && draft.text.trim()) setSources([...sources, { kind, text: draft.text, ...(draft.title.trim() && { title: draft.title.trim() }) }]);
@@ -236,7 +222,7 @@ function LaunchFromSources() {
           )}
         </form>
         <ActionBar>
-          <button className="k-btn k-pri k-full" type="submit" form="sources-form" disabled={sources.length === 0 || !title.trim() || busy !== null} title={appReview ? 'The drafts wait in Shipcast until you approve them.' : 'The drafts wait in a pull request until you approve them.'}>
+          <button className="k-btn k-pri k-full" type="submit" form="sources-form" disabled={sources.length === 0 || !title.trim() || busy !== null} title="The drafts wait in Shipcast until you approve them.">
             Draft the launch
           </button>
         </ActionBar>

@@ -23,6 +23,7 @@ async function setup(options: { networkFails?: boolean } = {}) {
     secrets,
     github: {} as ReviewGitHub,
     launchesRepo: 'yeyo11/launches',
+    launchRead: { review: async () => undefined, channelConfig: async () => undefined },
     publicUrl: 'https://shipcast.example',
     limiter: new FailureLimiter(),
     jobs: async () => ({ jobs: [], next: null }),

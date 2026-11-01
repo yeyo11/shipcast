@@ -1,4 +1,4 @@
-import { isAppLaunch, LaunchRefused, type ArticleInput, type Launch, type Post, type SourceMedia, type SourcesLaunchInput } from '@shipcast/engine';
+import { LaunchRefused, type ArticleInput, type Launch, type Post, type SourceMedia, type SourcesLaunchInput } from '@shipcast/engine';
 import type { Channel } from '@shipcast/schema';
 import { armScheduled, startDrafting, startPublishing as queuePublishing } from '@shipcast/runtime';
 import { launchService, sourcesService } from './app-services';
@@ -57,20 +57,12 @@ export async function startArticle(input: ArticleInput, direct: boolean): Promis
   });
 }
 
-/** Why a launch made from sources cannot be started in this process, or undefined when it can */
-async function sourcesUnavailable(): Promise<string | undefined> {
-  const ctx = await appContext();
-  return ctx.flags.on('launch-sources') ? undefined : 'launches made from sources are off (the launch-sources flag, SHIPCAST_FLAGS)';
-}
-
 /**
- * A launch made from sources (launch-sources): claimed with its sources recorded, then drafted by
+ * A launch made from sources: claimed with its sources recorded, then drafted by
  * the `draft` job like any launch, which reads them
  */
 export async function startSources(input: SourcesLaunchInput): Promise<Started> {
   if (fakeNetworks()) return { ok: false, problem: PREVIEW_REFUSAL };
-  const off = await sourcesUnavailable();
-  if (off) return { ok: false, problem: off };
   const ctx = await appContext();
   return started(async () => {
     const launch = await sourcesService(ctx).create(input, await ctx.brand());
@@ -79,27 +71,21 @@ export async function startSources(input: SourcesLaunchInput): Promise<Started> 
   });
 }
 
-/** An uploaded file taken into the media store, for a launch's `media` source (launch-sources) */
+/** An uploaded file taken into the media store, for a launch's `media` source */
 export async function uploadSource(bytes: Uint8Array): Promise<{ ok: true; file: SourceMedia } | { ok: false; problem: string }> {
-  const off = await sourcesUnavailable();
-  if (off) return { ok: false, problem: off };
   return { ok: true, file: await sourcesService(await appContext()).upload(bytes) };
 }
 
-/** Approving merges the pull request, or for a launch Shipcast holds records the approval; publishing follows as a job */
+/** Approving records the approval of the drafts Shipcast holds; publishing follows as a job */
 export async function approve(launchId: number, by?: string, versions?: Readonly<Record<string, number>>): Promise<Started> {
   const service = await launches();
-  // Approving merges a real pull request on the launches repo; a launch Shipcast holds is approved in its own rows
-  if (fakeNetworks() && !isAppLaunch((await service.get(launchId)) ?? {})) return { ok: false, problem: PREVIEW_REFUSAL };
   let launch: Launch;
   try {
     launch = await service.approve(launchId, by, versions);
   } catch (error) {
-    // GitHub refusing the merge is the owner's to read, as a refusal is
+    // A refusal (a launch decided in its pull request, a draft changed meanwhile) is the owner's to read
     return { ok: false, problem: error instanceof Error ? error.message : String(error) };
   }
-  // The page shows the drafts as merged at once; a failed read is left to the delivery and the poll
-  if (!isAppLaunch(launch)) await (await appContext()).drafts.refresh(launch).catch(() => undefined);
   return { ok: true, job: await startPublishing(launch) };
 }
 

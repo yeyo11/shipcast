@@ -81,7 +81,7 @@ export const LaunchConfig = z.strictObject({
   /**
    * What else the launch is about besides this repo (launch-sources, docs/sources.md): further repos,
    * read at their default branch, and pages Shipcast fetches. This repo stays the primary one: its
-   * release is what triggers the launch. Ignored while the launch-sources flag is off
+   * release is what triggers the launch. Ignored by Action mode, which reads no sources
    */
   sources: z
     .strictObject({

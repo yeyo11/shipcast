@@ -734,13 +734,22 @@ test('an article body sent to dev.to and Hashnode has its root-relative links on
   );
 });
 
-test('an imported launch publishes by its channel rows: a channel the import turned off never goes out, on a round or a retry', async () => {
+test('an imported launch publishes from its rows: by its channel rows, with no draft folder left on the launches repo', async () => {
   // The import turns off every channel the launch never published on (docs/launch-import.md). Until the
-  // fix publishing still read launch.yml at the tag, so a round or a Try again sent that channel after all
+  // fix publishing still read launch.yml at the tag, so a round or a Try again sent that channel after all.
+  // Its pack and texts are read from the rows too, so deleting the old draft folders (launch-model phase 8)
+  // leaves it publishable: the launches repo here has none of them
   const registry = await memoryRegistry();
   const launch = await drafted(registry);
   const launchYml = merged['yeyo11/claudio/.github/launch.yml@v0.8.2']!;
   await registry.launchStore.addPack(launch.id, pack as unknown as Record<string, unknown>, { importBatch: 'batch-1' });
+  for (const [key, body] of Object.entries(merged)) {
+    const path = /^yeyo11\/launches\/(.+\.md)@HEAD$/.exec(key)?.[1];
+    if (!path) continue;
+    const name = path.split('/').at(-1)!.replace('.md', '');
+    await registry.launchStore.addVersion(launch.id, { channel: path.startsWith('src/') ? 'blog' : name, piece: path.startsWith('src/') ? 'article:en' : 'post', body, fields: { path }, origin: 'import' });
+  }
+  const noFolders = { 'yeyo11/claudio/.github/launch.yml@v0.8.2': launchYml };
   await registry.launchStore.replaceChannels(
     launch.id,
     [
@@ -753,12 +762,13 @@ test('an imported launch publishes by its channel rows: a channel the import tur
     launchYml,
     'batch-1',
   );
-  const service = new PublishingService({ registry, github: gh('merged'), launchesRepo: 'yeyo11/launches' });
+  const service = new PublishingService({ registry, github: gh('merged', noFolders), launchesRepo: 'yeyo11/launches' });
   const { calls, publishers } = recorder();
 
   const round = await service.publish(launch, brand, { publishers, fetch: site(true) }, 'job-1');
-  assert.equal(round.state, 'published');
+  assert.equal(round.state, 'published', round.state === 'waiting' ? round.reason : '');
   assert.deepEqual(calls.map((c) => c.channel), ['devto', 'mastodon', 'instagram']);
+  assert.match(JSON.stringify(calls.find((c) => c.channel === 'mastodon')), /Edited mastodon/, 'the text as the rows hold it');
 
   await service.retry(launch.id, 'bluesky');
   await service.publish((await registry.launches.get(launch.id))!, brand, { publishers, fetch: site(true) }, 'job-2');

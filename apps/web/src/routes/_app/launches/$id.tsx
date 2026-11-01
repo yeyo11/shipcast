@@ -140,7 +140,7 @@ function LaunchPage() {
       timezone={timezone}
       held={Boolean(app)}
       articleUrl={articleUrl?.url ?? null}
-      deletable={data.deletable && !launch.deletedAt}
+      deletable={!launch.deletedAt}
       pending={launch.status === 'drafted' && !open}
       waiting={waiting}
       running={running}

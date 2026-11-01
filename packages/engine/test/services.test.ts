@@ -102,7 +102,8 @@ test('the launch service refuses a launch whose pre-flight fails; publishing aga
     updateFile: github.updateFile.bind(github),
     mergePullRequest: github.mergePullRequest.bind(github),
   } satisfies ReviewGitHub & Record<string, unknown>;
-  const service = new LaunchService({ launches: registry.launches, claims: { registry, github, launchesRepo: 'yeyo11/launches' }, github: bare });
+  const unused = async (): Promise<never> => assert.fail('nothing is edited or approved here');
+  const service = new LaunchService({ launches: registry.launches, claims: { registry, github, launchesRepo: 'yeyo11/launches' }, github: bare, appReview: { edit: unused, approve: unused } });
   await assert.rejects(// The pre-flight refuses before the brand is read
     service.claimManual('yeyo11/nothing', 'v1.0.0', () => Promise.reject(new Error('the brand is never read'))), (e: unknown) => e instanceof LaunchRefused && e.reason === 'not_ready');
   await assert.rejects(service.approve(999), (e: unknown) => e instanceof LaunchRefused && e.reason === 'not_found');

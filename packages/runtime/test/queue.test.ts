@@ -296,7 +296,7 @@ test('a scheduled piece wakes its launch’s publishing when due, also after a r
   assert.deepEqual(skipped?.log, ['Nothing to do: the post is no longer scheduled']);
 });
 
-test('a due piece of a launch whose drafts still wait for approval waits for the merge', async () => {
+test('a due piece queues its launch’s publishing, which itself waits while the drafts are not approved', async () => {
   const db = await database();
   const launchId = await launch(db.registry);
   await db.registry.launches.setStatus(launchId, 'drafted', 'https://github.com/yeyo11/launches/pull/7');
@@ -311,8 +311,10 @@ test('a due piece of a launch whose drafts still wait for approval waits for the
     },
   });
   const done = await queue.wait((await armScheduled(queue, post))!, 20_000, 100);
-  assert.deepEqual(done?.log, ['Waiting for approval: it goes out once the drafts are merged']);
-  assert.equal(publishes, 0);
+  // The publish job asks the approval (PublishingService.approval) and waits; the wake-up only queues it
+  assert.deepEqual(done?.log, ['bluesky is due: publishing claudio v1.0.0']);
+  for (const deadline = Date.now() + 10_000; publishes === 0 && Date.now() < deadline; ) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(publishes, 1);
 });
 
 test('beside live processes a reconcile spares a draft just starting, and fails one cut short long ago', async () => {

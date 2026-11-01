@@ -70,8 +70,8 @@ export interface ApiDeps {
   secrets: SecretStore;
   github: ReviewGitHub;
   launchesRepo: string;
-  /** With `launch-store-read`: a launch's drafts and channels from the launch model's tables, not GitHub */
-  launchRead?: Pick<LaunchReadService, 'review' | 'channelConfig'> | undefined;
+  /** A launch's drafts and channels from the launch model's tables, not GitHub */
+  launchRead: Pick<LaunchReadService, 'review' | 'channelConfig'>;
   /** The public origin the OpenAPI document names as its server */
   publicUrl: string;
   limiter: SignInLimiter;
@@ -95,15 +95,15 @@ export interface ApiDeps {
   redraftComment(commentId: number): Promise<WorkAnswer>;
   /** Account analysis: a profile's review as a job, and its edit on the network */
   profiles?: ProfileApi;
-  /** With launch-sources: a launch made from sources, and the files uploaded for it */
+  /** A launch made from sources, and the files uploaded for it; the app always has it, a test may leave it out */
   sources?: SourcesApi;
-  /** With `launch-delete`: deleting a launch (docs/launch-delete.md); without it the routes answer 404 */
+  /** Deleting a launch (docs/launch-delete.md); the app always has it, without it (a test's deps) the routes answer 404 */
   deletion?: Pick<LaunchDeletionService, 'plan' | 'delete'> | undefined;
 }
 
-/** The deletion service, or the 404 of a route that is not there while the flag is off */
+/** The deletion service, or the 404 of a route these deps do not serve */
 function deletionOf(deps: ApiDeps): Pick<LaunchDeletionService, 'plan' | 'delete'> {
-  if (!deps.deletion) throw new ApiError(404, 'not_found', 'launches are deleted only with the launch-delete flag on');
+  if (!deps.deletion) throw new ApiError(404, 'not_found', 'launches cannot be deleted here');
   return deps.deletion;
 }
 
@@ -176,9 +176,9 @@ const refused = (answer: WorkAnswer): Response => {
   throw new ApiError(409, 'refused', answer.problem);
 };
 
-/** A launch's posts, numbers, index status and drafts; the drafts' text stays in the pull request (or the launch model) */
+/** A launch's posts, numbers, index status and drafts; the drafts' text stays in the launch model */
 async function launchResource(deps: ApiDeps, launch: Launch) {
-  const detail = await launchDetail(deps.registry, launch, { github: deps.github, launchesRepo: deps.launchesRepo, stored: deps.launchRead });
+  const detail = await launchDetail(deps.registry, launch, { stored: deps.launchRead });
   const review = detail.review;
   const drafts =
     review === null
@@ -319,8 +319,8 @@ export type RouteAvailability = Pick<ApiDeps, 'sources' | 'deletion'>;
 
 export interface ApiRoute {
   /**
-   * Whether the route is there in this process; always when left out. A route behind a flag that is
-   * off is left out of the OpenAPI document, so a client (MCP among them) is not offered what refuses
+   * Whether the route is there with these deps; always when left out. A route whose deps are missing
+   * is left out of the OpenAPI document, so a client (MCP among them) is not offered what refuses
    */
   available?(deps: RouteAvailability): boolean;
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';

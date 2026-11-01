@@ -110,7 +110,7 @@ export interface RegistryEvents<R> {
  * never fails it: a lost event costs a page one stale view until the next, and the pages resync on
  * every reconnect anyway.
  */
-export function withEvents<R extends Pick<OpenRepositories, 'launches' | 'posts' | 'comments' | 'metrics' | 'accounts' | 'jobs' | 'attention' | 'cursors' | 'drafts'>>(
+export function withEvents<R extends Pick<OpenRepositories, 'launches' | 'posts' | 'comments' | 'metrics' | 'accounts' | 'jobs' | 'attention' | 'cursors'>>(
   registry: R,
   bus: Pick<EventBus, 'publish'>,
   log: (line: string) => void = (line) => console.error(line),
@@ -144,12 +144,6 @@ export function withEvents<R extends Pick<OpenRepositories, 'launches' | 'posts'
         if (result.claimed) launch(result.launch.id);
       },
       setStatus: ([id]) => launch(id),
-    }),
-    drafts: tapped(registry.drafts, {
-      saveSnapshot: (_args, result) => launch(result.launchId),
-      patchSnapshotFile: ([launchId], changed) => {
-        if (changed) launch(launchId);
-      },
     }),
     // A channel's failure is a cursor: the launch page and the bell show it
     cursors: tapped(registry.cursors, {

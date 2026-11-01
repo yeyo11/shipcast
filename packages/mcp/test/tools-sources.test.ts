@@ -10,8 +10,6 @@ const IMAGE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x
 const SHA = 'a'.repeat(64);
 const STORED = { file: { sha256: SHA, mime: 'image/png', bytes: IMAGE.byteLength, width: 1, height: 1 } };
 
-const SOURCES_OFF = () => apiError(409, 'refused', 'launches made from sources are not available in this process');
-const DELETE_OFF = () => apiError(404, 'not_found', 'launches are deleted only with the launch-delete flag on');
 
 /** A client of the fake that also keeps what each call handed to fetch, so a binary body can be compared byte for byte */
 function capturingClient(routes: FakeRoutes = {}) {
@@ -133,19 +131,6 @@ test('launch_from_sources checks its sources before calling the API, and passes 
   assert.deepEqual(fake.calls, []);
   const refused = await refusal(api, 'launch_from_sources', { title: 'x', sources: [{ kind: 'repo', repo: 'yeyo11/shipcast' }] });
   assert.match(refused, /launched already \(409 refused\)\. Shipcast refused the work/);
-  assert.doesNotMatch(refused, /flag/);
-});
-
-test('the sources tools say the feature is off when the launch-sources flag is', async () => {
-  const { api } = fakeClient({ 'POST /launches/sources': SOURCES_OFF, 'POST /media': SOURCES_OFF });
-  for (const [name, args] of [
-    ['launch_from_sources', { title: 'x', sources: [{ kind: 'text', text: 'Hi' }] }],
-    ['upload_media', { image_base64: 'aGVsbG8=' }],
-  ] as const) {
-    const message = await refusal(api, name, args);
-    assert.match(message, /^Launching from sources is turned off on this Shipcast: its launch-sources feature flag is off/, name);
-    assert.match(message, /Nothing was changed/);
-  }
 });
 
 test('edit_launch_posts sends the shared fields and the channels named', async () => {
@@ -184,13 +169,3 @@ test('the launch deletion tools make their one API call each, with the channels 
   assert.deepEqual(fake.calls, ['DELETE /launches/3/posts', 'DELETE /launches/3/posts?channels=devto%2Cbluesky', 'GET /launches/3/deletion', 'DELETE /launches/3', 'DELETE /launches/3?channels=blog%2Cdevto']);
 });
 
-test('the launch deletion tools say the feature is off when the launch-delete flag is, and a missing launch stays a missing launch', async () => {
-  const { api } = fakeClient({ 'GET /launches/3/deletion': DELETE_OFF, 'DELETE /launches/3': DELETE_OFF, 'GET /launches/4/deletion': () => apiError(404, 'not_found', 'no such launch') });
-  for (const [name, args] of [
-    ['plan_launch_deletion', { launch_id: 3 }],
-    ['delete_launch', { launch_id: 3, confirm: true }],
-  ] as const) {
-    assert.match(await refusal(api, name, args), /^Deleting launches is turned off on this Shipcast: its launch-delete feature flag is off.*Nothing was changed/, name);
-  }
-  assert.match(await refusal(api, 'plan_launch_deletion', { launch_id: 4 }), /no such launch \(404 not_found\)\. No such launch or post/);
-});

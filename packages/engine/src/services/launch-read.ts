@@ -1,4 +1,4 @@
-import { ContentPack, type LaunchConfig } from '@shipcast/schema';
+import { ContentPack, pullRequestNumber, ShipcastError, type LaunchConfig } from '@shipcast/schema';
 import { appBlogKey, appPreviewKey, approvedDrafts, isAppLaunch, articlePreview, channelWaits, type ArticlePreview, type BlogCommit, type SitePreview } from '../app-review.ts';
 import { readPack, storedChannelConfig } from '../launch-import.ts';
 import type { MediaObject, MediaStore } from '../media/store.ts';
@@ -17,14 +17,24 @@ export interface LaunchReadDeps {
 }
 
 /**
- * The launch model's fourth phase (docs/launch-store-read.md, docs/decisions/launch-model.md): what
- * the launch page, the REST API and MCP through it, scheduling, the comment assistant and the
- * writing assistant read of a launch, from Shipcast's own tables instead of GitHub. Built only with
- * the `launch-store-read` flag on.
- *
- * Each read takes the way it is read today (`otherwise`), used for a launch the tables do not hold:
- * one with no pack in them, drafted before the shadow write and not imported, or whose delivery the
- * shadow write could not store. A launch they hold is answered from them alone, with no GitHub call.
+ * A launch whose drafts went to a pull request but which the launch model does not hold: drafted
+ * before the shadow write and not imported (scripts/import-launches.ts), or whose delivery could not
+ * be stored. Since the pull-request path is gone (docs/decisions/launch-model.md, phase 8) nothing
+ * reads its drafts from GitHub any more: the import brings it in.
+ */
+export class LaunchNotHeld extends ShipcastError {
+  constructor(launch: Pick<Launch, 'id' | 'detail'>) {
+    super(`launch ${launch.id} is not held by Shipcast: its drafts are only in its pull request (${launch.detail?.split('\n')[0] ?? 'unknown'}); import it with scripts/import-launches.ts --apply`, { code: 'not_held', httpStatus: 409 });
+  }
+}
+
+/**
+ * What the launch page, the REST API and MCP through it, scheduling, the comment assistant and the
+ * writing assistant read of a launch, from Shipcast's own tables (docs/launch-store-read.md): a view
+ * makes no GitHub call. A launch is held once it has a pack in the rows; after the import every
+ * launch that was drafted is. One the rows do not hold has no review (nothing was drafted), or, when
+ * its drafts went to a pull request, its review is refused with LaunchNotHeld; its channels and its
+ * pack read as none, so it cannot be scheduled and grounds nothing.
  */
 export class LaunchReadService {
   readonly #deps: LaunchReadDeps;
@@ -38,10 +48,13 @@ export class LaunchReadService {
   }
 
   /** The launch's drafts as the page and the REST API show them: each piece's current version, the launch's files */
-  async review(launch: Launch, otherwise: () => Promise<Review | undefined>): Promise<Review | undefined> {
+  async review(launch: Launch): Promise<Review | undefined> {
     if (isAppLaunch(launch)) return this.#appReview(launch);
     const pack = await this.#store.currentPack(launch.id);
-    if (!pack) return otherwise();
+    if (!pack) {
+      if (pullRequestNumber(launch) !== undefined) throw new LaunchNotHeld(launch);
+      return undefined;
+    }
     const [drafts, media, channels, approval] = await Promise.all([this.#store.drafts(launch.id), this.#store.media(launch.id), this.#store.channels(launch.id), this.#store.approval(launch.id)]);
     return reviewFromStore(launch, { drafts, media, hasPack: true, channelsSource: channels.source, approved: approval !== undefined }, launchMediaPath);
   }
@@ -49,21 +62,21 @@ export class LaunchReadService {
   /**
    * The channels the launch publishes on, as launch.yml says them: the one copied when it was drafted,
    * each channel's mode from its row (the import turned off the channels that never published).
-   * Undefined when no channels were stored, as when launch.yml cannot be read.
+   * Undefined when no channels were stored, as when launch.yml cannot be read, or the launch is not held.
    */
-  async channelConfig(launch: Launch, otherwise: () => Promise<LaunchConfig | undefined>): Promise<LaunchConfig | undefined> {
-    if (!(await this.#store.currentPack(launch.id))) return otherwise();
+  async channelConfig(launch: Launch): Promise<LaunchConfig | undefined> {
+    if (!(await this.#store.currentPack(launch.id))) return undefined;
     return storedChannelConfig(await this.#store.channels(launch.id));
   }
 
   /**
    * The launch's current pack, what replies and the writing assistant are grounded in. A pack written
    * before a channel was retired is read without it, as the import reads it; undefined when even so it
-   * does not parse.
+   * does not parse, or the launch is not held.
    */
-  async pack(launch: Launch, otherwise: () => Promise<ContentPack | undefined>): Promise<ContentPack | undefined> {
+  async pack(launch: Launch): Promise<ContentPack | undefined> {
     const stored = await this.#store.currentPack(launch.id);
-    if (!stored) return otherwise();
+    if (!stored) return undefined;
     const parsed = ContentPack.safeParse(readPack(stored.pack).pack);
     return parsed.success ? parsed.data : undefined;
   }

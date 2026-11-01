@@ -10,7 +10,7 @@ const MAX_KEYS = 100;
 /** The bell's list, from the registry alone (attention.server.ts) */
 export const getAttention = createServerFn({ method: 'GET' }).handler(async () => {
   const ctx = await appContext();
-  return attentionFor(ctx.registry, { launchStore: ctx.launchStore !== undefined });
+  return attentionFor(ctx.registry);
 });
 
 function keysInput(input: unknown): { keys: string[] } {

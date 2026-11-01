@@ -82,8 +82,6 @@ export const listLaunches = createServerFn({ method: 'GET' })
       page: { number: page.page, pages: page.pages, total: page.total, size: page.pageSize },
       facets,
       timezone,
-      /** With `launch-delete`: the list offers to delete a launch from its row's menu (docs/launch-delete.md) */
-      deletable: ctx.flags.on('launch-delete'),
     };
   });
 
@@ -94,24 +92,19 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = ctx;
     const launch = await launchService(ctx).get(data);
     if (!launch) return null;
-    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, drafts: ctx.drafts, stored: ctx.launchRead }, launch);
+    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, stored: ctx.launchRead }, launch);
     return {
       ...page,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
       fakeNetworks: fakeNetworks(),
-      /** With `launch-delete`: the page offers to delete the launch (docs/launch-delete.md) */
-      deletable: ctx.flags.on('launch-delete'),
     };
   });
-
-const DELETE_OFF = 'launches are deleted only with the launch-delete flag on';
 
 /** What deleting a launch would do, for the owner to choose before anything happens (docs/launch-delete.md) */
 export const getDeletion = createServerFn({ method: 'GET' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
     const service = deletionService(await appContext());
-    if (!service) return { ok: false as const, problem: DELETE_OFF };
     try {
       const { mode, refused, channels, articleLinks } = await service.plan(data);
       return { ok: true as const, plan: { mode, refused: refused ?? null, channels, articleLinks } };
@@ -128,7 +121,6 @@ export const deleteLaunch = createServerFn({ method: 'POST' })
   })
   .handler(async ({ data }) => {
     const service = deletionService(await appContext());
-    if (!service) return { ok: false as const, problem: DELETE_OFF };
     try {
       const result = await service.delete(data.id, { channels: data.channels, by: (await signedIn()) ?? 'owner' });
       return {
@@ -144,24 +136,6 @@ export const deleteLaunch = createServerFn({ method: 'POST' })
     }
   });
 
-/**
- * "Refresh from GitHub": the drafts pull request read again and its snapshot rewritten, for when the
- * owner knows GitHub changed and the delivery has not arrived: the page reads the snapshot.
- */
-export const refreshDrafts = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => id(input))
-  .handler(async ({ data }) => {
-    const ctx = await appContext();
-    const launch = await launchService(ctx).get(data);
-    if (!launch) return { ok: false as const, problem: 'no such launch' };
-    try {
-      const snapshot = await ctx.drafts.refresh(launch);
-      return snapshot ? { ok: true as const, readAt: snapshot.readAt } : { ok: false as const, problem: 'this launch has no drafts pull request' };
-    } catch (error) {
-      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
 export const saveDraft = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
@@ -171,8 +145,6 @@ export const saveDraft = createServerFn({ method: 'POST' })
     const launches = launchService(await appContext());
     const launch = await launches.get(data.id);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
-    // A draft edit is a commit on the real pull request; a launch Shipcast holds keeps it in its own rows
-    if (fakeNetworks() && !isAppLaunch(launch)) return { ok: false as const, problem: PREVIEW_REFUSAL };
     try {
       await launches.editDraft(launch.id, data.path, data.content, await signedIn());
       return { ok: true as const };
@@ -181,13 +153,12 @@ export const saveDraft = createServerFn({ method: 'POST' })
     }
   });
 
-/** A launch Shipcast holds, for its preview on the real site; a refusal when it is not one or the flag is off */
-async function heldLaunch(launchId: number): Promise<{ ok: true; launch: Launch; service: NonNullable<Awaited<ReturnType<typeof appContext>>['appReview']> } | { ok: false; problem: string }> {
+/** A launch Shipcast holds, for its preview on the real site; a refusal when it is not one */
+async function heldLaunch(launchId: number): Promise<{ ok: true; launch: Launch; service: Awaited<ReturnType<typeof appContext>>['appReview'] } | { ok: false; problem: string }> {
   const ctx = await appContext();
-  if (!ctx.appReview) return { ok: false, problem: 'launches are reviewed in Shipcast only with the app-review flag on' };
   const launch = await launchService(ctx).get(launchId);
   if (!launch) return { ok: false, problem: 'no such launch' };
-  if (!isAppLaunch(launch)) return { ok: false, problem: 'this launch is reviewed in its pull request, which has its own preview' };
+  if (!isAppLaunch(launch)) return { ok: false, problem: 'this launch was decided in its pull request, which had its own preview' };
   return { ok: true, launch, service: ctx.appReview };
 }
 
@@ -247,10 +218,6 @@ export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
   return {
     owner: b.github,
     repos: await repoList({ github: ctx.github, cache: ctx.process.shared.cache }, b.github),
-    // Whether a launch can also be made from sources here (launch-sources)
-    sources: ctx.flags.on('launch-sources'),
-    // Whether new drafts wait in Shipcast rather than in a pull request (app-review)
-    appReview: ctx.flags.on('app-review'),
   };
 });
 
@@ -273,7 +240,7 @@ export const writeArticle = createServerFn({ method: 'POST' })
   .validator((input: unknown) => articleRequest(input))
   .handler(({ data }) => startArticle(data.input, data.direct));
 
-/** A launch made from sources (launch-sources), drafted as a job */
+/** A launch made from sources, drafted as a job */
 export const launchFromSources = createServerFn({ method: 'POST' })
   .validator((input: unknown) => sourcesRequest(input))
   .handler(({ data }) => startSources(data));

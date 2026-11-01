@@ -9,7 +9,6 @@ import { CommentRepository } from './comments.ts';
 import { JobRepository } from './jobs.ts';
 import { AccountRepository } from './accounts.ts';
 import { CursorRepository } from './cursors.ts';
-import { DraftSnapshotRepository } from './draft-snapshots.ts';
 import { LaunchStoreRepository } from './launch-store.ts';
 import { LaunchImportRepository } from './launch-imports.ts';
 import { LaunchDeletionRepository } from './launch-deletions.ts';
@@ -40,7 +39,6 @@ export * from './comments.ts';
 export * from './jobs.ts';
 export * from './accounts.ts';
 export * from './cursors.ts';
-export * from './draft-snapshots.ts';
 export * from './launch-store.ts';
 export * from './launch-imports.ts';
 export * from './launch-deletions.ts';
@@ -63,8 +61,6 @@ export interface Repositories {
   readonly jobs: JobRepository;
   readonly accounts: AccountRepository;
   readonly cursors: CursorRepository;
-  /** The drafts pull requests as last read from GitHub: what the launch page shows (phase 7) */
-  readonly drafts: DraftSnapshotRepository;
   /** A launch's packs, channel rows, draft versions, media and approvals in Shipcast (the launch model) */
   readonly launchStore: LaunchStoreRepository;
   /** The import of the launches drafted before Shipcast held them: its batch log, deletions and rollbacks */
@@ -72,7 +68,7 @@ export interface Repositories {
   /** The launches the owner deleted, and the keys a trigger never launches again */
   readonly launchDeletions: LaunchDeletionRepository;
   readonly settings: SettingRepository;
-  /** What each launch is about: its sources and the files uploaded for them (launch-sources) */
+  /** What each launch is about: its sources and the files uploaded for them (docs/sources.md) */
   readonly sources: LaunchSourceRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
@@ -94,7 +90,6 @@ export function repositoriesOn(db: Database): Repositories {
     jobs: new JobRepository(db),
     accounts: new AccountRepository(db),
     cursors: new CursorRepository(db),
-    drafts: new DraftSnapshotRepository(db),
     launchStore: new LaunchStoreRepository(db),
     launchImports: new LaunchImportRepository(db),
     launchDeletions: new LaunchDeletionRepository(db),

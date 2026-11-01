@@ -385,7 +385,7 @@ async function main(argv: string[]): Promise<number> {
         }
         let claimed: Launch;
         try {
-          ({ launch: claimed } = await new LaunchService({ launches: registry.launches, claims: deps, github }).claimManual(repo, values.ref, loadBrandNow, reportPreflight));
+          ({ launch: claimed } = await new LaunchService({ launches: registry.launches, claims: deps, github, appReview: runtime.appReview }).claimManual(repo, values.ref, loadBrandNow, reportPreflight));
         } catch (error) {
           if (!(error instanceof LaunchRefused)) throw error;
           const found = error.launch;
@@ -426,7 +426,8 @@ async function main(argv: string[]): Promise<number> {
           await writeAutomation(registry, { ...(await readAutomation(registry)), intervalSeconds: Math.max(MIN_INTERVAL_SECONDS, seconds) });
         }
         const automation = await readAutomation(registry);
-        const flags = Flags.fromEnv(process.env);
+        // An unknown name in SHIPCAST_FLAGS stops the start, as in the app
+        Flags.fromEnv(process.env);
         // SHIPCAST_ROLE: a worker or a heavy worker works its own queues only; `all` (unset) every one but the web app's probe
         const role = roleFromEnv(process.env);
         if (role === 'web') {
@@ -436,7 +437,7 @@ async function main(argv: string[]): Promise<number> {
         const proc = processState(process.env, `watch-${role}`);
         const queue = jobQueue({ registry, databaseUrl: config.databaseUrl, redis: proc.redis, options: { instanceName: 'watch', telemetry, schedule: runsTheClock(role), supervise: runsTheClock(role), reconcileAtStart: !split(role), poolMax: queuePoolMax(process.env) } });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
-        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags, drafts: runtime.drafts }, { firstRoundInSeconds: 0, role });
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh }, { firstRoundInSeconds: 0, role });
         const stopMaintenance = runsTheClock(role) && (split(role) || proc.redis) ? startMaintenance({ queue, lock: proc.redis ? new RedisLock(proc.redis.queue) : proc.shared.lock, reconcileRows: split(role) }) : undefined;
         console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
         if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');

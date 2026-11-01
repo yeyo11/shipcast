@@ -7,7 +7,7 @@ import { FakeGitHub, memoryRegistry, mockRunner, scriptedModel, submitParts } fr
 /*
  * The launch model's seventh phase, its triggers (docs/launch-triggers.md): with the owner's rules a
  * GitHub event creates a launch by them, launch.yml is optional input, and a dedupe key keeps a
- * second event or a re-run from launching the same thing twice. Without the rules (the flag off),
+ * second event or a re-run from launching the same thing twice. Without the rules (Action mode),
  * claimEvent is today's, which detect.test.ts pins.
  */
 
@@ -40,7 +40,7 @@ test('without the rules too, a repo made public by webhook and by poll is one la
   const byWebhook = await claimEvent(madePublic('webhook-public-yeyo11/tool', 'yeyo11/tool'), { github, registry, brand });
   const byPoll = await claimEvent(madePublic('4567', 'yeyo11/tool'), { github, registry, brand });
   assert.equal(byWebhook.result, 'claimed');
-  // Before, with the flag off, the claim carried no key and these were two launches of one event
+  // Before the rules, the claim carried no key and these were two launches of one event
   assert.equal(byPoll.result, 'already-claimed');
   assert.ok('launch' in byWebhook && (await registry.launches.dedupeKey(byWebhook.launch.id)) === 'github-public:yeyo11/tool');
 });
@@ -118,7 +118,7 @@ test('a release whose launch the owner removed is not launched again', async () 
   const outcome = await claimEvent(release('1', 'yeyo11/claudio', 'v1.0.0'), { ...options, removed });
   assert.deepEqual(outcome.result === 'ignored' && outcome.reason, 'its launch was deleted');
   assert.deepEqual(asked, ['github-release:yeyo11/claudio@v1.0.0']);
-  // Without the rules too (launch-delete on, launch-triggers off)
+  // Without the rules too (Action mode)
   const legacy = await claimEvent(release('2', 'yeyo11/claudio', 'v1.0.0'), { github: options.github, registry: options.registry, brand, removed });
   assert.equal(legacy.result, 'ignored');
 });

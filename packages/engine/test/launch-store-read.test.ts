@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sql } from 'drizzle-orm';
-import { draftFile, parseLaunchConfig, type Channel, type ContentPack } from '@shipcast/schema';
+import { draftFile, type Channel } from '@shipcast/schema';
 import {
-  deliverDrafts,
   editPost,
   gitBlobSha,
   inTransaction,
@@ -11,15 +10,13 @@ import {
   launchGrounding,
   launchMediaPath,
   LaunchImportService,
+  LaunchNotHeld,
   LaunchReadService,
   LaunchStoreService,
   launchReplyContext,
-  packOnLaunchesRepo,
-  readReview,
   type EditDeps,
   type ImportGitHub,
   type Launch,
-  type PipelineDeps,
   type PostKind,
   type Review,
   type ReviewGitHub,
@@ -28,10 +25,9 @@ import {
 import { FakeGitHub, memoryRegistry, MemoryMediaStore } from '../src/testing/index.ts';
 
 /*
- * The launch model's fourth phase (docs/launch-store-read.md): with `launch-store-read`, a launch the
- * tables hold is read from them alone, and reads as the pull request did. The parity is checked on
- * launches imported from a launches repo (the legacy path reads the same repo), and on one the
- * shadow write stored while its pull request is open.
+ * Reading launches from the launch model (docs/launch-store-read.md): a launch the tables hold is
+ * read from them alone. Checked on launches imported from a launches repo with two merged pull
+ * requests; a launch they do not hold is not read from GitHub any more (phase 8).
  */
 
 const LAUNCHES = 'yeyo11/launches';
@@ -165,23 +161,21 @@ async function imported() {
 const texts = (review: Review | undefined) => review?.drafts.filter((d) => d.kind === 'article' || d.kind === 'channel').map(({ path, label, kind, content }) => ({ path, label, kind, content }));
 const files = (review: Review | undefined) => review?.drafts.filter((d) => d.kind === 'image' || d.kind === 'video').map(({ path, label, kind }) => ({ path, label, kind }));
 
-test('parity: an imported release reads from the tables as the pull request reads on GitHub, with no GitHub call', async () => {
+test('an imported release reads from the tables alone: the texts as main has them, the files served by the app, no GitHub call', async () => {
   const { github, release, read, media } = await imported();
-  const legacy = await readReview(release, { github, launchesRepo: LAUNCHES });
-  github.calls = [];
-  const stored = await read.review(release, never);
+  const stored = await read.review(release);
   assert.deepEqual(github.calls, []);
 
-  assert.deepEqual(stored?.pullRequest, legacy?.pullRequest, 'the same pull request, merged');
-  assert.deepEqual(texts(stored), texts(legacy), 'every text, as main has it now (the Bluesky edit after the merge included)');
-  assert.equal(stored?.drafts.find((d) => d.path === BLUESKY)?.content, draft('Bluesky', 'hello, edited on main'));
-  // The project's cover and projects.yml are the site's: listed by the pull request, not the launch's
-  const ownFiles = files(legacy)?.filter((f) => !f.path.startsWith('public/covers/'));
-  assert.deepEqual(files(stored), ownFiles);
+  assert.deepEqual(stored?.pullRequest, { number: 1, url: `https://github.com/${LAUNCHES}/pull/1`, state: 'merged', branch: 'launch/claudio-v1.0.0' }, 'the pull request it was decided in, merged');
   assert.deepEqual(
-    stored?.drafts.filter((d) => d.kind === 'data').map((d) => d.path),
-    legacy?.drafts.filter((d) => d.kind === 'data' && d.path !== 'projects.yml').map((d) => d.path),
+    texts(stored)?.map((t) => t.path).sort(),
+    [ARTICLE_EN, BLUESKY, MASTODON].sort(),
+    'every text of the launch',
   );
+  assert.equal(stored?.drafts.find((d) => d.path === BLUESKY)?.content, draft('Bluesky', 'hello, edited on main'), 'the Bluesky edit after the merge included');
+  // The project's cover and projects.yml are the site's, not the launch's
+  assert.deepEqual(files(stored)?.map((f) => f.path).sort(), [`public/${D}/demo.mp4`, `public/${D}/og.png`]);
+  assert.deepEqual(stored?.drafts.filter((d) => d.kind === 'data').map((d) => d.path), [`${D}/pack.json`]);
 
   // Each file is served by the app, from the media store
   const og = stored!.drafts.find((d) => d.path === `public/${D}/og.png`)!;
@@ -191,105 +185,51 @@ test('parity: an imported release reads from the tables as the pull request read
   assert.ok(media.objects.size > 0);
 });
 
-test('parity: an imported article, its own launch.yml listed as the pull request lists it', async () => {
+test('an imported article lists its own launch.yml beside its pack', async () => {
   const { github, article, read } = await imported();
-  const legacy = await readReview(article, { github, launchesRepo: LAUNCHES });
-  const stored = await read.review(article, never);
-  assert.deepEqual(stored?.pullRequest, legacy?.pullRequest);
-  assert.deepEqual(texts(stored), texts(legacy));
-  assert.deepEqual(files(stored), files(legacy));
-  assert.deepEqual(stored?.drafts.filter((d) => d.kind === 'data').map((d) => d.path), legacy?.drafts.filter((d) => d.kind === 'data').map((d) => d.path));
+  const stored = await read.review(article);
+  assert.deepEqual(github.calls, []);
+  assert.equal(stored?.pullRequest?.state, 'merged');
+  assert.deepEqual(texts(stored)?.map((t) => t.path).sort(), [ARTICLE_BLUESKY, ARTICLE_ES].sort());
+  assert.deepEqual(files(stored)?.map((f) => f.path), [`public/${A}/og.png`]);
+  assert.deepEqual(stored?.drafts.filter((d) => d.kind === 'data').map((d) => d.path).sort(), [`${A}/launch.yml`, `${A}/pack.json`]);
 });
 
-test("parity: the channels are launch.yml's, with the channels the import turned off", async () => {
+test("the channels are launch.yml's, with the channels the import turned off", async () => {
   const { github, release, article, read } = await imported();
   for (const launch of [release, article]) {
-    const legacy = (await launchConfigOf(github, LAUNCHES, launch))!;
+    const fromFile = (await launchConfigOf(github, LAUNCHES, launch))!;
     github.calls = [];
-    const stored = (await read.channelConfig(launch, never))!;
+    const stored = (await read.channelConfig(launch))!;
     assert.deepEqual(github.calls, []);
-    const changed = Object.keys(legacy.publishing).filter((c) => legacy.publishing[c as keyof typeof legacy.publishing] !== stored.publishing[c as keyof typeof stored.publishing]);
+    const changed = Object.keys(fromFile.publishing).filter((c) => fromFile.publishing[c as keyof typeof fromFile.publishing] !== stored.publishing[c as keyof typeof stored.publishing]);
     // Mastodon (and Discussions, on by default) were on and never published: off since the import
     assert.deepEqual(changed.sort(), launch === release ? ['githubDiscussions', 'mastodon'] : []);
-    assert.deepEqual({ ...stored, publishing: legacy.publishing }, legacy, 'everything else as launch.yml says');
+    assert.deepEqual({ ...stored, publishing: fromFile.publishing }, fromFile, 'everything else as launch.yml says');
   }
 });
 
-test('parity: the pack replies and the writing assistant are grounded in is main\'s', async () => {
+test('the pack replies and the writing assistant are grounded in is the launch model’s', async () => {
   const { github, release, article, read } = await imported();
-  for (const launch of [release, article]) {
-    const fromRepo = await packOnLaunchesRepo(github, LAUNCHES, launch);
-    assert.ok(fromRepo, 'the pack parses');
-    assert.deepEqual(await read.pack(launch, never), fromRepo);
-  }
-  github.calls = [];
-  const grounding = await launchGrounding(release, { github, launchesRepo: LAUNCHES, stored: read });
+  assert.equal((await read.pack(release))?.analysis.summary, 'what claudio is');
+  assert.equal((await read.pack(article))?.analysis.summary, 'an opinion');
+  const grounding = await launchGrounding(release, { stored: read });
   assert.equal(grounding.launch?.analysis?.summary, 'what claudio is');
-  const reply = await launchReplyContext({ github, launchesRepo: LAUNCHES, checkout: async () => ({ hostPath: '/tmp/x' }) as never, stored: read })(article);
+  const reply = await launchReplyContext({ checkout: async () => ({ hostPath: '/tmp/x' }) as never, stored: read })(article);
   assert.equal(reply.analysis?.summary, 'an opinion');
   assert.deepEqual(github.calls, [], 'the pack came from the tables');
 });
 
-test('a launch the tables do not hold is read as before', async () => {
+test('a launch the tables do not hold: no review when nothing was drafted, a clear error when its drafts are only in a pull request', async () => {
   const registry = await memoryRegistry();
   const read = new LaunchReadService({ registry, media: new MemoryMediaStore() });
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/other', ref: 'v1.0.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
-  const review = { pullRequest: { number: 3, url: 'u', state: 'open' as const, branch: 'b' }, drafts: [] };
-  assert.equal(await read.review(launch, async () => review), review);
-  assert.equal(await read.channelConfig(launch, async () => undefined), undefined);
-  const pack = { analysis: { summary: 'from GitHub' } } as unknown as ContentPack;
-  assert.equal(await read.pack(launch, async () => pack), pack);
+  assert.equal(await read.review(launch), undefined);
+  const inPullRequest = await registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/3`);
+  await assert.rejects(read.review(inPullRequest), (error: unknown) => error instanceof LaunchNotHeld && /scripts\/import-launches\.ts --apply/.test(error.message) && error.httpStatus === 409);
+  assert.equal(await read.channelConfig(inPullRequest), undefined, 'nothing to schedule by');
+  assert.equal(await read.pack(inPullRequest), undefined, 'nothing to ground in');
   assert.equal(await read.mediaFile(1), undefined);
-});
-
-test('a launch the shadow write stores: open until the merge is recorded, an edit is the current text', async () => {
-  const registry = await memoryRegistry();
-  const github = new FakeGitHub();
-  github.setFile('yeyo11/claudio', '.github/launch.yml', LAUNCH_YML, 'v1.0.0');
-  const media = new MemoryMediaStore();
-  const store = new LaunchStoreService({ registry, media, github, launchesRepo: LAUNCHES });
-  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal' });
-  const deps = { github, registry, launchesRepo: LAUNCHES, launchStore: store } as unknown as PipelineDeps;
-  const delivered = await deliverDrafts(
-    launch,
-    deps,
-    {
-      files: [
-        { path: BLUESKY, content: draft('Bluesky', 'hello') },
-        { path: `${D}/pack.json`, content: JSON.stringify(releasePack) },
-        { path: `public/${D}/og.png`, bytes: new Uint8Array([1, 2, 3]) },
-      ],
-      branch: 'launch/claudio-v1.0.0',
-      title: 't',
-      body: 'b',
-      message: 'm',
-      source: { pack: releasePack as unknown as ContentPack, configText: LAUNCH_YML },
-    },
-    {},
-  );
-  assert.ok(delivered.ok);
-  const drafted = delivered.launch;
-  const read = new LaunchReadService({ registry, media });
-
-  const open = await read.review(drafted, never);
-  assert.deepEqual(open?.pullRequest, { number: 1, url: `https://github.com/${LAUNCHES}/pull/1`, state: 'open', branch: 'launch/claudio-v1.0.0' });
-  assert.deepEqual(
-    open?.drafts.map((d) => [d.path, d.kind]),
-    [
-      [BLUESKY, 'channel'],
-      [`public/${D}/og.png`, 'image'],
-      [`${D}/pack.json`, 'data'],
-    ],
-  );
-  const og = (await registry.launchStore.media(drafted.id))[0]!;
-  assert.equal(open?.drafts[1]?.url, launchMediaPath(og));
-  assert.deepEqual(parseLaunchConfig(LAUNCH_YML).ok && (await read.channelConfig(drafted, never))?.publishing.mastodon, 'approval', 'nothing turned off for a launch drafted now');
-
-  await store.edited(drafted, BLUESKY, draft('Bluesky', 'hello, edited in Shipcast'));
-  assert.equal((await read.review(drafted, never))?.drafts[0]?.content, draft('Bluesky', 'hello, edited in Shipcast'));
-
-  await registry.launchStore.approveOnce(drafted.id, { by: 'yeyo11', versions: {} });
-  assert.equal((await read.review(drafted, never))?.pullRequest?.state, 'merged');
 });
 
 test('a launch closed without merging reads as closed; one with no pull request has no review, as on GitHub', async () => {
@@ -297,9 +237,9 @@ test('a launch closed without merging reads as closed; one with no pull request 
   const closed = await registry.launches.setStatus(release.id, 'skipped', `https://github.com/${LAUNCHES}/pull/1: closed without merging`);
   // The import recorded the merge; a launch closed unmerged has none
   await registry.database.execute(sql`DELETE FROM approvals WHERE launch_id = ${release.id}`);
-  assert.equal((await read.review(closed, never))?.pullRequest?.state, 'closed');
+  assert.equal((await read.review(closed))?.pullRequest?.state, 'closed');
   const direct = { ...closed, status: 'drafted', detail: 'direct:abc https://github.com/x' } as Launch;
-  assert.equal(await read.review(direct, never), undefined);
+  assert.equal(await read.review(direct), undefined);
 });
 
 test('the article edited after publishing is a version, so the page reads it as the site shows it', async () => {
@@ -325,7 +265,7 @@ test('the article edited after publishing is a version, so the page reads it as 
   assert.equal(article.origin, 'post-publish-edit');
   const [linked] = await registry.queries.selectRows<{ id: number }>(sql`SELECT draft_version_id AS id FROM posts WHERE id = ${post!.id}`);
   assert.equal(Number(linked!.id), article.versionId, 'the post names the version it now says');
-  assert.equal((await read.review(release, never))?.drafts.find((d) => d.path === ARTICLE_EN)?.content, '---\ntitle: "claudio"\nupdatedDate: 2026-10-30\n---\n\nThe article, edited.\n');
+  assert.equal((await read.review(release))?.drafts.find((d) => d.path === ARTICLE_EN)?.content, '---\ntitle: "claudio"\nupdatedDate: 2026-10-30\n---\n\nThe article, edited.\n');
 
   // Without the launch store, the edit is the commit alone, as before
   await editPost(post!.id, { text: 'Again.' }, { registry, editors: async () => ({}), blog });

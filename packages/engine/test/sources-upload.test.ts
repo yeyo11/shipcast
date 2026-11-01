@@ -4,7 +4,7 @@ import { deflateSync } from 'node:zlib';
 import { dimensions, MAX_UPLOAD_BYTES, sanitiseUpload, sniffImage, UploadRefused } from '../src/index.ts';
 
 /*
- * An uploaded source file (launch-sources): what it is comes from its bytes, only still images are
+ * An uploaded source file (docs/sources.md): what it is comes from its bytes, only still images are
  * taken, and what a camera writes about the picture (EXIF and its GPS position, text chunks, XMP) is
  * gone before it is stored.
  */

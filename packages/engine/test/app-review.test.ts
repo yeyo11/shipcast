@@ -80,7 +80,7 @@ async function setup(options: { app?: boolean; config?: string } = {}) {
     assert.ok(result.ok, result.ok ? '' : result.problem);
     return result.launch;
   };
-  const launches = new LaunchService({ launches: registry.launches, claims: deps, github: github as unknown as LaunchServiceDeps['github'], launchStore: store, appReview: app });
+  const launches = new LaunchService({ launches: registry.launches, claims: deps, github: github as unknown as LaunchServiceDeps['github'], appReview: app });
   const read = new LaunchReadService({ registry, media, site: async () => brand.site });
   const fake = new FakeConnectors();
   const publishers: Publishers = fake.publishers(['bluesky', 'mastodon']);
@@ -134,7 +134,7 @@ test('the review comes from the rows: no pull request, what waits, and the artic
   const { launch, deliver, read, github } = await setup();
   const drafted = await deliver();
   const calls = github.calls.length;
-  const review = await read.review(drafted, async () => assert.fail('a launch Shipcast holds is never read elsewhere'));
+  const review = await read.review(drafted);
   assert.equal(github.calls.length, calls);
   assert.equal(review?.pullRequest, undefined);
   assert.equal(review?.app?.open, true);
@@ -324,14 +324,17 @@ test('the real site preview: a preview branch and its draft pull request, the ad
   assert.ok(registry);
 });
 
-test('a launch Shipcast holds waits in a process without the flag, and a legacy launch is never edited here', async () => {
-  const { registry, github, launch, deliver } = await setup();
+test('a launch Shipcast holds waits where nothing reads the launch model (Action mode), and a launch decided in a pull request is never edited or approved here', async () => {
+  const { registry, github, launch, deliver, launches } = await setup();
   const drafted = await deliver();
   const without = await publishLaunch(drafted, brand, { github, registry, launchesRepo: LAUNCHES, publishers: {} });
   assert.equal(without.state, 'waiting');
-  assert.match(without.state === 'waiting' ? without.reason : '', /app-review flag is off/);
-  const plain = new LaunchService({ launches: registry.launches, claims: { github, registry, launchesRepo: LAUNCHES } as unknown as PipelineDeps, github: github as unknown as LaunchServiceDeps['github'] });
-  await assert.rejects(plain.approve(launch.id), /app-review flag is off/);
+  assert.match(without.state === 'waiting' ? without.reason : '', /does not read the launch model/);
+  const { launch: legacy } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(legacy.id, 'drafted', `https://github.com/${LAUNCHES}/pull/9`);
+  await assert.rejects(launches.approve(legacy.id), /decided in a pull request/);
+  await assert.rejects(launches.editDraft(legacy.id, BLUESKY, 'x'), /decided in a pull request/);
+  assert.equal(launch.id !== legacy.id, true);
 });
 
 test('the preview address and the article preview, as pure functions', () => {
@@ -378,13 +381,13 @@ test('an approval names the versions the owner read: a draft changed since is re
   // between the owner reading the page and pressing Approve was approved without being read
   const { registry, launch, deliver, launches, read } = await setup();
   await deliver();
-  const seen = (await read.review((await registry.launches.get(launch.id))!, async () => undefined))!.app!.versions;
+  const seen = (await read.review((await registry.launches.get(launch.id))!))!.app!.versions;
   assert.equal(Object.keys(seen).length, 3, 'the review names each draft’s current version');
   await launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'changed while the owner read'));
   await assert.rejects(launches.approve(launch.id, 'yeyo11', seen), /changed since/);
   assert.equal(await registry.launchStore.approval(launch.id), undefined, 'nothing approved');
   // A versions map missing a draft is refused too: the owner did not see it
-  const fresh = (await read.review((await registry.launches.get(launch.id))!, async () => undefined))!.app!.versions;
+  const fresh = (await read.review((await registry.launches.get(launch.id))!))!.app!.versions;
   const [first] = Object.keys(fresh);
   const partial = Object.fromEntries(Object.entries(fresh).filter(([id]) => id !== first));
   await assert.rejects(launches.approve(launch.id, 'yeyo11', partial), /changed since/);

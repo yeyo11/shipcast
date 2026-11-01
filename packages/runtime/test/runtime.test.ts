@@ -92,29 +92,21 @@ test('without an App the engine runs on the old token, as before', async () => {
   assert.deepEqual(seen, ['GET /repos/yeyo11/launches/contents/brand.yml']);
 });
 
-test('app-review (docs/app-review.md) needs the reads and the media of the launch model, and is off unless named', async () => {
+test('the launch model is the only path: every launch held by Shipcast, by the trigger rules, deletable; an old SHIPCAST_FLAGS still starts', async () => {
   const start = async (flags: string) => createRuntime({ env: { ...BOOTSTRAP, SHIPCAST_FLAGS: flags }, root: '/repo', registry: await memoryRegistry(), secrets: new MemoryStore(), fetch: fakeGitHub([]) });
-  await assert.rejects(start('app-review'), /app-review flag needs launch-store-read/);
-  await assert.rejects(start('launch-store,launch-store-read,app-review'), /app-review flag needs launch-media/);
-  const off = await start('launch-store,launch-store-read,launch-media');
-  assert.equal(off.appReview, undefined);
-  assert.equal(off.pipeline.appReview, undefined, 'without it, drafts go to a pull request as before');
-  const on = await start('launch-store,launch-store-read,launch-media,app-review');
-  assert.ok(on.appReview);
-  assert.equal(on.pipeline.appReview, on.appReview);
-});
-
-test('launch-triggers and launch-delete (docs/launch-triggers.md, docs/launch-delete.md) are off unless named', async () => {
-  const start = async (flags: string) => createRuntime({ env: { ...BOOTSTRAP, SHIPCAST_FLAGS: flags }, root: '/repo', registry: await memoryRegistry(), secrets: new MemoryStore(), fetch: fakeGitHub([]) });
-  const off = await start('');
-  assert.equal(off.triggers, undefined);
-  assert.equal(off.pipeline.triggers, undefined, 'without it, each repo’s launch.yml decides alone');
-  // A removed launch stays removed whichever flags a later process runs with: the check is always on
-  assert.equal(await off.pipeline.removed?.('github-release:yeyo11/claudio@v1.0.0'), false, 'the removed releases are read without launch-delete too');
-  await off.registry.launchDeletions.record({ launchId: 1, dedupeKey: 'github-release:yeyo11/claudio@v0.9.0', repo: 'yeyo11/claudio', ref: 'v0.9.0', by: 'owner', mode: 'removed', channels: [], articleLinks: null });
-  assert.equal(await off.pipeline.removed?.('github-release:yeyo11/claudio@v0.9.0'), true);
-  const on = await start('launch-triggers,launch-delete');
-  assert.ok(on.triggers);
-  assert.equal(on.pipeline.triggers, on.triggers);
-  assert.equal(await on.pipeline.removed?.('github-release:yeyo11/claudio@v1.0.0'), false);
+  const runtime = await start('');
+  assert.ok(runtime.appReview && runtime.launchStore && runtime.launchRead && runtime.triggers);
+  assert.equal(runtime.pipeline.appReview, runtime.appReview, 'new drafts are held by Shipcast, never a pull request');
+  assert.equal(runtime.pipeline.launchRead, runtime.launchRead);
+  assert.equal(runtime.pipeline.triggers, runtime.triggers);
+  assert.ok(runtime.pipeline.sources, 'launches made from sources');
+  // A removed launch stays removed: the check is always on
+  assert.equal(await runtime.pipeline.removed?.('github-release:yeyo11/claudio@v0.9.0'), false);
+  await runtime.registry.launchDeletions.record({ launchId: 1, dedupeKey: 'github-release:yeyo11/claudio@v0.9.0', repo: 'yeyo11/claudio', ref: 'v0.9.0', by: 'owner', mode: 'removed', channels: [], articleLinks: null });
+  assert.equal(await runtime.pipeline.removed?.('github-release:yeyo11/claudio@v0.9.0'), true);
+  // Every launch-model flag is retired: an environment that still names them starts as before
+  const old = await start('launch-media,launch-store,launch-import,launch-store-read,app-review,launch-sources,launch-triggers,launch-delete');
+  assert.ok(old.appReview);
+  // Off a server, the media store may be missing: it refuses every call saying what is missing
+  assert.equal(runtime.media.storage, 'none');
 });

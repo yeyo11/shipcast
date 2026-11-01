@@ -3,8 +3,8 @@ import { Channel } from './channels.ts';
 
 /*
  * The owner's trigger rules (docs/launch-triggers.md): which GitHub events create a launch, kept as
- * a setting (`triggers`) rather than in each repo's launch.yml, which becomes optional input. Read
- * only with the `launch-triggers` flag; without it launch.yml's `triggers` decide, as before.
+ * a setting (`triggers`) rather than in each repo's launch.yml, which becomes optional input. Action
+ * mode reads no setting: there launch.yml's `triggers` decide.
  */
 
 /** What happened on GitHub: a release was published, or a repo went from private to public */

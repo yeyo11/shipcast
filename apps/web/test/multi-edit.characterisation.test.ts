@@ -27,7 +27,7 @@ async function world() {
   ]);
   const [discord] = await withScheduled(registry, launch.id, { discord: new Date('2099-01-01T00:00:00Z') });
   const editing = { registry, editors: fake.editors() };
-  const deps: PostActionDeps = { registry, editing: async () => editing, armSchedule: async () => {}, github: new FakeGitHub(), launchesRepo: 'yeyo11/launches' };
+  const deps: PostActionDeps = { registry, editing: async () => editing, armSchedule: async () => {}, launchRead: { channelConfig: async () => undefined } };
   const [mastodon, devto, bluesky, telegram] = posts;
   return { registry, fake, launch, editing, deps, mastodon: mastodon!, devto: devto!, bluesky: bluesky!, telegram: telegram!, discord: discord! };
 }

@@ -93,9 +93,9 @@ export interface NewLaunch {
   trigger: Trigger;
   kind: PackKind;
   brand: string;
-  /** What the app lists it as; a launch made from sources has one (launch-sources) */
+  /** What the app lists it as; a launch made from sources has one (docs/sources.md) */
   title?: string;
-  /** The launch.yml a launch with no repo publishes by (launch-sources) */
+  /** The launch.yml a launch with no repo publishes by (docs/sources.md) */
   channelsSource?: string;
   /**
    * What "a launch happens once" is also checked on (`launches.dedupe_key`, docs/launch-triggers.md):

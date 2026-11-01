@@ -7,9 +7,9 @@ import { articleConfig, channelsText, draftLaunch, jobFolder, loadBrand, type Ne
 import { FakeGitHub, memoryRegistry, mockRunner, promptOf, scriptedModel, submitParts } from '../src/testing/index.ts';
 
 /*
- * Drafting a launch made from sources (launch-sources): the sources gathered into one bundle, the
+ * Drafting a launch made from sources (docs/sources.md): the sources gathered into one bundle, the
  * pack asked for with claims, the claims checked against the sources there are, and the drafts
- * delivered as any launch's. Without `deps.sources` (the flag off), or for a release whose launch.yml
+ * delivered as any launch's. Without `deps.sources` (Action mode), or for a release whose launch.yml
  * names no sources, drafting is what it was: pipeline.test.ts and the first test here hold it.
  */
 
@@ -102,7 +102,7 @@ async function setup(output: unknown, files: Record<string, string> = {}) {
   return { github, registry, deps, model, clones, fetched, checkouts, archived, brand };
 }
 
-test('with the flag on, a release whose launch.yml names no sources is drafted from its repo as before', async () => {
+test('with sources, a release whose launch.yml names no sources is drafted from its repo as before', async () => {
   const { github, registry, deps, model, clones, checkouts, brand } = await setup({ ...releasePack, project: { name: 'claudio', repo: 'https://github.com/yeyo11/claudio', version: 'v0.9.0' }, analysis: { summary: 's', implemented: ['x'], planned: [], documentedOnly: [], limitations: [] } });
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
   const result = await draftLaunch(launch, brand, deps);

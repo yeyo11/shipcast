@@ -58,7 +58,7 @@ export const LOCKED_ARTICLE_RULES: readonly string[] = [
 ];
 
 /**
- * The same for a launch made from sources (launch-sources): the truth rule per source. Locked like
+ * The same for a launch made from sources (docs/sources.md): the truth rule per source. Locked like
  * the launch rules, and the last lines of the system prompt.
  */
 export const LOCKED_SOURCES_RULES: readonly string[] = [

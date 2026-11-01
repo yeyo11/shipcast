@@ -1,9 +1,9 @@
-import { parseLaunchConfig, pullRequestNumber, type ContentPack } from '@shipcast/schema';
+import { parseLaunchConfig, type ContentPack } from '@shipcast/schema';
 import type { DraftFile } from '../drafts.ts';
-import { channelRows, storeDifferences, storedFile, mediaKind, mimeOf, type PullRequestFile, type StoreCopy } from '../launch-store.ts';
+import { channelRows, storedFile, mediaKind, mimeOf, type PullRequestFile } from '../launch-store.ts';
 import { sha256Hex, type MediaStore } from '../media/store.ts';
-import type { DraftOrigin, DraftSnapshotInput, Launch, Repositories, StoredDraft } from '../repositories/index.ts';
-import { readDraftSnapshot, type ReviewGitHub } from '../review.ts';
+import type { DraftOrigin, Launch, Repositories, StoredDraft } from '../repositories/index.ts';
+import type { ReviewGitHub } from '../review.ts';
 
 /** The cursors the check reports a launch's differences under, read by the attention list */
 export const LAUNCH_STORE_PREFIX = 'launch-store:';
@@ -29,20 +29,17 @@ export interface Delivery {
   pack: ContentPack;
   /** The launch.yml the launch publishes by, as written: the release's, or the one an article's drafts carry */
   configText: string;
-  /** Every file as it was pushed: to the pull request, or committed straight onto main */
+  /** Every file of the drafts */
   files: readonly DraftFile[];
-  /** Committed straight onto main, which approves the drafts as they are */
-  direct?: { sha: string };
 }
 
 /**
- * The launch model's shadow write (docs/launch-store.md, phase 2 of docs/decisions/launch-model.md):
- * while the drafts pull request still decides everything, every launch it carries is also written to
- * Shipcast's own tables (the pack, the channel rows, each draft as versions, the media in the media
- * store, the approval at the merge) and compared with the pull request. Built only with the
- * `launch-store` flag on. The pull request still decides, so nothing here may stop today's flow: no
- * method throws, and what failed or differs is reported under the launch's cursor, which the
- * attention list shows, and answered for the caller's log.
+ * The launch model's write (docs/launch-store.md): a launch Shipcast holds is its pack, its channel
+ * rows, each draft as versions and its media in the media store (`held`), and a published article
+ * edited later is a version of it too (`articleEdited`). The shadow write beside the drafts pull
+ * request, and its check against it, went with the pull-request path (docs/decisions/launch-model.md,
+ * phase 8). An edit that cannot be stored is reported under the launch's cursor, which the attention
+ * list shows.
  */
 export class LaunchStoreService {
   readonly #deps: LaunchStoreDeps;
@@ -62,23 +59,11 @@ export class LaunchStoreService {
   }
 
   /**
-   * The pipeline handed the drafts over: the pack, the channels, a version of each draft and every
-   * file, then the check against what was pushed. Drafts committed straight onto main are approved.
-   */
-  drafted(launch: Launch, delivery: Delivery): Promise<string[]> {
-    return this.#checked(launch, async () => {
-      const { problems, files } = await this.#write(launch, delivery);
-      if (delivery.direct) await this.#approve(launch, { by: 'shipcast', note: `committed straight onto main as ${delivery.direct.sha}` });
-      return [...problems, ...storeDifferences(launch, await this.#copy(launch, files), files)];
-    });
-  }
-
-  /**
    * A launch Shipcast holds itself (docs/app-review.md): the shadow write's own write, with no pull
    * request to compare it with and no report: what could not be stored is answered for the caller to
    * fail the draft with, since these rows are all there is of the launch.
    */
-  async held(launch: Launch, delivery: Omit<Delivery, 'direct'>): Promise<string[]> {
+  async held(launch: Launch, delivery: Delivery): Promise<string[]> {
     const { problems } = await this.#write(launch, delivery);
     // A launch drafted again (a failed one retried) is this delivery and nothing else: a piece or a
     // file the earlier attempt made and this one did not would otherwise stay current, be reviewed,
@@ -105,7 +90,7 @@ export class LaunchStoreService {
   }
 
   /** The pack, the channels, a version of each draft and every file, as the drafts were handed over */
-  async #write(launch: Launch, delivery: Omit<Delivery, 'direct'>): Promise<{ problems: string[]; files: PullRequestFile[] }> {
+  async #write(launch: Launch, delivery: Delivery): Promise<{ problems: string[]; files: PullRequestFile[] }> {
     const problems: string[] = [];
     const { id: packId } = await this.#store.addPack(launch.id, delivery.pack as unknown as Record<string, unknown>, { aiTask: launch.ref.startsWith('article:') ? 'article' : 'pack' });
     const config = parseLaunchConfig(delivery.configText);
@@ -148,16 +133,6 @@ export class LaunchStoreService {
   }
 
   /**
-   * The owner edited a draft in Shipcast, which committed it to the pull request: a version of their
-   * own. A failure is added to what the check last reported, which a full check replaces.
-   */
-  edited(launch: Launch, path: string, content: string, author: string | null = null): Promise<string[]> {
-    return this.#editStored(launch, path, async (stored) => {
-      await this.#version(launch.id, await this.#store.drafts(launch.id), { ...stored, path, body: content, origin: 'owner', author });
-    });
-  }
-
-  /**
    * A published article was edited (Edit on the launch page, committed to the launches repo's main):
    * a `post-publish-edit` version, so the copy stays what the site shows, and the article's post now
    * names that version. Reported like an edit when it cannot be stored.
@@ -184,47 +159,6 @@ export class LaunchStoreService {
     }
   }
 
-  /**
-   * The pull request was read from GitHub (the drafts snapshot's refresh, or the check at the merge):
-   * each draft changed on it becomes a version of the owner's, a merge is the approval, and the rows
-   * are checked against it. A launch the shadow write never stored is left alone.
-   */
-  async pullRequestRead(launch: Launch, read: DraftSnapshotInput): Promise<string[]> {
-    if (!(await this.#holds(launch).catch(() => false))) return [];
-    return this.#checked(launch, async () => {
-      const current = await this.#store.drafts(launch.id);
-      for (const file of read.files) {
-        const stored = storedFile(launch, file.path);
-        if (stored.kind !== 'draft' || file.content === null) continue;
-        // A draft the rows lack is the check's to report, not this sync's to fill in
-        if (current.some((d) => d.channel === stored.channel && d.piece === stored.piece)) {
-          await this.#version(launch.id, current, { ...stored, path: file.path, body: file.content, origin: 'owner' });
-        }
-      }
-      if (read.pullRequest.state === 'merged' && !(await this.#store.approval(launch.id))) {
-        const pr = await this.#deps.github.pullRequest(this.#deps.launchesRepo, read.pullRequest.number);
-        await this.#approve(launch, { by: pr.mergedBy ?? 'pull-request', ...(pr.mergedAt && { at: pr.mergedAt }), note: `merged ${read.pullRequest.url}` });
-      }
-      return storeDifferences(launch, await this.#copy(launch, read.files), read.files, read.launchYml);
-    });
-  }
-
-  /**
-   * The drafts were found approved, as publishing finds them before it sends anything: a merged pull
-   * request is read once, for its approval and the check, whether or not the snapshot is on.
-   */
-  async merged(launch: Launch): Promise<string[]> {
-    try {
-      if (launch.detail?.startsWith('direct:') || !pullRequestNumber(launch) || !(await this.#holds(launch)) || (await this.#store.approval(launch.id))) return [];
-      const read = await readDraftSnapshot(launch, { github: this.#deps.github, launchesRepo: this.#deps.launchesRepo });
-      return read ? await this.pullRequestRead(launch, read) : [];
-    } catch (error) {
-      const problem = `the pull request could not be read for the check: ${error instanceof Error ? error.message : String(error)}`;
-      await this.#report(launch.id, [problem]).catch(() => undefined);
-      return [problem];
-    }
-  }
-
   /** A launch the shadow write stored: one with a pack */
   async #holds(launch: Launch): Promise<boolean> {
     return (await this.#store.currentPack(launch.id)) !== undefined;
@@ -236,29 +170,6 @@ export class LaunchStoreService {
     if (draft && draft.body === input.body) return draft.versionId;
     const { versionId } = await this.#store.addVersion(launchId, { channel: input.channel, piece: input.piece, body: input.body, fields: { path: input.path }, origin: input.origin, author: input.author ?? null, packId: input.packId ?? null });
     return versionId;
-  }
-
-  async #approve(launch: Launch, input: { by: string; at?: string; note: string }): Promise<void> {
-    const versions = Object.fromEntries((await this.#store.drafts(launch.id)).map((d) => [String(d.id), d.versionId]));
-    await this.#store.approveOnce(launch.id, { ...input, versions });
-  }
-
-  async #copy(launch: Launch, files: readonly PullRequestFile[]): Promise<StoreCopy> {
-    const shared = files.map((f) => storedFile(launch, f.path)).flatMap((s) => (s.kind === 'media' && s.shared ? [s.publicPath] : []));
-    const [pack, channels, drafts, media] = await Promise.all([this.#store.currentPack(launch.id), this.#store.channels(launch.id), this.#store.drafts(launch.id), this.#store.media(launch.id, shared)]);
-    return { pack, channelsSource: channels.source, drafts, media };
-  }
-
-  /** Runs a full write or check and reports what it found, replacing the report before; a failure is reported, never thrown */
-  async #checked(launch: Launch, work: () => Promise<string[]>): Promise<string[]> {
-    let differences: string[];
-    try {
-      differences = await work();
-    } catch (error) {
-      differences = [`the shadow write failed: ${error instanceof Error ? error.message : String(error)}`];
-    }
-    await this.#report(launch.id, differences).catch(() => undefined);
-    return differences;
   }
 
   async #report(launchId: number, differences: readonly string[]): Promise<void> {

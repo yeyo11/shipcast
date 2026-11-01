@@ -47,7 +47,7 @@ export interface LaunchImportDeps {
   inputs?: readonly CapturedArticleInput[];
   /** Fresh dry publishers for each launch the verification runs publishing on */
   dryPublishing: () => DryPublishing;
-  /** The `launch-import` flag: off, the import plans and verifies but never writes */
+  /** The script's own consent to write (`--apply`, or a `--rollback` asked for): without it the import plans and verifies but never writes */
   writable: boolean;
 }
 
@@ -109,7 +109,7 @@ export interface Verification {
   problems: string[];
 }
 
-/** The import may not write: the `launch-import` flag is off, or the media store is not there */
+/** The import may not write: it was not asked to (`--apply`), or the media store is not there */
 export class ImportRefused extends ShipcastError {
   constructor(message: string) {
     super(message, { code: 'state', httpStatus: 409 });
@@ -332,12 +332,12 @@ export class LaunchImportService {
    * undefined when every launch was skipped (imported or deleted already): a second run writes nothing.
    */
   async apply(plan: ImportPlan): Promise<string | undefined> {
-    if (!this.#deps.writable) throw new ImportRefused('the launch-import flag is off (SHIPCAST_FLAGS): the import only plans');
+    if (!this.#deps.writable) throw new ImportRefused('the import was not asked to write (--apply): it only plans');
     const work = plan.launches.filter((l) => l.action !== 'skip');
     if (work.length === 0) return undefined;
     // Not half an import: a launch whose files are missing from the store has nothing to publish them from later
     if (work.some((l) => l.media.length > 0) && this.#deps.media.storage === 'none') {
-      throw new ImportRefused('the media store is not available: turn launch-media on with SHIPCAST_MEDIA_* in .env');
+      throw new ImportRefused('the media store is not available: set SHIPCAST_MEDIA_* in .env');
     }
     const batch = randomUUID();
     for (const launchPlan of work) {
@@ -583,7 +583,7 @@ export class LaunchImportService {
    * are addressed by content, and another row may name the same bytes.
    */
   async rollback(batch: string): Promise<Record<string, number>> {
-    if (!this.#deps.writable) throw new ImportRefused('the launch-import flag is off (SHIPCAST_FLAGS): nothing is rolled back');
+    if (!this.#deps.writable) throw new ImportRefused('the import was not asked to write: nothing is rolled back');
     const { registry } = this.#deps;
     const rows = await registry.launchImports.batch(batch);
     if (rows.length === 0) throw new ImportRefused(`no batch ${batch} in force`);
@@ -623,13 +623,13 @@ export function databaseTarget(url: string): string {
 
 /**
  * Why the import script refuses `--verify` here, if it does. Connecting migrates the database and the
- * checks read every launch, so a verification is run where the import may write (`launch-import` on)
- * or on a database the owner says is a restored copy (`--database-is-copy`), never by accident on
- * production with the flag off.
+ * checks read every launch, so a verification is run only on a database the owner names: production
+ * (`--production`, the database the import writes to) or a restored copy (`--database-is-copy`), never
+ * by accident.
  */
-export function verifyRefusal(options: { writable: boolean; databaseIsCopy: boolean }): string | undefined {
-  if (options.writable || options.databaseIsCopy) return undefined;
-  return '--verify needs launch-import in SHIPCAST_FLAGS, or --database-is-copy when the database is a restored copy';
+export function verifyRefusal(options: { production: boolean; databaseIsCopy: boolean }): string | undefined {
+  if (options.production || options.databaseIsCopy) return undefined;
+  return '--verify needs --production on the database the import writes to, or --database-is-copy when it is a restored copy';
 }
 
 /** The plan as the dry run prints it: one block per launch */

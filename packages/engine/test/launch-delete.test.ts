@@ -174,7 +174,7 @@ test('a merged drafts pull request put the article on the site: such a launch is
 });
 
 test('a launch Shipcast holds whose article was committed is hidden, not removed, even where app-review is off', async () => {
-  // The service is built without app-review (the flag off in this process): until the fix it asked
+  // The service is built without app-review (as a test or Action mode may): until the fix it asked
   // app-review alone, so the launch was "never published" and removed, its article left on the site
   const { registry, service, claim } = await setup();
   const launch = await claim();

@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 import { parseDocument } from 'yaml';
 import { draftOf, type Channel, type LaunchConfig } from '@shipcast/schema';
 import { launchDir } from './drafts.ts';
@@ -96,14 +95,6 @@ export function channelsAsLaunchYml(source: string, rows: readonly ChannelRow[])
   return String(doc);
 }
 
-/** The launch's rows, as the check compares them with its pull request */
-export interface StoreCopy {
-  pack: StoredPack | undefined;
-  channelsSource: string | null;
-  drafts: readonly StoredDraft[];
-  media: readonly StoredMediaRow[];
-}
-
 /** A file of the pull request: a text's content, or null where it was listed without reading it; a file's sha256 when its bytes are at hand */
 export interface PullRequestFile {
   path: string;
@@ -113,50 +104,3 @@ export interface PullRequestFile {
 
 /** The path a draft version came from, which `fields.path` keeps */
 export const draftPath = (draft: Pick<StoredDraft, 'fields'>): string | undefined => (typeof draft.fields.path === 'string' ? draft.fields.path : undefined);
-
-/**
- * Every way the launch's rows differ from its pull request, one line each, none when they agree: a
- * file the rows lack, a text whose current version is not the file's, a draft no longer in the pull
- * request. `launchYml` is a release's launch.yml (in the project's repo, not the pull request) when it
- * was read. Files listed without their content are checked for presence only.
- */
-export function storeDifferences(launch: Pick<Launch, 'repo' | 'ref'>, copy: StoreCopy, files: readonly PullRequestFile[], launchYml?: string | null): string[] {
-  const out: string[] = [];
-  const draftsByKey = new Map(copy.drafts.map((d) => [`${d.channel}\n${d.piece}`, d]));
-  const seen = new Set<string>();
-  for (const file of files) {
-    const stored = storedFile(launch, file.path);
-    if (stored.kind === 'draft') {
-      const draft = draftsByKey.get(`${stored.channel}\n${stored.piece}`);
-      seen.add(`${stored.channel}\n${stored.piece}`);
-      if (!draft) out.push(`${file.path}: no draft in the database`);
-      else if (file.content !== null && draft.body !== file.content) out.push(`${file.path}: the database's version ${draft.n} differs from the pull request`);
-    } else if (stored.kind === 'pack') {
-      if (!copy.pack) out.push(`${file.path}: no pack in the database`);
-      else if (file.content !== null && !samePack(copy.pack.pack, file.content)) out.push(`${file.path}: the database's pack ${copy.pack.version} differs from the pull request`);
-    } else if (stored.kind === 'channels') {
-      if (copy.channelsSource === null) out.push(`${file.path}: no channels in the database`);
-      else if (file.content !== null && copy.channelsSource !== file.content) out.push(`${file.path}: the database's channels were read from another launch.yml`);
-    } else if (stored.kind === 'media') {
-      const row = copy.media.find((m) => m.publicPath === stored.publicPath);
-      if (!row) out.push(`${file.path}: no media in the database`);
-      else if (file.sha256 !== undefined && row.sha256 !== file.sha256) out.push(`${file.path}: the database's file has other bytes`);
-    }
-  }
-  for (const draft of copy.drafts) {
-    if (!seen.has(`${draft.channel}\n${draft.piece}`)) out.push(`${draftPath(draft) ?? `${draft.channel} ${draft.piece}`}: in the database, not in the pull request`);
-  }
-  if (launchYml !== undefined && launchYml !== null && !launch.ref.startsWith('article:') && copy.channelsSource !== launchYml) {
-    out.push(`launch.yml of ${launch.repo}: the database's channels were read from another version`);
-  }
-  return out;
-}
-
-function samePack(stored: Record<string, unknown>, text: string): boolean {
-  try {
-    // jsonb keeps no key order, so the pack is compared as a value, not as text
-    return isDeepStrictEqual(stored, JSON.parse(text));
-  } catch {
-    return false;
-  }
-}

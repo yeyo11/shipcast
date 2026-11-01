@@ -55,7 +55,7 @@ export interface LaunchDeletionDeps {
   github: Pick<GitHubSource, 'pullRequestState'> & Pick<PreviewWriter, 'closePreview'>;
   /** Read at each call: the launches repo is a setting the owner can change */
   readonly launchesRepo: string;
-  /** With `app-review`: a launch Shipcast holds, whose preview on the site is closed when it is removed */
+  /** A launch Shipcast holds, whose preview on the site is closed when it is removed */
   appReview?: Pick<AppReviewService, 'closePreview'> | undefined;
   /** Where a removed launch's media bytes are, deleted once no launch names them */
   media?: Pick<MediaStore, 'delete'> | undefined;
@@ -163,8 +163,7 @@ export class LaunchDeletionService {
     if (pieces.some((p) => p.status !== 'scheduled' && p.status !== 'failed')) return true;
     const attempts = await this.#deps.registry.attempts.ofLaunch(launch.id);
     if (attempts.some((a) => a.state === 'live' || a.state === 'unknown' || a.state === 'attempting')) return true;
-    // Read from the cursor itself, not through app-review, which a process without the flag lacks: its
-    // launch must still not be removed as never published. A commit still pending may be on main already
+    // Read from the cursor itself: a commit still pending may be on main already
     if (isAppLaunch(launch)) return (await this.#deps.registry.cursors.cursor(appBlogKey(launch.id))) !== undefined;
     if (launch.detail?.startsWith('direct:')) return true;
     const number = launch.status === 'drafted' ? pullRequestNumber(launch) : undefined;

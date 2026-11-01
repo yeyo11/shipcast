@@ -18,8 +18,8 @@ export const getAutomation = createServerFn({ method: 'GET' }).handler(async () 
     owner: (await ctx.brand()).github,
     /** The queue's work of the last day: drafting, publishing, GitHub's deliveries (moved here from the launches list) */
     jobs: await jobsPage(ctx.registry, { page: 1, state: 'all' }),
-    /** With `launch-triggers`: the rules that decide which GitHub events create a launch (docs/launch-triggers.md); null without */
-    triggers: ctx.triggers ? await ctx.triggers.rules() : null,
+    /** The rules that decide which GitHub events create a launch (docs/launch-triggers.md) */
+    triggers: await ctx.triggers.rules(),
     channels: [...CHANNELS],
   };
 });
@@ -32,7 +32,6 @@ export const saveTriggers = createServerFn({ method: 'POST' })
   })
   .handler(async ({ data }) => {
     const ctx = await appContext();
-    if (!ctx.triggers) return { ok: false as const, problem: 'trigger rules apply only with the launch-triggers flag on' };
     try {
       return { ok: true as const, rules: await ctx.triggers.save(data) };
     } catch (error) {

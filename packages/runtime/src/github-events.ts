@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { LruEtagCache, type EtagCache, type EtagEntry } from '@shipcast/connectors';
-import type { DraftSnapshotService, FileCache, Repositories } from '@shipcast/engine';
+import type { FileCache, Repositories } from '@shipcast/engine';
 import { PROJECTS_PATH } from '@shipcast/schema';
 import type { Cache, Json } from './redis/ports.ts';
 import { MemoryCache } from './redis/memory.ts';
@@ -107,40 +107,30 @@ export function githubCaches(cache: Cache | undefined, launchesRepo: () => strin
   };
 }
 
-/** What a delivery changes in what Shipcast holds of GitHub: a snapshot to read again, files to forget */
+/** What a delivery changes in what Shipcast holds of GitHub: files to forget */
 export interface GitHubEventEffects {
-  /** The launches repo's pull request whose snapshot is read again, by a job */
-  snapshot?: number;
   /** Files kept from this repo that the push changed; every file of it when `paths` is absent */
   forget?: { repo: string; paths?: string[] };
 }
 
 interface EventPayload {
-  action?: string;
   ref?: string;
   forced?: boolean;
   repository?: { full_name?: string; default_branch?: string };
-  pull_request?: { number?: number };
   commits?: Array<{ added?: string[]; modified?: string[]; removed?: string[] }>;
 }
 
-/** The pull request actions that change what the page shows: its files, its title or its state */
-const SNAPSHOT_ACTIONS = new Set(['opened', 'reopened', 'synchronize', 'edited', 'closed']);
 /** GitHub lists at most this many commits in a push; past it the paths are not all known */
 const PUSH_COMMITS_LISTED = 20;
 
 /**
  * Decided from the delivery alone, like webhookAction, and as cheap: the webhook applies the
- * forgetting inline (a cache delete) and queues the snapshot's read, so the answer stays immediate.
+ * forgetting inline (a cache delete), so the answer stays immediate. A pull request changes nothing
+ * Shipcast holds: launches have no drafts pull request (docs/decisions/launch-model.md, phase 8).
  */
-export function githubEventEffects(event: string | null, payload: EventPayload, launchesRepo: string): GitHubEventEffects {
+export function githubEventEffects(event: string | null, payload: EventPayload): GitHubEventEffects {
   const repo = payload.repository?.full_name;
   if (!repo) return {};
-  if (event === 'pull_request') {
-    const number = payload.pull_request?.number;
-    if (norm(repo) !== norm(launchesRepo) || !number || !SNAPSHOT_ACTIONS.has(payload.action ?? '')) return {};
-    return { snapshot: number };
-  }
   if (event !== 'push' || !payload.ref) return {};
   // A tag moved or made: a release's launch.yml read at it may have changed
   if (payload.ref.startsWith('refs/tags/')) return { forget: { repo } };
@@ -158,8 +148,8 @@ export const GITHUB_POLL_KEY = 'github-poll-at';
 export const GITHUB_POLL_MS = 3600_000;
 
 /**
- * Whether the hourly poll is due, and if so marks it taken: GitHub is read on deliveries, and the poll (detection, the open pull requests) is only the safety net for missed
- * ones, at most once an hour however often the rounds run. Rounds are one at a time, so the read
+ * Whether the hourly poll is due, and if so marks it taken: GitHub is read on deliveries, and the
+ * poll (detection, the launches repo's kept files forgotten) is only the safety net for missed ones, at most once an hour however often the rounds run. Rounds are one at a time, so the read
  * and the mark need no lock.
  */
 export async function takeGitHubPoll(registry: Pick<Repositories, 'cursors'>, now: Date = new Date()): Promise<boolean> {
@@ -167,15 +157,4 @@ export async function takeGitHubPoll(registry: Pick<Repositories, 'cursors'>, no
   if (Number.isFinite(last) && now.getTime() - last < GITHUB_POLL_MS) return false;
   await registry.cursors.setCursor(GITHUB_POLL_KEY, now.toISOString());
   return true;
-}
-
-/**
- * The poll's own reads, after the round's detection: every open pull request's snapshot read again
- * (304s when nothing changed), and the launches repo's kept files forgotten, so each is proven
- * current by its next read's ETag rather than trusted on for ever when a push was missed.
- */
-export async function pollGitHub(d: { drafts: Pick<DraftSnapshotService, 'refreshOpen'>; files: Pick<FileCache, 'forget'> | undefined; launchesRepo: string }): Promise<string[]> {
-  if (d.launchesRepo) await d.files?.forget(d.launchesRepo);
-  const { refreshed, problems } = await d.drafts.refreshOpen();
-  return [`GitHub poll: ${refreshed} drafts pull requests read`, ...problems.map((p) => `  ${p}`)];
 }

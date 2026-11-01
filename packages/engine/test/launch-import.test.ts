@@ -254,7 +254,7 @@ test('the verification finds a channel that would publish, and a draft that is n
   assert.ok(problems.some((p) => p.includes(`${ARTICLE}: version 2 is not the file at bbbbbbb`)), problems.join('\n'));
 });
 
-test('without the launch-import flag nothing is written, and a launch with a live piece is never deleted', async () => {
+test('not asked to write (no --apply), nothing is written, and a launch with a live piece is never deleted', async () => {
   const w = await world({ writable: false });
   const plan = await w.service.plan({ deletions: [w.launch.id] });
   assert.equal(plan.launches[0]!.action, 'skip');
@@ -312,11 +312,11 @@ test('the pure mapping', () => {
   assert.throws(() => parseArticleInputs('{"nope":1}', 'f'), /f:1: no launchId and input/);
 });
 
-test('the import script names its database without the password, and --verify runs only where writing is allowed or the database is said to be a copy', () => {
+test('the import script names its database without the password, and --verify runs only on a database named as production or as a copy', () => {
   assert.equal(databaseTarget('postgres://shipcast:s3cret@db.internal:5432/shipcast?sslmode=require'), 'db.internal:5432/shipcast');
   assert.ok(!databaseTarget('postgres://u:s3cret@h/d').includes('s3cret'));
   // Connecting migrates the database: a verification aimed at production by mistake must stop before it
-  assert.match(verifyRefusal({ writable: false, databaseIsCopy: false }) ?? '', /launch-import.*--database-is-copy/);
-  assert.equal(verifyRefusal({ writable: true, databaseIsCopy: false }), undefined);
-  assert.equal(verifyRefusal({ writable: false, databaseIsCopy: true }), undefined);
+  assert.match(verifyRefusal({ production: false, databaseIsCopy: false }) ?? '', /--production.*--database-is-copy/);
+  assert.equal(verifyRefusal({ production: true, databaseIsCopy: false }), undefined);
+  assert.equal(verifyRefusal({ production: false, databaseIsCopy: true }), undefined);
 });

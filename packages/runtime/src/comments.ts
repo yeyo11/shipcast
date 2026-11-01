@@ -40,10 +40,9 @@ export function replyDeps(d: CommentWorkDeps): ReplyDeps {
     aiRunner: d.pipeline.aiRunner,
     texts: d.pipeline.aiTexts ?? (async () => ({})),
     context: launchReplyContext({
-      github: d.pipeline.github,
-      launchesRepo: d.pipeline.launchesRepo,
       checkout: d.pipeline.checkout,
-      stored: d.pipeline.launchRead,
+      // The runtime's pipeline always reads the launch model; one without it grounds no reply in a pack
+      stored: d.pipeline.launchRead ?? { pack: async () => undefined },
     }),
   };
 }

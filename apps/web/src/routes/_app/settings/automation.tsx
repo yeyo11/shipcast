@@ -28,7 +28,7 @@ function Automation() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [sheet, setSheet] = useState<'round' | 'jobs' | null>(null);
-  // With launch-triggers: the rules, saved from the save bar
+  // The trigger rules, saved from the save bar
   const [rules, setRules] = useState<RuleDraft[] | null>(data.triggers);
   const savedRules = JSON.stringify(data.triggers);
   const rulesChanged = JSON.stringify(rules) !== savedRules;

@@ -123,7 +123,7 @@ export type MediaStoreConfig = { endpoint: string; bucket: string; accessKeyId: 
 /**
  * Reads the media store's bucket and key pair from the environment, which `loadConfig` has loaded
  * `.env` into. Undefined when none of it is set, so the store refuses with what is missing; half of
- * it set is a mistake worth stopping for. Only read with the `launch-media` flag on.
+ * it set is a mistake worth stopping for. A server requires it (media.ts).
  */
 export function loadMediaStoreConfig(env: NodeJS.ProcessEnv = process.env): MediaStoreConfig | undefined {
   const value = (name: string) => env[name]?.trim() || undefined;

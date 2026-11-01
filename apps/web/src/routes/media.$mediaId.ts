@@ -4,7 +4,7 @@ import { appContext } from '../server/context.server';
 /**
  * A launch's stored file (docs/launch-store-read.md), for the launch page's media: served from the
  * media store by the app, behind the session like every page (start.ts), so a draft's image is never
- * public before it is published. Only with `launch-store-read`; the bytes are the owner's own, served
+ * public before it is published. The bytes are the owner's own, served
  * as they were stored, never run: no sniffing, no scripts, no frames.
  */
 export const Route = createFileRoute('/media/$mediaId')({
@@ -13,7 +13,7 @@ export const Route = createFileRoute('/media/$mediaId')({
       GET: async ({ params }) => {
         const id = Number(params.mediaId);
         const { launchRead } = await appContext();
-        if (!launchRead || !Number.isInteger(id) || id <= 0) return new Response('Not found', { status: 404 });
+        if (!Number.isInteger(id) || id <= 0) return new Response('Not found', { status: 404 });
         let file: Awaited<ReturnType<typeof launchRead.mediaFile>>;
         try {
           file = await launchRead.mediaFile(id);

@@ -20,7 +20,6 @@ export class PublishingService {
   readonly #github: GitHubSource;
   readonly #launchesRepo: string;
   readonly #attempts: PublishAttempts;
-  readonly #launchStore: PublishDeps['launchStore'];
   readonly #appReview: PublishDeps['appReview'];
 
   constructor(deps: {
@@ -28,15 +27,13 @@ export class PublishingService {
     github: GitHubSource;
     launchesRepo: string;
     attempts?: PublishAttempts;
-    launchStore?: PublishDeps['launchStore'];
-    /** With `app-review`: launches Shipcast holds, approved in the app (docs/app-review.md) */
+    /** Launches Shipcast holds, approved in the app (docs/app-review.md); absent in Action mode, which only has pull requests */
     appReview?: PublishDeps['appReview'];
   }) {
     this.#registry = deps.registry;
     this.#github = deps.github;
     this.#launchesRepo = deps.launchesRepo;
     this.#attempts = deps.attempts ?? deps.registry.attempts;
-    this.#launchStore = deps.launchStore;
     this.#appReview = deps.appReview;
   }
 
@@ -58,7 +55,6 @@ export class PublishingService {
       launchesRepo: this.#launchesRepo,
       guard: new PieceGuard(this.#attempts, holder),
       keepUnpublishable: true,
-      ...(this.#launchStore && { launchStore: this.#launchStore }),
       ...(this.#appReview && { appReview: this.#appReview }),
     });
   }

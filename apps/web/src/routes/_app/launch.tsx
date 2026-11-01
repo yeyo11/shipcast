@@ -29,7 +29,7 @@ function releaseWords(release: Release, latest: boolean): string {
 }
 
 function LaunchARepo() {
-  const { repos, sources, appReview } = Route.useLoaderData();
+  const { repos } = Route.useLoaderData();
   const search = Route.useSearch();
   const navigate = useNavigate();
   const [repo, setRepo] = useState('');
@@ -103,12 +103,8 @@ function LaunchARepo() {
           <h1 className="k-d k-d48">Launch a repo</h1>
           <p className="k-muted wr-flush">
             Pick a release. Shipcast reads the code and drafts every piece; the analysis takes a few minutes.
-            {sources && (
-              <>
-                {' '}
-                Text, pages or images instead? <Link to="/sources">Launch from sources</Link>
-              </>
-            )}
+            {' '}
+            Text, pages or images instead? <Link to="/sources">Launch from sources</Link>
           </p>
           <PickerCombobox label="Repository" placeholder="Type a repo’s name" empty="No repo of yours matches." options={repoOptions} value={repo || null} onValueChange={(name) => void pick(name ?? '')} />
           {repo && (
@@ -144,7 +140,7 @@ function LaunchARepo() {
                 checked={!direct}
                 onChange={() => setDirect(false)}
                 title="Review the drafts first"
-                detail={appReview ? 'They wait in Shipcast until you approve them here.' : 'They wait in a pull request until you approve them here or merge it on GitHub.'}
+                detail="They wait in Shipcast until you approve them here."
               />
               <RadioCard name="mode" checked={direct} onChange={() => setDirect(true)} title="Publish without review" detail="Every channel publishes once the site is live." />
             </fieldset>

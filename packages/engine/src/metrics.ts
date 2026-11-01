@@ -151,7 +151,7 @@ export interface MetricSources {
     history(repo: string): Promise<RepoHistory>;
   };
   /**
-   * With launch-sources: each launch's further repos, besides the primary one, by launch id. Their
+   * Each launch's further repos, besides the primary one, by launch id. Their
    * stars, forks and watchers are read like the primary's and kept apart, per repo, under
    * `github:<owner/name>` (furtherRepoSource), so the launch's own `github` numbers stay its primary repo's
    */

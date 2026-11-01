@@ -18,9 +18,10 @@ export const MAX_WEBHOOK_BYTES = 5 * 1024 * 1024;
  * of it. The answer comes at once (GitHub gives up after ten seconds); drafting and publishing run as
  * background work.
  *
- * A delivery also keeps what Shipcast holds of GitHub current, whatever the
- * mode: a `pull_request` of the launches repo queues its snapshot's read, a `push` forgets the files
- * it touched. Bodies are size-limited and a redelivery of an id already handled is dropped.
+ * A delivery also keeps what Shipcast holds of GitHub current, whatever the mode: a `push` forgets
+ * the files it touched. A `pull_request` publishes nothing: launches are approved in Shipcast, not by
+ * a merge (docs/decisions/launch-model.md, phase 8). Bodies are size-limited and a redelivery of an id
+ * already handled is dropped.
  */
 export async function receiveWebhook(request: Request): Promise<Response> {
   const ctx = await appContext();
@@ -61,7 +62,7 @@ async function handle(ctx: AppContext, event: string | null, delivery: string, b
   const launchesRepo = ctx.settings.current().launchesRepo ?? '';
   // A push to the launches repo may change brand.yml: every replica reads the brand again
   if (event === 'push' && launchesRepo && payload.repository?.full_name?.toLowerCase() === launchesRepo.toLowerCase()) await ctx.announce('brand.changed', { repo: launchesRepo });
-  const kept = await applyEffects(ctx, githubEventEffects(event, payload, launchesRepo), delivery);
+  const kept = await applyEffects(ctx, githubEventEffects(event, payload));
   const action = webhookAction(event, payload, launchesRepo);
   if (action.kind === 'ping') return done(200, 'pong: the webhook reaches Shipcast');
   if (action.kind === 'installation') {
@@ -71,25 +72,22 @@ async function handle(ctx: AppContext, event: string | null, delivery: string, b
   }
   if ((await readAutomation(ctx.registry)).mode !== 'webhook') return done(200, kept.length > 0 ? kept.join('; ') : 'received, but webhooks are turned off in Automation', kept);
   if (action.kind === 'ignore') return done(200, kept.length > 0 ? kept.join('; ') : `ignored: ${action.reason}`, kept);
+  // Action mode publishes on a merge (`shipcast ci publish`); the app holds its launches and approves them itself
+  if (action.kind === 'publish') return done(200, kept.length > 0 ? kept.join('; ') : 'ignored: a merged pull request publishes nothing; launches are approved in Shipcast', kept);
 
   // The claim reads launch.yml from GitHub and the draft takes minutes: both are a job of the
   // queue, so the answer is immediate and a restart in between loses nothing
-  const what = action.kind === 'claim' ? `${action.event.repo} ${action.event.type === 'release' ? action.event.tag : 'made public'}` : action.pullRequestUrl;
-  const job = await ctx.queue.send('delivery', { action, delivery }, { title: action.kind === 'claim' ? `Claiming ${what}` : `Publishing the merge of ${what}` });
-  return done(202, `queued: ${action.kind === 'claim' ? `claiming ${what}` : `publishing ${what}`}${job ? '' : ' (already queued)'}`, kept);
+  const what = `${action.event.repo} ${action.event.type === 'release' ? action.event.tag : 'made public'}`;
+  const job = await ctx.queue.send('delivery', { action, delivery }, { title: `Claiming ${what}` });
+  return done(202, `queued: claiming ${what}${job ? '' : ' (already queued)'}`, kept);
 }
 
-/** Forgets the touched files at once (a cache delete) and queues the snapshot's read: nothing slow in the request */
-async function applyEffects(ctx: AppContext, effects: GitHubEventEffects, delivery: string): Promise<string[]> {
+/** Forgets the touched files at once (a cache delete): nothing slow in the request */
+async function applyEffects(ctx: AppContext, effects: GitHubEventEffects): Promise<string[]> {
   const lines: string[] = [];
   if (effects.forget) {
     await ctx.githubCaches.files.forget(effects.forget.repo, effects.forget.paths);
     lines.push(effects.forget.paths ? `forgot ${effects.forget.paths.length} files of ${effects.forget.repo}` : `forgot every file of ${effects.forget.repo}`);
-  }
-  if (effects.snapshot !== undefined) {
-    const n = effects.snapshot;
-    await ctx.queue.send('drafts-snapshot', { pullRequest: n, delivery }, { title: `Reading drafts pull request #${n}`, singletonKey: `pr:${n}` });
-    lines.push(`reading pull request #${n} again`);
   }
   return lines;
 }

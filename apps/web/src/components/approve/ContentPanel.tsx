@@ -1,7 +1,5 @@
-import { Link, useRouter } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
-import { refreshDrafts } from '../../server/launches.functions';
-import { useToast } from '../Toasts';
+import { Link } from '@tanstack/react-router';
+import { useMemo } from 'react';
 import { CHANNEL_NAMES } from '../../server/view';
 import { channelOfDraft } from '../assistant/protocol';
 import { Icon } from '../kit/Icon';
@@ -24,29 +22,8 @@ export function LaunchContentPanel({ data, running }: { data: LaunchData; runnin
   const pieces = useMemo(() => piecesOf(texts, channelOfDraft, nameOf), [texts]);
   const params = { id: String(launch.id) };
   const editable = reviewOk?.app ? reviewOk.app.open : reviewOk?.pullRequest?.state === 'open';
-  const router = useRouter();
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  // With the drafts snapshot the page shows the pull request as last read, and can read it again
-  const readAt = 'draftsReadAt' in data ? (data.draftsReadAt as string | null | undefined) : undefined;
-  const refresh = async () => {
-    setBusy(true);
-    const answer = await refreshDrafts({ data: launch.id }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
-    setBusy(false);
-    if (!answer.ok) toast.fail(answer.problem);
-    await router.invalidate();
-  };
   return (
     <div className="k-px k-stack k-g12 ap-mt14 ap-content-panel">
-      {readAt !== undefined && (launch.pullRequest || readAt) && (
-        <div className="k-hrow k-between k-g8 k-wrap">
-          <span className="k-sm k-muted">{readAt ? `Drafts read from GitHub ${readAt.slice(0, 16).replace('T', ' ')}` : 'The drafts have not been read from GitHub yet'}</span>
-          <button type="button" className="k-btn k-sm" disabled={busy} onClick={refresh}>
-            <Icon name="retry" size={18} />
-            Refresh from GitHub
-          </button>
-        </div>
-      )}
       {review && 'error' in review && (
         <div className="k-notice k-bad">
           <span className="ap-diamond" aria-hidden="true" />

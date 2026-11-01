@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { ShipcastApiError } from '../client.ts';
 import { accepted, channel, confirm, HINTS, launchId, PUBLISHES, requireConfirm, tool, ToolRefused, type ShipcastTool } from './shared.ts';
 
 /* Launching from sources (with the media uploaded for it), changing or deleting every post of a launch at once, and deleting a launch */
@@ -11,36 +10,6 @@ export const guide =
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 /** The longest base64 that can decode within MAX_UPLOAD_BYTES, so an oversized image is refused before it is decoded */
 const MAX_BASE64_CHARS = Math.ceil(MAX_UPLOAD_BYTES / 3) * 4;
-
-/**
- * The two flags behind these routes, and how the API answers while each is off: the deletion routes
- * with a 404 that names their flag, the sources routes with a 409 refusal. Left as they come, the model
- * would read "no such launch" or "do not retry, tell the user why" without learning the feature is off.
- */
-const FLAGS = {
-  sources: {
-    what: 'Launching from sources',
-    flag: 'launch-sources',
-    off: (error: ShipcastApiError) => error.status === 409 && /not available in this process/.test(error.message),
-  },
-  deletion: {
-    what: 'Deleting launches',
-    flag: 'launch-delete',
-    off: (error: ShipcastApiError) => error.status === 404 && /launch-delete flag/.test(error.message),
-  },
-} as const;
-
-async function unlessOff<T>(feature: keyof typeof FLAGS, call: Promise<T>): Promise<T> {
-  try {
-    return await call;
-  } catch (error) {
-    const { what, flag, off } = FLAGS[feature];
-    if (error instanceof ShipcastApiError && off(error)) {
-      throw new ToolRefused(`${what} is turned off on this Shipcast: its ${flag} feature flag is off (SHIPCAST_FLAGS). Nothing was changed. Tell the user; only the owner can turn it on, so do not retry.`);
-    }
-    throw error;
-  }
-}
 
 /** An image the model holds as base64 (or a data: URL), as the bytes POST /media takes */
 function imageBytes(data: string): Uint8Array<ArrayBuffer> {
@@ -118,7 +87,7 @@ export const tools: ShipcastTool[] = [
         }
       });
       const body = { title: args.title, lang: args.lang ?? 'en', channels: args.channels ?? [], sources };
-      return accepted(await unlessOff('sources', api.call('POST', '/launches/sources', { body })), `Launching "${args.title}" from ${sources.length} source${sources.length === 1 ? '' : 's'}`);
+      return accepted(await api.call('POST', '/launches/sources', { body }), `Launching "${args.title}" from ${sources.length} source${sources.length === 1 ? '' : 's'}`);
     },
   }),
   tool({
@@ -134,7 +103,7 @@ export const tools: ShipcastTool[] = [
     hints: HINTS.setting,
     run: async (api, args) => {
       const bytes = imageBytes(args.image_base64);
-      const answer = await unlessOff('sources', api.call<{ file: { sha256: string } }>('POST', '/media', { raw: { bytes, contentType: 'application/octet-stream' } }));
+      const answer = await api.call<{ file: { sha256: string } }>('POST', '/media', { raw: { bytes, contentType: 'application/octet-stream' } });
       return { ...answer, note: `Name this image in launch_from_sources as { kind: "media", sha256: "${answer.file.sha256}" }, with a name and alt text.` };
     },
   }),
@@ -191,7 +160,7 @@ export const tools: ShipcastTool[] = [
     operations: ['planLaunchDeletion'],
     input: z.object({ launch_id: launchId }),
     hints: HINTS.read,
-    run: (api, args) => unlessOff('deletion', api.call('GET', `/launches/${args.launch_id}/deletion`)),
+    run: (api, args) => api.call('GET', `/launches/${args.launch_id}/deletion`),
   }),
   tool({
     name: 'delete_launch',
@@ -207,7 +176,7 @@ export const tools: ShipcastTool[] = [
     hints: HINTS.destructive,
     run: (api, args) => {
       requireConfirm(args.confirm, 'delete_launch', `Deleting launch ${args.launch_id}`);
-      return unlessOff('deletion', api.call('DELETE', `/launches/${args.launch_id}`, { query: { channels: csv(args.channels) } }));
+      return api.call('DELETE', `/launches/${args.launch_id}`, { query: { channels: csv(args.channels) } });
     },
   }),
 ];

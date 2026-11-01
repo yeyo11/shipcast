@@ -19,11 +19,12 @@ export interface DetectOptions {
   /** The brand of the launches repo this engine writes to; launches for any other are refused */
   brand: Brand;
   /**
-   * With `launch-triggers`: the owner's trigger rules decide which events create a launch, a repo
-   * with no launch.yml is launched on a rule's channels. Each claim carries its dedupe key either way
+   * The owner's trigger rules decide which events create a launch, a repo with no launch.yml is
+   * launched on a rule's channels (the app always has them; Action mode has none and launch.yml
+   * decides). Each claim carries its dedupe key either way
    */
   triggers?: Pick<TriggerService, 'rules' | 'claimKeeping'> | undefined;
-  /** With `launch-delete`: whether the owner removed the launch a dedupe key names; its events launch nothing again */
+  /** Whether the owner removed the launch a dedupe key names; its events launch nothing again */
   removed?: ((dedupeKey: string) => Promise<boolean>) | undefined;
 }
 

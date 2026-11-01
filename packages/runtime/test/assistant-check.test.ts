@@ -77,6 +77,8 @@ async function world(runner: AiTaskRunner) {
     },
     aiRunner: runner,
     aiTexts: async () => ({ tone: 'Plain words.' }),
+    // The launch model's current pack, what the check is grounded in
+    launchRead: { pack: async () => pack },
   } as unknown as PipelineDeps;
   const queue = WorkQueue.pglite(client, registry, quiet);
   queues.push(queue);

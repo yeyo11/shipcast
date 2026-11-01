@@ -35,8 +35,6 @@ export interface JobData {
   checks: { reason: string };
   /** The measurement's browser page loads of fixed pages; worked by the web app only */
   probe: { reason: string };
-  /** A drafts pull request read again after GitHub said it changed */
-  'drafts-snapshot': { pullRequest: number; delivery: string };
   /**
    * A launch's text checked against its released code by the writing assistant,
    * out of the page's request; the result is kept for the page under the job's id (assistant-check.ts)
@@ -86,8 +84,6 @@ export const QUEUES: Record<QueueName, QueueSpec> = {
   // The measurement (docs/plans/performance-refactor.md, phase 0): no retries, the next hour's run is the retry
   checks: { title: 'Checking freshness and correctness', policy: 'stately', retryLimit: 0, expireInSeconds: 10 * 60, concurrency: 1 },
   probe: { title: 'Timing the pages', policy: 'stately', retryLimit: 0, expireInSeconds: 10 * 60, concurrency: 1 },
-  // One per pull request (its key): a burst of pushes to it is one read, of the latest state
-  'drafts-snapshot': { title: 'Reading a drafts pull request', policy: 'stately', retryLimit: 2, retryDelay: 60, expireInSeconds: 5 * 60, concurrency: 2 },
   // A clone and an agent's run for a page that waits: no retries, the owner asks again; the AI's own timeout is 30 minutes
   'assistant-check': { title: 'Checking a text against the code', policy: 'standard', retryLimit: 0, expireInSeconds: 45 * 60, concurrency: 2 },
 };

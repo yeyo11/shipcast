@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError } from '@shipcast/connectors';
-import { inTransaction, LaunchDeletionService, type ArticleInput, type Editors, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
-import { memoryRegistry } from '@shipcast/engine/testing';
+import { inTransaction, LaunchDeletionService, LaunchReadService, type ArticleInput, type Editors, type Launch, type Repositories, type ReviewGitHub } from '@shipcast/engine';
+import { memoryRegistry, MemoryMediaStore } from '@shipcast/engine/testing';
 import { COMMENT_CHANNELS } from '@shipcast/schema';
 import { WEBMCP_HEADER } from '@shipcast/mcp/webmcp';
 import { createApiToken, MemoryStore, writeWebMcp } from '@shipcast/runtime';
@@ -50,6 +50,7 @@ async function setup(): Promise<Setup> {
     secrets,
     github,
     launchesRepo: 'yeyo11/launches',
+    launchRead: new LaunchReadService({ registry, media: new MemoryMediaStore() }),
     publicUrl: 'https://shipcast.example',
     limiter: new FailureLimiter(3, 60_000),
     jobs: (page) => jobsFeed(registry, page),
@@ -226,6 +227,11 @@ test('a launch comes with its posts, numbers, index status and drafts summary', 
   await s.registry.launches.setStatus(launch.id, 'drafted', 'Drafts: https://github.com/yeyo11/launches/pull/7');
   await s.registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: null, url: 'https://josegarrido.dev/en/blog/claudio' });
   await s.registry.metrics.recordMetrics(launch.id, 'blog', { views: 12 }, new Date('2026-10-25T00:00:00Z'));
+  // Its drafts as the launch model holds them since the import
+  await s.registry.launchStore.addPack(launch.id, { schemaVersion: 1 });
+  for (const path of ['launches/claudio/v1.0.0/bluesky.md', 'src/content/posts/en/claudio.md']) {
+    await s.registry.launchStore.addVersion(launch.id, { channel: path.includes('bluesky') ? 'bluesky' : 'blog', piece: path.includes('bluesky') ? 'post' : 'article:en', body: 'text', fields: { path }, origin: 'import' });
+  }
 
   const response = await call(s.deps, 'GET', `/launches/${launch.id}`, { token: s.read });
   assert.equal(response.status, 200);
@@ -239,8 +245,8 @@ test('a launch comes with its posts, numbers, index status and drafts summary', 
   );
   const drafts = detail.drafts as { count: number; pullRequest: { number: number }; files: Array<Record<string, unknown>> };
   assert.equal(drafts.pullRequest.number, 7);
-  assert.equal(drafts.count, 2);
-  assert.ok(drafts.files.every((f) => !('content' in f)), 'the drafts are listed, their text stays in the pull request');
+  assert.equal(drafts.count, 3, 'the two texts and the pack');
+  assert.ok(drafts.files.every((f) => !('content' in f)), 'the drafts are listed, their text stays in the launch model');
 
   assert.equal((await call(s.deps, 'GET', '/launches/999', { token: s.read })).status, 404);
   assert.equal((await call(s.deps, 'GET', '/launches/abc', { token: s.read })).status, 400);

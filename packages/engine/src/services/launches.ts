@@ -5,10 +5,8 @@ import type { LaunchCatalog } from '../ports.ts';
 import { preflight, type Preflight, type PreflightSource } from '../preflight.ts';
 import { isAppLaunch } from '../app-review.ts';
 import type { Launch, LaunchFilter } from '../repositories/index.ts';
-import { approveLaunch, editDraft, type ReviewGitHub } from '../review.ts';
+import type { ReviewGitHub } from '../review.ts';
 import type { AppReviewService } from './app-review.ts';
-import type { DraftSnapshotService } from './drafts.ts';
-import type { LaunchStoreService } from './launch-store.ts';
 
 /** Why a launch was not started, approved or published again; `launch` is the one found in the way, when there is one */
 export class LaunchRefused extends Refused<'not_found' | 'not_ready' | 'launched' | 'state' | 'invalid'> {
@@ -31,12 +29,8 @@ export interface LaunchServiceDeps {
   /** The claim's: the registry that records it once, and GitHub for the latest release when no ref is named */
   claims: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>;
   github: PreflightSource & ReviewGitHub;
-  /** The drafts snapshot the page reads, told of an edit at once */
-  drafts?: Pick<DraftSnapshotService, 'edited'>;
-  /** With `launch-store`: an edit is also a version in the launch model's tables */
-  launchStore?: Pick<LaunchStoreService, 'edited'>;
-  /** With `app-review`: a launch Shipcast holds is edited and approved in the app, not on a pull request (docs/app-review.md) */
-  appReview?: Pick<AppReviewService, 'edit' | 'approve'>;
+  /** Launches are held by Shipcast, edited and approved in the app (docs/app-review.md) */
+  appReview: Pick<AppReviewService, 'edit' | 'approve'>;
 }
 
 /**
@@ -59,9 +53,13 @@ export class LaunchService {
     return launch;
   }
 
-  /** A launch Shipcast holds is reviewed only where the app-review flag is on */
-  #app(): Pick<AppReviewService, 'edit' | 'approve'> {
-    if (!this.#deps.appReview) throw new LaunchRefused('state', 'this launch is reviewed in Shipcast, and the app-review flag is off here');
+  /**
+   * A launch drafted to a pull request (before the launch model) is decided on GitHub: since the
+   * pull-request path is gone (docs/decisions/launch-model.md, phase 8) the app neither edits nor
+   * merges it. Every one in production was merged before the import.
+   */
+  #held(launch: Launch): Pick<AppReviewService, 'edit' | 'approve'> {
+    if (!isAppLaunch(launch)) throw new LaunchRefused('state', 'this launch’s drafts were decided in a pull request: they are no longer edited or approved in Shipcast');
     return this.#deps.appReview;
   }
 
@@ -110,33 +108,18 @@ export class LaunchService {
   }
 
   /**
-   * Saves the owner's edit of one draft as a commit on the pull request's branch (refused, as
-   * ReviewError, when it is not a draft of the launch, the pull request is closed or the text is too
-   * long for its network), then tells the snapshot and the launch model's copy, neither of which can
-   * fail the edit.
+   * Saves the owner's edit of one draft as a new version (refused when it is not a draft of the
+   * launch, a piece already out, or too long for its network); who wrote it (a login, `api`) is kept
    */
   async editDraft(launchId: number, path: string, content: string, author: string | null = null): Promise<void> {
     const launch = await this.#launch(launchId);
-    // Who wrote it (a login, `api`) is kept on the version of a launch Shipcast holds
-    if (isAppLaunch(launch)) return this.#app().edit(launch, path, content, author);
-    await editDraft(launch, path, content, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });
-    const committed = content.endsWith('\n') ? content : `${content}\n`;
-    // The page reads the snapshot: the edit shows at once, before GitHub's delivery confirms it
-    await this.#deps.drafts?.edited(launch, path, committed);
-    await this.#deps.launchStore?.edited(launch, path, committed).catch(() => undefined);
+    return this.#held(launch).edit(launch, path, content, author);
   }
 
-  /**
-   * Approves the drafts: merges their pull request, or for a launch Shipcast holds records the
-   * approval of every draft as it is now; the caller queues the publishing after either
-   */
+  /** Approves the drafts: the approval of every draft as it is now; the caller queues the publishing after it */
   async approve(launchId: number, by = 'owner', seen?: Readonly<Record<string, number>>): Promise<Launch> {
     const launch = await this.#launch(launchId);
-    if (isAppLaunch(launch)) {
-      await this.#app().approve(launch, by, seen);
-      return launch;
-    }
-    await approveLaunch(launch, { github: this.#deps.github, launchesRepo: this.#deps.claims.launchesRepo });
+    await this.#held(launch).approve(launch, by, seen);
     return launch;
   }
 }

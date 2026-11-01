@@ -2,8 +2,7 @@ import { ConnectorError, PostGone, type Comment, type CommentReader, type Replie
 import { AI_TASK_DEFINITIONS, channelDefinition, channelName, COMMENT_CHANNELS, InvalidRequest, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type ContentPack, type Channel, type CommentChannelId, type ReplyCapability, ReplyAnswer } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiTaskRunner } from './ai/runner.ts';
-import { isArticle, packOnLaunchesRepo } from './drafts.ts';
-import type { GitHubSource } from './github.ts';
+import { isArticle } from './drafts.ts';
 import { buildReplyPrompt, type PromptOptions, type ReplyPromptInput } from './prompt.ts';
 import type { CommentClass, CommentRecord, CommentStatus, Launch, Post, Repositories } from './repositories/index.ts';
 import type { CommentStore, SettingReader, SettingStore } from './ports.ts';
@@ -551,20 +550,13 @@ export async function runComments(
 
 /**
  * What a reply is grounded in, read for one launch: the analysis and each channel's text from the
- * pack the launches repo holds (with `launch-store-read`, the launch model's current pack), and a
- * fresh checkout of the released code for the AI to read. An article has no code: the article is
- * the truth, and its pack's summary says what it is.
+ * launch model's current pack, and a fresh checkout of the released code for the AI to read. An
+ * article has no code: the article is the truth, and its pack's summary says what it is.
  */
-export function launchReplyContext(deps: {
-  github: Pick<GitHubSource, 'fileAt'>;
-  launchesRepo: string;
-  checkout: (repo: string, ref: string) => Promise<Checkout>;
-  stored?: Pick<LaunchReadService, 'pack'> | undefined;
-}): (launch: Launch) => Promise<ReplyContext> {
+export function launchReplyContext(deps: { checkout: (repo: string, ref: string) => Promise<Checkout>; stored: Pick<LaunchReadService, 'pack'> }): (launch: Launch) => Promise<ReplyContext> {
   return async (launch) => {
     // A pack that cannot be read grounds nothing; the reply is drafted from the post and the code
-    const fromRepo = () => packOnLaunchesRepo(deps.github, deps.launchesRepo, launch);
-    const pack = await (deps.stored ? deps.stored.pack(launch, fromRepo) : fromRepo()).catch(() => undefined);
+    const pack = await deps.stored.pack(launch).catch(() => undefined);
     const postText: ReplyContext['postText'] = {};
     const english = pack?.article?.en ?? pack?.article?.es;
     // What each post said, as its channel's definition reads it from its piece (dev.to's is the article)
