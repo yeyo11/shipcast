@@ -155,7 +155,7 @@
   .home-all-title h2 { font-size: 48px; }
   .home-search { flex: none; width: 320px; }
   .home-needs-head { margin-block: 0 !important; }
-  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
   .home-peek, .home-bell { max-width: 560px; margin: 0 auto; }
   .home-empty-actions { max-width: 400px; }
 }
@@ -223,3 +223,25 @@
 }
 .home-palette-empty:empty { display: none; }
 .home-toast p, .home-toast h2, .home-toast details { margin: 0; }
+
+/* Calm cards: one row of marks (at most six, then "+n"), the numbers and the marks on the card's bottom
+   edge, so the cards of a grid row are one height */
+.home-card-foot { margin-top: auto; padding-top: 2px; }
+.home-marks { flex-wrap: nowrap; min-width: 0; }
+.home-mark-more { padding: 0 10px; }
+.home-peek-part { display: flex; flex-direction: column; gap: 14px; }
+.home-peek-part .k-sep { margin: 0; }
+
+/* What never went out (the "Not published" group): one line each, below the cards */
+.home-quiet { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.home-quiet-list .home-quiet-row { padding: 12px 0; gap: 12px; text-decoration: none; color: inherit; border-bottom: 1px solid var(--sc-hairline); }
+.home-quiet-list > li:last-child .home-quiet-row { border-bottom: 0; }
+.home-quiet-row:hover { color: inherit; }
+.home-quiet-row:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+.home-quiet-text { gap: 2px; }
+.home-quiet-name { align-items: baseline; min-width: 0; }
+.home-quiet-name strong { font-size: 16px; font-weight: 600; }
+.home-quiet-more { align-self: flex-start; margin-top: 8px; }
+@media (min-width: 960px) {
+  .home-quiet { margin-top: 20px; }
+}

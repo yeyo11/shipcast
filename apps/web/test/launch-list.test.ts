@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { agoLabel, draftingNote, laneOf, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
+import { agoLabel, draftingNote, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
 
 const launch = (id: number, status: string, tone: string) => ({ id, status, state: { tone } });
 
@@ -66,4 +66,51 @@ test('times read as the cards say them', () => {
 test('a drafting launch says what it does now, without the aside', () => {
   assert.equal(draftingNote(['Reading the code and writing the pack; this takes a few minutes…']), 'Reading the code and writing the pack');
   assert.equal(draftingNote([]), 'Drafting');
+});
+
+const calm = (id: number, status: string, tone: string, posts: string[] = [], totals?: { views: number; reactions: number; comments: number; clicks: number }) => ({
+  id,
+  status,
+  state: { tone },
+  posts: posts.map((s) => ({ status: s })),
+  numbers: totals ? { totals } : null,
+});
+const ZERO = { views: 0, reactions: 0, comments: 0, clicks: 0 };
+
+test('what never went out leaves the grid for the "Not published" rows', () => {
+  const ctx = { narrowed: false, listedFailures: new Set<number>() };
+  assert.equal(homeGroupOf(calm(1, 'skipped', 'quiet'), ctx), 'quiet');
+  // Published, but every piece taken down and no numbers: nothing is out there
+  assert.equal(homeGroupOf(calm(2, 'published', 'published', ['deleted', 'deleted'], ZERO), ctx), 'quiet');
+  assert.equal(homeGroupOf(calm(3, 'published', 'published', ['live'], ZERO), ctx), 'card');
+  // Numbers read before the pieces were taken down still make it a card
+  assert.equal(homeGroupOf(calm(4, 'published', 'published', ['deleted'], { ...ZERO, views: 12 }), ctx), 'card');
+  assert.equal(homeGroupOf(calm(5, 'drafted', 'published', ['scheduled']), ctx), 'card');
+  assert.equal(homeGroupOf(calm(6, 'generating', 'draft'), ctx), 'card');
+});
+
+test('a failure shows once: as a line in what needs you, or else as a card', () => {
+  const listed = { narrowed: false, listedFailures: new Set([7]) };
+  assert.equal(homeGroupOf(calm(7, 'failed', 'failed'), listed), 'quiet');
+  assert.equal(homeGroupOf(calm(8, 'failed', 'failed'), listed), 'card');
+  // Partly published: something went out, so its card stays, failures and all
+  assert.equal(homeGroupOf(calm(7, 'drafted', 'failed', ['live', 'failed']), listed), 'card');
+  assert.deepEqual([...listedFailures([{ key: 'launch:7:failed:abc', kind: 'retry' }, { key: 'launch:9:waiting:x', kind: 'approve' }, { key: 'comments:waiting:3', kind: 'reply' }])], [7]);
+});
+
+test('drafts waiting for approval are the yellow card, and a card among the others once the list is narrowed', () => {
+  const waiting = calm(10, 'drafted', 'waiting');
+  assert.equal(homeGroupOf(waiting, { narrowed: false, listedFailures: new Set() }), 'approval');
+  assert.equal(homeGroupOf(waiting, { narrowed: true, listedFailures: new Set() }), 'card');
+  const groups = homeGroups([calm(1, 'skipped', 'quiet'), waiting, calm(3, 'published', 'published', ['live']), calm(4, 'skipped', 'quiet')], { narrowed: false, listedFailures: new Set() });
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.map((l) => l.id)])),
+    { approval: [10], card: [3], quiet: [1, 4] },
+  );
+});
+
+test('a card shows at most six marks on its row, and at least one', () => {
+  assert.equal(homeMarkFit(326), 5);
+  assert.equal(homeMarkFit(2000), 6);
+  assert.equal(homeMarkFit(10), 1);
 });

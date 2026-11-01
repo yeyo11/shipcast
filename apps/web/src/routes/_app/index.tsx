@@ -1,14 +1,14 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { EmptyLaunches } from '../../components/illustrations';
 import { Icon } from '../../components/kit/Icon';
 import { TopBar } from '../../components/kit/Bars';
 import { badgeText, useShell } from '../../components/kit/shell';
-import { LaunchCard, type HomeLaunch } from '../../components/LaunchCard';
+import { LaunchCard, QuietRow, type HomeLaunch } from '../../components/LaunchCard';
 import { FilterMenus, FilterSheet, LaunchPager, SearchBox, useLaunchesNavigate } from '../../components/LaunchFilters';
 import { ApprovalCard, AttentionRow, attentionRows } from '../../components/LaunchRows';
 import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
-import { splitLaunches } from '../../server/launch-list';
+import { homeGroups, listedFailures } from '../../server/launch-list';
 import { readLaunchesSearch, type LaunchesSearch } from '../../server/launches-search';
 import { listLaunches } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
@@ -84,6 +84,41 @@ function FirstRun() {
   );
 }
 
+/** How many of the "Not published" rows show before "Show all" */
+const QUIET_ROWS = 3;
+
+/**
+ * The launches that never went out (not launched, failed before anything went out, every piece taken
+ * down), one line each below the cards: a few, then the rest a click away. Open from the start when a
+ * search or a filter asked for them.
+ */
+function NotPublished({ launches, timezone, open }: { launches: HomeLaunch[]; timezone: string; open: boolean }) {
+  const [all, setAll] = useState(open);
+  useEffect(() => setAll(open), [open]);
+  const shown = all ? launches : launches.slice(0, QUIET_ROWS);
+  const more = launches.length - QUIET_ROWS;
+  return (
+    <section className="home-quiet" aria-labelledby="home-quiet">
+      <div className="k-hrow k-between">
+        <h3 id="home-quiet" className="k-d k-d24">
+          Not published
+        </h3>
+        <span className="k-sm k-muted">{launches.length}</span>
+      </div>
+      <ul id="home-quiet-list" className="k-stack home-quiet-list">
+        {shown.map((l) => (
+          <QuietRow key={l.id} launch={l} timezone={timezone} />
+        ))}
+      </ul>
+      {more > 0 && (
+        <button type="button" className="k-btn k-sm home-quiet-more" aria-expanded={all} aria-controls="home-quiet-list" onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show all ${launches.length}`}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Launches() {
   const { launches, page, facets, timezone } = Route.useLoaderData();
   const search = Route.useSearch();
@@ -95,9 +130,13 @@ function Launches() {
   // Every launch there is, whatever the filters: an empty registry is the first run, not a search with no match
   const any = facets.statuses.some((s) => s.count > 0);
   const narrowed = Object.keys(search).some((k) => k !== 'page' && k !== 'sort');
-  // A search or a filter is about the list: what waits for approval shows among its cards then
-  const approvals = narrowed ? [] : splitLaunches(list).approval;
-  const rest = list.filter((l) => !approvals.includes(l));
+  // A search or a filter is about the list: what waits for approval shows among its cards then.
+  // What never went out leaves the grid for the "Not published" rows, and a failure what needs you
+  // already lists is not shown again as a card
+  const groups = homeGroups(list, { narrowed, listedFailures: listedFailures(attention?.items ?? []) });
+  const approvals = groups.approval;
+  const rest = groups.card;
+  const quiet = groups.quiet;
   const rows = attentionRows(attention?.items ?? []);
   const count = attention?.count ?? 0;
   // Live (realtime-ui): the list is read again when a launch, a piece or a launch's numbers change
@@ -169,7 +208,7 @@ function Launches() {
                   </div>
                 </div>
               </div>
-              {rest.length === 0 ? (
+              {rest.length === 0 && quiet.length === 0 ? (
                 <div className="k-stack k-g12 home-nomatch">
                   <p className="k-muted">{narrowed ? 'No launch matches these filters.' : approvals.length > 0 ? 'Nothing else yet.' : 'No launches on this page.'}</p>
                   {narrowed && (
@@ -179,12 +218,15 @@ function Launches() {
                   )}
                 </div>
               ) : (
-                <div className="home-grid">
-                  {rest.map((l) => (
-                    <LaunchCard key={l.id} launch={l} timezone={timezone} />
-                  ))}
-                </div>
+                rest.length > 0 && (
+                  <div className="home-grid">
+                    {rest.map((l) => (
+                      <LaunchCard key={l.id} launch={l} timezone={timezone} />
+                    ))}
+                  </div>
+                )
               )}
+              {quiet.length > 0 && <NotPublished launches={quiet} timezone={timezone} open={narrowed} />}
               <LaunchPager page={page} search={search} />
             </section>
           </>
