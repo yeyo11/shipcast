@@ -11,13 +11,6 @@
 
 export const PENDING: readonly string[] = [
 
-  // schedule: packages/mcp/src/tools/schedule.ts
-  'scheduleLaunch',
-  'reschedulePost',
-  'cancelScheduledPost',
-  'recommendTimes',
-  'getTimezone',
-  'setTimezone',
 
   // comments: packages/mcp/src/tools/comments.ts
   'listComments',
