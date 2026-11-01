@@ -24,6 +24,8 @@ export type HomeLaunch = LaunchView & {
   held: boolean;
   ready: { count: number; text: string } | null;
   drafting: string | null;
+  /** The title the launch model keeps (an article's), or null */
+  title: string | null;
 };
 
 const networkOf = (channel: string) => CHANNEL_NAMES[channel] ?? channel;

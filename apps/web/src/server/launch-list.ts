@@ -44,8 +44,11 @@ export function ownerAvatarUrl(repo: string): string | null {
 }
 
 /** The name a launch goes by on the list: the project, or an article's title as its slug spells it */
-export function launchTitle(launch: { repo: string; ref: string }): { title: string; version: string | null; article: boolean } {
+export function launchTitle(launch: { repo: string; ref: string; title?: string | null }): { title: string; version: string | null; article: boolean } {
   if (launch.ref.startsWith('article:')) {
+    // The title the launch model keeps; the slug only when it has none
+    const kept = launch.title?.trim();
+    if (kept) return { title: kept, version: null, article: true };
     const words = launch.ref.slice('article:'.length).replace(/[-_]+/g, ' ').trim();
     return { title: words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Article', version: null, article: true };
   }
@@ -188,4 +191,12 @@ export const HOME_MARKS_MAX = 6;
 /** How many marks a row of `width` px holds, between one and the most a card shows */
 export function homeMarkFit(width: number): number {
   return Math.min(HOME_MARKS_MAX, Math.max(1, Math.floor((Math.max(0, width) + HOME_MARK_GAP) / (HOME_MARK + HOME_MARK_GAP))));
+}
+
+/**
+ * The launch a line of what needs you may delete from its ⋯: only one that failed before anything
+ * went out, so a warning line never hides a launch that published. Null for every other line.
+ */
+export function deletableFromLine(item: { key: string; kind: string; nothingOut?: boolean }): number | null {
+  return item.nothingOut ? failedLaunchOf(item) : null;
 }

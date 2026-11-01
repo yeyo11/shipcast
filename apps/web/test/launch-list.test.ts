@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { agoLabel, canRelaunch, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
+import { memoryRegistry } from '@shipcast/engine/testing';
+import { agoLabel, canRelaunch, deletableFromLine, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
 
 const launch = (id: number, status: string, tone: string) => ({ id, status, state: { tone } });
 
@@ -127,4 +128,28 @@ test('a failed line of what needs you names its launch; other lines name none', 
   assert.equal(failedLaunchOf({ key: 'launch:12:failed:9x', kind: 'retry' }), 12);
   assert.equal(failedLaunchOf({ key: 'launch:12:waiting:2026', kind: 'approve' }), null);
   assert.equal(failedLaunchOf({ key: 'comments:waiting:4', kind: 'reply' }), null);
+});
+
+test('only a failure nothing of which went out can be deleted from its warning line', () => {
+  assert.equal(deletableFromLine({ key: 'launch:3:failed:ab', kind: 'retry', nothingOut: true }), 3);
+  // Partly published: its line keeps Retry alone, so deleting from a warning never hides a published launch
+  assert.equal(deletableFromLine({ key: 'launch:2:failed:cd', kind: 'retry' }), null);
+  assert.equal(deletableFromLine({ key: 'comments:waiting:4', kind: 'reply' }), null);
+});
+
+test('an article is named by the title the launch model keeps, its slug only without one', () => {
+  assert.deepEqual(launchTitle({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: 'Why I moved my notes into the repo' }), { title: 'Why I moved my notes into the repo', version: null, article: true });
+  assert.equal(launchTitle({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: '  ' }).title, 'Why i moved');
+  assert.equal(launchTitle({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: null }).title, 'Why i moved');
+  // A release keeps its project's name and version
+  assert.deepEqual(launchTitle({ repo: 'yeyo11/pando', ref: 'v1.0.0', title: 'Something else' }), { title: 'pando', version: 'v1.0.0', article: false });
+});
+
+test('the titles of a page of launches come in one read, only those that have one', async () => {
+  const registry = await memoryRegistry();
+  const { launch: named } = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:hello', trigger: 'article', kind: 'launch', brand: 'josegarridodev', title: 'Hello, world' });
+  const { launch: bare } = await registry.launches.claim({ repo: 'yeyo11/pando', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'josegarridodev' });
+  const titles = await registry.launches.titles([named.id, bare.id]);
+  assert.deepEqual([...titles], [[named.id, 'Hello, world']]);
+  assert.deepEqual([...(await registry.launches.titles([]))], []);
 });

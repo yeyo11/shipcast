@@ -37,6 +37,8 @@ export interface AttentionItem {
   subject?: string;
   /** The network a line is about (an account to reconnect): its mark beside the line */
   channel?: string;
+  /** A failed launch nothing of which went out: deleting it from the line hides nothing published */
+  nothingOut?: true;
 }
 
 export interface AttentionInput {
@@ -125,7 +127,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   for (const l of input.launches) {
     if (l.status !== 'failed') continue;
     const why = l.detail?.split('\n')[0]?.trim();
-    items.push({ key: `launch:${l.id}:failed:${digest(`${l.updatedAt}\n${why ?? ''}`)}`, kind: 'retry', text: `${launchName(l.repo, l.ref)} failed${why ? `: ${why}` : ''}`, action: 'Retry', target: { to: '/launches/$id', params: { id: String(l.id) } }, subject: launchName(l.repo, l.ref) });
+    items.push({ key: `launch:${l.id}:failed:${digest(`${l.updatedAt}\n${why ?? ''}`)}`, kind: 'retry', text: `${launchName(l.repo, l.ref)} failed${why ? `: ${why}` : ''}`, action: 'Retry', target: { to: '/launches/$id', params: { id: String(l.id) } }, subject: launchName(l.repo, l.ref), nothingOut: true });
   }
   for (const [id, failures] of failed) {
     const l = byId.get(id);

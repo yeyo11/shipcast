@@ -1,6 +1,6 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
-import { agoLabel, failedLaunchOf, launchTitle } from '../server/launch-list';
+import { agoLabel, deletableFromLine, launchTitle } from '../server/launch-list';
 import { launchRepo } from '../server/launches.functions';
 import type { AttentionItem } from '../server/attention';
 import { Icon } from './kit/Icon';
@@ -156,7 +156,8 @@ function rowItem(item: AttentionItem, network: (channel: string) => string): Att
 
 export function AttentionRow({ item, network, deletable }: { item: AttentionItem; network: (channel: string) => string; deletable: boolean }) {
   const shown = rowItem(item, network);
-  const failed = failedLaunchOf(item);
+  // Only a launch that failed before anything went out: deleting from a warning never hides a published one
+  const failed = deletableFromLine(item);
   return (
     <li className="home-row-item">
       <AttentionLink item={item} className="k-row home-row">
