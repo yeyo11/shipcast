@@ -78,7 +78,8 @@ function codeFor(status: number): ApiErrorCode {
   if (status === 403) return 'insufficient_scope';
   if (status === 404) return 'not_found';
   if (status === 429) return 'rate_limited';
-  if (status === 400) return 'invalid_input';
+  // POST /media answers 413 `too_large` for a file over its cap: an argument to fix, not a wrong address
+  if (status === 400 || status === 413) return 'invalid_input';
   if (status === 409) return 'refused';
   return status >= 500 ? 'internal' : 'bad_response';
 }

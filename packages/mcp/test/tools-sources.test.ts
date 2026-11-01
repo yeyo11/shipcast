@@ -95,6 +95,11 @@ test('upload_media passes on the API\'s refusal of a file that is not an image',
   assert.match(await refusal(api, 'upload_media', { image_base64: 'aGVsbG8=' }), /not a PNG, JPEG, GIF or WebP image \(409 refused\)/);
 });
 
+test('a file the API finds too large reads as an argument to fix', async () => {
+  const { api } = fakeClient({ 'POST /media': () => apiError(413, 'too_large', 'a file has at most 20971520 bytes') });
+  assert.match(await refusal(api, 'upload_media', { image_base64: 'aGVsbG8=' }), /at most 20971520 bytes \(413 invalid_input\)\. Fix the arguments/);
+});
+
 test('launch_from_sources sends every kind of source in the API\'s shape and answers the job', async () => {
   const { fake, api } = fakeClient({ 'POST /launches/sources': acceptedJob('j7') });
   const answer = (await runTool(api, 'launch_from_sources', {
