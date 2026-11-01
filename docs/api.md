@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-11-01T11:58:30.272132033Z
+updated_at: 2026-11-01T12:52:07.320519019Z
 tags:
     - api
     - reference
@@ -42,7 +42,8 @@ include the other. Every route takes `Authorization: Bearer <token>`; the sessio
 the API, except for WebMCP's same-origin calls while the owner has turned that experiment on
 ([decisions/mcp.md](decisions/mcp.md)). The [MCP server](mcp.md) uses a `read,write` token, over
 stdio (`shipcast mcp`) or at the app's `/mcp`, which checks the same tokens and shares their limit on
-wrong ones.
+wrong ones. Every route below has its MCP tool, added in the same change as the route
+([decisions/mcp-parity.md](decisions/mcp-parity.md)).
 
 ## Routes
 
@@ -197,4 +198,4 @@ routes of 2026-10-30 were checked with the work faked; nothing was fetched or up
 
 ## Related
 
-[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[decisions/lists.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[sources.md]] · [[launch-delete.md]]
+[[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[decisions/job-queue.md]] · [[decisions/lists.md]] · [[decisions/account-analysis.md]] · [[stats.md]] · [[scheduling.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[decisions/mcp-parity.md]] · [[decisions/comment-assistant.md]] · [[accounts.md]] · [[publishing.md]] · [[web-app.md]] · [[engine.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]] · [[sources.md]] · [[launch-delete.md]]
