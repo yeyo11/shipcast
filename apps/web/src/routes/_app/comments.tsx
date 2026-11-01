@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-r
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Mailbox } from '../../components/illustrations';
 import { TopBar } from '../../components/kit/Bars';
-import { GLYPHS } from '../../components/kit/glyphs';
+import { hasGlyph, NetworkGlyph } from '../../components/kit/NetworkGlyph';
 import { Icon } from '../../components/kit/Icon';
 import { Sheet } from '../../components/kit/Sheet';
 import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
@@ -43,13 +43,7 @@ const listSearch = (search: InboxSearch): InboxSearch => {
 };
 
 function Glyph({ channel, size }: { channel: string; size: number }) {
-  const d = GLYPHS[channel];
-  if (!d) return null;
-  return (
-    <svg width={size} height={size} style={{ flex: 'none' }} fill="currentColor" aria-hidden="true" viewBox="0 0 24 24">
-      <path d={d} />
-    </svg>
-  );
+  return hasGlyph(channel) ? <NetworkGlyph channel={channel} size={size} /> : null;
 }
 
 function Avatar({ author }: { author: CommentView['author'] }) {

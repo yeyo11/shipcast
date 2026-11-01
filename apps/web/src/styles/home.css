@@ -83,8 +83,6 @@
 .home-marks { position: relative; z-index: 1; }
 .home-mark { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 160px; border: 2px solid var(--sc-hairline); background: transparent; color: var(--sc-text); font: 600 13px var(--sc-font-text); cursor: pointer; }
 .home-mark:hover, .home-mark[data-popup-open] { border-color: var(--sc-rail); }
-.home-glyph { flex: none; display: block; }
-.home-glyph-letter { display: inline-flex; align-items: center; justify-content: center; font-weight: 700; line-height: 1; }
 .home-progress { height: 6px; border-radius: 3px; background: var(--sc-hairline); position: relative; overflow: hidden; }
 .home-progress > span { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: var(--sc-yellow); border-radius: 3px; }
 @media (prefers-reduced-motion: no-preference) {

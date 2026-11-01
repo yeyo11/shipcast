@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { GLYPHS } from '../kit/glyphs';
+import { hasGlyph, NetworkGlyph } from '../kit/NetworkGlyph';
 
 /*
  * The Stats section's small shared pieces: a network's glyph and the empty state every tab ends on
@@ -7,17 +7,9 @@ import { GLYPHS } from '../kit/glyphs';
  */
 
 /** The networks' glyph names, where a channel or an account's network is not one by itself */
-const GLYPH_OF: Record<string, string> = { brevo: 'newsletter' };
-
-/** A network's mark, inline so it takes the text colour (the board's glyphs) */
+/** A network's mark, inline so it takes the text colour (the board's glyphs); nothing for a row with no channel */
 export function Glyph({ channel, size = 14 }: { channel: string | null; size?: number }) {
-  const path = channel ? GLYPHS[GLYPH_OF[channel] ?? channel] : undefined;
-  if (!path) return null;
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ flex: 'none' }}>
-      <path d={path} />
-    </svg>
-  );
+  return channel && hasGlyph(channel) ? <NetworkGlyph channel={channel} size={size} /> : null;
 }
 
 /** The empty and nothing-yet state (board StatsEmpty): the section's art, a title, a line and a way on */

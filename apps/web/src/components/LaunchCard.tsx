@@ -6,7 +6,7 @@ import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
 import { Sheet, SheetClose } from './kit/Sheet';
 import { readyText } from './LaunchRows';
-import { NetworkGlyph } from './NetworkGlyph';
+import { NetworkGlyph } from './kit/NetworkGlyph';
 import { number } from './ui';
 
 /*

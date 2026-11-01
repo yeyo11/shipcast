@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { GLYPHS } from '../components/kit/glyphs';
+import { NetworkGlyph } from '../components/kit/NetworkGlyph';
 import { Icon } from '../components/kit/Icon';
 import { SignIn as SignInArt } from '../components/illustrations';
 import { safeWas, whereFrom } from '../components/where-from';
@@ -42,9 +42,7 @@ function SignIn() {
         </h1>
         <p className="k-lead acc-login-lead">{lead}</p>
         <a className="k-btn k-pri k-full acc-login-go" href={href}>
-          <svg className="acc-login-glyph" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d={GLYPHS.github} />
-          </svg>
+          <NetworkGlyph channel="github" size={22} className="acc-login-glyph" />
           Sign in with GitHub
         </a>
         {where && (

@@ -4,7 +4,7 @@ import { agoLabel, launchTitle } from '../server/launch-list';
 import type { AttentionItem } from '../server/attention';
 import { Icon } from './kit/Icon';
 import type { HomeLaunch } from './LaunchCard';
-import { NetworkGlyph } from './NetworkGlyph';
+import { NetworkGlyph } from './kit/NetworkGlyph';
 
 /*
  * What needs the owner first, on top of the Launches page (boards Main and DesktopHome): the yellow
