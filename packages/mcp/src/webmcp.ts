@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createApiClient, WEBMCP_HEADER, type FetchLike, type ShipcastApi } from './client.ts';
 import { invoke } from './errors.ts';
-import { TOOLS } from './tools.ts';
+import { TOOLS } from './tools/index.ts';
 
 /*
  * WebMCP: the same tools as the MCP server, offered to an agent built into the browser while the
