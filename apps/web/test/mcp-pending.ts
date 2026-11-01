@@ -13,11 +13,6 @@ export const PENDING: readonly string[] = [
 
 
 
-  // profiles: packages/mcp/src/tools/profiles.ts
-  'listProfileCapabilities',
-  'getProfileReview',
-  'reviewProfile',
-  'editProfile',
 
   // sources: packages/mcp/src/tools/sources.ts
   'launchFromSources',
