@@ -57,6 +57,8 @@ Both run as [Sluice](.sluice.toml) gates (`typecheck` on pre-commit, `test` on p
   stay as written.
 - Settings-shaped documents (`launch.yml`, brand config) are files; accumulating records (launches,
   metrics) are rows in a database.
+- Every feature reachable in the app gets a REST route and an MCP tool in the same change: the
+  parity test fails otherwise ([docs/decisions/mcp-parity.md](docs/decisions/mcp-parity.md)).
 - Commits follow Conventional Commits.
 - **Until a stable version, changes go straight to `main`** (since 2026-10-26, until the owner says
   otherwise; [docs/decisions/main-until-mvp.md](docs/decisions/main-until-mvp.md)). An agent works in
