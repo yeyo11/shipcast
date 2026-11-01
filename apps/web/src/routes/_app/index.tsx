@@ -92,7 +92,7 @@ const QUIET_ROWS = 3;
  * down), one line each below the cards: a few, then the rest a click away. Open from the start when a
  * search or a filter asked for them.
  */
-function NotPublished({ launches, timezone, open }: { launches: HomeLaunch[]; timezone: string; open: boolean }) {
+function NotPublished({ launches, timezone, open, deletable }: { launches: HomeLaunch[]; timezone: string; open: boolean; deletable: boolean }) {
   const [all, setAll] = useState(open);
   useEffect(() => setAll(open), [open]);
   const shown = all ? launches : launches.slice(0, QUIET_ROWS);
@@ -107,7 +107,7 @@ function NotPublished({ launches, timezone, open }: { launches: HomeLaunch[]; ti
       </div>
       <ul id="home-quiet-list" className="k-stack home-quiet-list">
         {shown.map((l) => (
-          <QuietRow key={l.id} launch={l} timezone={timezone} />
+          <QuietRow key={l.id} launch={l} timezone={timezone} deletable={deletable} />
         ))}
       </ul>
       {more > 0 && (
@@ -120,7 +120,7 @@ function NotPublished({ launches, timezone, open }: { launches: HomeLaunch[]; ti
 }
 
 function Launches() {
-  const { launches, page, facets, timezone } = Route.useLoaderData();
+  const { launches, page, facets, timezone, deletable } = Route.useLoaderData();
   const search = Route.useSearch();
   const go = useLaunchesNavigate(search);
   const router = useRouter();
@@ -181,7 +181,7 @@ function Launches() {
                     </div>
                     <ul className="k-stack home-rows">
                       {rows.map((item) => (
-                        <AttentionRow key={item.key} item={item} network={network} />
+                        <AttentionRow key={item.key} item={item} network={network} deletable={deletable} />
                       ))}
                     </ul>
                   </div>
@@ -226,7 +226,7 @@ function Launches() {
                   </div>
                 )
               )}
-              {quiet.length > 0 && <NotPublished launches={quiet} timezone={timezone} open={narrowed} />}
+              {quiet.length > 0 && <NotPublished launches={quiet} timezone={timezone} open={narrowed} deletable={deletable} />}
               <LaunchPager page={page} search={search} />
             </section>
           </>

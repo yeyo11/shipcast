@@ -79,6 +79,8 @@ export const listLaunches = createServerFn({ method: 'GET' })
       page: { number: page.page, pages: page.pages, total: page.total, size: page.pageSize },
       facets,
       timezone,
+      /** With `launch-delete`: the list offers to delete a launch from its row's menu (docs/launch-delete.md) */
+      deletable: ctx.flags.on('launch-delete'),
     };
   });
 

@@ -159,10 +159,24 @@ export function homeGroups<T extends Groupable>(launches: readonly T[], context:
 export function listedFailures(items: ReadonlyArray<{ key: string; kind: string }>): Set<number> {
   const ids = new Set<number>();
   for (const i of items) {
-    const id = i.kind === 'retry' ? /^launch:(\d+):failed:/.exec(i.key)?.[1] : undefined;
-    if (id) ids.add(Number(id));
+    const id = failedLaunchOf(i);
+    if (id !== null) ids.add(id);
   }
   return ids;
+}
+
+/** The launch a "failed" line of what needs you is about, or null for any other line */
+export function failedLaunchOf(item: { key: string; kind: string }): number | null {
+  const id = item.kind === 'retry' ? /^launch:(\d+):failed:/.exec(item.key)?.[1] : undefined;
+  return id ? Number(id) : null;
+}
+
+/**
+ * Whether a launch can be launched again as it is (the launch page's "Launch it again"): a release
+ * that failed before anything went out. An article is written again in Write instead.
+ */
+export function canRelaunch(launch: { status: string; ref: string; posts: readonly unknown[] }): boolean {
+  return launch.status === 'failed' && !launch.ref.startsWith('article:') && launch.posts.length === 0;
 }
 
 /** A card's channel mark (`.home-mark`: 8 + 15 + 6 + 10 + 8 px and its 2 px borders) and the gap after it */

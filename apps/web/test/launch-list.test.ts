@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { agoLabel, draftingNote, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
+import { agoLabel, canRelaunch, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
 
 const launch = (id: number, status: string, tone: string) => ({ id, status, state: { tone } });
 
@@ -113,4 +113,18 @@ test('a card shows at most six marks on its row, and at least one', () => {
   assert.equal(homeMarkFit(326), 5);
   assert.equal(homeMarkFit(2000), 6);
   assert.equal(homeMarkFit(10), 1);
+});
+
+test('a row offers to launch again only a release that failed before anything went out', () => {
+  assert.equal(canRelaunch({ status: 'failed', ref: 'v2.0.0', posts: [] }), true);
+  assert.equal(canRelaunch({ status: 'failed', ref: 'v2.0.0', posts: [{}] }), false);
+  // An article is written again in Write
+  assert.equal(canRelaunch({ status: 'failed', ref: 'article:notes', posts: [] }), false);
+  assert.equal(canRelaunch({ status: 'skipped', ref: 'v1.4.0', posts: [] }), false);
+});
+
+test('a failed line of what needs you names its launch; other lines name none', () => {
+  assert.equal(failedLaunchOf({ key: 'launch:12:failed:9x', kind: 'retry' }), 12);
+  assert.equal(failedLaunchOf({ key: 'launch:12:waiting:2026', kind: 'approve' }), null);
+  assert.equal(failedLaunchOf({ key: 'comments:waiting:4', kind: 'reply' }), null);
 });

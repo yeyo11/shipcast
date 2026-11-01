@@ -243,3 +243,15 @@
 @media (min-width: 960px) {
   .home-quiet { margin-top: 20px; }
 }
+
+/* A row's ⋯ beside its link: the "Not published" rows and a failed launch's line in what needs you */
+.home-quiet-item, .home-row-item { display: flex; align-items: center; gap: 4px; }
+.home-quiet-item > .k-row, .home-row-item > .k-row { flex: 1; min-width: 0; }
+.home-rows > .home-row-item:last-child .home-row, .home-quiet-list > .home-quiet-item:last-child .home-quiet-row { border-bottom: 0; }
+.home-rows .home-row-item:has(.home-row-menu) { border-bottom: 1px solid var(--sc-hairline); }
+.home-rows .home-row-item:has(.home-row-menu) .home-row { border-bottom: 0; }
+.home-rows > .home-row-item:last-child:has(.home-row-menu) { border-bottom: 0; }
+.home-quiet-list .home-quiet-item:has(.home-row-menu) { border-bottom: 1px solid var(--sc-hairline); }
+.home-quiet-list .home-quiet-item:has(.home-row-menu) .home-quiet-row { border-bottom: 0; }
+.home-quiet-list > .home-quiet-item:last-child:has(.home-row-menu) { border-bottom: 0; }
+.k-btn.k-sm.k-icon.home-row-menu { flex: none; width: 40px; min-height: 40px; margin-right: -8px; }

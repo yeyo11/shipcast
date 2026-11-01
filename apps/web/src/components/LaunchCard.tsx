@@ -1,11 +1,11 @@
 import { Link } from '@tanstack/react-router';
 import { useLayoutEffect, useRef, useState } from 'react';
-import { agoLabel, HOME_MARKS_MAX, homeMarkFit, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
+import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
 import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
 import { Sheet, SheetClose } from './kit/Sheet';
-import { readyText } from './LaunchRows';
+import { readyText, RowMenu } from './LaunchRows';
 import { NetworkGlyph } from './kit/NetworkGlyph';
 import { number } from './ui';
 
@@ -266,14 +266,15 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
 }
 
 /** A launch that never went out, as one line in the "Not published" group: its name, where it is from, when, and its state */
-export function QuietRow({ launch, timezone }: { launch: HomeLaunch; timezone: string }) {
+export function QuietRow({ launch, timezone, deletable }: { launch: HomeLaunch; timezone: string; deletable: boolean }) {
   const { title, version, article } = launchTitle(launch);
+  const name = title.charAt(0).toUpperCase() + title.slice(1);
   return (
-    <li>
+    <li className="home-quiet-item">
       <Link to="/launches/$id" params={{ id: String(launch.id) }} className="k-row home-quiet-row">
         <span className="k-grow k-stack home-quiet-text">
           <span className="k-hrow k-g8 home-quiet-name">
-            <strong className="k-ellipsis">{title.charAt(0).toUpperCase() + title.slice(1)}</strong>
+            <strong className="k-ellipsis">{name}</strong>
             {version && <span className="k-mono k-sm k-muted">{version}</span>}
           </span>
           <span className="k-xs k-muted k-ellipsis">
@@ -282,6 +283,7 @@ export function QuietRow({ launch, timezone }: { launch: HomeLaunch; timezone: s
         </span>
         <StatePill tone={launch.state.tone} label={launch.state.label} />
       </Link>
+      <RowMenu launch={{ id: launch.id, name: version ? `${name} ${version}` : name }} relaunch={canRelaunch(launch) ? { repo: launch.repo, ref: launch.ref } : null} deletable={deletable} />
     </li>
   );
 }
