@@ -90,7 +90,8 @@ export function Overlay({ kind, label, heading, footer, children, trigger, open,
   }
   wasOpen.current = isOpen;
   const from = anchor ?? (trigger ? null : opener.current);
-  const back = from instanceof HTMLElement ? from : undefined;
+  // Never on the server, which has no DOM: overlays render closed there
+  const back = typeof HTMLElement !== 'undefined' && from instanceof HTMLElement ? from : undefined;
 
   if (shape === 'sheet') {
     return (
