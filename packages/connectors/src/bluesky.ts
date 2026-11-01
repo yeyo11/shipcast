@@ -5,6 +5,7 @@ import {
   type IdentityCache,
   ConnectorError,
   expectOk,
+  failureText,
   imageUrl,
   json,
   okCheck,
@@ -15,6 +16,7 @@ import {
   type CommentReader,
   type Deletable,
   type Metrics,
+  type MetricsMany,
   type Profile,
   type ProfileEdit,
   type ProfileEditor,
@@ -25,6 +27,7 @@ import {
   type ReplyTarget,
   type SentReply,
 } from './http.ts';
+import { HttpClient, type RetryPolicy } from './http-client.ts';
 
 /** A node of app.bsky.feed.getPostThread; a blocked or deleted reply has no `post` */
 interface ThreadView {
@@ -147,6 +150,14 @@ export function richText(text: string): { text: string; facets: ReturnType<typeo
   return { text: shown + text.slice(from), facets };
 }
 
+/** The AppView's cached public host: a Bunny CDN hostname, whose address is a geo-DNS answer that lives seconds */
+const PUBLIC_APP_VIEW = 'https://public.api.bsky.app';
+/** The AppView itself, which Bluesky documents beside the public host as the other one that needs no login */
+const DIRECT_APP_VIEW = 'https://api.bsky.app';
+
+/** A read the AppView left with no HTTP answer at all (the HttpClient's network error or timeout) */
+const unanswered = (error: unknown): error is ConnectorError => error instanceof ConnectorError && error.status === undefined;
+
 /**
  * Bluesky through the AT Protocol: a session from the handle and an app password, a post record with
  * link facets and a link card, and its counts read from the public AppView, which needs no login.
@@ -157,16 +168,51 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
   readonly #fetch: typeof fetch;
   readonly #service: string;
   readonly #appView: string;
+  readonly #fallbackAppView: string | undefined;
+  /** The AppView's reads only: a write to the PDS is never repeated on its own */
+  readonly #http: HttpClient;
   #session: Session | undefined;
   readonly #cache: IdentityCache | undefined;
 
-  constructor(options: { identifier: string; appPassword: string; fetch?: typeof fetch; service?: string; appView?: string; cache?: IdentityCache }) {
+  /**
+   * `fallbackAppView` is where an AppView read goes when the first gave no answer: api.bsky.app when
+   * the AppView is the default public one, none when another was given, unless named too
+   */
+  constructor(options: { identifier: string; appPassword: string; fetch?: typeof fetch; service?: string; appView?: string; fallbackAppView?: string; cache?: IdentityCache; retry?: Partial<RetryPolicy> }) {
     this.#cache = options.cache;
     this.#identifier = options.identifier;
     this.#password = options.appPassword;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#service = options.service ?? 'https://bsky.social';
-    this.#appView = options.appView ?? 'https://public.api.bsky.app';
+    this.#appView = options.appView ?? PUBLIC_APP_VIEW;
+    this.#fallbackAppView = options.fallbackAppView ?? (options.appView === undefined ? DIRECT_APP_VIEW : undefined);
+    // getPosts answers in well under a second; three tries a second or two apart outlast a blip
+    this.#http = new HttpClient({ network: 'Bluesky', ...(options.fetch && { fetch: options.fetch }), timeoutMs: 20_000, retry: { attempts: 3, baseMs: 1_000, ...options.retry } });
+  }
+
+  /**
+   * A read from the AppView (`path` is `/xrpc/<method>?<query>`), through the HttpClient: a timeout,
+   * and retries with backoff on a network error, a 429 or a 502-504. A read the public host leaves
+   * with no answer at all after its retries is asked of the fallback AppView, which is reached on
+   * another network and resolved under another domain; `detour` says why, for the log. An HTTP
+   * answer, an error too, is the AppView's word, and is not asked again elsewhere.
+   */
+  async #read<T>(path: string, what: string): Promise<{ answer: T; detour?: string }> {
+    const reason = (error: ConnectorError) => error.message.replace(`Bluesky: ${what}: `, '');
+    try {
+      return { answer: await this.#http.json<T>(`${this.#appView}${path}`, { what }) };
+    } catch (error) {
+      const fallback = this.#fallbackAppView;
+      if (!fallback || !unanswered(error)) throw error;
+      const missed = `${hostOf(this.#appView)} gave no answer (${reason(error)})`;
+      try {
+        return { answer: await this.#http.json<T>(`${fallback}${path}`, { what }), detour: `${what} read from ${hostOf(fallback)}: ${missed}` };
+      } catch (second) {
+        if (!unanswered(second)) throw second;
+        // Both reasons are in the message, so no cause: a log that adds causes would say the first twice
+        throw new ConnectorError('Bluesky', `${what}: no AppView answered: ${missed}; ${hostOf(fallback)}: ${reason(second)}`);
+      }
+    }
   }
 
   async #login(): Promise<Session> {
@@ -248,10 +294,12 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
    */
   async comments(externalId: string): Promise<Comment[]> {
     const query = new URLSearchParams({ uri: externalId, depth: '10', parentHeight: '0' });
-    const { thread } = await json<{ thread: ThreadView }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPostThread?${query}`), 'read the replies').catch((error: unknown) => {
-      if (error instanceof ConnectorError && error.status === 400 && error.message.includes('"error":"NotFound"')) throw new PostGone('Bluesky', `the post ${externalId} no longer exists`, 400);
-      throw error;
-    });
+    const { thread } = (
+      await this.#read<{ thread: ThreadView }>(`/xrpc/app.bsky.feed.getPostThread?${query}`, 'read the replies').catch((error: unknown) => {
+        if (error instanceof ConnectorError && error.status === 400 && error.message.includes('"error":"NotFound"')) throw new PostGone('Bluesky', `the post ${externalId} no longer exists`, 400);
+        throw error;
+      })
+    ).answer;
     const owner = thread.post?.author.did;
     const out: Comment[] = [];
     const visit = (node: ThreadView) => {
@@ -287,7 +335,7 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
     const query = new URLSearchParams();
     query.append('uris', target.postExternalId);
     query.append('uris', target.commentExternalId);
-    const { posts } = await json<{ posts: Array<{ uri: string; cid: string }> }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?${query}`), 'read the thread');
+    const { posts } = (await this.#read<{ posts: Array<{ uri: string; cid: string }> }>(`/xrpc/app.bsky.feed.getPosts?${query}`, 'read the thread')).answer;
     const root = posts.find((p) => p.uri === target.postExternalId);
     const parent = posts.find((p) => p.uri === target.commentExternalId);
     if (!root || !parent) throw new ConnectorError('Bluesky', 'the post or the comment is gone: nothing to reply to', 404);
@@ -314,8 +362,7 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
 
   /** The public profile from the AppView, which needs no session: picture, name and counts */
   async #profile(actor: string): Promise<BlueskyProfile> {
-    const response = await this.#fetch(`${this.#appView}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`);
-    return json<BlueskyProfile>('Bluesky', response, 'read the profile');
+    return (await this.#read<BlueskyProfile>(`/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`, 'read the profile')).answer;
   }
 
   /**
@@ -487,16 +534,31 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
 
   /**
    * The numbers of many posts from the public AppView, 25 per call (getPosts' most). A post missing
-   * from the answer is gone or hidden, and is left out rather than read as zeros.
+   * from the answer is gone or hidden, and is left out rather than read as zeros. A call that failed
+   * costs only its own posts: they keep their last numbers and stay due, the others' still count,
+   * and `problems` says why (and when a call had to go to the fallback AppView). Only when no call
+   * was answered does the read fail as a whole.
    */
-  async metricsMany(uris: readonly string[]): Promise<Map<string, Metrics>> {
-    const out = new Map<string, Metrics>();
+  async metricsMany(uris: readonly string[]): Promise<MetricsMany> {
+    const out: MetricsMany = new Map<string, Metrics>();
+    const problems: string[] = [];
+    let answered = false;
+    let failed: unknown;
     for (const batch of chunks(uris, 25)) {
       const query = new URLSearchParams();
       for (const uri of batch) query.append('uris', uri);
-      const { posts } = await json<{ posts: Array<PostCounts & { uri: string }> }>('Bluesky', await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?${query}`), 'metrics');
-      for (const post of posts) out.set(post.uri, postMetrics(post));
+      try {
+        const { answer, detour } = await this.#read<{ posts: Array<PostCounts & { uri: string }> }>(`/xrpc/app.bsky.feed.getPosts?${query}`, 'metrics');
+        answered = true;
+        for (const post of answer.posts) out.set(post.uri, postMetrics(post));
+        if (detour && !problems.includes(detour)) problems.push(detour);
+      } catch (error) {
+        failed ??= error;
+        problems.push(`${batch.length} of ${uris.length} posts not read: ${failureText(error)}`);
+      }
     }
+    if (!answered && failed !== undefined) throw failed;
+    if (problems.length > 0) out.problems = problems;
     return out;
   }
 
@@ -560,8 +622,7 @@ export class Bluesky implements Deletable, CommentReader, Replier, ProfileReader
   }
 
   async metrics(externalId: string): Promise<Metrics> {
-    const response = await this.#fetch(`${this.#appView}/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(externalId)}`);
-    const { posts } = await json<{ posts: PostCounts[] }>('Bluesky', response, 'metrics');
+    const { posts } = (await this.#read<{ posts: PostCounts[] }>(`/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(externalId)}`, 'metrics')).answer;
     const post = posts[0];
     return post ? postMetrics(post) : {};
   }

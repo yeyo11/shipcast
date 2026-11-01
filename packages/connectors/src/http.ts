@@ -124,7 +124,35 @@ export function checkProblem(error: unknown, rejected?: string): Check {
     if (error.status !== undefined && error.status >= 500) return { ok: false, problem: `${error.network} is having trouble (${error.status}): try again later` };
     return { ok: false, problem: error.message };
   }
-  return { ok: false, problem: `could not reach the network: ${error instanceof Error ? error.message : String(error)}` };
+  return { ok: false, problem: `could not reach the network: ${failureText(error)}` };
+}
+
+/** A system or undici error code (ECONNRESET, EAI_AGAIN, UND_ERR_SOCKET); Shipcast's own codes are lower case */
+const SYSTEM_CODE = /^[A-Z][A-Z0-9_]+$/;
+
+/**
+ * An error's message with what caused it, for a log line or a problem. Node's fetch fails with a bare
+ * "fetch failed" and keeps the reason (a reset or closed socket, a DNS or TLS failure, a connect
+ * timeout) on `cause`, which a log of the message alone loses: `fetch failed: other side closed
+ * (UND_ERR_SOCKET)`. Each cause's message and code are added only when the text does not say them yet.
+ */
+export function failureText(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  let text = error.message;
+  let cause: unknown = error.cause;
+  for (let depth = 0; cause !== undefined && cause !== null && depth < 4; depth++) {
+    if (!(cause instanceof Error)) {
+      if (!text.includes(String(cause))) text += `: ${String(cause)}`;
+      break;
+    }
+    // Happy eyeballs fails with an AggregateError whose own message is empty: each address's error says why
+    const message = cause.message || (cause instanceof AggregateError ? cause.errors.map((e: unknown) => (e instanceof Error ? e.message : String(e))).join(', ') : '');
+    if (message && !text.includes(message)) text += `: ${message}`;
+    const code = (cause as { code?: unknown }).code;
+    if (typeof code === 'string' && SYSTEM_CODE.test(code) && !text.includes(code)) text += ` (${code})`;
+    cause = cause.cause;
+  }
+  return text;
 }
 
 /**
