@@ -68,6 +68,11 @@ function Answer({ message, assistant }: { message: ChatMessage; assistant: Assis
           Writing…
         </p>
       )}
+      {message.notice && (
+        <p className="k-sm k-muted wr-flush wr-notice" role="status">
+          {message.notice}
+        </p>
+      )}
       {message.problem && (
         <p className="k-sm wr-problem wr-flush" role="alert">
           {message.problem}

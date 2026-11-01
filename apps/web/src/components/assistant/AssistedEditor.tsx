@@ -228,6 +228,11 @@ function ProposalCard({ assistant, onAccept }: { assistant: Assistant; onAccept:
               })}
             </ul>
           )}
+          {proposal.notice && (
+            <p className="k-sm k-muted wr-flush wr-notice" role="status">
+              {proposal.notice}
+            </p>
+          )}
           {(hasText || !proposal.streaming) && <DiffView before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} context={context} legend className={proposal.range ? undefined : 'wr-diff-whole'} />}
         </>
       )}

@@ -82,6 +82,31 @@ test('a chat turn sends the conversation, and the text with the selection in the
   assert.deepEqual(JSON.parse(JSON.stringify(sent(model).messages)), [{ role: 'user', content: [{ type: 'text', text: 'Punchier, please' }] }]);
 });
 
+test('a proposal for a plain network that slips into Markdown is cleaned before it can be accepted, with a notice', async () => {
+  const model = streaming('claudio 1.0 is **out**: ', '[read it](https://josegarrido.dev/en/claudio/?ref=bluesky)');
+  const { events } = await ask({ action: 'improve', selection: '', document: 'claudio 1.0 is out.', launchId: 7, channel: 'bluesky' }, model);
+  assert.deepEqual(events.slice(-2), [
+    { type: 'cleaned', text: 'claudio 1.0 is out: read it (https://josegarrido.dev/en/claudio/?ref=bluesky)', notice: 'Took out Markdown links and bold: Bluesky does not show them' },
+    { type: 'done' },
+  ]);
+  assert.match(sent(model).system ?? '', /plain text only, no Markdown at all/);
+});
+
+test('an adaptation is cleaned for its target; Markdown the network shows, and titles, are left as they are', async () => {
+  const adapted = await ask({ action: 'adapt', target: 'mastodon', selection: '', document: 'An **article**.' }, streaming('A **post**.'));
+  assert.deepEqual(adapted.events.find((e) => e.type === 'cleaned'), { type: 'cleaned', text: 'A post.', notice: 'Took out bold: Mastodon does not show it' });
+  const article = await ask({ action: 'improve', selection: '', document: 'An article.' }, streaming('An **article**.'));
+  assert.equal(article.events.some((e) => e.type === 'cleaned'), false);
+  const titles = await ask({ action: 'titles', selection: '', document: 'x', channel: 'bluesky' }, streaming('**One**\nTwo'));
+  assert.equal(titles.events.some((e) => e.type === 'cleaned'), false);
+});
+
+test('a chat answer’s proposals are cleaned where they stand, its prose left as written', async () => {
+  const model = streaming('Here, **tighter**:\n```proposal\nIt is **out** now.\n```\nDone.');
+  const { events } = await ask({ action: 'chat', selection: '', document: 'It is out.', channel: 'bluesky', messages: [{ role: 'user', content: 'Tighter' }] }, model);
+  assert.deepEqual(events.find((e) => e.type === 'cleaned'), { type: 'cleaned', text: 'Here, **tighter**:\n```proposal\nIt is out now.\n```\nDone.', notice: 'Took out bold: Bluesky does not show it' });
+});
+
 test('checking an article against the code is refused with the reason, as an event', async () => {
   const { events } = await ask({ action: 'check', selection: 'x', document: 'x' }, streaming('never'));
   assert.equal(events.length, 1);

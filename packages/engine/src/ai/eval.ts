@@ -2,7 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   AI_TASK_DEFINITIONS,
+  channelInSentence,
   channelName,
+  checkFormat,
+  editorProfile,
   COMMENT_CHANNELS,
   ContentPack,
   formatIssues,
@@ -16,6 +19,7 @@ import {
   type LaunchConfig,
 } from '@shipcast/schema';
 import { z } from 'zod';
+import { buildActionPrompt, isAdaptTarget } from '../assistant.ts';
 import { LAUNCH_CONFIG_PATH } from '../detect.ts';
 import { buildPrompt, buildReplyPrompt, type ReplyPromptInput } from '../prompt.ts';
 import type { Launch } from '../repositories/index.ts';
@@ -70,6 +74,21 @@ export const EvalCase = z.discriminatedUnion('task', [
     analysis: AnalysisInput.optional(),
     /** Or the analysis of a pack case earlier in the same run, when that run answered it */
     analysisFrom: z.string().optional(),
+  }),
+  z.strictObject({
+    ...common,
+    /**
+     * A quick action of the writing assistant on a launch's piece, as the page asks it: its answer is
+     * checked against the piece's formatting (a Bluesky post answered with Markdown is a problem)
+     */
+    task: z.literal('assistant'),
+    action: z.enum(['improve', 'shorten', 'translate', 'adapt']),
+    channel: z.string().refine((c) => editorProfile(c) !== undefined, 'a channel with a formatting profile'),
+    /** For `adapt`: the network to adapt to */
+    target: z.string().refine(isAdaptTarget, 'a network the assistant adapts to').optional(),
+    lang: z.enum(['en', 'es']).optional(),
+    text: z.string().min(1),
+    analysis: AnalysisInput.optional(),
   }),
 ]);
 export type EvalCase = z.infer<typeof EvalCase>;
@@ -180,6 +199,8 @@ interface Asked {
   prompt: string;
   /** For a pack: the launch.yml it is checked against */
   config?: LaunchConfig;
+  /** The task answers with text, streamed (the writing assistant) */
+  streamed?: boolean;
 }
 
 async function launchConfigOf(c: Extract<EvalCase, { task: 'pack' }>, checkoutDir: string): Promise<LaunchConfig> {
@@ -197,6 +218,11 @@ export async function askFor(c: EvalCase, brand: Brand, checkoutDir: string, ana
     const now = new Date().toISOString();
     const launch: Launch = { id: 0, repo: c.repo, ref: c.ref, trigger: 'manual', kind: resolvePack(config, c.ref, c.previous), brand: brand.id, status: 'generating', detail: null, createdAt: now, updatedAt: now };
     return { task: AI_TASK_DEFINITIONS.pack as AiTaskDefinition<unknown>, config, ...buildPrompt(launch, config, brand) };
+  }
+  if (c.task === 'assistant') {
+    const context = { kind: 'launch' as const, channel: c.channel, document: c.text, ...(c.lang && { lang: c.lang }), launch: { repo: c.repo, ref: c.ref, ...(c.analysis && { analysis: c.analysis }) } };
+    const asked = buildActionPrompt({ action: c.action, selection: c.text, ...(c.target && isAdaptTarget(c.target) && { target: c.target }) }, context, brand);
+    return { task: AI_TASK_DEFINITIONS.assistant as AiTaskDefinition<unknown>, streamed: true, ...asked };
   }
   const analysis = c.analysis ?? (c.analysisFrom !== undefined ? analyses.get(c.analysisFrom) : undefined);
   const input: ReplyPromptInput = {
@@ -260,39 +286,58 @@ export async function runEval(cases: readonly EvalCase[], options: EvalRunOption
     };
     const started = clock();
     try {
+      // The assistant reads no repo: its case is grounded in the analysis it carries
       const key = `${c.repo}@${c.ref}`;
-      if (!checkouts.has(key)) checkouts.set(key, options.checkout(c.repo, c.ref));
-      const hostDir = await checkouts.get(key)!;
+      if (c.task !== 'assistant' && !checkouts.has(key)) checkouts.set(key, options.checkout(c.repo, c.ref));
+      const hostDir = c.task === 'assistant' ? '' : await checkouts.get(key)!;
       const asked = await askFor(c, brand, hostDir, analyses);
-      const result = await runner.run(
-        asked.task,
-        {
-          system: asked.system,
-          prompt: asked.prompt,
-          repo: { name: c.repo, ref: c.ref, hostDir },
-          observer: {
-            toolCall: (call) => toolCalls.push({ name: call.name, args: summarizeArgs(call.name, call.input) }),
-            step: (u) => {
-              modelCalls++;
-              usage.inputTokens += u.inputTokens ?? 0;
-              usage.outputTokens += u.outputTokens ?? 0;
-              usage.totalTokens += u.totalTokens ?? (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
-              usage.cacheReadTokens += u.inputTokenDetails?.cacheReadTokens ?? 0;
-              usage.cacheWriteTokens += u.inputTokenDetails?.cacheWriteTokens ?? 0;
+      if (asked.streamed && c.task === 'assistant') {
+        const stream = runner.stream(asked.task, { system: asked.system, prompt: asked.prompt }, setup);
+        let text = '';
+        for await (const chunk of stream.textStream) text += chunk;
+        const answered = await stream.result;
+        modelCalls = 1;
+        usage.inputTokens += answered.usage.inputTokens ?? 0;
+        usage.outputTokens += answered.usage.outputTokens ?? 0;
+        usage.totalTokens += answered.usage.totalTokens ?? 0;
+        record.ok = true;
+        record.output = text;
+        record.steps = 1;
+        record.model = answered.model;
+        // What the page would have to clean: syntax the piece's network does not show
+        const target = c.action === 'adapt' ? (c.target ?? 'bluesky') : c.channel;
+        record.problems = checkFormat(text, editorProfile(target)!).map((p) => `${channelInSentence(target)} does not show ${p.syntax}: ${p.sample}`);
+      } else {
+        const result = await runner.run(
+          asked.task,
+          {
+            system: asked.system,
+            prompt: asked.prompt,
+            repo: { name: c.repo, ref: c.ref, hostDir },
+            observer: {
+              toolCall: (call) => toolCalls.push({ name: call.name, args: summarizeArgs(call.name, call.input) }),
+              step: (u) => {
+                modelCalls++;
+                usage.inputTokens += u.inputTokens ?? 0;
+                usage.outputTokens += u.outputTokens ?? 0;
+                usage.totalTokens += u.totalTokens ?? (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
+                usage.cacheReadTokens += u.inputTokenDetails?.cacheReadTokens ?? 0;
+                usage.cacheWriteTokens += u.inputTokenDetails?.cacheWriteTokens ?? 0;
+              },
             },
           },
-        },
-        setup,
-      );
-      record.ok = true;
-      record.output = result.output;
-      record.steps = result.steps;
-      record.repaired = result.repaired;
-      record.model = result.model;
-      if (c.task === 'pack' && asked.config) {
-        const pack = ContentPack.parse(result.output);
-        analyses.set(c.id, pack.analysis);
-        record.problems = missingPieces(pack, asked.config, brand);
+          setup,
+        );
+        record.ok = true;
+        record.output = result.output;
+        record.steps = result.steps;
+        record.repaired = result.repaired;
+        record.model = result.model;
+        if (c.task === 'pack' && asked.config) {
+          const pack = ContentPack.parse(result.output);
+          analyses.set(c.id, pack.analysis);
+          record.problems = missingPieces(pack, asked.config, brand);
+        }
       }
     } catch (error) {
       record.error = redact(error instanceof Error ? error.message : String(error), secrets);
@@ -311,7 +356,7 @@ export async function runEval(cases: readonly EvalCase[], options: EvalRunOption
 const RecordFile = z.array(
   z.looseObject({
     case: z.string(),
-    task: z.enum(['pack', 'reply']),
+    task: z.enum(['pack', 'reply', 'assistant']),
     provider: z.string(),
     model: z.string(),
     access: z.string(),
@@ -395,6 +440,11 @@ export function compareEvals(a: readonly Recorded[], b: readonly Recorded[], lab
         for (const item of added) out.push(`  + ${item}`);
       }
       for (const [label, r] of [[labels.a, ra], [labels.b, rb]] as const) if (r.problems.length > 0) out.push(`${label} problems: ${r.problems.join('; ')}`);
+    } else if (ra.task === 'assistant') {
+      for (const [label, r] of [[labels.a, ra], [labels.b, rb]] as const) {
+        out.push(`${label}: ${typeof r.output === 'string' ? r.output : ''}`);
+        if (r.problems.length > 0) out.push(`${label} problems: ${r.problems.join('; ')}`);
+      }
     } else {
       for (const [label, r] of [[labels.a, ra], [labels.b, rb]] as const) {
         const reply = ReplyOutput.parse(r.output ?? {});

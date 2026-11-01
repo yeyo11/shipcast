@@ -2,6 +2,8 @@ import {
   AssistantRefused,
   buildActionPrompt,
   buildChat,
+  cleanedNotice,
+  cleanProposal,
   isAdaptTarget,
   isAssistantAction,
   type AiTaskRunner,
@@ -10,7 +12,7 @@ import {
   type Launch,
   type AssistantRepository,
 } from '@shipcast/engine';
-import { AI_TASK_DEFINITIONS, type Brand } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, type Brand, type Syntax } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
 import { splitProposals } from '../components/assistant/diff.ts';
 import { id, InvalidInput, object, text } from './input.ts';
@@ -147,6 +149,14 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
         }
       }
       settled = true;
+      // The model was told what the network shows; what slipped through is taken out before the
+      // owner can accept it, and the page says what went
+      const target = request.action === 'adapt' && request.target && isAdaptTarget(request.target) ? request.target : undefined;
+      const cleaned = request.action === 'titles' ? undefined : cleanAnswer(answer, request.action === 'chat', context, target);
+      if (cleaned) {
+        answer = cleaned.text;
+        yield { type: 'cleaned', text: cleaned.text, notice: cleanedNotice(cleaned.removed, context, target) };
+      }
       const saved = saving ? await saving.finish(answer) : undefined;
       if (saved) yield { type: 'saved', ...saved };
       yield { type: 'done' };
@@ -165,6 +175,36 @@ export async function* assistantEvents(request: AssistantRequest, deps: Assistan
     if (signal?.aborted) return;
     yield { type: 'error', message: message(error) };
   }
+}
+
+/**
+ * The answer with each proposal cleaned of what its network does not show: a quick action's answer
+ * is the proposal, a chat answer's are its fenced blocks (the prose around them is the owner's to
+ * read). Undefined when nothing had to go.
+ */
+export function cleanAnswer(answer: string, chat: boolean, context: Pick<AssistantContext, 'channel'>, target?: string): { text: string; removed: Syntax[] } | undefined {
+  if (!chat) {
+    const cleaned = cleanProposal(answer, context, target);
+    return cleaned.removed.length > 0 ? cleaned : undefined;
+  }
+  const removed = new Set<Syntax>();
+  // Each fenced block's body, found as splitProposals finds it, cleaned where it stands
+  let text = '';
+  let at = 0;
+  const open = /```proposal[^\n]*\n/g;
+  for (let match = open.exec(answer); match; match = open.exec(answer)) {
+    const bodyStart = match.index + match[0].length;
+    const close = answer.indexOf('\n```', bodyStart - 1);
+    const bodyEnd = close < 0 ? answer.length : Math.max(bodyStart, close);
+    const cleaned = cleanProposal(answer.slice(bodyStart, bodyEnd), context, target);
+    for (const s of cleaned.removed) removed.add(s);
+    text += answer.slice(at, bodyStart) + cleaned.text;
+    at = bodyEnd;
+    if (close < 0) break;
+    open.lastIndex = close + 4;
+  }
+  text += answer.slice(at);
+  return removed.size > 0 ? { text, removed: [...removed] } : undefined;
 }
 
 type Sessions = NonNullable<AssistantDeps['sessions']>;

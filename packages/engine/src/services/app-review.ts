@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { ContentPack, contentPackFor, draftBody, parseProjects, pieceLimitProblem, PROJECTS_PATH, Refused, withCover, type ChannelDefinition, type LaunchConfig } from '@shipcast/schema';
+import { channelDefinition, channelName, ContentPack, contentPackFor, draftBody, editorProfile, formatProblem, parseProjects, pieceLimitProblem, PROJECTS_PATH, Refused, withCover, type ChannelDefinition, type LaunchConfig } from '@shipcast/schema';
 import { appBlogKey, appPreviewKey, channelWaits, currentVersions, sameVersions, isAppLaunch, forAppReview, previewAddress, type BlogCommit, type SitePreview } from '../app-review.ts';
 import { isArticle, keepPubDates, projectSlug, type DraftFile } from '../drafts.ts';
 import { GitHubError, type CommitFile, type GitHubSource, type PreviewWriter } from '../github.ts';
@@ -101,6 +101,9 @@ export class AppReviewService {
     // The network would refuse it at publishing time: refused here, while it can still be fixed
     const tooLong = draft.channel === 'blog' ? undefined : pieceLimitProblem(draft.channel, draftBody(content));
     if (tooLong) throw new AppReviewRefused('invalid', `${path}: ${tooLong}`);
+    // So would it show syntax the network does not render as typed characters: `**bold**` on Bluesky
+    const unshown = draft.channel === 'blog' ? undefined : formatOf(draft.channel, draftBody(content));
+    if (unshown) throw new AppReviewRefused('invalid', `${path}: ${unshown}`);
     const body = content.endsWith('\n') ? content : `${content}\n`;
     if (body === draft.body) return;
     await this.#store.addVersion(launch.id, { channel: draft.channel, piece: draft.piece, body, fields: { ...draft.fields, path }, origin: 'owner', author });
@@ -293,4 +296,12 @@ export class AppReviewService {
     }
     return [...texts, ...media, ...site];
   }
+}
+
+/** What a draft's text has that its network does not show, read as the channel reads its draft (a title line is not the post) */
+function formatOf(channel: string, body: string): string | undefined {
+  const definition = channelDefinition(channel);
+  const profile = editorProfile(channel);
+  if (!definition?.draft || !profile) return undefined;
+  return formatProblem(channelName(channel), definition.draft.read(body).text, profile);
 }

@@ -163,6 +163,8 @@ test('an edit is a version of the owner’s, checked like a pull request edit, a
   assert.equal(github.calls.length, before);
   await assert.rejects(launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'x'.repeat(400))), /300|limit|long/i);
   await assert.rejects(launches.editDraft(launch.id, `${D}/nothing.md`, 'x'), /not a draft of this launch/);
+  // Bluesky shows no formatting: a bold would go out with its asterisks
+  await assert.rejects(launches.editDraft(launch.id, BLUESKY, pending('Bluesky', 'Approval', 'It is **out**')), /Bluesky does not show bold \(\*\*out\*\*\): write it as plain text/);
 });
 
 test('nothing goes out before the approval while the article waits for it, auto channels included, and nothing is committed', async () => {

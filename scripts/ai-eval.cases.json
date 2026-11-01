@@ -36,6 +36,29 @@
         "text": "claudio v0.9.0 is out."
       },
       "analysisFrom": "claudio-v0.9.0-pack"
+    },
+    {
+      "id": "claudio-v0.9.0-improve-bluesky",
+      "task": "assistant",
+      "repo": "yeyo11/claudio",
+      "ref": "v0.9.0",
+      "note": "Improve on a Bluesky post: the answer must be plain text, since Bluesky shows every * and # as typed. A problem in the record is Markdown the page would have had to clean.",
+      "action": "improve",
+      "channel": "bluesky",
+      "lang": "en",
+      "text": "claudio v0.9.0 is out. It runs Claude Code as a service: a REST API, sessions you can resume, and a web UI to follow them. The most important change is that it now detects when two sessions edit the same file. https://josegarrido.dev/en/claudio/?ref=bluesky",
+      "analysis": {
+        "summary": "claudio runs Claude Code as a service behind a REST API, with resumable sessions and a web UI.",
+        "implemented": [
+          "REST API to start and follow Claude Code sessions",
+          "Resumable sessions",
+          "A web UI to follow sessions",
+          "Detection of two sessions editing the same file"
+        ],
+        "planned": [],
+        "documentedOnly": [],
+        "limitations": []
+      }
     }
   ]
 }

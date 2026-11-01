@@ -62,7 +62,7 @@ async function demoRepo(withLaunchYml = true): Promise<string> {
   return repo;
 }
 
-test('the real cases file loads: three cases, the reply grounded in the claudio pack, the inline launch.yml valid today', async () => {
+test('the real cases file loads: the reply grounded in the claudio pack, the inline launch.yml valid today, the assistant’s Bluesky case', async () => {
   const path = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'scripts', 'ai-eval.cases.json');
   const file = loadEvalCases(await readFile(path, 'utf8'));
   assert.deepEqual(
@@ -71,6 +71,7 @@ test('the real cases file loads: three cases, the reply grounded in the claudio 
       ['shipcast-v0.1.0-pack', 'pack', 'yeyo11/shipcast', 'v0.1.0'],
       ['claudio-v0.9.0-pack', 'pack', 'yeyo11/claudio', 'v0.9.0'],
       ['claudio-v0.9.0-reply-conflict', 'reply', 'yeyo11/claudio', 'v0.9.0'],
+      ['claudio-v0.9.0-improve-bluesky', 'assistant', 'yeyo11/claudio', 'v0.9.0'],
     ],
   );
   const shipcast = file.cases[0]!;
@@ -225,4 +226,25 @@ test('two runs compare: steps, time and tokens side by side, and the analysis it
   assert.match(out, /## pack\nimplemented: 2 → 2\n {2}- Drafts a PR\n {2}\+ Publishes to Bluesky\nplanned: 0 → 0, the same items\ndocumentedOnly: 0 → 0, the same items\nlimitations: 1 → 1, the same items/);
   assert.match(out, /## reply\nB failed: ai_timeout/);
   assert.deepEqual(listDiff(['A thing', 'Other'], ['a  THING', 'New']), { added: ['New'], removed: ['Other'] });
+});
+
+test('an assistant case streams its answer, reads no repo, and records the Markdown its network would not show', async () => {
+  const answer = (delta: string): StreamPart[] => [{ type: 'text-start', id: 't' }, { type: 'text-delta', id: 't', delta }, { type: 'text-end', id: 't' }, finish('stop')];
+  const model = scripted(answer('claudio 0.9 is **out**: it spots two sessions on one file.'), answer('claudio 0.9 is out: it spots two sessions on one file.'));
+  const setup = { provider: mockProvider(model), settings: { apiKey: 'k' }, model: '' };
+  const runner = new AiTaskRunner({ resolve: async () => setup });
+  const outDir = join(await mkdtemp(join(tmpdir(), 'shipcast-eval-out-')), 'run');
+  const base = { task: 'assistant', repo: 'me/demo', ref: 'v1.0.0', action: 'improve', channel: 'bluesky', text: 'claudio 0.9 is out.' } as const;
+  const records = await runEval([{ ...base, id: 'slips' }, { ...base, id: 'plain' }], {
+    runner,
+    setup,
+    brand,
+    outDir,
+    checkout: async () => assert.fail('the assistant reads no repo'),
+  });
+  assert.deepEqual(records.map((r) => [r.case, r.ok, r.problems]), [
+    ['slips', true, ['Bluesky does not show bold: **out**']],
+    ['plain', true, []],
+  ]);
+  assert.match(String(model.doStreamCalls[0]!.prompt.find((m) => m.role === 'system')?.content), /plain text only, no Markdown at all/);
 });

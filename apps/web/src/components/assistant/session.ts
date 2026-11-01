@@ -43,6 +43,8 @@ export interface Proposal {
   titles?: string[];
   findings?: Array<{ claim: string; verdict: CheckVerdict; evidence: string }>;
   problem?: string;
+  /** What the server took out of the answer because the network does not show it */
+  notice?: string;
 }
 
 export interface ChatMessage extends ChatTurn {
@@ -56,6 +58,8 @@ export interface ChatMessage extends ChatTurn {
   savedId?: number;
   /** What was done with each proposal of the answer, by its number among the answer's proposals */
   settled?: Record<number, 'accepted' | 'rejected'>;
+  /** What the server took out of the answer's proposals because the network does not show it */
+  notice?: string;
 }
 
 const LABELS: Record<Action, string> = {
@@ -144,6 +148,7 @@ export function useAssistant(target: AssistantTarget) {
         if (event.type === 'whole') update((p) => ({ ...p, whole: true }));
         else if (event.type === 'text') update((p) => ({ ...p, text: p.text + event.text }));
         else if (event.type === 'check') update((p) => ({ ...p, text: event.revised, findings: event.findings }));
+        else if (event.type === 'cleaned') update((p) => ({ ...p, text: event.text, notice: event.notice }));
         else if (event.type === 'job') {
           // The check runs as a job: the stream has ended, the proposal waits for the job's result
           const read = async () => {
@@ -227,6 +232,7 @@ export function useAssistant(target: AssistantTarget) {
           update((m) => ({ ...m, savedId: event.messageId }));
         }
         else if (event.type === 'text') update((m) => ({ ...m, content: m.content + event.text }));
+        else if (event.type === 'cleaned') update((m) => ({ ...m, content: event.text, notice: event.notice }));
         else if (event.type === 'error') update((m) => ({ ...m, streaming: false, problem: event.message }));
         else if (event.type === 'done') {
           update((m) => ({ ...m, streaming: false }));

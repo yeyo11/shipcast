@@ -55,6 +55,11 @@ export type AssistantEvent =
   | { type: 'text'; text: string }
   | { type: 'check'; revised: string; findings: CheckFinding[] }
   /**
+   * The answer as it ended had formatting its network does not show: `text` replaces the whole answer
+   * (a chat answer's proposals cleaned in place), and `notice` says what was taken out
+   */
+  | { type: 'cleaned'; text: string; notice: string }
+  /**
    * The answer is worked as a job (the check against the code): the stream ends
    * here, and the page follows the job and reads its result (follow.ts) as the `check` it would have been
    */
