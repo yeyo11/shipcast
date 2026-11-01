@@ -12,6 +12,7 @@ import { DetailsPanel, DraftingView, FailedCard, SearchPanel, useNow } from '../
 import { pillClass, withScheduled } from '../../../components/launch/published';
 import { useToast } from '../../../components/Toasts';
 import { getLaunch, launchRepo } from '../../../server/launches.functions';
+import { canRelaunch } from '../../../server/launch-list';
 
 const appRoute = getRouteApi('/_app');
 
@@ -143,6 +144,9 @@ function LaunchPage() {
       pending={launch.status === 'drafted' && !open}
       waiting={waiting}
       running={running}
+      relaunch={canRelaunch(launch) ? { run: relaunch, busy: busy || running } : null}
+      problem={launch.problem ?? null}
+      failed={launch.status === 'failed'}
       onDeleted={async () => {
         await router.invalidate();
         await router.navigate({ to: '/' });
@@ -161,7 +165,7 @@ function LaunchPage() {
         />
       ) : (
       <div className="pub-page">
-        <Head name={shortName} version={version} pill={{ label: launch.state.label, className: pillClass(launch.state.tone, launch.status) }} meta={meta} menu={!drafting} />
+        <Head name={shortName} version={version} pill={{ label: launch.state.label, className: pillClass(launch.state.tone, launch.status) }} meta={meta} menu={!drafting} primary={!failedView} />
 
         {launch.deletedAt && (
           <div className="k-px pub-notice">
@@ -179,7 +183,7 @@ function LaunchPage() {
           <FailedCard
             problem={launch.problem}
             posted={launch.posts.length > 0}
-            relaunch={!launch.ref.startsWith('article:') && launch.posts.length === 0 ? relaunch : null}
+            relaunch={canRelaunch(launch) ? relaunch : null}
             busy={busy || running}
             detailsSearch={() => go({ tab: 'details' })}
           />
@@ -247,18 +251,32 @@ const STARTED_BY: Record<string, string> = {
   article: 'from Write',
 };
 
-/** The waiting view's ⋯: the launch menu of the actions' provider */
+/** The waiting view's ⋯: the launch menu of the actions' provider; none when it would be empty */
 function MenuButton() {
-  const { openMenu } = useLaunchActions();
+  const { openMenu, menu } = useLaunchActions();
+  if (menu.length === 0) return null;
   return (
-    <button type="button" className="k-btn k-icon" aria-label="More actions" aria-haspopup="dialog" onClick={openMenu}>
+    <button type="button" className="k-btn k-icon" aria-label="More actions" aria-haspopup="menu" onClick={(event) => openMenu(event.currentTarget)}>
       <Icon name="more" />
     </button>
   );
 }
 
-/** The heading, inside the actions' provider so its ⋯ opens their sheet */
-function Head({ name, version, pill, meta, menu }: { name: string; version: string | null; pill: { label: string; className: string }; meta: string; menu: boolean }) {
-  const { openMenu } = useLaunchActions();
-  return <LaunchHead name={name} version={version} pill={pill} meta={meta} {...(menu && { onMenu: openMenu })} />;
+/**
+ * The heading, inside the actions' provider so its ⋯ opens their menu. A failed release shows
+ * "Launch it again" beside the ⋯ on a desktop (board DesktopLaunchMenu), unless the failed card
+ * already offers it (`primary` false)
+ */
+function Head({ name, version, pill, meta, menu, primary }: { name: string; version: string | null; pill: { label: string; className: string }; meta: string; menu: boolean; primary: boolean }) {
+  const { openMenu, menu: entries, relaunch } = useLaunchActions();
+  const again =
+    primary && relaunch ? (
+      <span className="k-desktop">
+        <button type="button" className="k-btn k-pri" disabled={relaunch.busy} onClick={() => void relaunch.run()}>
+          <Icon name="retry" size={18} />
+          {relaunch.busy ? 'Launching…' : 'Launch it again'}
+        </button>
+      </span>
+    ) : undefined;
+  return <LaunchHead name={name} version={version} pill={pill} meta={meta} primary={again} {...(menu && entries.length > 0 && { onMenu: openMenu })} />;
 }

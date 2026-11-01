@@ -1,17 +1,18 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { DayPicker, type ChevronProps, type DateRange, type Matcher } from 'react-day-picker';
 import { enGB } from 'react-day-picker/locale';
-import { Drawer } from './Drawer';
-import { Popover } from './Popover';
-import { usePhone } from './ResponsiveMenu';
-import { CalendarIcon, ChevronIcon } from './icons';
+import { Icon } from '../kit/Icon';
+import { Overlay } from '../kit/Overlay';
+import { usePhone } from '../kit/usePhone';
+import { ChevronIcon } from './icons';
 import { dateToDay, dayToDate, formatDay, formatRange } from './dates';
 
 /*
  * Day pickers in place of the native `<input type="date">`, whose popups ignore Cartel and overflow
  * a phone. The calendar is react-day-picker (its grid, arrows, Page Up/Down for months, Home/End for
  * the week), with none of its own theme: every part is styled in components.css with the role
- * tokens. It opens in the Popover on a desktop and in the Drawer on a phone, like ResponsiveMenu.
+ * tokens, and the kit's yellow day inside the kit's overlay (kit.css, `.k-cal`). The trigger is the
+ * kit's input; the calendar opens in the kit's popover on a desktop and its bottom sheet on a phone.
  * Weeks start on Monday and days read day first (en-GB), as everywhere else in the app.
  */
 
@@ -37,31 +38,22 @@ function limits(min: string | undefined, max: string | undefined): { disabled: M
   return { disabled, startMonth: start, endMonth: end };
 }
 
-/** Popover on a desktop, bottom sheet on a phone: the same calendar in both */
-function Shell({ phone, label, trigger, open, onOpenChange, children }: { phone: boolean; label: string; trigger: ReactElement; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
-  if (phone) {
-    return (
-      <Drawer title={label} trigger={trigger} open={open} onOpenChange={onOpenChange}>
-        <div className="ui-date-sheet">{children}</div>
-      </Drawer>
-    );
-  }
+/** The kit's popover on a desktop, its bottom sheet on a phone: the same calendar in both */
+function Shell({ label, trigger, open, onOpenChange, children }: { label: string; trigger: ReactElement; open: boolean; onOpenChange: (open: boolean) => void; children: ReactNode }) {
   return (
-    <Popover trigger={trigger} label={label} align="start" className="ui-date-popover" open={open} onOpenChange={onOpenChange}>
-      {children}
-    </Popover>
+    <Overlay kind="popover" label={label} align="start" trigger={trigger} open={open} onOpenChange={onOpenChange} className="k-cal">
+      <div className="ui-date-sheet">{children}</div>
+    </Overlay>
   );
 }
 
 function Trigger({ id, label, text, placeholder, disabled, ...rest }: { id?: string; label: string; text: string; placeholder: string; disabled?: boolean }) {
   // Base UI's trigger passes its own props (aria-expanded, onClick, the ref) through `rest`
   return (
-    <button {...rest} type="button" id={id} className="ui-trigger ui-date-trigger" disabled={disabled} aria-label={`${label}: ${text || placeholder}`}>
-      <span className="ui-trigger-value" data-placeholder={text ? undefined : ''}>
-        {text || placeholder}
-      </span>
-      <span className="ui-trigger-icon">
-        <CalendarIcon />
+    <button {...rest} type="button" id={id} className={`k-input k-date-trigger${text ? '' : ' k-ph'}`} disabled={disabled} aria-label={`${label}: ${text || placeholder}`}>
+      <span className="k-grow k-ellipsis">{text || placeholder}</span>
+      <span className="k-muted k-hrow" aria-hidden="true">
+        <Icon name="calendar" size={18} />
       </span>
     </button>
   );
@@ -79,16 +71,17 @@ export interface DatePickerProps {
   id?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** The day without its weekday: `1 Oct 2026` */
+  short?: boolean;
 }
 
 /** One day: the trigger reads it in words, picking a day closes the calendar */
-export function DatePicker({ label, value, onChange, min, max, id, placeholder = 'Pick a day', disabled }: DatePickerProps) {
-  const phone = usePhone();
+export function DatePicker({ label, value, onChange, min, max, id, placeholder = 'Pick a day', disabled, short }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const selected = dayToDate(value);
   const bounds = limits(min, max);
   return (
-    <Shell phone={phone} label={label} open={open} onOpenChange={setOpen} trigger={<Trigger id={id} label={label} text={value ? formatDay(value) : ''} placeholder={placeholder} disabled={disabled} />}>
+    <Shell label={label} open={open} onOpenChange={setOpen} trigger={<Trigger id={id} label={label} text={value ? formatDay(value, short) : ''} placeholder={placeholder} disabled={disabled} />}>
       <DayPicker
         {...CALENDAR}
         {...bounds}
@@ -132,7 +125,7 @@ export function DateRangePicker({ label, from, to, onChange, min, max, id, place
   const firstShown = !phone && lastShown ? new Date(lastShown.getFullYear(), lastShown.getMonth() - 1, 1) : lastShown;
   const summary = formatRange(from, to);
   return (
-    <Shell phone={phone} label={label} open={open} onOpenChange={setOpen} trigger={<Trigger id={id} label={label} text={summary} placeholder={placeholder} />}>
+    <Shell label={label} open={open} onOpenChange={setOpen} trigger={<Trigger id={id} label={label} text={summary} placeholder={placeholder} />}>
       <DayPicker
         {...CALENDAR}
         {...bounds}
@@ -148,7 +141,7 @@ export function DateRangePicker({ label, from, to, onChange, min, max, id, place
           {summary || 'Pick the first day'}
           {summary && !to ? ', then the last' : ''}
         </span>
-        <button type="button" className="btn btn-small" onClick={() => setOpen(false)}>
+        <button type="button" className="k-btn k-sm" onClick={() => setOpen(false)}>
           Done
         </button>
       </div>

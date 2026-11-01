@@ -140,6 +140,89 @@ textarea.k-input { resize: vertical; align-items: flex-start; }
   .k-sheet-viewport .k-sheet[data-swiping] { transition-duration: 0ms; }
 }
 
+/* What the browser draws itself (scrollbars, an autofilled field, a native control left anywhere)
+   follows the theme: night by default, day under [data-theme="day"] like the tokens */
+:root { color-scheme: dark; }
+[data-theme="day"] { color-scheme: light; }
+
+/* ---------- Pickers (kit/Picker.tsx): the kit's input or chip, its list a raised menu card ---------- */
+.k-placeholder { color: var(--sc-rail); }
+.k-picker { line-height: 1.5; }
+.k-picker-input { flex: 1; min-width: 0; height: 24px; line-height: 1.5; border: 0; background: none; color: inherit; font: inherit; outline: none; padding: 0; }
+.k-picker-button { width: 100%; cursor: pointer; font: inherit; text-align: left; }
+.k-picker-button[data-disabled] { cursor: not-allowed; opacity: .6; }
+.k-picker-button[data-popup-open], .k-picker[data-popup-open] { border-color: var(--sc-yellow); }
+.k-picker-chevron { display: flex; align-items: center; color: var(--sc-muted); background: none; border: 0; padding: 0; cursor: pointer; flex: none; }
+.k-chip.k-picker-chip { min-height: 44px; font: inherit; font-size: 14px; font-weight: 600; }
+.k-picker-chip-field { display: inline-flex; }
+.k-picker-chip .k-picker-chevron { color: inherit; }
+.k-chip.k-picker-chip[data-popup-open] { border-color: var(--sc-yellow); }
+.k-chip.k-picker-chip:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+.k-pop-positioner { z-index: 70; outline: none; }
+.k-menu-note { padding: 8px 12px 4px; }
+.k-option[data-popup-open] { background: var(--sc-hairline); }
+.k-option[data-current] { font-weight: 700; }
+.k-ov-menu .k-option { justify-content: flex-start; }
+.k-ov-menu .k-option > svg:last-child { margin-left: auto; color: var(--sc-muted); }
+.k-pop-list { min-width: var(--anchor-width, 200px); max-width: calc(100vw - 16px); max-height: min(var(--available-height, 420px), 420px); overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.k-option { cursor: default; user-select: none; outline: none; justify-content: space-between; }
+.k-option[data-highlighted] { background: var(--sc-hairline); }
+.k-option[data-disabled] { opacity: .45; }
+.k-option-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.k-option-hint { font-size: 13px; color: var(--sc-muted); }
+.k-option-check { display: flex; color: var(--sc-yellow); }
+.k-pop-empty { padding: 12px; font-size: 14px; color: var(--sc-muted); }
+.k-pop-empty:empty { display: none; }
+.k-field-error { margin: 0; font-size: 13px; color: var(--sc-failure); }
+/* The app's own day and time fields (ui/DatePicker, ui/TimeField) in the kit's look */
+button.k-date-trigger { width: 100%; font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.k-date-trigger[data-popup-open] { border-color: var(--sc-yellow); }
+.k-ov-pop.k-cal { width: auto; }
+.k-cal .ui-date-sheet { justify-items: center; }
+.k-cal .rdp-selected .rdp-day_button { background: var(--sc-yellow); color: var(--sc-black); }
+.k-cal .rdp-today:not(.rdp-selected) .rdp-day_button { border: 2px solid var(--sc-rail); }
+.k-input .ui-time { min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; justify-content: flex-start; }
+.k-input .ui-time-segment { min-height: 28px; }
+.k-input .ui-time-segment:focus { background: var(--sc-yellow); color: var(--sc-black); }
+.k-input:has(.ui-time-segment:focus) { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255,212,59,.25); }
+
+/* ---------- Overlays on a desktop (kit/Overlay.tsx; boards DesktopLaunchMenu, DesktopConfirm, DesktopDrawer) ----------
+ * Below 960 px every overlay is the sheet above. From 960 px: a menu or a popover hangs from what
+ * opened it, a dialog is centred, a drawer comes from the right edge. */
+.k-ov-scrim { position: fixed; inset: 0; z-index: 60; }
+.k-ov-positioner { z-index: 62; outline: 0; }
+.k-ov-menu { width: 280px; max-height: var(--available-height); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; outline: none; }
+.k-ov-pop { width: min(420px, calc(100vw - 24px)); max-height: min(600px, var(--available-height)); overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px; outline: none; }
+.k-ov-menu .k-mi, .k-ov-pop .k-mi { cursor: pointer; }
+.k-ov-menu .k-mi:hover, .k-ov-menu .k-mi:focus-visible, .k-ov-pop .k-mi:hover, .k-ov-pop .k-mi:focus-visible { background: var(--sc-hairline); outline: none; color: var(--sc-text); }
+.k-ov-menu .k-mi.k-bad:hover, .k-ov-menu .k-mi.k-bad:focus-visible { color: var(--sc-failure); }
+.k-ov-menu .k-stack { gap: 0; }
+.k-ov-title { font-size: 22px; margin: 0; }
+.k-ov-menu .k-ov-title { margin: 8px 12px 4px; }
+.k-ov-viewport { position: fixed; inset: 0; z-index: 61; display: flex; justify-content: center; align-items: flex-start; padding: clamp(24px, 22vh, 200px) 24px 24px; overflow-y: auto; }
+.k-ov-dialog { width: min(480px, 100%); background: var(--sc-raised); border: 2.5px solid var(--sc-rail); border-radius: 24px; box-shadow: 8px 8px 0 var(--sc-black); padding: 24px; display: flex; flex-direction: column; gap: 14px; outline: none; }
+/* A confirmation's answers sit on the right at their own width, the way out first */
+.k-ov-dialog > .k-hrow:last-child { justify-content: flex-end; }
+.k-ov-dialog > .k-hrow:last-child > .k-btn { flex: none; }
+.k-ov-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: min(440px, 100vw); background: var(--sc-raised); border-left: 2.5px solid var(--sc-rail); display: flex; flex-direction: column; outline: none; }
+.k-ov-drawer.k-ov-wide { width: min(720px, calc(100vw - 240px)); }
+.k-ov-head { padding: 24px 24px 20px; }
+.k-ov-head h2 { margin: 0; }
+.k-ov-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 24px; display: flex; flex-direction: column; gap: 20px; }
+.k-ov-foot { padding: 0 24px 24px; display: flex; flex-direction: column; gap: 14px; }
+.k-ov-body:has(+ .k-ov-foot) { padding-bottom: 20px; }
+/* What only the sheet needs: its own heading in a menu, its Close button where a click outside, Escape or the header's close do it */
+:is(.k-ov-menu, .k-ov-pop, .k-ov-drawer, .k-ov-dialog) .k-sheet-only { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .k-ov-scrim { transition: opacity var(--ui-move) var(--ui-ease); }
+  .k-ov-scrim[data-starting-style], .k-ov-scrim[data-ending-style] { opacity: 0; }
+  .k-ov-menu, .k-ov-pop, .k-ov-dialog { transition: opacity var(--ui-move) var(--ui-ease), transform var(--ui-move) var(--ui-ease); }
+  .k-ov-menu[data-starting-style], .k-ov-menu[data-ending-style], .k-ov-pop[data-starting-style], .k-ov-pop[data-ending-style] { opacity: 0; transform: translateY(-4px); }
+  .k-ov-dialog[data-starting-style], .k-ov-dialog[data-ending-style] { opacity: 0; transform: scale(.98); }
+  .k-ov-drawer { transition: transform calc(var(--ui-move) * 1.6) var(--ui-ease); }
+  .k-ov-drawer[data-starting-style], .k-ov-drawer[data-ending-style] { transform: translateX(100%); }
+}
+
 /* ---------- The bars (boards TopBar, BottomBar and the desktop header) ---------- */
 .k-topbar { position: sticky; top: 0; z-index: 40; height: 64px; padding: 0 12px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--sc-hairline); background: var(--sc-ground); }
 .k-topbar-back { display: flex; align-items: center; gap: 4px; min-height: 44px; margin-left: -6px; padding-right: 8px; color: var(--sc-text); text-decoration: none; font-weight: 600; font-size: 16px; }

@@ -2,7 +2,7 @@ import { Dialog } from '@base-ui/react/dialog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../kit/Icon';
 import { useToast } from '../Toasts';
-import { usePhone } from '../write/usePhone';
+import { usePhone } from '../kit/usePhone';
 import { listAssistantSessions, type SessionSummary } from '../../server/assistant.functions';
 import { splitProposals } from './diff';
 import { DiffView } from './DiffView';

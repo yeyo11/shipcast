@@ -46,10 +46,10 @@ export function Mark() {
 }
 
 function Bell({ className }: { className: string }) {
-  const { attention, setNotificationsOpen } = useShell();
+  const { attention, notificationsOpen, setNotificationsOpen } = useShell();
   const count = attention?.count ?? 0;
   return (
-    <button type="button" className={className} aria-label={count > 0 ? `What needs you, ${count}` : 'What needs you, nothing'} onClick={() => setNotificationsOpen(true)}>
+    <button type="button" className={className} aria-label={count > 0 ? `What needs you, ${count}` : 'What needs you, nothing'} onClick={(event) => setNotificationsOpen(!notificationsOpen, event.currentTarget)}>
       <Icon name="bell" />
       {count > 0 && (
         <span className="k-badge" aria-hidden="true">

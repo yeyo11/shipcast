@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Icon } from '../../../components/kit/Icon';
-import { Sheet } from '../../../components/kit/Sheet';
+import { Overlay } from '../../../components/kit/Overlay';
+import { PickerSelect } from '../../../components/kit/Picker';
 import { SaveBar } from '../../../components/SaveBar';
 import { BUDGETS_OF, lockedRuleCount, promptEdited, promptLabel as promptName, TASK_TEXT, usd } from '../../../components/settings/ai';
 import { changesText, hostOf } from '../../../components/settings/view';
@@ -31,20 +32,17 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** A native select drawn as the kit's input with the board's chevron */
+/** The provider a task runs on: the kit's picker, labelled by the task it sits beside */
 function ProviderSelect({ data, value, label, onChange }: { data: Data; value: ProviderId; label: string; onChange: (p: ProviderId) => void }) {
   return (
-    <span className="k-input k-grow st-select">
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as ProviderId)}>
-        {data.providers.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-            {p.connected ? '' : ' (not connected)'}
-          </option>
-        ))}
-      </select>
-      <Icon name="chevronDown" size={16} />
-    </span>
+    <PickerSelect<ProviderId>
+      className="k-grow"
+      hideLabel
+      label={label}
+      value={value}
+      options={data.providers.map((p) => ({ value: p.id, label: p.connected ? p.name : `${p.name} (not connected)` }))}
+      onValueChange={onChange}
+    />
   );
 }
 
@@ -80,11 +78,10 @@ function Providers({ data }: { data: Data }) {
           </Link>
         ),
       )}
-      <Sheet label="claudio" open={open} onOpenChange={setOpen}>
-        <h2 className="k-d k-d30">claudio</h2>
+      <Overlay kind="drawer" label="claudio" open={open} onOpenChange={setOpen} heading="claudio">
         <p className="k-sm k-muted st-m0">Shipcast calls claudio’s OpenAI-compatible API, and Claude Code reads each release in a workspace claudio makes for it.</p>
         <SettingsForm settings={data.runtime} onSaved={() => setOpen(false)} />
-      </Sheet>
+      </Overlay>
     </section>
   );
 }
@@ -93,8 +90,7 @@ function Providers({ data }: { data: Data }) {
 function LimitsSheet({ data, task, budgets, onChange, onClose }: { data: Data; task: Task | null; budgets: BudgetFields; onChange: (b: BudgetFields) => void; onClose: () => void }) {
   const list = task ? (BUDGETS_OF[task] ?? []) : [];
   return (
-    <Sheet label="Spend limits" open={task !== null} onOpenChange={(open) => !open && onClose()}>
-      <h2 className="k-d k-d30">{task ? TASK_TEXT[task]?.label : ''}</h2>
+    <Overlay kind="drawer" label="Spend limits" open={task !== null} onOpenChange={(open) => !open && onClose()} heading={<>{task ? TASK_TEXT[task]?.label : ''}</>}>
       <p className="k-sm k-muted st-m0">
         What one run may spend, in USD, up to {data.budgets.max}. Empty keeps the default. Only claudio takes a limit today: the providers billed per token are bounded by steps and time.
       </p>
@@ -117,7 +113,7 @@ function LimitsSheet({ data, task, budgets, onChange, onClose }: { data: Data; t
       <button type="button" className="k-btn k-full" onClick={onClose}>
         Done
       </button>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -136,25 +132,17 @@ function Preview({ data }: { data: Data }) {
         </span>
         <Icon name="chevronRight" />
       </button>
-      <Sheet label="Preview a prompt" open={open} onOpenChange={setOpen}>
-        <h2 className="k-d k-d30">Preview a prompt</h2>
+      <Overlay kind="drawer" wide label="Preview a prompt" open={open} onOpenChange={setOpen} heading="Preview a prompt">
         {data.launches.length === 0 ? (
           <p className="k-sm k-muted st-m0">No launches yet: a preview renders the prompt a past launch would get.</p>
         ) : (
           <>
-            <label className="k-field">
-              <span className="k-lbl">The prompt a launch would get</span>
-              <span className="k-input st-select">
-                <select value={launchId === undefined ? '' : String(launchId)} onChange={(e) => setLaunchId(Number(e.target.value))}>
-                  {data.launches.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.label}
-                    </option>
-                  ))}
-                </select>
-                <Icon name="chevronDown" size={16} />
-              </span>
-            </label>
+            <PickerSelect
+              label="The prompt a launch would get"
+              value={launchId === undefined ? null : String(launchId)}
+              options={data.launches.map((l) => ({ value: String(l.id), label: l.label }))}
+              onValueChange={(v) => setLaunchId(Number(v))}
+            />
             <button
               type="button"
               className="k-btn k-full"
@@ -180,7 +168,7 @@ function Preview({ data }: { data: Data }) {
             )}
           </>
         )}
-      </Sheet>
+      </Overlay>
     </>
   );
 }

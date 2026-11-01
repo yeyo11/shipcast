@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { JobsPanel } from '../../../components/Jobs';
 import { Icon } from '../../../components/kit/Icon';
-import { Sheet } from '../../../components/kit/Sheet';
+import { Overlay } from '../../../components/kit/Overlay';
 import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { SaveBar } from '../../../components/SaveBar';
 import { RuleEditor, ruleTitle, ruleWithout, type RuleDraft } from '../../../components/TriggerRules';
@@ -150,7 +150,7 @@ function Automation() {
 
       {rules && <SaveBar form="automation-form" dirty={rulesChanged} busy={busy} text="Rules changed" />}
 
-      <Sheet label={editing === null ? 'Rule' : `Rule ${editing + 1}`} open={editing !== null && rules?.[editing] !== undefined} onOpenChange={(open) => !open && setEditing(null)}>
+      <Overlay kind="drawer" label={editing === null ? 'Rule' : `Rule ${editing + 1}`} open={editing !== null && rules?.[editing] !== undefined} onOpenChange={(open) => !open && setEditing(null)}>
         {editing !== null && rules?.[editing] && (
           <RuleEditor
             n={editing + 1}
@@ -164,10 +164,9 @@ function Automation() {
             onDone={() => setEditing(null)}
           />
         )}
-      </Sheet>
+      </Overlay>
 
-      <Sheet label="Last round" open={sheet === 'round'} onOpenChange={(open) => !open && setSheet(null)}>
-        <h2 className="k-d k-d30">Rounds</h2>
+      <Overlay kind="drawer" wide label="Last round" open={sheet === 'round'} onOpenChange={(open) => !open && setSheet(null)} heading="Rounds">
         <p className="k-sm k-muted st-m0">Each round checks for releases, publishes what is ready and reads the numbers when due.</p>
         {data.lastRound ? (
           <>
@@ -193,12 +192,11 @@ function Automation() {
           <Icon name="retry" size={18} />
           {data.running ? 'A round is running…' : 'Run a round now'}
         </button>
-      </Sheet>
+      </Overlay>
 
-      <Sheet label="Work in progress" open={sheet === 'jobs'} onOpenChange={(open) => !open && setSheet(null)}>
-        <h2 className="k-d k-d30">Work</h2>
+      <Overlay kind="drawer" wide label="Work in progress" open={sheet === 'jobs'} onOpenChange={(open) => !open && setSheet(null)} heading="Work">
         <JobsPanel initial={data.jobs} />
-      </Sheet>
+      </Overlay>
     </div>
   );
 }

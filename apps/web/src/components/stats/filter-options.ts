@@ -1,4 +1,4 @@
-import type { Option } from '../ui/Select';
+import type { PickerOption as Option } from '../kit/Picker';
 
 /** A choice in a filter's list; `group` is the heading it sits under (an account's network, a launch's project) */
 export interface FilterOption extends Option {

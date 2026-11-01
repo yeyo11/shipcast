@@ -58,7 +58,6 @@
 .ap-ring { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--sc-black); flex: none; }
 
 /* ---------- Another day (board LaunchSchedule) ---------- */
-.k-sheet.ap-sheet { max-width: 560px; margin: 0 auto; }
 .k-card.ap-cal { padding: 12px; gap: 8px; border-radius: 20px; }
 .ap-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 4px; }
 .ap-cal-head { padding: 4px 0; }
@@ -66,7 +65,7 @@
 .ap-cal-day:disabled { color: var(--sc-rail); cursor: default; }
 .ap-cal-day.ap-on { background: var(--sc-yellow); color: var(--sc-black); font-weight: 700; }
 .ap-time input { background: none; border: 0; color: inherit; font: inherit; padding: 0; outline: none; min-width: 0; }
-.ap-time input::-webkit-calendar-picker-indicator { display: none; }
+.ap-time-icon { display: flex; justify-content: flex-end; }
 .ap-time:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
 
 /* ---------- Preview (board LaunchPreview) ---------- */
@@ -127,7 +126,6 @@
 .ap-chat-form textarea::placeholder { color: var(--sc-rail); }
 .ap-session { text-align: left; width: 100%; background: none; border: 0; color: inherit; font: inherit; padding: 10px 12px; border-radius: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .ap-session:hover, .ap-session[aria-current="true"] { background: var(--sc-hairline); }
-.k-sheet .k-card.ap-chat { position: static; min-height: 60vh; max-height: none; border: 0; padding: 0; background: none; }
 
 /* ---------- Check against the code (board CodeCheck) ---------- */
 .ap-verdict-dot { margin-top: 6px; display: block; }

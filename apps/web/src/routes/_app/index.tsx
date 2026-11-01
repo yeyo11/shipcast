@@ -200,12 +200,10 @@ function Launches() {
                 </div>
                 <div className="k-hrow k-g8 home-tools">
                   <SearchBox search={search} />
-                  <div className="k-phone">
-                    <FilterSheet search={search} facets={facets} total={page.total} />
-                  </div>
                   <div className="k-hrow k-g8 k-desktop-flex">
                     <FilterMenus search={search} facets={facets} />
                   </div>
+                  <FilterSheet search={search} facets={facets} total={page.total} />
                 </div>
               </div>
               {rest.length === 0 && quiet.length === 0 ? (

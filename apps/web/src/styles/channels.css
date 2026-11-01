@@ -104,7 +104,6 @@ textarea.ch-input { display: block; resize: vertical; line-height: 1.5; }
   .ch-empty-actions { width: auto; }
   /* A screen with no desktop board: the phone's content, in a readable column */
   .ch-narrow { max-width: 640px; }
-  .ch-sheet { max-width: 560px; margin: 0 auto; }
 }
 .ch-perms-card { gap: 8px; }
 /* The board's heading keeps an h2's own margins */

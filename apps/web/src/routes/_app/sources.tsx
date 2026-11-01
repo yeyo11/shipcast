@@ -4,7 +4,7 @@ import { TopBar } from '../../components/kit/Bars';
 import { Icon } from '../../components/kit/Icon';
 import { useToast } from '../../components/Toasts';
 import { ActionBar, ChannelChips, LANGS, Seg } from '../../components/write/Form';
-import { PickerCombobox, type PickerOption } from '../../components/write/Picker';
+import { PickerCombobox, type PickerOption } from '../../components/kit/Picker';
 import { getChannels } from '../../server/channels.functions';
 import { launchFromSources, listRepos } from '../../server/launches.functions';
 
@@ -200,7 +200,7 @@ function LaunchFromSources() {
                 <label className="k-input wr-file">
                   <input type="file" className="visually-hidden" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                   <Icon name="image" />
-                  <span className={`k-grow k-ellipsis${file ? '' : ' wr-placeholder'}`}>{file ? file.name : 'Choose an image'}</span>
+                  <span className={`k-grow k-ellipsis${file ? '' : ' k-placeholder'}`}>{file ? file.name : 'Choose an image'}</span>
                 </label>
                 <input className="k-input" aria-label="What it shows (alt text)" placeholder="What it shows (alt text)" value={draft.alt} onChange={(e) => setDraft({ ...draft, alt: e.target.value })} maxLength={500} />
               </>

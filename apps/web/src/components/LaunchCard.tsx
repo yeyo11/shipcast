@@ -4,7 +4,7 @@ import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchTitle, shortD
 import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
-import { Sheet, SheetClose } from './kit/Sheet';
+import { Overlay, OverlayClose } from './kit/Overlay';
 import { readyText, RowMenu } from './LaunchRows';
 import { NetworkGlyph } from './kit/NetworkGlyph';
 import { number } from './ui';
@@ -131,7 +131,9 @@ function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaun
   const [open, setOpen] = useState(false);
   const name = markName(c);
   return (
-    <Sheet
+    <Overlay
+      kind="popover"
+      align="start"
       label={`${networkOf(c.channel)} on this launch`}
       open={open}
       onOpenChange={setOpen}
@@ -144,8 +146,8 @@ function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaun
       }
     >
       <PeekBody c={c} launch={launch} timezone={timezone} />
-      <SheetClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels', channel: c.channel }} />}>See it on the launch page</SheetClose>
-    </Sheet>
+      <OverlayClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels', channel: c.channel }} />}>See it on the launch page</OverlayClose>
+    </Overlay>
   );
 }
 
@@ -153,7 +155,9 @@ function ChannelMark({ c, launch, timezone }: { c: CardChannel; launch: HomeLaun
 function MoreMarks({ folded, launch, timezone }: { folded: CardChannel[]; launch: HomeLaunch; timezone: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <Sheet
+    <Overlay
+      kind="popover"
+      align="start"
       label={`${folded.length} more channels on this launch`}
       open={open}
       onOpenChange={setOpen}
@@ -170,8 +174,8 @@ function MoreMarks({ folded, launch, timezone }: { folded: CardChannel[]; launch
           <PeekBody c={c} launch={launch} timezone={timezone} />
         </div>
       ))}
-      <SheetClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels' }} />}>See it on the launch page</SheetClose>
-    </Sheet>
+      <OverlayClose render={<Link className="k-btn k-full" to="/launches/$id" params={{ id: String(launch.id) }} search={{ tab: 'channels' }} />}>See it on the launch page</OverlayClose>
+    </Overlay>
   );
 }
 

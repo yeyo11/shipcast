@@ -104,13 +104,6 @@
 .stats-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .stats-fieldset legend { padding: 0; margin-bottom: 8px; }
 .stats-filters-problem { margin: 0; color: var(--sc-failure); }
-.stats-day { position: relative; }
-.stats-day input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
-.stats-day:focus-within, .stats-select:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
-.stats-select { position: relative; padding: 0; }
-.stats-select select { appearance: none; flex: 1; min-width: 0; min-height: 48px; padding: 0 44px 0 14px; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; outline: none; }
-.stats-select select option { background: var(--sc-raised); color: var(--sc-text); }
-.stats-select-mark { position: absolute; right: 14px; pointer-events: none; display: flex; }
 .stats-filters-apply { flex: 1; }
 
 /* ---------- Desktop (board DesktopStats) ---------- */
@@ -137,7 +130,6 @@
   .stats-chart-plot { height: 280px; }
   .stats-groupby { gap: 6px; }
   .stats-groupby-chip.k-chip { min-height: 30px; }
-  .stats-filters.k-sheet { max-width: 560px; margin: 0 auto; }
   /* The tabs with no desktop board: the phone's content in the column, kept to a readable width */
   .stats-panel > section[aria-label="Ranking"], .stats-panel > section[aria-label="Articles in search engines"] { max-width: 760px; }
   .stats-accounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }

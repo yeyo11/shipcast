@@ -4,7 +4,8 @@ import { Mailbox } from '../../components/illustrations';
 import { TopBar } from '../../components/kit/Bars';
 import { hasGlyph, NetworkGlyph } from '../../components/kit/NetworkGlyph';
 import { Icon } from '../../components/kit/Icon';
-import { Sheet } from '../../components/kit/Sheet';
+import { Overlay } from '../../components/kit/Overlay';
+import { PickerSelect } from '../../components/kit/Picker';
 import { useLiveEnabled, useLiveRoute } from '../../components/live/Live';
 import { useToast } from '../../components/Toasts';
 import { ago, CLASS_NAMES, COMMENT_PILLS, INBOX_TABS, inboxTab, nextCheckIn, position, readInboxSearch, type InboxSearch, type InboxTab } from '../../server/comments-inbox';
@@ -486,8 +487,7 @@ function Actions({ r, sent, desktop }: { r: Reply; sent: boolean; desktop?: bool
 function SendSheet({ r, open }: { r: Reply; open: Open }) {
   const { comment } = open;
   return (
-    <Sheet label={`Send this reply to ${comment.author.handle}?`} open={r.confirming} onOpenChange={r.setConfirming} className="cm-sheet">
-      <h2 className="k-d k-d30">Send this reply to {comment.author.handle}?</h2>
+    <Overlay kind="dialog" label={`Send this reply to ${comment.author.handle}?`} open={r.confirming} onOpenChange={r.setConfirming} className="cm-sheet" heading={<>Send this reply to {comment.author.handle}?</>}>
       <div className="k-card cm-sheet-quote">
         <span className="k-sm">{r.draft}</span>
       </div>
@@ -501,7 +501,7 @@ function SendSheet({ r, open }: { r: Reply; open: Open }) {
           {r.busy ? 'Sending…' : 'Send the reply'}
         </button>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -618,24 +618,7 @@ function DesktopInbox({ data, search, openSheet, sentId, onSent }: { data: Data;
 /* ---------- Filters and the reply settings ---------- */
 
 function Select({ label, value, options, onChange, disabled }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (v: string) => void; disabled?: boolean }) {
-  const id = useId();
-  return (
-    <div className="k-field">
-      <label className="k-lbl" htmlFor={id}>
-        {label}
-      </label>
-      <span className="k-input cm-select">
-        <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <Icon name="chevronDown" size={18} />
-      </span>
-    </div>
-  );
+  return <PickerSelect label={label} value={value} options={options} onValueChange={onChange} disabled={disabled} />;
 }
 
 const ALL = 'all';
@@ -659,8 +642,7 @@ function FiltersSheet({ data, search, open, onOpenChange, openSettings }: { data
   const launches = [{ value: ALL, label: 'All launches' }, ...data.facets.launches.map((l) => ({ value: String(l.id), label: `${data.launches[l.id] ?? l.repo} (${l.count})` }))];
   const posts = [{ value: ALL, label: 'All posts' }, ...data.facets.posts.map((p) => ({ value: String(p.id), label: `${channelName(p.channel)}${p.kind === 'post' ? '' : ` · ${p.kind}`} (${p.count})` }))];
   return (
-    <Sheet label="Filters" open={open} onOpenChange={onOpenChange} className="cm-sheet">
-      <h2 className="k-d k-d30">Filters</h2>
+    <Overlay kind="drawer" label="Filters" open={open} onOpenChange={onOpenChange} className="cm-sheet" heading="Filters">
       <form
         role="search"
         className="k-field"
@@ -716,7 +698,7 @@ function FiltersSheet({ data, search, open, onOpenChange, openSettings }: { data
         <span className="k-grow">Replies per channel</span>
         <Icon name="chevronRight" size={18} />
       </button>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -760,8 +742,7 @@ function SettingsSheet({ data, open, onOpenChange }: { data: Data; open: boolean
     }
   };
   return (
-    <Sheet label="Replies per channel" open={open} onOpenChange={onOpenChange} className="cm-sheet">
-      <h2 className="k-d k-d30">Replies per channel</h2>
+    <Overlay kind="drawer" label="Replies per channel" open={open} onOpenChange={onOpenChange} className="cm-sheet" heading="Replies per channel">
       <p className="k-sm k-muted cm-sheet-text">Approval: replies are drafted and wait for you. Auto: drafted and sent at once. Off: Shipcast does not read them.</p>
       <div className="k-stack">
         {channels.map((channel) => {
@@ -806,7 +787,7 @@ function SettingsSheet({ data, open, onOpenChange }: { data: Data; open: boolean
       <button type="button" className="k-btn k-pri k-full" disabled={busy} onClick={() => void save()}>
         Save
       </button>
-    </Sheet>
+    </Overlay>
   );
 }
 

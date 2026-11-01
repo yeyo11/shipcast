@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { shortDay } from '../charts/data';
+import { useEffect, useId, useState } from 'react';
 import { Icon } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
+import { PickerSelect } from '../kit/Picker';
+import { DatePicker } from '../ui/DatePicker';
 import { dateToDay } from '../ui/dates';
 import { MAX_DAYS, daysBetween, isDay, type Period, type StatsSearch } from '../../server/stats-search';
 import { PERIOD_CHIPS } from './parts';
@@ -24,6 +25,10 @@ export interface FiltersProps {
   options: { channels: FilterOption[]; launches: FilterOption[] };
   onChange: (patch: Partial<StatsSearch>) => void;
 }
+
+/** The launch picker's two choices beside the launches: none chosen, and several chosen through the address */
+const EVERY = '*';
+const SEVERAL = 'several';
 
 export function Filters({ open, onOpenChange, search, period, options, onChange }: FiltersProps) {
   const id = useId();
@@ -62,15 +67,32 @@ export function Filters({ open, onOpenChange, search, period, options, onChange 
   const today = dateToDay(new Date());
 
   return (
-    <Sheet label="Filters" open={open} onOpenChange={onOpenChange} className="stats-filters">
+    <Overlay
+      kind="drawer"
+      label="Filters"
+      heading="Filters"
+      open={open}
+      onOpenChange={onOpenChange}
+      className="stats-filters"
+      footer={
+        <div className="k-hrow k-g10">
+          <button type="button" className="k-btn" onClick={() => setDraft((d) => ({ ...d, channels: allTicked ? [] : all }))}>
+            {allTicked ? 'Untick all' : 'Tick all'}
+          </button>
+          <button type="submit" form={`${id}-form`} className="k-btn k-pri stats-filters-apply" disabled={problem !== null}>
+            Show the numbers
+          </button>
+        </div>
+      }
+    >
       <form
+        id={`${id}-form`}
         className="k-stack stats-filters-form"
         onSubmit={(e) => {
           e.preventDefault();
           apply();
         }}
       >
-        <h2 className="k-d k-d30">Filters</h2>
         <fieldset className="k-stack k-g8 stats-fieldset">
           <legend className="k-lbl">Period</legend>
           <div className="k-chips">
@@ -112,37 +134,18 @@ export function Filters({ open, onOpenChange, search, period, options, onChange 
             </div>
           </fieldset>
         )}
-        <label className="k-field" htmlFor={`${id}-launch`}>
-          <span className="k-lbl">Launch</span>
-          <span className="k-input stats-select">
-            <select
-              id={`${id}-launch`}
-              value={draft.launches && draft.launches.length === 1 ? String(draft.launches[0]) : draft.launches ? 'several' : ''}
-              onChange={(e) => setDraft((d) => ({ ...d, launches: e.target.value === '' ? undefined : e.target.value === 'several' ? d.launches : [Number(e.target.value)] }))}
-            >
-              <option value="">Every launch</option>
-              {draft.launches && draft.launches.length > 1 && <option value="several">{draft.launches.length} launches</option>}
-              {options.launches.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <span className="k-muted stats-select-mark">
-              <Icon name="chevronDown" size={18} />
-            </span>
-          </span>
-        </label>
-        <div className="k-hrow k-g10">
-          <button type="button" className="k-btn" onClick={() => setDraft((d) => ({ ...d, channels: allTicked ? [] : all }))}>
-            {allTicked ? 'Untick all' : 'Tick all'}
-          </button>
-          <button type="submit" className="k-btn k-pri stats-filters-apply" disabled={problem !== null}>
-            Show the numbers
-          </button>
-        </div>
+        <PickerSelect
+          label="Launch"
+          value={draft.launches && draft.launches.length === 1 ? String(draft.launches[0]) : draft.launches ? SEVERAL : EVERY}
+          options={[
+            { value: EVERY, label: 'Every launch' },
+            ...(draft.launches && draft.launches.length > 1 ? [{ value: SEVERAL, label: `${draft.launches.length} launches` }] : []),
+            ...options.launches.map((l) => ({ value: l.value, label: l.label })),
+          ]}
+          onValueChange={(v) => setDraft((d) => ({ ...d, launches: v === EVERY ? undefined : v === SEVERAL ? d.launches : [Number(v)] }))}
+        />
       </form>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -158,36 +161,15 @@ function fromSearch(search: StatsSearch, period: { from: string; to: string }, a
   return { period: search.period, from: period.from, to: period.to, channels: search.channels ?? all, launches: search.launches };
 }
 
-/** A day as the board writes it ("1 Oct 2026"), with the browser's own date picker under it */
+/** A day as the board writes it ("1 Oct 2026"), its calendar the app's own (ui/DatePicker) */
 function DayField({ label, value, max, onChange }: { label: string; value: string; max: string; onChange: (day: string) => void }) {
   const id = useId();
-  const input = useRef<HTMLInputElement>(null);
   return (
-    <label className="k-field k-grow" htmlFor={id}>
-      <span className="k-lbl">{label}</span>
-      <span className="k-input stats-day">
-        <span className="k-grow k-ellipsis" aria-hidden="true">
-          {isDay(value) ? shortDay(value, true) : 'Pick a day'}
-        </span>
-        <span className="k-muted">
-          <Icon name="calendar" size={18} />
-        </span>
-        <input
-          ref={input}
-          id={id}
-          type="date"
-          value={value}
-          max={max}
-          onChange={(e) => onChange(e.target.value)}
-          onClick={() => {
-            try {
-              input.current?.showPicker();
-            } catch {
-              // A browser without showPicker opens its picker on the click itself
-            }
-          }}
-        />
-      </span>
-    </label>
+    <div className="k-field k-grow">
+      <label className="k-lbl" htmlFor={id}>
+        {label}
+      </label>
+      <DatePicker id={id} label={label} value={isDay(value) ? value : ''} max={max} onChange={onChange} short />
+    </div>
   );
 }

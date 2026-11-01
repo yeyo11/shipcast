@@ -4,12 +4,10 @@ import { agoLabel, deletableFromLine, launchTitle } from '../server/launch-list'
 import { launchRepo } from '../server/launches.functions';
 import type { AttentionItem } from '../server/attention';
 import { Icon } from './kit/Icon';
-import { Sheet, SheetClose } from './kit/Sheet';
+import { Overlay, OverlayClose } from './kit/Overlay';
 import { useShell } from './kit/shell';
 import { DeleteLaunch } from './launch/DeleteLaunch';
 import { useToast } from './Toasts';
-import { Menu } from './ui/Menu';
-import { usePhone } from './ui/ResponsiveMenu';
 import type { HomeLaunch } from './LaunchCard';
 import { NetworkGlyph } from './kit/NetworkGlyph';
 
@@ -184,12 +182,11 @@ export interface RowMenuLaunch {
 
 /**
  * A launch row's ⋯ (the "Not published" rows, a failed launch's line in what needs you): a sheet on a
- * phone, a menu on a desktop. Delete opens the launch page's own confirmation (DeleteLaunch), with
+ * phone, a menu hung from the ⋯ on a desktop. Delete opens the launch page's own confirmation (DeleteLaunch), with
  * what it would do read first; once it is done the list is read again, so the row leaves in place.
  * Nothing to offer, no button.
  */
 export function RowMenu({ launch, relaunch, deletable }: { launch: RowMenuLaunch; relaunch: { repo: string; ref: string } | null; deletable: boolean }) {
-  const phone = usePhone();
   const router = useRouter();
   const toast = useToast();
   const { reloadAttention } = useShell();
@@ -223,34 +220,22 @@ export function RowMenu({ launch, relaunch, deletable }: { launch: RowMenuLaunch
 
   return (
     <>
-      {phone ? (
-        <Sheet label={label} open={sheet} onOpenChange={setSheet} trigger={trigger}>
-          <h2 className="k-d k-d30">{launch.name}</h2>
-          <div className="k-stack">
-            {relaunch && (
-              <SheetClose render={<button type="button" className="k-mi" onClick={() => void retry()} />}>
-                <Icon name="retry" size={22} />
-                Launch it again
-              </SheetClose>
-            )}
-            {deletable && (
-              <button type="button" className="k-mi k-bad" onClick={askDelete}>
-                <Icon name="trash" size={22} />
-                Delete
-              </button>
-            )}
-          </div>
-        </Sheet>
-      ) : (
-        <Menu
-          align="end"
-          trigger={trigger}
-          entries={[
-            ...(relaunch ? [{ label: 'Launch it again', onSelect: () => void retry() }] : []),
-            ...(deletable ? [{ label: 'Delete', tone: 'danger' as const, onSelect: askDelete }] : []),
-          ]}
-        />
-      )}
+      <Overlay kind="menu" label={label} heading={launch.name} open={sheet} onOpenChange={setSheet} trigger={trigger}>
+        <div className="k-stack">
+          {relaunch && (
+            <OverlayClose render={<button type="button" className="k-mi" onClick={() => void retry()} />}>
+              <Icon name="retry" size={22} />
+              Launch it again
+            </OverlayClose>
+          )}
+          {deletable && (
+            <button type="button" className="k-mi k-bad" onClick={askDelete}>
+              <Icon name="trash" size={22} />
+              Delete
+            </button>
+          )}
+        </div>
+      </Overlay>
       {deletable && (
         <DeleteLaunch
           launchId={launch.id}

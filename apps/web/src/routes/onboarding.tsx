@@ -2,9 +2,9 @@ import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-r
 import { useEffect, useRef, useState, type ComponentType, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
 import { OnboardAI, OnboardAutomation, OnboardBrand, OnboardChannels, OnboardMeasure, Shipped, type IllustrationProps } from '../components/illustrations';
 import { Diamond, Icon } from '../components/kit/Icon';
-import { Sheet, SheetClose } from '../components/kit/Sheet';
+import { Overlay, OverlayClose } from '../components/kit/Overlay';
 import { ToastProvider, useToast } from '../components/Toasts';
-import { Combobox } from '../components/ui/Combobox';
+import { PickerCombobox, PickerSelect } from '../components/kit/Picker';
 import { TooltipProvider } from '../components/ui/Tooltip';
 import { requestTour } from '../components/tour/request';
 import { saveAutomation } from '../server/automation.functions';
@@ -232,15 +232,17 @@ function LanguagesField({ value, onChange, problem, onLeave }: { value: string[]
         {value.length ? languageWords(value) : 'Choose the languages'}
       </button>
       <FieldError problem={problem} />
-      <Sheet
+      <Overlay
+        kind="popover"
+        align="start"
         label="The blog’s languages"
+        heading="Languages"
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) onLeave();
         }}
       >
-        <h2 className="k-d k-d30">Languages</h2>
         <p className="k-sm k-muted acc-onb-sheet-lead">The blog is written in these; every article comes in each of them.</p>
         <div className="k-stack" role="group" aria-label="The blog’s languages">
           {LANGUAGES.map((l) => {
@@ -255,8 +257,8 @@ function LanguagesField({ value, onChange, problem, onLeave }: { value: string[]
             );
           })}
         </div>
-        <SheetClose className="k-btn k-pri k-full">Done</SheetClose>
-      </Sheet>
+        <OverlayClose className="k-btn k-pri k-full">Done</OverlayClose>
+      </Overlay>
     </div>
   );
 }
@@ -402,7 +404,7 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
       )}
       {data.brand.problem && <Trouble>{data.brand.problem}</Trouble>}
       {reposProblem && <Trouble>The repos could not be listed: {reposProblem}</Trouble>}
-      <Combobox
+      <PickerCombobox
         id="b-repo"
         label="The launches repo"
         options={repos}
@@ -440,8 +442,22 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
             </span>
           </div>
           <FieldError problem={commitProblem} />
-          <Sheet label="Add brand.yml?" open={yaml !== null} onOpenChange={(open) => !open && setYaml(null)}>
-            <h2 className="k-d k-d30">Add brand.yml?</h2>
+          <Overlay
+            kind="drawer"
+            wide
+            label="Add brand.yml?"
+            heading="Add brand.yml?"
+            open={yaml !== null}
+            onOpenChange={(open) => !open && setYaml(null)}
+            footer={
+              <div className="k-hrow k-g10">
+                <OverlayClose className="k-btn">Not now</OverlayClose>
+                <button type="button" id="b-commit" className="k-btn k-pri k-grow" disabled={busy} onClick={commit}>
+                  {busy ? 'Committing…' : 'Commit brand.yml'}
+                </button>
+              </div>
+            }
+          >
             <p className="k-sm k-muted acc-onb-sheet-lead">
               Committed {data.viaApp ? 'through the GitHub App ' : ''}to the default branch of {repo}.
             </p>
@@ -456,13 +472,7 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
                   </span>
                 ))}
             </div>
-            <div className="k-hrow k-g10">
-              <SheetClose className="k-btn">Not now</SheetClose>
-              <button type="button" id="b-commit" className="k-btn k-pri k-grow" disabled={busy} onClick={commit}>
-                {busy ? 'Committing…' : 'Commit brand.yml'}
-              </button>
-            </div>
-          </Sheet>
+          </Overlay>
         </>
       )}
     </>
@@ -486,22 +496,7 @@ function isHttpUrl(value: string): boolean {
 
 /** A choice of a few, drawn as the board's field: the value in the rounded box, a chevron to say it opens */
 function ChoiceField<V extends string>({ id, label, value, options, onChange }: { id: string; label: string; value: V; options: ReadonlyArray<{ id: V; name: string }>; onChange: (value: V) => void }) {
-  return (
-    <div className="k-field">
-      <label className="k-lbl" htmlFor={id}>
-        {label}
-      </label>
-      <span className="acc-onb-select">
-        <select id={id} className="k-input acc-onb-input" value={value} onChange={(e) => onChange(e.target.value as V)}>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
-        </select>
-      </span>
-    </div>
-  );
+  return <PickerSelect<V> id={id} label={label} value={value} options={options.map((o) => ({ value: o.id, label: o.name }))} onValueChange={onChange} />;
 }
 
 function AiStep({ data, saver, report, attempted }: StepProps) {

@@ -1,7 +1,7 @@
 import { channelDefinition } from '@shipcast/schema/channels';
 import { useId, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import { diffSummary, wordDiff, type Part } from '../assistant/diff';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
 import { multiEditPlan, networkName, singleEditChanges, type EditForm, type PieceRow, type SharedChanges } from '../../server/pieces';
 import { number } from '../ui';
 import { listWords } from './published';
@@ -92,8 +92,29 @@ export function PostEditSheet({
   const extra = (['title', 'tags', 'link', 'image'] as const).filter(has);
   const [more, setMore] = useState(false);
   return (
-    <Sheet label={`Edit ${name}`} open onOpenChange={(open) => !open && !busy && onClose()}>
-      <h2 className="k-d k-d30">Edit {name}</h2>
+    <Overlay kind="drawer" wide label={`Edit ${name}`} open onOpenChange={(open) => !open && !busy && onClose()} heading={<>Edit {name}</>} footer={
+      <div className="k-hrow k-g10">
+        <button type="button" className="k-btn" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="k-btn k-pri k-grow"
+          disabled={!changes || busy || over}
+          onClick={async () => {
+            if (!changes) return;
+            setBusy(true);
+            try {
+              await onSave(changes);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? 'Saving…' : `Save on ${networkName(row.channel)}`}
+        </button>
+      </div>
+    }>
       <p className="k-sm k-muted pub-flush">
         {prefill.text ? 'Starts from the text as it went out.' : 'Shipcast keeps no copy of this piece: write the new text whole.'} The network gets the new version; a launch happens once, so nothing is posted again.
       </p>
@@ -130,28 +151,7 @@ export function PostEditSheet({
         <span className="k-lbl">What changes</span>
         <span className="k-sm">{changes ? changeSummary(prefill.text, form.text, Object.keys(changes)) : 'Nothing changed yet.'}</span>
       </div>
-      <div className="k-hrow k-g10">
-        <button type="button" className="k-btn" onClick={onClose} disabled={busy}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="k-btn k-pri k-grow"
-          disabled={!changes || busy || over}
-          onClick={async () => {
-            if (!changes) return;
-            setBusy(true);
-            try {
-              await onSave(changes);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {busy ? 'Saving…' : `Save on ${networkName(row.channel)}`}
-        </button>
-      </div>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -170,8 +170,28 @@ export function EditManySheet({ rows, onClose, onApply }: { rows: PieceRow[]; on
   const doable = plan.filter((p) => p.ok).length;
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
   return (
-    <Sheet label={`Edit ${rows.length} pieces`} open onOpenChange={(open) => !open && !busy && onClose()}>
-      <h2 className="k-d k-d30">Edit {rows.length} pieces</h2>
+    <Overlay kind="drawer" wide label={`Edit ${rows.length} pieces`} open onOpenChange={(open) => !open && !busy && onClose()} heading={<>Edit {rows.length} pieces</>} footer={
+      <div className="k-hrow k-g10">
+        <button type="button" className="k-btn" onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="k-btn k-pri k-grow"
+          disabled={doable === 0 || Object.keys(changes).length === 0 || busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onApply(changes);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? 'Saving…' : `Save on ${doable} ${doable === 1 ? 'piece' : 'pieces'}`}
+        </button>
+      </div>
+    }>
       <p className="k-sm k-muted pub-flush">The same text, link or image goes to each; a network with no such field leaves it out. A launch happens once, so nothing is posted again.</p>
       <div className="k-field">
         <label className="k-lbl" htmlFor={textId}>
@@ -204,26 +224,6 @@ export function EditManySheet({ rows, onClose, onApply }: { rows: PieceRow[]; on
           ))}
         </ul>
       </div>
-      <div className="k-hrow k-g10">
-        <button type="button" className="k-btn" onClick={onClose} disabled={busy}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="k-btn k-pri k-grow"
-          disabled={doable === 0 || Object.keys(changes).length === 0 || busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              await onApply(changes);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {busy ? 'Saving…' : `Save on ${doable} ${doable === 1 ? 'piece' : 'pieces'}`}
-        </button>
-      </div>
-    </Sheet>
+    </Overlay>
   );
 }

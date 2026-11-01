@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { TopBar } from '../../components/kit/Bars';
 import { Icon } from '../../components/kit/Icon';
-import { Sheet } from '../../components/kit/Sheet';
+import { Overlay } from '../../components/kit/Overlay';
 import { lockedRuleCount, promptEdited, promptLabel } from '../../components/settings/ai';
 import { shortDay } from '../../components/settings/view';
 import { useToast } from '../../components/Toasts';
@@ -133,8 +133,7 @@ function PromptsPage() {
           </button>
         </section>
       </div>
-      <Sheet label="Locked" open={locked} onOpenChange={setLocked}>
-        <h2 className="k-d k-d30">Locked</h2>
+      <Overlay kind="drawer" wide label="Locked" open={locked} onOpenChange={setLocked} heading="Locked">
         {LOCKED.map((l) => {
           const value = data.locked[l.key];
           return (
@@ -144,7 +143,7 @@ function PromptsPage() {
             </div>
           );
         })}
-      </Sheet>
+      </Overlay>
     </div>
   );
 }

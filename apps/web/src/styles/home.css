@@ -106,10 +106,6 @@
 .home-filters fieldset { border: 0; padding: 0; min-width: 0; }
 .home-filters legend { padding: 0; margin-bottom: 8px; float: left; width: 100%; }
 .home-filter-group > div { clear: both; }
-.home-select { position: relative; }
-.home-select.k-ph { color: var(--sc-rail); }
-.home-select-native { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
-.home-select:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
 .home-order { width: 220px; }
 .home-filters-foot { margin-top: 4px; }
 .home-filters-foot .k-btn:disabled { opacity: 1; cursor: default; }
@@ -124,9 +120,6 @@
 .home .home-empty-note { margin-top: 6px; }
 
 /* Desktop (board DesktopHome) */
-.home-chip-select { position: relative; cursor: pointer; min-height: 44px; }
-.home-chip-select select { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; font-size: 16px; }
-.home-chip-select:focus-within { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
 
 @media (min-width: 960px) {
   .home > .k-topbar { display: none; }
@@ -154,7 +147,6 @@
   .home-search { flex: none; width: 320px; }
   .home-needs-head { margin-block: 0 !important; }
   .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
-  .home-peek, .home-bell { max-width: 560px; margin: 0 auto; }
   .home-empty-actions { max-width: 400px; }
 }
 

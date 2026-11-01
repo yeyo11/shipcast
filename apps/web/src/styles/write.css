@@ -28,24 +28,7 @@
 /* ---------- Inputs ---------- */
 /* Scoped to these screens: other sections set their own fields (Settings' mono ones) */
 .wr-page :where(input, textarea).k-input { width: 100%; line-height: 1.5; outline: none; }
-.wr-placeholder { color: var(--sc-rail); }
-.wr-picker { line-height: 1.5; }
-.wr-picker-input { flex: 1; min-width: 0; height: 24px; line-height: 1.5; border: 0; background: none; color: inherit; font: inherit; outline: none; padding: 0; }
-.wr-picker-button { width: 100%; cursor: pointer; font: inherit; text-align: left; }
-.wr-picker-button[data-disabled] { cursor: not-allowed; opacity: .6; }
-.wr-picker-chevron { display: flex; align-items: center; color: var(--sc-muted); background: none; border: 0; padding: 0; cursor: pointer; flex: none; }
 .wr-tag { font-size: 14px; }
-
-.wr-positioner { z-index: 70; outline: none; }
-.wr-popup { min-width: var(--anchor-width, 200px); max-width: calc(100vw - 16px); max-height: min(var(--available-height, 420px), 420px); overflow-y: auto; overscroll-behavior: contain; outline: none; }
-.wr-option { cursor: default; user-select: none; outline: none; justify-content: space-between; }
-.wr-option[data-highlighted] { background: var(--sc-hairline); }
-.wr-option[data-disabled] { opacity: .45; }
-.wr-option-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
-.wr-option-hint { font-size: 13px; color: var(--sc-muted); }
-.wr-option-check { display: flex; color: var(--sc-yellow); }
-.wr-empty { padding: 12px; font-size: 14px; color: var(--sc-muted); }
-.wr-empty:empty { display: none; }
 
 /* Radios drawn as the board's rings, over the native input that keeps the keyboard */
 .wr-radio-input:focus-visible + .k-radio { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }

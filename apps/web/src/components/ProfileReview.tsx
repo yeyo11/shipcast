@@ -3,7 +3,7 @@ import { applyBrandPictureNow, applyProfileProposal, getProfileReview, profileRe
 import { wordDiff } from './assistant/diff';
 import { dayWord } from './channels/view';
 import { Icon } from './kit/Icon';
-import { Sheet } from './kit/Sheet';
+import { Overlay } from './kit/Overlay';
 import { useLiveEnabled, useLiveInterest } from './live/Live';
 import { useToast } from './Toasts';
 import { when } from './ui';
@@ -33,8 +33,7 @@ export function reviewStanding(view: ProfileView | null): { pill: string; tone: 
 /** A confirmation as the boards ask one: the question, what it does, and the way out first */
 function ConfirmSheet({ open, onOpenChange, title, children, confirm, onConfirm }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode; confirm: string; onConfirm: () => void }) {
   return (
-    <Sheet label={title} open={open} onOpenChange={onOpenChange} className="ch-sheet">
-      <h2 className="k-d k-d30">{title}</h2>
+    <Overlay kind="dialog" label={title} open={open} onOpenChange={onOpenChange} className="ch-sheet" heading={<>{title}</>}>
       <p className="ch-flush">{children}</p>
       <div className="k-hrow k-g10">
         <button type="button" className="k-btn" onClick={() => onOpenChange(false)}>
@@ -51,7 +50,7 @@ function ConfirmSheet({ open, onOpenChange, title, children, confirm, onConfirm 
           {confirm}
         </button>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }
 

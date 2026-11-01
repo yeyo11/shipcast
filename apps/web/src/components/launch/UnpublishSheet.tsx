@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Icon } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
 import type { PieceRow } from '../../server/pieces';
 import { channelTitle } from './ChannelGlyph';
 import { listWords, unpublishGroups } from './published';
@@ -42,8 +42,7 @@ export function UnpublishSheet({
   const chosen = groups.filter((g) => ticked.includes(g.channel)).flatMap((g) => g.pieces);
   const names = groups.map((g) => (g.channel === 'blog' ? 'the article' : channelTitle(g.channel)));
   return (
-    <Sheet label="Delete everything it published?" open onOpenChange={(open) => !open && !busy && onClose()}>
-      <h2 className="k-d k-d30">Delete everything it published?</h2>
+    <Overlay kind="dialog" label="Delete everything it published?" open onOpenChange={(open) => !open && !busy && onClose()} heading="Delete everything it published?">
       {groups.length === 0 ? (
         <p className="pub-flush">Nothing of {name} is out on a network that lets it go.</p>
       ) : (
@@ -91,6 +90,6 @@ export function UnpublishSheet({
           {busy ? 'Unpublishing…' : `Unpublish ${chosen.length} ${chosen.length === 1 ? 'piece' : 'pieces'}`}
         </button>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { countOf, type AttentionItem } from '../server/attention';
 import { clearAttention, dismissAttention } from '../server/attention.functions';
 import { Icon } from './kit/Icon';
-import { Sheet } from './kit/Sheet';
+import { Overlay } from './kit/Overlay';
 import { useShell } from './kit/shell';
 import { AttentionLink, AttentionMark, Subject } from './LaunchRows';
 
@@ -15,7 +15,7 @@ import { AttentionLink, AttentionMark, Subject } from './LaunchRows';
  * when the sheet opens.
  */
 export function Notifications() {
-  const { attention, setAttention, reloadAttention: load, notificationsOpen: open, setNotificationsOpen: setOpen } = useShell();
+  const { attention, setAttention, reloadAttention: load, notificationsOpen: open, setNotificationsOpen: setOpen, bellAnchor } = useShell();
   const [said, setSaid] = useState('');
   const panel = useRef<HTMLDivElement>(null);
   /** Where focus goes once a dismissed line has left the list: the line now at that place */
@@ -68,9 +68,8 @@ export function Notifications() {
   }
 
   return (
-    <Sheet label="What needs you" open={open} onOpenChange={setOpen} className="home-bell">
+    <Overlay kind="popover" label="What needs you" heading="What needs you" open={open} onOpenChange={setOpen} anchor={bellAnchor} className="home-bell">
       <div className="home-bell-body" ref={panel}>
-        <h2 className="k-d k-d30">What needs you</h2>
         {items.length === 0 ? (
           <p className="k-muted home-bell-empty" tabIndex={-1}>
             Nothing needs you.
@@ -114,6 +113,6 @@ export function Notifications() {
           {said}
         </p>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }

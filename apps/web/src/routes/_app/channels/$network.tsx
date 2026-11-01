@@ -7,7 +7,7 @@ import { TopBar } from '../../../components/kit/Bars';
 import { Icon } from '../../../components/kit/Icon';
 import { ProfileReview, reviewStanding, type ProfileView } from '../../../components/ProfileReview';
 import { useToast } from '../../../components/Toasts';
-import { Select } from '../../../components/ui/Select';
+import { PickerSelect } from '../../../components/kit/Picker';
 import { connectWithForm, getChannels } from '../../../server/channels.functions';
 import { groupOf } from '../../../server/network-groups';
 import { getProfileReview } from '../../../server/profiles.functions';
@@ -172,7 +172,7 @@ function Connect() {
                 }}
               >
                 {brands.length > 1 && (
-                  <Select label="Brand" options={brands.map((b) => ({ value: b.id, label: b.name }))} value={brand} onValueChange={setBrand} help="A launch only ever publishes with its own brand’s accounts." />
+                  <PickerSelect label="Brand" options={brands.map((b) => ({ value: b.id, label: b.name }))} value={brand} onValueChange={setBrand} help="A launch only ever publishes with its own brand’s accounts." />
                 )}
                 {network.fields.map((field) => {
                   const help = [field.help, !oauth && field === firstSecret ? `Checked before it is saved; kept in ${secretsKind}.` : null, field.optional && !field.help ? 'Optional' : null].filter(Boolean).join('. ');

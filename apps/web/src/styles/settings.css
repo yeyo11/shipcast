@@ -56,12 +56,6 @@
 .st-input.k-bad:not(:focus-visible) { border-color: var(--sc-failure); }
 .st-kept { justify-content: space-between; }
 
-/* A native select drawn as the kit's input, with the board's chevron */
-.st-select { position: relative; padding: 0; min-height: 44px; }
-.st-select select { appearance: none; -webkit-appearance: none; width: 100%; min-height: 40px; padding: 0 40px 0 14px; background: transparent; border: 0; color: inherit; font: inherit; font-size: 16px; outline: none; cursor: pointer; }
-.st-select select option { background: var(--sc-raised); color: var(--sc-text); }
-.st-select > svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--sc-muted); }
-
 /* ---------- Sheets ---------- */
 .st-once-value { font-size: 13px; word-break: break-all; border-color: var(--sc-yellow); }
 
@@ -120,7 +114,6 @@
 .st-tone { resize: none; }
 /* The board's inputs are spans whose height comes from their text: the same height for the real controls */
 .st-input { line-height: 1.5; }
-.st-select select { min-height: 48px; }
 /* The slot has no box of its own: the bar sticks along the whole Settings page */
 .st-savebar-slot { display: contents; }
 textarea.st-tone { resize: none; field-sizing: content; }

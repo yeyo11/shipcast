@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Icon, type IconName } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
 import { useToast } from '../Toasts';
 
 /**
@@ -32,8 +32,7 @@ export function ConfirmSheet({
 }) {
   const [busy, setBusy] = useState(false);
   return (
-    <Sheet label={title} open={open} onOpenChange={onOpenChange}>
-      <h2 className="k-d k-d30">{title}</h2>
+    <Overlay kind="dialog" label={title} open={open} onOpenChange={onOpenChange} heading={<>{title}</>}>
       <p className="st-sheet-text">{children}</p>
       <div className="k-hrow k-g10">
         <button type="button" className="k-btn" onClick={() => onOpenChange(false)}>
@@ -57,7 +56,7 @@ export function ConfirmSheet({
           {confirm}
         </button>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -68,14 +67,13 @@ export function ConfirmSheet({
 export function OnceSheet({ value, title, text, note, onDone }: { value: string | null; title: string; text: string; note: ReactNode; onDone: () => void }) {
   const toast = useToast();
   return (
-    <Sheet
+    <Overlay kind="dialog"
       label={title}
       open={value !== null}
       onOpenChange={(open) => {
         if (!open) onDone();
       }}
-    >
-      <h2 className="k-d k-d30">{title}</h2>
+     heading={<>{title}</>}>
       <p className="k-sm k-muted st-m0">{text}</p>
       <div className="k-input k-mono st-once-value">{value}</div>
       <button
@@ -92,6 +90,6 @@ export function OnceSheet({ value, title, text, note, onDone }: { value: string 
       <button type="button" className="k-btn k-full" onClick={onDone}>
         Done
       </button>
-    </Sheet>
+    </Overlay>
   );
 }

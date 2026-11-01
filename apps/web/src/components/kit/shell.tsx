@@ -22,7 +22,9 @@ export interface ShellState {
   /** Accounts whose credential failed: the mark on Channels */
   brokenAccounts: number;
   notificationsOpen: boolean;
-  setNotificationsOpen: (open: boolean) => void;
+  /** `anchor`: the bell it was opened from, which the desktop's popover hangs from */
+  setNotificationsOpen: (open: boolean, anchor?: HTMLElement) => void;
+  bellAnchor: HTMLElement | null;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
   moreOpen: boolean;
@@ -39,7 +41,12 @@ export function useShell(): ShellState {
 
 export function ShellProvider({ children }: { children: ReactNode }) {
   const [attention, setAttentionState] = useState<Attention | null>(null);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpenState] = useState(false);
+  const [bellAnchor, setBellAnchor] = useState<HTMLElement | null>(null);
+  const setNotificationsOpen = useCallback((open: boolean, anchor?: HTMLElement) => {
+    if (anchor) setBellAnchor(anchor);
+    setNotificationsOpenState(open);
+  }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -75,12 +82,13 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       brokenAccounts: items.filter((i) => i.kind === 'reconnect').length,
       notificationsOpen,
       setNotificationsOpen,
+      bellAnchor,
       paletteOpen,
       setPaletteOpen,
       moreOpen,
       setMoreOpen,
     };
-  }, [attention, reloadAttention, notificationsOpen, paletteOpen, moreOpen]);
+  }, [attention, reloadAttention, notificationsOpen, setNotificationsOpen, bellAnchor, paletteOpen, moreOpen]);
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
 }

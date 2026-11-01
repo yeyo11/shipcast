@@ -1,10 +1,11 @@
 import { useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { cancelSchedule, moveSchedule, recommendedTimes, schedulePiece } from '../../server/posts.functions';
 import { scheduleChips, zonedInputToIso, type Chip } from '../../server/pieces';
 import type { SchedulingChannel } from '../../server/pieces.server';
 import { Icon } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
+import { TimeField } from '../ui/TimeField';
 import { useToast } from '../Toasts';
 import { dayLabel, monthGrid, MONTH_NAMES, zonedParts } from './model';
 
@@ -158,6 +159,7 @@ export function ScheduleSheet({
     return { day: zonedParts(tomorrow, timezone).day, time: '09:00' };
   };
   const [value, setValue] = useState(start);
+  const timeId = useId();
   const [month, setMonth] = useState(() => value.day.slice(0, 7));
   // Each opening starts again from the channel's time
   useEffect(() => {
@@ -184,8 +186,7 @@ export function ScheduleSheet({
   };
 
   return (
-    <Sheet label={`${title} for ${name}`} open={open} onOpenChange={onOpenChange} className="ap-sheet">
-      <h2 className="k-d k-d30">{title}</h2>
+    <Overlay kind="popover" label={`${title} for ${name}`} heading={title} open={open} onOpenChange={onOpenChange} className="ap-sheet">
       <p className="k-sm k-muted ap-m0">
         For {name}, in {timezone}. The launch keeps its other times.
       </p>
@@ -250,15 +251,17 @@ export function ScheduleSheet({
         </div>
       </div>
       <div className="k-hrow k-g10">
-        <label className="k-field k-grow">
-          <span className="k-lbl">Time</span>
+        <div className="k-field k-grow">
+          <label className="k-lbl" htmlFor={timeId}>
+            Time
+          </label>
           <span className="k-input ap-time">
-            <input type="time" className="k-grow" value={value.time} step={300} onChange={(e) => e.target.value && setValue((v) => ({ ...v, time: e.target.value }))} aria-label={`Time, in ${timezone}`} />
-            <span className="k-muted" aria-hidden="true">
+            <TimeField id={timeId} label={`Time, in ${timezone}`} value={value.time} onChange={(time) => time && setValue((v) => ({ ...v, time }))} />
+            <span className="k-muted k-grow ap-time-icon" aria-hidden="true">
               <Icon name="clock" size={18} />
             </span>
           </span>
-        </label>
+        </div>
       </div>
       {past && <p className="k-sm ap-m0 ap-bad-text">That moment has passed: pick a later one.</p>}
       <div className="k-hrow k-g10">
@@ -276,7 +279,7 @@ export function ScheduleSheet({
           Move to {label}
         </button>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }
 

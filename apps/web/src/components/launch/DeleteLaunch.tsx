@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
 import { deleteLaunch, getDeletion } from '../../server/launches.functions';
 import { useToast } from '../Toasts';
 import { channelTitle } from './ChannelGlyph';
@@ -64,8 +64,7 @@ export function DeleteLaunch({ launchId, open, onOpenChange, onDeleted }: { laun
   };
 
   return (
-    <Sheet label="Delete this launch?" open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <h2 className="k-d k-d30">Delete this launch?</h2>
+    <Overlay kind="dialog" label="Delete this launch?" open={open} onOpenChange={(next) => !busy && onOpenChange(next)} heading="Delete this launch?">
       {!plan ? (
         <p className="pub-flush">{problem ?? 'Reading what it would do…'}</p>
       ) : hidden ? (
@@ -119,6 +118,6 @@ export function DeleteLaunch({ launchId, open, onOpenChange, onDeleted }: { laun
           {busy ? 'Deleting…' : hidden ? 'Delete the launch' : 'Delete it'}
         </button>
       </div>
-    </Sheet>
+    </Overlay>
   );
 }

@@ -1,7 +1,9 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Diamond, Icon } from '../kit/Icon';
-import { Sheet, SheetClose } from '../kit/Sheet';
+import { Overlay, OverlayClose } from '../kit/Overlay';
+import { usePhone } from '../kit/usePhone';
+import { desktopMenuEntries, launchMenuEntries, type LaunchMenuEntry } from './launch-menu';
 import { publishAgain } from '../../server/launches.functions';
 import { deletePiece, editPiece, editPieces } from '../../server/posts.functions';
 import { draftPrefill, networkName, type PieceRow } from '../../server/pieces';
@@ -32,7 +34,12 @@ type Open =
   | null;
 
 export interface LaunchActions {
-  openMenu(): void;
+  /** `anchor`: the ⋯ it was opened from, which a desktop's menu hangs from */
+  openMenu(anchor?: HTMLElement): void;
+  /** What the menu offers in the window's current shape: nothing, and the page shows no ⋯ */
+  menu: LaunchMenuEntry[];
+  /** Launching a failed release again, when it can be; the desktop's header shows it as its button */
+  relaunch: { run: () => Promise<void>; busy: boolean } | null;
   /** Edit these pieces: one in its own sheet, several together */
   edit(rows: PieceRow[]): void;
   unpublish(preselect?: string[]): void;
@@ -67,21 +74,59 @@ export interface LaunchActionsProps {
   /** Waiting for the owner's approval: its text to edit and, for a launch Shipcast holds, the article's preview */
   waiting?: boolean;
   running: boolean;
+  /** canRelaunch: launching it again the way the failed card does ($id.tsx) */
+  relaunch: { run: () => Promise<void>; busy: boolean } | null;
+  /** Why it failed, when it did */
+  problem: string | null;
+  failed: boolean;
   onDeleted: () => Promise<void>;
   children: ReactNode;
 }
 
-export function LaunchActionsProvider({ launchId, name, version, rows, drafts, timezone, held, articleUrl, deletable, pending, waiting = false, running, onDeleted, children }: LaunchActionsProps) {
+export function LaunchActionsProvider({ launchId, name, version, rows, drafts, timezone, held, articleUrl, deletable, pending, waiting = false, running, relaunch, problem, failed, onDeleted, children }: LaunchActionsProps) {
   const router = useRouter();
   const toast = useToast();
+  const phone = usePhone();
   const [open, setOpen] = useState<Open>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = () => setOpen(null);
   const editable = rows.filter((r) => r.edit.allowed);
   const removable = rows.filter((r) => r.remove.allowed);
+  const relaunching = relaunch?.busy ?? false;
+  const all = launchMenuEntries({
+    relaunch: relaunch !== null,
+    waiting,
+    held,
+    article: articleUrl !== null,
+    pending,
+    running,
+    failed,
+    problem: Boolean(problem),
+    editable: editable.length,
+    removable: removable.length,
+    deletable,
+  });
+  const menu = phone ? all : desktopMenuEntries(all);
+  const has = (entry: LaunchMenuEntry) => menu.includes(entry);
+  const menuKey = menu.join();
+
+  const copyProblem = async () => {
+    try {
+      await navigator.clipboard.writeText(problem ?? '');
+      toast.done('Error copied');
+    } catch {
+      toast.fail('Could not copy the error');
+    }
+  };
 
   const actions = useMemo<LaunchActions>(
     () => ({
-      openMenu: () => setOpen({ kind: 'menu' }),
+      openMenu: (from) => {
+        setAnchor(from ?? null);
+        setOpen((now) => (now?.kind === 'menu' ? null : { kind: 'menu' }));
+      },
+      menu: menuKey ? (menuKey.split(',') as LaunchMenuEntry[]) : [],
+      relaunch,
       edit: (chosen) => {
         if (chosen.length === 0) toast.done('Tick what to edit first', 'Tick a channel that allows edits, then Edit selected.');
         else setOpen({ kind: 'edit', rows: chosen });
@@ -95,7 +140,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
         await router.invalidate();
       },
     }),
-    [launchId, router, toast],
+    [launchId, router, toast, menuKey, relaunch],
   );
 
   const publishPending = async () => {
@@ -114,52 +159,77 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
     <Context.Provider value={actions}>
       {children}
 
-      <Sheet label={`${name}, what to do`} open={open?.kind === 'menu'} onOpenChange={(next) => !next && close()}>
-        <div className="k-hrow k-g8 pub-menu-head">
+      <Overlay
+        kind="menu"
+        label={`${name}, what to do`}
+        open={open?.kind === 'menu'}
+        onOpenChange={(next) => !next && close()}
+        anchor={anchor}
+        footer={<OverlayClose className="k-btn k-full k-sheet-only">Close</OverlayClose>}
+      >
+        <div className="k-hrow k-g8 pub-menu-head k-sheet-only">
           <span className="k-d k-d30">{name}</span>
           {version && <span className="k-mono k-sm k-muted">{version}</span>}
         </div>
         <div className="k-stack">
-          {waiting && (
-            <SheetClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id/edit" params={{ id: String(launchId) }} />}>
+          {has('relaunch') && (
+            <OverlayClose render={<button type="button" className="k-mi k-sheet-only" disabled={running || relaunching} onClick={() => void relaunch?.run()} />}>
+              <Icon name="retry" />
+              Launch it again
+            </OverlayClose>
+          )}
+          {has('edit-text') && (
+            <OverlayClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id/edit" params={{ id: String(launchId) }} />}>
               <Icon name="write" />
               Edit the text
-            </SheetClose>
+            </OverlayClose>
           )}
-          {waiting && held && (
-            <SheetClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id/preview" params={{ id: String(launchId) }} />}>
+          {has('preview') && (
+            <OverlayClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id/preview" params={{ id: String(launchId) }} />}>
               <Icon name="eye" />
               Preview the article
-            </SheetClose>
+            </OverlayClose>
           )}
-          {articleUrl && (
-            <SheetClose nativeButton={false} render={<a className="k-mi" href={articleUrl} target="_blank" rel="noreferrer" />}>
+          {has('article') && articleUrl && (
+            <OverlayClose nativeButton={false} render={<a className="k-mi" href={articleUrl} target="_blank" rel="noreferrer" />}>
               <Icon name="external" />
               Open the article
               <span className="visually-hidden"> (opens in a new tab)</span>
-            </SheetClose>
+            </OverlayClose>
           )}
-          {pending && !running && (
+          {has('publish-pending') && (
             <button type="button" className="k-mi" onClick={publishPending}>
               <Icon name="send" />
               Publish what is pending
             </button>
           )}
-          {editable.length > 0 && (
+          {has('log') && (
+            <OverlayClose nativeButton={false} render={<Link className="k-mi" to="/launches/$id" params={{ id: String(launchId) }} search={(prev) => ({ ...prev, tab: 'details' })} replace resetScroll={false} />}>
+              <Icon name="external" />
+              The job’s log
+            </OverlayClose>
+          )}
+          {has('copy-error') && (
+            <OverlayClose render={<button type="button" className="k-mi" onClick={() => void copyProblem()} />}>
+              <Icon name="copy" />
+              Copy the error
+            </OverlayClose>
+          )}
+          {has('edit-out') && (
             <button type="button" className="k-mi" onClick={() => (editable.length === 1 ? setOpen({ kind: 'edit', rows: editable }) : setOpen({ kind: 'pick' }))}>
               <Icon name="write" />
               Edit what went out
             </button>
           )}
-          {removable.length > 0 && (
+          {has('unpublish') && (
             <button type="button" className="k-mi" onClick={() => setOpen({ kind: 'unpublish', preselect: [] })}>
               <Icon name="trash" />
               Unpublish everything
             </button>
           )}
-          {deletable && (
+          {has('delete') && (
             <>
-              {(waiting || articleUrl || editable.length > 0 || removable.length > 0 || pending) && <div className="k-sep" />}
+              {menu.some((e) => e !== 'delete' && e !== 'relaunch') && <div className="k-sep" role="separator" />}
               <button type="button" className="k-mi k-bad" disabled={running} onClick={() => setOpen({ kind: 'delete' })}>
                 <span className="pub-mi-diamond">
                   <Diamond size={10} />
@@ -168,13 +238,18 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
               </button>
             </>
           )}
-          {!waiting && !articleUrl && editable.length === 0 && removable.length === 0 && !deletable && !(pending && !running) && <p className="k-sm k-muted pub-menu-none">Nothing to do to this launch from here yet.</p>}
         </div>
-        <SheetClose className="k-btn k-full">Close</SheetClose>
-      </Sheet>
+      </Overlay>
 
-      <Sheet label="Edit what went out" open={open?.kind === 'pick'} onOpenChange={(next) => !next && close()}>
-        <h2 className="k-d k-d30">Edit what went out</h2>
+      <Overlay
+        kind="menu"
+        label="Edit what went out"
+        heading="Edit what went out"
+        open={open?.kind === 'pick'}
+        onOpenChange={(next) => !next && close()}
+        anchor={anchor}
+        footer={<OverlayClose className="k-btn k-full k-sheet-only">Close</OverlayClose>}
+      >
         <div className="k-stack">
           {editable.map((r) => (
             <button key={r.id} type="button" className="k-mi" onClick={() => setOpen({ kind: 'edit', rows: [r] })}>
@@ -184,8 +259,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
             </button>
           ))}
         </div>
-        <SheetClose className="k-btn k-full">Close</SheetClose>
-      </Sheet>
+      </Overlay>
 
       {single && (
         <PostEditSheet

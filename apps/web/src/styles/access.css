@@ -75,10 +75,7 @@ main.acc-onb-main { gap: 14px; padding-top: 16px; padding-bottom: 120px; }
 a.acc-onb-input:hover { color: var(--sc-text); border-color: var(--sc-text); }
 .acc-onb-pick { cursor: pointer; }
 .acc-onb-connect, a.acc-onb-connect:hover { color: var(--sc-yellow); font-weight: 600; border-style: dashed; }
-.acc-onb-select { position: relative; display: block; }
-.acc-onb-select select { appearance: none; cursor: pointer; }
 .acc-onb-input.acc-onb-kept::placeholder { color: var(--sc-text); }
-.acc-onb-select svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--sc-muted); }
 .acc-onb-error { margin: 0; color: var(--sc-failure); font-weight: 600; }
 .acc-onb-done { margin: 0; align-items: center; }
 .acc-onb-done svg { color: var(--sc-success); flex: none; }

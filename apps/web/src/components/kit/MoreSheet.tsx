@@ -4,7 +4,7 @@ import { requestTour } from '../tour/request';
 import { tourSteps } from '../tour/steps';
 import { Icon } from './Icon';
 import { useShell } from './shell';
-import { Sheet, SheetClose } from './Sheet';
+import { Overlay, OverlayClose } from './Overlay';
 
 export interface Owner {
   login: string;
@@ -30,9 +30,9 @@ export function MoreSheet({ owner }: { owner: Owner }) {
   const signOut = useRef<HTMLFormElement>(null);
   const stops = tourSteps({ launchId: null, phone: true }).length;
   return (
-    <Sheet label="More" open={moreOpen} onOpenChange={setMoreOpen} bottom={76}>
+    <Overlay kind="menu" label="More" open={moreOpen} onOpenChange={setMoreOpen} bottom={76}>
       <nav aria-label="More" className="k-stack">
-        <SheetClose nativeButton={false} render={<Link to="/channels" className="k-mi k-more-item" />}>
+        <OverlayClose nativeButton={false} render={<Link to="/channels" className="k-mi k-more-item" />}>
           <Icon name="channels" size={22} />
           <span className="k-grow">
             <strong>Channels</strong>
@@ -46,8 +46,8 @@ export function MoreSheet({ owner }: { owner: Owner }) {
           ) : (
             <Icon name="chevronRight" size={18} />
           )}
-        </SheetClose>
-        <SheetClose nativeButton={false} render={<Link to="/launch" className="k-mi k-more-item" />}>
+        </OverlayClose>
+        <OverlayClose nativeButton={false} render={<Link to="/launch" className="k-mi k-more-item" />}>
           <Icon name="launches" size={22} />
           <span className="k-grow">
             <strong>Launch a repo</strong>
@@ -55,8 +55,8 @@ export function MoreSheet({ owner }: { owner: Owner }) {
             <span className="k-xs k-muted">Or launch from sources</span>
           </span>
           <Icon name="chevronRight" size={18} />
-        </SheetClose>
-        <SheetClose nativeButton={false} render={<Link to="/settings" className="k-mi k-more-item" />}>
+        </OverlayClose>
+        <OverlayClose nativeButton={false} render={<Link to="/settings" className="k-mi k-more-item" />}>
           <Icon name="menu" size={22} />
           <span className="k-grow">
             <strong>Settings</strong>
@@ -64,7 +64,7 @@ export function MoreSheet({ owner }: { owner: Owner }) {
             <span className="k-xs k-muted">General, AI, Automation, API</span>
           </span>
           <Icon name="chevronRight" size={18} />
-        </SheetClose>
+        </OverlayClose>
         <button
           type="button"
           className="k-mi k-more-item"
@@ -95,6 +95,6 @@ export function MoreSheet({ owner }: { owner: Owner }) {
           <form ref={signOut} method="post" action="/auth/logout" hidden />
         </div>
       </nav>
-    </Sheet>
+    </Overlay>
   );
 }

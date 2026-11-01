@@ -8,7 +8,23 @@ import { Icon } from '../kit/Icon';
  * top bar back to the launches, the project in display type beside its version, the actions behind
  * ⋯, then its state as a pill and where it comes from. Every state of the launch page starts here.
  */
-export function LaunchHead({ name, version, pill, meta, onMenu }: { name: string; version: string | null; pill: { label: string; className: string }; meta: ReactNode; onMenu?: () => void }) {
+export function LaunchHead({
+  name,
+  version,
+  pill,
+  meta,
+  onMenu,
+  primary,
+}: {
+  name: string;
+  version: string | null;
+  pill: { label: string; className: string };
+  meta: ReactNode;
+  /** Opens the launch's menu, hung from the ⋯ given */
+  onMenu?: (anchor: HTMLElement) => void;
+  /** The page's yellow action beside the ⋯ (a failed release's "Launch it again" on a desktop) */
+  primary?: ReactNode;
+}) {
   return (
     <>
       <TopBar back={{ label: 'Launches', to: '/' }} />
@@ -18,10 +34,15 @@ export function LaunchHead({ name, version, pill, meta, onMenu }: { name: string
             <h1 className="k-d k-d48">{name}</h1>
             {version && <span className="k-mono k-muted">{version}</span>}
           </div>
-          {onMenu && (
-            <button type="button" className="k-btn k-icon" aria-label="More actions" aria-haspopup="dialog" onClick={onMenu}>
-              <Icon name="more" />
-            </button>
+          {(onMenu || primary) && (
+            <div className="k-hrow k-g8">
+              {primary}
+              {onMenu && (
+                <button type="button" className="k-btn k-icon" aria-label="More actions" aria-haspopup="menu" onClick={(event) => onMenu(event.currentTarget)}>
+                  <Icon name="more" />
+                </button>
+              )}
+            </div>
           )}
         </div>
         <div className="k-hrow k-g10 k-wrap">

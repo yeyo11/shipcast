@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { groupOf, type NetworkGroup } from '../../server/network-groups';
 import { Diamond, Icon } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
 import type { getChannels } from '../../server/channels.functions';
 import { NetworkGlyph } from './NetworkGlyph';
 import { credentialWord, stateOf, STATE_WORD } from './view';
@@ -42,8 +42,7 @@ export function AddNetworkSheet({ networks, open, onOpenChange, initialKind }: {
   const current = KINDS.find((k) => k.id === kind) ?? KINDS[0];
   const shown = networks.filter((n) => (current.groups as readonly NetworkGroup[]).includes(groupOf(n)));
   return (
-    <Sheet label="Connect a network" open={open} onOpenChange={onOpenChange} className="ch-sheet">
-      <h2 className="k-d k-d30">Connect a network</h2>
+    <Overlay kind="drawer" label="Connect a network" heading="Connect a network" open={open} onOpenChange={onOpenChange} className="ch-sheet">
       <p className="k-sm k-muted ch-flush">Pick one. A connected network can take another account.</p>
       <ul className="ch-tiles" aria-label={current.name}>
         {shown.map((n) => {
@@ -66,7 +65,7 @@ export function AddNetworkSheet({ networks, open, onOpenChange, initialKind }: {
           </button>
         ))}
       </div>
-    </Sheet>
+    </Overlay>
   );
 }
 
@@ -110,7 +109,7 @@ export function AccountSheet({
     void fn();
   };
   return (
-    <Sheet label={target ? (view === 'disconnect' ? `Disconnect ${target.account.label}?` : target.account.label) : 'Account'} open={target !== null} onOpenChange={(o) => !o && close()} className="ch-sheet">
+    <Overlay kind={view === 'menu' ? 'menu' : 'dialog'} label={target ? (view === 'disconnect' ? `Disconnect ${target.account.label}?` : target.account.label) : 'Account'} open={target !== null} onOpenChange={(o) => !o && close()} className="ch-sheet">
       {target && view === 'disconnect' && (
         <>
           <h2 className="k-d k-d30">Disconnect {target.account.label}?</h2>
@@ -189,11 +188,11 @@ export function AccountSheet({
               Disconnect
             </button>
           </div>
-          <button type="button" className="k-btn k-full" onClick={close}>
+          <button type="button" className="k-btn k-full k-sheet-only" onClick={close}>
             Close
           </button>
         </>
       )}
-    </Sheet>
+    </Overlay>
   );
 }

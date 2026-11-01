@@ -1,9 +1,9 @@
 import { Menu } from '@base-ui/react/menu';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Icon } from '../kit/Icon';
-import { Sheet } from '../kit/Sheet';
+import { Overlay } from '../kit/Overlay';
 import { useToast } from '../Toasts';
-import { usePhone } from '../write/usePhone';
+import { usePhone } from '../kit/usePhone';
 import { caretPoint } from './caret';
 import { sentenceContext } from './diff';
 import { DiffView } from './DiffView';
@@ -40,7 +40,7 @@ const QUICK: ReadonlyArray<[Exclude<Action, 'adapt' | 'check' | 'translate'>, st
  */
 function AssistMenu({ assistant, trigger, onOpenChat }: { assistant: Assistant; trigger: ReactElement; onOpenChat?: () => void }) {
   const item = (action: Action, label: string, disabled?: boolean) => (
-    <Menu.Item className="k-mi wr-option" onClick={() => assistant.run(action)} disabled={disabled}>
+    <Menu.Item className="k-mi k-option" onClick={() => assistant.run(action)} disabled={disabled}>
       {label}
     </Menu.Item>
   );
@@ -48,26 +48,26 @@ function AssistMenu({ assistant, trigger, onOpenChat }: { assistant: Assistant; 
     <Menu.Root>
       <Menu.Trigger render={trigger} />
       <Menu.Portal>
-        <Menu.Positioner className="wr-positioner" sideOffset={6} align="start">
-          <Menu.Popup className="k-menu wr-popup wr-assist-menu">
+        <Menu.Positioner className="k-pop-positioner" sideOffset={6} align="start">
+          <Menu.Popup className="k-menu k-pop-list wr-assist-menu">
             <div className="k-xs k-muted wr-menu-note">{scope(assistant)}</div>
             {QUICK.map(([action, label]) => (
-              <Menu.Item key={action} className="k-mi wr-option" onClick={() => assistant.run(action)}>
+              <Menu.Item key={action} className="k-mi k-option" onClick={() => assistant.run(action)}>
                 {label}
               </Menu.Item>
             ))}
             {item('translate', translateLabel(assistant))}
             {item('titles', 'Propose titles')}
             <Menu.SubmenuRoot>
-              <Menu.SubmenuTrigger className="k-mi wr-option">
+              <Menu.SubmenuTrigger className="k-mi k-option">
                 <span className="k-grow">Adapt for a network</span>
                 <Icon name="chevronRight" size={18} />
               </Menu.SubmenuTrigger>
               <Menu.Portal>
-                <Menu.Positioner className="wr-positioner" sideOffset={4} alignOffset={-6}>
-                  <Menu.Popup className="k-menu wr-popup">
+                <Menu.Positioner className="k-pop-positioner" sideOffset={4} alignOffset={-6}>
+                  <Menu.Popup className="k-menu k-pop-list">
                     {ADAPT_NETWORKS.map((n) => (
-                      <Menu.Item key={n.id} className="k-mi wr-option" onClick={() => assistant.run('adapt', n)}>
+                      <Menu.Item key={n.id} className="k-mi k-option" onClick={() => assistant.run('adapt', n)}>
                         {n.name}
                       </Menu.Item>
                     ))}
@@ -79,7 +79,7 @@ function AssistMenu({ assistant, trigger, onOpenChat }: { assistant: Assistant; 
             {item('check', 'Check against the repo’s code', Boolean(assistant.target.checkDisabled))}
             {assistant.target.checkDisabled && <div className="k-xs k-muted wr-menu-note">{assistant.target.checkDisabled}</div>}
             {onOpenChat && (
-              <Menu.Item className="k-mi wr-option" onClick={onOpenChat}>
+              <Menu.Item className="k-mi k-option" onClick={onOpenChat}>
                 <span className="k-hrow k-g12">
                   <Icon name="comments" />
                   Open the chat
@@ -109,7 +109,7 @@ function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant:
     </button>
   );
   return (
-    <Sheet label="Assist" open={open} onOpenChange={onOpenChange} className="wr-assist-sheet">
+    <Overlay kind="menu" label="Assist" open={open} onOpenChange={onOpenChange} className="wr-assist-sheet">
       <div className="k-stack k-g4 wr-sheet-head">
         <span className="k-hrow k-g8 wr-sheet-title">
           <Icon name="assist" />
@@ -166,7 +166,7 @@ function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant:
           )}
         </div>
       )}
-    </Sheet>
+    </Overlay>
   );
 }
 
