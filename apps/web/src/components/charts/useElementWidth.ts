@@ -19,3 +19,19 @@ export function useElementWidth<E extends HTMLElement>(): [(element: E | null) =
   }, []);
   return [ref, width];
 }
+
+/** An element's width and height, kept current: for a chart whose height the stylesheet sets per layout */
+export function useElementSize<E extends HTMLElement>(): [(element: E | null) => void, { width: number; height: number }] {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const ref = useCallback((element: E | null) => {
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    setSize({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setSize({ width: Math.floor(entry.contentRect.width), height: Math.floor(entry.contentRect.height) });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size];
+}

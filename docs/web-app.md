@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T08:07:05.847023162Z
-updated_at: 2026-10-29T15:36:58.968755675Z
+updated_at: 2026-10-31T12:05:12.601960287Z
 tags:
     - web-app
     - dashboard
@@ -93,6 +93,13 @@ that does TLS, and the same entry point can run as a `web`, `worker` or `heavy` 
   HTTP, checking the bearer token first and refusing a browser `Origin` other than the app's.
 
 ## Sections
+
+**Since 2026-10-31 every screen follows the redesign** ([plans/redesign.md](plans/redesign.md)): a
+phone layout with a top bar and the bottom bar (Launches, Write, Comments, Stats, More, with Channels,
+Launch a repo and Settings inside More) below 960 px, a desktop header from there, and the board's
+kit (`src/styles/kit.css`, `src/components/kit/`). Where the descriptions below name an older
+layout (toolbars, bands, popovers), the redesign's screens replace it; what each section does is
+unchanged unless the redesign document says so.
 
 - **Launches** (`/`): one summary card per launch in a grid (two columns on a desktop): its title
   and state pill, the repo and the date in the owner's zone, its views, reactions, comments and

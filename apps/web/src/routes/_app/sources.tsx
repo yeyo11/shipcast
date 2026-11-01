@@ -1,17 +1,16 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { Parcels } from '../../components/illustrations';
-import { PageHead } from '../../components/PageHead';
+import { TopBar } from '../../components/kit/Bars';
+import { Icon } from '../../components/kit/Icon';
 import { useToast } from '../../components/Toasts';
-import { Combobox } from '../../components/ui/Combobox';
+import { ActionBar, ChannelChips, LANGS, Seg } from '../../components/write/Form';
+import { PickerCombobox, type PickerOption } from '../../components/write/Picker';
 import { getChannels } from '../../server/channels.functions';
 import { launchFromSources, listRepos } from '../../server/launches.functions';
-import { CHANNEL_NAMES } from '../../server/view';
 
 /*
  * A launch made from sources (launch-sources, docs/sources.md): the owner's text, pages, repos and
- * images, gathered into one launch. Plain on purpose: the form's look follows Launch a repo and Write
- * until the owner settles one for it.
+ * images, gathered into one launch (board LaunchSources).
  */
 
 type Uploaded = { ok: true; file: { sha256: string; mime: string; width: number | null; height: number | null } } | { ok: false; problem: string };
@@ -45,19 +44,23 @@ type Source =
   | { kind: 'repo'; repo: string; ref?: string; primary?: boolean }
   | { kind: 'media'; sha256: string; name: string; alt?: string; size: string };
 
-const KINDS: ReadonlyArray<[Kind, string]> = [
-  ['text', 'Your text'],
-  ['url', 'A page'],
-  ['repo', 'A repo'],
-  ['media', 'An image'],
-];
+/** Each kind's word on its pill and the add form's lines (board LaunchSources) */
+const KINDS: Record<Kind, { label: string; help: string }> = {
+  text: { label: 'Text', help: 'Your words are the authority on your opinions and plans; a feature only your text announces is presented as yours to tell, not as working.' },
+  url: { label: 'Page', help: 'Fetched once when the launch is made: public pages only, HTML or text.' },
+  repo: { label: 'Repo', help: 'The primary repo’s release is the launch (its latest when none is named) and its launch.yml chooses the channels; other repos are read at their default branch.' },
+  media: { label: 'Image', help: 'PNG, JPEG, GIF or WebP, up to 20 MB. Its location metadata is removed before it is kept.' },
+};
+const KIND_OPTIONS = (Object.keys(KINDS) as Kind[]).map((k) => ({ value: k, label: KINDS[k].label }));
 
 function describe(source: Source): string {
   if (source.kind === 'text') return source.title ? `${source.title}: ${source.text.slice(0, 80)}` : source.text.slice(0, 100);
-  if (source.kind === 'url') return source.url;
+  if (source.kind === 'url') return source.url.replace(/^https?:\/\//, '');
   if (source.kind === 'repo') return `${source.repo}${source.ref ? ` at ${source.ref}` : ''}`;
   return `${source.name} (${source.size})${source.alt ? `: ${source.alt}` : ''}`;
 }
+
+const EMPTY = { text: '', title: '', url: '', repo: '', ref: '', alt: '' };
 
 function LaunchFromSources() {
   const { repos, ready, sources: enabled, appReview } = Route.useLoaderData();
@@ -67,18 +70,23 @@ function LaunchFromSources() {
   const [lang, setLang] = useState<'en' | 'es'>('es');
   const [channels, setChannels] = useState<string[]>(ready);
   const [sources, setSources] = useState<Source[]>([]);
-  const [kind, setKind] = useState<Kind>('text');
-  const [draft, setDraft] = useState({ text: '', title: '', url: '', repo: '', ref: '', alt: '' });
+  const [kind, setKind] = useState<Kind>('url');
+  const [draft, setDraft] = useState(EMPTY);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const repoOptions = useMemo(() => repos.map((r) => ({ value: r.repo, label: r.repo.split('/')[1] ?? r.repo, hint: r.repo })), [repos]);
+  const repoOptions = useMemo<PickerOption[]>(() => repos.map((r) => ({ value: r.repo, label: r.repo })), [repos]);
   const primary = sources.find((s): s is Extract<Source, { kind: 'repo' }> => s.kind === 'repo' && Boolean(s.primary)) ?? sources.find((s) => s.kind === 'repo');
 
   if (!enabled) {
     return (
       <>
-        <PageHead title="Launch from sources" art={<Parcels width={200} />}>Launches made from your text, pages, repos and images are not turned on here.</PageHead>
-        <p className="muted">They are behind the launch-sources flag (SHIPCAST_FLAGS).</p>
+        <TopBar back={{ label: 'Launch a repo', to: '/launch' }} />
+        <div className="wr-page">
+          <div className="k-stack wr-form">
+            <h1 className="k-d k-d48">From sources</h1>
+            <p className="k-muted wr-flush">Launches made from your text, pages, repos and images are not turned on here: they are behind the launch-sources flag (SHIPCAST_FLAGS).</p>
+          </div>
+        </div>
       </>
     );
   }
@@ -95,147 +103,144 @@ function LaunchFromSources() {
       const size = answer.file.width && answer.file.height ? `${answer.file.width}×${answer.file.height}` : answer.file.mime;
       setSources([...sources, { kind, sha256: answer.file.sha256, name: file.name, size, ...(draft.alt.trim() && { alt: draft.alt.trim() }) }]);
       setFile(null);
-    } else return;
-    setDraft({ text: '', title: '', url: '', repo: '', ref: '', alt: '' });
+    } else {
+      // Nothing to add yet: the field it needs is where the owner goes
+      document.querySelector<HTMLElement>('.wr-add .k-input, .wr-add input')?.focus();
+      return;
+    }
+    setDraft(EMPTY);
   };
 
   return (
     <>
-      <PageHead title="Launch from sources" art={<Parcels width={200} />}>
-        Gather what the launch is about: your own words, pages, repos and images. Shipcast reads all of it and every piece says only what a source shows.
-      </PageHead>
-      <form
-        className="form"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy('Fetching the pages and starting…');
-          const payload = sources.map((s) => (s.kind === 'media' ? { kind: s.kind, sha256: s.sha256, name: s.name, ...(s.alt && { alt: s.alt }) } : s));
-          const answer = await launchFromSources({ data: { title, lang, channels, sources: payload } }).catch((error: unknown) => ({
-            ok: false as const,
-            problem: error instanceof Error ? error.message : String(error),
-          }));
-          setBusy(null);
-          if (answer.ok) {
-            toast.done(`Drafting “${title}”`, 'The analysis takes a few minutes; it shows on Launches while it runs.');
-            await navigate({ to: '/' });
-          } else toast.fail(answer.problem);
-        }}
-      >
-        <div className="field">
-          <label htmlFor="title">Title</label>
-          <input id="title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
-        </div>
-        <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="label">Written in</legend>
-          <div className="seg">
-            <label>
-              <input type="radio" name="lang" checked={lang === 'es'} onChange={() => setLang('es')} />
-              <span>Spanish</span>
+      <TopBar back={{ label: 'Launch a repo', to: '/launch' }} />
+      <div className="wr-page">
+        <form
+          id="sources-form"
+          className="k-stack wr-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy('Fetching the pages and starting…');
+            const payload = sources.map((s) => (s.kind === 'media' ? { kind: s.kind, sha256: s.sha256, name: s.name, ...(s.alt && { alt: s.alt }) } : s));
+            const answer = await launchFromSources({ data: { title, lang, channels, sources: payload } }).catch((error: unknown) => ({
+              ok: false as const,
+              problem: error instanceof Error ? error.message : String(error),
+            }));
+            setBusy(null);
+            if (answer.ok) {
+              toast.done(`Drafting “${title}”`, 'The analysis takes a few minutes; it shows on Launches while it runs.');
+              await navigate({ to: '/' });
+            } else toast.fail(answer.problem);
+          }}
+        >
+          <h1 className="k-d k-d48">From sources</h1>
+          <p className="k-muted wr-flush">Your words, pages, repos and images. Shipcast reads all of it and every piece says only what a source shows.</p>
+          <div className="k-field">
+            <label className="k-lbl" htmlFor="sources-title">
+              Title
             </label>
-            <label>
-              <input type="radio" name="lang" checked={lang === 'en'} onChange={() => setLang('en')} />
-              <span>English</span>
-            </label>
+            <input id="sources-title" className="k-input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
           </div>
-        </fieldset>
+          <div className="k-stack k-g8">
+            <span className="k-lbl" id="sources-lang">
+              Written in
+            </span>
+            <Seg label="Written in" options={LANGS} value={lang} onChange={setLang} />
+          </div>
 
-        <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="label">Sources</legend>
-          {sources.length === 0 ? (
-            <small>None yet. Add at least one below.</small>
-          ) : (
-            <ol>
-              {sources.map((s, i) => (
-                <li key={i}>
-                  <div className="row">
-                    <span>
-                      <strong>{KINDS.find(([k]) => k === s.kind)?.[1]}</strong>
-                      {s === primary && ' · primary: its release is the launch'} · {describe(s)}
-                    </span>
-                    {s.kind === 'repo' && s !== primary && (
-                      <button type="button" className="btn-link" onClick={() => setSources(sources.map((x) => (x.kind === 'repo' ? { ...x, primary: x === s } : x)))}>
-                        Make primary
-                      </button>
-                    )}
-                    <button type="button" className="btn-link" onClick={() => setSources(sources.filter((_, j) => j !== i))}>
-                      Remove
+          <section className="k-stack k-g8" aria-labelledby="sources-list">
+            <span className="k-lbl" id="sources-list">
+              Sources · {sources.length}
+            </span>
+            {sources.length === 0 ? (
+              <span className="k-help">None yet. Add at least one below.</span>
+            ) : (
+              <ol className="k-stack k-g8 wr-sources">
+                {sources.map((s, i) => (
+                  <li key={i} className="k-card wr-source">
+                    <span className="k-pill k-p-line">{KINDS[s.kind].label}</span>
+                    <span className="k-grow k-sm k-ellipsis">{describe(s)}</span>
+                    {s.kind === 'repo' &&
+                      (s === primary ? (
+                        <span className="k-xs k-muted">primary</span>
+                      ) : (
+                        <button type="button" className="k-xs wr-textbutton" onClick={() => setSources(sources.map((x) => (x.kind === 'repo' ? { ...x, primary: x === s } : x)))}>
+                          Make primary
+                        </button>
+                      ))}
+                    <button type="button" className="k-btn k-icon k-sm k-ghost" aria-label={`Remove ${describe(s)}`} onClick={() => setSources(sources.filter((_, j) => j !== i))}>
+                      <Icon name="close" />
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </fieldset>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
 
-        <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="label">Add a source</legend>
-          <div className="seg">
-            {KINDS.map(([k, label]) => (
-              <label key={k}>
-                <input type="radio" name="kind" checked={kind === k} onChange={() => setKind(k)} />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
-          {kind === 'text' && (
-            <>
-              <input className="input" placeholder="What it is (optional)" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} maxLength={200} />
-              <textarea className="textarea" placeholder="Notes, a draft, your opinion: Markdown" value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
-              <small>Your words are the authority on your opinions and plans; a feature only your text announces is presented as yours to tell, not as working.</small>
-            </>
-          )}
-          {kind === 'url' && (
-            <>
-              <input className="input" type="url" placeholder="https://" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
-              <small>Fetched once by Shipcast when the launch is made: public pages only, HTML or text.</small>
-            </>
-          )}
-          {kind === 'repo' && (
-            <>
-              <Combobox label="Repository" placeholder="Type a repo’s name" empty="No repo of yours matches." options={repoOptions} value={draft.repo || null} onValueChange={(name) => setDraft({ ...draft, repo: name ?? '' })} />
-              <input className="input mono" placeholder="Release, branch or tag (optional)" value={draft.ref} onChange={(e) => setDraft({ ...draft, ref: e.target.value })} maxLength={140} />
-              <small>The primary repo’s release is the launch (its latest when none is named) and its launch.yml chooses the channels; other repos are read at their default branch.</small>
-            </>
-          )}
-          {kind === 'media' && (
-            <>
-              <input className="input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-              <input className="input" placeholder="What it shows (alt text)" value={draft.alt} onChange={(e) => setDraft({ ...draft, alt: e.target.value })} maxLength={500} />
-              <small>PNG, JPEG, GIF or WebP, up to 20 MB. Its metadata (a photo’s location) is removed before it is kept.</small>
-            </>
-          )}
-          <div className="row">
-            <button type="button" className="btn btn-small" onClick={() => void add()} disabled={busy !== null}>
+          <section className="k-card k-quiet wr-add" aria-labelledby="sources-add">
+            <span className="k-lbl" id="sources-add">
+              Add a source
+            </span>
+            <Seg label="Kind of source" options={KIND_OPTIONS} value={kind} onChange={setKind} tone="text" />
+            {kind === 'text' && (
+              <>
+                <textarea className="k-input wr-add-text" aria-label="Your text" placeholder="Notes, a draft, your opinion: Markdown" value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
+                <input className="k-input" aria-label="What it is (optional)" placeholder="What it is (optional)" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} maxLength={200} />
+              </>
+            )}
+            {kind === 'url' && <input className="k-input" type="url" aria-label="The page’s address" placeholder="https://" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />}
+            {kind === 'repo' && (
+              <>
+                <PickerCombobox label={<span className="visually-hidden">Repository</span>} placeholder="Type a repo’s name" empty="No repo of yours matches." options={repoOptions} value={draft.repo || null} onValueChange={(name) => setDraft({ ...draft, repo: name ?? '' })} />
+                <input className="k-input k-mono" aria-label="Release, branch or tag (optional)" placeholder="Release, branch or tag (optional)" value={draft.ref} onChange={(e) => setDraft({ ...draft, ref: e.target.value })} maxLength={140} />
+              </>
+            )}
+            {kind === 'media' && (
+              <>
+                <label className="k-input wr-file">
+                  <input type="file" className="visually-hidden" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                  <Icon name="image" />
+                  <span className={`k-grow k-ellipsis${file ? '' : ' wr-placeholder'}`}>{file ? file.name : 'Choose an image'}</span>
+                </label>
+                <input className="k-input" aria-label="What it shows (alt text)" placeholder="What it shows (alt text)" value={draft.alt} onChange={(e) => setDraft({ ...draft, alt: e.target.value })} maxLength={500} />
+              </>
+            )}
+            <span className="k-help">{KINDS[kind].help}</span>
+            <button type="button" className="k-btn k-sm wr-add-button" onClick={() => void add()} disabled={busy !== null}>
+              <Icon name="plus" size={16} />
               Add
             </button>
+          </section>
+
+          <div className="k-stack k-g8">
+            <span className="k-lbl">
+              Also on <span className="wr-normal">· besides the blog</span>
+            </span>
+            <ChannelChips ready={ready} chosen={channels} onChange={setChannels} />
+            <span className="k-help">
+              {primary ? (
+                'With a repo, its launch.yml chooses the channels instead.'
+              ) : ready.length === 0 ? (
+                <>
+                  No channel has a connected account; connect one in <Link to="/channels">Channels</Link>.
+                </>
+              ) : (
+                'With a repo, its launch.yml chooses the channels instead.'
+              )}
+            </span>
           </div>
-        </fieldset>
-
-        {!primary && (
-          <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="label">Also on</legend>
-            <div className="checks">
-              {ready.map((c) => (
-                <label className="check" key={c}>
-                  <input type="checkbox" checked={channels.includes(c)} onChange={(e) => setChannels(e.target.checked ? [...channels, c] : channels.filter((x) => x !== c))} />
-                  {CHANNEL_NAMES[c] ?? c}
-                </label>
-              ))}
-            </div>
-            <small>Besides the blog. With a repo, its launch.yml chooses the channels instead.</small>
-          </fieldset>
-        )}
-
-        {busy && <p className="muted">{busy}</p>}
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={sources.length === 0 || !title.trim() || busy !== null}>
+          {busy && (
+            <p className="k-sm k-muted wr-flush" role="status">
+              {busy}
+            </p>
+          )}
+        </form>
+        <ActionBar>
+          <button className="k-btn k-pri k-full" type="submit" form="sources-form" disabled={sources.length === 0 || !title.trim() || busy !== null} title={appReview ? 'The drafts wait in Shipcast until you approve them.' : 'The drafts wait in a pull request until you approve them.'}>
             Draft the launch
           </button>
-          <span className="muted" style={{ fontSize: 14 }}>
-            {appReview ? 'The drafts wait in Shipcast until you approve them.' : 'The drafts wait in a pull request until you approve them.'}
-          </span>
-        </div>
-      </form>
+        </ActionBar>
+      </div>
     </>
   );
 }

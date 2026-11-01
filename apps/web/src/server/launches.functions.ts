@@ -8,18 +8,40 @@ import { deletionService } from './deletion.server';
 import { channelList } from './post-changes';
 import { repoList } from './repo-list';
 import { id, object, text } from './input';
-import { ownerAvatarUrl } from './launch-list';
+import { draftingNote, ownerAvatarUrl, readyPieces } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
 import { launchPage } from './launch-page.server';
 import { launchNumbers, postAccounts, readTimezone } from './launch-summary.server';
 import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
 import { launchView, publishAgain as publishAgainFor } from './launches.server';
+import { CHANNEL_NAMES } from './view';
 import { approvalRequest, articleRequest, channelName, launchRequest, sourcesRequest } from './requests';
 import { approve, startArticle, startLaunch, startPublishing, startSources } from './work.server';
 
 /** A page holds a few rows of cards on any screen, two or three across, and each card reads its own numbers */
 const LAUNCHES_PAGE = 24;
+
+/**
+ * What the Launches page says of a launch beyond its view: when it last changed, whether Shipcast
+ * holds its drafts (no pull request to point at) and which pieces are ready, and what a launch being
+ * drafted is doing now. A few rows per launch, and only for the launches that need them.
+ */
+async function listGlance(registry: Awaited<ReturnType<typeof appContext>>['registry'], launch: Launch) {
+  const waiting = launch.status === 'drafted';
+  const drafting = launch.status === 'detected' || launch.status === 'generating';
+  const [drafts, jobs] = await Promise.all([
+    waiting ? registry.launchStore.drafts(launch.id) : Promise.resolve([]),
+    drafting ? registry.jobs.jobs({ launchId: launch.id, listed: true, limit: 1 }) : Promise.resolve([]),
+  ]);
+  const held = isAppLaunch(launch) || drafts.length > 0;
+  return {
+    updatedAt: launch.updatedAt,
+    held,
+    ready: drafts.length > 0 ? readyPieces(drafts.map((d) => d.channel), (c) => CHANNEL_NAMES[c] ?? c) : null,
+    drafting: drafting ? draftingNote(jobs[0]?.log ?? []) : null,
+  };
+}
 
 /** One page of launches for the filters in the address, with what the filters can offer: a handful of queries whatever the list's size */
 export const listLaunches = createServerFn({ method: 'GET' })
@@ -38,15 +60,22 @@ export const listLaunches = createServerFn({ method: 'GET' })
       ...(data.page && { page: data.page }),
     });
     const launches = page.launches;
-    const [views, numbers, accounts, timezone] = await Promise.all([
+    const [views, numbers, accounts, timezone, glance] = await Promise.all([
       Promise.all(launches.map((l) => launchView(registry, l))),
       launchNumbers(registry, launches),
       postAccounts(registry, launches),
       readTimezone(registry),
+      Promise.all(launches.map((l) => listGlance(registry, l))),
     ]);
     // The queue's jobs are Automation's now: the list is launches only
     return {
-      launches: views.map((v) => ({ ...v, numbers: numbers.get(v.id) ?? null, postAccounts: accounts.get(v.id) ?? {}, avatarUrl: imageUrl(ownerAvatarUrl(v.repo)) ?? null })),
+      launches: views.map((v, i) => ({
+        ...v,
+        ...glance[i]!,
+        numbers: numbers.get(v.id) ?? null,
+        postAccounts: accounts.get(v.id) ?? {},
+        avatarUrl: imageUrl(ownerAvatarUrl(v.repo)) ?? null,
+      })),
       page: { number: page.page, pages: page.pages, total: page.total, size: page.pageSize },
       facets,
       timezone,

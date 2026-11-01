@@ -1,37 +1,12 @@
 import { Dialog } from '@base-ui/react/dialog';
-import { getRouteApi } from '@tanstack/react-router';
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Icon } from '../kit/Icon';
 import { useToast } from '../Toasts';
-import { Avatar } from '../ui';
-import { ChatIcon, CloseIcon, HistoryIcon, PlusIcon } from '../ui/icons';
+import { usePhone } from '../write/usePhone';
 import { listAssistantSessions, type SessionSummary } from '../../server/assistant.functions';
 import { splitProposals } from './diff';
 import { DiffView } from './DiffView';
 import type { Assistant, ChatMessage } from './session';
-
-/** The Shipcast mark (design/logo/mark.svg), inline so it needs no request and takes no theme */
-function ShipcastMark({ size }: { size: number }) {
-  return (
-    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false">
-      <rect x="10" y="10" width="50" height="50" rx="14" fill="#F4F2EC" />
-      <rect x="4" y="4" width="50" height="50" rx="14" fill="#FFD43B" stroke="#000" strokeWidth="4" />
-      <circle cx="29" cy="29" r="9" fill="#000" />
-    </svg>
-  );
-}
-
-const SHELL = getRouteApi('/_app');
-
-/** The signed-in owner's GitHub picture, from the shell's loader; their initial while there is none */
-function Mine({ children }: { children: string }) {
-  const { login, avatarUrl } = SHELL.useLoaderData();
-  return (
-    <div className="chat-row chat-row-mine">
-      <p className="chat-mine">{children}</p>
-      <span className="chat-avatar">{avatarUrl ? <Avatar src={avatarUrl} alt="" size={28} /> : <span className="chat-initial" aria-hidden="true">{login.slice(0, 1).toUpperCase()}</span>}</span>
-    </div>
-  );
-}
 
 function Answer({ message, assistant }: { message: ChatMessage; assistant: Assistant }) {
   const toast = useToast();
@@ -41,59 +16,64 @@ function Answer({ message, assistant }: { message: ChatMessage; assistant: Assis
   let ordinal = -1;
   const before = message.range ? (message.original ?? '') : assistant.target.value;
   return (
-    <div className="chat-row">
-      <span className="chat-avatar chat-avatar-mark">
-        <ShipcastMark size={28} />
-      </span>
-      <div className="chat-answer">
-        {pieces.map((piece, i) => {
-          if (piece.type === 'prose')
-            return (
-              <p key={i} className="chat-prose">
-                {piece.text}
-              </p>
-            );
-          const n = ++ordinal;
+    <>
+      {pieces.map((piece, i) => {
+        if (piece.type === 'prose')
           return (
-            <div key={i} className="chat-proposal">
-              <DiffView before={before} after={piece.text} label={`Proposal ${n + 1} from the chat`} />
-              {!piece.complete ? (
-                <p className="muted">Still writing this proposal…</p>
-              ) : settled[n] ? (
-                <p className="muted">{settled[n] === 'accepted' ? 'Accepted' : 'Rejected'}</p>
-              ) : (
-                <div className="row">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-small"
-                    onClick={() => {
-                      const ok = assistant.accept({ range: message.range, original: before, text: piece.text });
-                      if (ok) assistant.settle(message, n, 'accepted');
-                      else toast.fail('The text changed under this proposal: ask again on the text as it is now.');
-                    }}
-                  >
-                    Accept
-                  </button>
-                  <button type="button" className="btn btn-small" onClick={() => assistant.settle(message, n, 'rejected')}>
-                    Reject
-                  </button>
-                </div>
-              )}
+            <p key={i} className="wr-chat-prose">
+              {piece.text}
+            </p>
+          );
+        const n = ++ordinal;
+        const label = `Proposal ${n + 1} from the chat`;
+        if (!piece.complete)
+          return (
+            <div key={i} className="k-card wr-chat-proposal wr-chat-pending">
+              <span className="k-xs k-muted">{label}</span>
+              <span className="k-sm k-muted" role="status">
+                Still writing this proposal…
+              </span>
             </div>
           );
-        })}
-        {message.streaming && (
-          <p className="muted chat-wait" role="status">
-            {message.content ? '' : 'Writing…'}
-          </p>
-        )}
-        {message.problem && (
-          <p className="problem" role="alert">
-            {message.problem}
-          </p>
-        )}
-      </div>
-    </div>
+        return (
+          <div key={i} className="k-card wr-chat-proposal">
+            <span className="k-xs k-muted">{label}</span>
+            <DiffView before={before} after={piece.text} label={label} className="k-sm" trim={message.range ? undefined : 48} />
+            {settled[n] ? (
+              <span className="k-xs k-muted">{settled[n] === 'accepted' ? 'Accepted' : 'Rejected'}</span>
+            ) : (
+              <div className="k-hrow k-g8">
+                <button type="button" className="k-btn k-sm" onClick={() => assistant.settle(message, n, 'rejected')}>
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  className="k-btn k-sm k-grow wr-chat-accept"
+                  onClick={() => {
+                    const ok = assistant.accept({ range: message.range, original: before, text: piece.text });
+                    if (ok) assistant.settle(message, n, 'accepted');
+                    else toast.fail('The text changed under this proposal: ask again on the text as it is now.');
+                  }}
+                >
+                  <Icon name="check" size={18} />
+                  Accept
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {message.streaming && !message.content && (
+        <p className="k-sm k-muted wr-flush" role="status">
+          Writing…
+        </p>
+      )}
+      {message.problem && (
+        <p className="k-sm wr-problem wr-flush" role="alert">
+          {message.problem}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -142,25 +122,28 @@ function History({ assistant, onChosen }: { assistant: Assistant; onChosen: () =
   }, [next, state, load]);
 
   return (
-    <div className="chat-history">
-      {state === 'ready' && sessions.length === 0 && <p className="muted chat-empty">No sessions yet: what you ask the assistant is kept here.</p>}
+    <div className="k-stack k-g8">
+      {state === 'ready' && sessions.length === 0 && <p className="k-sm k-muted wr-flush">No sessions yet: what you ask the assistant is kept here.</p>}
       {sessions.length > 0 && (
-        <ul className="chat-sessions">
+        <ul className="k-stack wr-chat-sessions">
           {sessions.map((s) => (
             <li key={s.id}>
               <button
                 type="button"
-                className="chat-session"
+                className="k-row wr-chat-session"
                 aria-current={assistant.sessionId === s.id ? 'true' : undefined}
                 onClick={async () => {
                   if (await assistant.openSession(s.id)) onChosen();
                   else toast.fail('That session could not be opened.');
                 }}
               >
-                <strong className="chat-session-title">{s.title}</strong>
-                <span className="muted">
-                  {s.draftLabel ?? (s.launchId === null ? 'An article on Write' : `Launch ${s.launchId}`)} · {when.format(new Date(s.updatedAt))}
+                <span className="k-grow k-stack">
+                  <strong className="k-sm k-ellipsis">{s.title}</strong>
+                  <span className="k-xs k-muted">
+                    {s.draftLabel ?? (s.launchId === null ? 'An article on Write' : `Launch ${s.launchId}`)} · {when.format(new Date(s.updatedAt))}
+                  </span>
                 </span>
+                <Icon name="chevronRight" size={18} />
               </button>
             </li>
           ))}
@@ -168,20 +151,20 @@ function History({ assistant, onChosen }: { assistant: Assistant; onChosen: () =
       )}
       <div ref={end} aria-hidden="true" />
       {state === 'loading' && (
-        <p className="muted" role="status">
+        <p className="k-sm k-muted wr-flush" role="status">
           Loading…
         </p>
       )}
       {state === 'failed' && (
-        <p className="problem" role="alert">
+        <p className="k-sm wr-problem wr-flush" role="alert">
           The history could not be loaded.{' '}
-          <button type="button" className="btn-link" onClick={() => void load(next ?? undefined)}>
+          <button type="button" className="wr-textbutton" onClick={() => void load(next ?? undefined)}>
             Try again
           </button>
         </p>
       )}
       {state === 'ready' && next && (
-        <button type="button" className="btn btn-small" onClick={() => void load(next)}>
+        <button type="button" className="k-btn k-sm wr-chat-more" onClick={() => void load(next)}>
           Load more
         </button>
       )}
@@ -189,36 +172,23 @@ function History({ assistant, onChosen }: { assistant: Assistant; onChosen: () =
   );
 }
 
-const PHONE = '(max-width: 760px)';
-
-/** Whether the screen is a phone's: the chat becomes a bubble and a full-screen sheet there */
-function usePhone(): boolean {
-  return useSyncExternalStore(
-    (notify) => {
-      const query = window.matchMedia(PHONE);
-      query.addEventListener('change', notify);
-      return () => query.removeEventListener('change', notify);
-    },
-    () => window.matchMedia(PHONE).matches,
-    () => false,
-  );
-}
-
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 interface SurfaceProps {
   assistant: Assistant;
+  /** What the conversation is about, for the line above it ("An article on Write") */
+  about: string;
   draft: string;
   setDraft: (draft: string) => void;
   view: 'chat' | 'history';
   setView: (view: 'chat' | 'history') => void;
   onClose: () => void;
-  /** In the sheet the panel is the whole screen, not a card beside the text */
+  /** In the phone's sheet: the whole height, the send button the screen's yellow one */
   sheet?: boolean;
 }
 
 /** The chat itself: header with the history and the new session, the conversation, the form */
-function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: SurfaceProps) {
+function Surface({ assistant, about, draft, setDraft, view, setView, onClose, sheet }: SurfaceProps) {
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   // Whether the reader is at the bottom: only then does a new message pull the view down with it
@@ -226,6 +196,7 @@ function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: 
   const seen = useRef(0);
   const busy = assistant.chat.some((m) => m.streaming);
   const last = assistant.chat.at(-1);
+  const icon = `k-btn k-icon k-ghost${sheet ? '' : ' k-sm'}`;
 
   useEffect(() => {
     const el = list.current;
@@ -251,23 +222,26 @@ function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: 
   };
 
   return (
-    <aside className={`chat-panel${sheet ? ' chat-panel-sheet' : ''}`} aria-label="The assistant’s chat">
+    <aside className={sheet ? 'wr-chat wr-chat-in-sheet' : 'k-card wr-chat wr-chat-card'} aria-label="The assistant’s chat">
       {/* The tour points at the header, not the panel: on a phone the panel is taller than the room left for the card */}
-      <header className="chat-head" data-tour="assistant">
-        <strong>{view === 'history' ? 'Past sessions' : 'Assistant'}</strong>
-        <div className="row">
+      <header className="k-hrow k-between wr-chat-head" data-tour="assistant">
+        <span className="k-hrow k-g8 wr-strong">
+          <Icon name={view === 'history' ? 'history' : 'assist'} />
+          {view === 'history' ? 'Past sessions' : 'Assistant'}
+        </span>
+        <div className="k-hrow k-g4">
           <button
             type="button"
-            className="ui-icon-button"
+            className={icon}
             onClick={() => setView(view === 'history' ? 'chat' : 'history')}
             aria-label={view === 'history' ? 'Back to the chat' : 'Past sessions'}
             aria-pressed={view === 'history'}
           >
-            <HistoryIcon />
+            <Icon name="history" />
           </button>
           <button
             type="button"
-            className="ui-icon-button"
+            className={icon}
             onClick={() => {
               assistant.newSession();
               setView('chat');
@@ -275,16 +249,16 @@ function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: 
             disabled={busy || (assistant.chat.length === 0 && view === 'chat')}
             aria-label="New session"
           >
-            <PlusIcon />
+            <Icon name="plus" />
           </button>
-          <button type="button" className="ui-icon-button" onClick={onClose} aria-label="Close the chat" aria-expanded="true">
-            <CloseIcon />
+          <button type="button" className={icon} onClick={onClose} aria-label="Close the chat" aria-expanded="true">
+            <Icon name="close" />
           </button>
         </div>
       </header>
       {/* Focusable, so a keyboard can scroll a conversation longer than the panel */}
       <div
-        className="chat-list"
+        className="k-stack k-g12 wr-chat-list"
         ref={list}
         role="region"
         aria-label={view === 'history' ? 'Past sessions' : 'Messages'}
@@ -297,88 +271,131 @@ function Surface({ assistant, draft, setDraft, view, setView, onClose, sheet }: 
       >
         {view === 'history' ? (
           <History assistant={assistant} onChosen={() => setView('chat')} />
-        ) : assistant.chat.length === 0 ? (
-          <p className="muted chat-empty">
-            Ask for anything about the text. Select a passage first to work on it alone; otherwise the assistant answers about the whole text. Every change it proposes is a diff you accept or reject.
-          </p>
         ) : (
-          assistant.chat.map((m) => (m.role === 'user' ? <Mine key={m.id}>{m.content}</Mine> : <Answer key={m.id} message={m} assistant={assistant} />))
+          <>
+            <div className="k-xs k-muted wr-chat-about">
+              {about} · {assistant.selected ? 'about the selection' : 'about the whole text'}
+            </div>
+            {assistant.chat.length === 0 ? (
+              <p className="k-sm k-muted wr-flush">Ask for anything about the text. Select a passage first to work on it alone; otherwise the assistant answers about the whole text. Every change it proposes is a diff you accept or reject.</p>
+            ) : (
+              assistant.chat.map((m) =>
+                m.role === 'user' ? (
+                  <p key={m.id} className="wr-chat-mine">
+                    {m.content}
+                  </p>
+                ) : (
+                  <Answer key={m.id} message={m} assistant={assistant} />
+                ),
+              )
+            )}
+          </>
         )}
       </div>
       {view === 'chat' && (
         <form
-          className="chat-form"
+          className="k-stack k-g6 wr-chat-form"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
         >
-          <label htmlFor="chat-input" className="visually-hidden">
-            Your request
-          </label>
-          <textarea
-            id="chat-input"
-            ref={input}
-            className="textarea chat-input"
-            rows={2}
-            value={draft}
-            placeholder={assistant.selected ? 'About the selected passage…' : 'About the whole text…'}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-          {busy ? (
-            <button type="button" className="btn btn-small chat-send" onClick={assistant.stopChat}>
-              Stop
-            </button>
-          ) : (
-            <button type="submit" className="btn btn-primary chat-send" disabled={!draft.trim()}>
-              Send
-            </button>
-          )}
-          <small className="muted">Enter sends, Shift+Enter a new line</small>
+          <div className="k-hrow k-g8">
+            <label htmlFor="chat-input" className="visually-hidden">
+              Your request
+            </label>
+            <textarea
+              id="chat-input"
+              ref={input}
+              className="k-input k-grow wr-chat-input"
+              rows={1}
+              value={draft}
+              placeholder={assistant.selected ? 'About the selected passage…' : 'About the whole text…'}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+            />
+            {busy ? (
+              <button type="button" className="k-btn k-icon" onClick={assistant.stopChat} aria-label="Stop the answer">
+                <Icon name="close" />
+              </button>
+            ) : (
+              <button type="submit" className={`k-btn k-icon${sheet ? ' k-pri' : ''}`} disabled={!draft.trim()} aria-label="Send">
+                <Icon name="send" />
+              </button>
+            )}
+          </div>
+          <span className="k-xs k-muted">Enter sends, Shift+Enter a new line</span>
         </form>
       )}
     </aside>
   );
 }
 
+export interface ChatPanelProps {
+  assistant: Assistant;
+  /** From 960 px: whether the panel shows beside the text */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /**
+   * On a phone: whether the chat's sheet is open. A page that opens it from its own controls (the
+   * Assist sheet's "Open the chat") passes these; without them the phone shows a floating button
+   * that opens it.
+   */
+  sheetOpen?: boolean;
+  onSheetOpenChange?: (open: boolean) => void;
+  /** What the conversation is about, for the line above it; the draft's name by default */
+  about?: string;
+}
+
 /**
- * The side chat: open requests about the text ("make the opening punchier", "is this too long for
- * Bluesky?"). A proposed rewrite comes as a diff to accept or reject; it replaces what was selected
- * when the question was sent, or the whole text. The header's history button lists the past sessions
- * to take one up again. Closes to an icon. On a phone it is a floating bubble that opens the chat as
- * a full-screen sheet; the selection made in the text stays, so the chat still works on it.
+ * The assistant's chat (boards AssistChat and the desktop editors' side card): open requests about
+ * the text ("make the opening more personal"). A proposed rewrite comes as a diff to accept or
+ * reject; it replaces what was selected when the question was sent, or the whole text. The history
+ * button lists the past sessions to take one up again. On a phone it is a sheet over the page; the
+ * selection made in the text stays, so the chat still works on it.
  */
-export function ChatPanel({ assistant, open, onOpenChange }: { assistant: Assistant; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ChatPanel({ assistant, open, onOpenChange, sheetOpen, onSheetOpenChange, about }: ChatPanelProps) {
   const phone = usePhone();
-  const [sheet, setSheet] = useState(false);
+  const [ownSheet, setOwnSheet] = useState(false);
   const [draft, setDraft] = useState('');
   const [view, setView] = useState<'chat' | 'history'>('chat');
-
-  const bubble = (props: { onClick?: () => void }) => (
-    <button type="button" className="chat-fab" aria-label="Open the assistant’s chat" aria-expanded={false} data-tour="assistant" {...props}>
-      <ChatIcon size={22} />
-    </button>
-  );
+  const controlled = onSheetOpenChange !== undefined;
+  const sheet = controlled ? Boolean(sheetOpen) : ownSheet;
+  const setSheet = controlled ? onSheetOpenChange : setOwnSheet;
+  const subject = about ?? assistant.target.draftLabel ?? 'The text';
 
   if (phone)
     return (
       <Dialog.Root open={sheet} onOpenChange={setSheet}>
-        {/* The bubble is the dialog's trigger, so closing the sheet gives the focus back to it */}
-        <Dialog.Trigger render={bubble({})} />
+        {!controlled && (
+          <Dialog.Trigger
+            render={
+              <button type="button" className="k-btn k-icon wr-chat-fab" aria-label="Open the assistant’s chat" data-tour="assistant">
+                <Icon name="comments" />
+              </button>
+            }
+          />
+        )}
         <Dialog.Portal>
-          <Dialog.Popup className="chat-sheet" aria-label="The assistant’s chat">
-            <Surface assistant={assistant} draft={draft} setDraft={setDraft} view={view} setView={setView} onClose={() => setSheet(false)} sheet />
+          <Dialog.Backdrop className="k-scrim wr-chat-scrim" />
+          <Dialog.Popup className="wr-chat-sheet" aria-label="The assistant’s chat">
+            <Surface assistant={assistant} about={subject} draft={draft} setDraft={setDraft} view={view} setView={setView} onClose={() => setSheet(false)} sheet />
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>
     );
 
-  if (!open) return bubble({ onClick: () => onOpenChange(true) });
-  return <Surface assistant={assistant} draft={draft} setDraft={setDraft} view={view} setView={setView} onClose={() => onOpenChange(false)} />;
+  // A page with its own "Open the chat" (Write) shows nothing while it is closed; others keep the button
+  if (!open)
+    return controlled ? null : (
+      <button type="button" className="k-btn k-icon wr-chat-fab" aria-label="Open the assistant’s chat" aria-expanded={false} data-tour="assistant" onClick={() => onOpenChange(true)}>
+        <Icon name="comments" />
+      </button>
+    );
+  return <Surface assistant={assistant} about={subject} draft={draft} setDraft={setDraft} view={view} setView={setView} onClose={() => onOpenChange(false)} />;
 }

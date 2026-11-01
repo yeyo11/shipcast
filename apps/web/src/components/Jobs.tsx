@@ -59,11 +59,18 @@ const FILTERS: Array<{ id: JobStateFilter; label: string }> = [
   { id: 'done', label: 'Done' },
 ];
 
+/** A job's state as word and shape (the kit's pills) */
+function JobPill({ state }: { state: JobView['state'] }) {
+  if (state === 'running') return <span className="k-pill k-p-run">Running</span>;
+  if (state === 'done') return <span className="k-pill k-p-pub">Done</span>;
+  return <span className="k-pill k-p-fail">Failed</span>;
+}
+
 /**
  * The queue's work of the last day: drafting, publishing, GitHub's deliveries; kept across restarts.
- * Ten to a page, cut on the server, filtered by state, in a box of bounded height. The first page of
- * every state comes with the route; any other page or filter is fetched, and fetched again whenever the
- * route's data refreshes (the page follows a running round), so it never shows a stale list.
+ * Ten to a page, cut on the server, filtered by state (Settings › Automation, in a sheet). The first
+ * page of every state comes with the route; any other page or filter is fetched, and fetched again
+ * whenever the route's data refreshes (the page follows a running round), so it never shows a stale list.
  */
 export function JobsPanel({ initial }: { initial: JobsPageView }) {
   const [state, setState] = useState<JobStateFilter>('all');
@@ -93,47 +100,60 @@ export function JobsPanel({ initial }: { initial: JobsPageView }) {
   }, [state, page, isFirst, initial]);
 
   const view = isFirst ? initial : (fetched ?? initial);
-  if (initial.counts.all === 0) return null;
 
   return (
-    <section aria-label="Work in progress" className="jobs-panel">
-      <div className="jobs-bar">
-        <div className="seg" role="radiogroup" aria-label="Filter by state">
-          {FILTERS.map((f) => (
-            <label key={f.id}>
-              <input
-                type="radio"
-                name="jobs-state"
-                checked={state === f.id}
-                onChange={() => {
-                  setState(f.id);
-                  setPage(1);
-                }}
-              />
-              <span>
-                {f.label} <small>{view.counts[f.id]}</small>
+    <section aria-label="Work in progress" className="k-stack k-g12">
+      <div className="k-seg" role="radiogroup" aria-label="Filter by state">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            role="radio"
+            aria-checked={state === f.id}
+            className={state === f.id ? 'k-on' : undefined}
+            onClick={() => {
+              setState(f.id);
+              setPage(1);
+            }}
+          >
+            {f.label} {view.counts[f.id]}
+          </button>
+        ))}
+      </div>
+      {failed && <p className="k-sm k-muted st-m0">That page could not be loaded; showing the last one.</p>}
+      {view.jobs.length === 0 ? (
+        <p className="k-sm k-muted st-m0">No {state === 'all' ? '' : `${state} `}jobs in the last day.</p>
+      ) : (
+        <div>
+          {view.jobs.map((job) => (
+            <div key={job.id} className="k-row">
+              <span className="k-grow">
+                <strong className="k-sm">{job.title}</strong>
+                <br />
+                <span className="k-xs k-muted st-anywhere">
+                  since {when(job.startedAt)}
+                  {job.log.length > 0 ? ` · ${job.log.at(-1)}` : ''}
+                </span>
               </span>
-            </label>
+              {job.link && (
+                <a className="k-btn k-sm" href={job.link}>
+                  Open
+                </a>
+              )}
+              <JobPill state={job.state} />
+            </div>
           ))}
         </div>
-      </div>
-      {failed && <p className="muted">That page could not be loaded; showing the last one.</p>}
-      {view.jobs.length === 0 ? (
-        <p className="muted">No {state === 'all' ? '' : `${state} `}jobs in the last day.</p>
-      ) : (
-        <ScrollArea maxHeight="480px" label="Jobs, scrollable">
-          <JobRows jobs={view.jobs} />
-        </ScrollArea>
       )}
       {view.pageCount > 1 && (
-        <nav className="jobs-pager" aria-label="Jobs pages">
-          <button className="btn btn-small" type="button" disabled={view.page <= 1} onClick={() => setPage(view.page - 1)}>
+        <nav className="k-hrow k-between k-g8" aria-label="Jobs pages">
+          <button className="k-btn k-sm" type="button" disabled={view.page <= 1} onClick={() => setPage(view.page - 1)}>
             Previous
           </button>
-          <span className="muted" aria-live="polite">
-            Page {view.page} of {view.pageCount} · {view.total} {view.total === 1 ? 'job' : 'jobs'}
+          <span className="k-xs k-muted" aria-live="polite">
+            {view.page} of {view.pageCount} · {view.total} {view.total === 1 ? 'job' : 'jobs'}
           </span>
-          <button className="btn btn-small" type="button" disabled={view.page >= view.pageCount} onClick={() => setPage(view.page + 1)}>
+          <button className="k-btn k-sm" type="button" disabled={view.page >= view.pageCount} onClick={() => setPage(view.page + 1)}>
             Next
           </button>
         </nav>

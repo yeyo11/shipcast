@@ -409,3 +409,36 @@ test('a source that counts per day keeps each day under it: Search Console’s d
     ],
   );
 });
+
+test('a network failure is said with its cause, and Bluesky’s numbers come through api.bsky.app when the public host is unreachable', async () => {
+  const registry = await memoryRegistry();
+  const { posts } = await aPublishedLaunch(registry, [
+    { channel: 'bluesky', externalId: 'at://did:plc:me/app.bsky.feed.post/1' },
+    { channel: 'mastodon', externalId: '101' },
+  ]);
+  const unreachable = (message: string, code: string) => new TypeError('fetch failed', { cause: Object.assign(new Error(message), { code }) });
+  const fetch: typeof globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.host === 'public.api.bsky.app') throw unreachable('Connect Timeout Error (attempted address: public.api.bsky.app:443, timeout: 10000ms)', 'UND_ERR_CONNECT_TIMEOUT');
+    return Response.json({ posts: url.searchParams.getAll('uris').map((uri) => ({ uri, likeCount: 7 })) });
+  };
+  const bluesky = new Bluesky({ identifier: 'me.bsky.social', appPassword: 'x', fetch, retry: { baseMs: 1 } });
+  const source: MetricSources = {
+    posts: {
+      bluesky: { metrics: (id) => bluesky.metrics(id), read: batchReader((ids) => bluesky.metricsMany(ids)).read },
+      // A connector that lets Node's error through as it is: its cause still reaches the log
+      mastodon: {
+        metrics: async () => ({}),
+        read: async () => {
+          throw unreachable('other side closed', 'UND_ERR_SOCKET');
+        },
+      },
+    },
+  };
+  const result = await collectHourly(registry, brand, source, new Date('2026-10-31T00:03:00Z'));
+  assert.deepEqual(result.problems, [
+    'bluesky: metrics read from api.bsky.app: public.api.bsky.app gave no answer (could not reach the network: fetch failed: Connect Timeout Error (attempted address: public.api.bsky.app:443, timeout: 10000ms) (UND_ERR_CONNECT_TIMEOUT))',
+    'mastodon: fetch failed: other side closed (UND_ERR_SOCKET)',
+  ]);
+  assert.deepEqual((await registry.metrics.postMetrics(posts[0]!.id)).find((m) => m.name === 'likes')?.value, 7, 'the numbers read through the fallback are kept');
+});

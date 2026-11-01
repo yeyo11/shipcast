@@ -1,0 +1,121 @@
+/*
+ * Access (boards Login, LoginExpired, DesktopLogin, Onboarding*, NotFound, ErrorState, Offline): the
+ * board's inline styles as named classes, on the kit (kit.css) and Cartel's role tokens.
+ */
+
+/* ---------- Sign in ---------- */
+.acc-login { min-height: 100vh; min-height: 100dvh; padding: 0; background: var(--sc-ground); }
+.acc-login-band { background: var(--sc-yellow); color: var(--sc-black); padding: 56px 20px 28px; border-bottom: 2.5px solid var(--sc-black); display: flex; flex-direction: column; align-items: center; }
+.acc-login-art { width: 300px; max-width: 100%; flex: none; }
+.acc-login-body { padding: 28px 16px 32px; display: flex; flex-direction: column; gap: 16px; }
+.acc-login-title { font-size: 96px; }
+.acc-login-title span { color: var(--sc-yellow); }
+.acc-login-lead { margin: 0; }
+.acc-login .acc-login-go { min-height: 56px; font-size: 17px; }
+.acc-login-glyph { flex: none; }
+.acc-login-was { margin: 0; }
+.acc-login-was svg { flex: none; }
+
+@media (min-width: 960px) {
+  .acc-login { display: grid; grid-template-columns: 1fr 1fr; }
+  .acc-login-band { border-bottom: 0; border-right: 2.5px solid var(--sc-black); justify-content: center; padding: 48px; }
+  .acc-login-art { width: 520px; }
+  .acc-login-body { justify-content: center; gap: 24px; padding: 64px; }
+  .acc-login-title { font-size: 150px; }
+  .acc-login-lead { max-width: 460px; }
+  .acc-login .acc-login-go { align-self: flex-start; width: auto; padding: 0 28px; }
+  .acc-login-glyph { display: none; }
+}
+
+/* ---------- Nothing here, That did not load, No connection ---------- */
+main.acc-problem-main { padding-block: 0; }
+.acc-problem { align-items: center; text-align: center; padding-top: 36px; padding-bottom: 32px; max-width: 560px; margin: 0 auto; }
+.acc-problem-art { width: 250px; max-width: 100%; flex: none; }
+.acc-problem-lead { margin: 0; max-width: 330px; }
+.acc-problem-actions { width: 100%; }
+.acc-problem-details { width: 100%; text-align: left; }
+.acc-problem-details summary { cursor: pointer; list-style: none; min-height: 24px; }
+.acc-problem-details summary::-webkit-details-marker { display: none; }
+.acc-problem-details[open] summary svg { transform: rotate(180deg); }
+.acc-problem-explained { margin: 0; }
+.acc-problem-raw { margin: 0; text-align: left; width: 100%; overflow-wrap: anywhere; }
+.acc-problem-brand { font-size: 24px; }
+.acc-problem-bare-bar { position: static; }
+@media (min-width: 960px) {
+  .acc-problem { padding-top: 64px; }
+  .acc-problem-actions, .acc-problem-details, .acc-problem-raw { max-width: 400px; }
+  .acc-problem-bare-bar { display: flex; padding: 12px 32px; }
+}
+
+/* ---------- Set up (the onboarding) ---------- */
+.acc-onb { min-height: 100vh; min-height: 100dvh; background: var(--sc-ground); }
+main.acc-onb { padding: 0; }
+.acc-onb-top { height: 64px; padding: 0 16px; border-bottom: 1px solid var(--sc-hairline); }
+.acc-onb-mark { width: 28px; height: 28px; border-radius: 9px; background: var(--sc-yellow); border: 2.5px solid var(--sc-black); box-shadow: 3px 3px 0 var(--sc-stamp); flex: none; }
+.acc-onb-leave { background: none; border: 0; padding: 10px 0; font-family: inherit; font-weight: 600; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.acc-onb-leave:hover { color: var(--sc-yellow); }
+main.acc-onb-main { gap: 14px; padding-top: 16px; padding-bottom: 120px; }
+.acc-onb-progress { list-style: none; margin: 0; padding: 0; }
+.acc-onb-progress li { flex: 1; display: flex; }
+.acc-onb-progress a, .acc-onb-progress li > span { flex: 1; display: flex; padding: 9px 0; margin: -9px 0; }
+.acc-onb-seg { flex: 1; height: 6px; border-radius: 3px; background: var(--sc-hairline); }
+.acc-onb-seg.k-on { background: var(--sc-yellow); }
+.acc-onb-progress a:hover .acc-onb-seg:not(.k-on) { background: var(--sc-rail); }
+.acc-onb-progress a:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; border-radius: 4px; }
+.acc-onb-count, .acc-onb-lead { margin: 0; }
+.acc-onb-art { display: flex; justify-content: center; background: var(--sc-raised); border-radius: 24px; padding: 12px; }
+.acc-onb-art-svg { width: 190px; max-width: 100%; flex: none; }
+.acc-onb-title { outline: none; overflow-wrap: anywhere; }
+.acc-onb-form { gap: 14px; }
+.acc-onb-input { width: 100%; font: 400 16px/1.5 var(--sc-font-text); text-align: left; text-decoration: none; outline: none; }
+.acc-onb-input.k-mono { font-family: var(--sc-font-mono); }
+.acc-onb-input:focus-visible, .acc-onb-input:focus { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.acc-onb-input::placeholder { color: var(--sc-muted); }
+.acc-onb-input[aria-invalid='true'] { border-color: var(--sc-failure); }
+a.acc-onb-input:hover { color: var(--sc-text); border-color: var(--sc-text); }
+.acc-onb-pick { cursor: pointer; }
+.acc-onb-connect, a.acc-onb-connect:hover { color: var(--sc-yellow); font-weight: 600; border-style: dashed; }
+.acc-onb-select { position: relative; display: block; }
+.acc-onb-select select { appearance: none; cursor: pointer; }
+.acc-onb-input.acc-onb-kept::placeholder { color: var(--sc-text); }
+.acc-onb-select svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--sc-muted); }
+.acc-onb-error { margin: 0; color: var(--sc-failure); font-weight: 600; }
+.acc-onb-done { margin: 0; align-items: center; }
+.acc-onb-done svg { color: var(--sc-success); flex: none; }
+.k-notice .k-diamond { margin-top: 6px; }
+.acc-onb .k-notice { overflow-wrap: anywhere; }
+.acc-onb-missing { color: inherit; }
+.acc-onb-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+.acc-onb-link:hover { color: var(--sc-yellow); }
+.acc-onb-log { white-space: pre-wrap; margin: 8px 0 0; }
+.acc-onb-note, .acc-onb-hint { margin: 0; }
+.acc-onb-bar.k-bar { position: fixed; bottom: 0; z-index: 30; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+/* The Combobox (ui/Combobox) in the board's field shape */
+.acc-onb .field { gap: 6px; }
+.acc-onb .field > .label { font: 600 14px/1.5 var(--sc-font-text); color: var(--sc-muted); }
+.acc-onb .ui-combo { border: 2px solid var(--sc-rail); padding-left: 14px; min-height: 52px; }
+.acc-onb .ui-combo:focus-within { outline: none; border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.acc-onb .field small { font-size: 13px; }
+/* The sheets of the set-up: brand.yml before it is committed, and the blog's languages */
+.acc-onb-sheet-lead { margin: 0; }
+.acc-onb-yaml { font-size: 13px; line-height: 1.7; align-items: flex-start; flex-direction: column; gap: 0; background: var(--sc-ground); overflow-x: auto; }
+.acc-onb-yaml .k-diff-add { white-space: pre-wrap; overflow-wrap: anywhere; }
+.acc-onb-check-row { min-height: 56px; }
+
+/* All set */
+.acc-onb-band { background: var(--sc-yellow); color: var(--sc-black); padding: 60px 20px 30px; border-bottom: 2.5px solid var(--sc-black); display: flex; justify-content: center; }
+.acc-onb-end-art { width: 280px; max-width: 100%; flex: none; }
+.acc-onb-end-body { padding-top: 28px; padding-bottom: 32px; }
+.acc-onb-end-title { font-size: 72px; outline: none; }
+.acc-onb-end-lead, .acc-onb-end-note { margin: 0; }
+
+/* A desktop: the phone's column, centred, the bar holding the same width */
+@media (min-width: 960px) {
+  main.acc-onb-main, .acc-onb-end-body { max-width: 560px; margin: 0 auto; }
+  .acc-onb-top { padding: 0 32px; }
+  .acc-onb-bar.k-bar { padding-left: max(16px, calc(50% - 280px + 16px)); padding-right: max(16px, calc(50% - 280px + 16px)); }
+}
+
+/* The offline gate keeps the page mounted, hidden; shown, its box is not one */
+.acc-gate { display: contents; }
+.acc-gate[hidden] { display: none; }

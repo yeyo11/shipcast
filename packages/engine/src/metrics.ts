@@ -1,5 +1,5 @@
 import type { MetricStore } from './ports.ts';
-import { ConnectorError, type AnalyticsMany, type CampaignVisits, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
+import { ConnectorError, failureText, type AnalyticsMany, type CampaignVisits, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
 import { campaignOf, channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
@@ -368,7 +368,8 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
     try {
       await fn();
     } catch (error) {
-      problems.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+      // With its cause: Node's fetch says only "fetch failed", and keeps why on the error's cause
+      problems.push(`${what}: ${failureText(error)}`);
     }
   };
 
@@ -584,7 +585,8 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     try {
       await fn();
     } catch (error) {
-      problems.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+      // With its cause: Node's fetch says only "fetch failed", and keeps why on the error's cause
+      problems.push(`${what}: ${failureText(error)}`);
     }
   };
   const due = (last: string | undefined, hours: number) => last === undefined || now.getTime() - Date.parse(last) >= hours * HOUR_MS - DUE_SLACK_MS;

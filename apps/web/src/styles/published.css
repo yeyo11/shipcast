@@ -1,0 +1,112 @@
+/*
+ * A launch's page once it is out, and its other states (boards LaunchDetail, LaunchMenu, PostEdit,
+ * Unpublish, LaunchSearch, LaunchDetails, DeleteLaunch, LaunchDrafting, LaunchFailed): the board's
+ * inline styles as named classes over the kit. Role tokens only.
+ */
+
+/* The page: the phone's column; on a desktop the same content in the page column, not stretched */
+.pub-page { padding-bottom: 24px; }
+@media (min-width: 960px) {
+  .pub-page { max-width: 880px; margin: 0 auto; padding: 16px 32px 64px; }
+}
+
+/* ---------- The heading ---------- */
+.pub-head { padding-top: 18px; }
+.pub-head-top { align-items: flex-start; }
+.pub-head-title { align-items: baseline; min-width: 0; }
+.pub-head-title h1 { overflow-wrap: anywhere; }
+
+/* ---------- The tabs: underlined in yellow, the board's `tabs` with Base UI's active state ---------- */
+.pub-tabs-wrap { margin-top: 16px; }
+.pub-tabs { margin: 0 16px; padding: 0; overflow-x: auto; scrollbar-width: none; }
+.pub-tabs .k-tab { cursor: pointer; }
+.pub-tabs .k-tab:hover { color: var(--sc-text); }
+.pub-tabs .k-tab[data-active] { color: var(--sc-text); border-bottom-color: var(--sc-yellow); }
+.pub-tabs .k-tab[data-active] .k-n { background: var(--sc-yellow); color: var(--sc-black); }
+.pub-tabs .k-tab:focus-visible { outline-offset: -2px; }
+.pub-panel { outline: none; }
+
+/* ---------- Channels ---------- */
+.pub-views { margin-top: 14px; }
+.pub-views-card { gap: 6px; }
+.pub-totals { margin: 0; }
+.pub-totals > div { flex-direction: column-reverse; }
+.pub-totals dd { margin: 0; }
+.pub-chart { width: 100%; }
+.pub-chart svg { display: block; overflow: visible; }
+.pub-rows { margin-top: 8px; }
+.pub-name { font-weight: 700; text-decoration: none; color: var(--sc-text); align-self: flex-start; }
+.pub-name:hover { text-decoration: underline; color: var(--sc-text); }
+.pub-ic-fail { border-color: var(--sc-failure); color: var(--sc-failure); }
+.pub-fail-line { color: var(--sc-failure); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pub-figure { align-items: flex-end; flex: none; }
+.pub-row-actions { margin-top: 10px; flex-wrap: wrap; }
+.pub-none { margin: 16px 0 0; }
+.pub-notice { margin-top: 14px; }
+
+/* A tick: the kit's check over a real checkbox, which takes the clicks and the keyboard */
+.pub-tick { position: relative; }
+.pub-tick input { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); margin: 0; opacity: 0; cursor: pointer; }
+.pub-tick:has(input:focus-visible) { outline: 2px solid var(--sc-yellow); outline-offset: 2px; }
+.pub-tick-off { opacity: .45; }
+.pub-tick-off input { cursor: not-allowed; }
+
+/* ---------- Sheets: the menu, editing, unpublishing, deleting ---------- */
+.pub-flush { margin: 0; }
+.pub-menu-head { align-items: baseline; padding: 0 4px; }
+.pub-menu-none { margin: 4px 12px; }
+.pub-mi-diamond { display: inline-flex; margin: 0 5px; }
+.pub-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.pub-legend { padding: 0; }
+.pub-pick { cursor: pointer; }
+.pub-more { padding-top: 0; }
+.pub-changes { padding: 12px; border-radius: 18px; gap: 4px; }
+.pub-plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pub-bad { color: var(--sc-failure); }
+.pub-input { font: inherit; font-size: 16px; width: 100%; }
+.pub-input:focus, .pub-textarea:focus { outline: none; border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.pub-textarea { font: inherit; font-size: 15px; line-height: 1.55; min-height: 120px; width: 100%; resize: vertical; }
+
+/* The text with what was added marked: a textarea over a copy of it, the marks in the copy */
+.pub-diffarea { position: relative; display: block; min-height: 150px; padding: 0; font-size: 15px; line-height: 1.55; border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.pub-diffarea-behind, .pub-diffarea textarea { margin: 0; padding: 12px 14px; font: inherit; font-size: 15px; line-height: 1.55; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+.pub-diffarea-behind { position: absolute; inset: 0; overflow: hidden; color: transparent; pointer-events: none; }
+.pub-diffarea-behind mark { background: rgba(111, 213, 142, .16); color: transparent; border-radius: 4px; }
+.pub-diffarea textarea { position: relative; display: block; width: 100%; min-height: 146px; height: 146px; border: 0; background: transparent; color: var(--sc-text); resize: none; outline: none; }
+
+/* ---------- Search ---------- */
+.pub-intro { margin: 14px 0 0; }
+.pub-search { margin-top: 6px; }
+
+/* ---------- Details ---------- */
+.pub-details { margin-top: 16px; gap: 14px; }
+.pub-break { overflow-wrap: anywhere; }
+.pub-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
+.pub-figures > div { flex-direction: column-reverse; justify-content: flex-end; }
+.pub-figures dd { margin: 0; }
+.pub-job { padding: 10px 0; }
+.pub-fail-word { color: var(--sc-failure); }
+.pub-run-word { color: var(--sc-yellow); }
+.pub-dot-run { border-radius: 50%; border: 2.5px solid var(--sc-yellow); border-right-color: transparent; }
+.pub-linkbtn { background: none; border: 0; padding: 8px 0 0; font: inherit; font-size: 14px; color: var(--sc-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; align-self: flex-start; }
+.pub-linkbtn:hover { color: var(--sc-yellow); }
+.pub-log { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--sc-ground); color: var(--sc-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- Drafting ---------- */
+.pub-drafting { align-items: center; text-align: center; margin-top: 28px; }
+.pub-drafting-art { width: 240px; max-width: 100%; flex: none; }
+.pub-drafting-text { margin: 0; max-width: 320px; }
+.pub-drafting-jobs { margin-top: 22px; }
+.pub-jobs-card { gap: 0; }
+.pub-jobs-card .pub-job { padding: 14px 0; }
+.pub-drafting-note { margin: 12px 0 0; text-align: center; }
+
+/* ---------- Failed before anything went out ---------- */
+.pub-failed { margin-top: 20px; }
+.pub-failed-card { gap: 12px; }
+.pub-failed-top { align-items: flex-start; }
+.pub-failed-art { width: 110px; max-width: 100%; flex: none; }
+.pub-failed-title { font-size: 18px; }
+.pub-problem { background: var(--sc-ground); border-radius: 12px; padding: 10px 12px; color: color-mix(in srgb, var(--sc-failure) 55%, var(--sc-text)); overflow-wrap: anywhere; }
+.pub-failed-log { align-self: center; padding-top: 0; }
+

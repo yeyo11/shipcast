@@ -1,3 +1,4 @@
+import { channelName } from '@shipcast/schema/channels';
 import { parseFailureKey } from '@shipcast/schema/failures';
 
 /*
@@ -30,11 +31,17 @@ export interface AttentionItem {
   /** The link's own words: the verb the owner will do */
   action: string;
   target: AttentionTarget;
+  /** How many things the line stands for (the waiting comments), for a section's own badge */
+  count?: number;
+  /** The words the line is about, at its start (a launch, the comments, an account): set in bold */
+  subject?: string;
+  /** The network a line is about (an account to reconnect): its mark beside the line */
+  channel?: string;
 }
 
 export interface AttentionInput {
   /** `updatedAt` moves with every change of status, so a launch drafted again is a new line */
-  launches: ReadonlyArray<{ id: number; repo: string; ref: string; status: string; updatedAt: string }>;
+  launches: ReadonlyArray<{ id: number; repo: string; ref: string; status: string; updatedAt: string; detail?: string | null }>;
   /** The `publish-failed:<launch>:<channel>` cursors, with the failure's message as their value */
   failures: ReadonlyArray<{ key: string; value: string }>;
   /** Accounts whose last check failed */
@@ -85,8 +92,11 @@ export const ATTENTION_KEY = /^(launch|comments|account|metrics):[\w.:-]{1,120}$
 
 const DAY = 86_400_000;
 
+
 export function launchName(repo: string, ref: string): string {
-  return ref.startsWith('article:') ? 'An article' : `${repo.split('/')[1] ?? repo} ${ref}`;
+  const name = repo.split('/')[1] ?? repo;
+  // A project's name opens a line, as a title does
+  return ref.startsWith('article:') ? 'An article' : `${name.charAt(0).toUpperCase()}${name.slice(1)} ${ref}`;
 }
 
 export function soonIn(ms: number): string {
@@ -109,19 +119,25 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   for (const l of input.launches) {
     // A drafted launch with a failure is "Partly published": its need is the retry, not the approval
     if (l.status !== 'drafted' || failed.has(l.id)) continue;
-    items.push({ key: `launch:${l.id}:waiting:${l.updatedAt}`, kind: 'approve', text: `${launchName(l.repo, l.ref)} waits for your approval`, action: 'Review the drafts', target: { to: '/launches/$id', params: { id: String(l.id) } } });
+    items.push({ key: `launch:${l.id}:waiting:${l.updatedAt}`, kind: 'approve', text: `${launchName(l.repo, l.ref)} waits for your approval`, action: 'Review the drafts', target: { to: '/launches/$id', params: { id: String(l.id) } }, subject: launchName(l.repo, l.ref) });
+  }
+  // A launch that failed before anything went out: nothing was published, so there is nothing else to tell it by
+  for (const l of input.launches) {
+    if (l.status !== 'failed') continue;
+    const why = l.detail?.split('\n')[0]?.trim();
+    items.push({ key: `launch:${l.id}:failed:${digest(`${l.updatedAt}\n${why ?? ''}`)}`, kind: 'retry', text: `${launchName(l.repo, l.ref)} failed${why ? `: ${why}` : ''}`, action: 'Retry', target: { to: '/launches/$id', params: { id: String(l.id) } }, subject: launchName(l.repo, l.ref) });
   }
   for (const [id, failures] of failed) {
     const l = byId.get(id);
     if (!l) continue;
-    const names = failures.map((f) => f.channel).join(', ');
+    const names = failures.map((f) => channelName(f.channel)).join(', ');
     // The launch's last change is in it too: a retry moves the launch, so failing again is a new line
     const state = digest(`${l.updatedAt}\n${failures.map((f) => `${f.channel}=${f.message}`).join('\n')}`);
-    items.push({ key: `launch:${id}:failed:${state}`, kind: 'retry', text: `${launchName(l.repo, l.ref)} failed on ${names}`, action: 'Retry', target: { to: '/launches/$id', params: { id: String(id) } } });
+    items.push({ key: `launch:${id}:failed:${state}`, kind: 'retry', text: `${launchName(l.repo, l.ref)} failed on ${names}`, action: 'Retry', target: { to: '/launches/$id', params: { id: String(id) } }, subject: launchName(l.repo, l.ref) });
   }
   if (input.commentsWaiting > 0) {
     const n = input.commentsWaiting;
-    items.push({ key: `comments:waiting:${input.newestWaitingComment ?? n}`, kind: 'reply', text: n === 1 ? '1 comment waits for a reply' : `${n} comments wait for a reply`, action: 'Answer', target: { to: '/comments', search: { state: 'waiting' } } });
+    items.push({ key: `comments:waiting:${input.newestWaitingComment ?? n}`, kind: 'reply', text: n === 1 ? '1 comment waits for a reply' : `${n} comments wait for a reply`, action: 'Answer', target: { to: '/comments', search: { state: 'waiting' } }, count: n, subject: n === 1 ? '1 comment' : `${n} comments` });
   }
   for (const c of input.canonicals ?? []) {
     const l = byId.get(c.launchId);
@@ -139,7 +155,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
     items.push({ key: `launch:${d.launchId}:store:${digest(d.differences.join('\n'))}`, kind: 'drift', text: `${launchName(l.repo, l.ref)}: Shipcast's copy differs from the pull request (${d.differences[0]}${more})`, action: 'See the launch', target: { to: '/launches/$id', params: { id: String(d.launchId) } } });
   }
   for (const a of input.brokenAccounts) {
-    items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${a.network}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } } });
+    items.push({ key: `account:${a.id}:reconnect:${digest(a.problem ?? '')}`, kind: 'reconnect', text: `${a.label} (${channelName(a.network)}) needs reconnecting`, action: 'Reconnect', target: { to: '/channels', search: { focus: String(a.id) } }, subject: a.label, channel: a.network });
   }
   for (const { key, value } of input.metricProblems ?? []) {
     const [, source = '', ...rest] = key.split(':');
@@ -166,7 +182,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
     if (!l) continue;
     const wait = at - input.now.getTime();
     const when = wait <= 0 ? 'any minute now' : `in ${soonIn(wait)}`;
-    items.push({ key: `launch:${id}:scheduled:${at}:${n}`, kind: 'scheduled', text: `${n === 1 ? '1 post' : `${n} posts`} of ${launchName(l.repo, l.ref)} go out ${when}`, action: 'See it', target: { to: '/launches/$id', params: { id: String(id) } } });
+    items.push({ key: `launch:${id}:scheduled:${at}:${n}`, kind: 'scheduled', text: `${n === 1 ? '1 post' : `${n} posts`} of ${launchName(l.repo, l.ref)} ${n === 1 ? 'goes' : 'go'} out ${when}`, action: 'See it', target: { to: '/launches/$id', params: { id: String(id) } } });
   }
   return items;
 }

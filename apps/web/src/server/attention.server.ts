@@ -47,7 +47,7 @@ async function readInput(registry: AttentionRegistry, options: AttentionOptions)
     options.launchStore ? registry.cursors.cursorsWithPrefix(LAUNCH_STORE_PREFIX) : Promise.resolve([]),
   ]);
   return {
-    launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt })),
+    launches: launches.map((l) => ({ id: l.id, repo: l.repo, ref: l.ref, status: l.status, updatedAt: l.updatedAt, detail: l.detail })),
     failures,
     brokenAccounts: accounts.filter((a) => a.status === 'failed').map((a) => ({ id: a.id, label: a.label, network: a.network, problem: a.problem })),
     commentsWaiting: facets.buckets.waiting,

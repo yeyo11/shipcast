@@ -1,23 +1,46 @@
 import { Menu } from '@base-ui/react/menu';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Icon } from '../kit/Icon';
+import { Sheet } from '../kit/Sheet';
 import { useToast } from '../Toasts';
-import { CaretIcon, SparkIcon } from '../ui/icons';
+import { usePhone } from '../write/usePhone';
 import { caretPoint } from './caret';
+import { sentenceContext } from './diff';
 import { DiffView } from './DiffView';
 import { ADAPT_NETWORKS, type Action } from './protocol';
 import type { Assistant } from './session';
 
-const VERDICTS: Record<string, string> = { backed: 'Backed by the code', planned: 'Planned, not built', 'not-found': 'Not found in the code', contradicted: 'The code says otherwise' };
+const VERDICTS: Record<string, { label: string; dot: string }> = {
+  backed: { label: 'Backed by the code', dot: 'k-dot-pub' },
+  planned: { label: 'Planned, not built', dot: 'k-dot-quiet' },
+  'not-found': { label: 'Not found in the code', dot: 'k-dot-quiet' },
+  contradicted: { label: 'The code says otherwise', dot: 'k-dot-fail' },
+};
+
+/** What the assistant is asked to work on, in the words the menu and the sheet lead with */
+function scope(assistant: Assistant): string {
+  if (!assistant.selected) return 'With the whole text (select a passage to work on it alone)';
+  const quote = assistant.selected.trim().replace(/\s+/g, ' ');
+  return `With the selection: “${quote.length > 90 ? `${quote.slice(0, 90).replace(/\s\S*$/, '')}…` : quote}”`;
+}
+
+function translateLabel(assistant: Assistant): string {
+  const lang = assistant.target.lang;
+  return lang === 'es' ? 'Translate to English' : lang === 'en' ? 'Translate to Spanish' : 'Translate EN ↔ ES';
+}
+
+const QUICK: ReadonlyArray<[Exclude<Action, 'adapt' | 'check' | 'translate'>, string]> = [
+  ['improve', 'Improve'],
+  ['shorten', 'Shorten'],
+];
 
 /**
- * The quick actions, behind one trigger: the same menu from the toolbar and from the small button
- * that appears beside a selection. Arrow keys move, Enter acts, Escape closes.
+ * The quick actions as a dropdown (from 960 px): the same list from the toolbar's Assist and from the
+ * small button beside a selection. Arrow keys move, Enter acts, Escape closes.
  */
-function AssistMenu({ assistant, trigger }: { assistant: Assistant; trigger: ReactElement }) {
-  const lang = assistant.target.lang;
-  const translate = lang === 'es' ? 'Translate to English' : lang === 'en' ? 'Translate to Spanish' : 'Translate EN ↔ ES';
+function AssistMenu({ assistant, trigger, onOpenChat }: { assistant: Assistant; trigger: ReactElement; onOpenChat?: () => void }) {
   const item = (action: Action, label: string, disabled?: boolean) => (
-    <Menu.Item className="ui-option" onClick={() => assistant.run(action)} disabled={disabled}>
+    <Menu.Item className="k-mi wr-option" onClick={() => assistant.run(action)} disabled={disabled}>
       {label}
     </Menu.Item>
   );
@@ -25,22 +48,26 @@ function AssistMenu({ assistant, trigger }: { assistant: Assistant; trigger: Rea
     <Menu.Root>
       <Menu.Trigger render={trigger} />
       <Menu.Portal>
-        <Menu.Positioner className="ui-positioner" sideOffset={6} align="start">
-          <Menu.Popup className="ui-popup ui-menu">
-            <div className="ui-menu-note">{assistant.selected ? 'With the selection' : 'With the whole text (select a passage to work on it alone)'}</div>
-            {item('improve', 'Improve')}
-            {item('shorten', 'Shorten')}
-            {item('translate', translate)}
+        <Menu.Positioner className="wr-positioner" sideOffset={6} align="start">
+          <Menu.Popup className="k-menu wr-popup wr-assist-menu">
+            <div className="k-xs k-muted wr-menu-note">{scope(assistant)}</div>
+            {QUICK.map(([action, label]) => (
+              <Menu.Item key={action} className="k-mi wr-option" onClick={() => assistant.run(action)}>
+                {label}
+              </Menu.Item>
+            ))}
+            {item('translate', translateLabel(assistant))}
             {item('titles', 'Propose titles')}
             <Menu.SubmenuRoot>
-              <Menu.SubmenuTrigger className="ui-option ui-submenu-trigger">
-                Adapt to a network <CaretIcon size={16} className="ui-submenu-caret" />
+              <Menu.SubmenuTrigger className="k-mi wr-option">
+                <span className="k-grow">Adapt for a network</span>
+                <Icon name="chevronRight" size={18} />
               </Menu.SubmenuTrigger>
               <Menu.Portal>
-                <Menu.Positioner className="ui-positioner" sideOffset={4} alignOffset={-6}>
-                  <Menu.Popup className="ui-popup ui-menu">
+                <Menu.Positioner className="wr-positioner" sideOffset={4} alignOffset={-6}>
+                  <Menu.Popup className="k-menu wr-popup">
                     {ADAPT_NETWORKS.map((n) => (
-                      <Menu.Item key={n.id} className="ui-option" onClick={() => assistant.run('adapt', n)}>
+                      <Menu.Item key={n.id} className="k-mi wr-option" onClick={() => assistant.run('adapt', n)}>
                         {n.name}
                       </Menu.Item>
                     ))}
@@ -48,13 +75,172 @@ function AssistMenu({ assistant, trigger }: { assistant: Assistant; trigger: Rea
                 </Menu.Positioner>
               </Menu.Portal>
             </Menu.SubmenuRoot>
-            <Menu.Separator className="ui-separator" />
+            <Menu.Separator className="k-sep" />
             {item('check', 'Check against the repo’s code', Boolean(assistant.target.checkDisabled))}
-            {assistant.target.checkDisabled && <div className="ui-menu-note">{assistant.target.checkDisabled}</div>}
+            {assistant.target.checkDisabled && <div className="k-xs k-muted wr-menu-note">{assistant.target.checkDisabled}</div>}
+            {onOpenChat && (
+              <Menu.Item className="k-mi wr-option" onClick={onOpenChat}>
+                <span className="k-hrow k-g12">
+                  <Icon name="comments" />
+                  Open the chat
+                </span>
+              </Menu.Item>
+            )}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>
     </Menu.Root>
+  );
+}
+
+/** The quick actions as the board's bottom sheet (AssistMenu), on a phone */
+function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant: Assistant; open: boolean; onOpenChange: (open: boolean) => void; onOpenChat?: () => void }) {
+  const [view, setView] = useState<'actions' | 'adapt'>('actions');
+  useEffect(() => {
+    if (open) setView('actions');
+  }, [open]);
+  const act = (action: Action, adaptTo?: { id: string; name: string }) => {
+    assistant.run(action, adaptTo);
+    onOpenChange(false);
+  };
+  const row = (action: Action, label: string, disabled?: boolean, why?: string) => (
+    <button type="button" className="k-mi" onClick={() => act(action)} disabled={disabled} aria-describedby={why ? 'assist-sheet-why' : undefined} title={why}>
+      {label}
+    </button>
+  );
+  return (
+    <Sheet label="Assist" open={open} onOpenChange={onOpenChange} className="wr-assist-sheet">
+      <div className="k-stack k-g4 wr-sheet-head">
+        <span className="k-hrow k-g8 wr-sheet-title">
+          <Icon name="assist" />
+          Assist
+        </span>
+        <span className="k-xs k-muted">{scope(assistant)}</span>
+      </div>
+      {view === 'adapt' ? (
+        <div className="k-stack">
+          <button type="button" className="k-mi wr-sheet-back" onClick={() => setView('actions')}>
+            <Icon name="chevronLeft" size={18} />
+            Adapt for a network
+          </button>
+          <div className="k-sep" />
+          {ADAPT_NETWORKS.map((n) => (
+            <button key={n.id} type="button" className="k-mi" onClick={() => act('adapt', n)}>
+              {n.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="k-stack">
+          {QUICK.map(([action, label]) => (
+            <button key={action} type="button" className="k-mi" onClick={() => act(action)}>
+              {label}
+            </button>
+          ))}
+          {row('translate', translateLabel(assistant))}
+          {row('titles', 'Propose titles')}
+          <button type="button" className="k-mi" onClick={() => setView('adapt')}>
+            <span className="k-grow">Adapt for a network</span>
+            <Icon name="chevronRight" size={18} />
+          </button>
+          <div className="k-sep" />
+          {row('check', 'Check against the repo’s code', Boolean(assistant.target.checkDisabled), assistant.target.checkDisabled)}
+          {/* Why it cannot run here, for a screen reader; the sheet keeps the board's list */}
+          {assistant.target.checkDisabled && (
+            <span id="assist-sheet-why" className="visually-hidden">
+              {assistant.target.checkDisabled}
+            </span>
+          )}
+          {onOpenChat && (
+            <button
+              type="button"
+              className="k-mi"
+              onClick={() => {
+                onOpenChange(false);
+                onOpenChat();
+              }}
+            >
+              <Icon name="comments" />
+              Open the chat
+            </button>
+          )}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** The quick action's answer (board AssistProposal): the change in place, to accept or reject */
+function ProposalCard({ assistant, onAccept }: { assistant: Assistant; onAccept: () => void }) {
+  const proposal = assistant.proposal;
+  if (!proposal) return null;
+  const context = proposal.range ? sentenceContext(assistant.target.value, proposal.range) : undefined;
+  const hasText = Boolean(proposal.text);
+  return (
+    <section className="k-card wr-proposal" aria-label={`Proposal: ${proposal.label}`}>
+      <div className="k-hrow k-between k-g8">
+        <span className="k-hrow k-g8 wr-strong">
+          <Icon name="assist" size={18} />
+          Proposal: {proposal.label}
+        </span>
+        <span className="k-xs k-muted">{proposal.range ? 'on the selection' : 'on the whole text'}</span>
+      </div>
+      {proposal.streaming && !hasText && (
+        <p className="k-sm k-muted wr-flush" role="status">
+          {proposal.whole ? 'Writing… the answer arrives all at once' : 'Writing…'}
+        </p>
+      )}
+      {proposal.problem ? (
+        <p className="k-sm wr-problem wr-flush" role="alert">
+          {proposal.problem}
+        </p>
+      ) : proposal.titles && !proposal.text ? (
+        <div className="k-stack k-g8">
+          <span className="k-xs k-muted">Pick one to see it against the text:</span>
+          <ul className="k-stack k-g8 wr-titles">
+            {proposal.titles.map((t) => (
+              <li key={t}>
+                <button type="button" className="k-chip wr-title-choice" onClick={() => assistant.chooseTitle(t)}>
+                  {t}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <>
+          {proposal.findings && proposal.findings.length > 0 && (
+            <ul className="k-stack wr-findings">
+              {proposal.findings.map((f, i) => {
+                const verdict = VERDICTS[f.verdict] ?? { label: f.verdict, dot: 'k-dot-quiet' };
+                return (
+                  <li key={i} className="k-row wr-finding" data-verdict={f.verdict}>
+                    <span className="wr-finding-dot">
+                      <span className={`k-dot ${verdict.dot}`} />
+                    </span>
+                    <span className="k-grow k-stack k-g4">
+                      <span className="k-sm wr-verdict">{verdict.label}</span>
+                      <span className="k-sm">“{f.claim}”</span>
+                      <span className="k-xs k-muted">{f.evidence}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {(hasText || !proposal.streaming) && <DiffView before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} context={context} legend className={proposal.range ? undefined : 'wr-diff-whole'} />}
+        </>
+      )}
+      <div className="k-hrow k-g8">
+        <button type="button" className="k-btn k-sm" onClick={assistant.rejectProposal}>
+          {proposal.streaming ? 'Stop' : 'Reject'}
+        </button>
+        <button type="button" className="k-btn k-pri k-sm k-grow" onClick={onAccept} disabled={proposal.streaming || !proposal.text || Boolean(proposal.problem)}>
+          <Icon name="check" size={18} />
+          Accept
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -66,17 +252,24 @@ export interface AssistedEditorProps {
   tall?: boolean;
   required?: boolean;
   placeholder?: string;
-  help?: string;
+  help?: ReactNode;
+  /** Opens the assistant's chat: offered in the Assist menu and, from 960 px, beside Assist */
+  onOpenChat?: () => void;
+  /** What the toolbar says on its right from 960 px (Write's "Markdown · 412 words") */
+  meta?: ReactNode;
+  className?: string;
 }
 
 /**
  * A textarea with the writing assistant: select a passage and a small button offers the quick
- * actions beside it (the toolbar's Assist offers the same, for the keyboard); the answer comes back
- * under the text as a diff to accept or reject.
+ * actions beside it (the toolbar's Assist offers the same, for the keyboard); on a phone they open as
+ * a bottom sheet. The answer comes back above the text as a diff to accept or reject.
  */
-export function AssistedEditor({ id, label, assistant, mono = true, tall, required, placeholder, help }: AssistedEditorProps) {
+export function AssistedEditor({ id, label, assistant, mono = false, tall, required, placeholder, help, onOpenChat, meta, className }: AssistedEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
+  const phone = usePhone();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [floating, setFloating] = useState<{ top: number; left: number } | null>(null);
   const { target, proposal } = assistant;
 
@@ -99,6 +292,15 @@ export function AssistedEditor({ id, label, assistant, mono = true, tall, requir
     setFloating({ top, left });
   }, [assistant.selected, assistant.selection.end]);
 
+  // The box grows with the text, as the boards draw it, so a long article scrolls with the page
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = '';
+    // Only past its minimum: below it the stylesheet's height holds, whatever the layout (a proposal shrinks it)
+    if (el.scrollHeight > el.clientHeight) el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [target.value, proposal]);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -112,24 +314,41 @@ export function AssistedEditor({ id, label, assistant, mono = true, tall, requir
     else ref.current?.focus();
   };
 
+  // On a phone both buttons open the sheet; from 960 px each is a dropdown's trigger
+  const assistButton = (
+    <button type="button" id={`${id}-assist`} className="k-btn k-sm wr-assist-button" aria-keyshortcuts="Alt+J" onClick={phone ? () => setSheetOpen(true) : undefined}>
+      <Icon name="assist" size={16} />
+      Assist
+    </button>
+  );
+  const floatButton = (
+    <button type="button" id={`${id}-float`} className="k-btn k-sm wr-assist-float-button" aria-label="Assist with the selection" onClick={phone ? () => setSheetOpen(true) : undefined}>
+      <Icon name="assist" size={16} />
+      <span>Assist</span>
+    </button>
+  );
+
   return (
-    <div className="field assisted">
-      <div className="assisted-bar">
-        <label htmlFor={id}>{label}</label>
-        <AssistMenu
-          assistant={assistant}
-          trigger={
-            <button type="button" id={`${id}-assist`} className="btn btn-small assist-trigger" aria-keyshortcuts="Alt+J">
-              <SparkIcon size={16} /> Assist <CaretIcon size={14} />
-            </button>
-          }
-        />
+    <div className={`k-field wr-assisted${proposal ? ' wr-has-proposal' : ''}${className ? ` ${className}` : ''}`}>
+      <div className="k-hrow k-g8 wr-assisted-bar">
+        <label htmlFor={id} className="k-lbl k-grow wr-assisted-label">
+          {label}
+        </label>
+        {phone ? assistButton : <AssistMenu assistant={assistant} trigger={assistButton} onOpenChat={onOpenChat} />}
+        {onOpenChat && (
+          <button type="button" className="k-btn k-sm wr-desk-inline" onClick={onOpenChat}>
+            <Icon name="comments" size={18} />
+            Open the chat
+          </button>
+        )}
+        {meta && <span className="k-xs k-muted wr-desk-inline wr-assisted-meta">{meta}</span>}
       </div>
-      <div className="assisted-box">
+      <ProposalCard assistant={assistant} onAccept={accept} />
+      <div className="wr-assisted-box">
         <textarea
           id={id}
           ref={ref}
-          className={`textarea${mono ? ' mono' : ''}${tall ? ' tall' : ''}`}
+          className={`k-input wr-textarea${mono ? ' k-mono' : ''}${tall ? ' wr-tall' : ''}`}
           value={target.value}
           required={required}
           placeholder={placeholder}
@@ -142,7 +361,7 @@ export function AssistedEditor({ id, label, assistant, mono = true, tall, requir
           onMouseUp={readSelection}
           onBlur={(e) => {
             // Moving to the floating button keeps it; anything else hides it
-            if (!(e.relatedTarget instanceof HTMLElement && e.relatedTarget.closest('.assist-float'))) setFloating(null);
+            if (!(e.relatedTarget instanceof HTMLElement && e.relatedTarget.closest('.wr-assist-float'))) setFloating(null);
           }}
           onKeyDown={(e) => {
             if (e.altKey && e.key.toLowerCase() === 'j') {
@@ -151,81 +370,22 @@ export function AssistedEditor({ id, label, assistant, mono = true, tall, requir
               (float ?? document.getElementById(`${id}-assist`))?.click();
             }
           }}
-          aria-describedby={help ? `${id}-help` : undefined}
+          aria-describedby={`${id}-help`}
         />
         {floating && (
-          <div className="assist-float" style={{ top: floating.top, left: floating.left }}>
-            <AssistMenu
-              assistant={assistant}
-              trigger={
-                <button type="button" id={`${id}-float`} className="assist-float-button" aria-label="Assist with the selection">
-                  <SparkIcon size={16} /> <span>Assist</span>
-                </button>
-              }
-            />
+          <div className="wr-assist-float" style={{ top: floating.top, left: floating.left }}>
+            {phone ? floatButton : <AssistMenu assistant={assistant} trigger={floatButton} onOpenChat={onOpenChat} />}
           </div>
         )}
       </div>
-      {help && (
-        <small id={`${id}-help`}>
-          {help} Select a passage for the assistant, or press Alt+J.
-        </small>
-      )}
+      <span id={`${id}-help`} className="k-help wr-assisted-help">
+        {help}
+        <span className="visually-hidden"> Select a passage for the assistant, or press Alt+J.</span>
+      </span>
       <div className="visually-hidden" role="status" aria-live="polite">
         {assistant.announce}
       </div>
-      {proposal && (
-        <section className="proposal" aria-label={`Proposal: ${proposal.label}`}>
-          <header className="proposal-head">
-            <strong>{proposal.label}</strong>
-            <span className="muted">{proposal.range ? 'on the selection' : 'on the whole text'}</span>
-            {proposal.streaming && (
-              <span className="proposal-wait" role="status">
-                {proposal.whole ? 'Writing… the answer arrives all at once' : 'Writing…'}
-              </span>
-            )}
-          </header>
-          {proposal.problem ? (
-            <p className="problem" role="alert">
-              {proposal.problem}
-            </p>
-          ) : proposal.titles && !proposal.text ? (
-            <div className="proposal-titles">
-              <p className="muted">Pick one to see it against the text:</p>
-              <ul>
-                {proposal.titles.map((t) => (
-                  <li key={t}>
-                    <button type="button" className="btn btn-small" onClick={() => assistant.chooseTitle(t)}>
-                      {t}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <>
-              {proposal.findings && proposal.findings.length > 0 && (
-                <ul className="findings">
-                  {proposal.findings.map((f, i) => (
-                    <li key={i} data-verdict={f.verdict}>
-                      <strong>{VERDICTS[f.verdict] ?? f.verdict}:</strong> {f.claim} <span className="muted">· {f.evidence}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {(proposal.text || !proposal.streaming) && <DiffView before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} />}
-            </>
-          )}
-          <div className="row">
-            <button type="button" className="btn btn-primary btn-small" onClick={accept} disabled={proposal.streaming || !proposal.text || Boolean(proposal.problem)}>
-              Accept
-            </button>
-            <button type="button" className="btn btn-small" onClick={assistant.rejectProposal}>
-              {proposal.streaming ? 'Stop' : 'Reject'}
-            </button>
-          </div>
-        </section>
-      )}
+      {phone && <AssistSheet assistant={assistant} open={sheetOpen} onOpenChange={setSheetOpen} onOpenChat={onOpenChat} />}
     </div>
   );
 }

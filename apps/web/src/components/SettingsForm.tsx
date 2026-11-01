@@ -1,10 +1,9 @@
 import { useRouter } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { saveSettings } from '../server/settings.functions';
-import { useToast } from './Toasts';
-import { PageToolbar } from './PageToolbar';
 import { SaveBar } from './SaveBar';
-import { ConfirmButton } from './ui/ConfirmButton';
+import { changesText, settingHelp } from './settings/view';
+import { useToast } from './Toasts';
 
 export interface SettingView {
   name: string;
@@ -19,32 +18,61 @@ export interface SettingView {
 /** The AI's settings (claudio's address and token) live in Settings › AI only, so nothing is configured twice */
 export const AI_SETTING_NAMES: ReadonlySet<string> = new Set(['claudioUrl', 'claudioToken']);
 
-const SOURCE: Record<string, string> = {
-  settings: 'saved here',
-  keychain: 'saved in the keychain',
-  '.env': 'from .env, until it is saved here',
-  unset: 'not set',
-};
+/** A secret marked to be cleared on save (its field shows that instead of a value) */
+const CLEAR = '\u0000clear';
+
+/** What each field starts from: a public value as it is, a secret never (it is not sent to the page) */
+const initialOf = (s: SettingView) => (s.secret ? '' : (s.value ?? ''));
 
 /**
- * A group of the runtime settings as one form. General and AI each show their own group, so a
- * setting is configured in exactly one place. With `toolbar` it is the page's own form: it keeps the
- * page's (empty) toolbar, so Settings' sections line up, and saves from the save bar.
+ * The runtime settings as one form (board SettingsGeneral's "What it needs"): a public value is
+ * edited in place, a secret that is kept shows as kept with a way to replace it. With `bar` the
+ * form saves from the page's save bar; otherwise it carries its own Save under the fields.
  */
-export function SettingsForm({ settings, submit = 'Save settings', toolbar = false }: { settings: SettingView[]; submit?: string; toolbar?: boolean }) {
+export function SettingsForm({ settings, missing = [], bar = false, heading, onSaved }: { settings: SettingView[]; missing?: readonly string[]; bar?: boolean; heading?: ReactNode; onSaved?: () => void }) {
   const formId = useId();
   const router = useRouter();
   const toast = useToast();
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [replacing, setReplacing] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  const focusNext = useRef<string | null>(null);
 
-  const save = async (change: Record<string, string | null>) => {
+  // A field Replace opened takes the focus once it is drawn
+  useEffect(() => {
+    if (!focusNext.current) return;
+    document.getElementById(`setting-${focusNext.current}`)?.focus();
+    focusNext.current = null;
+  });
+
+  const changed: Record<string, string | null> = {};
+  for (const s of settings) {
+    const draft = edits[s.name];
+    if (draft === undefined) continue;
+    if (draft === CLEAR) changed[s.name] = null;
+    else if (s.secret) {
+      if (draft.trim() !== '') changed[s.name] = draft.trim();
+    } else if (draft.trim() !== initialOf(s)) {
+      // An emptied value that was saved here falls back to .env; one that never was is left alone
+      if (draft.trim() !== '') changed[s.name] = draft.trim();
+      else if (s.source === 'settings') changed[s.name] = null;
+    }
+  }
+  const count = Object.keys(changed).length;
+
+  const reset = () => {
+    setEdits({});
+    setReplacing({});
+  };
+
+  const save = async () => {
     setBusy(true);
     try {
-      const answer = await saveSettings({ data: change });
-      setEdits({});
+      const answer = await saveSettings({ data: changed });
+      reset();
       toast.done('Settings saved', answer.missing.length ? `Still to set: ${answer.missing.join(', ')}.` : 'They apply to what runs next.');
       await router.invalidate();
+      onSaved?.();
     } catch (error) {
       toast.fail(error instanceof Error ? error.message : String(error));
     } finally {
@@ -52,62 +80,84 @@ export function SettingsForm({ settings, submit = 'Save settings', toolbar = fal
     }
   };
 
-  const changed = Object.fromEntries(Object.entries(edits).filter(([, v]) => v.trim() !== ''));
-
   return (
     <form
       id={formId}
-      className="form"
+      className="st-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void save(changed);
+        if (count > 0) void save();
       }}
     >
-      {settings.map((s) => (
-        <div className="field" key={s.name}>
-          <label htmlFor={`setting-${s.name}`}>{s.label}</label>
-          <div className="row">
-            <input
-              id={`setting-${s.name}`}
-              className="input"
-              style={{ flex: '1 1 220px', minWidth: 0 }}
-              type={s.secret ? 'password' : 'text'}
-              autoComplete="off"
-              placeholder={s.secret ? (s.set ? 'Set; type a new one to replace it' : 'Not set') : (s.value ?? 'Not set')}
-              value={edits[s.name] ?? ''}
-              onChange={(e) => setEdits({ ...edits, [s.name]: e.target.value })}
-            />
-            {s.source === 'settings' || s.source === 'keychain' ? (
-              <ConfirmButton
-                className="btn btn-small"
-                disabled={busy}
-                title={`Clear ${s.label.toLowerCase()}?`}
-                description={s.secret ? 'The secret is deleted from the keychain; what needs it waits until a new one is set.' : `It is now ${s.value ?? 'empty'}; clearing it falls back to .env, if .env has it.`}
-                confirm="Clear"
-                onConfirm={() => save({ [s.name]: null })}
-              >
-                Clear
-              </ConfirmButton>
+      {heading}
+      {settings.map((s) => {
+        const id = `setting-${s.name}`;
+        const draft = edits[s.name];
+        const help = settingHelp(s);
+        const kept = s.secret && s.set && !replacing[s.name];
+        const bad = missing.includes(s.label) && !(draft ?? initialOf(s)).trim();
+        return (
+          <div className="k-field" key={s.name}>
+            <label className="k-lbl" htmlFor={kept ? undefined : id}>
+              {s.label}
+            </label>
+            {kept ? (
+              <div className="k-input k-between st-kept">
+                <span className="k-mono st-mono">••••••••••••</span>
+                <span className="k-xs k-muted">
+                  {s.source === '.env' ? 'from .env' : 'kept'} ·{' '}
+                  <button
+                    type="button"
+                    className="st-link"
+                    aria-label={`Replace ${s.label.toLowerCase()}`}
+                    onClick={() => {
+                      focusNext.current = s.name;
+                      setReplacing({ ...replacing, [s.name]: true });
+                    }}
+                  >
+                    Replace
+                  </button>
+                </span>
+              </div>
+            ) : draft === CLEAR ? (
+              <div className="k-input k-between st-kept">
+                <span className="k-sm k-muted">Cleared when you save</span>
+                <button type="button" className="st-link k-xs" onClick={() => setEdits({ ...edits, [s.name]: '' })}>
+                  Keep it
+                </button>
+              </div>
+            ) : (
+              <input
+                id={id}
+                className={`k-input st-input${bad ? ' k-bad' : ''}`}
+                type={s.secret ? 'password' : 'text'}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={s.secret && s.set ? 'Type the new one' : 'Not set: tap to type it'}
+                value={draft ?? initialOf(s)}
+                onChange={(e) => setEdits({ ...edits, [s.name]: e.target.value })}
+              />
+            )}
+            {s.secret && replacing[s.name] && draft !== CLEAR && (s.source === 'keychain' || s.source === 'settings') ? (
+              <span className="k-help">
+                Empty keeps the one kept, or{' '}
+                <button type="button" className="st-link" onClick={() => setEdits({ ...edits, [s.name]: CLEAR })}>
+                  clear it
+                </button>
+                .
+              </span>
+            ) : help ? (
+              <span className="k-help">{help}</span>
             ) : null}
           </div>
-          <small>
-            {SOURCE[s.source]}
-            {s.value && !s.secret ? <> · now <code>{s.value}</code></> : null} · was <code>{s.env}</code> in .env
-          </small>
-        </div>
-      ))}
-      {/* The page's own form saves from the save bar; a form among others keeps its button under it */}
-      {toolbar ? (
-        <>
-          <PageToolbar label="Settings" />
-          <SaveBar form={formId} dirty={Object.keys(changed).length > 0} busy={busy} save={submit} onDiscard={() => setEdits({})} />
-        </>
+        );
+      })}
+      {bar ? (
+        <SaveBar form={formId} dirty={count > 0} busy={busy} text={changesText(count)} onUndo={reset} />
       ) : (
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={busy || Object.keys(changed).length === 0}>
-            {busy ? 'Saving…' : submit}
-          </button>
-        </div>
+        <button className="k-btn k-pri st-start" type="submit" disabled={busy || count === 0}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
       )}
     </form>
   );

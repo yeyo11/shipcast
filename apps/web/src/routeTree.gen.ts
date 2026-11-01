@@ -16,6 +16,7 @@ import { Route as McpRouteImport } from './routes/mcp'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ReadyzRouteImport } from './routes/readyz'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSplatRouteImport } from './routes/_app/$'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as AppAutomationRouteImport } from './routes/_app/automation'
 import { Route as AppCommentsRouteImport } from './routes/_app/comments'
@@ -60,6 +61,9 @@ import { Route as AuthRedditCallbackRouteImport } from './routes/auth/reddit.cal
 import { Route as AuthThreadsCallbackRouteImport } from './routes/auth/threads.callback'
 import { Route as AuthYoutubeCallbackRouteImport } from './routes/auth/youtube.callback'
 import { Route as AppLaunchesIdEditRouteImport } from './routes/_app/launches/$id_.edit'
+import { Route as AppLaunchesIdPreviewRouteImport } from './routes/_app/launches/$id_.preview'
+import { Route as AppSettingsAiPromptsRouteImport } from './routes/_app/settings_.ai.prompts'
+import { Route as AppSettingsAutomationWebhooksRouteImport } from './routes/_app/settings_.automation.webhooks'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -93,6 +97,11 @@ const ReadyzRoute = ReadyzRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSplatRoute = AppSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAiRoute = AppAiRouteImport.update({
@@ -315,6 +324,22 @@ const AppLaunchesIdEditRoute = AppLaunchesIdEditRouteImport.update({
   path: '/launches/$id/edit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLaunchesIdPreviewRoute = AppLaunchesIdPreviewRouteImport.update({
+  id: '/launches/$id_/preview',
+  path: '/launches/$id/preview',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsAiPromptsRoute = AppSettingsAiPromptsRouteImport.update({
+  id: '/settings_/ai/prompts',
+  path: '/settings/ai/prompts',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsAutomationWebhooksRoute =
+  AppSettingsAutomationWebhooksRouteImport.update({
+    id: '/settings_/automation/webhooks',
+    path: '/settings/automation/webhooks',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -323,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/onboarding': typeof OnboardingRoute
   '/readyz': typeof ReadyzRoute
+  '/$': typeof AppSplatRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -367,6 +393,9 @@ export interface FileRoutesByFullPath {
   '/channels/': typeof AppChannelsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
+  '/settings/ai/prompts': typeof AppSettingsAiPromptsRoute
+  '/settings/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
 export interface FileRoutesByTo {
   '/livez': typeof LivezRoute
@@ -374,6 +403,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/onboarding': typeof OnboardingRoute
   '/readyz': typeof ReadyzRoute
+  '/$': typeof AppSplatRoute
   '/ai': typeof AppAiRoute
   '/automation': typeof AppAutomationRoute
   '/comments': typeof AppCommentsRoute
@@ -418,6 +448,9 @@ export interface FileRoutesByTo {
   '/channels': typeof AppChannelsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
+  '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
+  '/settings/ai/prompts': typeof AppSettingsAiPromptsRoute
+  '/settings/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -427,6 +460,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/onboarding': typeof OnboardingRoute
   '/readyz': typeof ReadyzRoute
+  '/_app/$': typeof AppSplatRoute
   '/_app/ai': typeof AppAiRoute
   '/_app/automation': typeof AppAutomationRoute
   '/_app/comments': typeof AppCommentsRoute
@@ -472,6 +506,9 @@ export interface FileRoutesById {
   '/_app/channels/': typeof AppChannelsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
+  '/_app/launches/$id_/preview': typeof AppLaunchesIdPreviewRoute
+  '/_app/settings_/ai/prompts': typeof AppSettingsAiPromptsRoute
+  '/_app/settings_/automation/webhooks': typeof AppSettingsAutomationWebhooksRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -482,6 +519,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/onboarding'
     | '/readyz'
+    | '/$'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -526,6 +564,9 @@ export interface FileRouteTypes {
     | '/channels/'
     | '/settings/'
     | '/launches/$id/edit'
+    | '/launches/$id/preview'
+    | '/settings/ai/prompts'
+    | '/settings/automation/webhooks'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/livez'
@@ -533,6 +574,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/onboarding'
     | '/readyz'
+    | '/$'
     | '/ai'
     | '/automation'
     | '/comments'
@@ -577,6 +619,9 @@ export interface FileRouteTypes {
     | '/channels'
     | '/settings'
     | '/launches/$id/edit'
+    | '/launches/$id/preview'
+    | '/settings/ai/prompts'
+    | '/settings/automation/webhooks'
   id:
     | '__root__'
     | '/_app'
@@ -585,6 +630,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/onboarding'
     | '/readyz'
+    | '/_app/$'
     | '/_app/ai'
     | '/_app/automation'
     | '/_app/comments'
@@ -630,6 +676,9 @@ export interface FileRouteTypes {
     | '/_app/channels/'
     | '/_app/settings/'
     | '/_app/launches/$id_/edit'
+    | '/_app/launches/$id_/preview'
+    | '/_app/settings_/ai/prompts'
+    | '/_app/settings_/automation/webhooks'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -708,6 +757,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/$': {
+      id: '/_app/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AppSplatRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/ai': {
@@ -1018,6 +1074,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLaunchesIdEditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/launches/$id_/preview': {
+      id: '/_app/launches/$id_/preview'
+      path: '/launches/$id/preview'
+      fullPath: '/launches/$id/preview'
+      preLoaderRoute: typeof AppLaunchesIdPreviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings_/ai/prompts': {
+      id: '/_app/settings_/ai/prompts'
+      path: '/settings/ai/prompts'
+      fullPath: '/settings/ai/prompts'
+      preLoaderRoute: typeof AppSettingsAiPromptsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings_/automation/webhooks': {
+      id: '/_app/settings_/automation/webhooks'
+      path: '/settings/automation/webhooks'
+      fullPath: '/settings/automation/webhooks'
+      preLoaderRoute: typeof AppSettingsAutomationWebhooksRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -1040,6 +1117,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppSplatRoute: typeof AppSplatRoute
   AppAiRoute: typeof AppAiRoute
   AppAutomationRoute: typeof AppAutomationRoute
   AppCommentsRoute: typeof AppCommentsRoute
@@ -1056,9 +1134,13 @@ interface AppRouteChildren {
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
   AppLaunchesIdEditRoute: typeof AppLaunchesIdEditRoute
+  AppLaunchesIdPreviewRoute: typeof AppLaunchesIdPreviewRoute
+  AppSettingsAiPromptsRoute: typeof AppSettingsAiPromptsRoute
+  AppSettingsAutomationWebhooksRoute: typeof AppSettingsAutomationWebhooksRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppSplatRoute: AppSplatRoute,
   AppAiRoute: AppAiRoute,
   AppAutomationRoute: AppAutomationRoute,
   AppCommentsRoute: AppCommentsRoute,
@@ -1075,6 +1157,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
   AppLaunchesIdEditRoute: AppLaunchesIdEditRoute,
+  AppLaunchesIdPreviewRoute: AppLaunchesIdPreviewRoute,
+  AppSettingsAiPromptsRoute: AppSettingsAiPromptsRoute,
+  AppSettingsAutomationWebhooksRoute: AppSettingsAutomationWebhooksRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

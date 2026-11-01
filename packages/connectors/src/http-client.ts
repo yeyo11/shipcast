@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import { ConnectorError } from './http.ts';
+import { ConnectorError, failureText } from './http.ts';
 import { quotaOf, type Quota } from './quota.ts';
 
 /** What a provider said about its quota in one answer, for the counters */
@@ -311,7 +311,7 @@ export class HttpClient {
 
   #transportError(method: string, url: string, failure: Transport, timeoutMs: number, retryable: boolean, what: string | undefined): ConnectorError {
     const label = what ?? `${method} ${new URL(url).pathname}`;
-    const reason = failure.timedOut ? `timed out after ${timeoutMs} ms` : `could not reach the network: ${failure.error instanceof Error ? failure.error.message : String(failure.error)}`;
+    const reason = failure.timedOut ? `timed out after ${timeoutMs} ms` : `could not reach the network: ${failureText(failure.error)}`;
     // A POST that timed out may have gone through: trying it again could publish twice
     const error = new ConnectorError(this.network, `${label}: ${reason}`, undefined, retryable);
     error.cause = failure.error;

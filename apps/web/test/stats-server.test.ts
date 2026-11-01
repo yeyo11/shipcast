@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { indexStatusKey, type Repositories } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { DEFAULTS, parseStatsInput } from '../src/server/stats-search.ts';
-import { loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../src/server/stats.server.ts';
+import { familyWords, launchTitle, loadGrowth, loadSearch, loadStats, PAGE_SIZE, sortRanking } from '../src/server/stats.server.ts';
 
 const at = (day: string, hour = 6) => new Date(`2026-10-${day}T${String(hour).padStart(2, '0')}:00:00Z`);
 const TODAY = '2026-10-25';
@@ -23,7 +23,7 @@ async function seed(registry: Repositories) {
 test('the page reads its chart, totals, ranking and options from the registry', async () => {
   const registry = await memoryRegistry();
   const { account, launch } = await seed(registry);
-  const view = await loadStats(registry, { ...DEFAULTS, metric: 'reactions' }, TODAY);
+  const view = await loadStats(registry, { ...DEFAULTS, metric: 'reactions', groupBy: 'channel' }, TODAY);
 
   assert.equal(view.period.days, 30);
   assert.equal(view.chart.buckets.length, 30);
@@ -33,15 +33,39 @@ test('the page reads its chart, totals, ranking and options from the registry', 
   assert.equal(view.chart.groups[0]?.total, 30);
   assert.equal(view.chart.groups[0]?.values.length, view.chart.buckets.length);
   assert.equal(view.chart.groups[0]?.comparison, null, 'no comparison unless asked');
-  assert.equal(view.totals.previous, null);
+  assert.equal(view.totals.previous?.reactions ?? 0, 0, 'the totals always carry the period before, empty here');
   assert.equal(view.totals.lifetime.reactions, 30, 'where the likes stood at the period’s end');
-  assert.deepEqual(view.details, [{ metric: 'saves', value: 2, previous: null, lifetime: 2, channels: [{ channel: 'bluesky', label: 'Bluesky', value: 2, lifetime: 2 }] }], 'the second tier, with each channel’s part');
+  assert.deepEqual(view.details, [{ metric: 'saves', value: 2, previous: 0, lifetime: 2, channels: [{ channel: 'bluesky', label: 'Bluesky', value: 2, lifetime: 2 }] }], 'the second tier, with each channel’s part');
   assert.deepEqual(view.averages, []);
   assert.equal(view.ranking.total, 1);
   assert.equal(view.ranking.entries[0]?.lifetime.reactions, 30);
   assert.equal(view.ranking.entries[0]?.launchId, launch.id);
   assert.deepEqual(view.options.accounts, [{ value: String(account.id), label: '@me', hint: 'Bluesky', group: 'Bluesky' }]);
   assert.ok(view.options.channels.some((c) => c.value === 'bluesky'));
+});
+
+test('the total adds every channel up, and the page names the best launch and the top pieces', async () => {
+  const registry = await memoryRegistry();
+  const { launch } = await seed(registry);
+  const view = await loadStats(registry, { ...DEFAULTS, metric: 'reactions' }, TODAY);
+  assert.equal(DEFAULTS.groupBy, 'total');
+  assert.equal(view.chart.groups.length, 1);
+  assert.equal(view.chart.groups[0]?.key, 'total');
+  assert.equal(view.chart.groups[0]?.total, 30);
+  assert.equal(view.chart.groups[0]?.values.reduce((a, b) => a + b, 0), 30);
+  assert.deepEqual(view.best && { ...view.best, publishedOn: typeof view.best.publishedOn }, { launchId: launch.id, title: 'claudio v1.0.0', name: 'claudio', ref: 'v1.0.0', value: 30, publishedOn: 'string' });
+  assert.equal(view.top.length, 1);
+  assert.equal(view.top[0]?.title, 'claudio v1.0.0');
+  assert.equal(view.top[0]?.words.reactions, 'likes', 'Bluesky calls its reactions likes');
+  assert.equal(view.ranking.entries[0]?.title, 'claudio v1.0.0');
+});
+
+test('a family is named as its network names it, and a launch by its title, an article slug or its tag', () => {
+  assert.equal(familyWords('mastodon').reactions, 'favourites');
+  assert.deepEqual(familyWords(null), {});
+  assert.equal(launchTitle({ repo: 'yeyo11/claudio', ref: 'v1.5.0' }, null).title, 'claudio v1.5.0');
+  assert.deepEqual(launchTitle({ repo: 'yeyo11/launches', ref: 'article:notes-in-the-repo' }, null), { title: 'Notes in the repo', name: 'Notes in the repo', ref: null });
+  assert.equal(launchTitle({ repo: 'yeyo11/launches', ref: 'article:x' }, 'My notes').title, 'My notes');
 });
 
 test('comparing lays the previous period over the same buckets and reports its totals', async () => {
@@ -95,6 +119,7 @@ test('growth lists the accounts with snapshots, their change and their freshness
   assert.equal(a?.points.length, 2);
   assert.equal(a?.stale, false);
   assert.equal(a?.channel, 'bluesky');
+  assert.equal(a?.failing, false);
 });
 
 test('a view the server function parsed always loads', async () => {
@@ -121,5 +146,12 @@ test('the search tab lists each article page with what each engine said, and the
   assert.equal(entry?.google?.impressions, 40, 'what grew in the period');
   assert.deepEqual(entry?.google?.lifetime, { impressions: 40, clicks: 1 }, 'and where it stood at the period’s end');
   assert.equal(entry?.bing, null, 'Bing never read');
+  assert.equal(entry?.publishedOn?.length, 10, 'the day its article went out');
   assert.deepEqual((await loadSearch(registry, { from: '2026-09-26', to: TODAY, launches: [launch.id + 1] })).launches, []);
+
+  const { launch: bare } = await registry.launches.claim({ repo: 'yeyo11/sluice', ref: 'v2.0.0', trigger: 'release', kind: 'major', brand: 'personal' });
+  await registry.launches.setStatus(bare.id, 'published');
+  const withBare = await loadSearch(registry, { from: '2026-09-26', to: TODAY });
+  const listed = withBare.launches.find((l) => l.id === bare.id);
+  assert.deepEqual(listed && { pages: listed.pages, publishedOn: listed.publishedOn, title: listed.title }, { pages: [], publishedOn: null, title: 'sluice v2.0.0' }, 'a launch without an article stays, with nothing to index');
 });

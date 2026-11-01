@@ -3,8 +3,8 @@ import { useLenis } from 'lenis/react';
 import { NextStepProvider, NextStepReact, useNextStep, type ArrowComponentProps, type CardComponentProps, type NavigationAdapter } from 'nextstepjs';
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { listLaunches } from '../../server/launches.functions';
-import { CloseIcon } from '../ui/icons';
-import { notchFor, tourSteps, TOUR_NAME, type TourStep } from './steps';
+import { Icon } from '../kit/Icon';
+import { tourSteps, TOUR_NAME, type TourStep } from './steps';
 
 /*
  * The tour, on NextStep: a spotlight per step and a Cartel card. Loaded lazily by TourHost, so its
@@ -95,9 +95,9 @@ function isFixed(el: Element): boolean {
 
 /** The part of the window no bar covers: under a sticky header, over the phone's bottom bar */
 function freeBand(): { top: number; bottom: number } {
-  const header = document.querySelector('.top');
+  const header = [...document.querySelectorAll('.k-topbar, .k-dheader')].find((el) => el.getClientRects().length > 0);
   const stuck = header && ['sticky', 'fixed'].includes(getComputedStyle(header).position);
-  const bar = document.querySelector('.bottom-bar');
+  const bar = document.querySelector('.k-bottombar');
   const barShown = bar && bar.getClientRects().length > 0;
   return { top: stuck && header ? header.getBoundingClientRect().bottom : 0, bottom: barShown && bar ? bar.getBoundingClientRect().top : window.innerHeight };
 }
@@ -177,15 +177,9 @@ function useReveal(steps: TourStep[]) {
   );
 }
 
-/**
- * The pointer is part of the card: a notch on the edge facing the target, in the card's own fill and
- * outline (features.css). NextStep's positioning style is left out on purpose: it centres its caret
- * on the target, which for a full-width heading lands at the card's far corner, over the text.
- */
-function TourNotch({ side }: ArrowComponentProps) {
-  const notch = notchFor(side);
-  if (!notch) return null;
-  return <span className="tour-notch" data-edge={notch.edge} data-align={notch.align} aria-hidden="true" />;
+/** No pointer: the spotlight's yellow ring says what the card is about (board Tour) */
+function TourNotch(_: ArrowComponentProps) {
+  return null;
 }
 
 /**
@@ -193,7 +187,7 @@ function TourNotch({ side }: ArrowComponentProps) {
  * reader user hears the step and can act on it. NextStep's own keys still work: the arrows move,
  * Escape ends the tour.
  */
-function TourCard({ step, currentStep, totalSteps, skipTour, arrow }: CardComponentProps) {
+function TourCard({ step, currentStep, totalSteps, skipTour }: CardComponentProps) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const { go, moving } = useContext(ConductorContext);
@@ -203,39 +197,34 @@ function TourCard({ step, currentStep, totalSteps, skipTour, arrow }: CardCompon
     ref.current?.focus({ preventScroll: true });
   }, [currentStep]);
   return (
-    <div ref={ref} className="tour-card" role="dialog" aria-modal="false" aria-labelledby={titleId} aria-busy={moving} tabIndex={-1}>
-      <div className="tour-card-head">
-        <span className="tour-count">
-          {currentStep + 1} / {totalSteps}
+    <div ref={ref} className="k-card k-stamp tour-card home-tour" role="dialog" aria-modal="false" aria-labelledby={titleId} aria-busy={moving} tabIndex={-1}>
+      <div className="k-hrow k-between">
+        <span className="k-xs home-tour-count">
+          {currentStep + 1} of {totalSteps}
         </span>
-        <button type="button" className="ui-icon-button tour-close" onClick={skipTour} aria-label="End the tour">
-          <CloseIcon size={18} />
-        </button>
-      </div>
-      <h2 id={titleId} className="tour-title">
-        {step.title}
-      </h2>
-      <div className="tour-text">{step.content}</div>
-      <div className="tour-progress" aria-hidden="true">
-        <span style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }} />
-      </div>
-      <div className="row tour-actions">
-        {currentStep > 0 && (
-          <button type="button" className="btn btn-small" onClick={() => go(-1)} disabled={moving}>
-            Back
-          </button>
-        )}
-        <button type="button" className="btn btn-primary btn-small" onClick={() => go(1)} disabled={moving}>
-          {last ? 'Done' : 'Next'}
-        </button>
         {!last && (
-          <button type="button" className="btn-link tour-skip" onClick={skipTour}>
+          <button type="button" className="k-xs home-tour-skip" onClick={skipTour}>
             Skip the tour
           </button>
         )}
       </div>
+      <h2 id={titleId} className="k-d k-d30">
+        {step.title}
+      </h2>
+      <p className="k-sm home-tour-text">{step.content}</p>
+      <div className="k-hrow k-g8">
+        {currentStep > 0 && (
+          <button type="button" className="k-btn k-onyel" onClick={() => go(-1)} disabled={moving}>
+            Back
+          </button>
+        )}
+        <span className="k-grow" />
+        <button type="button" className="k-btn k-blk" onClick={() => go(1)} disabled={moving}>
+          {!last && <Icon name="chevronRight" size={18} />}
+          {last ? 'Done' : 'Next'}
+        </button>
+      </div>
       <p className="visually-hidden">Arrow keys move between steps; Escape ends the tour.</p>
-      {arrow}
     </div>
   );
 }
@@ -360,8 +349,8 @@ export default function TourRuntime({ onEnd }: { onEnd: () => void }) {
             arrowComponent={TourNotch}
             navigationAdapter={useTanStackAdapter}
             cardTransition={reduced ? { duration: 0 } : GLIDE}
-            shadowRgb="10, 10, 10"
-            shadowOpacity="0.6"
+            shadowRgb="0, 0, 0"
+            shadowOpacity="0.66"
             disableConsoleLogs
             scrollToTop={false}
             noInViewScroll
