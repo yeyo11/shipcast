@@ -16,11 +16,15 @@ import {
 } from '@shipcast/engine';
 import type { ApiRoute } from './api.ts';
 import { InvalidInput } from './input.ts';
+import { parseGrowthInput, parseSearchInput } from './stats-search.ts';
+import { loadGrowth, loadSearch } from './stats.server.ts';
 
 /*
  * The stats routes of the REST API, read-only, thin over packages/engine/src/stats.ts. Kept apart
  * from api.ts, which spreads them into its routes and its OpenAPI document; only types come back
- * from api.ts, so the two modules never need each other at load time. See docs/stats.md
+ * from api.ts, so the two modules never need each other at load time. The two tabs of the Stats page
+ * that are not one engine query (its accounts and its search engines) are served by the page's own
+ * loaders, so the API and the page read them the same way. See docs/stats.md
  */
 
 type JsonSchema = Record<string, unknown>;
@@ -38,6 +42,15 @@ function period(query: Query): { from: string; to: string } {
   const from = query.get('from') ?? daysBefore(to.slice(0, 10), 29);
   for (const [name, value] of [['from', from], ['to', to]] as const) if (value.length > 40) throw new InvalidInput(`${name} is too long`);
   return { from, to };
+}
+
+/**
+ * The page's period as days, for the routes served by the page's loaders: the last 30 days by
+ * default like every stats route, then checked as the page's server function checks it
+ */
+function days(query: Query): { from: string; to: string } {
+  const to = query.get('to') ?? today();
+  return { from: query.get('from') ?? (/^\d{4}-\d{2}-\d{2}$/.test(to) ? daysBefore(to, 29) : to), to };
 }
 
 function oneOf<T extends string>(query: Query, name: string, allowed: readonly T[], fallback?: T): T {
@@ -100,6 +113,10 @@ const FILTERS = [
   q('channels', 'Comma-separated channels or sources (`devto,bluesky,blog`)', { type: 'string' }),
   q('accounts', 'Comma-separated account ids; leaves out what no account published', { type: 'string' }),
   q('launches', 'Comma-separated launch ids', { type: 'string' }),
+];
+const DAYS = [
+  q('from', 'The first day, YYYY-MM-DD, included; 29 days before `to` when left out', { type: 'string', format: 'date' }),
+  q('to', 'The last day, YYYY-MM-DD, included; today when left out', { type: 'string', format: 'date' }),
 ];
 const GROUP_BY: readonly SeriesGroupBy[] = ['channel', 'account', 'launch'];
 const BUCKETS: readonly SeriesBucket[] = ['day', 'week'];
@@ -208,6 +225,32 @@ export const STATS_ROUTES: ApiRoute[] = [
       return ok(await accountGrowth(deps.registry, id, { from, to }));
     },
   },
+  {
+    method: 'GET',
+    path: '/stats/accounts',
+    scope: 'read',
+    operationId: 'statsAccounts',
+    summary: 'Every account with snapshots: its latest followers, following and posts, how fresh they are, and its growth in the period',
+    query: DAYS,
+    response: { status: 200, description: 'The Stats page’s accounts tab', schema: ref('StatsAccounts') },
+    async handle(deps, { url }) {
+      return ok(await loadGrowth(deps.registry, parseGrowthInput(days(url.searchParams))));
+    },
+  },
+  {
+    method: 'GET',
+    path: '/stats/search',
+    scope: 'read',
+    operationId: 'statsSearch',
+    summary: 'Each published launch’s blog articles in Google and Bing: whether each page is indexed, and the impressions and clicks per engine',
+    query: [...DAYS, q('launches', 'Comma-separated launch ids, at most 50; every published launch when left out', { type: 'string' })],
+    response: { status: 200, description: 'The Stats page’s search tab', schema: ref('StatsSearch') },
+    async handle(deps, { url }) {
+      const query = url.searchParams;
+      const launches = list(query, 'launches', positive);
+      return ok(await loadSearch(deps.registry, parseSearchInput({ ...days(query), ...(launches && { launches }) })));
+    },
+  },
 ];
 
 const windowSchema = { type: 'object', properties: { from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' } } };
@@ -219,6 +262,26 @@ const point = { type: 'object', properties: { bucket: { type: 'string', format: 
 const group = {
   type: 'object',
   properties: { key: { type: 'string' }, label: { type: 'string' }, total: { type: 'number' }, baseline: { type: 'number' }, points: { type: 'array', items: point } },
+};
+const counts = { type: 'object', properties: { followers: { type: ['integer', 'null'] }, following: { type: ['integer', 'null'] }, posts: { type: ['integer', 'null'] } } };
+const indexed = {
+  oneOf: [
+    { type: 'null', description: 'The engine has not been read for this page yet' },
+    { type: 'object', properties: { indexed: { type: 'boolean' }, coverage: { type: 'string', description: 'The engine’s own words' }, checkedAt: { type: 'string', format: 'date-time' } } },
+  ],
+};
+const engineNumbers = {
+  oneOf: [
+    { type: 'null', description: 'The engine has no reading for the launch' },
+    {
+      type: 'object',
+      properties: {
+        impressions: { type: 'number', description: 'What grew in the period' },
+        clicks: { type: 'number' },
+        lifetime: { type: 'object', description: 'Where they stood at the period’s end', properties: { impressions: { type: 'number' }, clicks: { type: 'number' } } },
+      },
+    },
+  ],
 };
 const change = { type: 'object', properties: { followers: { type: ['integer', 'null'] }, following: { type: ['integer', 'null'] }, posts: { type: ['integer', 'null'] } } };
 
@@ -303,6 +366,51 @@ export const STATS_SCHEMAS: Record<string, JsonSchema> = {
             posts: { type: ['integer', 'null'] },
             change,
             days: { type: ['integer', 'null'] },
+          },
+        },
+      },
+    },
+  },
+  StatsAccounts: {
+    type: 'object',
+    properties: {
+      from: { type: 'string', format: 'date' },
+      to: { type: 'string', format: 'date' },
+      accounts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            label: { type: 'string' },
+            network: { type: 'string' },
+            channel: { type: 'string' },
+            avatarUrl: { type: ['string', 'null'] },
+            syncedAt: { type: ['string', 'null'], format: 'date-time', description: 'When the account was last read' },
+            stale: { type: 'boolean', description: 'Not read in the last 36 hours, or never' },
+            latest: { oneOf: [{ type: 'null' }, { ...counts, description: 'The last snapshot, whenever it was taken' }] },
+            change: { ...change, description: 'Over the period: the last snapshot in it against the one before the period (or its first)' },
+            points: { type: 'array', items: { type: 'object', properties: { day: { type: 'string', format: 'date' }, ...counts.properties } } },
+          },
+        },
+      },
+    },
+  },
+  StatsSearch: {
+    type: 'object',
+    properties: {
+      from: { type: 'string', format: 'date' },
+      to: { type: 'string', format: 'date' },
+      launches: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' },
+            label: { type: 'string' },
+            google: engineNumbers,
+            bing: engineNumbers,
+            pages: { type: 'array', items: { type: 'object', properties: { lang: { type: 'string' }, url: { type: 'string' }, google: indexed, bing: indexed } } },
           },
         },
       },

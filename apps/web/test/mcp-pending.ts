@@ -10,11 +10,6 @@
  */
 
 export const PENDING: readonly string[] = [
-  // stats: packages/mcp/src/tools/stats.ts
-  'statsOverview',
-  'statsSeries',
-  'statsRanking',
-  'accountGrowth',
 
   // schedule: packages/mcp/src/tools/schedule.ts
   'scheduleLaunch',
