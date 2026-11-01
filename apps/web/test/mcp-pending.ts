@@ -14,12 +14,5 @@ export const PENDING: readonly string[] = [
 
 
 
-  // sources: packages/mcp/src/tools/sources.ts
-  'launchFromSources',
-  'uploadMedia',
-  'editLaunchPosts',
-  'deleteLaunchPosts',
-  'planLaunchDeletion',
-  'deleteLaunch',
 
 ];
