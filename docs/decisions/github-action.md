@@ -195,6 +195,16 @@ Postgres, the GitHub App); `--local` and `--action` choose explicitly.
   run. They are the SDK providers the app already uses, tested with the AI SDK's mock model; the
   first launch with a real key is the owner's or a developer's.
 
+## Publishing the CLI to npm
+
+`.github/workflows/npm-publish.yml` publishes `@yeyo11/shipcast` when a release is published: it checks
+out the tag, checks that the tag is `v` + `apps/cli/package.json`'s version, builds the package, packs
+it and runs the packed `shipcast --help` and `--version` from an empty directory, then
+`npm publish --access public --provenance`. It uses npm **trusted publishing** (OIDC, `id-token:
+write`), so no npm token is stored; the package's trusted publisher on npmjs.com names this repository
+and this workflow. A trusted publisher can only be set on a package that exists, so the first version
+is published by hand. Run by hand (`workflow_dispatch`) it takes a tag and defaults to a dry run.
+
 ## Rejected
 
 - **A JavaScript action (`runs.using: node24`) bundling everything**: GitHub runs such an action with

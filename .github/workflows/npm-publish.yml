@@ -1,0 +1,74 @@
+name: npm publish
+
+# Publishes the CLI, `@yeyo11/shipcast`, to npm when a release is published: the same build the
+# Action ships (apps/cli/scripts/build.ts, docs/decisions/github-action.md). npm trusted publishing
+# (OIDC): no token is stored; the package's trusted publisher on npmjs.com names this repository and
+# this workflow file. The very first version is published by hand, since a trusted publisher can only
+# be set on a package that exists.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (vX.Y.Z)
+        required: true
+        type: string
+      dry-run:
+        description: Build and pack only, publish nothing
+        type: boolean
+        default: true
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+
+      - name: The tag matches the CLI's version
+        run: |
+          version=$(node -p "require('./apps/cli/package.json').version")
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG but apps/cli/package.json says $version"; exit 1
+          fi
+
+      - run: pnpm --filter @shipcast/cli build
+
+      # The build's proof (docs/decisions/github-action.md): the packed tarball, installed into an
+      # empty directory, runs `shipcast --help`
+      - name: Pack and smoke-test
+        run: |
+          cd apps/cli/dist-npm
+          tarball=$(npm pack --silent)
+          mkdir -p "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
+          npm init -y >/dev/null
+          npm install --ignore-scripts "$GITHUB_WORKSPACE/apps/cli/dist-npm/$tarball"
+          npx shipcast --help
+          npx shipcast --version
+
+      - name: Publish
+        if: github.event_name == 'release' || inputs.dry-run == false
+        working-directory: apps/cli/dist-npm
+        run: npm publish --access public --provenance
