@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-31T12:04:51.33781303Z
-updated_at: 2026-11-01T14:13:03.898968978Z
+updated_at: 2026-11-01T15:54:53.454522567Z
 tags:
     - web-app
     - design
@@ -38,7 +38,8 @@ its board and matches it. It loads after the older stylesheets. Next to it:
   so they take the text colour.
 - `components/kit/Bars.tsx`: the phone `TopBar` (each screen renders its own: the mark, or a way
   back), the `BottomBar` and the `DesktopHeader`.
-- `components/kit/Sheet.tsx`: the bottom sheet (Base UI's drawer). `MoreSheet.tsx`: More.
+- `components/kit/Overlay.tsx`: every overlay, the bottom sheet on a phone and its kind's shape on a
+  desktop (below). `MoreSheet.tsx`: More. `Picker.tsx`: the pickers in place of native selects.
 - `components/kit/shell.tsx`: one read of what needs the owner for the bell, Comments' badge and
   More's failing accounts, and the state of the palette, the bell's sheet and More.
 
@@ -204,6 +205,36 @@ went out shown like the ones that did. Changed:
 - **Network marks drawn whole**: the glyph table kept one path per icon and every screen filled it,
   so the newsletter showed as a chevron and Threads as a blob. It now keeps each icon's shapes and
   whether it is a line, and one component (`components/kit/NetworkGlyph.tsx`) draws every mark.
+
+## Overlays on a desktop
+
+Until 2026-11-01 every overlay was the phone's bottom sheet at every width, full width or a 560 px
+column on a desktop; the owner found it ugly. Now one component, `components/kit/Overlay.tsx`, has a
+`kind`, and the shape follows the window's width (`usePhone`, `matchMedia('(max-width: 959px)')`,
+never the kind of pointer):
+
+| Kind | Below 960 px | From 960 px (boards) | Used for |
+|---|---|---|---|
+| `menu` | bottom sheet | a 280 px menu card hung from its button, right-aligned (DesktopLaunchMenu); arrows, Home and End move between items | the launch's ⋯, "Edit what went out", a launch row's ⋯, an account's ⋯ |
+| `drawer` | bottom sheet | a 440 px panel from the right, full height, scrim, its own title and round close, the body scrolling between a fixed header and footer (DesktopDrawer); `wide` makes it 720 px (never closer than 240 px to the left edge) | filters (Launches, Stats, Comments), replies per channel, connect a network, claudio, spend limits, rule editor; wide: edit a post, edit several, prompt preview, locked rules, last round, work in progress, add brand.yml |
+| `dialog` | bottom sheet | a 480 px card, 200 px from the top, answers on the right (DesktopConfirm); never wider | delete a launch, unpublish, disconnect and rename an account, send a reply, the settings' confirmations and the secret shown once, a profile change |
+| `popover` | bottom sheet | a 420 px card hung from what it is about | the bell, a channel's mark and "+N", the schedule and Move picker, the onboarding's languages, the day picker |
+
+The content is the same in every shape: `heading` is the sheet's and the dialog's big title, the
+drawer's header; `footer` holds the closing actions; what only the sheet needs (its own heading in a
+menu, a Close button) carries `k-sheet-only`. A menu or popover opened from code hangs from the
+element given as `anchor`, or from what had the focus when it opened, and gives the focus back to
+it. Full-page editors (the drafts, the prompts, Write) stay pages.
+
+The launch page's menu (`components/launch/launch-menu.ts`) offers "Launch it again" whenever
+`canRelaunch` holds, on any tab, "The job's log" and "Copy the error" for a failed launch, and Delete
+behind `launch-delete`; with nothing to offer there is no ⋯. On a desktop "Launch it again" is the
+yellow button beside the ⋯ (unless the failed card already shows it) and the menu leaves it out.
+
+No native control is left: the selects are the kit's `PickerSelect` / `PickerCombobox` (a chip on
+the Launches desktop filters), the days `ui/DatePicker` and the times `ui/TimeField`, both in the
+kit's look; the older `ui/Menu` wears the kit's menu card. `color-scheme` follows the theme for
+whatever the browser still draws.
 
 ## Related
 
