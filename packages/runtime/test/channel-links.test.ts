@@ -58,8 +58,17 @@ test('Threads and Telegram: the text’s link is tagged, unless the tags would p
     await publisher.publish!({ text: `New: ${ARTICLE}?ref=${channel}`, imageUrl: 'https://josegarrido.dev/og.jpg' }, tracking);
     const full = `${'a'.repeat(limit - `${ARTICLE}?ref=${channel}`.length - 1)} ${ARTICLE}?ref=${channel}`;
     await publisher.publish!({ text: full }, tracking);
-    assert.deepEqual(sent(), [{ text: `New: ${tagged(channel)}`, imageUrl: 'https://josegarrido.dev/og.jpg' }, { text: full }], channel);
+    // Telegram's text goes as its HTML, where the tags' `&` is an entity Telegram reads back
+    const html = (text: string) => (channel === 'telegram' ? text.replaceAll('&', '&amp;') : text);
+    const mode = channel === 'telegram' ? { parseMode: 'HTML' } : {};
+    assert.deepEqual(sent(), [{ text: `New: ${html(tagged(channel))}`, imageUrl: 'https://josegarrido.dev/og.jpg', ...mode }, { text: full, ...mode }], channel);
   }
+});
+
+test('Telegram: a draft’s light Markdown goes as Telegram’s HTML, escaped, its links tagged first', async () => {
+  const { publisher, sent } = publisherOf('telegram');
+  await publisher.publish!({ text: `**claudio 1.0** is _out_: [read it](${ARTICLE}?ref=telegram) <3 & more` }, tracking);
+  assert.deepEqual(sent(), [{ text: `<b>claudio 1.0</b> is <i>out</i>: <a href="${tagged('telegram').replaceAll('&', '&amp;')}">read it</a> &lt;3 &amp; more`, parseMode: 'HTML' }]);
 });
 
 test('Discord: the message’s link and the embed are tagged; a full message keeps its ?ref=', async () => {
@@ -147,8 +156,8 @@ test('edits: each channel that edits tags the edited text as its post was, with 
   await editorOf('youtube', { youtube: keep('youtube') }).edit('y', { title: 'Only the title' }, { ...tracking, kind: 'post:video' });
   assert.deepEqual(sent, [
     ['mastodon', { text: `Fixed ${tagged('mastodon')}` }],
-    ['telegram', { text: `Fixed ${tagged('telegram')}` }],
-    ['telegram', { text: full }],
+    ['telegram', { text: `Fixed ${tagged('telegram').replaceAll('&', '&amp;')}`, parseMode: 'HTML' }],
+    ['telegram', { text: full, parseMode: 'HTML' }],
     ['discord', { content: `Fixed ${tagged('discord')}` }],
     ['githubDiscussions', { title: 'T', body: `Read [it](${tagged('github')}).` }],
     ['mastodon', { text: `As written ${ARTICLE}?ref=mastodon` }],

@@ -1,5 +1,5 @@
 import { ConnectorError, Telegram } from '@shipcast/connectors';
-import { telegram, trackWithinLimit } from '@shipcast/schema';
+import { telegram, telegramHtml, trackWithinLimit, type LinkTracking } from '@shipcast/schema';
 import { channelAdapter } from './adapter.ts';
 
 /** Telegram: a bot that is an admin of the channel; posts, edits and deletes there, and tells the owner what is waiting */
@@ -28,10 +28,11 @@ export const telegramAdapter = channelAdapter({
       },
     },
   },
-  // Telegram counts a link's every character: a text the tags would push over the limit keeps its ?ref=
-  publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: trackWithinLimit('telegram', post.text, tracking) }) }),
-  // An edit's text is tagged as the post's was, within the same limit
-  editor: (c) => ({ edit: (id, e, tracking) => c.edit(id, { ...e, text: trackWithinLimit('telegram', e.text, tracking) }), delete: (id) => c.delete(id) }),
+  // Telegram counts a link's every character: a text the tags would push over the limit keeps its
+  // ?ref=. The draft's light Markdown is tagged first, then sent as Telegram's HTML, so its bold is bold
+  publisher: (c) => ({ publish: (post, tracking) => c.publish({ ...post, text: formatted(post.text, tracking), parseMode: 'HTML' }) }),
+  // An edit's text is tagged and formatted as the post's was, within the same limit
+  editor: (c) => ({ edit: (id, e, tracking) => c.edit(id, { ...e, text: formatted(e.text, tracking), parseMode: 'HTML' }), delete: (id) => c.delete(id) }),
   // Only from the changes Telegram pushed, every post at once, each page kept before it is confirmed:
   // a post with none kept its reactions, and one never told about has no reading. There is no read of
   // one post, since reading the changes for one would confirm, and lose, every other post's
@@ -48,3 +49,8 @@ export const telegramAdapter = channelAdapter({
     return chat ? new Telegram({ botToken: credentials.secrets.botToken!, chatId: chat, fetch: http }) : undefined;
   },
 });
+
+/** A post's Markdown as Telegram takes it: its links tagged within the limit, then its HTML */
+function formatted(markdown: string, tracking: LinkTracking | undefined): string {
+  return telegramHtml(trackWithinLimit('telegram', markdown, tracking));
+}
