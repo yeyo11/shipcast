@@ -1,5 +1,5 @@
-import { SOURCE_LIMITS, type ArticleInput, type SourceInput, type SourcesLaunchInput } from '@shipcast/engine';
-import { CHANNELS, type Channel } from '@shipcast/schema';
+import { ARTICLE_IMAGE_NAME, SOURCE_LIMITS, type ArticleImage, type ArticleInput, type SourceInput, type SourcesLaunchInput } from '@shipcast/engine';
+import { CHANNELS, imageAltProblem, LIMITS, type Channel } from '@shipcast/schema';
 import { id, InvalidInput, list, object, text } from './input.ts';
 
 /*
@@ -29,7 +29,20 @@ export function articleRequest(input: unknown): { input: ArticleInput; direct: b
   const title = text(o.title, 'title', 200).trim();
   const markdown = text(o.markdown, 'markdown', 200_000);
   if (!title || !markdown.trim()) throw new InvalidInput('an article needs a title and a body');
-  return { input: { title, markdown, lang, channels }, direct: o.direct === true };
+  // Every image says what it shows, as the launch image does: refused before any work starts
+  const alt = imageAltProblem(markdown, LIMITS.imageAlt);
+  if (alt) throw new InvalidInput(alt);
+  if (o.images !== undefined && o.images !== null && !Array.isArray(o.images)) throw new InvalidInput('images must be a list');
+  const images = ((o.images ?? []) as unknown[]).map((value, i): ArticleImage => {
+    const image = object(value, `images[${i}]`);
+    const sha256 = text(image.sha256, `images[${i}].sha256`, 64);
+    const name = text(image.name, `images[${i}].name`, 40);
+    if (!/^[0-9a-f]{64}$/.test(sha256)) throw new InvalidInput(`images[${i}].sha256 is the sha256 the upload answered`);
+    if (!ARTICLE_IMAGE_NAME.test(name) || !sha256.startsWith(name.split('.')[0]!)) throw new InvalidInput(`images[${i}].name is the upload's name: its sha256's first 16 characters and its type`);
+    return { sha256, name };
+  });
+  if (images.length > 30) throw new InvalidInput('an article takes at most 30 images');
+  return { input: { title, markdown, lang, channels, ...(images.length > 0 && { images }) }, direct: o.direct === true };
 }
 
 const optional = (value: unknown, name: string, max: number) => (value === undefined || value === null || value === '' ? undefined : text(value, name, max));

@@ -89,9 +89,14 @@ export const tools: ShipcastTool[] = [
     operations: ['writeArticle'],
     input: z.object({
       title: z.string().min(1).max(200).describe('The article\'s title'),
-      markdown: z.string().min(1).max(200_000).describe('The body in Markdown, without a top-level heading'),
+      markdown: z.string().min(1).max(200_000).describe('The body in Markdown, without a top-level heading. An image is ![what it shows](/articles/<slug>/<name>), its alt text required (at most 140 characters)'),
       lang: z.enum(['en', 'es']).describe('The language it is written in'),
       channels: z.array(channel).optional().describe('Channels to announce it on, besides the blog'),
+      images: z
+        .array(z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/), name: z.string().describe('The articleName upload_media answered') }))
+        .max(30)
+        .optional()
+        .describe('Images uploaded with upload_media that the body links by name; they go to the article\'s folder on the site'),
       direct: z.boolean().optional().describe('Publish without a drafts pull request to review; false by default'),
       confirm: confirmDirect,
     }),
@@ -99,7 +104,7 @@ export const tools: ShipcastTool[] = [
     run: async (api, args) => {
       if (args.direct === true) requireConfirm(args.confirm, 'write_article', `Publishing "${args.title}" without reviewing its drafts`);
       return accepted(
-        await api.call('POST', '/articles', { body: { title: args.title, markdown: args.markdown, lang: args.lang, channels: args.channels ?? [], direct: args.direct === true } }),
+        await api.call('POST', '/articles', { body: { title: args.title, markdown: args.markdown, lang: args.lang, channels: args.channels ?? [], ...(args.images && { images: args.images }), direct: args.direct === true } }),
         `Writing "${args.title}"`,
       );
     },

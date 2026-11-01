@@ -212,6 +212,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     triggers,
     removed,
+    media,
   };
 
   return {

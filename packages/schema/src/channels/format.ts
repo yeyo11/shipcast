@@ -273,3 +273,18 @@ export function formatProblem(network: string, text: string, profile: EditorProf
   const listed = what.length > 1 ? `${what.slice(0, -1).join(', ')} and ${what.at(-1)}` : what[0]!;
   return `${network} does not show ${listed} (${problems[0]!.sample}): ${profile.format === 'plain' ? 'write it as plain text' : 'take it out'}`;
 }
+
+/**
+ * What is wrong with a text's images, if anything: an image needs alt text, and no more than `max`
+ * characters of it (the blog's `imageAlt` cap, as for the launch image). Images in code are not images.
+ */
+export function imageAltProblem(markdown: string, max: number): string | undefined {
+  const outside = markdown.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[ \t]*$/gm, '').replace(/(`+)[^`]*?\1/g, '');
+  for (const match of outside.matchAll(/!\[([^\]]*)\]\(([^)\s]*)(?:\s+"[^"]*")?\)/g)) {
+    const alt = match[1]!.trim();
+    const where = match[2]!.split('/').at(-1) || match[2]!;
+    if (!alt) return `The image ${where} has no alt text: say in a few words what it shows`;
+    if (alt.length > max) return `The alt text of ${where} has ${alt.length} characters; at most ${max}`;
+  }
+  return undefined;
+}

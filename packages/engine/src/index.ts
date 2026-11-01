@@ -26,6 +26,7 @@ export * from './stats.ts';
 export * from './comments.ts';
 export * from './db/snapshot.ts';
 export * from './assistant.ts';
+export * from './article-images.ts';
 export * from './fake-ai.ts';
 export * from './profile.ts';
 export * from './telemetry/histogram.ts';

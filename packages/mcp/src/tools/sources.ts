@@ -94,7 +94,7 @@ export const tools: ShipcastTool[] = [
     name: 'upload_media',
     title: 'Upload an image',
     description:
-      'Upload an image for launch_from_sources: PNG, JPEG, GIF or WebP, up to 20 MiB, given as base64. Shipcast removes its metadata (EXIF, GPS) and answers the stored file; name it in launch_from_sources as a source { kind: "media", sha256 } with that sha256. Uploading publishes nothing. Only on a Shipcast with launches from sources turned on.',
+      'Upload an image for launch_from_sources or for an article\'s body (write_article): PNG, JPEG, GIF or WebP, up to 20 MiB, given as base64. Shipcast removes its metadata (EXIF, GPS) and answers the stored file. Name it in launch_from_sources as a source { kind: "media", sha256 } with that sha256; in write_article, link it in the body as ![what it shows](/articles/<slug>/<articleName>) and list { sha256, name: articleName } in `images`. Uploading publishes nothing.',
     operations: ['uploadMedia'],
     input: z.object({
       image_base64: z.string().min(1).describe('The image file\'s bytes, base64-encoded; a data: URL is taken too'),
@@ -103,8 +103,9 @@ export const tools: ShipcastTool[] = [
     hints: HINTS.setting,
     run: async (api, args) => {
       const bytes = imageBytes(args.image_base64);
-      const answer = await api.call<{ file: { sha256: string } }>('POST', '/media', { raw: { bytes, contentType: 'application/octet-stream' } });
-      return { ...answer, note: `Name this image in launch_from_sources as { kind: "media", sha256: "${answer.file.sha256}" }, with a name and alt text.` };
+      const answer = await api.call<{ file: { sha256: string; articleName?: string } }>('POST', '/media', { raw: { bytes, contentType: 'application/octet-stream' } });
+      const article = answer.file.articleName ? ` In write_article, link it as ![what it shows](/articles/<slug>/${answer.file.articleName}) and list { sha256: "${answer.file.sha256}", name: "${answer.file.articleName}" } in images.` : '';
+      return { ...answer, note: `Name this image in launch_from_sources as { kind: "media", sha256: "${answer.file.sha256}" }, with a name and alt text.${article}` };
     },
   }),
   tool({

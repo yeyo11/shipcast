@@ -1,3 +1,4 @@
+import { articleImageFiles, placeImages, type ArticleImage } from './article-images.ts';
 import {
   AI_TASK_DEFINITIONS,
   CHANNELS,
@@ -23,6 +24,8 @@ export interface ArticleInput {
   lang: Language;
   /** The channels besides the blog, which always carries it */
   channels: Channel[];
+  /** Images uploaded for the body, which links them by name; one it does not name is left out */
+  images?: ArticleImage[];
 }
 
 /** `Running Claude Code as a service` → `running-claude-code-as-a-service` */
@@ -91,7 +94,16 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
   const fail = async (problems: string[]): Promise<DraftResult> => ({ ok: false, launch: await registry.launches.setStatus(launch.id, 'failed', problems.join('\n')), problems });
   await registry.launches.setStatus(launch.id, 'generating');
 
-  const generated = await generateArticlePack(input, brand, deps);
+  // The body's images linked at the article's own folder before anything reads it, translations included
+  const dir = launchDir(launch);
+  const placed = placeImages(input.markdown, input.images ?? [], dir);
+  let images: Awaited<ReturnType<typeof articleImageFiles>>;
+  try {
+    images = await articleImageFiles(placed.used, dir, deps.media);
+  } catch (error) {
+    return fail([error instanceof Error ? error.message : String(error)]);
+  }
+  const generated = await generateArticlePack({ ...input, markdown: placed.markdown }, brand, deps);
   if (!generated.ok) return fail(generated.problems);
   const { pack, config } = generated;
 
@@ -113,11 +125,11 @@ export async function draftArticle(launch: Launch, input: ArticleInput, brand: B
   });
   if (!assets.ok) return fail([assets.problem]);
 
-  const dir = launchDir(launch);
   const now = (deps.now ?? (() => new Date()))();
   const files = [
     ...(await keepPubDates(renderDrafts(pack, launch, config, brand, now, assets.media.ogPng, screenshotPaths(assets.files)), deps.github, deps.launchesRepo, now)),
     ...assets.files,
+    ...images,
   ];
   const configText = `# The channels chosen in Shipcast for this article\n${stringify({ enabled: true, brand: brand.id, publishing: config.publishing })}`;
   files.push({ path: `${dir}/launch.yml`, content: configText });

@@ -1,6 +1,7 @@
 import { R2MediaStore, unavailableMediaStore, type MediaStore } from '@shipcast/engine';
 import { ConfigError, loadMediaStoreConfig, MEDIA_STORE_VARIABLES } from './config.ts';
 import { fakeNetworks } from './preview/guard.ts';
+import { PreviewMediaStore } from './preview/media.ts';
 
 /**
  * The process's media store (docs/media-store.md): R2 from SHIPCAST_MEDIA_* in .env. Every launch is
@@ -14,6 +15,8 @@ export function mediaStoreFor(env: NodeJS.ProcessEnv, options: { fetch?: typeof 
   if (!config) {
     const missing = `missing in .env: ${MEDIA_STORE_VARIABLES.join(', ')} (see .env.example)`;
     if (env.SHIPCAST_APP_TLS === 'proxy' && !fakeNetworks(env)) throw new ConfigError(`the media store is required on a server: ${missing}`);
+    // A local preview with fake networks keeps its uploads in memory, so the editor's images can be tried there
+    if (env.SHIPCAST_APP_TLS === 'off' && fakeNetworks(env)) return new PreviewMediaStore();
     return unavailableMediaStore(missing);
   }
   const { region, ...bucket } = config;

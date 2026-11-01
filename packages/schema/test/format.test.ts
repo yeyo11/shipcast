@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { channelTables, CHANNEL_DEFINITIONS, checkFormat, EDITOR_PROFILES, editorProfile, formatProblem, PIECE_LIMITS, stripFormat, telegramHtml, telegramLength, telegramVisibleText, type EditorProfile } from '../src/index.ts';
+import { channelTables, CHANNEL_DEFINITIONS, checkFormat, imageAltProblem, EDITOR_PROFILES, editorProfile, formatProblem, PIECE_LIMITS, stripFormat, telegramHtml, telegramLength, telegramVisibleText, type EditorProfile } from '../src/index.ts';
 
 /*
  * The formatting profile on each channel's definition and the checks that read it
@@ -103,4 +103,11 @@ test('Telegram counts the text a reader sees: not the Markdown, the tags or a li
   assert.equal(telegramLength('**bold** [label](https://x.dev/a/long/url)'), 10);
   const text = `**${'a'.repeat(898)}**`;
   assert.equal(PIECE_LIMITS.telegram!.length(text), 898);
+});
+
+test('an image needs alt text, within the blog’s cap; an image in code is not one', () => {
+  assert.equal(imageAltProblem('![The setup](/a/shot.png)', 140), undefined);
+  assert.equal(imageAltProblem('Text ![ ](/articles/x/shot.png)', 140), 'The image shot.png has no alt text: say in a few words what it shows');
+  assert.equal(imageAltProblem(`![${'a'.repeat(141)}](/s.png)`, 140), 'The alt text of s.png has 141 characters; at most 140');
+  assert.equal(imageAltProblem('`![](/s.png)`\n\n```\n![](/t.png)\n```', 140), undefined);
 });

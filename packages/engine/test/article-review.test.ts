@@ -114,3 +114,53 @@ test('an article keeps the owner’s words, gets its translation and pieces, and
   assert.ok(pr.files.some((f) => f.path === 'articles/my-own-title/bluesky.md'));
   assert.ok(!pr.files.some((f) => f.path.startsWith('public/covers/')), 'an article draws no project cover');
 });
+
+test('an article’s uploaded images go with it: linked at its own folder, committed beside it, those it names only', async () => {
+  const { MemoryMediaStore } = await import('../src/testing/index.ts');
+  const media = new MemoryMediaStore();
+  const shot = await media.put(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]), 'image/png');
+  const unused = await media.put(new Uint8Array([9, 9, 9]), 'image/png');
+  const github = fakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML });
+  const pack = { ...launchPack, project: { name: 'x', repo: 'https://github.com/x/y' }, devto: undefined, mastodon: undefined };
+  const d = { ...(await deps(github, pack)), media };
+  const brand = await loadBrand(github, 'yeyo11/launches');
+  const name = `${shot.sha256.slice(0, 16)}.png`;
+  // Linked under the slug the title had when the image was added: the folder follows the title it has now
+  const input = {
+    title: 'With a picture',
+    markdown: `Before.\n\n![The setup, applied](/articles/an-older-title/${name})\n\nAfter.`,
+    lang: 'en' as const,
+    channels: [],
+    images: [{ sha256: shot.sha256, name }, { sha256: unused.sha256, name: `${unused.sha256.slice(0, 16)}.png` }],
+  };
+  const { launch } = await claimArticle(input, brand, d);
+  const result = await draftArticle(launch, input, brand, d);
+  assert.ok(result.ok, result.ok ? '' : result.problems.join('; '));
+  assert.match(promptOf(d.model), new RegExp(`/articles/with-a-picture/${name}`));
+  const pr = github.opened[0]!;
+  const en = pr.files.find((f) => f.path === 'src/content/posts/en/claudio.md');
+  assert.match(en && 'content' in en ? en.content : '', new RegExp(`!\\[The setup, applied\\]\\(/articles/with-a-picture/${name}\\)`));
+  const image = pr.files.find((f) => f.path === `public/articles/with-a-picture/${name}`);
+  assert.ok(image && 'bytes' in image, 'the image is committed beside the article');
+  assert.deepEqual([...(image as { bytes: Uint8Array }).bytes], [0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  assert.ok(!pr.files.some((f) => f.path.includes(unused.sha256.slice(0, 16))), 'an upload the body does not link stays out');
+});
+
+test('an article whose image is not in the media store fails with the reason', async () => {
+  const { MemoryMediaStore } = await import('../src/testing/index.ts');
+  const github = fakeGitHub({ 'yeyo11/launches/brand.yml@HEAD': BRAND_YML });
+  const d = { ...(await deps(github)), media: new MemoryMediaStore() };
+  const brand = await loadBrand(github, 'yeyo11/launches');
+  const sha256 = 'a'.repeat(64);
+  const input = { title: 'Missing', markdown: `![x](/articles/missing/${'a'.repeat(16)}.png)`, lang: 'en' as const, channels: [], images: [{ sha256, name: `${'a'.repeat(16)}.png` }] };
+  const { launch } = await claimArticle(input, brand, d);
+  const result = await draftArticle(launch, input, brand, d);
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? '' : result.problems.join(' '), /is not in the media store: upload it again/);
+});
+
+test('held in the app, an article’s image is one of its own media, which the site’s commit carries', async () => {
+  const { storedFile } = await import('../src/launch-store.ts');
+  const article = { repo: 'yeyo11/launches', ref: 'article:with-a-picture' };
+  assert.deepEqual(storedFile(article, 'public/articles/with-a-picture/0123456789abcdef.png'), { kind: 'media', publicPath: '/articles/with-a-picture/0123456789abcdef.png', role: 'other', shared: false });
+});

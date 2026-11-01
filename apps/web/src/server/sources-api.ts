@@ -1,4 +1,4 @@
-import { MAX_UPLOAD_BYTES, type SourceMedia, type SourcesLaunchInput } from '@shipcast/engine';
+import { articleImageName, MAX_UPLOAD_BYTES, type SourceMedia, type SourcesLaunchInput } from '@shipcast/engine';
 import type { ApiRoute } from './api.ts';
 import { InvalidInput } from './input.ts';
 import { sourcesRequest } from './requests.ts';
@@ -74,7 +74,7 @@ export async function pageUpload(request: Request, deps: { upload: SourcesApi['u
   const stored = await deps.upload(bytes);
   if (!stored.ok) return page(409, stored);
   const { sha256, mime, width, height } = stored.file;
-  return page(200, { ok: true, file: { sha256, mime, width, height } });
+  return page(200, { ok: true, file: { sha256, mime, width, height, articleName: articleImageName(sha256, mime) } });
 }
 
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
@@ -100,8 +100,15 @@ const sourceSchema: JsonSchema = {
 export const SOURCES_SCHEMAS: Record<string, JsonSchema> = {
   UploadedFile: {
     type: 'object',
-    required: ['sha256', 'mime', 'bytes'],
-    properties: { sha256: { type: 'string' }, mime: { type: 'string' }, bytes: { type: 'integer' }, width: { type: ['integer', 'null'] }, height: { type: ['integer', 'null'] } },
+    required: ['sha256', 'mime', 'bytes', 'articleName'],
+    properties: {
+      sha256: { type: 'string' },
+      mime: { type: 'string' },
+      bytes: { type: 'integer' },
+      width: { type: ['integer', 'null'] },
+      height: { type: ['integer', 'null'] },
+      articleName: { type: 'string', description: 'Its name in an article’s folder: link it as `![alt](/articles/<slug>/<articleName>)` and list it in POST /articles `images`' },
+    },
   },
 };
 
@@ -112,7 +119,7 @@ export const SOURCES_ROUTES: ApiRoute[] = [
     scope: 'write',
     operationId: 'uploadMedia',
     available: (deps) => deps.sources !== undefined,
-    summary: 'Upload an image for a launch made from sources (PNG, JPEG, GIF or WebP; its metadata is removed); name it in the launch by its sha256',
+    summary: 'Upload an image (PNG, JPEG, GIF or WebP; its metadata is removed): a launch made from sources names it by its sha256, an article written by hand links it by its `articleName`',
     body: { type: 'string', format: 'binary' },
     bodyType: 'application/octet-stream',
     response: { status: 200, description: 'The file as stored', schema: { type: 'object', required: ['file'], properties: { file: ref('UploadedFile') } } },
@@ -123,7 +130,7 @@ export const SOURCES_ROUTES: ApiRoute[] = [
       const stored = await deps.sources.upload(bytes);
       if (!stored.ok) return failure(409, 'refused', stored.problem);
       const { sha256, mime, bytes: size, width, height } = stored.file;
-      return answer(200, { file: { sha256, mime, bytes: size, width, height } });
+      return answer(200, { file: { sha256, mime, bytes: size, width, height, articleName: articleImageName(sha256, mime) } });
     },
   },
   {

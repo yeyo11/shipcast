@@ -1,3 +1,4 @@
+import type { MediaStore } from './media/store.ts';
 import { formatIssues, parseBrand, parseLaunchConfig, parseProjects, PROJECTS_PATH, resolvePack, type Brand, type ContentPack, type LaunchConfig, type Projects } from '@shipcast/schema';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
@@ -59,6 +60,8 @@ export interface PipelineDeps {
   triggers?: Pick<TriggerService, 'rules' | 'claimKeeping' | 'channelsText'>;
   /** Whether the owner removed the launch a dedupe key names, so no event launches it again (docs/launch-delete.md) */
   removed?: (dedupeKey: string) => Promise<boolean>;
+  /** The media store, which an article's uploaded images are read back from for its commit */
+  media?: Pick<MediaStore, 'get'>;
 }
 
 /** The prompts and tone a task on the runner is written with: the settings', or the ones in code */

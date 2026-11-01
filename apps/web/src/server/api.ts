@@ -504,9 +504,15 @@ export const ROUTES: ApiRoute[] = [
       required: ['title', 'markdown', 'lang'],
       properties: {
         title: { type: 'string', maxLength: 200 },
-        markdown: { type: 'string', description: 'The body, without a top-level heading' },
+        markdown: { type: 'string', description: 'The body, without a top-level heading. An image is `![what it shows](/articles/<slug>/<name>)`, its alt text required (at most 140 characters)' },
         lang: { type: 'string', enum: ['en', 'es'] },
         channels: { type: 'array', items: { type: 'string' }, description: 'Channels besides the blog' },
+        images: {
+          type: 'array',
+          maxItems: 30,
+          description: 'Images uploaded with POST /media that the body links by `name`; committed with the article to its folder on the site',
+          items: { type: 'object', required: ['sha256', 'name'], properties: { sha256: { type: 'string' }, name: { type: 'string', description: 'What POST /media answered as `articleName`' } } },
+        },
         direct: { type: 'boolean', default: false },
       },
     },

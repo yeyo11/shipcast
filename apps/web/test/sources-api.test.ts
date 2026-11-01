@@ -81,7 +81,7 @@ test('an upload is read up to the cap and no further, whatever its length says',
   });
   const ok = await handleApi(request('/media', token, new Uint8Array([1, 2, 3]), 'application/octet-stream'), deps);
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { file: { sha256: 'a'.repeat(64), mime: 'image/png', bytes: 3, width: 1, height: 1 } });
+  assert.deepEqual(await ok.json(), { file: { sha256: 'a'.repeat(64), mime: 'image/png', bytes: 3, width: 1, height: 1, articleName: `${'a'.repeat(16)}.png` } });
 
   const declared = { headers: new Headers({ 'content-length': String(MAX_UPLOAD_BYTES + 1) }), body: null } as unknown as Request;
   assert.equal(await readCapped(declared, MAX_UPLOAD_BYTES), undefined, 'a declared length over the cap is not read at all');
@@ -127,7 +127,7 @@ test('the page’s upload: the flag and the length are checked before a byte is 
 
   const ok = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1, 2, 3]) }), { upload });
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { ok: true, file: { sha256: 'b'.repeat(64), mime: 'image/png', width: 2, height: 3 } });
+  assert.deepEqual(await ok.json(), { ok: true, file: { sha256: 'b'.repeat(64), mime: 'image/png', width: 2, height: 3, articleName: `${'b'.repeat(16)}.png` } });
   assert.deepEqual(uploaded, [3]);
 
   const refused = await pageUpload(new Request('https://shipcast.example/api/sources/media', { method: 'POST', body: new Uint8Array([1]) }), { upload: async () => ({ ok: false, problem: 'only PNG, JPEG, GIF or WebP' }) });

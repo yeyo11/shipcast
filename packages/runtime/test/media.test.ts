@@ -24,6 +24,13 @@ test('off a server, with no bucket in .env, the store refuses every call, naming
   }
 });
 
+test('a local preview with fake networks and no bucket keeps its uploads in memory, for the editor’s images', async () => {
+  const store = mediaStoreFor({ SHIPCAST_APP_TLS: 'off', SHIPCAST_PREVIEW_FAKE_NETWORKS: '1' });
+  assert.equal(store.storage, 'preview-memory');
+  const put = await store.put(new Uint8Array([1, 2, 3]), 'image/png');
+  assert.deepEqual([...(await store.get(put.key))!.body], [1, 2, 3]);
+});
+
 test('a server (behind its proxy, not a preview) does not start without the bucket', () => {
   assert.throws(() => mediaStoreFor({ SHIPCAST_APP_TLS: 'proxy' }), (error: unknown) => error instanceof ConfigError && /required on a server: missing in \.env: SHIPCAST_MEDIA_ENDPOINT/.test(error.message));
   assert.ok(mediaStoreFor({ SHIPCAST_APP_TLS: 'proxy', ...BUCKET }) instanceof R2MediaStore);

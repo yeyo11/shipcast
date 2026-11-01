@@ -69,6 +69,10 @@ test('upload_media decodes the base64, sends the bytes and says how to name the 
     assert.deepEqual(answer.file, STORED.file);
     assert.match(answer.note, new RegExp(`launch_from_sources as \\{ kind: "media", sha256: "${SHA}" \\}`));
   }
+  // With the name an article links it by, the note says how
+  const { api: named } = capturingClient({ 'POST /media': { file: { ...STORED.file, articleName: 'abc.png' } } });
+  const answer = (await runTool(named, 'upload_media', { image_base64: base64 })) as { note: string };
+  assert.match(answer.note, /write_article, link it as !\[what it shows\]\(\/articles\/<slug>\/abc\.png\)/);
   assert.equal(sent.length, 3);
   for (const call of sent) {
     assert.equal(call.url, `${BASE}/api/v1/media`);
