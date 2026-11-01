@@ -1,12 +1,13 @@
 ---
-created_at: 2026-10-28T08:07:05.847023162Z
-updated_at: 2026-11-01T16:07:50.879258773Z
+created_at: 2026-11-01T14:05:01.299152642Z
+updated_at: 2026-11-01T20:38:59.343354796Z
 tags:
     - web-app
     - dashboard
     - webhooks
     - realtime
     - services
+    - editor
 ---
 # The web app
 
@@ -73,7 +74,8 @@ that does TLS, and the same entry point can run as a `web`, `worker` or `heavy` 
   one place; fixtures can stand in for GitHub's reads, and the GitHub client's writes are **dry runs**
   (`previewGitHubFetch`: shas of the right shape, pull request number 0). A process on a `_preview`
   database without the switch refuses to start, and the CLI on one only runs the commands that reach
-  no network. The App's token minting and the sign-in keep the real fetch.
+  no network. The App's token minting and the sign-in keep the real fetch. A local one (TLS off) with
+  no bucket in `.env` keeps uploads in memory, so the editor's images can be tried there.
 - **Every request is checked.** A request middleware (`src/start.ts`) sends pages without a session to
   `/login?next=<the page>` and answers everything else with 401, marked `x-shipcast-session: required`.
   When a session ends while a page is open, `components/SessionExpiry.tsx` reads that mark on the next
@@ -147,6 +149,12 @@ unchanged unless the redesign document says so.
   actions and the chat stream from the AI task runner, and **check against the code** is a `heavy`
   job (a clone and an AI run) that the page follows until its result, never work inside the request.
   On a phone (760 px and under) the chat is a floating bubble that opens a full-screen sheet.
+  Since 2026-11-01 the text is the **rich editor** ([decisions/rich-editor.md](decisions/rich-editor.md)):
+  a Markdown | Visual switch (Markdown by default; Visual is TipTap over the same Markdown string), a
+  toolbar with only what the text's channel shows (none on a plain network such as Bluesky), a paste
+  that keeps only that, and on Write images by paste, drop and an Image button, each uploaded at once
+  and described (alt text) before the article can be prepared. A proposal in the Visual mode is a
+  formatted diff, with "Show as Markdown" for the word diff.
 - **Channels** (`/channels`): see [accounts.md](accounts.md#the-channels-page). Four tabs by kind of
   network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
   card. The **Anthropic API** and an **OpenAI-compatible server** are connected here too, under AI
@@ -389,4 +397,4 @@ same frame. A setting is configured in exactly one place. General:
 
 ## Related
 
-[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]] · [[decisions/comment-assistant.md]] · [[decisions/writing-assistant.md]] · [[decisions/onboarding.md]]
+[[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[server.md]] · [[measurement.md]] · [[decisions/architecture.md]] · [[decisions/redis.md]] · [[decisions/ai-layer.md]] · [[decisions/job-queue.md]] · [[plans/goal-finish.md]] · [[plans/mvp-close.md]] · [[plans/design-system.md]] · [[decisions/web-app-stack.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[decisions/github-app.md]] · [[mcp.md]] · [[decisions/mcp.md]] · [[status.md]] · [[decisions/component-layer.md]] · [[plans/goal-after-mvp.md]] · [[stats.md]] · [[decisions/comment-assistant.md]] · [[decisions/writing-assistant.md]] · [[decisions/onboarding.md]] · [[decisions/rich-editor.md]]

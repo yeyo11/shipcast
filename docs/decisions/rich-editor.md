@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-01T18:34:11.834167255Z
-updated_at: 2026-11-01T18:34:11.834167255Z
+created_at: 2026-11-01T20:37:27.411269979Z
+updated_at: 2026-11-01T20:37:27.411269979Z
 tags:
     - decision
     - web-app
@@ -8,17 +8,20 @@ tags:
     - writing-assistant
     - channels
     - telegram
+    - images
 ---
 # The rich editor, and each channel's formatting
 
-Decided on 2026-11-01, from the owner's approved mockups (board "Shipcast · rediseño de pantallas",
-page *Editor de Write*) and the channel compatibility analysis behind them. The plain textarea of
-`AssistedEditor` (Write and the drafts) becomes an editor with a **Markdown** mode, the default, and a
-**Visual** mode, a toolbar, and images by paste, drag and a button. Each surface offers only the
-formatting its channel shows, and the writing assistant keeps to the same rule.
+Decided on 2026-11-01, from the brief written from the owner's approved mockups (board "Shipcast ·
+rediseño de pantallas", page *Editor de Write*) and the channel compatibility analysis behind them.
+The board itself could not be read by the agent that built this, so its look is checked by the owner
+on a live preview. The plain textarea of `AssistedEditor` (Write and the drafts) becomes an editor
+with a **Markdown** mode, the default, and a **Visual** mode, a toolbar, and images by paste, drag and
+a button. Each surface offers only the formatting its channel shows, and the writing assistant keeps
+to the same rule.
 
-Built in four phases, each pushed on its own: the formatting profile, the assistant and Telegram (no
-change in the page); the editor on Write; images; the drafts.
+Built in four phases: the formatting profile, the assistant and Telegram (no change in the page);
+the editor on Write; images; the drafts.
 
 ## Markdown stays the stored format
 
@@ -99,6 +102,105 @@ sends it with `parse_mode: 'HTML'`, on publish and on edit. The rendering happen
 in `publish.ts`, because the links must be tagged on the Markdown first and the adapter is where the
 tags are added. Telegram counts a post on what a reader sees, so the piece's length is the visible
 text of that HTML: a link's label, not its address or the asterisks. See [publishing.md](../publishing.md).
+
+## The editor
+
+`AssistedEditor` (`apps/web/src/components/assistant/AssistedEditor.tsx`) takes the text's profile
+and, for a Markdown or light one, shows the **Markdown | Visual** switch and a toolbar built from the
+profile (`toolsFor` in `apps/web/src/components/editor/toolbar.ts`), wrapping to a second row rather
+than scrolling; a plain profile has no bar at all, only the note that says so. Markdown is the
+default mode, and the choice is not kept yet.
+
+- **The Markdown mode is the textarea it always was.** CodeMirror 6 was the other choice; the
+  textarea is lighter (no dependency, no second document model), and it keeps the writing
+  assistant's selection and proposal offsets plain string offsets, as `protocol.ts` and `DiffView`
+  already read them. A button wraps the selection (`**`, `*`, `~~`, `` ` ``, `<u>`, `||`) or marks
+  the lines it touches (`## `, `> `, `- `, `1. `, `- [ ] `), and a second press takes it off.
+- **The Visual mode is TipTap 3** (`@tiptap/react`, `@tiptap/starter-kit`, the MIT table, list and
+  image extensions and `@tiptap/markdown`; no Pro extension, no TipTap cloud). Its schema is built
+  from the profile (`extensionsFor`), so a mark or block the channel does not show does not exist in
+  it: a paste or a shortcut cannot make it. Underline and spoilers are two small marks of our own,
+  written `<u>…</u>` and `||…||`.
+- **The string is the model.** The document is parsed from the Markdown and serialised back only when
+  the owner edits in the Visual mode: switching modes without typing never changes the stored text.
+  Syntax the profile does not show is taken out with `stripFormat` before parsing, so its words are
+  kept rather than dropped by the parser.
+- **A paste keeps what the channel shows**: in the Markdown mode the pasted text goes through
+  `stripFormat` (a `**bold**` pasted into Bluesky arrives as its words); in the Visual mode the schema
+  does the same.
+- **Dialogs never submit the page.** The link and image dialogs are portals, but React bubbles their
+  submit to Write's own form, which would start "Prepare the pieces": each stops it. The alt field
+  under the bar is no form at all, for the same reason (a nested form is invalid HTML).
+- **An image is never put in a table cell** in the Visual mode: a Markdown table's cell holds one line,
+  so the image goes after the table.
+- **Write's status line** says where the text goes as written, from the definitions whose edit
+  carries the article: "Blog, dev.to and Hashnode; the other channels are written from it".
+
+### The round trip and its normalisations
+
+`roundTrip` (Markdown → the Visual mode's document → Markdown) is tested over real articles in the
+launches repo's style (`apps/web/test/fixtures/articles/`: tables, images, code fences, links with
+query strings, both languages) and a synthetic text with every block: they come back byte for byte.
+TipTap's serialiser was changed in three places to get there, all in `extensions.ts`:
+
+- **Escaping**: TipTap escapes every `_`, `~` and `*` and writes `&` as `&amp;`, which rewrote
+  `x86_64`, `~40%` and `Q&A` on every edit (and a plain network would show the entity as typed).
+  `escapeText` escapes a character only where it could read as syntax: `_` not inside a word, `~`
+  when another follows, `*` not between spaces, `<` before a tag, `&` before an entity.
+- **Tables** are written compact, `| a | b |` and `| --- |`, as the articles write them; TipTap pads
+  every column to the widest cell and adds blank lines around the table.
+- **The last line break** is kept as the text had it.
+
+What a Visual edit still normalises: `_italics_` is written `*italics*`, list markers become `-` and
+`1.`, a table loses its padding, and a heading deeper than the profile shows is brought up to the
+deepest it does.
+
+## The assistant in the Visual mode
+
+The assistant keeps working on the Markdown string. A selection made in the Visual mode is
+serialised to Markdown and found in the string (the occurrence nearest where it was in the document,
+or its plain words when its Markdown is not there; failing both, the whole text), so the request's
+`selection` and `range` are what they were. A proposal is shown **formatted**: the word diff of the
+two Markdown strings is marked with private-use characters, rendered (raw HTML shown as text, only
+safe links), and each text node split into its deleted and inserted runs, struck and marked as
+`DiffView` draws them, with "Show as Markdown" falling back to `DiffView` itself. Accept applies the
+string and the Visual mode parses it in again. `protocol.ts` gained only the `cleaned` event.
+
+## Images
+
+Only where the profile says `images: true`, and today only on Write (a held launch's drafts would
+need their uploads attached to the launch's media; not built).
+
+- **Upload**: the existing upload (`POST /api/v1/media`, the MCP tool `upload_media`, and the page's
+  `POST /api/sources/media`), which takes PNG, JPEG, GIF and WebP up to 20 MB by their bytes, removes
+  their metadata and stores them in the media store. Its answer now carries `articleName`, the
+  image's name in an article's folder: the first 16 characters of its sha256 and its type. The page
+  uploads through a route rather than a server function because those parse a multipart body whole
+  before any check could refuse it.
+- **Linking**: the body links it root-relative, `![what it shows](/articles/<slug>/<articleName>)`,
+  as [article-images.md](article-images.md) says; `absoluteLinks` already fixes those for dev.to and
+  Hashnode. The page links it under the slug its title has then; when the article is prepared the
+  engine (`placeImages`, `packages/engine/src/article-images.ts`) points every link to an uploaded
+  name at the article's real folder, so a title changed later costs nothing.
+- **Committing**: `POST /articles` (and `write_article`) take `images: [{ sha256, name }]`; the
+  engine reads the ones the body links back from the media store and adds them to the drafts as
+  `public/articles/<slug>/<name>`, where the launch model keeps them as the article's own media and
+  the site's commit carries them with the article.
+- **Alt text is required**, at most 140 characters (the blog's `imageAlt`): `imageAltProblem` in
+  `packages/schema` refuses "Prepare the pieces" and a draft's save with an image without it,
+  naming the image. A pasted or dropped image is uploaded at once and inserted with no alt text; a
+  field under the bar asks what it shows (`EditorImageInline`). The bar's Image button opens a
+  480 px dialog with the file and its description together (`EditorImageDialog`).
+- **Seeing it before the site has it**: the editor shows an uploaded image from `/uploads/<sha256>`,
+  served from the media store behind the session, only for a recorded upload. A local preview with
+  fake networks and no bucket keeps its uploads in memory, so this can be tried there.
+
+## The drafts
+
+Each draft's editor reads its channel's profile: Bluesky, Mastodon, Threads, LinkedIn and Instagram
+have no bar and a paste that strips formatting; Telegram, Discord and the newsletter the reduced bar;
+the article, dev.to, Hashnode, Reddit and GitHub Discussions the full one (no image button there).
+The character counter stays as it was.
 
 ## Out of scope
 
