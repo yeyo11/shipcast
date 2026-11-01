@@ -70,7 +70,7 @@ function Reconnect({ network, account, brand, ready }: { network: NetworkView; a
           {account.avatarUrl ? <img src={account.avatarUrl} alt="" referrerPolicy="no-referrer" /> : account.label.replace(/^@/, '').slice(0, 1).toUpperCase()}
         </span>
         <div className="k-grow k-stack">
-          <strong className="k-ellipsis">{account.label}</strong>
+          <strong className="k-ellipsis">{account.display}</strong>
           <span className="k-xs ch-bad">◆ {account.problem ?? 'Its last check failed'}</span>
         </div>
       </div>
@@ -143,7 +143,7 @@ function Connect() {
             ) : (
               <div key={a.id} className="k-notice k-bad">
                 <div className="k-grow">
-                  <strong>{a.label}</strong> <span className="ch-bad">◆ {a.problem ?? 'Its last check failed'}</span>. Fill the form below again with a new credential: connecting the same account replaces it.
+                  <strong>{a.display}</strong> <span className="ch-bad">◆ {a.problem ?? 'Its last check failed'}</span>. Fill the form below again with a new credential: connecting the same account replaces it.
                 </div>
               </div>
             ),
@@ -262,7 +262,7 @@ function Connect() {
                   <span className={`k-pill ${standing.tone}`}>{standing.pill}</span>
                 </div>
                 <p className="k-sm k-muted ch-flush">
-                  {profiles.length > 1 ? `${account.label}. ` : ''}
+                  {profiles.length > 1 ? `${account.display}. ` : ''}
                   {standing.reviewed ? 'The AI read the profile, how the account grew and your brand. Nothing changes until you apply a proposal.' : 'The AI reads the profile, how the account grew and your brand, and proposes what to change. Nothing changes until you apply it.'}
                 </p>
                 <Link className="k-btn k-full" to="/channels/$network" params={{ network: network.id }} search={{ review: account.id }}>

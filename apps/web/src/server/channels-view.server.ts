@@ -3,6 +3,7 @@ import { accountGrowth, type Repositories } from '@shipcast/engine';
 import { credentialsFor, isStale, lastSynced, NETWORK_SPECS, networksOn, type Flags, type RuntimeSettings, type SecretStore } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
 import { accountAvatar } from './pieces.ts';
+import { sourceName } from './source-name.ts';
 
 /** The page's view from what it reads: the registry, the keychain and the cached brand, never a network */
 export async function channelsViewOf(ctx: { registry: Repositories; secrets: SecretStore; brand(): Promise<Brand>; settings: Pick<RuntimeSettings, 'oauthApp'>; flags: Flags }) {
@@ -20,7 +21,8 @@ export async function channelsViewOf(ctx: { registry: Repositories; secrets: Sec
       const snapshot = snapshots.get(account.id) ?? null;
       const syncedAt = lastSynced(account, snapshot?.takenAt);
       const weekChange = snapshot?.followers != null ? (await accountGrowth(registry, account.id, week)).change.followers : null;
-      return { ...account, avatarUrl: accountAvatar(account), snapshot, weekChange, activity: activity.get(account.id) ?? { count: 0, last: null }, syncedAt, stale: isStale(syncedAt, now) };
+      // A source of the blog's numbers is named by its service and the brand's site, never by its raw label
+      return { ...account, display: sourceName(account.network, current.site) ?? account.label, avatarUrl: accountAvatar(account), snapshot, weekChange, activity: activity.get(account.id) ?? { count: 0, last: null }, syncedAt, stale: isStale(syncedAt, now) };
     }),
   );
   const fromEnv: string[] = [];

@@ -18,7 +18,7 @@ import {
   type StatsMetric,
   STATS_METRICS,
 } from '@shipcast/engine';
-import { isStale, lastSynced } from '@shipcast/runtime';
+import { isStale, lastSynced, network } from '@shipcast/runtime';
 import { effectiveBucket, resolvePeriod, type StatsSearch } from './stats-search.ts';
 import { CHANNEL_NAMES } from './view.ts';
 import { accountAvatar } from './pieces.ts';
@@ -292,6 +292,7 @@ export interface GrowthView {
     id: number;
     label: string;
     network: string;
+    networkName: string;
     channel: string;
     avatarUrl: string | null;
     syncedAt: string | null;
@@ -312,7 +313,9 @@ export interface GrowthView {
  */
 export async function loadGrowth(registry: Pick<Repositories, 'accounts' | 'queries'>, range: { from: string; to: string }, now = new Date()): Promise<GrowthView> {
   const [accounts, latest] = await Promise.all([registry.accounts.accounts(), registry.accounts.lastSnapshots()]);
-  const measured = accounts.filter((a) => latest.has(a.id));
+  // Only accounts with an audience (a channel's network): the sources of numbers (search consoles,
+  // Bing, Cloudflare, Umami, GitHub's profile) have no followers to grow and live under Channels
+  const measured = accounts.filter((a) => latest.has(a.id) && network(a.network)?.channel !== undefined);
   const growth = await Promise.all(measured.map((a) => accountGrowth(registry, a.id, range)));
   return {
     ...range,
@@ -324,6 +327,8 @@ export async function loadGrowth(registry: Pick<Repositories, 'accounts' | 'quer
         id: a.id,
         label: a.label,
         network: a.network,
+        /** The network's name for the page ("LinkedIn"), never its connector key */
+        networkName: CHANNEL_NAMES[channelOfNetwork(a.network)] ?? network(a.network)?.name ?? a.network,
         channel: channelOfNetwork(a.network),
         avatarUrl: accountAvatar(a),
         syncedAt,

@@ -50,24 +50,24 @@ function useAccountActions(setBusy: (id: number | null) => void): AccountActions
       await act(account, async () => {
         const result = await syncAccountNow({ data: account.id });
         const details = result.lines.join('\n') || undefined;
-        if (result.state === 'completed') toast.done(`${account.label} synced`, details);
-        else if (result.state === 'failed') toast.fail(result.lines[0] ?? `${account.label} could not be synced`);
-        else toast.done(`Syncing ${account.label}`, 'It is still running: reload the page in a minute to see it.');
+        if (result.state === 'completed') toast.done(`${account.display} synced`, details);
+        else if (result.state === 'failed') toast.fail(result.lines[0] ?? `${account.display} could not be synced`);
+        else toast.done(`Syncing ${account.display}`, 'It is still running: reload the page in a minute to see it.');
       });
     },
     check: async (account) => {
       await act(account, async () => {
         const result = await recheckAccount({ data: account.id });
-        if (result.status === 'ok') toast.done(`${account.label} works`, result.identity ? `Signed in as ${result.identity}.` : undefined);
-        else toast.fail(result.problem ?? `${account.label} did not answer its check`);
+        if (result.status === 'ok') toast.done(`${account.display} works`, result.identity ? `Signed in as ${result.identity}.` : undefined);
+        else toast.fail(result.problem ?? `${account.display} did not answer its check`);
       });
     },
     rename: (account, label) => act(account, () => renameAccount({ data: { id: account.id, label } }), `Renamed to ${label}`),
     makePrimary: async (account) => {
-      await act(account, () => makePrimary({ data: account.id }), `${account.label} now publishes for its brand`);
+      await act(account, () => makePrimary({ data: account.id }), `${account.display} now publishes for its brand`);
     },
     disconnect: async (account) => {
-      await act(account, () => disconnect({ data: account.id }), `${account.label} disconnected`);
+      await act(account, () => disconnect({ data: account.id }), `${account.display} disconnected`);
     },
   };
 }
@@ -93,8 +93,8 @@ function AccountCard({ network, account, now, siblings, busy, onMore, onSync }: 
         </span>
         <div className="k-grow k-stack">
           <strong className="ch-ph k-ellipsis">{network.name}</strong>
-          <strong className="ch-dt k-ellipsis">{account.label}</strong>
-          <span className="k-xs k-muted k-ellipsis ch-ph">{account.label}</span>
+          <strong className="ch-dt k-ellipsis">{account.display}</strong>
+          <span className="k-xs k-muted k-ellipsis ch-ph">{account.display}</span>
           {failed ? (
             <span className="k-xs ch-dt ch-bad k-ellipsis">◆ {account.problem ?? 'Its last check failed'}</span>
           ) : (
@@ -131,7 +131,7 @@ function AccountCard({ network, account, now, siblings, busy, onMore, onSync }: 
               {busy ? 'Syncing…' : 'Sync now'}
             </button>
           )}
-          <button type="button" className="k-btn k-icon k-sm" aria-label={`More for ${account.label}`} aria-haspopup="menu" onClick={onMore}>
+          <button type="button" className="k-btn k-icon k-sm" aria-label={`More for ${account.display}`} aria-haspopup="menu" onClick={onMore}>
             <Icon name="more" />
           </button>
         </div>

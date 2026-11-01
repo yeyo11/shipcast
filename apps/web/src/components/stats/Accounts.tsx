@@ -6,7 +6,6 @@ import { Diamond } from '../kit/Icon';
 import { useToast } from '../Toasts';
 import { syncAccountNow } from '../../server/channels.functions';
 import type { getGrowth } from '../../server/stats.functions';
-import { CHANNEL_NAMES } from '../../server/view';
 import { ago, daysSince, Glyph, StatsEmpty } from './parts';
 
 type GrowthData = Awaited<ReturnType<typeof getGrowth>>;
@@ -26,7 +25,8 @@ const FOLLOWER_WORD: Record<string, string> = { telegram: 'Subscribers', newslet
  * (docs/decisions/account-snapshots.md): a card per account with the measure picked above, its change
  * over the period and a sparkline of it. An account whose credential failed, or that has gone unread
  * for over 36 hours, is the failure card: what it last read, and the way to fix it (Reconnect on
- * Channels for a failed credential, Sync now otherwise).
+ * Channels for a failed credential, Sync now otherwise). Only accounts with an audience are here, and
+ * each measure lists only the accounts whose network counts it; the sources of numbers are on Channels.
  */
 export function Accounts({ data, days }: { data: GrowthData; days: number }) {
   const [measure, setMeasure] = useState<Measure>('followers');
@@ -46,6 +46,8 @@ export function Accounts({ data, days }: { data: GrowthData; days: number }) {
     );
   }
   const buckets = everyDay(data.from, data.to);
+  // A measure lists only the accounts whose network counts it: no card says only "not counted"
+  const counting = data.accounts.filter((a) => counts(a, measure));
   return (
     <section aria-label="Account growth">
       <div className="k-px stats-gap14">
@@ -57,13 +59,22 @@ export function Accounts({ data, days }: { data: GrowthData; days: number }) {
           ))}
         </div>
       </div>
-      <ul className="k-px k-stack k-g10 stats-gap14 stats-accounts">
-        {data.accounts.map((a) => (
-          <AccountCard key={a.id} account={a} measure={measure} buckets={buckets} days={days} />
-        ))}
-      </ul>
+      {counting.length === 0 ? (
+        <p className="k-px k-sm k-muted stats-gap14">No connected network counts {MEASURES.find((m) => m.value === measure)?.label.toLowerCase()}.</p>
+      ) : (
+        <ul className="k-px k-stack k-g10 stats-gap14 stats-accounts">
+          {counting.map((a) => (
+            <AccountCard key={a.id} account={a} measure={measure} buckets={buckets} days={days} />
+          ))}
+        </ul>
+      )}
     </section>
   );
+}
+
+/** Whether an account's network gives this figure: its latest reading has it, or any day did */
+function counts(account: Pick<AccountGrowthView, 'latest' | 'points'>, measure: Measure): boolean {
+  return (account.latest?.[measure] ?? null) !== null || account.points.some((p) => p[measure] !== null);
 }
 
 /** Every day of the period: a missed snapshot shows as a gap rather than squeezing the days together */
@@ -81,12 +92,11 @@ function AccountCard({ account, measure, buckets, days }: { account: AccountGrow
   // The sparkline runs to the last day read: a failing account's line stops where its readings stopped
   const lastRead = account.points.filter((p) => p[measure] !== null).at(-1)?.day;
   const values = buckets.map((d) => (lastRead && d > lastRead ? undefined : (byDay.get(d) ?? null))).filter((v): v is number | null => v !== undefined);
-  const network = CHANNEL_NAMES[account.channel] ?? account.network;
+  const network = account.networkName;
   const bad = account.failing || account.stale;
   const now = account.latest?.[measure] ?? null;
   const change = account.change[measure];
   const word = measure === 'followers' ? (FOLLOWER_WORD[account.channel] ?? 'Followers') : measure === 'following' ? 'Following' : 'Posts';
-  const uncounted = MEASURES.filter((m) => account.latest?.[m.value] === null || account.latest?.[m.value] === undefined);
 
   const sync = async () => {
     setBusy(true);
@@ -149,11 +159,6 @@ function AccountCard({ account, measure, buckets, days }: { account: AccountGrow
             <button type="button" className="k-btn k-sm" disabled={busy} onClick={() => void sync()}>
               {busy ? 'Syncing…' : 'Sync now'}
             </button>
-          )}
-          {uncounted.length > 0 && (
-            <span className="k-xs k-muted">
-              {uncounted.map((m) => m.label).join(', ')}: not counted by {network}
-            </span>
           )}
         </div>
       )}

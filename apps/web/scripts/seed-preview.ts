@@ -225,6 +225,8 @@ interface AccountSeed {
   /** Set for an account whose last check failed */
   problem?: string;
   followers?: { from: number; to: number; following?: number; posts?: number };
+  /** A source of numbers' own readings (no audience), recorded once */
+  extra?: Record<string, number>;
 }
 
 const ACCOUNTS: AccountSeed[] = [
@@ -234,6 +236,10 @@ const ACCOUNTS: AccountSeed[] = [
   { network: 'devto', label: 'yeyo11', settings: {}, secrets: { apiKey: 'preview-fake-devto-key' }, identity: 'yeyo11', followers: { from: 268, to: 281, posts: 34 } },
   { network: 'telegram', label: '@josegarridodev', settings: { chatId: '@josegarridodev' }, secrets: { botToken: 'preview-fake-telegram-bot-token' }, identity: '@josegarridodev', followers: { from: 140, to: 149 } },
   { network: 'threads', label: '@josegarridodev', settings: { preview: 'true' }, secrets: { accessToken: 'preview-fake-threads-token' }, identity: '@josegarridodev', followers: { from: 512, to: 538, following: 95, posts: 120 } },
+  // The sources of the blog's numbers, labelled as their connectors label them (a property, a site tag, a service account)
+  { network: 'searchConsole', label: 'https://josegarrido.dev/ (verified)', settings: {}, secrets: { serviceAccount: '{"client_email":"search-console-reader@preview.iam.gserviceaccount.com"}' }, identity: 'search-console-reader@preview.iam.gserviceaccount.com', extra: { clicks28d: 214, impressions28d: 6930 } },
+  { network: 'bingWebmaster', label: 'https://josegarrido.dev/ (verified)', settings: {}, secrets: { apiKey: 'preview-fake-bing-key' }, identity: 'https://josegarrido.dev/', extra: { clicks28d: 31, impressions28d: 1240 } },
+  { network: 'cloudflare', label: 'site 1c50f01c3a9d, 0 views of / yesterday', settings: { accountId: 'preview-account', siteTag: '1c50f01c3a9d' }, secrets: { apiToken: 'preview-fake-cloudflare-token' }, identity: 'site 1c50f01c3a9d', extra: { visits7d: 1489 } },
 ];
 
 async function seedAccounts(registry: OpenRepositories, secrets: SecretStore, brand: Brand): Promise<Map<string, Account>> {
@@ -256,6 +262,7 @@ async function seedAccounts(registry: OpenRepositories, secrets: SecretStore, br
         await registry.accounts.recordSnapshot(account.id, { followers: Math.round(from + (to - from) * share), ...(following !== undefined && { following }), ...(posts !== undefined && { posts: posts - Math.round(d / 3) }) }, at);
       }
     }
+    if (seed.extra) await registry.accounts.recordSnapshot(account.id, { extra: seed.extra }, minutesAgo(40));
     if (seed.problem) account = await registry.accounts.recordCheck(account.id, { ok: false, problem: seed.problem }, hoursAgo(26));
     else account = await registry.accounts.recordCheck(account.id, { ok: true, account: seed.identity }, minutesAgo(40));
     out.set(seed.network, account);

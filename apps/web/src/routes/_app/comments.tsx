@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-r
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Mailbox } from '../../components/illustrations';
 import { TopBar } from '../../components/kit/Bars';
-import { hasGlyph, NetworkGlyph } from '../../components/kit/NetworkGlyph';
+import { NetworkGlyph } from '../../components/kit/NetworkGlyph';
 import { Icon } from '../../components/kit/Icon';
 import { Overlay } from '../../components/kit/Overlay';
 import { PickerSelect } from '../../components/kit/Picker';
@@ -44,7 +44,7 @@ const listSearch = (search: InboxSearch): InboxSearch => {
 };
 
 function Glyph({ channel, size }: { channel: string; size: number }) {
-  return hasGlyph(channel) ? <NetworkGlyph channel={channel} size={size} /> : null;
+  return <NetworkGlyph channel={channel} size={size} />;
 }
 
 function Avatar({ author }: { author: CommentView['author'] }) {

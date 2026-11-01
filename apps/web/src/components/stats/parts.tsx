@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
-import { hasGlyph, NetworkGlyph } from '../kit/NetworkGlyph';
+import { NetworkGlyph } from '../kit/NetworkGlyph';
 
 /*
  * The Stats section's small shared pieces: a network's glyph and the empty state every tab ends on
  * when there is nothing to show; its words are in words.ts.
  */
 
-/** The networks' glyph names, where a channel or an account's network is not one by itself */
 /** A network's mark, inline so it takes the text colour (the board's glyphs); nothing for a row with no channel */
 export function Glyph({ channel, size = 14 }: { channel: string | null; size?: number }) {
-  return channel && hasGlyph(channel) ? <NetworkGlyph channel={channel} size={size} /> : null;
+  // The kit's mark always draws something (a line icon or an initial): no empty tile beside a name
+  return channel ? <NetworkGlyph channel={channel} size={size} /> : null;
 }
 
 /** The empty and nothing-yet state (board StatsEmpty): the section's art, a title, a line and a way on */

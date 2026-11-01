@@ -112,6 +112,11 @@ test('growth lists the accounts with snapshots, their change and their freshness
   await registry.accounts.addAccount({ network: 'brevo', brand: 'personal', label: 'newsletter', settings: {} });
   const growth = await loadGrowth(registry, { from: '2026-10-01', to: '2026-10-25' }, new Date('2026-10-25T12:00:00Z'));
   assert.equal(growth.accounts.length, 1, 'an account with no snapshots has no growth to show');
+  const bing = await registry.accounts.addAccount({ network: 'bingWebmaster', brand: 'personal', label: 'https://example.com/ (verified)', settings: {} });
+  await registry.accounts.recordSnapshot(bing.id, { extra: { clicks28d: 3 } }, at('24', 4));
+  const withSource = await loadGrowth(registry, { from: '2026-10-01', to: '2026-10-25' }, new Date('2026-10-25T12:00:00Z'));
+  assert.deepEqual(withSource.accounts.map((x) => x.id), [account.id], 'a source of numbers has no audience: it stays on Channels');
+  assert.equal(withSource.accounts[0]?.networkName, 'Bluesky');
   const [a] = growth.accounts;
   assert.equal(a?.id, account.id);
   assert.equal(a?.latest?.followers, 112);

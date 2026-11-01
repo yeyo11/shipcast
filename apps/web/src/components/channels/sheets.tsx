@@ -109,10 +109,10 @@ export function AccountSheet({
     void fn();
   };
   return (
-    <Overlay kind={view === 'menu' ? 'menu' : 'dialog'} label={target ? (view === 'disconnect' ? `Disconnect ${target.account.label}?` : target.account.label) : 'Account'} open={target !== null} onOpenChange={(o) => !o && close()} className="ch-sheet">
+    <Overlay kind={view === 'menu' ? 'menu' : 'dialog'} label={target ? (view === 'disconnect' ? `Disconnect ${target.account.display}?` : target.account.display) : 'Account'} open={target !== null} onOpenChange={(o) => !o && close()} className="ch-sheet">
       {target && view === 'disconnect' && (
         <>
-          <h2 className="k-d k-d30">Disconnect {target.account.label}?</h2>
+          <h2 className="k-d k-d30">Disconnect {target.account.display}?</h2>
           <p className="ch-flush">Its credential is deleted from the keychain and it stops publishing and reading numbers.</p>
           <p className="k-sm k-muted ch-flush">
             {target.network.channel ? `Its posts stay on ${target.network.name}. ` : ''}Connecting it again needs {credentialWord(target.network)}.
@@ -155,9 +155,9 @@ export function AccountSheet({
         <>
           <div className="k-hrow k-g10 ch-sheet-who">
             <NetworkGlyph network={target.network} size={22} />
-            <strong>{target.account.label}</strong>
+            <strong>{target.account.display}</strong>
           </div>
-          <div className="k-stack" role="menu" aria-label={`${target.account.label}: actions`}>
+          <div className="k-stack" role="menu" aria-label={`${target.account.display}: actions`}>
             <button type="button" role="menuitem" className="k-mi" onClick={() => run(() => actions.sync(target.account))}>
               <Icon name="retry" />
               Sync now
