@@ -115,7 +115,7 @@ export interface SignInLimiter {
 }
 
 /**
- * The limiter over the shared window counters (Redis with `redis-state` on): every replica counts a
+ * The limiter over the shared window counters (Redis, when the process has it): every replica counts a
  * client's wrong tokens together, so spreading the guesses over replicas buys nothing.
  */
 export function sharedLimiter(window: WindowLimiter): SignInLimiter {

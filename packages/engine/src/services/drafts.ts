@@ -19,8 +19,7 @@ const RECENT = 500;
 
 /**
  * The drafts snapshot's use cases (docs/plans/performance-refactor.md, phase 7): what writes the row
- * the launch page reads instead of GitHub. Built only with the `github-events` flag on; without it
- * nothing calls this and the page reads GitHub as before.
+ * the launch page reads instead of GitHub.
  */
 export class DraftSnapshotService {
   readonly #deps: DraftSnapshotDeps;

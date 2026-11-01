@@ -59,13 +59,13 @@ export interface Runtime {
   brand(): Promise<Brand>;
   /** Reads the settings again: after a save in the app, and before each round */
   refresh(): Promise<void>;
-  /** Forgets the cached brand, so the next call reads it from the launches repo again */
+  /** Kept for the replicas' events: the brand lives in the GitHub file cache, which pushes invalidate */
   invalidateBrand(): void;
-  /** With `github-events`: the GitHub client's ETag and file caches, which webhooks and the poll invalidate */
-  githubCaches: GitHubCaches | undefined;
-  /** With `github-events`: the drafts snapshots the launch page reads instead of GitHub */
-  drafts: DraftSnapshotService | undefined;
-  /** With `realtime-ui` and a bus: sends the registry's coalesced events still waiting, part of a stop */
+  /** The GitHub client's ETag and file caches, which webhooks and the hourly poll invalidate */
+  githubCaches: GitHubCaches;
+  /** The drafts snapshots the launch page reads instead of GitHub */
+  drafts: DraftSnapshotService;
+  /** With a bus: sends the registry's coalesced events still waiting, part of a stop */
   flushEvents(): Promise<void>;
   /** With `launch-media` and its bucket in .env: where launch media are kept; otherwise it refuses every call */
   media: MediaStore;
@@ -93,21 +93,19 @@ export interface RuntimeOptions {
    * repos. Not the App's token minting or the sign-in, whose POSTs must stay real to read at all.
    */
   githubFetch?: typeof fetch;
-  /** The refactor's switches; read from `env` when not given */
+  /** The switches (SHIPCAST_FLAGS); read from `env` when not given */
   flags?: Flags;
   /**
-   * The shared Cache (Redis, with `redis-state`) the GitHub caches live in, so every replica's 304
-   * serves the others; this process's memory when not given
+   * The shared Cache (Redis) the GitHub caches live in, so every replica's 304 serves the others;
+   * this process's memory when not given
    */
   cache?: Cache;
   /**
-   * The bus the registry's writes are announced on, with `realtime-ui` on (realtime/publish.ts): set
-   * by a process that serves pages or works jobs, so every change a page shows reaches it
+   * The bus the registry's writes are announced on (realtime/publish.ts): set by a process that
+   * serves pages or works jobs, so every change a page shows reaches it
    */
   events?: EventBus;
 }
-
-const BRAND_TTL_MS = 5 * 60_000;
 
 export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const env = options.env ?? process.env;
@@ -116,9 +114,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   const flags = options.flags ?? Flags.fromEnv(env);
   const opened = options.registry ?? (await connectRepositories(config.databaseUrl, poolOptions(env)));
   // Wrapped before anything is built on it, so every writer below (the pipeline, the drafts, the jobs) announces
-  const announced = flags.on('realtime-ui') && options.events ? withEvents(opened, options.events) : undefined;
+  const announced = options.events ? withEvents(opened, options.events) : undefined;
   const registry = announced?.registry ?? opened;
-  const secrets = options.secrets ?? secretStoreFor(config, env, { flags, rows: new SecretRows(registry.database) });
+  const secrets = options.secrets ?? secretStoreFor(config, env, { rows: new SecretRows(registry.database) });
   // One session key and API pepper across replicas, read once per process (app-keys.ts)
   provisionAppKeys(secrets, { env, lock: new PostgresLock(registry.database) });
   const settings = new RuntimeSettings({ registry, secrets, env });
@@ -128,7 +126,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   if (skipped.length > 0) log(`Settings: not imported from .env, the value does not pass the Settings page's check: ${skipped.join(', ')}`);
   await settings.read();
 
-  const caches = flags.on('github-events') ? githubCaches(options.cache, () => settings.current().launchesRepo) : undefined;
+  const caches = githubCaches(options.cache, () => settings.current().launchesRepo);
   const app = config.githubApp;
   const githubApp = app
     ? new GitHubApp({
@@ -138,23 +136,17 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
         // The launches repo's installation; before one is set, the owner's own account
         account: () => settings.current().launchesRepo ?? config.allowedLogins[0],
         ...(options.fetch && { fetch: options.fetch }),
-        ...(caches && { etags: caches.etags }),
+        etags: caches.etags,
       })
     : undefined;
   const githubFetch = options.githubFetch ?? options.fetch;
-  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }), ...(caches && { etags: caches.etags, files: caches.files }) });
+  const github = new GitHubRest({ token: githubApp ?? config.githubToken!, ...(githubFetch && { fetch: githubFetch }), etags: caches.etags, files: caches.files });
   const access: GitHubAccess = app ? { kind: 'app', slug: app.slug, bot: app.slug ? `${app.slug}[bot]` : undefined } : { kind: 'token' };
   // The refresh is locked across every process on the registry: two replicas never spend one refresh token
   const userTokens = app ? new GitHubUserTokens({ secrets, lock: new PostgresLock(registry.database), client: { clientId: app.clientId, clientSecret: app.clientSecret, ...(options.fetch && { fetch: options.fetch }) } }) : undefined;
 
-  let cached: { repo: string; brand: Brand; at: number } | undefined;
-  const brand = async (): Promise<Brand> => {
-    const repo = settings.launchesRepo();
-    // With the file cache brand.yml is read from GitHub once, then again only after a push to it
-    if (caches) return loadBrand(github, repo);
-    if (!cached || cached.repo !== repo || Date.now() - cached.at > BRAND_TTL_MS) cached = { repo, brand: await loadBrand(github, repo), at: Date.now() };
-    return cached.brand;
-  };
+  // Through the file cache brand.yml is read from GitHub once, then again only after a push to it
+  const brand = async (): Promise<Brand> => loadBrand(github, settings.launchesRepo());
 
   const media = mediaStoreFor(flags, env, { ...(options.fetch && { fetch: options.fetch }) });
   // Its media go to the media store, which refuses while launch-media is off: the check reports that
@@ -194,16 +186,14 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
   // relaunch what one with it removed. One indexed lookup (launch_deletions_by_key) per claim
   const removed = (dedupeKey: string) => registry.launchDeletions.removed(dedupeKey);
 
-  const drafts = caches
-    ? new DraftSnapshotService({
-        github,
-        registry,
-        get launchesRepo() {
-          return settings.current().launchesRepo ?? '';
-        },
-        ...(launchStore && { launchStore }),
-      })
-    : undefined;
+  const drafts = new DraftSnapshotService({
+    github,
+    registry,
+    get launchesRepo() {
+      return settings.current().launchesRepo ?? '';
+    },
+    ...(launchStore && { launchStore }),
+  });
 
   // What choosing a task's provider needs: read when a task runs, so a change in the app applies to the next one
   const aiDeps = {
@@ -231,7 +221,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     },
     // Beside other processes each job clones into a folder of its own, removed at its end
     checkout: (repo, ref) => checkout({ ...workspace, perJob: split(roleFromEnv(env)) }, repo, ref),
-    ...(drafts && { drafts }),
+    drafts,
     ...(launchStore && { launchStore }),
     ...(launchRead && { launchRead }),
     ...(appReview && { appReview }),
@@ -265,9 +255,8 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
     refresh: async () => {
       await settings.read();
     },
-    invalidateBrand: () => {
-      cached = undefined;
-    },
+    // brand.yml is read through the file cache, which a push to it (or the hourly poll) forgets
+    invalidateBrand: () => undefined,
     githubCaches: caches,
     drafts,
     flushEvents: async () => {

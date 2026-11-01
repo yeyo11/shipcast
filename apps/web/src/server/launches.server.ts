@@ -74,7 +74,7 @@ export async function launchDetail(
   deps: {
     github: ReviewGitHub;
     launchesRepo: string;
-    /** With `github-events`: the drafts snapshot, read from the registry, instead of the pull request from GitHub */
+    /** The page's drafts snapshot, read from the registry, instead of the pull request from GitHub; the REST API reads GitHub */
     snapshot?: Promise<DraftSnapshot | undefined>;
     /** With `launch-store-read`: the drafts from the launch model's tables, for a launch they hold */
     stored?: Pick<LaunchReadService, 'review'> | undefined;

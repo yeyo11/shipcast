@@ -3,7 +3,7 @@ import type { EventBus, ShipcastEvents, Unsubscribe } from '../redis/ports.ts';
 
 /*
  * The other half of phase 9 (docs/plans/performance-refactor.md, "6. A live UI"): one server-sent
- * event stream per open tab, fed by the event bus (Redis pub/sub across replicas with `redis-state`,
+ * event stream per open tab, fed by the event bus (Redis pub/sub across replicas when the process has Redis,
  * this process's memory without), so a page reloads what it shows when, and only when, it changed.
  *
  * The protocol, GET /api/events:

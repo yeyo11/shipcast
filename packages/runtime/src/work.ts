@@ -1,4 +1,4 @@
-import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, publishLaunch, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
+import { draftArticle, draftLaunch, type DraftSnapshotService, draftReply, PublishingService, runChecks, runComments, TelemetryStore, UNFINISHED_JOB_STATES, type Account, type GitHubRest, type Launch, type PipelineDeps, type Post, type Repositories } from '@shipcast/engine';
 import { MemoryEtagCache, type EtagCache } from '@shipcast/connectors';
 import { channelCadence, lastMetricsRead, pullRequestNumber, type Brand, type Channel } from '@shipcast/schema';
 import { LAST_ROUND_KEY, readAutomation, record } from './automation.ts';
@@ -7,7 +7,7 @@ import { PUBLISH_RETRIES, PUBLISH_RETRY_SECONDS, RetryLater, RECONCILE_GRACE_MS,
 import { handlersOf, runsTheClock, split, type Role } from './roles.ts';
 import type { Cache, Lock } from './redis/ports.ts';
 import { pollGitHub, takeGitHubPoll } from './github-events.ts';
-import { notifications, notify, readMetrics, readMetricsHourly, refreshInstagramTokens, runRound } from './rounds.ts';
+import { notifications, notify, readMetricsHourly, refreshInstagramTokens, runRound } from './rounds.ts';
 import { MemoryCache } from './redis/memory.ts';
 import type { SecretStore } from './secrets.ts';
 import { SettingMissing } from './settings.ts';
@@ -32,12 +32,12 @@ export interface WorkDeps {
   fetch?: typeof fetch;
   /** Reads the settings again, before each round, so a change made in the app reaches every worker */
   refresh?: () => Promise<void>;
-  /** The refactor's switches; all off when not given */
+  /** The switches (SHIPCAST_FLAGS); all off when not given */
   flags?: Flags;
-  /** With `github-events`: the drafts snapshots deliveries and the hourly poll keep current */
+  /** The drafts snapshots deliveries and the hourly poll keep current */
   drafts?: DraftSnapshotService;
   /**
-   * Where the hourly reads keep accounts' identities and sessions between runs (`batched-metrics`):
+   * Where the hourly reads keep accounts' identities and sessions between runs:
    * Redis's cache where the process has one, else this process's memory
    */
   cache?: Cache;
@@ -125,8 +125,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
   const flags = d.flags ?? new Flags();
   const publishing = new PublishingService({ registry, github: d.github, launchesRepo: d.pipeline.launchesRepo, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }), ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
   const servicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets }));
-  // Phase 8: the hourly reads, with what they keep between runs, which lives as long as the process
-  const batched = flags.on('batched-metrics');
+  // The hourly reads, with what they keep between runs, which lives as long as the process
   const cache = d.cache ?? new MemoryCache();
   const etags = d.etags ?? new MemoryEtagCache();
   const hourlyServicesFor = d.services ?? ((brand: Brand) => buildServices({ env: d.env, brand, registry, github: d.github, secrets: d.secrets, cache, etags }));
@@ -207,9 +206,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       const brand = await d.brand();
       const services = await servicesFor(brand);
       const connectors = publishConnectors(services);
-      const result = flags.on('publishing-service')
-        ? await publishing.publish(current, brand, connectors, job.id)
-        : await publishLaunch(current, brand, { github: d.github, registry, launchesRepo: d.pipeline.launchesRepo, ...connectors, ...(d.pipeline.launchStore && { launchStore: d.pipeline.launchStore }), ...(d.pipeline.appReview && { appReview: d.pipeline.appReview }) });
+      const result = await publishing.publish(current, brand, connectors, job.id);
       if (result.state === 'waiting') {
         const minutes = Math.round((PUBLISH_RETRIES * PUBLISH_RETRY_SECONDS) / 60);
         if (job.lastAttempt) throw new Error(`still waiting after ${minutes} minutes (${result.reason}); the next publish round will pick it up`);
@@ -266,7 +263,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     /** GitHub said a drafts pull request changed: its snapshot is read again, off the webhook's request */
     async 'drafts-snapshot'({ pullRequest }, job) {
       if (!d.drafts) {
-        job.log('The drafts snapshot is off (github-events): nothing to read');
+        job.log('This process keeps no drafts snapshot: nothing to read');
         return;
       }
       const launch = await d.drafts.launchOf(pullRequest);
@@ -329,25 +326,21 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
           log(error.message);
           return;
         }
-        // With github-events releases come by webhook; the round's own detection is the hourly safety net, in either mode
-        const polling = flags.on('github-events') && (reason === BY_HAND || (await takeGitHubPoll(registry)));
+        // Releases come by webhook; the round's own detection is the hourly safety net, in either mode
+        const polling = reason === BY_HAND || (await takeGitHubPoll(registry));
         await runRound(
           // A process with its own services (a preview's fake networks) publishes and notifies with them in the round too
           { env: d.env, registry, github: d.github, secrets: d.secrets, brand, pipeline: d.pipeline, log, ...(d.services && { services: d.services }) },
           {
-            detect: flags.on('github-events') ? polling : automation.mode === 'poll' || reason === BY_HAND,
+            detect: polling,
             draft: async (claimed) => {
               log(`Claimed ${claimed.repo} ${claimed.ref}: drafting`);
               await startDrafting(queue, claimed);
             },
-            // With the publishing service the round only queues: a launch is published by its own job, one at a time
-            ...(flags.on('publishing-service') && {
-              enqueue: async (drafted: Launch) => {
-                if ((await publishing.approval(drafted)).state !== 'waiting') await startPublishing(queue, drafted);
-              },
-            }),
-            // A launch with its own publish job waiting for the deploy is left to that job
-            busy: async (drafted) => (await registry.jobs.jobs({ launchId: drafted.id, queues: ['publish'], states: UNFINISHED_JOB_STATES, limit: 1 })).length > 0,
+            // The round only queues: a launch is published by its own job, one at a time
+            enqueue: async (drafted: Launch) => {
+              if ((await publishing.approval(drafted)).state !== 'waiting') await startPublishing(queue, drafted);
+            },
           },
         );
         if (polling && d.drafts) for (const line of await pollGitHub({ drafts: d.drafts, files: d.github.files, launchesRepo: d.pipeline.launchesRepo })) log(line);
@@ -377,7 +370,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         for (const line of await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand)), new Date(), { posts: [postId] })) job.log(line);
         return;
       }
-      const lines = batched ? await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand))) : await readMetrics({ registry, brand }, withRepos(await servicesFor(brand)));
+      const lines = await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand)));
       for (const line of lines) job.log(line);
     },
 
@@ -420,15 +413,15 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
         return;
       }
       const brand = await d.brand();
-      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }), ...(batched && { cache }) });
+      const deps = replyDeps({ env: d.env, registry, secrets: d.secrets, pipeline: d.pipeline, brand, github: d.github, ...(d.fetch && { fetch: d.fetch }), cache });
       if (commentId !== undefined) {
         const drafted = await draftReply(commentId, deps);
         if (drafted.status === 'failed') throw new Error(drafted.problem ?? 'could not draft');
         job.log(drafted.draft ? `Drafted: ${drafted.draft}` : `Suggested: dismiss (${drafted.classification ?? 'no reply'})`);
         return;
       }
-      // With batched-metrics each account's feed is asked first and only the posts it names are read
-      const result = await runComments(deps, { log: (line) => job.log(line), ...(batched && { feeds: { cursors: registry.cursors } }) });
+      // Each account's feed is asked first and only the posts it names are read
+      const result = await runComments(deps, { log: (line) => job.log(line), feeds: { cursors: registry.cursors } });
       if (result.drafted.length > 0) job.log(`Drafted ${result.drafted.length}; sent ${result.sent.length}`);
       const notice = commentsNotice(result, d.env.SHIPCAST_PUBLIC_URL);
       if (notice) await notify(await servicesFor(brand), notice);
@@ -439,7 +432,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     /** The measurement's checks (docs/plans/performance-refactor.md), from the registry only: no provider is called */
     async checks(_data, job) {
       // With the hourly reads each channel is fresh within its own cadence (its definition's)
-      const cadence = batched ? { cadenceHours: METRICS_HOURLY_CADENCE_HOURS, cadenceOf: (channel: string) => channelCadence(channel)?.hours } : { cadenceHours: METRICS_CADENCE_HOURS };
+      const cadence = { cadenceHours: METRICS_HOURLY_CADENCE_HOURS, cadenceOf: (channel: string) => channelCadence(channel)?.hours };
       for (const result of await runChecks(registry, new TelemetryStore(registry.database), cadence)) {
         job.log(`${result.name}: ${result.ok ? 'ok' : 'NOT OK'} (${Math.round(result.value * 1000) / 1000})`);
       }
@@ -474,13 +467,10 @@ export async function syncNow(queue: JobQueue, account: Pick<Account, 'id' | 'la
   return waiting;
 }
 
-/** When the scheduled jobs are sent, in UTC: the numbers every six hours, the tokens and the accounts once a day */
-export const METRICS_CRON = '0 */6 * * *';
-/** The hours between two runs of METRICS_CRON: how old a reading may be and still be fresh */
-export const METRICS_CADENCE_HOURS = 6;
 /**
- * With `batched-metrics`: the metrics job every hour, off the round's and the checks' minutes; each
- * run reads only the sources whose cadence is due, so most of them read only the hourly ones
+ * When the scheduled jobs are sent, in UTC. The metrics job every hour, off the round's and the
+ * checks' minutes; each run reads only the sources whose cadence is due, so most of them read only
+ * the hourly ones. The tokens and the accounts once a day
  */
 export const METRICS_HOURLY_CRON = '3 * * * *';
 export const METRICS_HOURLY_CADENCE_HOURS = 1;
@@ -523,9 +513,7 @@ export async function startWorking(queue: JobQueue, d: WorkDeps, options: Workin
   await queue.schedule('checks', CHECKS_CRON, { reason: 'hourly' });
   // Only a process that can load the pages (the web app) times them
   if (options.scheduleProbe ?? options.handlers?.probe !== undefined) await queue.schedule('probe', PROBE_CRON, { reason: 'hourly' });
-  // The same schedule's name either way: turning the flag off and restarting puts the six hours back
-  if ((d.flags ?? new Flags()).on('batched-metrics')) await queue.schedule('metrics', METRICS_HOURLY_CRON, { reason: 'hourly' });
-  else await queue.schedule('metrics', METRICS_CRON, { reason: 'every 6 hours' });
+  await queue.schedule('metrics', METRICS_HOURLY_CRON, { reason: 'hourly' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
   await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });
   await queue.schedule('comments', COMMENTS_CRON, { reason: 'every 30 minutes' }, { singletonKey: COMMENTS_KEY });
@@ -545,7 +533,7 @@ export const MAINTENANCE_EVERY_MS = 10 * 60_000;
 
 export interface MaintenanceDeps {
   queue: JobQueue & { reconcileScheduled?: () => Promise<number | undefined> };
-  /** A lock every process shares (Redis's, with `redis-state` on) */
+  /** A lock every process shares (Redis's, when the process has Redis) */
   lock: Lock;
   /** Whether the `jobs` rows are reconciled here, rather than at each queue's start */
   reconcileRows: boolean;

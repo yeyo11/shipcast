@@ -1,24 +1,10 @@
 /**
- * The switches of the refactor in docs/plans/performance-refactor.md: one per phase that changes
- * behaviour, off until it is turned on, so a phase ships dark, is turned on where it is verified and
- * is turned off again by an environment change and a restart, with no deploy. Set as a list:
- * `SHIPCAST_FLAGS=publishing-service,bullmq`.
+ * The switches of a phase that changes behaviour (the launch model's in docs/decisions/launch-model.md,
+ * Umami's): off until it is turned on, so a phase ships dark, is turned on where it is verified and is
+ * turned off again by an environment change and a restart, with no deploy. Set as a list:
+ * `SHIPCAST_FLAGS=launch-media,launch-store`. The performance refactor's switches are retired (RETIRED).
  */
 export const FLAGS = {
-  /** Phase 2: every publish through PublishingService, with attempt rows and per-piece locks */
-  'publishing-service': 'Publishing through PublishingService, with attempt rows and per-piece locks',
-  /** Phase 5: secrets in the encrypted Postgres table instead of the file or the keychain */
-  'secrets-table': 'Secrets in the encrypted secrets table',
-  /** Phase 5: OAuth state, console links and the API limiter in Redis */
-  'redis-state': 'Shared ephemeral state in Redis',
-  /** Phase 6: BullMQ on redis-queue instead of pg-boss */
-  bullmq: 'Jobs on BullMQ',
-  /** Phase 7: pages read the drafts snapshot; GitHub is read on events and hourly */
-  'github-events': 'GitHub read on events, pages from the drafts snapshot',
-  /** Phase 8: metrics hourly and batched at each source's cadence; comments from notification feeds */
-  'batched-metrics': 'Hourly, batched metrics and comment feeds',
-  /** Phase 9: the pages update over SSE instead of polling */
-  'realtime-ui': 'Pages updated over server-sent events',
   /**
    * Launch model (docs/decisions/launch-model.md), phase 1: the media store on Cloudflare R2, built
    * from SHIPCAST_MEDIA_* in .env. Off, the store refuses every call; nothing calls it yet
@@ -80,6 +66,16 @@ export const FLAGS = {
 const RETIRED: ReadonlySet<string> = new Set([
   // The AI task runner is the only AI layer (docs/decisions/ai-layer.md)
   'ai-runner',
+  // The performance refactor (docs/plans/performance-refactor.md), on in production since 2026-10-29:
+  // every publish through PublishingService, the secrets table selectable, Redis and BullMQ whenever
+  // SHIPCAST_REDIS_QUEUE_URL is set, GitHub by events, the hourly metrics, the pages over server-sent events
+  'publishing-service',
+  'secrets-table',
+  'redis-state',
+  'bullmq',
+  'github-events',
+  'batched-metrics',
+  'realtime-ui',
 ]);
 
 export type Flag = keyof typeof FLAGS;

@@ -81,8 +81,8 @@ test('the runner’s setup carries the spend limits the owner set in the AI sett
 });
 
 test('the retired ai-runner flag is accepted and ignored: an old SHIPCAST_FLAGS still starts', () => {
-  const flags = Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner, bullmq' });
-  assert.equal(flags.on('bullmq'), true);
+  const flags = Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runner, umami' });
+  assert.equal(flags.on('umami'), true);
   assert.ok(!('ai-runner' in flags.list()), 'no longer a switch');
   assert.throws(() => Flags.fromEnv({ SHIPCAST_FLAGS: 'ai-runnr' }), /unknown ai-runnr/, 'a typo is still refused');
 });

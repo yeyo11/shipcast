@@ -20,7 +20,7 @@ import { DEFAULTS } from '../src/server/stats-search.ts';
 import { loadGrowth, loadSearch, loadStats } from '../src/server/stats.server.ts';
 
 /*
- * Phase 7's exit (docs/plans/performance-refactor.md): with `github-events` on, no page's server
+ * Phase 7's exit (docs/plans/performance-refactor.md): no page's server
  * function reaches outside the process. Each loader runs under its telemetry origin, with the global
  * fetch counted and made to throw and a GitHub client that throws on any call, so a loader that
  * reaches GitHub (or any provider) fails here instead of costing a request on every view.
@@ -88,13 +88,6 @@ test('getLaunch with 13 drafts reads only the registry: no outbound call, GitHub
   assert.ok(page.draftsReadAt, 'the page says when the drafts were read');
 });
 
-test('without the snapshot the same loader reads GitHub, as before the flag', async () => {
-  const { registry, launch } = await seeded();
-  const page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES }, launch);
-  assert.ok(page.review && 'error' in page.review && /GitHub was called/.test(page.review.error));
-  assert.equal('draftsReadAt' in page, false);
-});
-
 /*
  * The launch model's fourth phase (docs/launch-store-read.md): with `launch-store-read`, a launch the
  * launch model's tables hold is read from them alone, with no snapshot at all: its drafts, its files
@@ -118,14 +111,14 @@ test('with launch-store-read, getLaunch reads the launch model alone: no outboun
   const { registry, launch, read } = await stored();
   let page: Awaited<ReturnType<typeof launchPage>> | undefined;
   const calls = await counted('fn:getLaunch', async () => {
-    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, stored: read }, launch);
+    page = await launchPage({ registry, github: unreachable, launchesRepo: LAUNCHES, drafts: { get: (id) => registry.drafts.snapshot(id) }, stored: read }, launch);
   });
   assert.deepEqual(calls, []);
   assert.ok(page?.review && !('error' in page.review), 'the drafts came from the tables, not from an error');
   assert.equal(page.review.pullRequest?.state, 'open');
   assert.equal(page.review.drafts.find((d) => d.path === `${D}/bluesky.md`)?.content, '# Bluesky\n\nhello\n');
   assert.match(page.review.drafts.find((d) => d.kind === 'image')?.url ?? '', /^\/media\/\d+$/, 'served by the app, not GitHub');
-  assert.equal('draftsReadAt' in page, false);
+  assert.equal(page.draftsReadAt, null, 'no snapshot: nothing was read from GitHub');
   const channels = page.pieces.scheduling.channels.map((c) => c.channel);
   assert.ok(channels.includes('bluesky') && channels.includes('threads'));
   assert.ok(!channels.includes('mastodon'), 'a channel its row turns off cannot be scheduled');
@@ -156,7 +149,7 @@ test("the launches list and the stats pages' loaders make no outbound call", asy
 });
 
 /*
- * Phase 9 (realtime-ui): every route's loader, not only the launch page's. What each page's server
+ * Phase 9: every route's loader, not only the launch page's. What each page's server
  * function reads, run on a seeded registry with fetch throwing: the list, a launch (above), the
  * comments, the stats (above), the channels, Automation and its jobs, the bell, a profile review, and
  * the one list only GitHub has (the repositories of "Launch a repo"), which is a cached read.

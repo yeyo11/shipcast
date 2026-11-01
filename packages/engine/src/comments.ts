@@ -118,7 +118,7 @@ export interface CommentFeed {
 export interface CommentConnectors {
   reader?: CommentReader;
   replier?: Replier;
-  /** Where the network has a feed of what is new (the `batched-metrics` flag reads it first) */
+  /** Where the network has a feed of what is new (the hourly comment run reads it first) */
   feed?: CommentFeed;
 }
 
@@ -245,7 +245,7 @@ export const commentSweepKey = (channel: string, accountId: number | null) => `c
 export const COMMENT_SWEEP_HOURS = 24;
 
 /**
- * The comment run of the `batched-metrics` flag: the same posts as `fetchComments`, one connector
+ * The hourly comment run: the same posts as `fetchComments`, one connector
  * per account, each account's feed asked once and only the posts it names read; a network with no
  * feed (Threads) is read post by post, as before. The cursors are kept per account.
  */

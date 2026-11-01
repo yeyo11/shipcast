@@ -14,6 +14,6 @@ export const whoAmI = createServerFn({ method: 'GET' }).handler(async () => {
   const session = await readSession(ctx.secrets, cookieOf(getRequest(), SESSION_COOKIE));
   const login = session?.login ?? '';
   const fallback = login ? `https://avatars.githubusercontent.com/${encodeURIComponent(login)}?size=64` : null;
-  // With realtime-ui the tab opens the event stream instead of polling (components/live)
+  // The tab opens the event stream instead of polling (components/live)
   return { login, name: session?.name ?? null, avatarUrl: imageUrl(session?.avatarUrl) ?? fallback, live: ctx.live !== undefined };
 });

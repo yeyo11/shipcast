@@ -267,10 +267,9 @@ async function main(argv: string[]): Promise<number> {
   const { config, registry, github, secrets, settings, pipeline: deps } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
   const loadBrandNow = () => runtime.brand();
-  // A queue sent to and worked here, on whichever backend the app's processes use (the bullmq flag)
+  // A queue sent to and worked here, on whichever backend the app's processes use (BullMQ with Redis)
   const cliQueue = () =>
     jobQueue({
-      flags: Flags.fromEnv(process.env),
       registry,
       databaseUrl: config.databaseUrl,
       redis: processState(process.env, 'cli').redis,
@@ -435,10 +434,10 @@ async function main(argv: string[]): Promise<number> {
           return 2;
         }
         const proc = processState(process.env, `watch-${role}`);
-        const queue = jobQueue({ flags, registry, databaseUrl: config.databaseUrl, redis: proc.redis, options: { instanceName: 'watch', telemetry, schedule: runsTheClock(role), supervise: runsTheClock(role), reconcileAtStart: !split(role), poolMax: queuePoolMax(process.env) } });
+        const queue = jobQueue({ registry, databaseUrl: config.databaseUrl, redis: proc.redis, options: { instanceName: 'watch', telemetry, schedule: runsTheClock(role), supervise: runsTheClock(role), reconcileAtStart: !split(role), poolMax: queuePoolMax(process.env) } });
         // A worker of the same queue as the app: the same rounds and jobs, never one round twice
-        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags, ...(runtime.drafts && { drafts: runtime.drafts }) }, { firstRoundInSeconds: 0, role });
-        const stopMaintenance = runsTheClock(role) && (split(role) || flags.on('bullmq')) ? startMaintenance({ queue, lock: proc.redis ? new RedisLock(proc.redis.queue) : proc.shared.lock, reconcileRows: split(role) }) : undefined;
+        await startWorking(queue, { env: process.env, registry, github, secrets, pipeline: deps, brand: loadBrandNow, refresh: runtime.refresh, flags, drafts: runtime.drafts }, { firstRoundInSeconds: 0, role });
+        const stopMaintenance = runsTheClock(role) && (split(role) || proc.redis) ? startMaintenance({ queue, lock: proc.redis ? new RedisLock(proc.redis.queue) : proc.shared.lock, reconcileRows: split(role) }) : undefined;
         console.log(`Working Shipcast's job queue for ${brand.github}'s releases and ${deps.launchesRepo}: ${automation.mode} mode, a round every ${automation.intervalSeconds} s. Ctrl+C to stop.`);
         if (automation.mode === 'off') console.log('Automation is off (in the app\'s Automation page): no rounds run until it is turned on; jobs sent by hand still do.');
         console.log(`Publishing to and reading from: ${services.configured.join(', ')}`);

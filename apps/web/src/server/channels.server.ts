@@ -17,7 +17,7 @@ export async function channelsView() {
 
 /**
  * OAuth sign-ins in flight, by state: which network, brand and instance they are for, ten minutes
- * each and good once. In the process's one-time store: memory, or Redis with `redis-state` on, so a
+ * each and good once. In the process's one-time store: memory, or Redis when the process has it, so a
  * sign-in started on one replica finishes on whichever one the network's redirect reaches.
  */
 type OAuthNetwork = string;

@@ -212,7 +212,7 @@ export function ProfileReview({ account, network, initial, now }: { account: { i
     },
     [account.id, toast],
   );
-  // Live (realtime-ui): the job's own events (ended, or a resync) say when to read it
+  // Live: the job's own events (ended, or a resync) say when to read it
   const live = useLiveEnabled();
   useLiveInterest(live && job ? ['job'] : null, {
     accepts: (e) => e.data.id === job && (e.data.state === 'completed' || e.data.state === 'failed'),

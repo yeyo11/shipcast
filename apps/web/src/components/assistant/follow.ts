@@ -2,7 +2,7 @@ import type { Interest, LiveEvent } from '../live/client';
 
 /*
  * Following a job a request started, until its result: the job's own live events say when to read
- * it (`realtime-ui`), and without a live client it is read every few seconds, as the profile review
+ * it, and without a live client it is read every few seconds, as the profile review
  * does. No React here: the reader, the client and the clock are given, so a test drives it with fakes.
  */
 

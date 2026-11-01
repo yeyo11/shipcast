@@ -43,7 +43,7 @@ test('the shared limiter refuses a client once the window is full', async () => 
 
 describe('two web replicas over one Redis', { skip: reachable ? false : `no test Redis at ${url}` }, () => {
   const prefix = `test:${randomUUID()}:`;
-  const env = { SHIPCAST_FLAGS: 'redis-state', SHIPCAST_REDIS_QUEUE_URL: url };
+  const env = { SHIPCAST_REDIS_QUEUE_URL: url };
   const states: ProcessState[] = [buildProcessState(env, 'web-1', prefix), buildProcessState(env, 'web-2', prefix)];
   after(async () => {
     const sweeper = redisClient(url, 'queue');

@@ -233,7 +233,7 @@ test("a preview's sign-in never leaves the app: its consent comes back to the ca
   assert.deepEqual(ledger.entries.map((e) => `${e.channel} ${e.action}`), ['youtube connect']);
 });
 
-test("the round publishes with the process's own services when it has them (a preview's), never with the brand's", async () => {
+test("the round publishes nothing itself, with the process's own services or the brand's: it queues each drafted launch's publishing", async () => {
   const registry = await memoryRegistry();
   const ledger = new MemoryFakeNetworkLedger();
   const launch = await aLaunch(registry, { detail: 'direct:x' });
@@ -246,6 +246,7 @@ test("the round publishes with the process's own services when it has them (a pr
   });
   const world = previewWorld({ ledger });
   const lines: string[] = [];
+  const queued: number[] = [];
   await runRound(
     {
       // Telegram's credentials in .env: the brand's own services would post for real
@@ -258,7 +259,8 @@ test("the round publishes with the process's own services when it has them (a pr
       services: async () => world.services(realServices()),
       log: (line) => lines.push(line),
     },
-    { detect: false },
+    { detect: false, enqueue: async (drafted) => void queued.push(drafted.id) },
   );
-  assert.deepEqual(ledger.entries.filter((e) => e.action === 'publish').map((e) => e.channel), ['telegram'], lines.join('\n'));
+  assert.deepEqual(queued, [launch.id], lines.join('\n'));
+  assert.deepEqual(ledger.entries.filter((e) => e.action === 'publish'), [], 'the publish job sends, with the services of its process');
 });

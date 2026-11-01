@@ -139,7 +139,7 @@ function Launches() {
   const quiet = groups.quiet;
   const rows = attentionRows(attention?.items ?? []);
   const count = attention?.count ?? 0;
-  // Live (realtime-ui): the list is read again when a launch, a piece or a launch's numbers change
+  // Live: the list is read again when a launch, a piece or a launch's numbers change
   const live = useLiveEnabled();
   useLiveRoute(Route.id, live ? ['launch', 'post', 'metrics'] : null);
   // Otherwise, while something runs, the page follows it by polling

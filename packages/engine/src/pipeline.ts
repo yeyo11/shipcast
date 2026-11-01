@@ -40,7 +40,7 @@ export interface PipelineDeps {
    * folder and clones, the guarded page fetcher). Absent, every launch is its one repo, as before
    */
   sources?: SourcesDeps;
-  /** With `github-events`: the drafts snapshot written as the pull request is opened, so the page never reads GitHub */
+  /** The drafts snapshot written as the pull request is opened, so the page never reads GitHub */
   drafts?: { opened(launch: Launch, pr: { number: number; url: string; created: boolean }, branch: string, files: readonly DraftFile[]): Promise<void> };
   /**
    * With `launch-store`: the launch model's shadow write, which also keeps each delivery's pack,

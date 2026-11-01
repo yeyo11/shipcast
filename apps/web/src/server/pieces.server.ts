@@ -8,7 +8,7 @@ interface PiecesDeps {
   launchesRepo: string;
   draftPaths: readonly string[] | Promise<readonly string[]>;
   /**
-   * With `github-events`: launch.yml as the drafts snapshot kept it, instead of a read from GitHub;
+   * launch.yml as the drafts snapshot kept it, instead of a read from GitHub;
    * with `launch-store-read`, the launch model's channel rows. Asked only for a launch that can still schedule
    */
   launchConfig?: () => Promise<LaunchConfig | undefined>;

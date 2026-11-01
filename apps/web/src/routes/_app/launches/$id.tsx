@@ -52,7 +52,7 @@ function LaunchPage() {
   const [busy, setBusy] = useState(false);
   const { launch, review, index, jobs, pieces, numbers } = data;
   const running = jobs.some((j) => j.state === 'running' && !j.queued) || launch.status === 'generating';
-  // Live (realtime-ui): this launch's own events reload it, whether or not something runs
+  // Live: this launch's own events reload it, whether or not something runs
   const live = useLiveEnabled();
   useLiveRoute(Route.id, live ? [`launch:${launch.id}`, `post:${launch.id}`, `job:${launch.id}`, `comment:${launch.id}`, `metrics:${launch.id}`] : null);
   useEffect(() => {

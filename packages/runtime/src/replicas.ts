@@ -5,7 +5,7 @@ import type { SharedState } from './redis/state.ts';
  * What every replica caches and must drop when another replica changes it: the settings (each
  * process reads them once and keeps them), the brand (read from the launches repo every few
  * minutes) and the GitHub App's installation (looked up once). With the shared state on Redis
- * (`redis-state`), a change is announced on the event bus and every replica, this one included,
+ * (SHIPCAST_REDIS_QUEUE_URL), a change is announced on the event bus and every replica, this one included,
  * reacts to it; in memory there is no other replica, so this process reacts directly, as before.
  */
 
@@ -26,7 +26,7 @@ export interface ReplicaEvents {
 const CACHE_EVENTS = ['settings.changed', 'github.installation.changed', 'brand.changed'] as const;
 
 /**
- * `pages`: with `realtime-ui` the open pages listen on the bus too (realtime/stream.ts), so a single
+ * `pages`: the open pages listen on the bus too (realtime/stream.ts), so a single
  * process without Redis still puts its changes on its in-memory bus, where only they hear them
  */
 export async function replicaEvents(shared: Pick<SharedState, 'events' | 'backend'>, caches: ReplicaCaches, log: (line: string) => void = (line) => console.error(line), options: { pages?: boolean } = {}): Promise<ReplicaEvents> {

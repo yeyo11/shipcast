@@ -6,8 +6,7 @@ import { cookieOf, SESSION_COOKIE } from '../../server/session.server';
 /**
  * The tab's event stream (runtime's realtime/stream.ts has the protocol). Behind the session like
  * every page (start.ts refuses it without one); the cookie's digest names the session for the cap on
- * streams, never the cookie itself. With `realtime-ui` off there is nothing to stream: 404, and the
- * pages poll as they always did.
+ * streams, never the cookie itself. A process that serves no pages has nothing to stream: 404.
  */
 export const Route = createFileRoute('/api/events')({
   server: {

@@ -178,7 +178,7 @@ function ImportNotice({ count, busy, onImport }: { count: number; busy: boolean;
 
 function Channels() {
   const data = Route.useLoaderData();
-  // Live (realtime-ui): an account connected, checked or removed, here or in another tab, reloads the list
+  // Live: an account connected, checked or removed, here or in another tab, reloads the list
   useLiveRoute(Route.id, useLiveEnabled() ? ['account'] : null);
   const router = useRouter();
   const toast = useToast();

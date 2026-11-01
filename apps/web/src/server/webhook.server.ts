@@ -18,28 +18,27 @@ export const MAX_WEBHOOK_BYTES = 5 * 1024 * 1024;
  * of it. The answer comes at once (GitHub gives up after ten seconds); drafting and publishing run as
  * background work.
  *
- * With `github-events` a delivery also keeps what Shipcast holds of GitHub current, whatever the
+ * A delivery also keeps what Shipcast holds of GitHub current, whatever the
  * mode: a `pull_request` of the launches repo queues its snapshot's read, a `push` forgets the files
  * it touched. Bodies are size-limited and a redelivery of an id already handled is dropped.
  */
 export async function receiveWebhook(request: Request): Promise<Response> {
   const ctx = await appContext();
-  const events = ctx.flags.on('github-events');
   const secrets = [ctx.config.githubApp?.webhookSecret, await ctx.secrets.get(WEBHOOK_SECRET_KEY)];
   if (!secrets.some(Boolean)) return answer(503, 'webhooks are not set up in Shipcast: generate a secret in Automation');
-  if (events && Number(request.headers.get('content-length') ?? 0) > MAX_WEBHOOK_BYTES) return answer(413, 'the delivery is larger than Shipcast reads');
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_WEBHOOK_BYTES) return answer(413, 'the delivery is larger than Shipcast reads');
   const body = await request.text();
-  if (events && Buffer.byteLength(body, 'utf8') > MAX_WEBHOOK_BYTES) return answer(413, 'the delivery is larger than Shipcast reads');
+  if (Buffer.byteLength(body, 'utf8') > MAX_WEBHOOK_BYTES) return answer(413, 'the delivery is larger than Shipcast reads');
   if (!verifyAnySignature(secrets, body, request.headers.get('x-hub-signature-256'))) return answer(401, 'the signature does not match the secret');
 
   const event = request.headers.get('x-github-event');
   const delivery = request.headers.get('x-github-delivery') ?? 'unknown';
-  // One seen-set: every replica's with redis-state, this process's otherwise; before github-events, as before, only with Redis
-  const deliveries = delivery !== 'unknown' && (events || ctx.process.shared.backend === 'redis') ? ctx.process.shared.deliveries : undefined;
+  // One seen-set: every replica's with Redis, this process's otherwise
+  const deliveries = delivery !== 'unknown' ? ctx.process.shared.deliveries : undefined;
   // After the signature, so nobody can burn an id GitHub is about to send
   if (deliveries && !(await deliveries.claim(delivery))) return answer(200, `already handled delivery ${delivery.slice(0, 8)}`);
   try {
-    return await handle(ctx, event, delivery, body, events);
+    return await handle(ctx, event, delivery, body);
   } catch (error) {
     // GitHub's redelivery of a delivery that failed here must be taken
     await deliveries?.release(delivery);
@@ -47,7 +46,7 @@ export async function receiveWebhook(request: Request): Promise<Response> {
   }
 }
 
-async function handle(ctx: AppContext, event: string | null, delivery: string, body: string, events: boolean): Promise<Response> {
+async function handle(ctx: AppContext, event: string | null, delivery: string, body: string): Promise<Response> {
   const done = async (status: number, summary: string, lines: string[] = []) => {
     await record(ctx.registry, LAST_DELIVERY_KEY, { at: new Date().toISOString(), summary: `${event ?? 'event'} ${delivery.slice(0, 8)}: ${summary}`, lines });
     return answer(status, summary);
@@ -62,7 +61,7 @@ async function handle(ctx: AppContext, event: string | null, delivery: string, b
   const launchesRepo = ctx.settings.current().launchesRepo ?? '';
   // A push to the launches repo may change brand.yml: every replica reads the brand again
   if (event === 'push' && launchesRepo && payload.repository?.full_name?.toLowerCase() === launchesRepo.toLowerCase()) await ctx.announce('brand.changed', { repo: launchesRepo });
-  const kept = events ? await applyEffects(ctx, githubEventEffects(event, payload, launchesRepo), delivery) : [];
+  const kept = await applyEffects(ctx, githubEventEffects(event, payload, launchesRepo), delivery);
   const action = webhookAction(event, payload, launchesRepo);
   if (action.kind === 'ping') return done(200, 'pong: the webhook reaches Shipcast');
   if (action.kind === 'installation') {
@@ -83,11 +82,11 @@ async function handle(ctx: AppContext, event: string | null, delivery: string, b
 /** Forgets the touched files at once (a cache delete) and queues the snapshot's read: nothing slow in the request */
 async function applyEffects(ctx: AppContext, effects: GitHubEventEffects, delivery: string): Promise<string[]> {
   const lines: string[] = [];
-  if (effects.forget && ctx.githubCaches) {
+  if (effects.forget) {
     await ctx.githubCaches.files.forget(effects.forget.repo, effects.forget.paths);
     lines.push(effects.forget.paths ? `forgot ${effects.forget.paths.length} files of ${effects.forget.repo}` : `forgot every file of ${effects.forget.repo}`);
   }
-  if (effects.snapshot !== undefined && ctx.drafts) {
+  if (effects.snapshot !== undefined) {
     const n = effects.snapshot;
     await ctx.queue.send('drafts-snapshot', { pullRequest: n, delivery }, { title: `Reading drafts pull request #${n}`, singletonKey: `pr:${n}` });
     lines.push(`reading pull request #${n} again`);

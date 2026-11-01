@@ -139,6 +139,6 @@ export function migrationLines(m: SecretsMigration): string[] {
     `  copied and read back: ${m.copied.length}${names(m.copied)}`,
     `  already there with the same value: ${m.same.length}${names(m.same)}`,
     `  already there with a different value, left as they are: ${m.conflicts.length}${names(m.conflicts)}`,
-    `${m.from} was only read: it stays as it was. Set SHIPCAST_SECRET_STORE=table (with SHIPCAST_FLAGS=secrets-table) to use the table; nothing writes to the old store from then on.`,
+    `${m.from} was only read: it stays as it was. Set SHIPCAST_SECRET_STORE=table to use the table; nothing writes to the old store from then on.`,
   ];
 }

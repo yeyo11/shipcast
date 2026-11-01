@@ -122,11 +122,10 @@ test('time() records the outcome and passes the result or the error through', as
   ]);
 });
 
-test('flags are off unless named, and a misspelt one is refused', () => {
-  const flags = Flags.fromEnv({ SHIPCAST_FLAGS: 'bullmq, publishing-service' });
-  assert.equal(flags.on('bullmq'), true);
-  assert.equal(flags.on('realtime-ui'), false);
-  assert.equal(flags.list()['publishing-service'], true);
-  assert.equal(Flags.fromEnv({}).on('bullmq'), false);
-  assert.throws(() => Flags.fromEnv({ SHIPCAST_FLAGS: 'bulmq' }), /unknown bulmq/);
+test('flags are off unless named, a misspelt one is refused, and a retired one is ignored', () => {
+  const flags = Flags.fromEnv({ SHIPCAST_FLAGS: 'umami, bullmq, publishing-service' });
+  assert.equal(flags.on('umami'), true);
+  assert.ok(!('bullmq' in flags.list()) && !('publishing-service' in flags.list()), 'the refactor’s switches are retired');
+  assert.equal(Flags.fromEnv({}).on('umami'), false);
+  assert.throws(() => Flags.fromEnv({ SHIPCAST_FLAGS: 'umamii' }), /unknown umamii/);
 });

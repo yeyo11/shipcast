@@ -11,7 +11,7 @@ import type { TelemetryRecorder } from './telemetry/recorder.ts';
 import { armScheduled } from './work.ts';
 
 /*
- * The durable work on BullMQ, on redis-queue (noeviction, AOF), behind the `bullmq` flag: the same
+ * The durable work on BullMQ, on redis-queue (noeviction, AOF), used whenever the process has Redis: the same
  * JobQueue as WorkQueue (pg-boss), held to the same semantics by test/queue-contract.test.ts.
  * Postgres stays the truth: the `jobs` rows are the audit, written by the same runJob wrapper, and
  * what Redis loses is rebuilt from Postgres (the scheduled posts by reconcileScheduled, the round

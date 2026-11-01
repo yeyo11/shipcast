@@ -1,4 +1,3 @@
-import type { Flags } from '../flags.ts';
 import { RedisCache, RedisDeliveryDedupe, RedisEventBus, RedisLock, RedisOneTimeStore, RedisTokenBucket, RedisWindowLimiter } from './adapters.ts';
 import type { RedisConnections } from './connection.ts';
 import { MemoryCache, MemoryDeliveryDedupe, MemoryEventBus, MemoryLock, MemoryOneTimeStore, MemoryTokenBucket, MemoryWindowLimiter } from './memory.ts';
@@ -31,14 +30,15 @@ export interface SharedStateOptions {
 const SIGN_IN = { limit: 10, windowSeconds: 600 };
 
 /**
- * Builds the state from the flags: with `redis-state` on, on the two Redis instances (it is an error
- * to turn it on without SHIPCAST_REDIS_QUEUE_URL); off, in this process's memory, as a single
- * install without Redis runs. Not called by the app yet: it is wired behind the flag.
+ * Builds the state: with the process's Redis connections, on the two Redis instances (it is an error
+ * to hand connections without SHIPCAST_REDIS_QUEUE_URL); without them, in this process's memory, as a
+ * single install without Redis (a desktop, a test) runs. A split process always has them
+ * (redis/process.ts).
  */
-export function sharedState(flags: Flags, connections: RedisConnections | undefined, options: SharedStateOptions = {}): SharedState {
+export function sharedState(connections: RedisConnections | undefined, options: SharedStateOptions = {}): SharedState {
   const signIn = options.signIn ?? SIGN_IN;
   const buckets = options.buckets ?? {};
-  if (!flags.on('redis-state')) {
+  if (!connections) {
     return {
       cache: new MemoryCache(),
       events: new MemoryEventBus(),
@@ -50,7 +50,7 @@ export function sharedState(flags: Flags, connections: RedisConnections | undefi
       backend: 'memory',
     };
   }
-  if (!connections?.urls.queue) throw new Error('the redis-state flag needs SHIPCAST_REDIS_QUEUE_URL');
+  if (!connections.urls.queue) throw new Error('the shared state on Redis needs SHIPCAST_REDIS_QUEUE_URL');
   const prefixed = options.prefix !== undefined ? { prefix: options.prefix } : {};
   const queue = connections.queue;
   const cache = connections.cache;

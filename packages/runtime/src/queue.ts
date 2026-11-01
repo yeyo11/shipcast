@@ -35,7 +35,7 @@ export interface JobData {
   checks: { reason: string };
   /** The measurement's browser page loads of fixed pages; worked by the web app only */
   probe: { reason: string };
-  /** With `github-events`: a drafts pull request read again after GitHub said it changed */
+  /** A drafts pull request read again after GitHub said it changed */
   'drafts-snapshot': { pullRequest: number; delivery: string };
   /**
    * A launch's text checked against its released code by the writing assistant,
@@ -158,7 +158,7 @@ export interface QueueOptions {
 
 /**
  * What the app and `shipcast watch` need of the durable work, whichever queue holds it: pg-boss
- * (`WorkQueue`) or BullMQ (`BullQueue`, behind the `bullmq` flag). Both keep the registry's `jobs`
+ * (`WorkQueue`) or BullMQ (`BullQueue`, whenever the process has Redis). Both keep the registry's `jobs`
  * rows through the same wrapper (`runJob`), and one contract suite
  * (test/queue-contract.test.ts) holds both to the same semantics.
  */

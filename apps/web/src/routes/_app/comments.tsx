@@ -814,7 +814,7 @@ function SettingsSheet({ data, open, onOpenChange }: { data: Data; open: boolean
 
 function Comments() {
   const data = Route.useLoaderData();
-  // Live (realtime-ui): a comment read, drafted or sent, or a piece it hangs under, reloads the list
+  // Live: a comment read, drafted or sent, or a piece it hangs under, reloads the list
   useLiveRoute(Route.id, useLiveEnabled() ? ['comment', 'post'] : null);
   const search = Route.useSearch();
   const [sheet, setSheet] = useState<Sheets>(null);

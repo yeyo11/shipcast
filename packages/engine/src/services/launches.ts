@@ -31,7 +31,7 @@ export interface LaunchServiceDeps {
   /** The claim's: the registry that records it once, and GitHub for the latest release when no ref is named */
   claims: Pick<PipelineDeps, 'github' | 'registry' | 'launchesRepo'>;
   github: PreflightSource & ReviewGitHub;
-  /** With `github-events`: the drafts snapshot the page reads, told of an edit at once */
+  /** The drafts snapshot the page reads, told of an edit at once */
   drafts?: Pick<DraftSnapshotService, 'edited'>;
   /** With `launch-store`: an edit is also a version in the launch model's tables */
   launchStore?: Pick<LaunchStoreService, 'edited'>;

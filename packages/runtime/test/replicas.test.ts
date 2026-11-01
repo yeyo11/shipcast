@@ -21,7 +21,7 @@ const until = async (check: () => boolean | Promise<boolean>, timeoutMs = 5000) 
 
 describe('two replicas over one Redis', { skip: redisSkip }, () => {
   const redis = testRedis();
-  const env = { SHIPCAST_FLAGS: 'redis-state', SHIPCAST_REDIS_QUEUE_URL: TEST_REDIS_URL };
+  const env = { SHIPCAST_REDIS_QUEUE_URL: TEST_REDIS_URL };
   const states: ProcessState[] = [];
   const replica = () => {
     const state = buildProcessState(env, `replica-${states.length}`, redis.prefix);
@@ -33,11 +33,13 @@ describe('two replicas over one Redis', { skip: redisSkip }, () => {
     await redis.cleanup();
   });
 
-  test('the shared state is Redis’s with redis-state on, memory without', () => {
+  test('the shared state is Redis’s with SHIPCAST_REDIS_QUEUE_URL, memory without; a split process needs it', () => {
     assert.equal(replica().shared.backend, 'redis');
     const local = buildProcessState({}, 'local');
     assert.equal(local.shared.backend, 'memory');
-    assert.equal(local.redis, undefined, 'no flag, no Redis connection');
+    assert.equal(local.redis, undefined, 'no URL, no Redis connection');
+    for (const role of ['web', 'worker', 'heavy']) assert.throws(() => buildProcessState({ SHIPCAST_ROLE: role }, 'split'), /needs SHIPCAST_REDIS_QUEUE_URL/);
+    assert.throws(() => buildProcessState({ SHIPCAST_REDIS_CACHE_URL: TEST_REDIS_URL }, 'half'), /without SHIPCAST_REDIS_QUEUE_URL/);
   });
 
   test('an OAuth state started on one finishes on the other, once', async () => {

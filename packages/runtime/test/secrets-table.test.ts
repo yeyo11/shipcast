@@ -6,7 +6,7 @@ import { memoryRegistry } from '@shipcast/engine/testing';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { copySecrets, FileStore, Flags, MemoryStore, migrateSecrets, migrationLines, SecretStoreError, secretStoreFor, TableStore } from '../src/index.ts';
+import { copySecrets, FileStore, MemoryStore, migrateSecrets, migrationLines, SecretStoreError, secretStoreFor, TableStore } from '../src/index.ts';
 
 async function table(key = randomBytes(32)) {
   const registry = await memoryRegistry();
@@ -61,17 +61,16 @@ test('a copy reads every value back, and never overwrites a different value alre
   assert.deepEqual(again.same.sort(), ['a', 'b']);
 });
 
-test('SHIPCAST_SECRET_STORE=table is the table, only with the secrets-table flag; off, the old stores as they were', async () => {
+test('SHIPCAST_SECRET_STORE=table is the table, with the registry and the key; the other stores as they were', async () => {
   const registry = await memoryRegistry();
   const rows = new SecretRows(registry.database);
   const config = { keychainService: 'shipcast-test', dataDir: '/tmp/shipcast-data' };
   const env = { SHIPCAST_SECRET_STORE: 'table', SHIPCAST_SECRETS_KEY: randomBytes(32).toString('base64') };
-  assert.ok(secretStoreFor(config, env, { flags: new Flags(['secrets-table']), rows }) instanceof TableStore);
-  assert.throws(() => secretStoreFor(config, env, { flags: new Flags(), rows }), /secrets-table flag/);
+  assert.ok(secretStoreFor(config, env, { rows }) instanceof TableStore);
   assert.throws(() => secretStoreFor(config, env), /does not open the registry/);
-  assert.throws(() => secretStoreFor(config, { SHIPCAST_SECRET_STORE: 'table' }, { flags: new Flags(['secrets-table']), rows }), /SHIPCAST_SECRETS_KEY/);
+  assert.throws(() => secretStoreFor(config, { SHIPCAST_SECRET_STORE: 'table' }, { rows }), /SHIPCAST_SECRETS_KEY/);
   const file = { SHIPCAST_SECRET_STORE: 'file', SHIPCAST_SECRETS_KEY: env.SHIPCAST_SECRETS_KEY };
-  assert.ok(secretStoreFor(config, file, { flags: new Flags(['secrets-table']), rows }) instanceof FileStore, 'the flag alone moves nothing');
+  assert.ok(secretStoreFor(config, file, { rows }) instanceof FileStore, 'the rows alone move nothing');
 });
 
 test('the migration copies a file store into the table, reads each back, names keys only, and leaves the file as it was', async () => {

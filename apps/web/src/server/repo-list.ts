@@ -3,8 +3,8 @@ import type { Cache, Json } from '@shipcast/runtime/redis';
 
 /*
  * The "Launch a repo" page lists the owner's repositories, which only GitHub knows: the one page
- * loader that cannot read the registry instead. With `realtime-ui` it is a cached read, shared by
- * every replica through the process's cache (Redis's with `redis-state`): GitHub is asked at most once
+ * loader that cannot read the registry instead. It is a cached read, shared by every replica
+ * through the process's cache (Redis's when the process has it): GitHub is asked at most once
  * per REPO_LIST_TTL_SECONDS, and a new repository shows up within that, or at once from the
  * releases picker, which asks GitHub on the owner's click.
  */

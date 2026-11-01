@@ -99,7 +99,7 @@ export async function approve(launchId: number, by?: string, versions?: Readonly
     return { ok: false, problem: error instanceof Error ? error.message : String(error) };
   }
   // The page shows the drafts as merged at once; a failed read is left to the delivery and the poll
-  if (!isAppLaunch(launch)) await (await appContext()).drafts?.refresh(launch).catch(() => undefined);
+  if (!isAppLaunch(launch)) await (await appContext()).drafts.refresh(launch).catch(() => undefined);
   return { ok: true, job: await startPublishing(launch) };
 }
 

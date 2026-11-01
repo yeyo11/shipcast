@@ -78,7 +78,7 @@ function Loading() {
 
 function Stats() {
   const { stats, growth, search: searchData } = Route.useLoaderData();
-  // Live (realtime-ui): a metrics run, an account's numbers or a new piece reloads the figures
+  // Live: a metrics run, an account's numbers or a new piece reloads the figures
   useLiveRoute(Route.id, useLiveEnabled() ? ['metrics', 'account', 'post'] : null);
   const { tab = 'overview', ...address } = Route.useSearch();
   const search = withDefaults(address);

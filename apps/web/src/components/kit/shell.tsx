@@ -56,7 +56,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     void reloadAttention();
     setMoreOpen(false);
   }, [reloadAttention, path]);
-  // Live (realtime-ui): read again when something the lines come from changes, never on a timer
+  // Live: read again when something the lines come from changes, never on a timer
   const live = useLiveEnabled();
   useLiveInterest(live ? ['attention', 'launch', 'post', 'comment', 'account'] : null, { reload: () => void reloadAttention(), debounceMs: 1000 });
   useEffect(() => {

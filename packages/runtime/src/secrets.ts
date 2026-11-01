@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { SecretRows } from '@shipcast/engine';
-import type { Flags } from './flags.ts';
 import { seal, unseal } from './seal.ts';
 import { TableStore } from './secrets-table.ts';
 
@@ -202,8 +201,6 @@ export class FileStore implements SecretStore {
 
 /** What the table store needs, which only a process with the registry open can give */
 export interface TableStoreDeps {
-  /** The refactor's switches: `table` is refused unless `secrets-table` is on */
-  flags: Pick<Flags, 'on'>;
   /** The registry's `secrets` rows */
   rows: SecretRows;
 }
@@ -218,8 +215,8 @@ function masterKey(env: NodeJS.ProcessEnv, kind: string): Buffer {
 /**
  * The store an install uses: the desktop keychain by default, the encrypted file on a server
  * (SHIPCAST_SECRET_STORE=file, with SHIPCAST_SECRETS_KEY; the file is <data dir>/secrets.enc), or the
- * registry's encrypted `secrets` table (SHIPCAST_SECRET_STORE=table, with the same key and the
- * `secrets-table` flag), the one every replica and worker can share. `table` needs `table`: the rows,
+ * registry's encrypted `secrets` table (SHIPCAST_SECRET_STORE=table, with the same key), the one
+ * every replica and worker can share. `table` needs `table`: the rows,
  * from a process that has the registry open.
  */
 export function secretStoreFor(config: { keychainService: string; dataDir: string }, env: NodeJS.ProcessEnv = process.env, table?: TableStoreDeps): SecretStore {
@@ -227,8 +224,6 @@ export function secretStoreFor(config: { keychainService: string; dataDir: strin
   if (kind === 'keychain') return new KeychainStore(config.keychainService);
   if (kind === 'file') return new FileStore(join(config.dataDir, 'secrets.enc'), masterKey(env, kind));
   if (kind !== 'table') throw new SecretStoreError(`SHIPCAST_SECRET_STORE is "keychain", "file" or "table", not "${kind}"`);
-  // Off, the table is not selectable at all: turning the flag off goes back to the old store, never to a half-wired one
-  if (table && !table.flags.on('secrets-table')) throw new SecretStoreError('SHIPCAST_SECRET_STORE=table needs the secrets-table flag (SHIPCAST_FLAGS=secrets-table)');
   if (!table) throw new SecretStoreError('SHIPCAST_SECRET_STORE=table is the registry’s table: this command does not open the registry');
   return new TableStore(table.rows, masterKey(env, kind));
 }

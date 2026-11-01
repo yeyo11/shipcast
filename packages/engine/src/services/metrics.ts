@@ -24,7 +24,7 @@ export class MetricsService {
     return result;
   }
 
-  /** The hourly reads (the `batched-metrics` flag): each source at its own cadence, batched, unchanged values only checked */
+  /** The hourly reads : each source at its own cadence, batched, unchanged values only checked */
   async readHourly(brand: Brand, sources: MetricSources, now = new Date(), options: HourlyOptions = {}): Promise<CollectResult> {
     const result = await collectHourly(this.#store, brand, sources, now, options);
     // A last read of a few pieces is not a reading of everything

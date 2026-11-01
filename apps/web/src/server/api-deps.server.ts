@@ -10,7 +10,7 @@ import { approve, armSchedule, startArticle, startLaunch, startPublishing, start
 
 /**
  * Shared by /api/v1 and /mcp, so wrong tokens count once whichever door they knock on: per process as
- * before, or with `redis-state` on, across every replica
+ * before, or with Redis, across every replica
  */
 let limiter: SignInLimiter | undefined;
 const limiterOf = (): SignInLimiter => {

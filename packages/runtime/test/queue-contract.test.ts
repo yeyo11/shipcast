@@ -8,7 +8,6 @@ import { clonePglite, connectPglite, registryOn } from '@shipcast/engine/testing
 import { Queue } from 'bullmq';
 import { BullQueue, drainPgBoss } from '../src/queue-bullmq.ts';
 import { jobQueue } from '../src/queue-factory.ts';
-import { Flags } from '../src/flags.ts';
 import { currentOrigin, LOST_RUNNING, RetryLater, TelemetryRecorder, WorkQueue, type JobQueue, type QueueName } from '../src/index.ts';
 import { RedisConnections, RedisLock, redisUrls } from '../src/redis/index.ts';
 import { redisSkip, TEST_REDIS_URL, testRedis, type TestRedis } from './redis-helper.ts';
@@ -525,14 +524,16 @@ describe('the cutover from pg-boss', () => {
     }
   });
 
-  test('the bullmq flag picks the queue: off pg-boss, on BullMQ on redis-queue, which it needs', async () => {
+  test('Redis picks the queue: without it pg-boss, with it BullMQ on redis-queue, which needs its URL', async () => {
     const { registry } = await database();
     const url = 'postgres://nobody@127.0.0.1:1/none';
     // Nothing connects until a queue starts, so building either is free
-    assert.ok(jobQueue({ flags: new Flags(), registry, databaseUrl: url }) instanceof WorkQueue);
+    assert.ok(jobQueue({ registry, databaseUrl: url }) instanceof WorkQueue);
     const redis = new RedisConnections(redisUrls({ SHIPCAST_REDIS_QUEUE_URL: 'redis://127.0.0.1:1' }));
-    assert.ok(jobQueue({ flags: new Flags(['bullmq']), registry, databaseUrl: url, redis }) instanceof BullQueue);
-    assert.throws(() => jobQueue({ flags: new Flags(['bullmq']), registry, databaseUrl: url }), /SHIPCAST_REDIS_QUEUE_URL/);
+    assert.ok(jobQueue({ registry, databaseUrl: url, redis }) instanceof BullQueue);
+    const noQueueUrl = new RedisConnections(redisUrls({ SHIPCAST_REDIS_CACHE_URL: 'redis://127.0.0.1:1' }));
+    assert.throws(() => jobQueue({ registry, databaseUrl: url, redis: noQueueUrl }), /SHIPCAST_REDIS_QUEUE_URL/);
+    await noQueueUrl.close();
     await redis.close();
   });
 });

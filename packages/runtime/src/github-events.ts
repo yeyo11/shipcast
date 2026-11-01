@@ -6,8 +6,7 @@ import type { Cache, Json } from './redis/ports.ts';
 import { MemoryCache } from './redis/memory.ts';
 
 /*
- * GitHub by events (docs/plans/performance-refactor.md, phase 7, behind the `github-events` flag):
- * every GitHub GET is conditional through an ETag cache, and the few files the engine reads over and
+ * GitHub by events (docs/plans/performance-refactor.md, phase 7): every GitHub GET is conditional through an ETag cache, and the few files the engine reads over and
  * over (brand.yml, projects.yml, a launch's launch.yml and pack.json) are kept until a push, one of
  * Shipcast's own commits or the hourly poll says they changed. Both live in the shared Cache when
  * there is one (Redis, so every replica's 304 serves every other), in this process otherwise.
@@ -90,14 +89,14 @@ export class GitHubFileCache implements FileCache {
   }
 }
 
-/** The two caches GitHubRest takes with the flag on */
+/** The two caches GitHubRest takes */
 export interface GitHubCaches {
   etags: EtagCache;
   files: GitHubFileCache;
 }
 
 /**
- * The caches on the shared Cache when the composition hands one in (Redis with `redis-state`), or
+ * The caches on the shared Cache when the composition hands one in (Redis), or
  * in this process: an LRU for the ETags, whose bodies can add up, and the in-memory Cache for the
  * few files, which cannot.
  */
@@ -159,8 +158,7 @@ export const GITHUB_POLL_KEY = 'github-poll-at';
 export const GITHUB_POLL_MS = 3600_000;
 
 /**
- * Whether the hourly poll is due, and if so marks it taken: with `github-events` GitHub is read on
- * deliveries, and the poll (detection, the open pull requests) is only the safety net for missed
+ * Whether the hourly poll is due, and if so marks it taken: GitHub is read on deliveries, and the poll (detection, the open pull requests) is only the safety net for missed
  * ones, at most once an hour however often the rounds run. Rounds are one at a time, so the read
  * and the mark need no lock.
  */

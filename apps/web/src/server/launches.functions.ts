@@ -94,7 +94,7 @@ export const getLaunch = createServerFn({ method: 'GET' })
     const { registry, github, deps } = ctx;
     const launch = await launchService(ctx).get(data);
     if (!launch) return null;
-    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, ...(ctx.drafts && { drafts: ctx.drafts }), stored: ctx.launchRead }, launch);
+    const page = await launchPage({ registry, github, launchesRepo: deps.launchesRepo, drafts: ctx.drafts, stored: ctx.launchRead }, launch);
     return {
       ...page,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
@@ -146,14 +146,12 @@ export const deleteLaunch = createServerFn({ method: 'POST' })
 
 /**
  * "Refresh from GitHub": the drafts pull request read again and its snapshot rewritten, for when the
- * owner knows GitHub changed and the delivery has not arrived. Only with `github-events`, where the
- * page reads the snapshot; without it every view already reads GitHub.
+ * owner knows GitHub changed and the delivery has not arrived: the page reads the snapshot.
  */
 export const refreshDrafts = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
     const ctx = await appContext();
-    if (!ctx.drafts) return { ok: false as const, problem: 'the drafts are read from GitHub on every view already' };
     const launch = await launchService(ctx).get(data);
     if (!launch) return { ok: false as const, problem: 'no such launch' };
     try {
@@ -248,7 +246,7 @@ export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
   const b = await ctx.brand();
   return {
     owner: b.github,
-    repos: await repoList({ github: ctx.github, cache: ctx.flags.on('realtime-ui') ? ctx.process.shared.cache : undefined }, b.github),
+    repos: await repoList({ github: ctx.github, cache: ctx.process.shared.cache }, b.github),
     // Whether a launch can also be made from sources here (launch-sources)
     sources: ctx.flags.on('launch-sources'),
     // Whether new drafts wait in Shipcast rather than in a pull request (app-review)

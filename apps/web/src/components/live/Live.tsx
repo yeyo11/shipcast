@@ -4,8 +4,8 @@ import { LiveClient, type Interest, type LiveEvent, type LiveStatus, type Topic 
 
 /*
  * The React side of the live client (client.ts): one LiveClient per tab, made when the shell mounts
- * with `realtime-ui` on. Off, there is no client: every hook says `enabled: false` and each page
- * keeps the polling it always had, so turning the flag off is exactly the app before phase 9.
+ * when the server streams events (every process that serves pages does). Without it there is no
+ * client: every hook says `enabled: false` and each page polls instead.
  */
 
 interface LiveValue {

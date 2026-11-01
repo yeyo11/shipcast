@@ -74,19 +74,19 @@ export interface AppContext {
   /** Reads the settings again, after the Settings page saved them */
   refresh(): Promise<void>;
   /**
-   * After a save in Settings: this process reads the settings again, and with `redis-state` on every
+   * After a save in Settings: this process reads the settings again, and with Redis every
    * other replica is told to (settings.changed)
    */
   settingsSaved(key?: string): Promise<void>;
-  /** Tells every replica (with `redis-state` on), and this process, of a change they cache */
+  /** Tells every replica (over Redis when the process has it), and this process, of a change they cache */
   announce<E extends EventName>(event: E, payload: ShipcastEvents[E]): Promise<void>;
-  /** The durable work: pg-boss on the registry's Postgres, or BullMQ with `bullmq` on; worked here by the role's queues */
+  /** The durable work: BullMQ with Redis, pg-boss on the registry's Postgres without; worked here by the role's queues */
   queue: JobQueue;
   /** What this process takes on (SHIPCAST_ROLE) */
   role: Role;
   /** The shared ephemeral state and Redis connections of this process */
   process: ProcessState;
-  /** The refactor's switches (SHIPCAST_FLAGS), one per phase that changes behaviour */
+  /** The switches still in use (SHIPCAST_FLAGS) */
   flags: Flags;
   /** The measurement: outbound calls, server functions, requests and jobs, counted per hour */
   telemetry: TelemetryRecorder;
@@ -94,8 +94,8 @@ export interface AppContext {
   brand(): Promise<Brand>;
   /** Every brand, by id; one per launches repo, so one today */
   brands(): Promise<Map<string, Brand>>;
-  /** With `github-events`: the drafts snapshots the launch page reads, and the caches deliveries invalidate */
-  drafts: DraftSnapshotService | undefined;
+  /** The drafts snapshots the launch page reads, and the caches deliveries invalidate */
+  drafts: DraftSnapshotService;
   /** With `launch-store`: the launch model's shadow write beside the drafts pull request */
   launchStore: LaunchStoreService | undefined;
   /** With `launch-store-read`: the launch page, the REST API and scheduling read the launch model's tables, not GitHub */
@@ -104,8 +104,8 @@ export interface AppContext {
   appReview: AppReviewService | undefined;
   /** With `launch-triggers`: the owner's trigger rules, edited in Settings (docs/launch-triggers.md) */
   triggers: TriggerService | undefined;
-  githubCaches: GitHubCaches | undefined;
-  /** With `realtime-ui`, in a process that serves pages: the tabs' event streams (GET /api/events) */
+  githubCaches: GitHubCaches;
+  /** In a process that serves pages: the tabs' event streams (GET /api/events) */
   live: LiveHub | undefined;
   /** On a preview with fake networks: the fakes, their ledger and the fixtures (packages/runtime/src/preview) */
   preview: PreviewWorld | undefined;
@@ -135,11 +135,9 @@ async function createContext(): Promise<AppContext> {
   const role = roleFromEnv(process.env);
   const app = loadAppConfig(process.env);
   const proc = processState(process.env, role === 'all' ? 'app' : role);
-  // A job's events must reach the pages from another process: only Redis's bus carries them there
-  if (flags.on('realtime-ui') && split(role) && proc.shared.backend !== 'redis') throw new ConfigError('the realtime-ui flag on split processes (SHIPCAST_ROLE) needs redis-state, whose bus carries the events between them');
   // A preview's GitHub client reads for real (its fixtures first) and only pretends to write: no pull request, commit or merge
   const fixtures = fakeNetworks() ? previewFixtures(process.env) : undefined;
-  // With redis-state the GitHub ETag and file caches are every replica's (redis-cache); otherwise a bounded one of this process
+  // With Redis the GitHub ETag and file caches are every replica's (redis-cache); otherwise a bounded one of this process
   const runtime = await createRuntime({ root: ROOT, log: console.log, flags, ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }), events: proc.shared.events, ...(fakeNetworks() && { githubFetch: previewGitHubFetch(fetch, fixtures) }) });
   const { config, registry, github, secrets, pipeline: deps, brand } = runtime;
   attachTelemetryStore(new TelemetryStore(registry.database));
@@ -152,7 +150,6 @@ async function createContext(): Promise<AppContext> {
    * start reconciles: the worker does, under a lock (startMaintenance)
    */
   const queue = jobQueue({
-    flags,
     registry,
     databaseUrl: config.databaseUrl,
     redis: proc.redis,
@@ -167,8 +164,8 @@ async function createContext(): Promise<AppContext> {
     brand,
     refresh: runtime.refresh,
     flags,
-    ...(runtime.drafts && { drafts: runtime.drafts }),
-    // The hourly reads' identities and sessions, every replica's with redis-state
+    drafts: runtime.drafts,
+    // The hourly reads' identities and sessions, every replica's with Redis
     ...(proc.shared.backend === 'redis' && { cache: proc.shared.cache }),
     // A preview with fake networks publishes nothing real, even a scheduled piece that comes due in it
     ...(preview && {
@@ -177,7 +174,7 @@ async function createContext(): Promise<AppContext> {
     }),
   };
   // Another replica's save, the App's installation and the brand reach this process's caches
-  const events = await replicaEvents(proc.shared, runtime, undefined, { pages: flags.on('realtime-ui') });
+  const events = await replicaEvents(proc.shared, runtime, undefined, { pages: true });
   const ctx: AppContext = {
     config,
     app,
@@ -213,7 +210,7 @@ async function createContext(): Promise<AppContext> {
     preview,
   };
   // Subscribed before the first page asks, so a change made meanwhile is already in the ring
-  if (flags.on('realtime-ui') && (role === 'web' || role === 'all')) {
+  if (role === 'web' || role === 'all') {
     const live = new LiveHub({ bus: proc.shared.events });
     await live.start();
     ctx.live = live;
@@ -234,8 +231,8 @@ async function createContext(): Promise<AppContext> {
     const { probePages } = await import('./probe.server');
     await startWorking(queue, work, { role, handlers: { probe: (_data, job) => probePages(ctx, job) } });
     // Beside other processes, or on BullMQ whose scheduled posts are rebuilt from Postgres: under a lock, every ten minutes
-    if (clock && (split(role) || flags.on('bullmq'))) {
-      // Redis's lock whenever Redis is there, so workers never run it twice at once even without redis-state
+    if (clock && (split(role) || proc.redis)) {
+      // Redis's lock whenever Redis is there, so workers never run it twice at once
       const lock = proc.redis ? new RedisLock(proc.redis.queue) : proc.shared.lock;
       const stop = startMaintenance({ queue, lock, reconcileRows: split(role) });
       onStop('queue', 'the maintenance', async () => stop());

@@ -564,7 +564,7 @@ export interface HourlyOptions {
 }
 
 /**
- * The hourly reads of phase 8 (behind the `batched-metrics` flag): every live piece of every
+ * The hourly reads of phase 8: every live piece of every
  * published launch, each source only when its last check is older than its cadence (the channel
  * definitions' `metrics.cadence`, SITE_CADENCES for the site), each channel's due pieces asked for
  * at once through its MetricReader, the blog's paths in one query, each repo once whatever number of

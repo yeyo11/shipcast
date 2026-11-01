@@ -34,7 +34,7 @@ function Automation() {
   const rulesChanged = JSON.stringify(rules) !== savedRules;
   // By value: the page reloads every few seconds while a round runs, and an unsaved edit must survive that
   useEffect(() => setRules(JSON.parse(savedRules) as RuleDraft[] | null), [savedRules]);
-  // Live (realtime-ui): any job's row or a saved setting reloads it; otherwise, while a round runs, it polls
+  // Live: any job's row or a saved setting reloads it; otherwise, while a round runs, it polls
   const live = useLiveEnabled();
   useLiveRoute(Route.id, live ? ['job', 'settings'] : null);
   const working = data.running || data.jobs.counts.running > 0;

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { Flags } from '../src/flags.ts';
 import {
   MemoryCache,
   MemoryDeliveryDedupe,
@@ -328,15 +327,15 @@ describe('Redis connections', { skip: redisSkip }, () => {
   });
 });
 
-describe('the state the flags build', () => {
-  test('off, every port is in memory; on without SHIPCAST_REDIS_QUEUE_URL, it refuses', () => {
-    assert.equal(sharedState(new Flags(), undefined).backend, 'memory');
-    assert.throws(() => sharedState(new Flags(['redis-state']), new RedisConnections(redisUrls({}))), /SHIPCAST_REDIS_QUEUE_URL/);
+describe('the state the process builds', () => {
+  test('without Redis, every port is in memory; connections without SHIPCAST_REDIS_QUEUE_URL are refused', () => {
+    assert.equal(sharedState(undefined).backend, 'memory');
+    assert.throws(() => sharedState(new RedisConnections(redisUrls({}))), /SHIPCAST_REDIS_QUEUE_URL/);
   });
 
-  test('on, the ports are Redis’s, the cache on redis-cache and the rest on redis-queue', async () => {
+  test('with Redis, the ports are Redis’s, the cache on redis-cache and the rest on redis-queue', async () => {
     const connections = new RedisConnections(redisUrls({ SHIPCAST_REDIS_QUEUE_URL: 'redis://127.0.0.1:1/0', SHIPCAST_REDIS_CACHE_URL: 'redis://127.0.0.1:1/1' }));
-    const state = sharedState(new Flags(['redis-state']), connections);
+    const state = sharedState(connections);
     assert.equal(state.backend, 'redis');
     assert.ok(state.cache instanceof RedisCache && state.lock instanceof RedisLock && state.oneTime instanceof RedisOneTimeStore);
     assert.notEqual(connections.cache, connections.queue);

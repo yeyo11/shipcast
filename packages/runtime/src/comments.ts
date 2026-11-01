@@ -26,7 +26,7 @@ export interface CommentWorkDeps {
   fetch?: typeof fetch;
   /** The engine's GitHub access, which reads and answers GitHub Discussions */
   github?: { auth: GitHubTokenSource };
-  /** Where accounts' identities are kept between runs (the `batched-metrics` feeds) */
+  /** Where accounts' identities are kept between runs (the comment feeds) */
   cache?: IdentityCache;
 }
 
