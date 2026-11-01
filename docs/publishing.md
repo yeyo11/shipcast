@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-30T13:05:46.293300118Z
-updated_at: 2026-10-30T21:32:05.315614386Z
+created_at: 2026-10-30T22:31:27.814837996Z
+updated_at: 2026-11-01T18:37:41.463539072Z
 tags:
     - publishing
     - connectors
@@ -20,6 +20,8 @@ tags:
     - channels
     - correctness
     - tracking
+    - telegram
+    - editor
 ---
 # Publishing, media and metrics
 
@@ -130,7 +132,11 @@ and step 3 reads each channel's approved version.
    - **The newsletter**: one Brevo campaign per language, described below.
    - **Hashnode**: the English article with `originalArticleURL` set to the blog. Hashnode's API needs
      a paid Pro plan since 2026-05-13, so the owner left it out; built and tested with fakes only.
-   - **Telegram**: `telegram.md` as the caption of `og.jpg`, to the channel.
+   - **Telegram**: `telegram.md` as the caption of `og.jpg`, to the channel. Since 2026-11-01 it goes
+     formatted: its light Markdown (bold, italics, underline, strikethrough, spoilers, code, links,
+     quotes) is rendered as Telegram's HTML and sent with `parse_mode: 'HTML'`, on publish and on edit,
+     every other `<`, `>` and `&` escaped; its links are tagged on the Markdown first, and its
+     900-character cap is counted on the text a reader sees ([decisions/rich-editor.md](decisions/rich-editor.md)).
    - **Discord**: `discord.md` through a webhook, with an embed of the article.
    - **LinkedIn**, **Threads**, **GitHub Discussions**: their draft as a post (a discussion in the
      repo's category for GitHub).
@@ -505,4 +511,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]] · [[app-review.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]] · [[app-review.md]] · [[decisions/rich-editor.md]]

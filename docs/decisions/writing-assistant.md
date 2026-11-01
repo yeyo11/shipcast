@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T16:39:23.13001651Z
-updated_at: 2026-10-28T07:49:25.301811959Z
+created_at: 2026-10-28T08:00:39.37312654Z
+updated_at: 2026-11-01T18:35:02.120159356Z
 tags:
     - decision
     - web-app
@@ -8,6 +8,7 @@ tags:
     - writing-assistant
     - phase-8
     - limits
+    - editor
 ---
 # The writing assistant
 
@@ -42,6 +43,17 @@ Saving is the net under it: `editDraft` refuses a channel draft past its network
 network, the cap and the length ("Bluesky takes at most 300 characters (the link included); this is
 305"), so a post the network would refuse is caught before the merge instead of failing at
 publishing time.
+
+## A network's formatting
+
+Added on 2026-11-01 with the rich editor ([decisions/rich-editor.md](rich-editor.md)). Every action
+used to say "Keep the Markdown", so Improve on a Bluesky post could propose `**bold**` that Bluesky
+shows as typed. Now the system prompt carries the piece's formatting profile from its channel's
+definition: plain text only for Bluesky, Mastodon, Threads, LinkedIn and Instagram; only the Markdown
+it shows for Telegram, Discord and the newsletter; the article's Markdown on Write. Adapt to a network
+is told the target's profile. A proposal that slips is cleaned before it can be accepted, with a
+notice saying what was taken out (a `cleaned` event in the stream), and saving a draft refuses what its
+network does not show.
 
 ## What it may say
 
@@ -94,4 +106,4 @@ GitHub picture on theirs, the Shipcast mark on the assistant's.
 
 ## Related
 
-[[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[content-pack.md]] · [[plans/goal-after-mvp.md]] · [[web-app.md]] · [[claudio.md]]
+[[decisions/ai-providers.md]] · [[decisions/app-design-direction.md]] · [[content-pack.md]] · [[plans/goal-after-mvp.md]] · [[web-app.md]] · [[claudio.md]] · [[decisions/rich-editor.md]]
