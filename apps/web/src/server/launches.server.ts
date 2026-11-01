@@ -45,6 +45,7 @@ export async function launchView(registry: Pick<Repositories, 'posts' | 'metrics
     id: launch.id,
     repo: launch.repo,
     ref: launch.ref,
+    title: launch.title ?? null,
     kind: launch.kind,
     trigger: launch.trigger,
     status: launch.status,

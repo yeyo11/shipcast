@@ -55,6 +55,16 @@ export function launchTitle(launch: { repo: string; ref: string; title?: string 
   return { title: launch.repo.split('/')[1] ?? launch.repo, version: launch.ref, article: false };
 }
 
+/**
+ * A launch's name in one string, where a page's title, a back link or a toast names it: an article's
+ * title (launchTitle), a release's project and version ("Claudio v1.5.0", capitalised as a heading is)
+ */
+export function launchName(launch: { repo: string; ref: string; title?: string | null }): string {
+  const { title, version } = launchTitle(launch);
+  const named = title.charAt(0).toUpperCase() + title.slice(1);
+  return version ? `${named} ${version}` : named;
+}
+
 /** A list in words: "a, b and c" */
 export function wordList(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? '';

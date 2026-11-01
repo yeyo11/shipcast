@@ -1,5 +1,6 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { launchName } from '../../server/launch-list';
 import { saveDraft } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
 import { channelOfDraft } from '../assistant/protocol';
@@ -44,7 +45,7 @@ export function DraftsScreen({ data, search, onSearch }: { data: LaunchData; sea
   const waiting = launch.status === 'drafted' && editable;
   const [bodies, setBodies] = useState<Record<string, string>>({});
   const [checks, setChecks] = useState<Record<string, CheckResult>>({});
-  const project = launch.ref.startsWith('article:') ? 'The article' : `${(launch.repo.split('/')[1] ?? launch.repo).replace(/^./, (c) => c.toUpperCase())} ${launch.ref}`;
+  const project = launchName(launch);
   const params = { id: String(launch.id) };
 
   if (!piece || !draft) {

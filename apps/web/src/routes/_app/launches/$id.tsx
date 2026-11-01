@@ -11,6 +11,7 @@ import { LaunchHead, LaunchTabs } from '../../../components/launch/LaunchHead';
 import { DetailsPanel, DraftingView, FailedCard, SearchPanel, useNow } from '../../../components/launch/LaunchPanels';
 import { pillClass, withScheduled } from '../../../components/launch/published';
 import { useToast } from '../../../components/Toasts';
+import { launchName, launchTitle } from '../../../server/launch-list';
 import { getLaunch, launchRepo } from '../../../server/launches.functions';
 import { canRelaunch } from '../../../server/launch-list';
 
@@ -39,7 +40,7 @@ export const Route = createFileRoute('/_app/launches/$id')({
     if (!data) throw notFound();
     return data;
   },
-  head: ({ loaderData }) => ({ meta: [{ title: `${loaderData?.launch.repo ?? 'Launch'} · Shipcast` }] }),
+  head: ({ loaderData }) => ({ meta: [{ title: `${loaderData ? launchName(loaderData.launch) : 'Launch'} · Shipcast` }] }),
   component: LaunchPage,
 });
 
@@ -82,7 +83,6 @@ function LaunchPage() {
   const go = (next: LaunchSearch) => navigate({ search: (prev) => ({ ...prev, ...next }), replace: true, resetScroll: false });
   const articleUrl = pieces.rows.find((r) => r.channel === 'blog' && r.url && (r.status === 'live' || r.status === 'edited'));
   const shown = Object.values(numbers.totals).some((n) => n > 0) || pieces.rows.length > 0;
-  const article = launch.ref.startsWith('article:');
   const now = useNow();
   const owner = appRoute.useLoaderData().login;
 
@@ -94,13 +94,13 @@ function LaunchPage() {
       problem: error instanceof Error ? error.message : String(error),
     }));
     setBusy(false);
-    if (answer.ok) toast.done(`Drafting ${launch.repo.split('/')[1]} ${launch.ref}`, 'The analysis takes a few minutes; it shows here while it runs.');
+    if (answer.ok) toast.done(`Drafting ${launchName(launch)}`, 'The analysis takes a few minutes; it shows here while it runs.');
     else toast.fail(answer.problem);
     await router.invalidate();
   };
 
-  const shortName = article ? 'Article' : launch.repo.split('/')[1] ?? launch.repo;
-  const version = article ? null : launch.ref;
+  // An article goes by the title the launch model keeps (its slug in words without one), a release by its project and version
+  const { title: shortName, version } = launchTitle(launch);
   const drafting = (launch.status === 'generating' || launch.status === 'detected') && !search.tab;
   const failedView = failedEmpty && !search.tab;
   const meta = drafting

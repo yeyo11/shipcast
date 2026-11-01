@@ -37,6 +37,8 @@ export interface Launch {
   updatedAt: string;
   /** Always set on a launch read from the registry; a launch built without it is `legacy` */
   model?: LaunchModel;
+  /** The title the launch model keeps (an article's, as the owner wrote it); absent when it has none */
+  title?: string;
   /**
    * When the owner deleted it, a launch that had published (docs/launch-delete.md): hidden from the
    * lists, the rounds and the metrics, its row kept so it is never launched again. Absent otherwise
@@ -131,6 +133,7 @@ function toLaunch(row: typeof launches.$inferSelect): Launch {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     model: row.model === 'app' ? 'app' : 'legacy',
+    ...(row.title?.trim() && { title: row.title.trim() }),
     ...(row.deletedAt !== null && { deletedAt: row.deletedAt }),
   };
 }

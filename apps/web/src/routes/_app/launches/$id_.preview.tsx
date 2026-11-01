@@ -5,6 +5,7 @@ import { Icon } from '../../../components/kit/Icon';
 import { articleLine, langOf, splitDraft } from '../../../components/approve/model';
 import type { DraftView } from '../../../components/approve/parts';
 import { useToast } from '../../../components/Toasts';
+import { launchName } from '../../../server/launch-list';
 import { findSitePreview, getLaunch, previewOnSite } from '../../../server/launches.functions';
 
 /*
@@ -24,7 +25,7 @@ export const Route = createFileRoute('/_app/launches/$id_/preview')({
     if (!data) throw notFound();
     return data;
   },
-  head: ({ loaderData }) => ({ meta: [{ title: `Preview · ${loaderData?.launch.repo ?? 'Launch'} · Shipcast` }] }),
+  head: ({ loaderData }) => ({ meta: [{ title: `Preview · ${loaderData ? launchName(loaderData.launch) : 'Launch'} · Shipcast` }] }),
   component: PreviewPage,
 });
 
@@ -46,7 +47,7 @@ function PreviewPage() {
   const article = articles.find((a) => langOf(a.path) === lang) ?? articles[0];
   const preview = app?.preview;
   const ready = Boolean(preview?.url && preview.urlSha && preview.sha.startsWith(preview.urlSha));
-  const back = launch.ref.startsWith('article:') ? 'The article' : `${(launch.repo.split('/')[1] ?? launch.repo).replace(/^./, (c) => c.toUpperCase())} ${launch.ref}`;
+  const back = launchName(launch);
   const params = { id: String(launch.id) };
 
   const site = async (find: boolean) => {

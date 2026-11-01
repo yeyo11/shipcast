@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { memoryRegistry } from '@shipcast/engine/testing';
-import { agoLabel, canRelaunch, deletableFromLine, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
+import { agoLabel, canRelaunch, deletableFromLine, draftingNote, failedLaunchOf, homeGroupOf, homeGroups, homeMarkFit, laneOf, listedFailures, launchName, launchTitle, ownerAvatarUrl, readyPieces, shortDate, shortDateTime, splitLaunches, wordList } from '../src/server/launch-list.ts';
 
 const launch = (id: number, status: string, tone: string) => ({ id, status, state: { tone } });
 
@@ -152,4 +152,24 @@ test('the titles of a page of launches come in one read, only those that have on
   const titles = await registry.launches.titles([named.id, bare.id]);
   assert.deepEqual([...titles], [[named.id, 'Hello, world']]);
   assert.deepEqual([...(await registry.launches.titles([]))], []);
+});
+
+test('a launch’s name in one string: an article’s kept title, a release’s project and version', () => {
+  assert.equal(launchName({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: 'Why I moved my notes into the repo' }), 'Why I moved my notes into the repo');
+  // Never "Article": the slug in words when the launch model keeps no title
+  assert.equal(launchName({ repo: 'yeyo11/launches', ref: 'article:why-i-moved', title: null }), 'Why i moved');
+  assert.equal(launchName({ repo: 'yeyo11/claudio', ref: 'v1.5.0', title: null }), 'Claudio v1.5.0');
+});
+
+test('a launch read from the registry carries the title the launch model keeps, and its view names it', async () => {
+  const { launchView } = await import('../src/server/launches.server.ts');
+  const registry = await memoryRegistry();
+  const { launch: named } = await registry.launches.claim({ repo: 'yeyo11/launches', ref: 'article:hello', trigger: 'article', kind: 'launch', brand: 'josegarridodev', title: 'Hello, world' });
+  const { launch: bare } = await registry.launches.claim({ repo: 'yeyo11/pando', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'josegarridodev' });
+  const read = (await registry.launches.get(named.id))!;
+  assert.equal(read.title, 'Hello, world');
+  const view = await launchView(registry, read);
+  assert.equal(view.title, 'Hello, world');
+  assert.equal(launchName(view), 'Hello, world');
+  assert.equal((await launchView(registry, bare)).title, null);
 });

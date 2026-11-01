@@ -8,6 +8,8 @@ export interface LaunchView {
   id: number;
   repo: string;
   ref: string;
+  /** The title the launch model keeps: an article is named by it (launchTitle); null when it has none */
+  title: string | null;
   kind: string;
   trigger: string;
   status: string;

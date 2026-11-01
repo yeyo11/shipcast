@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { DraftsScreen, type EditSearch } from '../../../components/approve/DraftsScreen';
+import { launchName } from '../../../server/launch-list';
 import { getLaunch } from '../../../server/launches.functions';
 
 /*
@@ -19,7 +20,7 @@ export const Route = createFileRoute('/_app/launches/$id_/edit')({
     if (!data) throw notFound();
     return data;
   },
-  head: ({ loaderData }) => ({ meta: [{ title: `Edit · ${loaderData?.launch.repo ?? 'Launch'} · Shipcast` }] }),
+  head: ({ loaderData }) => ({ meta: [{ title: `Edit · ${loaderData ? launchName(loaderData.launch) : 'Launch'} · Shipcast` }] }),
   component: EditPage,
 });
 

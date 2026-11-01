@@ -1,5 +1,6 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { useMemo, useState, type ReactNode } from 'react';
+import { launchTitle } from '../../server/launch-list';
 import { approveDrafts } from '../../server/launches.functions';
 import type { SchedulingChannel } from '../../server/pieces.server';
 import { CHANNEL_NAMES } from '../../server/view';
@@ -87,8 +88,8 @@ export function LaunchApproval({ data, tab, onTab, channel, onChannel, search, d
     await router.invalidate();
   };
 
-  const project = launch.ref.startsWith('article:') ? 'Article' : (launch.repo.split('/')[1] ?? launch.repo);
-  const version = launch.ref.startsWith('article:') ? null : launch.ref;
+  // An article goes by its kept title, a release by its project and version (launchTitle)
+  const { title: project, version } = launchTitle(launch);
   const params = { id: String(launch.id) };
   const changedSince = app?.approval ? Object.keys(app.waiting) : [];
   const previewLink = app ? (
