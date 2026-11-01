@@ -4,7 +4,7 @@ import { accepted, accountId, confirm, HINTS, requireConfirm, tool, ToolRefused,
 /* Account profiles: what each network lets Shipcast change, the review of a profile, and editing it on its network */
 
 export const guide =
-  'Profiles: list_profile_capabilities says what each network lets Shipcast read and edit on an account\'s profile, and get_profile_review reads an account\'s latest AI review with its proposals. review_profile starts a background review that changes nothing on the network; edit_profile changes the public profile and needs confirm: true after the user agrees.';
+  'Profiles: list_profile_capabilities says what each network lets Shipcast read and edit; review_profile starts an AI review that changes nothing, get_profile_review reads its proposals, and edit_profile applies them on the network.';
 
 // The API's own limits (profileEditInput and reviewInput of apps/web), which the network's own may narrow further
 const displayName = z.string().max(500);
@@ -25,7 +25,7 @@ export const tools: ShipcastTool[] = [
     name: 'get_profile_review',
     title: 'Get a profile review',
     description:
-      'One account\'s profile capability, narrowed by its credential (`edit: reconnect` means the network could edit it but the account must be connected again), and its latest AI review: a summary, the profile as it was read and a proposal per field with the current text, the proposed one, why, any problem with it (such as a limit) and when it was applied. The review is null until review_profile has run.',
+      'One account\'s profile capability, narrowed by its credential (`edit: reconnect` means the network could edit it but the account must be connected again), and its latest AI review: a summary, the profile as it was read and a proposal per field with the current text, the proposed one, why, any problem with it (such as a limit) and when it was applied. The review is null until review_profile has run. edit_profile applies a proposal.',
     operations: ['getProfileReview'],
     input: z.object({ account_id: accountId }),
     hints: HINTS.read,
@@ -63,7 +63,7 @@ export const tools: ShipcastTool[] = [
       const body = { ...(pasted && { pasted }), ...(args.language !== undefined && { language: args.language }) };
       // The route takes no body at all for a plain review
       const answer = await api.call('POST', `/accounts/${args.account_id}/profile-review`, Object.keys(body).length > 0 ? { body } : {});
-      return accepted(answer, `Reviewing the profile of account ${args.account_id}; nothing changes on its network, and get_profile_review reads the proposals once the job ends`);
+      return accepted(answer, `Reviewing the profile of account ${args.account_id}; nothing changes on its network`, 'get_profile_review');
     },
   }),
   tool({

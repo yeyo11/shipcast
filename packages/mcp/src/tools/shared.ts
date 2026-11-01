@@ -45,13 +45,18 @@ export const HINTS = {
   destructive: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
   /** A write that stays inside Shipcast, such as a setting; doing it twice leaves the same state */
   setting: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  /** Starts a background AI run whose result stays inside Shipcast, such as a new draft */
+  job: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 } satisfies Record<string, ToolHints>;
 
 /** Keeps the generic type of each tool while collecting them in one list */
 export const tool = <S extends z.ZodObject>(definition: ShipcastTool<S>): ShipcastTool => definition as unknown as ShipcastTool;
 
-/** What a write that starts work answers: the job, to follow with list_jobs */
-export const accepted = (answer: unknown, what: string) => ({ ...(answer as object), note: `${what}. It runs as a background job: follow it with list_jobs, then get_launch.` });
+/** What a write that starts work answers: the job, to follow with list_jobs, and the tool that reads its result */
+export const accepted = (answer: unknown, what: string, then = 'get_launch') => ({
+  ...(answer as object),
+  note: `${what}. It runs as a background job: follow it with list_jobs, then read the result with ${then}.`,
+});
 
 export const PUBLISHES = 'Publishing is public and happens once per launch; confirm with the user before calling this.';
 
@@ -70,6 +75,8 @@ export const postId = z.number().int().positive().describe('The post id, from th
 export const accountId = z.number().int().positive().describe('The account id, as list_accounts gives it');
 export const channel = z.enum(CHANNELS).describe('A channel of launch.yml');
 export const confirm = z.boolean().optional().describe('Must be true: the user agreed to this, which cannot be undone');
+/** For a write that publishes at once only on request, such as `direct` */
+export const confirmDirect = z.boolean().optional().describe('Must be true with `direct: true`: the user agreed to publish without reviewing the drafts');
 export const cursor = z.string().optional().describe('The `next` value of the previous page');
 /** A page size, 1 to 100, as every list of the API takes it */
 export const limit = (fallback: number) => z.number().int().min(1).max(100).optional().describe(`How many, 1 to 100; ${fallback} by default`);

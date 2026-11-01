@@ -151,9 +151,10 @@ test('the sources tools say the feature is off when the launch-sources flag is',
 test('edit_launch_posts sends the shared fields and the channels named', async () => {
   const outcomes = { outcomes: [{ postId: 12, channel: 'mastodon', kind: 'post', ok: true }] };
   const { fake, api } = fakeClient({ 'PATCH /launches/3/posts': outcomes });
-  assert.deepEqual(await runTool(api, 'edit_launch_posts', { launch_id: 3, text: 'Fixed', image_url: 'https://img.example/a.png', image_alt: 'A chart' }), outcomes);
-  await runTool(api, 'edit_launch_posts', { launch_id: 3, channels: ['mastodon', 'bluesky'], link: 'https://example.com' });
-  assert.match(await refusal(api, 'edit_launch_posts', { launch_id: 3, channels: ['mastodon'] }), /at least one field/);
+  assert.match(await refusal(api, 'edit_launch_posts', { launch_id: 3, text: 'Fixed' }), /Nothing was changed\. Changing every live post of launch 3 in public.*confirm: true/);
+  assert.deepEqual(await runTool(api, 'edit_launch_posts', { launch_id: 3, text: 'Fixed', image_url: 'https://img.example/a.png', image_alt: 'A chart', confirm: true }), outcomes);
+  await runTool(api, 'edit_launch_posts', { launch_id: 3, channels: ['mastodon', 'bluesky'], link: 'https://example.com', confirm: true });
+  assert.match(await refusal(api, 'edit_launch_posts', { launch_id: 3, channels: ['mastodon'], confirm: true }), /at least one field/);
   assert.match(await refusal(api, 'edit_launch_posts', { launch_id: 3, text: 'x', channels: [] }), /Invalid arguments for edit_launch_posts/);
   assert.deepEqual(fake.calls, [
     'PATCH /launches/3/posts {"text":"Fixed","imageUrl":"https://img.example/a.png","imageAlt":"A chart"}',

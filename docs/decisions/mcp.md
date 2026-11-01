@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:03:17.775522423Z
-updated_at: 2026-10-27T17:29:29.401059953Z
+updated_at: 2026-11-01T12:31:46.129424484Z
 tags:
     - decision
     - mcp
@@ -13,7 +13,9 @@ tags:
 
 Taken on 2026-10-25, building milestone 7 of the [goal](../plans/goal-after-mvp.md) (phase 11 of
 [plans/after-mvp.md](../plans/after-mvp.md): `shipcast mcp` over stdio, then remote over HTTP with a
-token; WebMCP as an experiment). How to connect and the tools are in [mcp.md](../mcp.md).
+token; WebMCP as an experiment). How to connect and the tools are in [mcp.md](../mcp.md). Since
+2026-11-01 every API operation has a tool, kept so by a test
+([decisions/mcp-parity.md](mcp-parity.md)).
 
 ## Every tool is one REST call
 
@@ -53,10 +55,15 @@ Zod 4 schemas, which the repo already uses, and the annotations `readOnlyHint`, 
   network hop. It is stateless: a fresh server per request, nothing lost on a restart. OAuth, which
   the MCP specification describes for remote servers, was left out for the reason the API's tokens
   were chosen ([decisions/api-tokens.md](api-tokens.md)): one owner, who makes a token per client.
-- **Destructive tools ask twice.** `edit_post` and `delete_post` are marked destructive;
-  `delete_post` also refuses unless called with `confirm: true`, and its description tells the model
-  to ask the user first. The schema allows `confirm: false` on purpose, so the model reads why nothing
-  happened rather than a bare validation error.
+- **Public actions ask twice.** Every tool that publishes, changes or deletes something public in
+  the owner's name, and is not already behind the drafts review, is annotated destructive or
+  open-world and refuses unless called with `confirm: true`; its description tells the model to ask
+  the user first. On 2026-10-25 that was `delete_post`; since 2026-11-01 it is also `approve_drafts`
+  (the review itself), `edit_post`, `edit_launch_posts`, `delete_launch_posts`, `delete_launch`,
+  `edit_profile`, `approve_reply`, `set_comment_settings` to auto, and `launch_repo` and
+  `write_article` with `direct: true` ([mcp.md](../mcp.md#how-the-tools-behave)). The schema allows
+  `confirm: false` on purpose, so the model reads why nothing happened rather than a bare validation
+  error.
 
 ## WebMCP: experimental, off, and the cookie only with a marker
 
@@ -90,4 +97,4 @@ an experiment), and opening the API to the cookie with the usual same-origin che
 
 ## Related
 
-[[mcp.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[web-app.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]
+[[mcp.md]] · [[decisions/mcp-parity.md]] · [[api.md]] · [[decisions/api-tokens.md]] · [[decisions/edit-delete.md]] · [[web-app.md]] · [[plans/after-mvp.md]] · [[plans/goal-after-mvp.md]]

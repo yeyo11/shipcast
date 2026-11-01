@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TOOLS } from '@shipcast/mcp';
 import { ROUTES } from '../src/server/api.ts';
-import { PENDING } from './mcp-pending.ts';
 
 /*
  * The MCP server keeps up with the REST API: every operation of /api/v1 is called by some MCP tool
  * (its `operations`), or is left out on purpose with the reason. ROUTES holds every route whether its
  * flag is on or off, so a route behind a flag gets its tool too; the API refuses it while the flag is
- * off. See docs/mcp.md
+ * off. The rule and why: docs/decisions/mcp-parity.md; how to add a tool: docs/mcp.md
  */
 
 /** Operations a model is not offered on purpose, each with the reason */
@@ -23,7 +22,7 @@ for (const tool of TOOLS) for (const operation of tool.operations) callers.set(o
 const list = (lines: string[]) => lines.map((line) => `  - ${line}`).join('\n');
 
 test('every API operation has an MCP tool, or a written reason it has none', () => {
-  const missing = ROUTES.filter((r) => !callers.has(r.operationId) && !(r.operationId in EXCLUDED) && !PENDING.includes(r.operationId));
+  const missing = ROUTES.filter((r) => !callers.has(r.operationId) && !(r.operationId in EXCLUDED));
   if (missing.length === 0) return;
   assert.fail(
     `These /api/v1 operations have no MCP tool:\n${list(missing.map((r) => `${r.operationId} (${r.method} ${r.path})`))}\n` +
@@ -37,15 +36,12 @@ test('every operation a tool declares is one the API serves', () => {
   assert.deepEqual(unknown, [], `These tools declare operations /api/v1 does not have (operationIds are in apps/web/src/server/api.ts):\n${list(unknown)}`);
 });
 
-test('EXCLUDED and PENDING name only API operations that have no tool, each in one of them', () => {
-  for (const [operation, reason] of Object.entries(EXCLUDED)) assert.ok(reason.trim().length > 0, `EXCLUDED ${operation} needs its reason`);
-  const entries = [...Object.keys(EXCLUDED).map((operation) => ({ operation, list: 'EXCLUDED' })), ...PENDING.map((operation) => ({ operation, list: 'PENDING' }))];
-  const problems = entries.flatMap(({ operation, list: where }) => [
-    ...(routes.has(operation) ? [] : [`${where} names ${operation}, which /api/v1 does not have: remove it`]),
-    ...(callers.has(operation) ? [`${where} names ${operation}, which ${callers.get(operation)!.join(', ')} already calls: remove it from ${where}`] : []),
+test('EXCLUDED names only API operations that have no tool, each with its reason', () => {
+  const problems = Object.entries(EXCLUDED).flatMap(([operation, reason]) => [
+    ...(reason.trim().length > 0 ? [] : [`EXCLUDED ${operation} needs its reason`]),
+    ...(routes.has(operation) ? [] : [`EXCLUDED names ${operation}, which /api/v1 does not have: remove it`]),
+    ...(callers.has(operation) ? [`EXCLUDED names ${operation}, which ${callers.get(operation)!.join(', ')} already calls: remove it from EXCLUDED`] : []),
   ]);
-  const twice = entries.map((e) => e.operation).filter((operation, i, all) => all.indexOf(operation) !== i);
-  problems.push(...[...new Set(twice)].map((operation) => `${operation} is listed more than once across EXCLUDED and PENDING`));
   assert.deepEqual(problems, [], `\n${list(problems)}`);
 });
 

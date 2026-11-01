@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-10-29T16:38:12.813094315Z
+updated_at: 2026-11-01T12:50:05.657364096Z
 tags:
     - status
     - roadmap
@@ -100,7 +100,9 @@ accounts per brand, the phase 5 channels and what the MVP had left
   encrypted file, encrypted table), accounts per brand, the network catalog, process roles, the job
   queue (pg-boss or BullMQ), Redis, the flags, the shared round, the GitHub webhook handling and the
   automation settings, shared by the CLI and the app.
-- **`packages/mcp`** ([mcp.md](mcp.md)): the MCP server over the REST API.
+- **`packages/mcp`** ([mcp.md](mcp.md)): the MCP server over the REST API, one tool per `/api/v1`
+  operation since 2026-11-01 (41), kept at parity by a test
+  ([decisions/mcp-parity.md](decisions/mcp-parity.md)).
 - **`apps/cli`**: `launch` (after the pre-flight), `preflight`, `watch`, `publish [--retry]`,
   `metrics`, `status`, `secrets migrate`.
 - **`apps/web`** ([web-app.md](web-app.md), [decisions/web-app-stack.md](decisions/web-app-stack.md)):
@@ -174,4 +176,4 @@ the owner. The roadmap after that is [plans/after-mvp.md](plans/after-mvp.md).
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[plans/refactor-report.md]] · [[plans/handoff-2026-10-29.md]] · [[decisions/migration-lock.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/mcp-parity.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[plans/refactor-report.md]] · [[plans/handoff-2026-10-29.md]] · [[decisions/migration-lock.md]]
