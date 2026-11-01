@@ -37,10 +37,10 @@ If Shipcast is useful to you, a star helps other developers find it.
 
 The quickest way: the [Shipcast Launch](https://github.com/yeyo11/shipcast-action) GitHub Action,
 with your own AI key (Anthropic or OpenAI) and nothing to host. In your project's repo, with Node 24
-(the command runs the CLI that ships in the Action's repo):
+(the command runs the Shipcast CLI from npm):
 
 ```bash
-npx github:yeyo11/shipcast-action#v1 init
+npx @yeyo11/shipcast init
 ```
 
 It writes `.github/launch.yml` and a launch workflow in the project, `brand.yml` and a publish
@@ -137,7 +137,7 @@ repo, the AI provider, the channels) is set in the app's onboarding. See
 
 **Without a machine of your own**, Shipcast runs in GitHub Actions:
 [yeyo11/shipcast-action](https://github.com/yeyo11/shipcast-action), set up by
-`npx github:yeyo11/shipcast-action#v1 init` ([get started](#get-started-on-your-own-repos),
+`npx @yeyo11/shipcast init` ([get started](#get-started-on-your-own-repos),
 [docs/decisions/github-action.md](docs/decisions/github-action.md)).
 
 An install from before Postgres keeps its registry in `data/shipcast.db`: stop the app and the CLI,
