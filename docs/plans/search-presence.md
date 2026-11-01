@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T11:41:47.048348514Z
-updated_at: 2026-10-25T12:05:32.65323642Z
+created_at: 2026-10-25T12:53:11.587162587Z
+updated_at: 2026-11-01T11:50:20.133001674Z
 tags:
     - plan
     - seo
@@ -48,7 +48,7 @@ The panel comes from Google's Knowledge Graph, which recognises entities, not pa
 
 - **The `Person` on the blog** (`@id` `https://josegarrido.dev/#person`) with the same name, photo
   and description everywhere, and `sameAs` to every profile: GitHub, Mastodon, Bluesky, dev.to,
-  Instagram, Reddit, and the Wikidata item.
+  Instagram and Reddit. It linked the owner's Wikidata item too, until Wikidata deleted it (below).
 - **A Wikidata item for the owner**, which Google reads, kept distinct from the namesakes by its
   description ("full-stack developer"), and items for the projects linked to it.
   - Wikidata asks for an item to describe a clearly identifiable entity backed by serious public
@@ -57,6 +57,9 @@ The panel comes from Google's Knowledge Graph, which recognises entities, not pa
     (an interview, a talk, an article by someone else) is what makes them hold.
   - Wikidata's conflict-of-interest guideline allows people to create their own item, disclosed on
     the user page.
+  - **The risk came true**: the three items were deleted on 2026-10-25, the day they were created, as
+    not meeting Wikidata's notability policy (the deletion log, checked 2026-11-01). An item goes back
+    only once independent coverage exists to reference it.
 - **Links from outside**: dev.to already points to the blog as the original; each project's README
   should link the blog and the article that launched it.
 - **Claiming the panel** once Google shows one: the owner verifies through Google and can then suggest
@@ -72,15 +75,17 @@ depends on the independent references above.
     `sameAs`, on the blog ([launches-repo.md](../launches-repo.md)).
   - The Wikidata items, created through the API from the owner's account, with the conflict of
     interest disclosed on its user page:
-    - the owner, [Q141856101](https://www.wikidata.org/wiki/Q141856101): human, software developer,
+    - the owner, Q141856101: human, software developer,
       given and family names, official website, GitHub, Mastodon, Bluesky, Instagram, Reddit and
       Telegram usernames, notable work, each referenced to the about page except Telegram;
-    - claudio, [Q141856151](https://www.wikidata.org/wiki/Q141856151), and Shipcast,
-      [Q141856152](https://www.wikidata.org/wiki/Q141856152): free software, developer the owner,
+    - claudio, Q141856151, and Shipcast, Q141856152: free software, developer the owner,
       source repository, MIT licence, programmed in TypeScript, described at their launch articles.
   - The owner's item added to the blog's `sameAs`.
   - QuickStatements needs an autoconfirmed account (four days and fifty edits), so the items went
     through the Wikidata API with a bot password the owner created.
+- **2026-10-25**, undone the same day: Wikidata deleted all three items as not meeting its notability
+  policy (the deletion log, checked 2026-11-01), so none of them exists. The blog's `sameAs` stops
+  linking the owner's item in a separate change to the launches repo.
 - **Next**: the project pages and the article index (design with the owner), links from each
   project's README to the blog, and adding the owner to the "José Garrido" disambiguation page.
 

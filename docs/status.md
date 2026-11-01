@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-10-29T16:38:12.813094315Z
+created_at: 2026-10-30T13:06:15.05364609Z
+updated_at: 2026-11-01T11:50:01.229916001Z
 tags:
     - status
     - roadmap
@@ -117,10 +117,11 @@ accounts per brand, the phase 5 channels and what the MVP had left
   Shipcast now reaches. Since 2026-10-25 on Cloudflare Workers (GitHub Pages before): the bare domain
   opens in the reader's language, security headers, a preview per pull request, IndexNow, a Lighthouse
   gate, structured data, `llms.txt`, and PageSpeed at 93-94 on mobile and 100 on desktop.
-- **Wikidata**: the owner's item ([Q141856101](https://www.wikidata.org/wiki/Q141856101)) and the
-  projects' (claudio Q141856151, Shipcast Q141856152), created on 2026-10-25 from the owner's account
-  with the conflict of interest disclosed, and linked from the blog's `Person`
-  ([plans/search-presence.md](plans/search-presence.md)).
+- **Wikidata: no items.** The owner's item (Q141856101) and the projects' (claudio Q141856151,
+  Shipcast Q141856152), created on 2026-10-25 from the owner's account with the conflict of interest
+  disclosed, were deleted by Wikidata the same day as not meeting its notability policy (the deletion
+  log, checked 2026-11-01). The blog's `Person` stops linking the owner's item in a separate change to
+  the launches repo ([plans/search-presence.md](plans/search-presence.md)).
 - **claudio**: production runs its own headless instance in Shipcast's stack; a local install runs
   one from `docker-compose.yml` ([claudio.md](claudio.md)), and so does the registry's Postgres
   (`docker compose up -d postgres`).
