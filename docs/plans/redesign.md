@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-31T12:04:51.33781303Z
-updated_at: 2026-10-31T12:04:51.33781303Z
+updated_at: 2026-11-01T14:13:03.898968978Z
 tags:
     - web-app
     - design
@@ -181,6 +181,29 @@ Built against what exists, never faked:
 - A launch Shipcast holds no longer says its drafts are in a pull request.
 - New routes: `/launches/<id>/preview`, `/settings/ai/prompts`, `/settings/automation/webhooks`, and a
   not-found page inside the shell.
+
+## After the first look in production (2026-11-01)
+
+The owner found the Launches grid noisy: cards of very different heights, and launches that never
+went out shown like the ones that did. Changed:
+
+- **Cards** only for launches that are drafting, have a piece out (live, edited or scheduled) or
+  have numbers. Their channel marks stay on one row, at most six (fewer when the card is narrower),
+  problems first and the rest behind "+N", which opens one sheet listing them; the cards of a grid
+  row are the same height, numbers and marks on their bottom edge.
+- **Not published**: launches never launched, or with nothing out and no numbers, are one-line rows
+  (title, version, repo or "Article", date, state) under the cards, three shown and the rest behind
+  "Show all N"; search and filters apply to both groups. Articles show their stored title, read for
+  the whole page in one query, the slug only when there is none.
+- **A failure shows once**: a launch that failed before anything went out is a card only when what
+  needs the owner does not already list it.
+- **A row's ⋯ menu**: "Launch it again" for a release that failed before anything went out, and
+  "Delete" (the launch page's delete sheet) with `launch-delete` on. A failed line in what needs the
+  owner offers Delete only when nothing of that launch went out, so deleting from a warning never
+  hides a published launch.
+- **Network marks drawn whole**: the glyph table kept one path per icon and every screen filled it,
+  so the newsletter showed as a chevron and Threads as a blob. It now keeps each icon's shapes and
+  whether it is a line, and one component (`components/kit/NetworkGlyph.tsx`) draws every mark.
 
 ## Related
 
