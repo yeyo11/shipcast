@@ -12,15 +12,6 @@
 export const PENDING: readonly string[] = [
 
 
-  // comments: packages/mcp/src/tools/comments.ts
-  'listComments',
-  'checkComments',
-  'redraftComment',
-  'editReply',
-  'approveReply',
-  'dismissComment',
-  'getCommentSettings',
-  'setCommentSettings',
 
   // profiles: packages/mcp/src/tools/profiles.ts
   'listProfileCapabilities',
