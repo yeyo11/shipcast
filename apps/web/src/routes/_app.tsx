@@ -71,7 +71,7 @@ function Shell() {
             <BottomBar />
             <MoreSheet owner={owner} />
             <Notifications />
-            <Palette />
+            <Palette owner={login || null} />
             <TourHost />
             <WebMcpHost enabled={webMcp} />
           </TooltipProvider>
@@ -90,9 +90,10 @@ function ShellMain({ children }: { children: ReactNode }) {
   );
 }
 
-function Palette() {
-  const { paletteOpen, setPaletteOpen } = useShell();
-  return <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />;
+/** `owner`: the signed-in GitHub login, whose repo "Launch a repo called …" offers when nothing matches */
+function Palette({ owner }: { owner: string | null }) {
+  const { paletteOpen, setPaletteOpen, attention, reloadAttention } = useShell();
+  return <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} attention={attention} onOpened={reloadAttention} owner={owner} />;
 }
 
 /** The desktop header's owner button: the settings, the tour and signing out */

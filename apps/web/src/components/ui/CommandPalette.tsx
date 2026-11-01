@@ -1,28 +1,16 @@
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { Dialog } from '@base-ui/react/dialog';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { Attention } from '../../server/attention';
 import { runRoundNow } from '../../server/automation.functions';
-import { launchTitle } from '../../server/launch-list';
+import { getChannels } from '../../server/channels.functions';
 import { listLaunches } from '../../server/launches.functions';
 import { Icon } from '../kit/Icon';
+import { NetworkGlyph } from '../kit/NetworkGlyph';
 import { requestTour } from '../tour/request';
 import { useToast } from '../Toasts';
-
-interface Command {
-  value: string;
-  label: string;
-  /** Other words it is found by ("settings", "token") */
-  keywords?: string;
-  /** A word after it: a launch's state */
-  hint?: string;
-  run: () => void | Promise<void>;
-}
-
-interface Group {
-  value: string;
-  items: Command[];
-}
+import { connectGroups, emptyGroups, needsEntries, sequenceTarget, tryGroup, typedGroups, type PaletteEntry, type PaletteGroup, type PaletteIcon, type PaletteLaunch, type PaletteNetwork, type PalettePill } from './palette';
 
 /** Sign out is a POST, as in the header's form, so the palette posts a form of its own */
 function signOut() {
@@ -36,6 +24,13 @@ function signOut() {
 /** Whether the shortcut is the platform's: ⌘K on Apple devices, Ctrl+K elsewhere */
 const isShortcut = (e: KeyboardEvent) => e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
 
+/** Whether a key press belongs to something the owner is typing in, where N and L are letters */
+const isEditable = (target: EventTarget | null) =>
+  target instanceof HTMLElement && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+
+/** How long the second key of a sequence (N, then L) is waited for */
+const SEQUENCE_MS = 1200;
+
 /**
  * The label of the shortcut for this device. The server cannot know the platform, so the first
  * render says Ctrl K everywhere and an Apple device corrects it once hydrated, without a mismatch.
@@ -48,157 +43,295 @@ export function useShortcutLabel(): string {
   return label;
 }
 
-interface LaunchHit {
-  id: number;
-  label: string;
-  state: string;
+const PILL: Record<PalettePill['tone'], string> = { published: 'k-p-pub', waiting: 'k-p-wait', failed: 'k-p-fail', draft: 'k-p-run', quiet: 'k-p-quiet', line: 'k-p-line' };
+
+function EntryIcon({ icon }: { icon: PaletteIcon }) {
+  if (icon.kind === 'failed')
+    return (
+      <span className="home-palette-ic is-bad">
+        <span className="home-palette-dia" />
+      </span>
+    );
+  return <span className={`home-palette-ic${icon.bad ? ' is-bad' : ''}`}>{icon.kind === 'network' ? <NetworkGlyph channel={icon.network} size={15} /> : <Icon name={icon.name} size={16} />}</span>;
 }
 
-/** At most this many lines per group: the palette is a glance, and typing narrows it */
-const PER_GROUP = 4;
+function Title({ entry }: { entry: PaletteEntry }) {
+  const { title, hit } = entry;
+  return (
+    <span className="home-palette-t">
+      {hit ? (
+        <>
+          {title.slice(0, hit[0])}
+          <span className="home-palette-hit">{title.slice(hit[0], hit[1])}</span>
+          {title.slice(hit[1])}
+        </>
+      ) : (
+        title
+      )}
+      {entry.version && <span className="home-palette-v">{entry.version}</span>}
+    </span>
+  );
+}
 
-const matches = (c: Command, q: string) => !q || `${c.label} ${c.keywords ?? ''}`.toLowerCase().includes(q);
+interface Loaded {
+  launches: PaletteLaunch[];
+  timezone: string;
+}
 
 /**
- * The search palette (board SearchPalette): ⌘K or Ctrl+K anywhere, or the bars' search, opens it over
- * the screen; typing narrows the newest launches, the sections and the main actions, a few of each,
- * and Enter runs the highlighted one. A Dialog around an inline Autocomplete, so the focus is trapped
- * while it is open, Escape or Cancel closes it and the focus returns where it was.
+ * The search palette (boards DesktopSearch*, SearchPalette*): ⌘K or Ctrl+K anywhere, or the bars'
+ * search, opens it. An empty field lists what needs the owner, the newest launches and the main
+ * actions; typing finds launches, articles, accounts, sections and actions; "Connect an account" is a
+ * step inside it, listing the networks. A Dialog around an inline Autocomplete, so the focus is
+ * trapped while it is open, Escape (or Cancel on a phone) closes it and the focus returns where it was.
+ * The lines themselves are built in palette.ts.
  */
-export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function CommandPalette({ open, onOpenChange, attention, onOpened, owner }: { open: boolean; onOpenChange: (open: boolean) => void; attention: Attention | null; onOpened?: () => void; owner: string | null }) {
   const navigate = useNavigate();
   const router = useRouter();
   const toast = useToast();
+  const shortcut = useShortcutLabel();
+  const input = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
-  const [launches, setLaunches] = useState<LaunchHit[]>([]);
+  const [step, setStep] = useState<'connect' | null>(null);
+  const [loaded, setLoaded] = useState<Loaded>({ launches: [], timezone: 'UTC' });
+  const [found, setFound] = useState<PaletteLaunch[]>([]);
+  const [networks, setNetworks] = useState<PaletteNetwork[]>([]);
 
+  // ⌘K toggles it; N then L or W goes to an action, when the owner is not typing and no dialog is open
   useEffect(() => {
+    let previous: { key: string; at: number } | null = null;
     const onKey = (e: KeyboardEvent) => {
-      if (!isShortcut(e)) return;
-      e.preventDefault();
-      onOpenChange(!open);
+      if (isShortcut(e)) {
+        e.preventDefault();
+        onOpenChange(!open);
+        return;
+      }
+      if (open || e.metaKey || e.ctrlKey || e.altKey || e.repeat || isEditable(e.target) || document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+        previous = null;
+        return;
+      }
+      const fresh = previous && e.timeStamp - previous.at < SEQUENCE_MS ? previous.key : null;
+      const to = sequenceTarget(fresh, e.key);
+      previous = to ? null : { key: e.key, at: e.timeStamp };
+      if (to) {
+        e.preventDefault();
+        void navigate({ href: to });
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, navigate]);
 
-  // The newest launches, read each time it opens: a launch is found by its project, version or article
+  // Read each time it opens: the newest launches, the accounts and what needs the owner
   useEffect(() => {
     if (!open) {
       setQ('');
+      setStep(null);
+      setFound([]);
       return;
     }
+    onOpened?.();
     let alive = true;
     void listLaunches({ data: {} })
-      .then((data) => {
-        if (!alive) return;
-        setLaunches(
-          data.launches.map((l) => {
-            const t = launchTitle(l);
-            const name = t.title.charAt(0).toUpperCase() + t.title.slice(1);
-            return { id: l.id, label: t.version ? `${name} ${t.version}` : name, state: l.state.tone === 'waiting' ? 'waiting' : l.state.label.toLowerCase() };
-          }),
-        );
-      })
+      .then((data) => alive && setLoaded({ launches: data.launches, timezone: data.timezone }))
+      .catch(() => {});
+    void getChannels()
+      .then((data) => alive && setNetworks(data.networks))
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [open]);
+  }, [open, onOpened]);
 
-  const all = useMemo<Group[]>(() => {
-    const go = (to: string) => () => void navigate({ to });
-    return [
-      {
-        value: 'Go to',
-        items: [
-          { value: 'go-comments', label: 'Comments', keywords: 'replies answers mentions', run: go('/comments') },
-          { value: 'go-stats', label: 'Stats', keywords: 'numbers metrics charts', run: go('/stats') },
-          { value: 'go-channels', label: 'Channels', keywords: 'accounts networks', run: go('/channels') },
-          { value: 'go-ai', label: 'AI settings', keywords: 'provider model prompts tone claude', run: go('/settings/ai') },
-          { value: 'go-automation', label: 'Automation', keywords: 'rounds webhooks polling', run: go('/settings/automation') },
-          { value: 'go-launches', label: 'Launches', keywords: 'home releases', run: go('/') },
-          { value: 'go-write', label: 'Write', keywords: 'article blog', run: go('/write') },
-          { value: 'go-api', label: 'API', keywords: 'tokens rest mcp', run: go('/settings/api') },
-          { value: 'go-settings', label: 'Settings', keywords: 'github app configuration brand', run: go('/settings') },
-        ],
-      },
-      {
-        value: 'Actions',
-        items: [
-          { value: 'launch', label: 'Launch a repo', keywords: 'release draft new', run: go('/launch') },
-          { value: 'write', label: 'Write an article', keywords: 'post blog new', run: go('/write') },
-          { value: 'connect', label: 'Connect an account', keywords: 'channel network add', run: () => void navigate({ to: '/channels', hash: 'add' }) },
-          {
-            value: 'round',
-            label: 'Run an automation round now',
-            keywords: 'check releases publish',
-            run: async () => {
-              const answer = await runRoundNow().catch((error: unknown) => {
-                toast.fail(error instanceof Error ? error.message : String(error));
-                return null;
-              });
-              if (!answer) return;
-              if (answer.started) toast.done('A round has started', 'It checks for releases, publishes what is ready and reads the numbers when due.');
-              else toast.show({ tone: 'wait', title: 'A round is already running' });
-              await router.invalidate();
-            },
-          },
-          { value: 'tour', label: 'Take the tour', keywords: 'help guide walkthrough', run: requestTour },
-          { value: 'setup', label: 'Finish setting up', keywords: 'onboarding setup brand provider', run: go('/onboarding') },
-          { value: 'token', label: 'Create an API token', keywords: 'rest mcp script', run: go('/settings/api') },
-          { value: 'sign-out', label: 'Sign out', keywords: 'log out leave', run: signOut },
-        ],
-      },
-    ];
-  }, [navigate, router, toast]);
+  // Typed words search every launch, not only the newest page; the newest stay while the answer comes
+  const words = q.trim();
+  useEffect(() => {
+    if (!open || !words || step) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      void listLaunches({ data: { q: words } })
+        .then((data) => alive && setFound(data.launches))
+        .catch(() => {});
+    }, 150);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [open, words, step]);
 
-  const groups = useMemo<Group[]>(() => {
-    const words = q.trim().toLowerCase();
-    const found: Command[] = launches
-      .map((l) => ({ value: `launch-${l.id}`, label: l.label, hint: l.state, run: () => void navigate({ to: '/launches/$id', params: { id: String(l.id) } }) }))
-      .filter((c) => matches(c, words));
-    return [{ value: 'Launches', items: found }, ...all.map((g) => ({ ...g, items: g.items.filter((c) => matches(c, words)) }))]
-      .map((g) => ({ ...g, items: g.items.slice(0, PER_GROUP) }))
-      .filter((g) => g.items.length > 0);
-  }, [q, launches, all, navigate]);
+  const now = useMemo(() => new Date(), [open]);
+  const needs = useMemo(() => needsEntries(attention?.items ?? [], loaded.launches, networks, now), [attention, loaded.launches, networks, now]);
 
-  const choose = (command: Command) => {
+  const { groups, empty } = useMemo<{ groups: PaletteGroup[]; empty: boolean }>(() => {
+    if (step === 'connect') return { groups: connectGroups(networks, q), empty: false };
+    if (!words) return { groups: emptyGroups({ needs, launches: loaded.launches, networks, timezone: loaded.timezone, now }), empty: false };
+    const launches = [...found, ...loaded.launches.filter((l) => !found.some((f) => f.id === l.id))];
+    const typed = typedGroups(words, { needs, launches, networks, timezone: loaded.timezone, now });
+    return typed.length > 0 ? { groups: typed, empty: false } : { groups: [tryGroup(words, owner)], empty: true };
+  }, [step, networks, q, words, needs, loaded, found, owner, now]);
+
+  const back = () => {
+    setStep(null);
+    setQ('');
+  };
+
+  // The field is mounted again with each step: the focus goes back into it
+  useEffect(() => {
+    if (open) input.current?.focus();
+  }, [open, step]);
+
+  const choose = (entry: PaletteEntry) => {
+    const run = entry.run;
+    if (run.kind === 'step') {
+      setStep(run.step);
+      setQ('');
+      return;
+    }
     onOpenChange(false);
-    void command.run();
+    if (run.kind === 'href') {
+      void navigate({ href: run.href });
+      return;
+    }
+    if (run.command === 'tour') requestTour();
+    else if (run.command === 'sign-out') signOut();
+    else void runRound();
+  };
+
+  const runRound = async () => {
+    const answer = await runRoundNow().catch((error: unknown) => {
+      toast.fail(error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (!answer) return;
+    if (answer.started) toast.done('A round has started', 'It checks for releases, publishes what is ready and reads the numbers when due.');
+    else toast.show({ tone: 'wait', title: 'A round is already running' });
+    await router.invalidate();
+  };
+
+  const onFieldKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (step && e.key === 'Backspace' && e.currentTarget.value === '') {
+      e.preventDefault();
+      back();
+    }
   };
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
       <Dialog.Portal>
         <Dialog.Backdrop className="home-palette-scrim" />
-        <Dialog.Popup className="home-palette" aria-label="Search">
-          <Autocomplete.Root open inline mode="none" items={groups} value={q} onValueChange={(v) => setQ(v)} itemToStringValue={(c: Command) => c.label} autoHighlight="always" keepHighlight>
-            <div className="k-hrow k-g8">
-              <label className="k-input k-focus k-grow home-palette-field">
-                <Icon name="search" />
-                <Autocomplete.Input className="home-palette-input" aria-label="Go to or do" placeholder="Go to or do…" />
+        <Dialog.Popup className="home-palette" aria-label="Search" initialFocus={input}>
+          <Autocomplete.Root
+            // A step is a new list: mounted again, its first line is the highlighted one, not the line under the pointer
+            key={step ?? 'search'}
+            open
+            inline
+            mode="none"
+            items={groups}
+            value={q}
+            onValueChange={(v, details) => {
+              // Choosing a line is not typing: the field keeps the words (a step empties it itself)
+              if (details.reason !== 'item-press') setQ(v);
+            }}
+            itemToStringValue={(e: PaletteEntry) => e.title}
+            autoHighlight="always"
+            keepHighlight
+          >
+            <div className="home-palette-top">
+              <label className="home-palette-field">
+                {step ? (
+                  <>
+                    <button type="button" className="k-btn k-icon k-sm k-ghost home-palette-back" aria-label="Back" onClick={back}>
+                      <Icon name="chevronLeft" size={18} />
+                    </button>
+                    <span className="home-palette-tok">
+                      <Icon name="channels" size={16} />
+                      Connect an account
+                    </span>
+                  </>
+                ) : (
+                  <span className="k-muted home-palette-glass">
+                    <Icon name="search" />
+                  </span>
+                )}
+                <Autocomplete.Input ref={input} className="home-palette-input" aria-label="Go to or do" placeholder={step ? 'Pick a network…' : 'Go to or do…'} onKeyDown={onFieldKey} />
+                <kbd className="k-kbd home-palette-esc">esc</kbd>
               </label>
-              <Dialog.Close className="k-btn k-ghost k-sm">Cancel</Dialog.Close>
+              <Dialog.Close className="k-btn k-ghost k-sm home-palette-cancel">Cancel</Dialog.Close>
             </div>
-            <div className="k-menu k-stack home-palette-list">
-              <Autocomplete.Empty className="k-sm k-muted home-palette-empty">Nothing matches. Try “launch”, “write” or “channels”.</Autocomplete.Empty>
+            <div className="home-palette-list">
+              {empty && (
+                <div className="home-palette-empty">
+                  <strong>Nothing matches “{words}”.</strong>
+                  <span className="k-sm k-muted">It looks in launches, articles, accounts, sections and actions. Comments are not searched yet.</span>
+                </div>
+              )}
               <Autocomplete.List>
-                {(group: Group) => (
-                  <Autocomplete.Group key={group.value} items={group.items}>
-                    <Autocomplete.GroupLabel className="k-lbl home-palette-group">{group.value}</Autocomplete.GroupLabel>
+                {(group: PaletteGroup) => (
+                  <Autocomplete.Group key={group.id} items={group.items} className="home-palette-groupbox">
+                    <Autocomplete.GroupLabel className="home-palette-group">
+                      {group.label}
+                      {group.count !== undefined && <span className="home-palette-n">· {group.count}</span>}
+                    </Autocomplete.GroupLabel>
                     <Autocomplete.Collection>
-                      {(command: Command) => (
-                        <Autocomplete.Item key={command.value} value={command} className="k-mi home-palette-item" onClick={() => choose(command)}>
-                          {command.label}
-                          <span className="k-grow" />
-                          {command.hint && <span className="k-xs k-muted">{command.hint}</span>}
+                      {(entry: PaletteEntry) => (
+                        <Autocomplete.Item
+                          key={entry.id}
+                          value={entry}
+                          className="home-palette-item"
+                          onClick={() => choose(entry)}
+                          // An autocomplete selects nothing, so Base UI leaves aria-selected out: the highlighted line is the selected option
+                          render={(props, state) => <div {...props} aria-selected={state.highlighted} />}
+                        >
+                          <EntryIcon icon={entry.icon} />
+                          <Title entry={entry} />
+                          {entry.meta && <span className="home-palette-m">{entry.meta}</span>}
+                          {entry.pill && <span className={`k-pill ${PILL[entry.pill.tone]}`}>{entry.pill.label}</span>}
+                          {entry.keys && (
+                            <span className="home-palette-k">
+                              {entry.keys.map((k) => (
+                                <kbd key={k} className="k-kbd">
+                                  {k}
+                                </kbd>
+                              ))}
+                            </span>
+                          )}
+                          {entry.run.kind === 'step' && (
+                            <span className="k-muted home-palette-chev">
+                              <Icon name="chevronRight" size={18} />
+                            </span>
+                          )}
+                          <kbd className="k-kbd home-palette-enter" aria-hidden="true">
+                            ↵
+                          </kbd>
                         </Autocomplete.Item>
                       )}
                     </Autocomplete.Collection>
                   </Autocomplete.Group>
                 )}
               </Autocomplete.List>
+            </div>
+            <div className="home-palette-foot" aria-hidden="true">
+              {step && (
+                <span>
+                  <kbd className="k-kbd">⌫</kbd>Back
+                </span>
+              )}
+              <span>
+                <kbd className="k-kbd">↑</kbd>
+                <kbd className="k-kbd">↓</kbd>Move
+              </span>
+              <span>
+                <kbd className="k-kbd">↵</kbd>
+                {step ? 'Connect' : 'Open'}
+              </span>
+              <span>
+                <kbd className="k-kbd">esc</kbd>Close
+              </span>
+              <span className="k-grow" />
+              <span>
+                <kbd className="k-kbd">{shortcut}</kbd>anywhere
+              </span>
             </div>
           </Autocomplete.Root>
         </Dialog.Popup>

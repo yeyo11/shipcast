@@ -187,9 +187,9 @@ function Components() {
         </Popover>
       </Specimen>
 
-      <Specimen name="Command palette" text="⌘K or Ctrl+K anywhere: the sections and the main actions, filtered as you type.">
+      <Specimen name="Search palette" text="⌘K or Ctrl+K anywhere (or Search in the bars): “Go to or do…”. An empty field lists what needs you, the newest launches and the main actions; typing finds launches, articles, accounts, sections and actions; Connect an account is a step inside it. N then L launches a repo, N then W writes an article.">
         <p className="muted">
-          Press <kbd className="ui-kbd">Ctrl K</kbd> (or <kbd className="ui-kbd">⌘K</kbd>), or use Search in the top bar.
+          Press <kbd className="k-kbd">Ctrl K</kbd> (or <kbd className="k-kbd">⌘K</kbd>), or use Search in the top bar.
         </p>
       </Specimen>
     </>
