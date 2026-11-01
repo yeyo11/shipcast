@@ -1,5 +1,6 @@
 import { WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
-import { characters, singleDraft } from './text.ts';
+import { telegramLength } from './telegram-html.ts';
+import { singleDraft } from './text.ts';
 
 /** Fits a photo caption (1024) with room for the link */
 const limits = { telegramText: 900 } as const;
@@ -24,8 +25,16 @@ export const telegram = {
   brief: "telegram: one post in English, at most {{limit.telegramText}} characters (it is the caption of the launch image), ending with the English article's link {{site}}/en/<English slug>/?ref=telegram.",
   adapt: `at most ${limits.telegramText} characters, a link at the end`,
   draft: { ...singleDraft('telegram', 'Telegram'), read: (body: string) => ({ text: body }) },
+  editor: {
+    format: 'light',
+    marks: ['bold', 'italic', 'underline', 'strike', 'spoiler', 'code', 'link'],
+    blocks: ['quote'],
+    images: false,
+    note: 'Sent as Telegram’s formatting: bold, italics, underline, strikethrough, spoilers, code, links and quotes',
+  },
   limits,
-  text: { max: limits.telegramText, length: characters, counting: 'the link included' },
+  // Telegram counts what a reader sees once its HTML is read: a link's label, not its address or the Markdown
+  text: { max: limits.telegramText, length: telegramLength, counting: 'as shown, the link included' },
   edit: {
     edit: 'yes',
     delete: 'yes',

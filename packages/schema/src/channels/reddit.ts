@@ -42,6 +42,13 @@ export const reddit = {
       return { text: post.body, title: post.title };
     },
   },
+  editor: {
+    format: 'markdown',
+    marks: ['bold', 'italic', 'strike', 'code', 'link'],
+    blocks: ['heading', 'quote', 'bulletList', 'orderedList', 'codeBlock', 'table'],
+    images: false,
+    note: 'Markdown, but a self post through the API takes no image in its text',
+  },
   limits,
   edit: {
     edit: 'no',

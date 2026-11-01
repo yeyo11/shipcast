@@ -1,5 +1,6 @@
 import { blog } from './blog.ts';
 import { bluesky } from './bluesky.ts';
+import type { EditorProfile } from './format.ts';
 import type { AverageMetric, ChannelDefinition, EditField, MetricFamily, PostingWindow, ProfileCapability } from './definition.ts';
 import { devto } from './devto.ts';
 import { discord } from './discord.ts';
@@ -113,6 +114,7 @@ export function channelTables(definitions: readonly ChannelDefinition[]) {
     chartSlots: by<number | 'ink'>((d) => d.chartSlot),
     limits: Object.assign({}, ...definitions.map((d) => d.limits)) as Record<string, number>,
     pieceLimits: by<PieceLimit>((d) => d.text && { max: d.text.max, length: d.text.length, network: d.name, counting: d.text.counting }),
+    editorProfiles: by<EditorProfile>((d) => d.editor),
     briefs: Object.fromEntries(definitions.map((d) => [`channel.${d.id}`, d.brief])) as Record<string, string>,
     adaptTargets: by<{ name: string; limit: string }>((d) => (d.adapt ? { name: d.inSentence, limit: d.adapt } : undefined)),
     /** The channel a draft file is of, and its part: `newsletter-es.md` is the newsletter's `es` */
@@ -193,6 +195,15 @@ export function isAveragedMetric(source: string, name: string): boolean {
 }
 /** Each channel's own slot in the charts' palette */
 export const CHANNEL_SLOTS: Readonly<Record<string, number | 'ink'>> = TABLES.chartSlots;
+/**
+ * The formatting each channel's text shows, from its definition: the editor's toolbar and paste, the
+ * writing assistant's instruction and the check of a proposal or a saved draft all read this
+ */
+export const EDITOR_PROFILES: Readonly<Partial<Record<ChannelId, EditorProfile>>> = TABLES.editorProfiles;
+/** The profile of a text: its channel's, or the article's (the blog's) for a text of no channel, as on Write */
+export function editorProfile(channel: string | undefined): EditorProfile | undefined {
+  return (EDITOR_PROFILES as Readonly<Record<string, EditorProfile>>)[channel ?? 'blog'];
+}
 /** Each channel's default brief, as the AI settings' `channel.<id>` prompts */
 export const CHANNEL_BRIEFS = TABLES.briefs as Readonly<Record<`channel.${ChannelId}`, string>>;
 /** The networks a text can be adapted to, with what their post may hold */

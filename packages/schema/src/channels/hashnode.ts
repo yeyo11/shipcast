@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { FULL_MARKDOWN } from './format.ts';
 import { singleDraft } from './text.ts';
 
 const limits = { hashnodeTags: 5 } as const;
@@ -30,6 +31,7 @@ export const hashnode = {
     'hashnode: 1 to {{limit.hashnodeTags}} lowercase tags (letters and digits only). Hashnode republishes the English article with the blog as the original URL, so write nothing else for it.',
   adapt: 'an article in Markdown for developers, plain and practical',
   draft: { ...singleDraft('hashnode', 'Hashnode'), read: (body: string) => ({ text: body }) },
+  editor: { ...FULL_MARKDOWN, note: 'Markdown, as the blog shows it; its images are made absolute links' },
   limits,
   edit: {
     edit: 'yes',

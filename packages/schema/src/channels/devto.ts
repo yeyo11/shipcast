@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ArticleSummary, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { FULL_MARKDOWN } from './format.ts';
 import { singleDraft } from './text.ts';
 
 const limits = { devtoTags: 4 } as const;
@@ -34,6 +35,7 @@ export const devto = {
   brief: 'devto: 1 to {{limit.devtoTags}} lowercase tags. dev.to republishes the English article with the blog as canonical URL, so write nothing else for it.',
   adapt: 'an article in Markdown for developers, plain and practical',
   draft: { ...singleDraft('devto', 'dev.to'), read: (body: string) => ({ text: body }) },
+  editor: { ...FULL_MARKDOWN, note: 'Markdown, as the blog shows it; its images are made absolute links' },
   limits,
   edit: {
     edit: 'yes',

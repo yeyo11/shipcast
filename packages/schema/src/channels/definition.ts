@@ -1,6 +1,7 @@
 // A type-only import: erased at runtime, so a definition (and `@shipcast/schema/channels`) loads no
 // zod in the browser. The pack's piece is a factory the main index calls with zod in hand.
 import type { z } from 'zod';
+import type { EditorProfile } from './format.ts';
 
 /*
  * What Shipcast knows about one channel, as data: one module per channel under this folder, listed
@@ -147,6 +148,12 @@ export interface ChannelDefinition<Id extends string = string> {
   brief: string;
   /** What its post may hold, for the writing assistant's "Adapt to a network" */
   adapt?: string;
+  /**
+   * The formatting its text shows: what the editor's toolbar offers, what a paste keeps, what the
+   * writing assistant may write and what a saved draft may hold. None for a channel with no text to
+   * edit (YouTube's scenes). See docs/decisions/rich-editor.md
+   */
+  editor?: EditorProfile;
 
   /** Its drafts in the pull request; the blog's articles are where the blog reads them instead */
   draft?: {

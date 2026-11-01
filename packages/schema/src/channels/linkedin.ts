@@ -1,4 +1,5 @@
 import { MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { PLAIN_TEXT } from './format.ts';
 import { characters, singleDraft } from './text.ts';
 
 /** LinkedIn takes 3000; a post past the "see more" fold at about 200 is read by fewer people */
@@ -25,6 +26,7 @@ export const linkedin = {
     "linkedin: one post in {{linkedinLanguage}} on the author's own profile, at most {{limit.linkedinText}} characters, written for developers and engineering peers: the first two lines carry the point (LinkedIn folds the rest), then what it is, why it was built and what it does today, in short paragraphs. No link in the text: the article is attached as the post's link card. Up to three specific hashtags at the end.",
   adapt: 'a short professional post, a few short paragraphs, no hashtag walls',
   draft: { ...singleDraft('linkedin', 'LinkedIn'), read: (body: string) => ({ text: body }) },
+  editor: PLAIN_TEXT('LinkedIn'),
   limits,
   text: { max: limits.linkedinText, length: characters, counting: 'the hashtags included' },
   edit: {

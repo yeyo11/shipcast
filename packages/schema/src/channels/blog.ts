@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { FULL_MARKDOWN } from './format.ts';
 
 const limits = { articleDescription: 200, imageAlt: 140 } as const;
 
@@ -50,6 +51,7 @@ export const blog = {
   pack: { key: 'article', piece },
   brief:
     "article: the canonical post, one version per language ({{blogLanguages}}). Each version has its own slug, written in its language's words (the English one in English, the Spanish one in Spanish), and lives at {{site}}/<lang>/<that slug>/. Markdown body without front matter and without a top-level heading. Description at most {{limit.articleDescription}} characters. For search engines and assistants: the body's first paragraph says in one or two plain sentences what the project is and does; headings are phrased as the questions a reader asks where that reads naturally; imageAlt describes the launch image in that language (at most {{limit.imageAlt}} characters).",
+  editor: { ...FULL_MARKDOWN, note: 'The article: Markdown, as the blog, dev.to and Hashnode show it, with images' },
   limits,
   edit: {
     edit: 'yes',

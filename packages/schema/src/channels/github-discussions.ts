@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { FULL_MARKDOWN } from './format.ts';
 import { parseDiscussionDraft, singleDraft } from './text.ts';
 
 const limits = {
@@ -44,6 +45,7 @@ export const githubDiscussions = {
       return { text: discussion.body, title: discussion.title };
     },
   },
+  editor: { ...FULL_MARKDOWN, note: 'GitHub-flavoured Markdown, images included' },
   limits,
   edit: {
     edit: 'yes',

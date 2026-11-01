@@ -44,6 +44,13 @@ export const newsletter = {
       return { text: issue.markdown, title: issue.subject };
     },
   },
+  editor: {
+    format: 'light',
+    marks: ['bold', 'italic', 'link'],
+    blocks: ['bulletList', 'orderedList'],
+    images: false,
+    note: 'The issue styles bold, italics, links and lists; anything else reaches the inbox unstyled',
+  },
   limits,
   edit: { edit: 'no', delete: 'no', note: 'A sent campaign is in the readers’ inboxes already', fields: [], main: 'post' },
   posting: {

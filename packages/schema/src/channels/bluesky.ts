@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { PLAIN_TEXT } from './format.ts';
 import { graphemeCount, singleDraft } from './text.ts';
 
 const limits = { blueskyGraphemes: 300 } as const;
@@ -28,6 +29,7 @@ export const bluesky = {
   brief: "bluesky: one post in English, at most {{limit.blueskyGraphemes}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=bluesky.",
   adapt: `at most ${limits.blueskyGraphemes} characters, a link at the end`,
   draft: { ...singleDraft('bluesky', 'Bluesky'), read: (body: string) => ({ text: body }) },
+  editor: PLAIN_TEXT('Bluesky'),
   limits,
   text: { max: limits.blueskyGraphemes, length: graphemeCount, counting: 'the link included' },
   edit: {

@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { PLAIN_TEXT } from './format.ts';
 import { parseInstagramDraft, singleDraft } from './text.ts';
 
 const limits = {
@@ -55,6 +56,7 @@ export const instagram = {
   adapt: `a caption of at most ${limits.instagramCaption} characters: a one-line hook, two or three lines, "link in bio", at most ${limits.instagramHashtags} specific hashtags`,
   // The carousel's texts are drawn into its images: only the caption is the post's text
   draft: { ...singleDraft('instagram', 'Instagram'), read: (body: string) => ({ text: parseInstagramDraft(body).caption }) },
+  editor: PLAIN_TEXT('Instagram'),
   limits,
   edit: {
     edit: 'no',

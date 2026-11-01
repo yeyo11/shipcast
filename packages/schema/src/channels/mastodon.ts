@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { PLAIN_TEXT } from './format.ts';
 import { characters, singleDraft } from './text.ts';
 
 const limits = { mastodonCharacters: 500 } as const;
@@ -27,6 +28,7 @@ export const mastodon = {
     "mastodon: one post in English, at most {{limit.mastodonCharacters}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=mastodon, and a few hashtags (Mastodon search relies on them).",
   adapt: `at most ${limits.mastodonCharacters} characters, a few hashtags, a link at the end`,
   draft: { ...singleDraft('mastodon', 'Mastodon'), read: (body: string) => ({ text: body }) },
+  editor: PLAIN_TEXT('Mastodon'),
   limits,
   text: { max: limits.mastodonCharacters, length: characters, counting: 'the link and hashtags included' },
   edit: {

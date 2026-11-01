@@ -23,6 +23,14 @@ export const discord = {
   brief: "discord: one message in English, at most {{limit.discordText}} characters, ending with the English article's link {{site}}/en/<English slug>/?ref=discord. Short paragraphs; Discord renders Markdown.",
   adapt: `at most ${limits.discordText} characters, short paragraphs, Markdown`,
   draft: { ...singleDraft('discord', 'Discord'), read: (body: string) => ({ text: body }) },
+  editor: {
+    format: 'light',
+    marks: ['bold', 'italic', 'strike', 'code', 'link', 'spoiler'],
+    blocks: ['heading', 'quote', 'bulletList', 'orderedList', 'codeBlock'],
+    maxHeading: 3,
+    images: false,
+    note: 'Discord’s Markdown: headings down to the third, no tables, no images',
+  },
   limits,
   text: { max: limits.discordText, length: characters, counting: 'the link included' },
   edit: {

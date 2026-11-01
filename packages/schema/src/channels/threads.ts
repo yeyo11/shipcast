@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { PLAIN_TEXT } from './format.ts';
 import { singleDraft, threadsLength } from './text.ts';
 
 const limits = { threadsText: 500 } as const;
@@ -29,6 +30,7 @@ export const threads = {
     "threads: one post in English, at most {{limit.threadsText}} characters (an emoji counts as four), conversational, ending with the English article's link {{site}}/en/<English slug>/?ref=threads. It goes with the launch image. At most two hashtags, or none.",
   adapt: `at most ${limits.threadsText} characters (an emoji counts as four), conversational, a link at the end, at most two hashtags`,
   draft: { ...singleDraft('threads', 'Threads'), read: (body: string) => ({ text: body }) },
+  editor: PLAIN_TEXT('Threads'),
   limits,
   text: { max: limits.threadsText, length: threadsLength, counting: 'the link included, an emoji counting as four or more' },
   edit: { edit: 'no', delete: 'yes', note: 'The Threads API has no edit: a post can only be deleted (at most 100 deletes a day)', fields: [], main: 'post' },
