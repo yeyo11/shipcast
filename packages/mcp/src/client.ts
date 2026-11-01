@@ -11,7 +11,7 @@
  */
 export const WEBMCP_HEADER = 'x-shipcast-webmcp';
 
-export type Method ='GET' | 'POST' | 'PATCH' | 'DELETE';
+export type Method ='GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** What the API answers on an error, plus the two failures that never reach it */
 export type ApiErrorCode =
