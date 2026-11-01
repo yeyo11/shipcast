@@ -1,5 +1,12 @@
 import { Menu } from '@base-ui/react/menu';
+import type { Editor } from '@tiptap/core';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { stripFormat, type EditorProfile } from '@shipcast/schema/channels';
+import { activeTools, EditorToolbar, FormattedDiff, LinkDialog, runVisual, type EditorMode } from '../editor/EditorToolbar';
+import { imageFiles, type ImageSupport } from '../editor/images';
+import { ImageDialog, MissingAlt } from '../editor/ImageParts';
+import { applyTool, insertImage, insertLink, type Edit, type Tool, type ToolId } from '../editor/toolbar';
+import { VisualEditor } from '../editor/VisualEditor';
 import { Icon } from '../kit/Icon';
 import { Overlay } from '../kit/Overlay';
 import { useToast } from '../Toasts';
@@ -9,6 +16,16 @@ import { sentenceContext } from './diff';
 import { DiffView } from './DiffView';
 import { ADAPT_NETWORKS, type Action } from './protocol';
 import type { Assistant } from './session';
+
+/**
+ * Where an image goes in the Visual mode: where it was put, or after the table it was put in. A
+ * Markdown table's cell holds a line of text, so an image there would not survive the way back.
+ */
+function outsideTable(editor: Editor, pos: number): number {
+  const $pos = editor.state.doc.resolve(Math.min(pos, editor.state.doc.content.size));
+  for (let depth = $pos.depth; depth > 0; depth--) if ($pos.node(depth).type.name === 'table') return $pos.after(depth);
+  return pos;
+}
 
 const VERDICTS: Record<string, { label: string; dot: string }> = {
   backed: { label: 'Backed by the code', dot: 'k-dot-pub' },
@@ -171,8 +188,10 @@ function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant:
 }
 
 /** The quick action's answer (board AssistProposal): the change in place, to accept or reject */
-function ProposalCard({ assistant, onAccept }: { assistant: Assistant; onAccept: () => void }) {
+function ProposalCard({ assistant, onAccept, formatted }: { assistant: Assistant; onAccept: () => void; formatted?: boolean }) {
   const proposal = assistant.proposal;
+  // In the Visual mode a proposal reads formatted; its Markdown is one press away
+  const [asMarkdown, setAsMarkdown] = useState(false);
   if (!proposal) return null;
   const context = proposal.range ? sentenceContext(assistant.target.value, proposal.range) : undefined;
   const hasText = Boolean(proposal.text);
@@ -233,7 +252,17 @@ function ProposalCard({ assistant, onAccept }: { assistant: Assistant; onAccept:
               {proposal.notice}
             </p>
           )}
-          {(hasText || !proposal.streaming) && <DiffView before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} context={context} legend className={proposal.range ? undefined : 'wr-diff-whole'} />}
+          {(hasText || !proposal.streaming) &&
+            (formatted && !asMarkdown ? (
+              <FormattedDiff before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} />
+            ) : (
+              <DiffView before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} context={context} legend className={proposal.range ? undefined : 'wr-diff-whole'} />
+            ))}
+          {formatted && (hasText || !proposal.streaming) && (
+            <button type="button" className="wr-textbutton k-sm ed-diff-toggle" aria-pressed={asMarkdown} onClick={() => setAsMarkdown(!asMarkdown)}>
+              {asMarkdown ? 'Show formatted' : 'Show as Markdown'}
+            </button>
+          )}
         </>
       )}
       <div className="k-hrow k-g8">
@@ -263,6 +292,16 @@ export interface AssistedEditorProps {
   /** What the toolbar says on its right from 960 px (Write's "Markdown · 412 words") */
   meta?: ReactNode;
   className?: string;
+  /**
+   * The formatting the text's channel shows: with it the editor has the Markdown | Visual switch and
+   * the buttons the profile offers, and a paste keeps only what the profile shows. A plain profile has
+   * no bar. Without it the editor is the plain textarea.
+   */
+  profile?: EditorProfile;
+  /** Under the text: where it goes as written (Write's status line) */
+  status?: ReactNode;
+  /** Images by paste, drop and the bar's button, where the profile takes them */
+  images?: ImageSupport;
 }
 
 /**
@@ -270,13 +309,114 @@ export interface AssistedEditorProps {
  * actions beside it (the toolbar's Assist offers the same, for the keyboard); on a phone they open as
  * a bottom sheet. The answer comes back above the text as a diff to accept or reject.
  */
-export function AssistedEditor({ id, label, assistant, mono = false, tall, required, placeholder, help, onOpenChat, meta, className }: AssistedEditorProps) {
+export function AssistedEditor({ id, label, assistant, mono = false, tall, required, placeholder, help, onOpenChat, meta, className, profile, status, images: imageSupport }: AssistedEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const phone = usePhone();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [floating, setFloating] = useState<{ top: number; left: number } | null>(null);
   const { target, proposal } = assistant;
+  // Markdown is the default; the choice is not kept between visits yet
+  const [mode, setMode] = useState<EditorMode>('markdown');
+  const [visual, setVisual] = useState<Editor | null>(null);
+  const [active, setActive] = useState<Set<ToolId>>(new Set());
+  const [linkOpen, setLinkOpen] = useState(false);
+  const formatting = profile !== undefined && profile.format !== 'plain';
+  const inVisual = formatting && mode === 'visual';
+  const [imageOpen, setImageOpen] = useState(false);
+  // Only where the channel shows images in the text
+  const images = profile?.images ? imageSupport : undefined;
+
+  /**
+   * Pasted or dropped images, uploaded at once and put where they landed with no alt text yet: the
+   * field under the bar asks for it, and the text cannot be saved until it has it
+   */
+  const takeFiles = (files: File[], at: { markdown: number } | { visual: number }): boolean => {
+    const taken = images ? imageFiles(files) : [];
+    if (!images || taken.length === 0) return false;
+    void (async () => {
+      for (const file of taken) {
+        const uploaded = await images.upload(file);
+        if (!uploaded.ok) {
+          toast.fail(`${file.name || 'The image'} was not taken: ${uploaded.problem}`);
+          continue;
+        }
+        if ('visual' in at) {
+          if (visual) visual.chain().focus().insertContentAt(outsideTable(visual, at.visual), { type: 'image', attrs: { src: uploaded.src, alt: '' } }).run();
+        } else {
+          const edit = insertImage(latestValue.current, { start: at.markdown, end: at.markdown }, { alt: '', src: uploaded.src });
+          applyEdit(edit);
+        }
+      }
+    })();
+    return true;
+  };
+  const latestValue = useRef(target.value);
+  latestValue.current = target.value;
+
+  // The pressed state follows the Visual mode's selection
+  useEffect(() => {
+    if (!visual) return;
+    const update = () => setActive(activeTools(visual));
+    visual.on('transaction', update);
+    return () => {
+      visual.off('transaction', update);
+    };
+  }, [visual]);
+
+  /** Applies an edit of the Markdown text and puts the selection where it says */
+  const applyEdit = (edit: Edit) => {
+    target.onChange(edit.text);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(edit.selection.start, edit.selection.end);
+      assistant.setSelection(edit.selection);
+    });
+  };
+
+  const onTool = (tool: Tool) => {
+    if (tool.id === 'link') {
+      setLinkOpen(true);
+      return;
+    }
+    if (tool.id === 'image') {
+      setImageOpen(true);
+      return;
+    }
+    if (inVisual) {
+      if (visual) runVisual(visual, tool.id);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    applyEdit(applyTool(target.value, { start: el.selectionStart, end: el.selectionEnd }, tool.id));
+  };
+
+  const onImage = (image: { src: string; alt: string }) => {
+    if (inVisual && visual) {
+      visual.chain().focus().insertContentAt(outsideTable(visual, visual.state.selection.to), { type: 'image', attrs: image }).run();
+      return;
+    }
+    const el = ref.current;
+    const at = el ? el.selectionEnd : target.value.length;
+    applyEdit(insertImage(target.value, { start: at, end: at }, image));
+  };
+
+  const onLink = (url: string | null) => {
+    if (inVisual && visual) {
+      const chain = visual.chain().focus().extendMarkRange('link');
+      if (url === null) chain.unsetLink().run();
+      else if (visual.state.selection.empty && !visual.isActive('link')) chain.insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }] }).run();
+      else chain.setLink({ href: url }).run();
+      return;
+    }
+    const el = ref.current;
+    if (!el || url === null) return;
+    applyEdit(insertLink(target.value, { start: el.selectionStart, end: el.selectionEnd }, url));
+  };
 
   const readSelection = () => {
     const el = ref.current;
@@ -286,6 +426,17 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
 
   // The floating button follows the end of a selection made with the pointer or the keyboard
   useLayoutEffect(() => {
+    if (inVisual) {
+      const box = boxRef.current;
+      if (!visual || !box || !assistant.selected || visual.state.selection.empty) {
+        setFloating(null);
+        return;
+      }
+      const at = visual.view.coordsAtPos(visual.state.selection.to);
+      const frame = box.getBoundingClientRect();
+      setFloating({ top: Math.min(at.bottom - frame.top + 6, frame.height - 8), left: Math.min(Math.max(at.left - frame.left - 20, 4), frame.width - 140) });
+      return;
+    }
     const el = ref.current;
     if (!el || !assistant.selected || document.activeElement !== el) {
       setFloating(null);
@@ -295,16 +446,16 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
     const top = Math.min(Math.max(point.top + point.height + 6, 4), el.clientHeight - 8);
     const left = Math.min(Math.max(point.left - 20, 4), el.clientWidth - 140);
     setFloating({ top, left });
-  }, [assistant.selected, assistant.selection.end]);
+  }, [assistant.selected, assistant.selection.end, inVisual, visual]);
 
   // The box grows with the text, as the boards draw it, so a long article scrolls with the page
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || inVisual) return;
     el.style.height = '';
     // Only past its minimum: below it the stylesheet's height holds, whatever the layout (a proposal shrinks it)
     if (el.scrollHeight > el.clientHeight) el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
-  }, [target.value, proposal]);
+  }, [target.value, proposal, inVisual]);
 
   useEffect(() => {
     const el = ref.current;
@@ -312,10 +463,11 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
     const hide = () => setFloating(null);
     el.addEventListener('scroll', hide);
     return () => el.removeEventListener('scroll', hide);
-  }, []);
+  }, [inVisual]);
 
   const accept = () => {
     if (!assistant.acceptProposal()) toast.fail('The text changed under the proposal: ask again on the text as it is now.');
+    else if (inVisual) visual?.commands.focus();
     else ref.current?.focus();
   };
 
@@ -348,8 +500,40 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
         )}
         {meta && <span className="k-xs k-muted wr-desk-inline wr-assisted-meta">{meta}</span>}
       </div>
-      <ProposalCard assistant={assistant} onAccept={accept} />
-      <div className="wr-assisted-box">
+      {formatting && <EditorToolbar profile={profile} mode={mode} onMode={(m) => {
+        setMode(m);
+        setFloating(null);
+        assistant.setSelection({ start: 0, end: 0 });
+      }} onTool={onTool} active={inVisual ? active : undefined} images={Boolean(images)} controls={id} />}
+      {images && <MissingAlt value={target.value} onChange={target.onChange} images={images} />}
+      {profile && profile.format !== 'markdown' && !status && <p className="k-xs k-muted wr-flush ed-note">{profile.note}</p>}
+      <ProposalCard assistant={assistant} onAccept={accept} formatted={inVisual} />
+      <div
+        className="wr-assisted-box"
+        ref={boxRef}
+        onKeyDown={(e) => {
+          if (inVisual && e.altKey && e.key.toLowerCase() === 'j') {
+            e.preventDefault();
+            const float = document.getElementById(`${id}-float`);
+            (float ?? document.getElementById(`${id}-assist`))?.click();
+          }
+        }}
+      >
+        {inVisual ? (
+          <VisualEditor
+            id={id}
+            label={label}
+            value={target.value}
+            onChange={target.onChange}
+            profile={profile}
+            onSelect={assistant.setSelection}
+            onReady={setVisual}
+            {...(images && { onFiles: (files: File[], at: number) => takeFiles(files, { visual: at }), imageSrc: images.display })}
+            describedBy={`${id}-help`}
+            tall={tall}
+            dimmed={Boolean(proposal)}
+          />
+        ) : (
         <textarea
           id={id}
           ref={ref}
@@ -362,6 +546,30 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
             readSelection();
           }}
           onSelect={readSelection}
+          onDrop={(e) => {
+            const files = [...e.dataTransfer.files];
+            if (files.length > 0 && takeFiles(files, { markdown: e.currentTarget.selectionStart })) e.preventDefault();
+          }}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files];
+            if (files.length > 0 && takeFiles(files, { markdown: e.currentTarget.selectionEnd })) {
+              e.preventDefault();
+              return;
+            }
+            // A paste keeps only the formatting the channel shows: a bold pasted into Bluesky arrives as its words
+            if (!profile) return;
+            const pasted = e.clipboardData.getData('text/plain');
+            const cleaned = stripFormat(pasted, profile).text;
+            if (!pasted || cleaned === pasted) return;
+            e.preventDefault();
+            const el = e.currentTarget;
+            const at = el.selectionStart + cleaned.length;
+            target.onChange(el.value.slice(0, el.selectionStart) + cleaned + el.value.slice(el.selectionEnd));
+            requestAnimationFrame(() => {
+              el.setSelectionRange(at, at);
+              readSelection();
+            });
+          }}
           onKeyUp={readSelection}
           onMouseUp={readSelection}
           onBlur={(e) => {
@@ -377,12 +585,14 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
           }}
           aria-describedby={`${id}-help`}
         />
+        )}
         {floating && (
           <div className="wr-assist-float" style={{ top: floating.top, left: floating.left }}>
             {phone ? floatButton : <AssistMenu assistant={assistant} trigger={floatButton} onOpenChat={onOpenChat} />}
           </div>
         )}
       </div>
+      {status && <p className="k-xs k-muted wr-flush ed-status">{status}</p>}
       <span id={`${id}-help`} className="k-help wr-assisted-help">
         {help}
         <span className="visually-hidden"> Select a passage for the assistant, or press Alt+J.</span>
@@ -391,6 +601,8 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
         {assistant.announce}
       </div>
       {phone && <AssistSheet assistant={assistant} open={sheetOpen} onOpenChange={setSheetOpen} onOpenChat={onOpenChat} />}
+      {images && <ImageDialog open={imageOpen} onOpenChange={setImageOpen} images={images} onInsert={onImage} />}
+      {formatting && <LinkDialog open={linkOpen} onOpenChange={setLinkOpen} initial={inVisual && visual?.isActive('link') ? String(visual.getAttributes('link').href ?? '') : ''} onSubmit={onLink} />}
     </div>
   );
 }

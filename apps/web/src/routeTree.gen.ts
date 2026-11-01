@@ -41,6 +41,7 @@ import { Route as AuthThreadsRouteImport } from './routes/auth/threads'
 import { Route as AuthYoutubeRouteImport } from './routes/auth/youtube'
 import { Route as AvatarsAccountIdRouteImport } from './routes/avatars.$accountId'
 import { Route as MediaMediaIdRouteImport } from './routes/media.$mediaId'
+import { Route as UploadsSha256RouteImport } from './routes/uploads.$sha256'
 import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/index'
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
 import { Route as AppDesignComponentsRouteImport } from './routes/_app/design/components'
@@ -224,6 +225,11 @@ const MediaMediaIdRoute = MediaMediaIdRouteImport.update({
   path: '/media/$mediaId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UploadsSha256Route = UploadsSha256RouteImport.update({
+  id: '/uploads/$sha256',
+  path: '/uploads/$sha256',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppChannelsIndexRoute = AppChannelsIndexRouteImport.update({
   id: '/channels/',
   path: '/channels/',
@@ -373,6 +379,7 @@ export interface FileRoutesByFullPath {
   '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/media/$mediaId': typeof MediaMediaIdRoute
+  '/uploads/$sha256': typeof UploadsSha256Route
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
   '/design/illustrations': typeof AppDesignIllustrationsRoute
@@ -427,6 +434,7 @@ export interface FileRoutesByTo {
   '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/media/$mediaId': typeof MediaMediaIdRoute
+  '/uploads/$sha256': typeof UploadsSha256Route
   '/': typeof AppIndexRoute
   '/channels/$network': typeof AppChannelsNetworkRoute
   '/design/components': typeof AppDesignComponentsRoute
@@ -485,6 +493,7 @@ export interface FileRoutesById {
   '/auth/youtube': typeof AuthYoutubeRouteWithChildren
   '/avatars/$accountId': typeof AvatarsAccountIdRoute
   '/media/$mediaId': typeof MediaMediaIdRoute
+  '/uploads/$sha256': typeof UploadsSha256Route
   '/_app/': typeof AppIndexRoute
   '/_app/channels/$network': typeof AppChannelsNetworkRoute
   '/_app/design/components': typeof AppDesignComponentsRoute
@@ -544,6 +553,7 @@ export interface FileRouteTypes {
     | '/auth/youtube'
     | '/avatars/$accountId'
     | '/media/$mediaId'
+    | '/uploads/$sha256'
     | '/channels/$network'
     | '/design/components'
     | '/design/illustrations'
@@ -598,6 +608,7 @@ export interface FileRouteTypes {
     | '/auth/youtube'
     | '/avatars/$accountId'
     | '/media/$mediaId'
+    | '/uploads/$sha256'
     | '/'
     | '/channels/$network'
     | '/design/components'
@@ -655,6 +666,7 @@ export interface FileRouteTypes {
     | '/auth/youtube'
     | '/avatars/$accountId'
     | '/media/$mediaId'
+    | '/uploads/$sha256'
     | '/_app/'
     | '/_app/channels/$network'
     | '/_app/design/components'
@@ -703,6 +715,7 @@ export interface RootRouteChildren {
   AuthYoutubeRoute: typeof AuthYoutubeRouteWithChildren
   AvatarsAccountIdRoute: typeof AvatarsAccountIdRoute
   MediaMediaIdRoute: typeof MediaMediaIdRoute
+  UploadsSha256Route: typeof UploadsSha256Route
   ApiGithubWebhookRoute: typeof ApiGithubWebhookRoute
   ApiSourcesMediaRoute: typeof ApiSourcesMediaRoute
   ApiV1SplatRoute: typeof ApiV1SplatRoute
@@ -932,6 +945,13 @@ declare module '@tanstack/react-router' {
       path: '/media/$mediaId'
       fullPath: '/media/$mediaId'
       preLoaderRoute: typeof MediaMediaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/uploads/$sha256': {
+      id: '/uploads/$sha256'
+      path: '/uploads/$sha256'
+      fullPath: '/uploads/$sha256'
+      preLoaderRoute: typeof UploadsSha256RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/channels/': {
@@ -1270,6 +1290,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthYoutubeRoute: AuthYoutubeRouteWithChildren,
   AvatarsAccountIdRoute: AvatarsAccountIdRoute,
   MediaMediaIdRoute: MediaMediaIdRoute,
+  UploadsSha256Route: UploadsSha256Route,
   ApiGithubWebhookRoute: ApiGithubWebhookRoute,
   ApiSourcesMediaRoute: ApiSourcesMediaRoute,
   ApiV1SplatRoute: ApiV1SplatRoute,

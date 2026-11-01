@@ -181,3 +181,64 @@ button.wr-chat-session { padding: 12px 0; }
   .wr-out-help { display: none; }
 }
 .wr-title-field textarea.wr-title-input { resize: none; overflow: hidden; line-height: 1.5; display: block; }
+
+/* ---------- The rich editor (boards EditorWrite, EditorDrafts, EditorAssistVisual) ---------- */
+/* The bar: the mode switch, then the profile's buttons; it scrolls sideways rather than wrap on a phone */
+/* It wraps rather than scroll: every button stays in sight, at any width */
+.ed-bar { flex-wrap: wrap; row-gap: 6px; padding: 2px 0; }
+.ed-bar .k-seg { flex: none; }
+.ed-tools { flex-wrap: wrap; gap: 2px; min-width: 0; }
+.ed-bar-sep { width: 1px; height: 22px; background: var(--sc-hairline); margin: 0 6px; flex: none; }
+.ed-tool { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--sc-text); font: 700 14px var(--sc-font-text); cursor: pointer; }
+.ed-tool:hover { background: var(--sc-hairline); }
+.ed-tool:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 1px; }
+.ed-tool.ed-on { background: var(--sc-text); color: var(--sc-ground); }
+.ed-tool-italic span { font-style: italic; font-family: var(--sc-font-display); }
+.ed-tool-underline span { text-decoration: underline; text-underline-offset: 3px; }
+.ed-tool-strike span { text-decoration: line-through; }
+.ed-tool-code span, .ed-tool-codeBlock span { font: 600 13px var(--sc-font-mono); }
+@media (pointer: coarse) { .ed-tool { min-width: 44px; height: 44px; } }
+.ed-note, .ed-status { margin-top: 2px; }
+
+/* The Visual mode: the text as it reads, in the kit's input box */
+.ed-visual-box { display: block; }
+.ed-visual { display: block; min-height: 160px; max-width: 100%; font-size: 16px; line-height: 1.6; outline: none; overflow-wrap: anywhere; }
+.ed-visual.ed-tall { min-height: 260px; }
+@media (min-width: 960px) { .wr-write-editor .ed-visual.ed-tall { min-height: 460px; } }
+.ed-visual:focus-visible { border-color: var(--sc-yellow); }
+.ed-dimmed .ed-visual { opacity: .55; }
+.ed-visual ::selection { background: rgba(255, 212, 59, .35); }
+.ed-visual > :first-child, .ed-prose > :first-child { margin-top: 0; }
+.ed-visual > :last-child, .ed-prose > :last-child { margin-bottom: 0; }
+.ed-visual :is(h2, h3, h4), .ed-prose :is(h2, h3, h4) { font-family: var(--sc-font-display); line-height: 1.2; margin: 1.2em 0 .4em; }
+.ed-visual h2, .ed-prose h2 { font-size: 24px; }
+.ed-visual h3, .ed-prose h3 { font-size: 20px; }
+.ed-visual p, .ed-prose p { margin: 0 0 .8em; }
+.ed-visual :is(ul, ol), .ed-prose :is(ul, ol) { padding-left: 1.4em; margin: 0 0 .8em; }
+.ed-visual blockquote, .ed-prose blockquote { margin: 0 0 .8em; padding-left: 14px; border-left: 3px solid var(--sc-yellow); color: var(--sc-muted); }
+.ed-visual code, .ed-prose code { font: .9em var(--sc-font-mono); background: var(--sc-hairline); padding: 1px 5px; border-radius: 5px; }
+.ed-visual pre, .ed-prose pre { background: var(--sc-black); color: var(--sc-on-black); padding: 12px 14px; border-radius: 12px; overflow-x: auto; margin: 0 0 .8em; }
+.ed-visual pre code, .ed-prose pre code { background: none; padding: 0; color: inherit; }
+.ed-visual a, .ed-prose a { color: inherit; text-decoration: underline; text-decoration-color: var(--sc-yellow); text-underline-offset: 3px; }
+.ed-visual img, .ed-prose img { max-width: 100%; height: auto; border-radius: 12px; display: block; margin: 0 0 .8em; }
+.ed-visual img.ProseMirror-selectednode { outline: 3px solid var(--sc-yellow); }
+.ed-visual table, .ed-prose table { border-collapse: collapse; margin: 0 0 .8em; width: 100%; }
+.ed-visual :is(td, th), .ed-prose :is(td, th) { border: 1px solid var(--sc-hairline); padding: 6px 10px; text-align: left; vertical-align: top; }
+.ed-visual th, .ed-prose th { font-weight: 700; }
+.ed-visual ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.ed-visual ul[data-type="taskList"] li { display: flex; gap: 8px; align-items: flex-start; }
+.ed-visual ul[data-type="taskList"] li > label { margin-top: 3px; }
+.ed-visual ul[data-type="taskList"] li > div { flex: 1; }
+.ed-visual hr, .ed-prose hr { border: 0; border-top: 1px solid var(--sc-hairline); margin: 1.2em 0; }
+.ed-spoiler { background: var(--sc-muted); color: var(--sc-ground); border-radius: 4px; padding: 0 3px; }
+.ed-visual p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--sc-muted); float: left; height: 0; pointer-events: none; }
+
+/* A proposal shown formatted: the diff's marks over the rendered text */
+.ed-formatted-diff .wr-diff-text { white-space: normal; }
+.ed-diff-toggle { align-self: flex-start; }
+
+/* Images (boards EditorImageInline, EditorImageDialog): each one without alt text asks for it in place */
+.ed-alts { margin: 4px 0; }
+.ed-alt { padding: 12px; gap: 12px; align-items: flex-start; border-color: var(--sc-yellow); }
+.ed-alt-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; flex: none; background: var(--sc-hairline); }
+.ed-image-preview { max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; align-self: flex-start; }

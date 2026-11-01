@@ -1,6 +1,8 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AssistedEditor } from '../../components/assistant/AssistedEditor';
+import { ALT_MAX, articleFolder, linkedImages, uploadImage, type ImageSupport, type KeptImage } from '../../components/editor/images';
+import { articleDestinations } from '../../components/editor/toolbar';
 import { ChatPanel } from '../../components/assistant/ChatPanel';
 import { useAssistant } from '../../components/assistant/session';
 import { TopBar } from '../../components/kit/Bars';
@@ -11,6 +13,10 @@ import { ago, count, words } from '../../components/write/format';
 import { getChannels } from '../../server/channels.functions';
 import { writeArticle } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
+import { editorProfile, imageAltProblem } from '@shipcast/schema/channels';
+
+/** The article's formatting: the blog's, which dev.to and Hashnode take as written */
+const ARTICLE_PROFILE = editorProfile(undefined)!;
 
 export const Route = createFileRoute('/_app/write')({
   head: () => ({ meta: [{ title: 'Write · Shipcast' }] }),
@@ -36,6 +42,8 @@ interface Kept {
   lang: 'en' | 'es';
   channels: string[];
   direct: boolean;
+  /** The images uploaded for it, which its body links by name */
+  images: KeptImage[];
   savedAt: number;
 }
 
@@ -51,6 +59,7 @@ function readKept(): Kept | null {
       lang: kept.lang === 'en' ? 'en' : 'es',
       channels: Array.isArray(kept.channels) ? kept.channels.filter((c): c is string => typeof c === 'string') : [],
       direct: kept.direct === true,
+      images: Array.isArray(kept.images) ? kept.images.filter((i): i is KeptImage => typeof i?.sha256 === 'string' && typeof i.name === 'string') : [],
       savedAt: kept.savedAt,
     };
   } catch {
@@ -85,6 +94,26 @@ function Write() {
   const [lang, setLang] = useState<'en' | 'es'>('es');
   const [channels, setChannels] = useState<string[]>(ready);
   const [direct, setDirect] = useState(false);
+  const [images, setImages] = useState<KeptImage[]>([]);
+  const titleNow = useRef(title);
+  titleNow.current = title;
+  const imagesNow = useRef(images);
+  imagesNow.current = images;
+  // Uploaded as soon as they are added, linked at the article's folder, shown from the app until the site has them
+  const imageSupport: ImageSupport = {
+    upload: async (file) => {
+      const answer = await uploadImage(file);
+      if (!answer.ok) return answer;
+      const { sha256, articleName } = answer.file;
+      setImages((kept) => (kept.some((i) => i.sha256 === sha256) ? kept : [...kept, { sha256, name: articleName }]));
+      return { ok: true, src: `${articleFolder(titleNow.current)}/${articleName}` };
+    },
+    display: (src) => {
+      const name = src.split('/').at(-1);
+      const kept = imagesNow.current.find((i) => i.name === name);
+      return kept ? `/uploads/${kept.sha256}` : src;
+    },
+  };
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [outOpen, setOutOpen] = useState(false);
@@ -124,6 +153,7 @@ function Write() {
       setLang(kept.lang);
       setChannels(kept.channels.filter((c): c is (typeof ready)[number] => (ready as readonly string[]).includes(c)));
       setDirect(kept.direct);
+      setImages(kept.images);
       setSavedAt(kept.savedAt);
     }
     setRestored(true);
@@ -140,11 +170,11 @@ function Write() {
     // A pause in the typing, not every key
     const timer = window.setTimeout(() => {
       const at = Date.now();
-      writeKept({ title, markdown, lang, channels, direct, savedAt: at });
+      writeKept({ title, markdown, lang, channels, direct, images, savedAt: at });
       setSavedAt(at);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [restored, title, markdown, lang, channels, direct]);
+  }, [restored, title, markdown, lang, channels, direct, images]);
 
   const langName = LANGS.find((l) => l.value === lang)?.label ?? lang;
   const summary = `In ${langName} · ${['Blog', ...channels.map((c) => CHANNEL_NAMES[c] ?? c)].join(', ')} · ${direct ? 'publish without review' : 'review first'}`;
@@ -167,8 +197,15 @@ function Write() {
             className="k-stack k-g12 wr-write-main"
             onSubmit={async (e) => {
               e.preventDefault();
+              // Every image says what it shows before any work starts; the server refuses it too
+              const alt = imageAltProblem(markdown, ALT_MAX);
+              if (alt) {
+                toast.fail(alt);
+                return;
+              }
               setBusy(true);
-              const answer = await writeArticle({ data: { title, markdown, lang, channels, direct } }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
+              const linked = linkedImages(markdown, images);
+              const answer = await writeArticle({ data: { title, markdown, lang, channels, direct, ...(linked.length > 0 && { images: linked }) } }).catch((error: unknown) => ({ ok: false as const, problem: error instanceof Error ? error.message : String(error) }));
               setBusy(false);
               if (answer.ok) {
                 writeKept(null);
@@ -203,8 +240,11 @@ function Write() {
               tall
               required
               placeholder="Markdown, without the title as a heading"
-              help={`Markdown, without the title as a heading · ${length}`}
-              meta={`Markdown · ${length}`}
+              help={`Without the title as a heading · ${length}`}
+              meta={length}
+              profile={ARTICLE_PROFILE}
+              status={articleDestinations()}
+              images={imageSupport}
               className="wr-write-editor"
               onOpenChat={() => {
                 setChatOpen(true);
