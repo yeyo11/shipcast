@@ -14,6 +14,8 @@ LinkedIn, Telegram and Discord, one post per subreddit on Reddit, an announcemen
 Discussions, an Instagram carousel with its story and a newsletter issue. Then it reads back how each
 channel did.
 
+I built it to launch my own projects: claudio, Sluice and Shipcast itself went out through it.
+
 ![Shipcast's app: launches, launching a repo, channels and writing an article](docs/media/tour.gif)
 
 > [!NOTE]
@@ -23,17 +25,22 @@ channel did.
 > it takes one command, [on your machine](#what-you-need) one command and the app's onboarding.
 
 Read the launch article, written and published by Shipcast itself:
-[Shipcast: launch your GitHub projects without writing the announcement ten times](https://josegarrido.dev/en/shipcast-launch-your-github-projects/)
-([en español](https://josegarrido.dev/es/shipcast-lanza-tus-proyectos-de-github/)), and every launch
-on [the project's page](https://josegarrido.dev/en/projects/shipcast/) of the author's blog.
+[Shipcast: launch your GitHub projects without writing the announcement ten times](https://josegarrido.dev/en/shipcast-launch-your-github-projects/?utm_source=github&utm_medium=referral&utm_campaign=shipcast-readme)
+([en español](https://josegarrido.dev/es/shipcast-lanza-tus-proyectos-de-github/?utm_source=github&utm_medium=referral&utm_campaign=shipcast-readme)),
+and every launch on
+[the project's page](https://josegarrido.dev/en/projects/shipcast/?utm_source=github&utm_medium=referral&utm_campaign=shipcast-readme)
+of the author's blog.
+
+If Shipcast is useful to you, a star helps other developers find it.
 
 ## Get started on your own repos
 
 The quickest way: the [Shipcast Launch](https://github.com/yeyo11/shipcast-action) GitHub Action,
-with your own AI key (Anthropic or OpenAI) and nothing to host. In your project's repo:
+with your own AI key (Anthropic or OpenAI) and nothing to host. In your project's repo, with Node 24
+(the command runs the CLI that ships in the Action's repo):
 
 ```bash
-npx @yeyo11/shipcast init
+npx github:yeyo11/shipcast-action#v1 init
 ```
 
 It writes `.github/launch.yml` and a launch workflow in the project, `brand.yml` and a publish
@@ -105,7 +112,8 @@ Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](d
 
 ## What you need
 
-- Node 24 and pnpm; on Linux, `libsecret-tools` for the keychain; ffmpeg for the demo video.
+- git, Node 24 with corepack (it brings pnpm) and Docker, which the installer checks for; on Linux,
+  `libsecret-tools` for the keychain; ffmpeg for the demo video.
 - [claudio](https://github.com/yeyo11/claudio), which runs Claude Code as a service, as the AI provider,
   and PostgreSQL for the launch registry (`docker-compose.yml` here starts both; tests need neither).
 - A launches repo with an Astro blog that accepts Shipcast's articles
@@ -113,21 +121,23 @@ Sign-in is with GitHub, limited to the logins you allow. See [docs/web-app.md](d
 - An account on each network you want, connected from the app or listed in `.env`
   ([.env.example](.env.example)).
 
-Install in one command (it clones Shipcast, installs it and runs `shipcast init`, which writes the
-bootstrap `.env`, starts Postgres and creates your GitHub App from a manifest):
+Install in one command (it clones Shipcast into `./shipcast`, installs it and runs `shipcast init`,
+which writes the bootstrap `.env`, starts Postgres and creates your GitHub App from a manifest):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yeyo11/shipcast/main/scripts/install.sh | sh
 cd shipcast && pnpm app          # then finish in the app's onboarding
 ```
 
-Or by hand, in a clone: `pnpm install`, then `pnpm shipcast init`. Everything else (the launches
+The installer runs `corepack enable`, which writes beside Node: with a Node installed system-wide,
+run `sudo corepack enable` once first. Or by hand, in a clone: `pnpm install`, then
+`pnpm shipcast init` (with `--skip-docker` if Postgres is your own). Everything else (the launches
 repo, the AI provider, the channels) is set in the app's onboarding. See
 [docs/install.md](docs/install.md).
 
 **Without a machine of your own**, Shipcast runs in GitHub Actions:
 [yeyo11/shipcast-action](https://github.com/yeyo11/shipcast-action), set up by
-`npx @yeyo11/shipcast init` ([get started](#get-started-on-your-own-repos),
+`npx github:yeyo11/shipcast-action#v1 init` ([get started](#get-started-on-your-own-repos),
 [docs/decisions/github-action.md](docs/decisions/github-action.md)).
 
 An install from before Postgres keeps its registry in `data/shipcast.db`: stop the app and the CLI,
