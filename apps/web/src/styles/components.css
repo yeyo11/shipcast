@@ -102,7 +102,7 @@
 
 .ui-tabs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 /* The list scrolls sideways when the tabs do not fit, rather than widening the page */
-.ui-tab-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; padding: 3px; }
+.ui-tab-list { display: flex; gap: 6px; overflow-x: auto; padding: 3px; }
 .ui-tab { flex: none; min-height: 44px; padding: 0 18px; border-radius: var(--sc-radius-pill); border: var(--sc-border-control) solid var(--sc-rail); background: transparent; color: var(--sc-muted); font: 600 14.5px/1 var(--sc-font-text); cursor: pointer; }
 .ui-tab:hover { color: var(--sc-text); }
 .ui-tab[data-active] { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
@@ -218,14 +218,6 @@
 /* No hover on a touch screen: the thumb stays visible so the region reads as scrollable */
 @media (hover: none) { .ui-scrollbar { opacity: 1; } }
 
-/* ---------- The page's own scrollbar, in the role colours (Firefox and Chromium, Safari through the pseudo-elements) ---------- */
-/* The gutter is always kept, so a page that gets taller than the window (the AI section, say) does not
-   narrow the content by the scrollbar's width when the owner moves between sections */
-html { scrollbar-color: var(--sc-rail) var(--sc-ground); scrollbar-width: thin; scrollbar-gutter: stable; }
-html::-webkit-scrollbar { width: 12px; height: 12px; }
-html::-webkit-scrollbar-track { background: var(--sc-ground); }
-html::-webkit-scrollbar-thumb { background: var(--sc-rail); border-radius: var(--sc-radius-pill); border: 3px solid var(--sc-ground); }
-html::-webkit-scrollbar-thumb:hover { background: var(--sc-muted); }
 
 /* ---------- The work list: filter on top, a bounded list, the pager below ---------- */
 /* ---------- Date pickers: react-day-picker's parts (its default class names, no library theme) in role tokens ---------- */

@@ -158,7 +158,7 @@ export function DesktopHeader({ owner }: DesktopHeaderProps) {
             Shipcast
           </span>
         </Link>
-        <nav className="k-nav k-hrow k-g4 k-grow" aria-label="Sections">
+        <nav className="k-nav k-hrow k-g4" aria-label="Sections">
           {DESKTOP.map((s) => {
             const on = s.match(path);
             return (

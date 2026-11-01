@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-31T12:04:51.33781303Z
-updated_at: 2026-11-01T15:54:53.454522567Z
+updated_at: 2026-11-01T18:03:51.77824269Z
 tags:
     - web-app
     - design
@@ -235,6 +235,21 @@ No native control is left: the selects are the kit's `PickerSelect` / `PickerCom
 the Launches desktop filters), the days `ui/DatePicker` and the times `ui/TimeField`, both in the
 kit's look; the older `ui/Menu` wears the kit's menu card. `color-scheme` follows the theme for
 whatever the browser still draws.
+
+## One column and no vertical scrollbars (2026-11-01)
+
+- **One page column on a desktop.** The header and every page share a 1200 px column with 32 px
+  sides, so the logo and each page's title start at the same left edge on every screen (`.k-page`).
+  Narrow content (a form, the article preview) caps its own width but stays left-aligned in that
+  column, never a smaller centred one. The launch page follows the board: "All launches", the title
+  at 96 px with its version, its actions on the right. In the header the search field gives way first
+  (down to an icon below 1120 px) so a section never slides under it.
+- **Scrollbars.** No vertical scrollbar is drawn anywhere, in the page or inside a panel, menu or
+  list; the wheel, touch and the keyboard still scroll. A horizontal one is hidden on a touch screen
+  and kept on a desktop, thin, in the rail colour, with no arrow buttons. Chromium and Safari take it
+  per axis through `::-webkit-scrollbar` (so no `scrollbar-width` is set there, which would switch the
+  pseudo-elements off); Firefox has no per-axis control, so it hides both and a `.k-hscroll` row opts
+  back in on a desktop. The rules are in `kit.css`, once.
 
 ## Related
 

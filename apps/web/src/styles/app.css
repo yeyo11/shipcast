@@ -296,7 +296,7 @@ a.post-link:hover { color: var(--sc-text); }
   .post-numbers { grid-column: 1 / -1; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
 }
 @media (max-width: 640px) {
-  .chan-strip { flex-wrap: nowrap; overflow-x: auto; padding: 6px 2px; margin: -6px -2px; scrollbar-width: thin; }
+  .chan-strip { flex-wrap: nowrap; overflow-x: auto; padding: 6px 2px; margin: -6px -2px; }
   .chan-chip { flex: none; }
   .chan-panel { padding: 16px 14px; }
   h2.ph.chan-title { font-size: 30px; }
