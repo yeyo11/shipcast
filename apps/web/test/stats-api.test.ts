@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Repositories, ReviewGitHub } from '@shipcast/engine';
+import { indexStatusKey, type Repositories, type ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { createApiToken, MemoryStore } from '@shipcast/runtime';
 import { FailureLimiter, handleApi, openApiDocument, type ApiDeps } from '../src/server/api.ts';
@@ -53,7 +53,7 @@ async function seed(registry: Repositories) {
 test('the stats routes answer with the read scope only', async () => {
   const s = await setup();
   await seed(s.registry);
-  for (const path of ['/stats/overview', '/stats/series?metric=views', '/stats/ranking']) {
+  for (const path of ['/stats/overview', '/stats/series?metric=views', '/stats/ranking', '/stats/accounts', '/stats/search']) {
     assert.equal((await get(s.deps, path, s.write)).status, 403, path);
     assert.equal((await get(s.deps, path, s.read)).status, 200, path);
   }
@@ -95,6 +95,42 @@ test('an account’s growth, and 404 for an account that does not exist', async 
   assert.equal((await get(s.deps, '/accounts/abc/growth', s.read)).status, 400);
 });
 
+test('the accounts tab: every account with snapshots, its latest numbers, freshness and growth', async () => {
+  const s = await setup();
+  const { account } = await seed(s.registry);
+  await s.registry.accounts.addAccount({ network: 'brevo', brand: 'personal', label: 'newsletter', settings: {} });
+  const answer = await get(s.deps, '/stats/accounts?from=2026-10-17&to=2026-10-17', s.read);
+  assert.equal(answer.status, 200);
+  assert.deepEqual([answer.body.from, answer.body.to], ['2026-10-17', '2026-10-17']);
+  const accounts = answer.body.accounts as Array<{ id: number; latest: { followers: number }; change: { followers: number }; stale: boolean; points: Array<{ day: string }> }>;
+  assert.deepEqual(
+    accounts.map((a) => [a.id, a.latest.followers, a.change.followers, a.stale, a.points.map((p) => p.day)]),
+    [[account.id, 5, 2, true, ['2026-10-17']]],
+    'the account with no snapshots is left out, and one read in October is stale today',
+  );
+});
+
+test('the search tab: each published launch\'s article pages, what each engine said, and its numbers', async () => {
+  const s = await setup();
+  const { launch } = await seed(s.registry);
+  await s.registry.launches.setStatus(launch.id, 'published');
+  const url = 'https://blog.example/en/claudio/';
+  await s.registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: 'article:en', externalId: 'a1', url });
+  await s.registry.cursors.setCursor(indexStatusKey(url), JSON.stringify({ indexed: false, coverage: 'Discovered - currently not indexed', checkedAt: '2026-10-24T06:00:00.000Z' }));
+  await s.registry.metrics.recordMetrics(launch.id, 'search', { impressions: 30, clicks: 2 }, new Date('2026-10-20T06:00:00Z'));
+
+  const answer = await get(s.deps, `/stats/search?from=2026-10-01&to=2026-10-25&launches=${launch.id}`, s.read);
+  assert.equal(answer.status, 200);
+  const launches = answer.body.launches as Array<{ id: number; label: string; google: { impressions: number; clicks: number } | null; bing: unknown; pages: unknown[] }>;
+  assert.deepEqual(
+    launches.map((l) => [l.id, l.label, l.google?.impressions, l.google?.clicks, l.bing, l.pages]),
+    [[launch.id, 'yeyo11/claudio v1.0.0', 30, 2, null, [{ lang: 'en', url, google: { indexed: false, coverage: 'Discovered - currently not indexed', checkedAt: '2026-10-24T06:00:00.000Z' }, bing: null }]]],
+  );
+  assert.deepEqual((await get(s.deps, `/stats/search?from=2026-10-01&to=2026-10-25&launches=${launch.id + 1}`, s.read)).body.launches, []);
+  const fallback = await get(s.deps, '/stats/search?to=2026-10-25', s.read);
+  assert.deepEqual([fallback.body.from, fallback.body.to], ['2026-09-26', '2026-10-25'], 'the last 30 days by default');
+});
+
 test('parameters that are not valid are a 400 that says why', async () => {
   const s = await setup();
   const cases: Array<[string, RegExp]> = [
@@ -111,6 +147,10 @@ test('parameters that are not valid are a 400 that says why', async () => {
     ['/stats/overview?accounts=1,x', /accounts has an item/],
     ['/stats/overview?channels=', /comma-separated/],
     ['/accounts/1/growth?from=2026-10-01&to=yesterday', /days/],
+    ['/stats/accounts?from=2026-10-20&to=2026-10-01', /to comes after from/],
+    ['/stats/search?from=2026-10-01&to=yesterday', /days, YYYY-MM-DD/],
+    ['/stats/search?from=2020-01-01&to=2026-10-25', /at most 731 days/],
+    ['/stats/search?launches=1,x', /launches has an item/],
   ];
   await s.registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me', settings: {} });
   for (const [path, message] of cases) {
@@ -122,11 +162,14 @@ test('parameters that are not valid are a 400 that says why', async () => {
 
 test('the OpenAPI document describes the stats routes and their schemas', () => {
   const doc = openApiDocument('https://shipcast.example', {});
-  for (const path of ['/stats/overview', '/stats/series', '/stats/ranking', '/accounts/{accountId}/growth']) {
+  for (const path of ['/stats/overview', '/stats/series', '/stats/ranking', '/accounts/{accountId}/growth', '/stats/accounts', '/stats/search']) {
     const operation = doc.paths[path]?.get as { 'x-scope': string; parameters: Array<{ name: string; schema: { type: string } }> } | undefined;
     assert.equal(operation?.['x-scope'], 'read', path);
   }
   const growth = doc.paths['/accounts/{accountId}/growth']?.get as { parameters: Array<{ name: string; in: string; schema: { type: string } }> };
   assert.deepEqual(growth.parameters.find((p) => p.in === 'path')?.schema.type, 'integer');
-  for (const name of ['StatsOverview', 'StatsSeries', 'StatsRanking', 'AccountGrowth']) assert.ok(name in doc.components.schemas, name);
+  const search = doc.paths['/stats/search']?.get as { operationId: string; parameters: Array<{ name: string }> };
+  assert.equal(search.operationId, 'statsSearch');
+  assert.deepEqual(search.parameters.map((p) => p.name), ['from', 'to', 'launches']);
+  for (const name of ['StatsOverview', 'StatsSeries', 'StatsRanking', 'AccountGrowth', 'StatsAccounts', 'StatsSearch']) assert.ok(name in doc.components.schemas, name);
 });

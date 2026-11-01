@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { InMemoryTransport, type CallToolResult } from '@modelcontextprotocol/server';
-import { checkStdioOptions, createApiClient, createMcpHttpHandler, createShipcastServer, McpSetupError } from '../src/index.ts';
+import { checkStdioOptions, createApiClient, createMcpHttpHandler, createShipcastServer, INSTRUCTIONS, McpSetupError, TOOLS } from '../src/index.ts';
 import { fakeApi, serveFake, TOKEN } from './fake-api.ts';
 
 const BASE = 'https://shipcast.example';
@@ -28,7 +28,8 @@ test('a client lists the tools with their annotations, and calls them', async ()
   const { client, fake } = await connected();
   try {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 11);
+    assert.deepEqual(tools.map((t) => t.name), TOOLS.map((t) => t.name));
+    assert.equal(client.getInstructions(), INSTRUCTIONS);
     const del = tools.find((t) => t.name === 'delete_post');
     assert.equal(del?.annotations?.destructiveHint, true);
     assert.equal(del?.annotations?.readOnlyHint, false);
@@ -64,11 +65,17 @@ test('the resources and prompts', async () => {
     assert.equal(JSON.parse((one.contents[0] as { text: string }).text).drafts.count, 2);
 
     const { prompts } = await client.listPrompts();
-    assert.deepEqual(prompts.map((p) => p.name).sort(), ['announce_release', 'launch_checklist']);
+    assert.deepEqual(prompts.map((p) => p.name).sort(), ['announce_release', 'launch_checklist', 'launch_report']);
     const checklist = await client.getPrompt({ name: 'launch_checklist', arguments: { repo: 'yeyo11/claudio', ref: 'v1.0.0' } });
     assert.match(JSON.stringify(checklist.messages), /launch_repo with repo \\"yeyo11\/claudio\\" and ref \\"v1.0.0\\"/);
     const announce = await client.getPrompt({ name: 'announce_release', arguments: { repo: 'yeyo11/claudio', lang: 'es' } });
     assert.match(JSON.stringify(announce.messages), /in Spanish.*write_article/);
+    const report = JSON.stringify((await client.getPrompt({ name: 'launch_report', arguments: { launch_id: '3' } })).messages);
+    assert.match(report, /launch 3.*get_launch with launch_id 3.*get_stats_overview.*launch_ids.*compare \\"previous\\".*get_stats_ranking.*get_search_index_status/);
+    const latest = JSON.stringify((await client.getPrompt({ name: 'launch_report', arguments: {} })).messages);
+    assert.match(latest, /latest published launch.*list_launches with status \\"published\\"/);
+    const prompted = new Set(report.match(/\b(?:get|list)_[a-z_]+/g));
+    for (const name of prompted) assert.ok(TOOLS.some((t) => t.name === name), `launch_report names ${name}, a tool the server has`);
   } finally {
     await client.close();
   }
@@ -94,7 +101,7 @@ test('over Streamable HTTP: the token is checked first, then every tool runs und
   const client = new Client({ name: 'test', version: '1.0.0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp`), { fetch: fetchVia(TOKEN) }));
   try {
-    const result = (await client.callTool({ name: 'approve_drafts', arguments: { launch_id: 3 } })) as CallToolResult;
+    const result = (await client.callTool({ name: 'approve_drafts', arguments: { launch_id: 3, confirm: true } })) as CallToolResult;
     assert.notEqual(result.isError, true, text(result));
     assert.match(text(result), /"job": "j2"/);
     assert.ok(fake.calls.includes('POST /launches/3/approve'));
