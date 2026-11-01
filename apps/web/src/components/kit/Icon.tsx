@@ -29,6 +29,8 @@ const PATHS = {
   ),
   stats: <path d="M5 19V11M10 19V5M15 19v-6M20 19V9" />,
   cloud: <path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.4 9.1 4.75 4.75 0 0 0 7 18.5z" />,
+  /** An article: lines of text */
+  text: <path d="M5 6h14M5 11h14M5 16h9" />,
   bell: (
     <>
       <path d="M12 2.5V5M6.5 15.5v-5a5.5 5.5 0 0 1 11 0v5l1.75 1.75H4.75z" />
