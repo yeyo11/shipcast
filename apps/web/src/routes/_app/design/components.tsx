@@ -4,14 +4,12 @@ import { PageHead } from '../../../components/PageHead';
 import { PageToolbar, ToolbarAction } from '../../../components/PageToolbar';
 import { useToast } from '../../../components/Toasts';
 import { Pill } from '../../../components/ui';
-import { Combobox } from '../../../components/ui/Combobox';
+import { Overlay, OverlayClose } from '../../../components/kit/Overlay';
+import { PickerCombobox, PickerSelect } from '../../../components/kit/Picker';
 import { ConfirmButton } from '../../../components/ui/ConfirmButton';
-import { Dialog, DialogClose } from '../../../components/ui/Dialog';
-import { Drawer } from '../../../components/ui/Drawer';
 import { DotsIcon, PlusIcon } from '../../../components/ui/icons';
 import { Menu } from '../../../components/ui/Menu';
 import { Popover } from '../../../components/ui/Popover';
-import { Select } from '../../../components/ui/Select';
 import { Tabs } from '../../../components/ui/Tabs';
 import { Tooltip } from '../../../components/ui/Tooltip';
 
@@ -74,23 +72,44 @@ function Components() {
         </div>
       </Specimen>
 
-      <Specimen name="Dialog" text="Modal, focus trapped, Escape and the backdrop close it, focus returns to the trigger.">
-        <Dialog
-          title="Edit the post"
-          description="A dialog holds a task that needs the whole attention for a moment."
-          trigger={<button className="btn" type="button">Open a dialog</button>}
-          footer={
-            <>
-              <DialogClose>Cancel</DialogClose>
-              <DialogClose className="btn btn-primary">Save the post</DialogClose>
-            </>
-          }
-        >
-          <div className="field">
-            <label htmlFor="spec-dialog-text">Text</label>
-            <textarea id="spec-dialog-text" className="textarea" defaultValue="claudio 0.9 is out. Start a session on your laptop and pick it up from your phone." />
-          </div>
-        </Dialog>
+      <Specimen name="Overlay" text="kit/Overlay: the bottom sheet below 960 px; from there a menu or popover hung from its button, a centred dialog, or a drawer from the right. Escape, the scrim and the close return the focus.">
+        <div className="row">
+          <Overlay kind="menu" label="A menu" trigger={<button className="btn" type="button">Menu</button>} footer={<OverlayClose className="k-btn k-full k-sheet-only">Close</OverlayClose>}>
+            <div className="k-stack">
+              <OverlayClose className="k-mi">Check the credential</OverlayClose>
+              <OverlayClose className="k-mi">Rename</OverlayClose>
+              <div className="k-sep" role="separator" />
+              <OverlayClose className="k-mi k-bad">Disconnect</OverlayClose>
+            </div>
+          </Overlay>
+          <Overlay kind="popover" label="A popover" heading="Why approval?" trigger={<button className="btn" type="button">Popover</button>}>
+            <p className="k-sm">A channel on approval is published when you approve it: you read every post before it goes out.</p>
+          </Overlay>
+          <Overlay
+            kind="dialog"
+            label="Delete this launch?"
+            heading="Delete this launch?"
+            trigger={<button className="btn" type="button">Dialog</button>}
+          >
+            <p>Nothing of it ever went out, so it is removed with its drafts and jobs.</p>
+            <div className="k-hrow k-g10">
+              <OverlayClose className="k-btn">Keep it</OverlayClose>
+              <OverlayClose className="k-btn k-danger k-grow">Delete the launch</OverlayClose>
+            </div>
+          </Overlay>
+          <Overlay
+            kind="drawer"
+            label="Edit the post"
+            heading="Edit the post"
+            trigger={<button className="btn" type="button">Drawer</button>}
+            footer={<OverlayClose className="k-btn k-pri k-full">Save the post</OverlayClose>}
+          >
+            <label className="k-field">
+              <span className="k-lbl">Text</span>
+              <textarea className="k-input" defaultValue="claudio 0.9 is out. Start a session on your laptop and pick it up from your phone." />
+            </label>
+          </Overlay>
+        </div>
       </Specimen>
 
       <Specimen name="Alert dialog" text="Replaces window.confirm: the question, the consequence, Cancel focused first, the verb on the confirming button.">
@@ -106,13 +125,13 @@ function Components() {
 
       <Specimen name="Combobox" text="A long list with a search: filters by the name and the hint, arrow keys and Enter pick.">
         <div className="form">
-          <Combobox label="Repository" placeholder="Type a repo’s name" options={REPOS} value={repo} onValueChange={setRepo} />
+          <PickerCombobox label="Repository" placeholder="Type a repo’s name" options={REPOS} value={repo} onValueChange={setRepo} />
         </div>
       </Specimen>
 
       <Specimen name="Select" text="A short list without a search, in place of a native select.">
         <div className="form">
-          <Select label="Release" mono options={RELEASES} value={release} onValueChange={setRelease} />
+          <PickerSelect label="Release" mono options={RELEASES} value={release} onValueChange={setRelease} />
         </div>
       </Specimen>
 
@@ -166,12 +185,6 @@ function Components() {
         <Popover title="Why approval?" trigger={<button className="btn btn-small" type="button">Why does Reddit wait?</button>}>
           <p>A channel on approval is published when you merge the drafts: you read every post before it goes out.</p>
         </Popover>
-      </Specimen>
-
-      <Specimen name="Drawer" text="The phone's More: a sheet from the bottom, swiped down, Escape or the backdrop to close.">
-        <Drawer title="A drawer" trigger={<button className="btn" type="button">Open a drawer</button>}>
-          <p className="muted">It holds the rest of the sections on a phone, and the signed-in account.</p>
-        </Drawer>
       </Specimen>
 
       <Specimen name="Command palette" text="⌘K or Ctrl+K anywhere: the sections and the main actions, filtered as you type.">
