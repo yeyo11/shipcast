@@ -153,27 +153,50 @@ export const ListFilesInput = z.strictObject({
   depth: z.number().int().min(1).max(20).optional().describe('How many directory levels below `path` to list; every level when absent'),
 });
 
-export const GitInput = z.discriminatedUnion('command', [
-  z.strictObject({
-    command: z.literal('log'),
-    range: Range.optional().describe('A ref or a range: "v0.8.0..v0.9.0"; the checked-out commit when absent'),
-    n: z.number().int().min(1).max(REPO_TOOL_LIMITS.logMax).optional(),
-    paths: z.array(RepoPath).max(20).optional().describe('Only commits touching these paths'),
-  }),
-  z.strictObject({ command: z.literal('tags'), n: z.number().int().min(1).max(200).optional().describe('The newest n tags, by date') }),
-  z.strictObject({
-    command: z.literal('show'),
-    ref: Ref,
-    path: RepoPath.optional().describe('A file as it was at the ref; without it, the commit with its changed files'),
-  }),
-  z.strictObject({
-    command: z.literal('diff'),
-    from: Ref,
-    to: Ref,
-    path: RepoPath.optional().describe('The diff of this path; without it, the files changed and their line counts'),
-  }),
-  z.strictObject({ command: z.literal('status') }),
-]);
+/** What each git command takes: the fields it may be given, and those it needs */
+const GIT_FIELDS = {
+  log: { takes: ['range', 'n', 'paths'], needs: [] },
+  tags: { takes: ['n'], needs: [] },
+  show: { takes: ['ref', 'path'], needs: ['ref'] },
+  diff: { takes: ['from', 'to', 'path'], needs: ['from', 'to'] },
+  status: { takes: [], needs: [] },
+} as const satisfies Record<string, { takes: readonly string[]; needs: readonly string[] }>;
+
+/**
+ * One object with the command and every command's fields, checked per command: a tool's input
+ * schema must be an object at the top level (the Anthropic API refuses anything else, a union of
+ * objects included, and OpenAI's function tools take an object too). The checks say what a
+ * discriminated union would: a field a command does not take, or one it needs and lacks.
+ */
+export const GitInput = z
+  .strictObject({
+    command: z
+      .enum(['log', 'tags', 'show', 'diff', 'status'])
+      .describe('log: commits (range, n, paths); tags: the newest tags (n); show: a commit or a file at a ref (ref, path); diff: between two refs (from, to, path); status: the working tree (nothing else)'),
+    range: Range.optional().describe('log only. A ref or a range: "v0.8.0..v0.9.0"; the checked-out commit when absent'),
+    n: z
+      .number()
+      .int()
+      .min(1)
+      .max(REPO_TOOL_LIMITS.logMax)
+      .optional()
+      .describe(`log: how many commits (default ${REPO_TOOL_LIMITS.logDefault}); tags: the newest n tags, by date (default 50)`),
+    paths: z.array(RepoPath).max(20).optional().describe('log only. Only commits touching these paths'),
+    ref: Ref.optional().describe('show only, and needed there. A tag, a branch, a commit or HEAD~n'),
+    from: Ref.optional().describe('diff only, and needed there. The ref the diff starts from'),
+    to: Ref.optional().describe('diff only, and needed there. The ref the diff goes to'),
+    path: RepoPath.optional().describe('show: a file as it was at the ref, else the commit with its changed files; diff: the diff of this path, else the files changed and their line counts'),
+  })
+  .superRefine((input, ctx) => {
+    const fields = GIT_FIELDS[input.command];
+    for (const key of Object.keys(input) as Array<keyof typeof input>) {
+      if (key === 'command' || input[key] === undefined) continue;
+      if (!(fields.takes as readonly string[]).includes(key)) ctx.addIssue({ code: 'custom', path: [key], message: `git ${input.command} does not take ${key}` });
+    }
+    for (const key of fields.needs as readonly string[]) {
+      if (input[key as keyof typeof input] === undefined) ctx.addIssue({ code: 'custom', path: [key], message: `git ${input.command} needs ${key}` });
+    }
+  });
 
 export const OverviewInput = z.strictObject({
   lines: z.number().int().min(10).max(REPO_TOOL_LIMITS.overviewMaxLines).optional().describe(`Lines of each doc shown (default ${REPO_TOOL_LIMITS.overviewLines})`),
@@ -430,12 +453,15 @@ export class RepoReader {
         return out.trim() || 'no tags (a shallow clone may have only the one it was made at)';
       }
       case 'show':
-        if (command.path) return this.#git(['show', '--no-color', '--no-textconv', '--end-of-options', `${command.ref}:${command.path}`]);
-        return this.#git(['show', '--no-color', '--no-ext-diff', '--stat', '--date=short', '--format=commit %H%nDate: %ad%nAuthor: %an%n%n%B', '--end-of-options', command.ref]);
+        // ref is there: the schema's checks need it for show
+        if (command.path) return this.#git(['show', '--no-color', '--no-textconv', '--end-of-options', `${command.ref!}:${command.path}`]);
+        return this.#git(['show', '--no-color', '--no-ext-diff', '--stat', '--date=short', '--format=commit %H%nDate: %ad%nAuthor: %an%n%n%B', '--end-of-options', command.ref!]);
       case 'diff': {
+        // from and to are there: the schema's checks need them for diff
         const base = ['diff', '--no-color', '--no-ext-diff', '--no-textconv'];
-        if (command.path) return (await this.#git([...base, '--end-of-options', command.from, command.to, '--', command.path])) || 'no differences';
-        return (await this.#git([...base, '--stat=200', '--end-of-options', command.from, command.to])) || 'no differences';
+        const refs = [command.from!, command.to!];
+        if (command.path) return (await this.#git([...base, '--end-of-options', ...refs, '--', command.path])) || 'no differences';
+        return (await this.#git([...base, '--stat=200', '--end-of-options', ...refs])) || 'no differences';
       }
       case 'status':
         return this.#git(['status', '--short', '--branch']);
@@ -587,7 +613,7 @@ export function repoTools(root: string, options: RepoToolsOptions = {}): ToolSet
     }),
     git: tool({
       description:
-        'Reads the history: log (a ref or a range like v0.8.0..v0.9.0, -n, paths), tags (newest first, with dates), show (a commit with its changed files, or a file as it was at a ref), diff (between two refs: the changed files, or one path) and status. Read-only.',
+        'Reads the history, one command per call: log (range: a ref or a range like v0.8.0..v0.9.0, n, paths), tags (newest first, with dates; n), show (ref: a commit with its changed files, or with path a file as it was at that ref), diff (from and to: the changed files between two refs, or with path the diff of one file) and status (no other field). Give only the fields of the command you run. Read-only.',
       inputSchema: GitInput,
       execute: (input) => guard(() => reader.git(input)),
     }),

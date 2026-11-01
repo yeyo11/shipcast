@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-11-01T16:08:09.41847859Z
+updated_at: 2026-11-01T17:54:00.216819Z
 tags:
     - engine
     - registry
@@ -232,6 +232,12 @@ the `ai-runner` flag; since 2026-10-29 it is the only path, the first layer
   over the job's clone (`repo_overview`, `read_files`, `search`, `list_files`, `git`, in
   `repo-tools.ts`) and takes the answer through a strict `submit_answer` tool; a `remote-workspace`
   provider (claudio) reads the repo in a workspace it downloads itself ([claudio.md](claudio.md)).
+  Every repo tool's input schema is an object at the top level: the Anthropic API refuses a tool
+  whose `input_schema` is anything else (a union of objects included) and OpenAI's function tools
+  take an object too. So `git` takes one object, `command` (`log`, `tags`, `show`, `diff`,
+  `status`) beside every command's fields, all optional in the schema, and a check per command
+  refuses a field the command does not take and names one it needs (`ref` for `show`, `from` and
+  `to` for `diff`). A test converts each tool's schema the way the AI SDK does and checks it.
   The runtime builds one runner per process (`aiRunnerFor`), resolving the task's provider and model
   from the AI settings when the task runs.
 

@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { before, test } from 'node:test';
-import { REPO_TOOL_LIMITS, RepoReader, repoTools } from '../src/ai/repo-tools.ts';
+import { asSchema } from 'ai';
+import { GitInput, REPO_TOOL_LIMITS, REPO_TOOL_NAMES, RepoReader, repoTools } from '../src/ai/repo-tools.ts';
 
 /*
  * The repo tools over a real git repository in a temp folder: two tagged versions, a monorepo's
@@ -182,4 +183,61 @@ test('the AI SDK tools answer with text, an invalid input as an error the model 
   assert.match(String(await run('read_files', { files: [{ path: 'README.md' }] })), /# Demo/);
   assert.match(String(await run('git', { command: 'push' })), /^error: command:/);
   assert.match(String(await run('read_files', { files: [] })), /^error: files:/);
+});
+
+test('every tool\'s input schema is an object at the top level, as the Anthropic API and OpenAI\'s function tools require', async () => {
+  // Converted the way the AI SDK sends it: a union at the top (`git`'s once was) is refused with "input_schema.type: Field required"
+  const tools = repoTools(root, { rg: null });
+  assert.deepEqual(Object.keys(tools), [...REPO_TOOL_NAMES]);
+  for (const [name, t] of Object.entries(tools)) {
+    const schema = await asSchema(t.inputSchema).jsonSchema;
+    assert.equal(schema.type, 'object', `${name}: input schema type`);
+    assert.ok(!('anyOf' in schema) && !('oneOf' in schema) && !('allOf' in schema), `${name}: no union at the top level`);
+    assert.equal(typeof schema.properties, 'object', `${name}: properties`);
+  }
+  const git = await asSchema(tools.git!.inputSchema).jsonSchema;
+  assert.deepEqual(git.required, ['command']);
+  assert.deepEqual((git.properties!.command as { enum: string[] }).enum, ['log', 'tags', 'show', 'diff', 'status']);
+});
+
+test('git input: each command with its own fields is accepted, a field another command takes or a missing one is refused', () => {
+  const issues = (input: unknown): string[] => {
+    const parsed = GitInput.safeParse(input);
+    return parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+  };
+  for (const ok of [
+    { command: 'log' },
+    { command: 'log', range: 'v1.0.0..v2.0.0', n: 5, paths: ['src/deep/util.ts'] },
+    { command: 'tags', n: 10 },
+    { command: 'show', ref: 'v1.0.0' },
+    { command: 'show', ref: 'HEAD~1', path: 'README.md' },
+    { command: 'diff', from: 'v1.0.0', to: 'v2.0.0' },
+    { command: 'diff', from: 'v1.0.0', to: 'v2.0.0', path: 'src/deep/util.ts' },
+    { command: 'status' },
+  ]) assert.deepEqual(issues(ok), [], JSON.stringify(ok));
+
+  assert.deepEqual(issues({ command: 'show' }), ['ref: git show needs ref']);
+  assert.deepEqual(issues({ command: 'diff', from: 'v1.0.0' }), ['to: git diff needs to']);
+  assert.deepEqual(issues({ command: 'diff' }), ['from: git diff needs from', 'to: git diff needs to']);
+  assert.deepEqual(issues({ command: 'status', ref: 'HEAD' }), ['ref: git status does not take ref']);
+  assert.deepEqual(issues({ command: 'tags', paths: ['src'] }), ['paths: git tags does not take paths']);
+  assert.deepEqual(issues({ command: 'log', ref: 'HEAD' }), ['ref: git log does not take ref']);
+  assert.deepEqual(issues({ command: 'show', ref: 'HEAD', range: 'a..b' }), ['range: git show does not take range']);
+  assert.match(issues({ command: 'push' })[0]!, /^command:/);
+  assert.match(issues({ command: 'status', extra: 1 })[0]!, /Unrecognized key/);
+  // The guards on refs, ranges, paths and n stay
+  assert.match(issues({ command: 'log', range: '--output=/tmp/x' })[0]!, /^range:/);
+  assert.match(issues({ command: 'show', ref: 'a..b' })[0]!, /^ref:/);
+  assert.match(issues({ command: 'show', ref: 'HEAD', path: '../x' })[0]!, /^path:/);
+  assert.match(issues({ command: 'diff', from: 'a', to: 'b', path: '/etc/passwd' })[0]!, /^path:/);
+  assert.match(issues({ command: 'log', paths: ['-x'] })[0]!, /^paths\.0:/);
+  assert.match(issues({ command: 'log', n: REPO_TOOL_LIMITS.logMax + 1 })[0]!, /^n:/);
+});
+
+test('the git tool answers a field the command does not take, or a missing one, as an error the model can read', async () => {
+  const tools = repoTools(root, { rg: null });
+  const run = (input: unknown) => tools.git!.execute!(input as never, { toolCallId: '1', messages: [] } as never);
+  assert.equal(String(await run({ command: 'show' })), 'error: ref: git show needs ref');
+  assert.equal(String(await run({ command: 'status', path: 'README.md' })), 'error: path: git status does not take path');
+  assert.match(String(await run({ command: 'show', ref: 'v1.0.0', path: 'src/deep/util.ts' })), /no conflict here/);
 });
