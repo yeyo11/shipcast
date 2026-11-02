@@ -296,7 +296,7 @@ async function main(argv: string[]): Promise<number> {
         } else {
           console.log('\nGitHub: GITHUB_TOKEN_PERSONAL (no GitHub App in .env)');
         }
-        const missing = settings.missing();
+        const missing = await settings.missingNow();
         if (missing.length > 0) {
           console.log(`Settings still to set in the app's Settings page: ${missing.map((n) => settingDefinition(n).label).join(', ')}`);
           return 0;

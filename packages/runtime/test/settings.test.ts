@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { memoryRegistry } from '@shipcast/engine/testing';
+import { AI_TASKS, writeAiSettings } from '@shipcast/engine';
 import { IMPORTED_KEY, importEnvSettings, InvalidSetting, MemoryStore, RuntimeSettings, SettingMissing } from '../src/index.ts';
 
 const OLD_ENV = {
@@ -18,6 +19,19 @@ test('with nothing set, each setting that is needed says so and where to set it'
   assert.deepEqual(settings.missing(), ['launchesRepo', 'claudioUrl', 'claudioToken']);
   assert.throws(() => settings.launchesRepo(), (e) => e instanceof SettingMissing && e.message === 'The launches repo is not set: set it in Settings (/settings)');
   assert.throws(() => settings.claudio(), SettingMissing);
+});
+
+test('claudio’s address and token are missing only while a task of the AI settings runs on claudio', async () => {
+  const registry = await memoryRegistry();
+  const settings = new RuntimeSettings({ registry, secrets: new MemoryStore(), env: { SHIPCAST_LAUNCHES_REPO: 'yeyo11/launches' } });
+  await settings.read();
+  // The defaults run every task on claudio
+  assert.deepEqual(await settings.missingNow(), ['claudioUrl', 'claudioToken']);
+  const tasks = Object.fromEntries(AI_TASKS.map((task) => [task, { provider: 'anthropic' }]));
+  await writeAiSettings(registry, { tasks });
+  assert.deepEqual(await settings.missingNow(), []);
+  // Nothing else asks for claudio: the engine starts and runs without its address
+  assert.deepEqual(settings.missing({ claudio: false }), []);
 });
 
 test('.env is a fallback until a value is saved, and the source of each value is known', async () => {

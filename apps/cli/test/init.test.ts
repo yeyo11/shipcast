@@ -9,7 +9,8 @@ test('the bootstrap .env holds only what the app needs before anyone signs in', 
   const local = bootstrapEnv({ publicUrl: undefined, login: 'yeyo11', postgresPassword: 'pw', claudioToken: 'ct' });
   assert.match(local, /^SHIPCAST_DATABASE_URL=postgres:\/\/shipcast:pw@127\.0\.0\.1:5433\/shipcast$/m);
   assert.match(local, /^POSTGRES_PASSWORD=pw$/m);
-  assert.match(local, /^SHIPCAST_CLAUDIO_TOKEN=ct$/m, 'docker-compose.yml refuses to start without it');
+  assert.match(local, /^SHIPCAST_CLAUDIO_TOKEN=ct$/m, 'the optional claudio of docker-compose.yml refuses to start without it');
+  assert.match(local, /docker compose --profile claudio up -d/, 'claudio is started only when chosen');
   assert.match(local, /^SHIPCAST_ALLOWED_GITHUB=yeyo11$/m);
   assert.match(local, /^SHIPCAST_APP_TLS=off$/m, 'no address of its own: plain HTTP on this machine');
   assert.match(local, /^SHIPCAST_APP_HOST=127\.0\.0\.1$/m);

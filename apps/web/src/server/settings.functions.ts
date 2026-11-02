@@ -46,7 +46,7 @@ export const getSettings = createServerFn({ method: 'GET' }).handler(async () =>
   const userToken = ctx.userTokens ? ((await ctx.userTokens.token()) ? await ctx.userTokens.stored() : undefined) : undefined;
   return {
     settings,
-    missing: ctx.settings.missing().map((n) => settingDefinition(n).label),
+    missing: (await ctx.settings.missingNow()).map((n) => settingDefinition(n).label),
     secretsKind: ctx.secrets.kind,
     github: {
       access: ctx.access,
@@ -73,5 +73,5 @@ export const saveSettings = createServerFn({ method: 'POST' })
     const ctx = await appContext();
     await forOwner(() => ctx.settings.write(data));
     await ctx.settingsSaved(Object.keys(data).join(','));
-    return { missing: ctx.settings.missing().map((n) => settingDefinition(n).label) };
+    return { missing: (await ctx.settings.missingNow()).map((n) => settingDefinition(n).label) };
   });

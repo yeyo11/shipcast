@@ -1,4 +1,4 @@
-import type { Repositories } from '@shipcast/engine';
+import { readAiSettings, type Repositories } from '@shipcast/engine';
 import { InvalidRequest, ShipcastError } from '@shipcast/schema';
 import { NETWORK_SPECS, networkSpec } from './catalog.ts';
 import type { OAuthApp } from './channels/adapter.ts';
@@ -175,10 +175,21 @@ export class RuntimeSettings {
     return this.#sources;
   }
 
-  /** The settings that are still unset, by label, for `shipcast status` and the pages */
-  missing(): SettingName[] {
-    const required: SettingName[] = ['launchesRepo', 'claudioUrl', 'claudioToken'];
+  /**
+   * The settings that are still unset, by label, for `shipcast status` and the pages. claudio's
+   * address and token are needed only while a task of the AI settings runs on claudio: with the
+   * Anthropic API or an OpenAI-compatible server chosen for every task, they are not missing
+   * (`missingNow` reads that choice).
+   */
+  missing(options: { claudio?: boolean } = {}): SettingName[] {
+    const required: SettingName[] = ['launchesRepo', ...(options.claudio === false ? [] : (['claudioUrl', 'claudioToken'] as const))];
     return required.filter((n) => this.#current[n] === undefined);
+  }
+
+  /** `missing`, knowing from the AI settings whether any task runs on claudio */
+  async missingNow(): Promise<SettingName[]> {
+    const ai = await readAiSettings(this.#deps.registry);
+    return this.missing({ claudio: Object.values(ai.tasks).some((t) => t.provider === 'claudio') });
   }
 
   launchesRepo(): string {

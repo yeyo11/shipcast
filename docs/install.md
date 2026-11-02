@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-26T07:37:46.160887007Z
-updated_at: 2026-10-27T17:34:31.086344807Z
+created_at: 2026-11-02T20:17:21.050199301Z
+updated_at: 2026-11-02T20:17:21.050199301Z
 tags:
     - install
     - cli
@@ -37,8 +37,9 @@ checkout `init` is the local install, anywhere else it is the GitHub Action setu
 
 1. **Writes the bootstrap `.env`**: only what the app needs before anyone signs in
    ([decisions/github-app.md](decisions/github-app.md)): the registry's database URL and a random
-   Postgres password, a random token for claudio (docker compose refuses to start any service
-   without it), the GitHub login allowed to sign in, and the app's address. With an https address
+   Postgres password, a random token for claudio (used only if claudio is the AI provider: its
+   service in `docker-compose.yml` starts with `docker compose --profile claudio up -d`), the GitHub
+   login allowed to sign in, and the app's address. With an https address
    (`--public-url https://host`), the app serves it with a Let's Encrypt certificate through Cloudflare
    DNS (its token goes in `.env`). Without one, the app runs on this machine over plain HTTP
    (`SHIPCAST_APP_TLS=off`, `127.0.0.1:8744`) and the owner signs in with the one-time link it prints
@@ -57,6 +58,13 @@ checkout `init` is the local install, anywhere else it is the GitHub Action setu
 **An existing install is never touched**: when `.env` already holds an install's settings, `init`
 says so and stops. Everything else (the launches repo and `brand.yml`, the AI provider, the channels,
 measurement, automation) is set in the web app's onboarding, after `pnpm app`.
+
+**The AI provider** is one of three on a self-hosted install, chosen in the onboarding and then per
+task in Settings > AI: the **Anthropic API** (a key), an **OpenAI-compatible server** (its base URL,
+a model and an optional key), or **claudio**, which runs Claude Code on a Claude subscription. Only
+claudio runs beside Shipcast: `docker compose --profile claudio up -d`, then sign in once
+([claudio.md](claudio.md)). A plain `docker compose up -d` starts Postgres alone, and nothing asks
+for claudio's address while no task runs on it (`missingNow` in `packages/runtime/src/settings.ts`).
 
 | Flag | Does |
 | --- | --- |

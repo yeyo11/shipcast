@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T09:14:15.634162071Z
-updated_at: 2026-11-02T09:14:15.634162071Z
+created_at: 2026-11-02T20:17:40.544920489Z
+updated_at: 2026-11-02T20:17:40.544920489Z
 tags:
     - guide
     - getting-started
@@ -15,14 +15,16 @@ tags:
 For developers other than the owner, written on 2026-10-27 with milestone 3 of
 [plans/goal-v0.2.md](plans/goal-v0.2.md). Shipcast runs as a **GitHub Action** on your repos, with
 your own AI key and your own accounts: no server, no database, nothing to host. The design is
-[decisions/github-action.md](decisions/github-action.md); the owner's local install (the web app,
-Postgres, the keychain) is [install.md](install.md).
+[decisions/github-action.md](decisions/github-action.md); the self-hosted install (the web app,
+Postgres, the keychain) is [install.md](install.md). Self-hosted, the AI is the **Anthropic API**, an
+**OpenAI-compatible server** or **claudio** (`docker compose --profile claudio up -d`), chosen in the
+app's onboarding.
 
 ## What happens
 
 1. You publish a release of a project.
 2. The project's workflow runs [Shipcast Launch](https://github.com/yeyo11/shipcast-action): it reads
-   the code at the release's tag, has the AI (Anthropic or OpenAI) write the article in your blog's
+   the code at the release's tag, has the AI (Anthropic, OpenAI or an OpenAI-compatible server) write the article in your blog's
    languages and a post for each channel you turned on, and opens a **drafts pull request** in your
    **launches repo**. Every piece says what the code does, not what the README promises.
 3. You read the drafts, edit them in the pull request if you like, and **merge** it. The merge
@@ -41,7 +43,8 @@ Postgres, the keychain) is [install.md](install.md).
   collection reads it as it is ([launches-repo.md](launches-repo.md) is the full contract). It can be a
   new, empty repo while you try it.
 - **An AI key**: [Anthropic](https://console.anthropic.com/settings/keys) or
-  [OpenAI](https://platform.openai.com/api-keys).
+  [OpenAI](https://platform.openai.com/api-keys), or an OpenAI-compatible server (`ai-provider:
+  openai-compatible` with its `ai-base-url`).
 - **A GitHub token**: a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
   for the project repos and the launches repo, with Contents, Pull requests and Discussions read and
   write. The workflow's own token cannot write to another repo.

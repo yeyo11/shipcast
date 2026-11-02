@@ -1,22 +1,30 @@
-# What the engine needs beside it: claudio, Shipcast's AI provider (https://github.com/yeyo11/claudio),
-# as an instance of its own, and the Postgres the launch registry lives in:
+# What the engine needs beside it: the Postgres the launch registry lives in, and, if you choose it as
+# the AI provider, claudio (https://github.com/yeyo11/claudio) as an instance of its own:
 #
-#   docker compose up -d
+#   docker compose up -d                      # Postgres only: the Anthropic API or an OpenAI-compatible server
+#   docker compose --profile claudio up -d    # Postgres and claudio (or COMPOSE_PROFILES=claudio in .env)
 #
-# Then sign in to Claude once: `docker compose exec claudio claudio login` (docs/claudio.md); the
-# headless image has no web UI. The engine runs on the host and reaches claudio at SHIPCAST_CLAUDIO_URL
-# and Postgres at SHIPCAST_DATABASE_URL.
+# The AI provider is chosen in the app (onboarding, then Settings > AI): the Anthropic API, an
+# OpenAI-compatible server, or claudio. With claudio, sign in to Claude once:
+# `docker compose exec claudio claudio login` (docs/claudio.md); the headless image has no web UI. The
+# engine runs on the host and reaches claudio at SHIPCAST_CLAUDIO_URL and Postgres at
+# SHIPCAST_DATABASE_URL.
 name: shipcast # volumes are shipcast_*, whatever folder this is started from
 
 services:
   claudio:
+    # Optional: only `--profile claudio` (or COMPOSE_PROFILES=claudio) starts it
+    profiles: [claudio]
     # Pinned: the engine is written against this API. Move it on purpose, and check docs/claudio.md
     image: ghcr.io/yeyo11/claudio:0.11.0-headless
     init: true # reaps the claude child processes
     # Only what claudio needs: an env_file would hand it every Shipcast secret (GitHub, networks)
     environment:
       CLAUDIO_AUTH_MODE: token
-      CLAUDIO_AUTH_TOKEN: ${SHIPCAST_CLAUDIO_TOKEN:?set SHIPCAST_CLAUDIO_TOKEN in .env (openssl rand -hex 32)}
+      # Not `:?`: compose interpolates every service, even one whose profile is off, so a required
+      # variable would stop `docker compose up -d` for Postgres alone. Empty, claudio itself refuses to
+      # start ("CLAUDIO_AUTH_MODE=token needs CLAUDIO_AUTH_TOKEN"): set it in .env (openssl rand -hex 32)
+      CLAUDIO_AUTH_TOKEN: ${SHIPCAST_CLAUDIO_TOKEN:-}
       # Required by the headless profile: claudio refuses to start without a daily ceiling
       CLAUDIO_DAILY_SPEND_CAP_USD: ${CLAUDIO_DAILY_SPEND_CAP_USD:-100}
     ports:

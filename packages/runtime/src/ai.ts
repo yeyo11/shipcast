@@ -45,7 +45,7 @@ export async function aiProviderSettings(id: string, deps: AiDeps): Promise<AiPr
     return { url: claudio.url, token: claudio.token };
   }
   const found = await connectedAccount(id, deps);
-  if (!found) throw new AiError('ai_not_connected', `the ${aiProviderDefinition(id)?.name ?? id} is chosen in the AI settings but no account is connected: connect one on the Channels page`, { provider: id });
+  if (!found) throw new AiError('ai_not_connected', `the ${aiProviderDefinition(id)?.name ?? id} is chosen in the AI settings but no account is connected: connect it from Settings → AI, Providers`, { provider: id });
   if (found.settings.baseUrl) registerAiHost(found.settings.baseUrl, 'openai-compatible');
   return { ...found.settings, ...found.secrets };
 }

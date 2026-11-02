@@ -32,7 +32,7 @@ export interface InitOptions {
   login: string;
   /** The Postgres password docker compose creates the database with */
   postgresPassword: string;
-  /** claudio's token: docker-compose.yml refuses to start any service without it */
+  /** claudio's token, for the optional claudio of docker-compose.yml (its `claudio` profile), which refuses to start without one */
   claudioToken: string;
 }
 
@@ -53,7 +53,8 @@ export function bootstrapEnv(options: InitOptions): string {
     `POSTGRES_PASSWORD=${options.postgresPassword}`,
     `SHIPCAST_DATABASE_URL=postgres://shipcast:${options.postgresPassword}@127.0.0.1:5433/shipcast`,
     '',
-    '# claudio, the AI provider of docker-compose.yml (optional: `docker compose up -d claudio`)',
+    '# claudio, if you choose it as the AI provider (or pick the Anthropic API or an OpenAI-compatible',
+    '# server in the onboarding and leave this): `docker compose --profile claudio up -d`',
     `SHIPCAST_CLAUDIO_TOKEN=${options.claudioToken}`,
     '',
     '# Who may sign in',
@@ -262,6 +263,8 @@ export async function runInit(argv: string[], root: string, log: (line: string) 
         'Done. Next:',
         '  pnpm app        start the app, then open it and finish in its onboarding',
         publicUrl ? `                  (${publicUrl}; set SHIPCAST_TLS_CLOUDFLARE_TOKEN in .env for its certificate)` : `                  (${LOCAL_URL}, signed in with the one-time link it prints)`,
+        '  The AI provider is chosen in the onboarding: the Anthropic API, an OpenAI-compatible server,',
+        '                  or claudio (docker compose --profile claudio up -d, then docs/claudio.md)',
         '  docs/install.md for what each step did and the GitHub Action mode',
       ].join('\n'),
     );

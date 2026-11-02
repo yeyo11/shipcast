@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-28T08:00:40.756364133Z
-updated_at: 2026-10-29T15:29:29.037092787Z
+created_at: 2026-11-02T20:09:38.010397546Z
+updated_at: 2026-11-02T20:17:11.037336171Z
 tags:
     - claudio
     - ai-provider
@@ -19,7 +19,9 @@ desktop app or another project's container: its data, sign-in and workspaces sta
 version it runs is the one the engine was written against. Decided on 2026-10-24 by the owner, who
 configures the instance.
 
-- **A local install** runs it from [`docker-compose.yml`](../docker-compose.yml) in this repo.
+- **A local install** runs it, if the owner chooses it, from [`docker-compose.yml`](../docker-compose.yml)
+  in this repo, under the compose profile `claudio`: since 2026-11-02 `docker compose up -d` starts
+  only Postgres, and the Anthropic API or an OpenAI-compatible server need nothing more.
 - **Production** (`apps-1`, since 2026-10-29) runs Shipcast's own headless claudio,
   `ghcr.io/yeyo11/claudio:0.11.0-headless`, in Shipcast's stack (yeyo11/infra#18): its own volumes, a
   daily spend cap of 100 USD (`CLAUDIO_DAILY_SPEND_CAP_USD`), its token in a file of its own on the
@@ -40,10 +42,11 @@ about 3.5 minutes.
 1. Make a token (`openssl rand -hex 32`) and put it in `.env` as `SHIPCAST_CLAUDIO_TOKEN` (copy
    `.env.example` first). Compose starts claudio with it as the instance's owner token
    (`CLAUDIO_AUTH_TOKEN` inside the container), and Shipcast sends the same value as its bearer token.
-2. Start it:
+2. Start it with its profile (or put `COMPOSE_PROFILES=claudio` in `.env` and keep
+   `docker compose up -d`):
 
    ```bash
-   docker compose up -d
+   docker compose --profile claudio up -d
    ```
 
 3. Sign in to Claude once, from the command line, since the headless image has no web UI:
@@ -100,6 +103,12 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   The engine depends on claudio's API; moving the version is a deliberate change. 0.11.0 is the first
   release with what the runner needs: the workspaces API, the `/v1` policy headers and `/api/ready`
   (`/api/v1` itself arrived in 0.10.0). The headless image has no web UI.
+- **A profile, `claudio`** (since 2026-11-02): claudio is one provider among several, so a plain
+  `docker compose up -d` starts Postgres alone. Its token is `${SHIPCAST_CLAUDIO_TOKEN:-}`, not the
+  `:?` it was: compose interpolates every service, an inactive profile's too, so a required variable
+  stopped Postgres from starting without it. Empty, claudio refuses to start on its own
+  ("CLAUDIO_AUTH_MODE=token needs CLAUDIO_AUTH_TOKEN"), which is the check. Production is not
+  affected: it runs its own stack (yeyo11/infra, `stacks/shipcast`), not this file.
 - **`CLAUDIO_DAILY_SPEND_CAP_USD`**, 100 by default: the headless profile refuses to start without a
   daily ceiling.
 - **Port `127.0.0.1:8798`**, not claudio's usual 8797, so it can run beside the desktop app or a dev

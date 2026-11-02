@@ -33,7 +33,7 @@ test('each task gets the provider and model its settings choose, and the owner�
 test('a provider chosen without a connected account fails the task with what to do; claudio needs none', async () => {
   const d = await deps();
   await writeAiSettings(d.registry, { tasks: { pack: { provider: 'openaiCompatible' }, article: { provider: 'claudio' }, assistant: { provider: 'claudio' } } });
-  await assert.rejects(aiRunSetup(d)('pack'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Channels page/.test(e.message));
+  await assert.rejects(aiRunSetup(d)('pack'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Settings → AI/.test(e.message));
   assert.equal((await aiRunSetup(d)('article')).provider.id, 'claudio');
 });
 
@@ -68,7 +68,7 @@ test('the AI task runner reads claudio from the settings and every other provide
   assert.equal(article.provider.id, 'anthropic');
   assert.equal(article.model, 'claude-opus-5-5');
   assert.equal(article.settings.apiKey, 'sk-ant-test');
-  await assert.rejects(setup('assistant'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Channels page/.test(e.message));
+  await assert.rejects(setup('assistant'), (e) => e instanceof AiError && e.code === 'ai_not_connected' && /Settings → AI/.test(e.message));
   assert.ok(aiRunnerFor({ ...d, archives: { tarballUrl: async () => 'https://codeload.github.com/o/r/tar.gz/v1' } }));
 });
 
@@ -112,7 +112,7 @@ test('a provider without a readiness is tested with one cheap call, its failure 
   const d = await deps();
   const missing = await aiProviderCheck(aiRunnerFor({ ...d, archives: { tarballUrl: async () => '' } }), 'anthropic', d);
   assert.deepEqual(missing.ok ? undefined : missing.code, 'ai_not_connected');
-  assert.match(missing.ok ? '' : missing.problem, /no account is connected: connect one on the Channels page/);
+  assert.match(missing.ok ? '' : missing.problem, /no account is connected: connect it from Settings → AI, Providers/);
 
   const account = await d.registry.accounts.addAccount({ network: 'anthropic', brand: 'personal', label: 'Anthropic API', settings: {} });
   await d.secrets.set(accountSecretKey(account.id), JSON.stringify({ apiKey: 'sk-ant-revoked' }), 'Anthropic API');
