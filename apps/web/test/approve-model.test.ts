@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ago, articleLine, checkSummary, dayLabel, fingerprint, joinDraft, monthGrid, piecesOf, plainText, splitDraft, timeLabel, verdictCounts, zonedParts } from '../src/components/approve/model.ts';
+import { ago, articleLine, checkSummary, dayLabel, draftProfile, draftsView, fingerprint, joinDraft, monthGrid, piecesOf, plainText, splitDraft, timeLabel, verdictCounts, zonedParts } from '../src/components/approve/model.ts';
+
+test('the drafts screen edits while the review is open, and is read-only, named by its state, after', () => {
+  assert.deepEqual(draftsView({ app: { open: true } }, { label: 'Waiting for you' }), { editable: true, title: 'Drafts' });
+  assert.deepEqual(draftsView({ app: { open: false } }, { label: 'Published' }), { editable: false, title: 'Published' });
+  assert.deepEqual(draftsView({ app: { open: false } }, { label: 'Failed' }), { editable: false, title: 'Failed' });
+  assert.deepEqual(draftsView({ pullRequest: { state: 'open' } }, { label: 'Waiting for you' }), { editable: true, title: 'Drafts' });
+  assert.deepEqual(draftsView({ pullRequest: { state: 'merged' } }, { label: 'Published' }), { editable: false, title: 'Published' });
+  // A launch whose drafts could not be read is never edited
+  assert.deepEqual(draftsView(undefined, { label: 'Published' }), { editable: false, title: 'Published' });
+});
+
+test('every draft gets a formatting profile: its channel’s, else the article’s', () => {
+  assert.equal(draftProfile('bluesky').format, 'plain');
+  assert.equal(draftProfile('devto').format, 'markdown');
+  assert.deepEqual(draftProfile('Release notes'), draftProfile('blog'));
+});
 
 const ARTICLE = '---\ntitle: "pando 1.0"\npubDate: 2026-10-31\nlang: en\n---\n\nYour notes and your code drift apart.\n\n## What you get\n\n- **One index** for docs.\n';
 const CHANNEL = '# Bluesky\n\n> **Approval:** published once approved in Shipcast.\n\npando 1.0 is out. https://example.com/?ref=bluesky\n';

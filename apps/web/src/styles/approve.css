@@ -167,3 +167,8 @@
 }
 .ap-help-row { width: 100%; }
 .k-input.ap-readonly { min-height: 300px; resize: none; font-size: 16px; line-height: 1.6; }
+/* Read-only (a launch no longer waiting): the text as it went out, no chat column, a way back to the launch */
+.k-input.ap-readonly { display: block; height: auto; overflow-wrap: anywhere; }
+.ap-readonly-plain { white-space: pre-wrap; }
+.ap-ddrafts.ap-ddrafts-read { grid-template-columns: 220px minmax(0, 760px); }
+.ap-readonly-note { max-width: 62ch; }

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:00:56.904351317Z
-updated_at: 2026-11-02T20:00:56.904351317Z
+created_at: 2026-11-02T20:01:09.996705077Z
+updated_at: 2026-11-02T20:03:56.24529613Z
 tags:
     - web-app
     - dashboard
@@ -134,7 +134,14 @@ unchanged unless the redesign document says so.
   `components/launch/published.ts`, tested); Edit selected and Delete everything above the panel), **Content** (what
   went out, or the drafts, editable while the launch waits for approval: a save is a new version), **Search engines** and **Details** (properties, accounts, the last reading of every number,
   the launch's jobs). A launch that failed before its drafts were written opens on **Details**, and a
-  release with nothing out has **Launch it again**. **Where the drafts come from**: the launch
+  release with nothing out has **Launch it again**. **The drafts editor** (`/launches/<id>/edit`,
+  `components/approve/DraftsScreen.tsx`) is titled Drafts and edits while the review is open, every
+  draft in the rich editor (its channel's formatting profile, or the article's for a text of no
+  channel such as the release notes: `draftProfile`). Once the launch no longer waits it is a
+  **read-only view**, phone and desktop alike: titled by the launch's state (Published, Failed…), the
+  text as it went out (formatted for a Markdown channel, its own lines for a plain one), no Save, no
+  writing assistant, chat or check, and a line saying published pieces are edited one by one from the
+  launch page, linked (`draftsView` in `components/approve/model.ts`, tested). **Where the drafts come from**: the launch
   model's rows, never GitHub ([launch-store-read.md](launch-store-read.md)); a launch drafted in a pull
   request and not imported shows the error that names the import. The drafts snapshot and its
   **Refresh from GitHub** went with the pull-request path on 2026-11-01

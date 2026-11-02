@@ -1,5 +1,5 @@
 // Pure and import-light: the launch-to-approve screens' shaping of the drafts, testable without a browser
-import { channelDefinition } from '@shipcast/schema/channels';
+import { channelDefinition, editorProfile, type EditorProfile } from '@shipcast/schema/channels';
 
 /** A draft as the launch page reads it: one file of the content pack */
 export interface DraftLike {
@@ -233,4 +233,23 @@ export function articleLine(content: string, body: string): string {
   const minutes = Math.max(1, Math.round(words(plainText(body)) / 220));
   const when = date ? `${Number(date[3])} ${MONTH[Number(date[2]) - 1]} ${date[1]}` : '';
   return [when, `${minutes} min`].filter(Boolean).join(' · ');
+}
+
+/**
+ * What the drafts screen is for a launch: the editor while its drafts can still change (a launch
+ * Shipcast holds while drafted, one in a pull request while that is open), titled Drafts; otherwise a
+ * read-only view of the text as it went out, titled by the launch's own state (Published, Failed…).
+ */
+export function draftsView(review: { app?: { open: boolean }; pullRequest?: { state: string } } | undefined, state: { label: string }): { editable: boolean; title: string } {
+  const editable = review?.app ? review.app.open : review?.pullRequest?.state === 'open';
+  return editable ? { editable: true, title: 'Drafts' } : { editable: false, title: state.label };
+}
+
+/**
+ * The formatting a draft's text is edited with: its channel's profile, or the article's for a text
+ * of no channel (the release notes, a draft whose file name is not a channel's), so every draft gets
+ * the rich editor rather than a bare text box
+ */
+export function draftProfile(channel: string): EditorProfile {
+  return editorProfile(channel) ?? editorProfile(undefined)!;
 }
