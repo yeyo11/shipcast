@@ -112,8 +112,8 @@ export const withDefaults = (search: Partial<StatsSearch>): StatsSearch => ({ ..
 
 /**
  * The period's days, both included; `today` is the server's UTC day. "All" starts on `earliest`, the
- * first published launch's day (nothing before it can have numbers), at most MAX_DAYS back, and is the
- * last 30 days while nothing is published.
+ * day of the first reading (firstReadingDay: nothing before it has numbers), at most MAX_DAYS back, and
+ * is the last 30 days while nothing has been read.
  */
 export function resolvePeriod(search: Pick<StatsSearch, 'period' | 'from' | 'to'>, today: string, earliest?: string): { from: string; to: string; days: number } {
   if (search.period === 'custom' && search.from && search.to) return { from: search.from, to: search.to, days: daysBetween(search.from, search.to) };

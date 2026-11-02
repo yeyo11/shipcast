@@ -81,6 +81,36 @@ test('comparing lays the previous period over the same buckets and reports its t
   assert.equal(view.totals.previous?.reactions, 8);
 });
 
+test('"all" starts on the first reading, not on the launch\'s day, counts at least what 90 days do, and compares with nothing', async () => {
+  const registry = await memoryRegistry();
+  // The launch is made today (memoryRegistry stamps the real clock), but its pieces were read for months before:
+  // a launch made or marked published after its numbers began, which "all" used to start on
+  const today = new Date().toISOString().slice(0, 10);
+  const ago = (days: number) => new Date(Date.parse(`${today}T06:00:00Z`) - days * 86_400_000);
+  const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' });
+  await registry.launches.setStatus(launch.id, 'published');
+  const { post } = await registry.posts.recordPost({ launchId: launch.id, channel: 'devto', kind: 'post', accountId: null, externalId: 'd1', url: 'https://dev.example/1' });
+  for (const [days, views] of [[150, 100], [60, 400], [9, 900], [2, 1000]] as const) await registry.metrics.recordMetrics(launch.id, 'devto', { views, reactions: 1 }, ago(days), post.id);
+  await registry.metrics.recordDays(launch.id, 'blog', { [ago(140).toISOString().slice(0, 10)]: { views: 7 }, [ago(1).toISOString().slice(0, 10)]: { views: 3 } }, ago(0));
+
+  const all = await loadStats(registry, { ...DEFAULTS, period: 'all', compare: true }, today);
+  assert.equal(all.period.from, ago(150).toISOString().slice(0, 10), 'from the first reading');
+  assert.equal(all.period.bucket, 'week', 'past 120 days in weeks');
+  assert.equal(all.totals.metrics.views, 1000 + 7 + 3, 'every reading: the piece from zero, the blog every day');
+  assert.equal(all.totals.previous, null, '"all" has no period before it');
+  assert.equal(all.comparePeriod, null, 'not even when the address asks for one');
+  assert.equal(all.chart.groups[0]?.comparison, null);
+  assert.equal(all.chart.groups[0]?.values.reduce((a, b) => a + b, 0), all.totals.metrics.views, 'the weeks keep every reading');
+
+  let shorter = all.totals.metrics.views!;
+  for (const period of ['90d', '30d', '7d'] as const) {
+    const view = await loadStats(registry, { ...DEFAULTS, period }, today);
+    assert.ok(view.totals.metrics.views! <= shorter, `${period} counts no more than the period before it in the list`);
+    assert.notEqual(view.totals.previous, null, `${period} compares with the days before it`);
+    shorter = view.totals.metrics.views!;
+  }
+});
+
 test('filters narrow the view and a channel with nothing is an empty one', async () => {
   const registry = await memoryRegistry();
   const { account, launch } = await seed(registry);

@@ -2,6 +2,7 @@ import {
   accountGrowth,
   articleUrls,
   DETAIL_METRICS,
+  firstReadingDay,
   indexStatus,
   METRIC_FAMILIES,
   previousWindow,
@@ -145,22 +146,22 @@ async function firstPublished(registry: Pick<Repositories, 'posts'>, launchId: n
   return days[0] ?? null;
 }
 
-/** The day the first published launch was made: where "all" starts */
-const firstLaunchDay = (launches: ReadonlyArray<{ status: string; createdAt: string }>): string | undefined =>
-  launches.reduce<string | undefined>((first, l) => (l.status === 'published' && (first === undefined || l.createdAt.slice(0, 10) < first) ? l.createdAt.slice(0, 10) : first), undefined);
-
 const lastDay = (iso: string) => new Date(Date.parse(iso) - 1).toISOString().slice(0, 10);
 
 export async function loadStats(registry: Pick<Repositories, 'launches' | 'accounts' | 'posts' | 'queries'>, search: StatsSearch, today = new Date().toISOString().slice(0, 10)): Promise<StatsView> {
-  const [accounts, launches] = await Promise.all([registry.accounts.accounts(), registry.launches.recent(LAUNCH_OPTIONS)]);
-  const period = resolvePeriod(search, today, firstLaunchDay(launches));
+  // "All" starts on the first reading, not on a launch's day: a launch made after its pieces were
+  // first read (or one that is not marked published) would start it too late and leave readings out
+  const [accounts, launches, first] = await Promise.all([registry.accounts.accounts(), registry.launches.recent(LAUNCH_OPTIONS), search.period === 'all' ? firstReadingDay(registry) : null]);
+  const period = resolvePeriod(search, today, first ?? undefined);
   const bucket = effectiveBucket(search.bucket, period.days);
+  // "All" has no period before it to compare with: what came before it is nothing by definition
+  const comparable = search.period !== 'all';
   const filters = {
     ...(search.channels && { channels: search.channels }),
     ...(search.accounts && { accounts: search.accounts }),
     ...(search.launches && { launches: search.launches }),
   };
-  const previous = search.compare ? previousWindow(statsWindow(period.from, period.to)) : null;
+  const previous = search.compare && comparable ? previousWindow(statsWindow(period.from, period.to)) : null;
   const accountById = new Map(accounts.map((a) => [a.id, a]));
   // The total is every channel's line added up: read by channel with room for all of them
   const total = search.groupBy === 'total';
@@ -168,8 +169,8 @@ export async function loadStats(registry: Pick<Repositories, 'launches' | 'accou
   const seriesLimit = total ? 50 : SERIES_LIMIT;
 
   const [overview, series, before, ranking, bestLaunch] = await Promise.all([
-    // The totals always carry the previous period: each number says how it moved (the board's KPIs)
-    statsOverview(registry, { from: period.from, to: period.to, ...filters, compareTo: 'previous' as const }),
+    // The totals carry the previous period, each number saying how it moved (the board's KPIs), but for "all"
+    statsOverview(registry, { from: period.from, to: period.to, ...filters, ...(comparable && { compareTo: 'previous' as const }) }),
     statsSeries(registry, { metric: search.metric, groupBy, from: period.from, to: period.to, bucket, limit: seriesLimit, ...filters }),
     // The previous period with room for every group, so a series that was small then still finds its line
     previous ? statsSeries(registry, { metric: search.metric, groupBy, from: previous.from, to: previous.to, bucket, limit: 50, ...filters }) : null,

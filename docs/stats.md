@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T13:06:09.095720895Z
-updated_at: 2026-11-01T11:57:00.358896431Z
+updated_at: 2026-11-02T12:00:00Z
 tags:
     - stats
     - metrics
@@ -133,10 +133,14 @@ A channel's reading with no piece is skipped: those are the newsletter readings 
 [post model](decisions/post-model.md), each the sum of both issues, and every such launch has its
 issues as pieces now, so counting both would count twice.
 
-**Increase in a period.** A counter starts the period at its **last reading before it**, or at zero
-for a piece that had none. GitHub is the exception: with no reading before the period it starts at
-its first reading in it. The increase is the highest reading in the period above the start, never
-below zero, so a dip takes nothing away and a missed reading is caught up by the next one. In a
+**Increase in a period.** A counter starts the period at its **highest reading before it**, or at
+zero for a piece that had none. GitHub is the exception: with no reading before the period it starts
+at its first reading in it. The increase is the highest reading in the period above the start, never
+below zero, so a dip takes nothing away, climbing back to where it had been adds nothing, and a
+missed reading is caught up by the next one. So a period never counts less than a longer one that
+holds it (all ≥ 90 days ≥ 30 days ≥ 7 days), and periods side by side add up to the one they make.
+Until 2026-11-02 the start was the last reading before the period, so a period that began after a
+dip counted the climb back as new growth and could count more than a longer period. In a
 series, a counter at a bucket's end stands at its highest reading so far; `cumulative` is the start
 plus the increases. The overview's increase is always the sum of the series' buckets.
 
@@ -198,6 +202,7 @@ meaningful once a network has several.
 | `statsSeries(registry, { metric, groupBy, from, to, bucket, limit?, …filters })` | `buckets` (days, or weeks from Monday, at most 400) and one series per channel, account or launch: `baseline`, `total` and `{ bucket, increase, cumulative }`; past `limit` (10) the rest in `other` |
 | `statsRanking(registry, { by, from, to, limit?, offset?, order?, …filters })` | Posts, launches or accounts by score, a page at a time, each with its raw `metrics` and their `lifetime`, `pieces`, `label`, and for a piece its `url` and `kind` |
 | `accountGrowth(registry, accountId, { from, to })` | The account's daily snapshots ([decisions/account-snapshots.md](decisions/account-snapshots.md)) with the change since the snapshot before each one, and the change over the period |
+| `firstReadingDay(registry)` | The UTC day of the first number the stats can count: the earliest reading, or the earliest day kept of a source in `DATED_METRICS`, whichever is first; null while nothing was read. Where the page's "All" starts |
 
 `registry` is a `Pick` of the repositories ([engine.md](engine.md#the-launch-registry)); the raw SQL
 (window functions, `FILTER`, `LATERAL`) runs through the `queries` repository on either driver.
@@ -207,9 +212,10 @@ costs no provider call.
 
 ## Cost
 
-Each counter's start is one backwards probe of `metrics_by_launch` (launch, source, name, taken_at)
-and its period one range scan of it, so a query reads the period's readings plus one per counter,
-never the whole history. On a copy of the live registry with a year of synthetic readings added
+Each counter's start is a range scan of `metrics_by_launch` (launch, source, name, taken_at) up to the
+period, for its highest reading before it, and its period one range scan of it. Since batched
+readings add a row only when a value changes, a counter's history is short; until 2026-11-02 the
+start was one backwards probe, and the figures below are from then. On a copy of the live registry with a year of synthetic readings added
 (170,000 rows), the overview went from 1.2 s with a full-history pass to 20 ms, a 90-day daily series
 to 15 ms, and the ranking to 18 ms. Labels are read in one query per table per page. A dated
 counter's days are read through `metric_days_by_launch` (launch, source, name, day); the lifetime is
@@ -255,7 +261,7 @@ their input checked by the server functions' own `parseGrowthInput` and `parseSe
 What the page shows and the routes do not answer as such is presentation over the same numbers: the
 ranking sorted by a raw column (the API ranks by score; every entry carries its raw numbers), the
 previous period laid over the chart (a second series call over the previous window), "All" as a
-period (a `from` on the first published launch's day) and the filters' option lists (`GET /accounts`,
+period (a `from` on the first reading's day, `firstReadingDay`, with no comparison) and the filters' option lists (`GET /accounts`,
 `GET /launches`).
 
 ## The page
@@ -270,8 +276,13 @@ no part needs a long scroll: each tab fits about one screen on a desktop.
   the filters), how the chart is drawn (grouped by channel, account or launch; lines, areas or bars;
   days or weeks, weeks only past 120 days; compared with the previous period or not) and a custom
   range in one calendar (the `DateRangePicker` of the [component layer](decisions/component-layer.md),
-  no later than today). The button counts what is set. "All" starts on the day of the first published
-  launch, at most 731 days back.
+  no later than today). The button counts what is set. "All" starts on the day of the first reading
+  (`firstReadingDay`), at most 731 days back, so it holds every reading; past 120 days it is charted in
+  weeks, which keep every reading too. It has no period before it, so its totals show no change and
+  the chart no previous period, whatever the address asks. Until 2026-11-02 it started on the day the
+  first published launch was made: a launch made, or marked published, after its pieces were first
+  read started it too late, and every counter started at its readings from before, so "All" counted
+  less than 90 days and compared itself with the days before it.
 - **The tabs**: Overview, Ranking, Accounts, Search, as Base UI Tabs. The tab is in the address
   (`/stats?tab=accounts`; `?tab=posts` still opens Ranking); it is left out of the loader's
   dependencies, so moving between tabs never reads the numbers again.
@@ -315,7 +326,13 @@ search tab's input and what it lists, the lifetime, the second tier and the aver
 `packages/engine/test/stats-dated.test.ts` covers a day read again, a dated source counted on the
 day it happened with its lifetime, a launch without days read as a counter, a repo's traffic from its
 days once per repo, the lifetime beside the period, the second tier added up and never scored, and
-the averages as a period ends.
+the averages as a period ends. `packages/engine/test/stats-periods.test.ts` covers where "all" starts
+(a day kept before the first reading included, a repo's stars per day left out) and that a longer
+period never counts less than a shorter one for every family and filter, with counters first read
+inside a period, a dip, GitHub's stars from before Shipcast and dated sources, the weeks of "all"
+adding up to its total and periods side by side adding up across a dip;
+`apps/web/test/stats-server.test.ts` covers the page's "all" starting on the first reading of a
+launch made after it, with no comparison.
 
 ## Related
 

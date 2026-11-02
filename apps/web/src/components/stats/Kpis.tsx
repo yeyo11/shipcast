@@ -7,9 +7,10 @@ type Totals = Partial<Record<Metric, number>>;
 
 /**
  * The period's totals (board StatsOverview and DesktopStats): a card per family the sources count,
- * each with how it moved against the period before. The cards are also the chart's metric switch,
- * so they are a radio group: the charted one is the light card, arrows move between them. The change
- * is a sign and a number, never a colour: in Cartel red only means failure.
+ * each with how it moved against the period before (none for "all", which has no period before it).
+ * The cards are also the chart's metric switch, so they are a radio group: the charted one is the
+ * light card, arrows move between them. The change is a sign and a number, never a colour: in Cartel
+ * red only means failure.
  */
 export function Kpis({ totals, previous, days, metric, onPick }: { totals: Totals; previous: Totals | null; days: number; metric: Metric; onPick: (m: Metric) => void }) {
   const list = useRef<HTMLDivElement>(null);
@@ -37,11 +38,14 @@ export function Kpis({ totals, previous, days, metric, onPick }: { totals: Total
           <button key={m} type="button" role="radio" className="stats-kpi" aria-checked={on} tabIndex={m === focusable ? 0 : -1} onClick={() => onPick(m)} onKeyDown={(e) => onKeyDown(e, i)}>
             <span className="stats-kpi-label">{METRIC_NAMES[m]}</span>
             <span className="k-d stats-kpi-value">{full(value)}</span>
-            <span className="k-xs stats-kpi-delta">
-              {delta ? delta.text : '—'}
-              {on && delta && delta.text !== 'new' && delta.text !== '—' && ` on the ${days} days before`}
-              <span className="visually-hidden"> against the period before ({full(previous?.[m] ?? 0)})</span>
-            </span>
+            {/* "All" has no period before it: no change to show */}
+            {previous && (
+              <span className="k-xs stats-kpi-delta">
+                {delta ? delta.text : '—'}
+                {on && delta && delta.text !== 'new' && delta.text !== '—' && ` on the ${days} days before`}
+                <span className="visually-hidden"> against the period before ({full(previous[m] ?? 0)})</span>
+              </span>
+            )}
           </button>
         );
       })}

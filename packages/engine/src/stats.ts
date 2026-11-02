@@ -113,6 +113,18 @@ export function previousWindow(window: StatsWindow): StatsWindow {
   return { from: new Date(Date.parse(window.from) - length).toISOString(), to: window.from };
 }
 
+/**
+ * The UTC day of the first number the stats can count, YYYY-MM-DD: the earliest reading taken, or
+ * the earliest day kept of a dated source the stats read (DATED_METRICS), whichever comes first; null while nothing has been read.
+ * What "all" starts on: a period from it holds every reading, so it is never less than a shorter one.
+ */
+export async function firstReadingDay(registry: Pick<Repositories, 'queries'>): Promise<string | null> {
+  const [row] = await registry.queries.selectRows<{ first: string | null }>(
+    sql`SELECT least((SELECT left(min(taken_at), 10) FROM metrics), (SELECT min(day) FROM metric_days WHERE (source || '.' || name) IN (${values(datedPairs)}))) AS first`,
+  );
+  return row?.first ?? null;
+}
+
 const values = (items: readonly (string | number)[]) => sql.join(
   items.map((item) => sql`${item}`),
   sql`, `,
@@ -222,11 +234,13 @@ const num = (value: unknown): number => (value === null || value === undefined ?
 const numOrNull = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
 
 /**
- * Every counter's increase in each window. Where a counter stood when a window began is its last
+ * Every counter's increase in each window. Where a counter stood when a window began is its highest
  * reading before it, or zero for a piece that had none yet (pieces start at zero when they go out);
  * GitHub's repo had its stars before Shipcast watched it, so its first reading is where it stood. The
  * increase is the highest reading in the window above that, never below zero: a dip (an unlike, a
- * network recounting) takes nothing away, and a reading missed is caught up by the next one.
+ * network recounting) takes nothing away, climbing back to where it was adds nothing, and a reading
+ * missed is caught up by the next one. So a window's increase is never more than a longer window's
+ * that holds it, and windows side by side add up to the window they make.
  */
 async function counters(registry: Pick<Repositories, 'queries'>, windows: readonly StatsWindow[], filter: StatsFilter): Promise<CounterRow[]> {
   const end = windows[0]!.to;
@@ -236,12 +250,13 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
     sql``,
   );
   const joins = windows.map((w, i) => {
-    const [b, x, f] = [`b${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL];
+    const [b, h, x, f] = [`b${i}`, `h${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL, SQL];
     return sql`
       LEFT JOIN LATERAL (
-        SELECT m.taken_at, m.value, coalesce(m.checked_at, m.taken_at) >= ${w.from} AS held
+        SELECT coalesce(m.checked_at, m.taken_at) >= ${w.from} AS held
         FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${w.from} ORDER BY m.taken_at DESC LIMIT 1
       ) ${b} ON true
+      LEFT JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${w.from}) ${h} ON true
       LEFT JOIN LATERAL (SELECT max(m.value) AS hi, count(*) AS n FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${w.from} AND m.taken_at < ${w.to}) ${x} ON true
       LEFT JOIN LATERAL (
         SELECT m.taken_at, m.value FROM metrics m
@@ -249,11 +264,11 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
       ) ${f} ON true`;
   });
   const columns = windows.map((_, i) =>
-    // A repo's launches are counters of one unit: its start is the latest reading before the window
+    // A repo's launches are counters of one unit: its start is the highest reading before the window
     // among them, its first reading the earliest in it
     sql.raw(
       `,
-      (array_agg(b#.value ORDER BY b#.taken_at DESC NULLS LAST))[1]::float8 AS base#,
+      max(h#.hw)::float8 AS base#,
       max(x#.hi)::float8 AS hi#,
       sum(x#.n)::int + count(*) FILTER (WHERE b#.held) AS n#,
       (array_agg(f#.value ORDER BY f#.taken_at NULLS LAST))[1]::float8 AS first#`.replaceAll('#', String(i)),
@@ -520,10 +535,10 @@ export function bucketsOf(window: StatsWindow, bucket: SeriesBucket): string[] {
 
 /**
  * A metric over time, one series per channel, account or launch: the increase in each bucket and
- * the running total. A counter starts the period where its last reading before it stood (see
+ * the running total. A counter starts the period at its highest reading before it (see
  * counters); where it stands at a bucket's end is its highest reading since, so a bucket's increase
  * never goes below zero, a day with no reading shows no growth and the next reading carries what
- * happened in between. Only the period's readings are read, plus one per counter before it.
+ * happened in between. Only the period's readings are read, plus each counter's highest before it.
  */
 export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'queries'>, options: SeriesOptions): Promise<StatsSeries> {
   const window = statsWindow(options.from, options.to);
@@ -552,12 +567,12 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
       JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${window.from} AND m.taken_at < ${window.to}) m ON true
     ),
     base AS (
-      SELECT c.unit, c.name, m.taken_at, m.value FROM cc c
-      JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${window.from} ORDER BY m.taken_at DESC LIMIT 1) m ON true
+      SELECT c.unit, c.name, m.hw FROM cc c
+      JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${window.from}) m ON m.hw IS NOT NULL
     ),
     start AS (
-      -- A repo's launches are counters of one unit: it starts at the latest reading among them
-      SELECT DISTINCT ON (unit, name) unit, name, value FROM base ORDER BY unit, name, taken_at DESC
+      -- A repo's launches are counters of one unit: it starts at the highest reading among them
+      SELECT unit, name, max(hw) AS value FROM base GROUP BY unit, name
     ),
     repo_first AS (
       SELECT DISTINCT ON (unit, name) unit, name, value FROM w WHERE unit LIKE 'r:%' ORDER BY unit, name, taken_at
