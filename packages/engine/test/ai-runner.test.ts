@@ -437,8 +437,10 @@ test('the Anthropic API is sent an append-only conversation: tool rounds, then a
   assert.match(repairTail, /Only submit_answer may be called now/, 'a repo tool called in the repair refuses to run');
   assert.doesNotMatch(repairTail, /export const answer/, 'and reads nothing');
   for (const request of requests) {
-    assert.deepEqual(request.body.thinking, { block_binding: { prefix_mismatch_behavior: 'drop_block' } }, 'the safety net: a stale block is dropped, not a 400');
-    assert.match(request.headers.get('anthropic-beta') ?? '', /thinking-binding-controls-2026-08-01/, 'with the beta the setting needs');
+    // No thinking parameter: the API refuses `thinking` without a `type` (400 "thinking.type: Field required", 2026-11-02),
+    // and the append-only conversation is what keeps replayed thinking valid
+    assert.equal(request.body.thinking, undefined, 'no thinking parameter is sent');
+    assert.doesNotMatch(request.headers.get('anthropic-beta') ?? '', /thinking-binding-controls/, 'nor its beta');
     assert.equal(request.body.tool_choice && (request.body.tool_choice as { type: string }).type, 'auto', 'never a forced tool_choice');
   }
 });
