@@ -1,8 +1,11 @@
 # Shipcast Launch
 
+> Part of [Shipcast](https://github.com/yeyo11/shipcast): the docs, the self-hosted app and the issues
+> live there. If it is useful to you, a star on that repo helps other developers find it.
+
 Launch a GitHub project on each release. Shipcast reads the code at the release's tag, has the AI you
-choose (**Anthropic** or **OpenAI**) write the article and the posts, and opens a **drafts pull
-request** in your launches repo (your blog). Merging it publishes the article and every channel you
+choose (**Anthropic**, **OpenAI** or an OpenAI-compatible server) write the article and the posts, and
+opens a **drafts pull request** in your launches repo (your blog). Merging it publishes the article and every channel you
 turned on: dev.to, Bluesky, Mastodon, Hashnode, Telegram, Discord and GitHub Discussions. A release
 is launched **once**, whatever re-runs.
 
