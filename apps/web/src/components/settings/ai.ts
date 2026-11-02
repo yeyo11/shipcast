@@ -4,6 +4,29 @@ import { channelName } from '@shipcast/schema/channels';
  * The AI settings' words, shared by Settings › AI and its Prompts page.
  */
 
+/**
+ * Settings › AI's tabs, as Stats has them: the tab is in the address (`?tab=tasks`), the first one
+ * left out. A link to a section's old anchor (`#st-tone`, from when the page was one long column)
+ * opens its tab.
+ */
+export const AI_TABS = ['providers', 'tasks', 'tone', 'prompts'] as const;
+export type AiTab = (typeof AI_TABS)[number];
+export const AI_TAB_NAMES: Record<AiTab, string> = { providers: 'Providers', tasks: 'Tasks', tone: 'Tone', prompts: 'Prompts' };
+
+const isAiTab = (value: unknown): value is AiTab => typeof value === 'string' && (AI_TABS as readonly string[]).includes(value);
+
+/** The tab named in the address, as the route keeps it: undefined for the first one or for none */
+export function readAiTab(raw: Record<string, unknown>): Exclude<AiTab, 'providers'> | undefined {
+  return isAiTab(raw.tab) && raw.tab !== 'providers' ? raw.tab : undefined;
+}
+
+/** The tab on screen: the address's, else an old section anchor's (`#st-tasks-d` too), else Providers */
+export function aiTabOf(tab: AiTab | undefined, hash: string): AiTab {
+  if (tab) return tab;
+  const anchored = /^#?st-([a-z]+?)(?:-d)?$/.exec(hash)?.[1];
+  return isAiTab(anchored) ? anchored : 'providers';
+}
+
 /** Each task's name and what it covers, in the board's short form */
 export const TASK_TEXT: Record<string, { label: string; text: string }> = {
   pack: { label: 'Launch content pack', text: 'The article and every post of a release' },

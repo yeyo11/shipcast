@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { lockedRuleCount, promptEdited, promptLabel } from '../src/components/settings/ai.ts';
+import { aiTabOf, lockedRuleCount, promptEdited, promptLabel, readAiTab } from '../src/components/settings/ai.ts';
 import { ago, changesText, everyText, hostOf, listeningText, oauthPart, settingHelp, tokenUse } from '../src/components/settings/view.ts';
 import { ruleTitle, ruleWithout } from '../src/components/settings/rules.ts';
 
@@ -63,4 +63,17 @@ test('prompts: their names, whether one is edited and how many rules are locked'
   assert.equal(promptEdited({ default: 'a', versions: [{ text: 'b' }] }), true);
   assert.equal(promptEdited({ default: 'a', versions: [{ text: 'b' }, { text: 'a' }] }), false);
   assert.equal(lockedRuleCount({ a: ['1', '2'], b: ['3'], schema: '{}' }), 4);
+});
+
+test('Settings › AI opens the tab its address or an old section anchor names', () => {
+  assert.equal(readAiTab({ tab: 'tone' }), 'tone');
+  assert.equal(readAiTab({ tab: 'providers' }), undefined);
+  assert.equal(readAiTab({ tab: 'nope' }), undefined);
+  assert.equal(readAiTab({}), undefined);
+  assert.equal(aiTabOf('prompts', '#st-tone'), 'prompts');
+  assert.equal(aiTabOf(undefined, '#st-tone'), 'tone');
+  assert.equal(aiTabOf(undefined, '#st-tasks-d'), 'tasks');
+  assert.equal(aiTabOf(undefined, 'st-prompts'), 'prompts');
+  assert.equal(aiTabOf(undefined, '#elsewhere'), 'providers');
+  assert.equal(aiTabOf(undefined, ''), 'providers');
 });

@@ -15,6 +15,8 @@
 .st-lead { margin: 14px 16px 0; font-size: 14px; color: var(--sc-muted); }
 .st-cards { display: flex; flex-direction: column; gap: 14px; padding: 0 16px; margin-top: 14px; }
 .st-cards.st-first { margin-top: 16px; }
+/* Settings › AI's tabs: Stats' tab bar (stats-tabs), under the lead */
+.stats-tabs-wrap.st-ai-tabs-wrap { margin-top: 10px; }
 
 /* Settings' save bar: above the bottom bar on a phone */
 .st-savebar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
@@ -28,6 +30,7 @@
   .st-content { gap: 20px; }
   .st-lead { margin: 0; font-size: 20px; line-height: 1.4; }
   .st-cards, .st-cards.st-first { padding: 0; margin: 0; gap: 20px; }
+  .stats-tabs-wrap.st-ai-tabs-wrap { margin-top: 0; }
   .st-savebar { position: sticky; bottom: 0; margin-top: 24px; border-radius: 20px; border: 2px solid var(--sc-rail); }
 }
 

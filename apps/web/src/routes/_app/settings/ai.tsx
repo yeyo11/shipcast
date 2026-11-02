@@ -1,17 +1,28 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, Link, useLocation, useRouter } from '@tanstack/react-router';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Icon } from '../../../components/kit/Icon';
 import { Overlay } from '../../../components/kit/Overlay';
 import { PickerSelect } from '../../../components/kit/Picker';
 import { SaveBar } from '../../../components/SaveBar';
-import { BUDGETS_OF, lockedRuleCount, promptEdited, promptLabel as promptName, TASK_TEXT, usd } from '../../../components/settings/ai';
+import { AI_TAB_NAMES, AI_TABS, aiTabOf, BUDGETS_OF, lockedRuleCount, promptEdited, promptLabel as promptName, readAiTab, TASK_TEXT, usd, type AiTab } from '../../../components/settings/ai';
 import { changesText, hostOf } from '../../../components/settings/view';
 import { AI_SETTING_NAMES, SettingsForm, type SettingView } from '../../../components/SettingsForm';
 import { useToast } from '../../../components/Toasts';
 import { getSettings } from '../../../server/settings.functions';
 import { getAiSettings, previewAiPrompt, saveAiSettings } from '../../../server/ai.functions';
 
+/*
+ * Settings › AI (boards SettingsAI, DesktopSettingsAI): which AI writes each task, in what tone and
+ * with which prompts, in four tabs as Stats has them (Providers, Tasks, Tone, Prompts), the tab in
+ * the address so a link opens on it. The fields of every tab are one form: an edit survives moving
+ * between tabs, and the save bar saves them all.
+ */
+
 export const Route = createFileRoute('/_app/settings/ai')({
+  validateSearch: (search: Record<string, unknown>): { tab?: Exclude<AiTab, 'providers'> } => {
+    const tab = readAiTab(search);
+    return tab ? { tab } : {};
+  },
   head: () => ({ meta: [{ title: 'AI · Shipcast' }] }),
   loader: async () => {
     const [ai, general] = await Promise.all([getAiSettings(), getSettings()]);
@@ -177,6 +188,18 @@ function Preview({ data }: { data: Data }) {
 function AiSettingsPage() {
   const data = Route.useLoaderData();
   const router = useRouter();
+  const navigate = Route.useNavigate();
+  const tab = aiTabOf(Route.useSearch().tab, useLocation({ select: (l) => l.hash }));
+  // As on Stats, the tab replaces the entry rather than adding one: Back leaves the page instead of walking the tabs
+  const pickTab = (next: AiTab) => void navigate({ search: next === 'providers' ? {} : { tab: next }, hash: '', replace: true, resetScroll: false });
+  const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const next = AI_TABS[(index + step + AI_TABS.length) % AI_TABS.length] ?? 'providers';
+    pickTab(next);
+    document.getElementById(`st-ai-tab-${next}`)?.focus();
+  };
   const toast = useToast();
   const [tasks, setTasks] = useState(data.settings.tasks);
   const [tone, setTone] = useState(data.settings.tone ?? '');
@@ -230,22 +253,10 @@ function AiSettingsPage() {
 
   const edited = data.prompts.filter(promptEdited).length;
   const lockedRules = lockedRuleCount(data.locked);
-
-  return (
-    <div className="st-content">
-      {/* The fields are kept in state; the save bar's Save submits this form (sheets' own forms stay apart from it) */}
-      <form
-        id="ai-form"
-        hidden
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save();
-        }}
-      />
-      <p className="st-lead">Which AI writes each task, in what tone and with which prompts.</p>
-      <div className="st-cards">
-        <Providers data={data} />
-
+  const panels: Record<AiTab, ReactNode> = {
+    providers: <Providers data={data} />,
+    tasks: (
+      <>
         <section className="k-card st-g0 st-tasks k-phone" aria-labelledby="st-tasks">
           <h2 id="st-tasks" className="k-d k-d30">
             Tasks
@@ -311,15 +322,19 @@ function AiSettingsPage() {
             .
           </p>
         </section>
-
-        <section className="k-card st-g8" aria-labelledby="st-tone">
-          <h2 id="st-tone" className="k-d k-d30">
-            <label htmlFor="st-tone-text">Tone</label>
-          </h2>
-          <textarea id="st-tone-text" className="k-input st-tone" value={tone} placeholder={data.brandTone ?? 'First person, direct and technical, no hype.'} onChange={(e) => setTone(e.target.value)} />
-          <span className="k-help">Replaces brand.yml’s tone in every prompt. Empty keeps brand.yml’s{data.brandTone ? '' : ' (it has none: the default applies)'}.</span>
-        </section>
-
+      </>
+    ),
+    tone: (
+      <section className="k-card st-g8" aria-labelledby="st-tone">
+        <h2 id="st-tone" className="k-d k-d30">
+          <label htmlFor="st-tone-text">Tone</label>
+        </h2>
+        <textarea id="st-tone-text" className="k-input st-tone" value={tone} placeholder={data.brandTone ?? 'First person, direct and technical, no hype.'} onChange={(e) => setTone(e.target.value)} />
+        <span className="k-help">Replaces brand.yml’s tone in every prompt. Empty keeps brand.yml’s{data.brandTone ? '' : ' (it has none: the default applies)'}.</span>
+      </section>
+    ),
+    prompts: (
+      <>
         <Link to="/settings/ai/prompts" className="k-card st-g0 k-phone">
           <span className="k-hrow k-between">
             <h2 className="k-d k-d30">Prompts</h2>
@@ -348,6 +363,44 @@ function AiSettingsPage() {
         </section>
 
         <Preview data={data} />
+      </>
+    ),
+  };
+
+  return (
+    <div className="st-content">
+      {/* The fields are kept in state; the save bar's Save submits this form (sheets' own forms stay apart from it) */}
+      <form
+        id="ai-form"
+        hidden
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      />
+      <p className="st-lead">Which AI writes each task, in what tone and with which prompts.</p>
+      <div className="stats-tabs-wrap st-ai-tabs-wrap">
+        <div role="tablist" aria-label="AI settings sections" className="k-tabs stats-tabs st-ai-tabs">
+          {AI_TABS.map((t, i) => (
+            <button
+              key={t}
+              id={`st-ai-tab-${t}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              aria-controls="st-ai-panel"
+              tabIndex={tab === t ? 0 : -1}
+              className={`k-tab${tab === t ? ' k-on' : ''}`}
+              onClick={() => pickTab(t)}
+              onKeyDown={(e) => onTabKey(e, i)}
+            >
+              {AI_TAB_NAMES[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div id="st-ai-panel" role="tabpanel" aria-labelledby={`st-ai-tab-${tab}`} className="st-cards">
+        {panels[tab]}
       </div>
       <LimitsSheet data={data} task={limitsOf} budgets={budgets} onChange={setBudgets} onClose={() => setLimitsOf(null)} />
       <SaveBar form="ai-form" dirty={count > 0} busy={busy} text={changesText(count)} onUndo={reset} />

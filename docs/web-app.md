@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:09:47.951910895Z
-updated_at: 2026-11-02T20:11:03.542794191Z
+created_at: 2026-11-02T20:11:16.447698637Z
+updated_at: 2026-11-02T20:13:49.279837901Z
 tags:
     - web-app
     - dashboard
@@ -328,7 +328,13 @@ a round is a singleton across processes.
 
 Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md), superseded in part by
 [decisions/ai-layer.md](decisions/ai-layer.md)); a section of Settings (`/settings/ai`,
-`src/server/ai.functions.ts`), and **all** AI configuration lives there:
+`src/server/ai.functions.ts`), and **all** AI configuration lives there. Since 2026-11-02 the page is
+**four tabs, as Stats has them** (the same `k-tabs stats-tabs` bar, phone and desktop): Providers,
+Tasks, Tone and Prompts (with Preview a prompt), the tab in the address (`/settings/ai?tab=tasks`,
+Providers left out as the default; `readAiTab` and `aiTabOf` in `components/settings/ai.ts`, tested).
+An old section anchor (`#st-tone`, `#st-tasks`…) opens its tab, and the Prompts page goes back to
+the Prompts tab. Every tab's fields are one form: an edit survives moving between tabs and the save
+bar saves them all.
 
 - **claudio**: its URL and token ([claudio.md](claudio.md)). The global AI budget that used to sit
   here (`ai-budget-usd`, `SHIPCAST_MAX_BUDGET_USD`) was removed on 2026-10-29: each task's spend

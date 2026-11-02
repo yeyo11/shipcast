@@ -105,9 +105,10 @@ function PromptsPage() {
 
   return (
     <div className="k-page st-sub">
-      <TopBar back={{ label: 'AI', to: '/settings/ai' }} />
+      {/* Back to the AI settings' Prompts tab, where this page is opened from */}
+      <TopBar back={{ label: 'AI', to: '/settings/ai', search: { tab: 'prompts' } }} />
       <div className="st-subbody st-g12">
-        <Link to="/settings/ai" className="k-desktop st-backlink">
+        <Link to="/settings/ai" search={{ tab: 'prompts' }} className="k-desktop st-backlink">
           <Icon name="chevronLeft" size={18} />
           AI
         </Link>
