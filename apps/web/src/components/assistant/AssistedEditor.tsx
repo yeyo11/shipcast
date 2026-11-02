@@ -188,7 +188,7 @@ function AssistSheet({ assistant, open, onOpenChange, onOpenChat }: { assistant:
 }
 
 /** The quick action's answer (board AssistProposal): the change in place, to accept or reject */
-function ProposalCard({ assistant, onAccept, formatted }: { assistant: Assistant; onAccept: () => void; formatted?: boolean }) {
+function ProposalCard({ assistant, onAccept, formatted, imageSrc }: { assistant: Assistant; onAccept: () => void; formatted?: boolean; imageSrc?: (src: string) => string }) {
   const proposal = assistant.proposal;
   // In the Visual mode a proposal reads formatted; its Markdown is one press away
   const [asMarkdown, setAsMarkdown] = useState(false);
@@ -254,7 +254,7 @@ function ProposalCard({ assistant, onAccept, formatted }: { assistant: Assistant
           )}
           {(hasText || !proposal.streaming) &&
             (formatted && !asMarkdown ? (
-              <FormattedDiff before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} />
+              <FormattedDiff before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} imageSrc={imageSrc} />
             ) : (
               <DiffView before={proposal.original} after={proposal.text} label={`${proposal.label}: the change`} context={context} legend className={proposal.range ? undefined : 'wr-diff-whole'} />
             ))}
@@ -302,6 +302,11 @@ export interface AssistedEditorProps {
   status?: ReactNode;
   /** Images by paste, drop and the bar's button, where the profile takes them */
   images?: ImageSupport;
+  /**
+   * Where the page shows an image the text links, for a text that takes no new image (a launch's
+   * draft, whose images are its own files, served by the app). `images.display` wins over it.
+   */
+  imageSrc?: (src: string) => string;
 }
 
 /**
@@ -309,7 +314,7 @@ export interface AssistedEditorProps {
  * actions beside it (the toolbar's Assist offers the same, for the keyboard); on a phone they open as
  * a bottom sheet. The answer comes back above the text as a diff to accept or reject.
  */
-export function AssistedEditor({ id, label, assistant, mono = false, tall, required, placeholder, help, onOpenChat, meta, className, profile, status, images: imageSupport }: AssistedEditorProps) {
+export function AssistedEditor({ id, label, assistant, mono = false, tall, required, placeholder, help, onOpenChat, meta, className, profile, status, images: imageSupport, imageSrc }: AssistedEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -327,6 +332,8 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
   const [imageOpen, setImageOpen] = useState(false);
   // Only where the channel shows images in the text
   const images = profile?.images ? imageSupport : undefined;
+  // Where the page shows an image the text links: an upload from the app, or a launch's own file
+  const shownImage = profile?.images ? (images?.display ?? imageSrc) : undefined;
 
   /**
    * Pasted or dropped images, uploaded at once and put where they landed with no alt text yet: the
@@ -518,7 +525,7 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
         )}
       </div>
       {images && <MissingAlt value={target.value} onChange={target.onChange} images={images} />}
-      <ProposalCard assistant={assistant} onAccept={accept} formatted={inVisual} />
+      <ProposalCard assistant={assistant} onAccept={accept} formatted={inVisual} imageSrc={shownImage} />
       {/* One frame (board EditorWrite): the bar on top, the text, the status band under it */}
       <div className={`ed-frame${profile ? '' : ' ed-frame-bare'}`}>
       {formatting && <EditorToolbar profile={profile} mode={mode} onMode={(m) => {
@@ -551,7 +558,8 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
             profile={profile}
             onSelect={assistant.setSelection}
             onReady={setVisual}
-            {...(images && { onFiles: (files: File[], at: number) => takeFiles(files, { visual: at }), imageSrc: images.display })}
+            {...(images && { onFiles: (files: File[], at: number) => takeFiles(files, { visual: at }) })}
+            {...(shownImage && { imageSrc: shownImage })}
             describedBy={`${id}-help`}
             tall={tall}
             dimmed={Boolean(proposal)}

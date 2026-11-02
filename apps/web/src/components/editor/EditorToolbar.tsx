@@ -258,9 +258,9 @@ export function LinkDialog({ open, onOpenChange, initial, onSubmit }: { open: bo
  * A proposal shown formatted (board EditorAssistVisual): the text as it reads, its deleted words
  * struck and its added ones marked, formatting kept. "Show as Markdown" is the caller's DiffView.
  */
-export function FormattedDiff({ before, after, label }: { before: string; after: string; label: string }) {
+export function FormattedDiff({ before, after, label, imageSrc }: { before: string; after: string; label: string; imageSrc?: (src: string) => string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const html = renderMarkdown(markedDiff(before, after));
+  const html = renderMarkdown(markedDiff(before, after), imageSrc ? { imageSrc } : {});
   useLayoutEffect(() => {
     if (ref.current) paintDiff(ref.current);
   }, [html]);

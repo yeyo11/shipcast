@@ -9,6 +9,7 @@ import { TopBar } from '../kit/Bars';
 import { Icon } from '../kit/Icon';
 import { useToast } from '../Toasts';
 import { AssistedEditor } from '../assistant/AssistedEditor';
+import { launchImageSrc } from '../editor/images';
 import { renderMarkdown } from '../editor/visual';
 import { ChatPanel } from '../assistant/ChatPanel';
 import { checkSummary, draftProfile, draftsView, joinDraft, langName, langOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
@@ -39,6 +40,8 @@ export function DraftsScreen({ data, search, onSearch }: { data: LaunchData; sea
   const reviewOk = review && !('error' in review) ? review : undefined;
   const texts = useMemo(() => reviewOk?.drafts.filter((d) => d.kind === 'article' || d.kind === 'channel') ?? [], [reviewOk]);
   const pieces = useMemo(() => piecesOf(texts, channelOfDraft, nameOf), [texts]);
+  // An article's images are the launch's own files, served by the app: the site's paths it links are not the app's
+  const imageSrc = useMemo(() => launchImageSrc(reviewOk?.drafts ?? []), [reviewOk]);
   const piece = pieces.find((p) => p.id === search.draft) ?? pieces[0];
   const draft = piece ? (piece.drafts.find((d) => langOf(d.path) === search.lang) ?? piece.drafts[0]) : undefined;
   // A launch Shipcast holds is edited while drafted (docs/app-review.md); one in a pull request while it is open.
@@ -87,6 +90,7 @@ export function DraftsScreen({ data, search, onSearch }: { data: LaunchData; sea
       setCheck={(c) => setChecks((all) => ({ ...all, [draft.path]: c }))}
       search={search}
       onSearch={onSearch}
+      imageSrc={imageSrc}
     />
   );
 }
@@ -109,9 +113,11 @@ interface PieceEditorProps {
   setCheck: (check: CheckResult) => void;
   search: EditSearch;
   onSearch: (next: EditSearch) => void;
+  /** Where the page shows an image the text links */
+  imageSrc: (src: string) => string;
 }
 
-function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, editable, title, waiting, body, setBody, check, setCheck, search, onSearch }: PieceEditorProps) {
+function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, editable, title, waiting, body, setBody, check, setCheck, search, onSearch, imageSrc }: PieceEditorProps) {
   const router = useRouter();
   const toast = useToast();
   const parts = useMemo(() => splitDraft(draft.content ?? '', draft.kind), [draft.content, draft.kind]);
@@ -192,9 +198,9 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
   // once the launch has gone out the text is only read, formatted as its channel shows it
   const editor = (where: 'phone' | 'desk', help: ReactNode) =>
     editable ? (
-      <AssistedEditor id={`ap-draft-${where}`} label={label} assistant={assistant} help={help} className="ap-assisted" profile={profile} {...(where === 'phone' ? { onOpenChat: () => setChatOpen(true) } : !deskChat ? { onOpenChat: () => setDeskChat(true) } : {})} />
+      <AssistedEditor id={`ap-draft-${where}`} label={label} assistant={assistant} help={help} className="ap-assisted" profile={profile} imageSrc={imageSrc} {...(where === 'phone' ? { onOpenChat: () => setChatOpen(true) } : !deskChat ? { onOpenChat: () => setDeskChat(true) } : {})} />
     ) : (
-      <ReadOnlyText id={`ap-draft-${where}`} label={label} value={value} plain={profile.format === 'plain'} lang={lang} help={help} />
+      <ReadOnlyText id={`ap-draft-${where}`} label={label} value={value} plain={profile.format === 'plain'} lang={lang} help={help} imageSrc={imageSrc} />
     );
   // Read-only: what went out is changed piece by piece, from the launch page's Channels tab
   const readOnlyNote = (
@@ -341,8 +347,8 @@ const reviewHeld = (launch: LaunchData['launch']) => !launch.pullRequest;
  * Markdown, its own lines for a plain network. A region the keyboard can reach and scroll, never a box
  * that looks editable.
  */
-function ReadOnlyText({ id, label, value, plain, lang, help }: { id: string; label: string; value: string; plain: boolean; lang: string | undefined; help: ReactNode }) {
-  const html = useMemo(() => (plain ? '' : renderMarkdown(value)), [plain, value]);
+function ReadOnlyText({ id, label, value, plain, lang, help, imageSrc }: { id: string; label: string; value: string; plain: boolean; lang: string | undefined; help: ReactNode; imageSrc: ((src: string) => string) | undefined }) {
+  const html = useMemo(() => (plain ? '' : renderMarkdown(value, imageSrc ? { imageSrc } : {})), [plain, value, imageSrc]);
   return (
     <div className="k-field">
       <span className="k-lbl" id={`${id}-label`}>

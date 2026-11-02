@@ -74,3 +74,58 @@ export interface KeptImage {
 
 /** The images a text links, of those uploaded: what goes with the article when it is prepared */
 export const linkedImages = (markdown: string, images: readonly KeptImage[]): KeptImage[] => images.filter((i) => markdown.includes(`/${i.name})`) || markdown.includes(`/${i.name} `));
+
+/**
+ * What the page shows in place of an image the launch does not hold: a quiet dashed box that says so,
+ * not the browser's broken icon. Inline, so it costs no request of its own.
+ */
+export const MISSING_IMAGE =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200"><rect x="1" y="1" width="638" height="198" rx="12" fill="#f4f3ef" stroke="#d6d4cc" stroke-width="2" stroke-dasharray="8 6"/><g fill="none" stroke="#8a877e" stroke-width="3" stroke-linejoin="round"><rect x="296" y="58" width="48" height="38" rx="5"/><path d="M300 92l12-14 9 10 7-7 12 11"/></g><text x="320" y="134" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#6b685f">Image not found</text></svg>',
+  );
+
+/** A launch's file as its review lists it: its path in the launches repo and where the app serves it */
+export interface ServedFile {
+  path: string;
+  kind: string;
+  url?: string;
+}
+
+/**
+ * Where the page shows an image an article's Markdown links, from its launch's files: both launch
+ * models keep every file of the launch's folder (`public/articles/<slug>/`, or
+ * `public/launches/<project>/<ref>/`) as a media row the app serves at `/media/<id>`, behind the
+ * session. The Markdown keeps its address; only the page asks for another. A root-relative link
+ * (`/articles/<slug>/x.png`) is the site's path of one of those files; a page-relative one (`x.png`,
+ * `./x.png`) names a file of the launch's own folder. A web or inline image address is shown as it is.
+ * Anything else, or a file the launch does not hold, shows `MISSING_IMAGE`.
+ */
+export function launchImageSrc(files: readonly ServedFile[]): (src: string) => string {
+  const served = new Map<string, string>();
+  const byName = new Map<string, string | null>();
+  for (const file of files) {
+    if (!file.url || file.kind !== 'image' || !file.path.startsWith('public/')) continue;
+    served.set(file.path.slice('public'.length), file.url);
+    const name = file.path.split('/').at(-1)!;
+    // A name two folders share says nothing on its own
+    byName.set(name, byName.has(name) ? null : file.url);
+  }
+  return (src) => {
+    const trimmed = src.trim();
+    if (/^(https?:\/\/|data:image\/)/i.test(trimmed)) return trimmed;
+    const path = safeDecode(trimmed.replace(/[?#].*$/, ''));
+    let found: string | null | undefined;
+    if (path.startsWith('/') && !path.startsWith('//')) found = served.get(path);
+    else if (path && !path.startsWith('/') && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !path.includes('..')) found = byName.get(path.replace(/^\.\//, ''));
+    return found ?? MISSING_IMAGE;
+  };
+}
+
+const safeDecode = (s: string) => {
+  try {
+    return decodeURI(s);
+  } catch {
+    return s;
+  }
+};

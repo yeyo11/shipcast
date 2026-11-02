@@ -63,13 +63,18 @@ const SAFE_URL = /^(https?:\/\/|mailto:|#|\/(?!\/))/i;
 /**
  * Markdown as HTML for the formatted diff: GitHub-flavoured, raw HTML shown as text but for the
  * underline the profiles write, links and images only to web, mail, anchors or the site's own paths,
- * and a spoiler drawn as one
+ * and a spoiler drawn as one. `imageSrc` says where the page shows an image the Markdown links (a
+ * launch's files are served by the app, not at the site's paths); what it answers passes the same
+ * check, an inline image allowed.
  */
-export function renderMarkdown(markdown: string): string {
+export function renderMarkdown(markdown: string, options: { imageSrc?: (src: string) => string } = {}): string {
   const marked = new Marked({
     gfm: true,
     walkTokens: (token) => {
-      if ((token.type === 'link' || token.type === 'image') && !SAFE_URL.test(token.href.trim())) token.href = '#';
+      if (token.type === 'image' && options.imageSrc) {
+        const shown = options.imageSrc(token.href).trim();
+        token.href = SAFE_URL.test(shown) || /^data:image\/(png|jpeg|gif|webp|svg\+xml)[;,]/i.test(shown) ? shown : '#';
+      } else if ((token.type === 'link' || token.type === 'image') && !SAFE_URL.test(token.href.trim())) token.href = '#';
     },
     renderer: {
       html: (token) => (/^<\/?u>$/.test(token.text.trim()) ? token.text.trim() : esc(token.text)),

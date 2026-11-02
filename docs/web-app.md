@@ -141,7 +141,16 @@ unchanged unless the redesign document says so.
   **read-only view**, phone and desktop alike: titled by the launch's state (Published, Failed…), the
   text as it went out (formatted for a Markdown channel, its own lines for a plain one), no Save, no
   writing assistant, chat or check, and a line saying published pieces are edited one by one from the
-  launch page, linked (`draftsView` in `components/approve/model.ts`, tested). **Where the drafts come from**: the launch
+  launch page, linked (`draftsView` in `components/approve/model.ts`, tested). **An article's images**
+  on this screen (read-only, and the editable Visual mode with its formatted proposals): the Markdown
+  links them at the site's paths (`/articles/<slug>/x.png`, or a bare `x.png`), which the app does not
+  serve. Both launch models keep every file of the launch's folder in the launches repo as a media row
+  (imported from `public/<launch dir>/` for a launch drafted before the launch model; written with its
+  drafts for one Shipcast holds, uploads included), which the review lists with its `/media/<id>`
+  address, behind the session; `launchImageSrc` in `components/editor/images.ts` (tested) shows each
+  image from there, the way the article preview does on the server, and an image the launch does not
+  hold as a dashed "Image not found" box, never a broken icon. Only the page's `src` changes: the
+  Markdown saved, committed and published keeps its links. **Where the drafts come from**: the launch
   model's rows, never GitHub ([launch-store-read.md](launch-store-read.md)); a launch drafted in a pull
   request and not imported shows the error that names the import. The drafts snapshot and its
   **Refresh from GitHub** went with the pull-request path on 2026-11-01
