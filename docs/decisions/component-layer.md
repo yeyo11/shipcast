@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T20:33:51.413921256Z
-updated_at: 2026-10-26T12:38:19.672015668Z
+created_at: 2026-11-02T06:52:02.228616766Z
+updated_at: 2026-11-02T06:53:18.624565122Z
 tags:
     - decision
     - web-app
@@ -60,11 +60,15 @@ palette) are built on [Base UI](https://base-ui.com) (`@base-ui/react` 1.x) and 
     `html` gets `scrollbar-color` and `scrollbar-width` (Firefox, Chromium) and `::-webkit-scrollbar`
     rules (Safari) from the same tokens.
   - `DatePicker` and `DateRangePicker` (`DatePicker.tsx`, with `dates.ts`): see the next section.
-  - `CommandPalette`: a Dialog around an inline Autocomplete, after Linear's. ⌘K or Ctrl+K anywhere,
-    or the Search icon in the top bar (an icon-only button named "Search", with the shortcut in its
-    tooltip), or the phone's More; it filters the sections and the main actions (launch a repo, write,
-    connect an account, run an automation round, create a token, sign out). On a phone it is centred
-    with safe-area margins.
+  - `CommandPalette` (its lines computed by the pure `palette.ts`, so the grouping and the matching
+    are unit-tested): still a Dialog around an inline Autocomplete, after Linear's. ⌘K or Ctrl+K
+    anywhere, the desktop header's search (an icon below 1120 px) or the phone top bar's Search. On a
+    desktop a centred 640 px panel with no Cancel (Esc closes) and a footer of keys; on a phone the
+    whole screen with Cancel. An empty field groups Needs you, Recent and Actions; typing groups
+    Launches, Articles, Accounts, Go to, Actions and Needs you. "Connect an account" is a step nested
+    inside it. The actions are still launch a repo, write, connect an account, run an automation
+    round, take the tour, finish setting up, create a token and sign out. The highlighted line gets
+    `aria-selected`, which Base UI's autocomplete leaves out.
   - `icons.tsx`: the few interface glyphs, in `currentColor`, always decorative.
 - **The toast API is kept.** `components/Toasts.tsx` is re-implemented on Base UI's Toast with the
   same `useToast().show/done/fail` the pages already call, and the same Cartel look (the outlined

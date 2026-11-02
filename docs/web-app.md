@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-01T14:05:01.299152642Z
-updated_at: 2026-11-01T20:38:59.343354796Z
+created_at: 2026-11-02T06:53:24.835786476Z
+updated_at: 2026-11-02T06:53:24.835786476Z
 tags:
     - web-app
     - dashboard
@@ -239,8 +239,18 @@ on the [approved design direction](decisions/app-design-direction.md).
   Settings' layout renders a `PageToolbarHost` under its banner, and each section's toolbar is drawn
   there through a portal. Only Launch a repo has no bar. What waits for the owner is in the bell; the
   one-line `.strip` is what a page may show for its own pending matter.
-- **The command palette**: ⌘K or Ctrl+K anywhere, Search in the top bar, or More on a phone; it
-  filters the sections and the main actions.
+- **The command palette** (`components/ui/CommandPalette.tsx`, its lines built by the pure, tested
+  `components/ui/palette.ts`): ⌘K or Ctrl+K anywhere, the desktop header's search (an icon below
+  1120 px), or Search in a phone's top bar. On a desktop a stamped 640 px panel 120 px from the top,
+  with the field inside, an esc hint and a footer of keys; on a phone the whole screen with Cancel.
+  An empty field lists what needs the owner (the bell's items as verbs: Review, Retry, Answer,
+  Reconnect), the three newest launches and the main actions; typing searches every launch and
+  article (`listLaunches` with `q`), the connected accounts (`getChannels`), the sections and the
+  actions, at most four lines per group, one line each with an ellipsis. "Connect an account" is a
+  step inside the palette (Backspace or the back arrow returns). Nothing matching offers "Launch a
+  repo called …" (`/launch?repo=`) and "Search all launches" (`/?q=`). N then L and N then W open
+  Launch a repo and Write when no field or dialog has the keys. Comments are not searched. Boards:
+  DesktopSearch*, SearchPalette* (redesign board v27).
 - **The first-run onboarding and the tour** ([decisions/onboarding.md](decisions/onboarding.md)): a
   centred wizard on the first sign-in (its provider test runs through the provider module's own
   readiness or one cheap call on the AI task runner), then an optional tour (NextStep) driven by one
