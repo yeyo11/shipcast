@@ -84,7 +84,6 @@
 
 /* ---------- Details ---------- */
 .pub-details { margin-top: 16px; gap: 14px; }
-.pub-break { overflow-wrap: anywhere; }
 .pub-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; }
 .pub-figures > div { flex-direction: column-reverse; justify-content: flex-end; }
 .pub-figures dd { margin: 0; }

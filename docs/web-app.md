@@ -291,6 +291,12 @@ on the [approved design direction](decisions/app-design-direction.md).
   2026-11-02: Stats' channels chip, the filter icon on a desktop and the channels icon on a phone,
   where the Filters chip beside it has the filter one). See
   [decisions/component-layer.md](decisions/component-layer.md); reviewed at `/design/components`.
+- **Long text in a tight place**: `k-ellipsis` keeps one line; `k-clamp2` (and `k-clamp3`) shows at
+  most two (three) lines ending in an ellipsis (`line-clamp` with its `-webkit-box` fallback, breaking
+  a long unspaced value such as a slug or a URL anywhere). A clamped element carries its full text in
+  `title`, so nothing is lost. A launch's **Details** tab clamps the About this launch values
+  (repository, article slug or release ref, pack, drafts, pull request) and each job's title to two
+  lines; the expanded job logs are read in full.
 - **Illustrations wired in**: the 404 page, the error boundary, the empty states, the sign-in page,
   the Stats page's loading and empty states, a launch's picture when it has no avatar.
 - **Reflow to WCAG 2.2 at 320 CSS px**: no hidden horizontal overflow; grids, forms and long strings

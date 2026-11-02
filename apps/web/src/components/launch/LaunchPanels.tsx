@@ -107,7 +107,9 @@ function JobRow({ job, now }: { job: JobView; now: Date }) {
   const running = job.state === 'running' && !job.queued;
   return (
     <div className="k-row k-sm pub-job">
-      <span className="k-grow">{running ? <strong>{job.title}</strong> : job.title}</span>
+      <span className="k-grow k-clamp2" title={job.title}>
+        {running ? <strong>{job.title}</strong> : job.title}
+      </span>
       {job.state === 'failed' ? (
         <>
           <span className="k-xs pub-fail-word">Failed</span>
@@ -154,6 +156,10 @@ export function DetailsPanel({ data, owner, timezone }: { data: DetailsData; own
   const [allJobs, setAllJobs] = useState(false);
   const shownJobs = allJobs ? jobs : jobs.slice(0, 3);
   const approval = data.approval;
+  // The long values read at most two lines, each whole in its title
+  const pack = `${launch.kind.charAt(0).toUpperCase() + launch.kind.slice(1)}, ${TRIGGER_WORDS[launch.trigger] ?? `started by ${launch.trigger}`}`;
+  const slug = launch.ref.replace(/^article:/, '');
+  const drafts = approval ? `Kept in Shipcast, approved by ${approval.by === owner ? 'you' : `@${approval.by}`} on ${dayOnly(approval.at, timezone)}` : 'Kept in Shipcast, not approved yet';
   return (
     <div className="k-px k-stack pub-details">
       <section className="k-card" aria-labelledby="about-title">
@@ -162,26 +168,32 @@ export function DetailsPanel({ data, owner, timezone }: { data: DetailsData; own
         </h2>
         <dl className="k-kv">
           <dt>Repository</dt>
-          <dd className="pub-break">{launch.repo}</dd>
+          <dd className="k-clamp2" title={launch.repo}>
+            {launch.repo}
+          </dd>
           <dt>{article ? 'Article' : 'Release'}</dt>
-          <dd className="k-mono pub-break">{launch.ref.replace(/^article:/, '')}</dd>
+          <dd className="k-mono k-clamp2" title={slug}>
+            {slug}
+          </dd>
           <dt>Pack</dt>
-          <dd>
-            {launch.kind.charAt(0).toUpperCase() + launch.kind.slice(1)}, {TRIGGER_WORDS[launch.trigger] ?? `started by ${launch.trigger}`}
+          <dd className="k-clamp2" title={pack}>
+            {pack}
           </dd>
           <dt>Started</dt>
           <dd>{dayTime(launch.createdAt, timezone)}</dd>
           {approval !== undefined && (
             <>
               <dt>Drafts</dt>
-              <dd>Kept in Shipcast{approval ? `, approved by ${approval.by === owner ? 'you' : `@${approval.by}`} on ${dayOnly(approval.at, timezone)}` : ', not approved yet'}</dd>
+              <dd className="k-clamp2" title={drafts}>
+                {drafts}
+              </dd>
             </>
           )}
           {launch.pullRequest && (
             <>
               <dt>Drafts</dt>
               <dd>
-                <a className="pub-break" href={launch.pullRequest} target="_blank" rel="noreferrer">
+                <a className="k-clamp2" href={launch.pullRequest} target="_blank" rel="noreferrer" title={launch.pullRequest}>
                   Pull request #{launch.pullRequest.split('/').at(-1)}
                   <span className="visually-hidden"> (opens in a new tab)</span>
                 </a>
