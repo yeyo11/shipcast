@@ -199,8 +199,9 @@
 .home-palette-ic.is-bad { border-color: var(--sc-failure); color: var(--sc-failure); }
 .home-palette-dia { width: 9px; height: 9px; background: var(--sc-failure); transform: rotate(45deg); }
 /* The title and the meta share one line: the meta takes at most half of it and both end in an ellipsis,
-   so a long account label (a service account, an analytics site) never pushes the line sideways */
-.home-palette-t { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   so a long account label (a service account, an analytics site) never pushes the line sideways. The
+   title keeps at least 40% of the line, so a long meta is cut before the name it belongs to */
+.home-palette-t { flex: 1 1 0; min-width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-palette-v { font-family: var(--sc-font-mono); font-size: 13px; color: var(--sc-muted); margin-left: 6px; }
 .home-palette-m { font-size: 13px; color: var(--sc-muted); white-space: nowrap; flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; }
 .home-palette-item .k-pill { height: 24px; font-size: 12px; padding: 0 9px; }
