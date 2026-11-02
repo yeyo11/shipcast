@@ -468,10 +468,25 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
     return () => el.removeEventListener('scroll', hide);
   }, [inVisual]);
 
+  // Back to the text without moving the page, the caret after the change, nothing left selected
   const accept = () => {
-    if (!assistant.acceptProposal()) toast.fail('The text changed under the proposal: ask again on the text as it is now.');
-    else if (inVisual) visual?.commands.focus();
-    else ref.current?.focus();
+    const accepted = proposal;
+    if (!accepted || !assistant.acceptProposal()) {
+      toast.fail('The text changed under the proposal: ask again on the text as it is now.');
+      return;
+    }
+    if (inVisual) {
+      visual?.commands.focus(undefined, { scrollIntoView: false });
+      return;
+    }
+    const caret = accepted.range ? accepted.range.start + accepted.text.length : accepted.text.length;
+    assistant.setSelection({ start: caret, end: caret });
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(caret, caret);
+    });
   };
 
   // On a phone both buttons open the sheet; from 960 px each is a dropdown's trigger

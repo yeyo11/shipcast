@@ -90,7 +90,10 @@ export function VisualEditor({ id, value, onChange, profile, onSelect, onReady, 
   useEffect(() => {
     if (!editor || value === written.current) return;
     written.current = value;
-    editor.commands.setContent(parseFor(manager, value, profile), { emitUpdate: false });
+    // The caret stays where it was (an accepted proposal: where the change is), never at the end:
+    // left there, the next focus scrolled the page to the article's last block
+    const at = editor.state.selection.from;
+    editor.chain().setContent(parseFor(manager, value, profile), { emitUpdate: false }).setTextSelection(at).run();
   }, [editor, value, manager, profile]);
 
   return <EditorContent editor={editor} className={`ed-visual-box${dimmed ? ' ed-dimmed' : ''}`} />;
