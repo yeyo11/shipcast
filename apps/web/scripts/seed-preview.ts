@@ -106,7 +106,6 @@ const TABLES = [
   'media',
   'launch_channels',
   'launch_sources',
-  'draft_snapshots', // no longer written (docs/decisions/launch-model.md, phase 8); cleared for an old seed's rows
   'assistant_messages',
   'assistant_sessions',
   'jobs',

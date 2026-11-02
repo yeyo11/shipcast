@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T07:55:43.916970887Z
-updated_at: 2026-11-01T16:05:57.897672605Z
+updated_at: 2026-11-02T07:25:12.172951868Z
 tags:
     - launches
     - launch-model
@@ -25,7 +25,7 @@ phase is [launch-triggers.md](launch-triggers.md).
 
 | The launch | Mode | What happens |
 | --- | --- | --- |
-| Nothing of it ever reached an audience | `removed` | The launch's row goes with every row that hangs on it: its scheduled pieces, attempts, snapshot, metrics and comments (`removeLaunch`, the import's own), and by cascade the launch model's rows (packs, channels, drafts and versions, media, approvals). Jobs and assistant sessions stay, unlinked. Its drafts pull request is closed and its branch deleted (a legacy launch), or its preview on the real site (a launch Shipcast holds), so nothing left open can still publish it. Its media bytes are deleted from the media store when no other launch names them |
+| Nothing of it ever reached an audience | `removed` | The launch's row goes with every row that hangs on it: its scheduled pieces, attempts, metrics and comments (`launchDeletions.removeLaunch`; the drafts snapshot it also emptied went with its table on 2026-11-02), and by cascade the launch model's rows (packs, channels, drafts and versions, media, approvals). Jobs and assistant sessions stay, unlinked. Its drafts pull request is closed and its branch deleted (a legacy launch), or its preview on the real site (a launch Shipcast holds), so nothing left open can still publish it. Its media bytes are deleted from the media store when no other launch names them |
 | It published | `hidden` | `launches.deleted_at` is set: the launch leaves the lists (the Launches page, `GET /launches`, the facets, `recent`, which the rounds, the metric reads and the stats' pickers use), nothing more of it goes out (`publishLaunch` skips it, its scheduled pieces are dropped), and its row stays, so its release is never claimed again. Its page still opens by id, saying when it was deleted |
 
 "Published" is decided from what may be out, not from the status alone: a post of any status but

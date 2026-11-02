@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-11-02T07:04:22.800610444Z
+updated_at: 2026-11-02T07:25:25.69569962Z
 tags:
     - engine
     - registry
@@ -90,7 +90,10 @@ uses; `inTransaction` runs a use case over several in one transaction.
 
 The schema is `src/db/schema.ts`; `pnpm --filter @shipcast/engine db:generate` writes a change as a
 new SQL migration in `packages/engine/drizzle/`, committed and never edited once applied; migrations
-run under an advisory lock and are additive. The pool is sized per process (`PoolOptions`: `max`,
+run under an advisory lock and are additive. The one agreed exception is
+`0022_drop_draft_snapshots`, which drops the `draft_snapshots` table nothing has used since phase 8
+of [decisions/launch-model.md](decisions/launch-model.md#where-it-stands) (the owner's decision of
+2026-11-02); any other drop or destructive change needs the owner's own agreement again. The pool is sized per process (`PoolOptions`: `max`,
 `prepare: false` behind PgBouncer, a direct `migrateUrl`; [server.md](server.md)). What makes "a
 launch happens once" hold:
 
@@ -285,7 +288,8 @@ steps, output tokens and the timeout.
    data API), or, with `direct`, **one commit straight onto `main`**: Action mode's delivery. In the
    app the drafts are always kept by Shipcast alone, and nothing reaches the launches repo until the
    launch is published ([app-review.md](app-review.md)); the drafts snapshot went with the app's
-   pull-request path on 2026-11-01, its `draft_snapshots` table left in place until a later drop.
+   pull-request path on 2026-11-01, and its `draft_snapshots` table with migration
+   `0022_drop_draft_snapshots` on 2026-11-02.
 
 `claimManual(repo, ref?)` starts a launch by hand. In the app and the rounds, drafting is a `draft`
 job (a `heavy` one in a split), never retried on its own since it costs an AI run.

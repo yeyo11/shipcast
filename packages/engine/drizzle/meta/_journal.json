@@ -148,6 +148,13 @@
       "when": 1793348970384,
       "tag": "0021_dedupe_key_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793604232423,
+      "tag": "0022_drop_draft_snapshots",
+      "breakpoints": true
     }
   ]
 }

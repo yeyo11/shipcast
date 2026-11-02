@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T22:52:52.911566745Z
-updated_at: 2026-11-02T07:05:04.7085882Z
+updated_at: 2026-11-02T07:25:54.09442851Z
 tags:
     - decision
     - launches
@@ -47,7 +47,8 @@ and one destination among others.
 ## How it is built
 
 In phases, each behind a flag and deployed like the refactor (a `pg_dump` before each migration,
-additive migrations only, the current flow working until the last phase):
+additive migrations only, the current flow working until the last phase; the one exception is the
+drop of `draft_snapshots` below):
 
 1. **Schema and storage**: new tables for sources, per-launch channel config, packs, versioned drafts,
    media and approvals, plus a dedupe key so "a launch happens once" holds without a repo and a tag;
@@ -79,7 +80,7 @@ code**:
   Shipcast. The engine keeps its delivery to a pull request and its publishing from the merged files
   only for Action mode, which this decision froze on that flow (`shipcast ci` builds no launch model).
 - **The drafts snapshot is gone**: its service, repository and queue, "Refresh from GitHub" and the
-  hourly re-read of open pull requests. Its table stays (below).
+  hourly re-read of open pull requests; its table is dropped too (below).
 - **The `pull_request` webhook is ignored by the app**: a merge publishes nothing; Action mode still
   publishes on its workflow's merge.
 - **Launches already in pull requests stay readable** from the rows the import wrote: the launch page,
@@ -108,11 +109,13 @@ What remains, each a separate step the owner must agree to:
    back to the brand's default channels without it). Publishing reads none of the folders since phase
    8; Action mode reads them only for its own launches, and the owner's launches repo does not run it.
    With the folders gone, the import script had nothing left to read and was removed (above).
-3. **Drop what nothing uses any more**, in a migration of its own (migrations stay additive until
-   then): the `draft_snapshots` table, which nothing writes or reads since phase 8 (the SQLite
-   converter still names it, and goes with it). The `launches.model` column keeps telling launches
-   decided in a pull request (`legacy`) from the others, and the `import_batch` columns and
-   `launch_imports` keep the record of the import.
+3. **Drop what nothing uses any more**: the `draft_snapshots` table, which nothing writes or reads
+   since phase 8, is dropped by migration `0022_drop_draft_snapshots` (2026-11-02), with its last
+   mentions (the deletion of a launch's rows, the SQLite converter, the preview seed). It is **the
+   one agreed exception to additive-only migrations**: the owner decided it, with no `pg_dump` step
+   because he keeps his own backups; every other migration stays additive. The `launches.model`
+   column keeps telling launches decided in a pull request (`legacy`) from the others, and the
+   `import_batch` columns and `launch_imports` keep the record of the import.
 
 ## Related
 

@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-02T07:04:50.467299559Z
+updated_at: 2026-11-02T07:25:39.811631093Z
 tags:
     - status
     - roadmap
@@ -177,8 +177,9 @@ request for a new launch in the app, no drafts snapshot, the `pull_request` webh
 decided in pull requests read and published from their rows. Before that image is deployed the
 import must have run in production ([launch-import.md](launch-import.md#in-production)). On
 2026-11-02 the import's script was removed and the old draft folders' deletion from the launches repo
-was prepared for the owner to push; the drop of `draft_snapshots` is a later step the owner agrees
-to.
+was prepared for the owner to push, and migration `0022_drop_draft_snapshots` drops the
+`draft_snapshots` table: the one agreed exception to additive-only migrations
+([decisions/launch-model.md](decisions/launch-model.md#where-it-stands)).
 
 ## Next
 

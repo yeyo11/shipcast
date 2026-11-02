@@ -240,7 +240,7 @@ export async function launchConfigOf(github: Pick<GitHubSource, 'fileAt'>, launc
   return launchConfigFrom(await launchConfigText(github, launchesRepo, launch));
 }
 
-/** The text launchConfigOf parses, which the drafts snapshot keeps so the page parses it without GitHub */
+/** The text launchConfigOf parses: the repo's launch.yml at the release, or an article's on the launches repo */
 export function launchConfigText(github: Pick<GitHubSource, 'fileAt'>, launchesRepo: string, launch: Launch): Promise<string | undefined> {
   // An article's channels were chosen in the app and travel with its drafts
   return isArticle(launch)

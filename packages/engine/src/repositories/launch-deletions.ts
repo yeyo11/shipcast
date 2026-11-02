@@ -30,7 +30,6 @@ const HISTORY: ReadonlyArray<{ table: string; where: (launchId: number) => SQL }
   { table: 'metrics', where: (id) => sql`launch_id = ${id}` },
   { table: 'metric_days', where: (id) => sql`launch_id = ${id}` },
   { table: 'publish_attempts', where: (id) => sql`launch_id = ${id}` },
-  { table: 'draft_snapshots', where: (id) => sql`launch_id = ${id}` },
 ];
 
 /**

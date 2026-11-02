@@ -452,31 +452,6 @@ export const secrets = pgTable('secrets', {
 });
 
 /*
- * The drafts pull request as Shipcast last read it (docs/plans/performance-refactor.md, phase 7):
- * the launch page reads this row instead of GitHub. Written when the pull request is opened, after
- * each edit Shipcast makes, on every `pull_request` delivery and by the hourly poll; "Refresh from
- * GitHub" rewrites it on demand. One row per launch: only the latest reading matters.
- */
-export const draftSnapshots = pgTable('draft_snapshots', {
-  launchId: integer('launch_id')
-    .primaryKey()
-    .references(() => launches.id),
-  prNumber: integer('pr_number').notNull(),
-  url: text('url').notNull(),
-  branch: text('branch').notNull(),
-  // The branch's head when it was read; null when written from Shipcast's own push, before GitHub said
-  headSha: text('head_sha'),
-  // open, merged or closed
-  state: text('state').notNull(),
-  // The launch.yml the launch publishes by, as launchConfigOf reads it; null when it could not be read
-  launchYml: text('launch_yml'),
-  // Each file of the pull request: path, the text of an article or a channel's draft (null for media
-  // and data, which the page lists without reading), and its blob sha when GitHub gave it
-  files: jsonb('files').$type<Array<{ path: string; content: string | null; sha: string | null }>>().notNull(),
-  readAt: text('read_at').notNull().default(nowIso),
-});
-
-/*
  * A launch held by Shipcast (docs/decisions/launch-model.md): what it is about, how each channel
  * publishes it, the packs the AI wrote, every version of every draft, its media and its approvals.
  * Added in the model's first phase and read by nothing yet. Every table hangs on the launch with a
