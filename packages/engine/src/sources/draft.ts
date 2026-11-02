@@ -1,4 +1,4 @@
-import { formatIssues, missingPieces, parseLaunchConfig, SOURCES_PACK_TASK, type Brand, type ContentPack, type LaunchConfig } from '@shipcast/schema';
+import { formatIssues, missingPieces, packLanguages, packTaskFor, parseLaunchConfig, SOURCES_PACK_TASK, type Brand, type ContentPack, type LaunchConfig } from '@shipcast/schema';
 import { stringify } from 'yaml';
 import { chatIdOf } from '../ai/runner.ts';
 import { draftsBranch, isArticle, launchDir, projectSlug, reviewSections, type DraftFile } from '../drafts.ts';
@@ -160,7 +160,7 @@ export async function draftFromSources(
 
   let pack: ContentPack;
   try {
-    const result = await deps.aiRunner.run(SOURCES_PACK_TASK, {
+    const result = await deps.aiRunner.run(packTaskFor(SOURCES_PACK_TASK, packLanguages(brand)), {
       system,
       prompt,
       repo: { name: bundle.primary?.repo ?? `launch-${launch.id}`, ref: launch.ref, hostDir: bundle.hostDir, archive: () => s.archive(bundle.hostDir) },

@@ -4,7 +4,7 @@ import { Brand } from '@shipcast/schema';
 import { detect, type EventsPage, type GitHubEvent } from '../src/index.ts';
 import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 const VALID = 'enabled: true\nbrand: personal\n';
 

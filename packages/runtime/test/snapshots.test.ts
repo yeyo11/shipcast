@@ -18,7 +18,7 @@ import {
   type WorkDeps,
 } from '../src/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 /** Each network's API as the sync reaches it: a check, then the profile's counts */
 const networks = (async (input: string | URL | Request) => {

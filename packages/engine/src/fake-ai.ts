@@ -1,4 +1,4 @@
-import { activeChannels, type Brand, type ContentPack, type Language, type LaunchConfig } from '@shipcast/schema';
+import { activeChannels, newsletterLanguages, type Brand, type ContentPack, type Language, type LaunchConfig } from '@shipcast/schema';
 import { projectSlug } from './drafts.ts';
 import type { Launch } from './repositories/index.ts';
 
@@ -27,10 +27,14 @@ export function fakePack(launch: Launch, config: LaunchConfig, brand: Brand): Co
   const version = launch.ref.startsWith('public:') || launch.ref.startsWith('article:') ? undefined : launch.ref;
   const channels = new Set(activeChannels(config));
   const title = `${name}${version ? ` ${version}` : ''}`;
-  const url = (lang: Language, via: string) => `${brand.site}/${lang}/${slug}-${lang === 'en' ? 'launch' : 'lanzamiento'}/?ref=${via}`;
+  // The Spanish placeholder keeps its own words, as it always had; any other language reads English
+  const articleSlug = (lang: Language) => `${slug}-${lang === 'es' ? 'lanzamiento' : 'launch'}`;
+  // The channels outside the blog link the lead article: English when the brand writes in it, else its primary language
+  const lead: Language = brand.languages.blog.includes('en') ? 'en' : (brand.languages.blog[0] ?? 'en');
+  const url = (lang: Language, via: string) => `${brand.site}/${lang}/${articleSlug(lang)}/?ref=${via}`;
 
+  // Only the brand's languages: dev.to and Hashnode republish the lead one, which is among them
   const languages = new Set<Language>(brand.languages.blog);
-  if (channels.has('devto') || channels.has('hashnode')) languages.add('en');
   const needsArticle = channels.has('blog') || channels.has('devto') || channels.has('hashnode') || channels.has('linkedin');
   const article = needsArticle
     ? {
@@ -39,8 +43,8 @@ export function fakePack(launch: Launch, config: LaunchConfig, brand: Brand): Co
           [...languages].map((lang) => [
             lang,
             {
-              slug: `${slug}-${lang === 'en' ? 'launch' : 'lanzamiento'}`,
-              title: lang === 'en' ? `${title}: a test launch` : `${title}: un lanzamiento de prueba`,
+              slug: articleSlug(lang),
+              title: lang === 'es' ? `${title}: un lanzamiento de prueba` : `${title}: a test launch`,
               description: FAKE_NOTICE,
               markdown: `${FAKE_NOTICE}\n\n## What is ${name}?\n\nThe project at https://github.com/${launch.repo}${version ? `, release ${version}` : ''}.\n`,
               imageAlt: `${name}, a test launch`,
@@ -62,11 +66,11 @@ export function fakePack(launch: Launch, config: LaunchConfig, brand: Brand): Co
     ...(channels.has('hashnode') && { hashnode: { tags: ['test'] } }),
     ...(channels.has('bluesky') && { bluesky: { lang, text: `${title} (test) ${url(lang, 'bluesky')}` } }),
     ...(channels.has('mastodon') && { mastodon: { lang, text: `${short} ${url(lang, 'mastodon')}` } }),
-    ...(channels.has('telegram') && { telegram: { text: `${short} ${url('en', 'telegram')}` } }),
-    ...(channels.has('discord') && { discord: { text: `${short} ${url('en', 'discord')}` } }),
-    ...(channels.has('threads') && { threads: { text: `${title} (test) ${url('en', 'threads')}` } }),
+    ...(channels.has('telegram') && { telegram: { text: `${short} ${url(lead, 'telegram')}` } }),
+    ...(channels.has('discord') && { discord: { text: `${short} ${url(lead, 'discord')}` } }),
+    ...(channels.has('threads') && { threads: { text: `${title} (test) ${url(lead, 'threads')}` } }),
     ...(channels.has('linkedin') && { linkedin: { text: short } }),
-    ...(channels.has('githubDiscussions') && { githubDiscussions: { title: `${title} (test)`, body: `${FAKE_NOTICE}\n\n${url('en', 'github')}` } }),
+    ...(channels.has('githubDiscussions') && { githubDiscussions: { title: `${title} (test)`, body: `${FAKE_NOTICE}\n\n${url(lead, 'github')}` } }),
     ...(channels.has('instagram') && {
       instagram: {
         caption: `${title}. Link in bio. #test`,
@@ -81,7 +85,7 @@ export function fakePack(launch: Launch, config: LaunchConfig, brand: Brand): Co
     ...(channels.has('newsletter') &&
       brand.newsletter && {
         newsletter: Object.fromEntries(
-          Object.keys(brand.newsletter.lists).map((l) => [l, { subject: `${title} (test)`, previewText: 'A placeholder issue', markdown: FAKE_NOTICE }]),
+          newsletterLanguages(brand).map((l) => [l, { subject: `${title} (test)`, previewText: 'A placeholder issue', markdown: FAKE_NOTICE }]),
         ) as ContentPack['newsletter'],
       }),
   };

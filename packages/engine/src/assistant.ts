@@ -1,4 +1,4 @@
-import { ADAPT_TARGETS, AI_TASK_DEFINITIONS, channelInSentence, editorProfile, formatInstruction, languageName, ShipcastError, PIECE_LIMITS, stripFormat, SYNTAX_NAMES, type AdaptChannelId, type EditorProfile, type Syntax, type Brand, type ContentPack as Pack, type CheckAnswer } from '@shipcast/schema';
+import { ADAPT_TARGETS, AI_TASK_DEFINITIONS, channelInSentence, editorProfile, formatInstruction, languageName, ShipcastError, translationTarget, PIECE_LIMITS, stripFormat, SYNTAX_NAMES, type AdaptChannelId, type EditorProfile, type Syntax, type Brand, type ContentPack as Pack, type CheckAnswer } from '@shipcast/schema';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { AiTaskRunner } from './ai/runner.ts';
@@ -180,7 +180,10 @@ export const TITLE_COUNT = 5;
  */
 export function buildActionPrompt(input: ActionInput, context: AssistantContext, brand: Brand, options: { tone?: string } = {}): AssistantPrompt {
   const lang = context.lang ? languageName(context.lang) : undefined;
-  const other = context.lang === 'es' ? 'English' : context.lang === 'en' ? 'Spanish' : undefined;
+  const into = translationTarget(context.lang, brand.languages.blog);
+  const other = into && languageName(into);
+  // A text in no known language goes into the brand's other language: its first two, both ways
+  const [first, second] = brand.languages.blog.map(languageName);
   const task = ((): string => {
     switch (input.action) {
       case 'improve':
@@ -190,7 +193,9 @@ export function buildActionPrompt(input: ActionInput, context: AssistantContext,
       case 'translate':
         return other
           ? `Translate the passage faithfully into ${other}. Keep the formatting, the code and every link as they are.`
-          : 'Translate the passage faithfully: into Spanish if it is in English, into English if it is in Spanish. Keep the formatting, the code and every link as they are.';
+          : second
+            ? `Translate the passage faithfully: into ${second} if it is in ${first}, into ${first} if it is in ${second}. Keep the formatting, the code and every link as they are.`
+            : `Translate the passage faithfully into ${first}. Keep the formatting, the code and every link as they are.`;
       case 'titles':
         return `Propose ${TITLE_COUNT} titles for it${lang ? `, in ${lang}` : ''}: short, specific, no clickbait, no colon-heavy formulas. One per line, with no numbering, quotes or anything else.`;
       case 'adapt': {

@@ -45,7 +45,7 @@ function mockProvider(model: MockLanguageModelV4): AiProviderDefinition {
   });
 }
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me', languages: { blog: ['en', 'es'] } });
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  blog: off\n  devto: off\n  instagram: off\n  githubDiscussions: off\n  mastodon: off\n';
 
 async function demoRepo(withLaunchYml = true): Promise<string> {

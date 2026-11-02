@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T23:21:05.33725432Z
-updated_at: 2026-10-27T23:21:28.958675931Z
+updated_at: 2026-11-02T23:16:03.670711185Z
 tags:
     - brands
     - config
@@ -61,11 +61,26 @@ Every other social post is written in English and links the English article. Lin
 and description read from the article as merged. LinkedIn takes one post per launch, so there is no
 "both languages".
 
+## Languages
+
+`languages.blog` is the list of languages the blog is written in, as ISO 639-1 codes: `[en]`,
+`[en, es]`, `[de]`, `[fr, en]`. The order matters: the first is the **primary language**, where Write
+and Sources start an article and what an API call or MCP tool without a `lang` takes. A brand that
+names none writes in English alone (`[en]`, since 2026-11-03; it was `[en, es]` before, which the
+owner's brand now says explicitly).
+
+Every launch writes its article in each of these languages and no other, and the newsletter one issue
+per language it has a list for (`newsletter.lists`, keyed by the same codes). Which version every
+channel links, and dev.to and Hashnode republish, is English when the article has it and the primary
+language otherwise ([content-pack.md](content-pack.md#languages)). The app's language switches show
+the languages a launch's drafts are in, and none for a launch in one language. An article or a launch
+from sources in a language the brand does not list is refused before anything is claimed.
+
 ## What the schema has to enforce
 
 The brand schema in `packages/schema` validates this file: `id` and `displayName` required, handles
-and `support` optional (a channel without a handle cannot publish), languages from `en` and `es`, the
-blog in at least one, X and LinkedIn optional; `languages.linkedin` is a single language. A launch's
+and `support` optional (a channel without a handle cannot publish), languages as ISO 639-1 codes (two
+lowercase letters, any language), the blog in at least one and each once, `[en]` when unset, X and LinkedIn optional; `languages.linkedin` is a single language. A launch's
 `launch.yml` names its brand by `id`, and the engine refuses a launch whose brand does not match the
 launches repo it would write to — the mechanical form of "brands never mix".
 

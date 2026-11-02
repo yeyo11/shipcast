@@ -10,7 +10,7 @@ import { memoryRegistry } from '../src/testing/index.ts';
  * primary repo's. Without `furtherRepos` (Action mode) nothing changes.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const NOW = new Date('2026-10-30T12:00:00Z');
 
 async function published(registry: Repositories) {

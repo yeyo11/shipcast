@@ -8,7 +8,7 @@ const brand = Brand.parse({
   id: 'personal',
   displayName: 'José Antonio Garrido',
   site: 'https://josegarrido.dev',
-  github: 'yeyo11',
+  github: 'yeyo11', languages: { blog: ['en', 'es'] },
   tone: 'First person, didactic and direct.',
 });
 const config = LaunchConfig.parse({

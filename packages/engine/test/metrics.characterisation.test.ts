@@ -12,7 +12,7 @@ import { aLaunch, aPublishedLaunch, FakeConnectors, FakeGitHub, memoryRegistry, 
  * leaves.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 test('one run over several launches: each readable piece is asked once, the rest never; a failing source is one problem', async () => {
   const registry = await memoryRegistry();

@@ -14,7 +14,7 @@ import { jsonModel, mockRunner, scriptedModel, submitParts } from '../src/testin
  * refused. The runner's own loop, validation and errors are in ai-runner.test.ts.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
 const at = '2026-10-25T00:00:00.000Z';
 const launch: Launch = { id: 1, repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal', status: 'detected', detail: null, createdAt: at, updatedAt: at };

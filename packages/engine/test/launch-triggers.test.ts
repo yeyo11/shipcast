@@ -11,7 +11,7 @@ import { FakeGitHub, memoryRegistry, mockRunner, scriptedModel, submitParts } fr
  * claimEvent is today's, which detect.test.ts pins.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const VALID = 'enabled: true\nbrand: personal\n';
 
 const release = (id: string, repo: string, tag: string, prerelease = false): GitHubEvent => ({
@@ -125,7 +125,7 @@ test('a release whose launch the owner removed is not launched again', async () 
 
 test('a repo with no launch.yml is launched on the rule’s channels, which its draft reads', async () => {
   const { registry, github, options } = await setup(
-    { 'yeyo11/launches/brand.yml@HEAD': 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n' },
+    { 'yeyo11/launches/brand.yml@HEAD': 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\nlanguages:\n  blog: [en, es]\n' },
     [rule({ id: 'everything', event: 'release', channels: ['blog', 'bluesky'] })],
   );
   const outcome = await claimEvent(release('1', 'yeyo11/plain', 'v1.0.0'), options);

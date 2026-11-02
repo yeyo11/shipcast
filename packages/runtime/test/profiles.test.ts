@@ -10,7 +10,7 @@ import { accountSecretKey, MemoryStore, profileConnector, profileDeps, runProfil
  * what it was asked: an account's own credential reaches its own instance and nothing else.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 function fakeMastodon(seen: string[]): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {

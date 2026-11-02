@@ -41,7 +41,7 @@ function sender(options: PreviewWorldOptions): Send {
 }
 
 /** The issue's language, from the campaign name the engine gives it (`claudio v1 (en)`) */
-const issueLanguage = (campaign: BrevoCampaign) => /\((en|es)\)$/.exec(campaign.name)?.[1] ?? 'en';
+const issueLanguage = (campaign: BrevoCampaign) => /\(([a-z]{2})\)$/.exec(campaign.name)?.[1] ?? 'en';
 
 /**
  * Every built-in channel's publisher. Mastodon and Reddit answer the way their networks do when a

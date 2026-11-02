@@ -22,7 +22,7 @@ import {
 } from '../src/index.ts';
 import { MemoryTokenBucket } from '../src/redis/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 /** Google faked: the token endpoint, the channel, and the upload session; every request recorded */
 function google(log: string[] = []): typeof fetch {

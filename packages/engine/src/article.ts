@@ -2,8 +2,11 @@ import { articleImageFiles, placeImages, type ArticleImage } from './article-ima
 import {
   AI_TASK_DEFINITIONS,
   CHANNELS,
+  languageName,
   LaunchConfig,
   missingPieces,
+  packLanguages,
+  packTaskFor,
   type Brand,
   type Channel,
   type ContentPack,
@@ -65,11 +68,15 @@ export async function generateArticlePack(
   deps: Pick<PipelineDeps, 'aiRunner' | 'aiTexts' | 'launchesRepo'>,
 ): Promise<{ ok: true; pack: ContentPack; config: LaunchConfig } | { ok: false; problems: string[] }> {
   const config = articleConfig(brand, input.channels);
+  // The pack has a version for each of the brand's languages and no other: the owner's must be one
+  if (!brand.languages.blog.includes(input.lang)) {
+    return { ok: false, problems: [`the blog is not written in ${languageName(input.lang)} (${input.lang}); brand.yml's languages.blog is ${brand.languages.blog.join(', ')}`] };
+  }
   let pack: ContentPack;
   try {
     // No repo: the answer validated against the pack's schema and repaired once by the runner
     const { prompt, system } = buildArticlePrompt(input, brand, config, deps.launchesRepo, await aiTextsOf(deps));
-    const result = await deps.aiRunner.run(AI_TASK_DEFINITIONS.article, { system, prompt });
+    const result = await deps.aiRunner.run(packTaskFor(AI_TASK_DEFINITIONS.article, packLanguages(brand)), { system, prompt });
     pack = result.output;
   } catch (error) {
     return { ok: false, problems: [error instanceof Error ? error.message : String(error)] };

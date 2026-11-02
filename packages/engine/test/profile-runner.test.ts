@@ -10,7 +10,7 @@ import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRu
  * and nothing is stored.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 async function world(): Promise<{ registry: Repositories; accountId: number }> {
   const registry = await memoryRegistry();

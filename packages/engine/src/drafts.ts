@@ -1,4 +1,4 @@
-import { articleLink, CHANNEL_DEFINITIONS, ContentPack, discussionDraft, draftFile, hasDemo, type Brand, type Channel, type ChannelDefinition, type LaunchConfig, type PublishMode } from '@shipcast/schema';
+import { articleLink, CHANNEL_DEFINITIONS, ContentPack, discussionDraft, draftFile, hasDemo, imageLanguage, languageName, leadLanguage, newsletterLanguages, type Brand, type Channel, type ChannelDefinition, type Language, type LaunchConfig, type PublishMode } from '@shipcast/schema';
 import type { GitHubSource } from './github.ts';
 import { issueDraftBody } from './newsletter.ts';
 
@@ -17,9 +17,21 @@ const q = (value: string): string => JSON.stringify(value);
  * and a question that invites an answer. Links in comments are not clickable either, hence the bio.
  */
 export function instagramComment(pack: ContentPack, brand: Brand): string {
-  const url = articleLink(pack, brand.site, 'en', 'es').replace(/^https:\/\//, '');
+  const url = articleLink(pack, brand.site, leadLanguage(pack.article, brand)).replace(/^https:\/\//, '');
   return `Full write-up: ${url} (link in bio). What would you use it for?`;
 }
+
+/** The title the launch's images show: the English article's for a brand that writes in English (languages.ts) */
+const coverTitle = (pack: ContentPack, brand: Pick<Brand, 'languages'>): string | undefined => {
+  const lang = imageLanguage(pack.article, brand);
+  return lang && pack.article?.[lang]?.title;
+};
+
+/** The language dev.to and Hashnode republish, named for their draft: English unless the pack has none */
+const republished = (pack: ContentPack, brand: Pick<Brand, 'languages'>): string => {
+  const lead = leadLanguage(pack.article, brand);
+  return !lead || lead === 'en' ? 'English' : languageName(lead);
+};
 
 /** Each subreddit's post is a draft of its own, edited like a discussion: a title line, then the body */
 export const redditDraftFile = (subreddit: string): string => draftFile('reddit', subreddit).name;
@@ -84,6 +96,19 @@ export function asPublishedDirectly(files: DraftFile[]): DraftFile[] {
   );
 }
 
+/** An article's file in the launches repo: `src/content/posts/<lang>/<slug>.md`, in any language */
+export const ARTICLE_PATH = /^src\/content\/posts\/([a-z]{2})\/[^/]+\.md$/;
+
+/**
+ * The key the blog pairs an article's translations by: the slug of the first version in the brand's
+ * order, English first (as every launch before languages were configurable had it), so a launch's
+ * key never moves when a language is added after it.
+ */
+export function translationKeyOf(pack: Pick<ContentPack, 'article'>, brand: Pick<Brand, 'languages'>): string {
+  const lead = leadLanguage(pack.article, brand);
+  return (lead && pack.article?.[lead]?.slug) ?? '';
+}
+
 /**
  * An article written again over one already on the blog (a later launch whose slug is the same, or the
  * same launch drafted twice) keeps the day it was first published and says when it changed:
@@ -94,7 +119,7 @@ export async function keepPubDates(files: readonly DraftFile[], github: Pick<Git
   const today = date.toISOString().slice(0, 10);
   return Promise.all(
     files.map(async (file) => {
-      if (!('content' in file) || !/^src\/content\/posts\/(en|es)\/[^/]+\.md$/.test(file.path)) return file;
+      if (!('content' in file) || !ARTICLE_PATH.test(file.path)) return file;
       const existing = await github.fileAt(launchesRepo, file.path, 'HEAD');
       const first = existing && /^pubDate: (\S+)$/m.exec(existing)?.[1];
       if (!first || first === today) return file;
@@ -123,11 +148,12 @@ export function renderDrafts(
   const files: DraftFile[] = [];
   const dir = launchDir(launch);
   const mode = (c: Channel) => config.publishing[c];
-  // Each language has its own slug; the key the blog pairs translations by is the first of them
-  const translationKey = pack.article?.en?.slug ?? pack.article?.es?.slug ?? '';
+  // Each language has its own slug; the key the blog pairs translations by is the lead one's
+  const translationKey = translationKeyOf(pack, brand);
 
   if (pack.article && mode('blog') !== 'off') {
-    for (const lang of ['en', 'es'] as const) {
+    // Only the languages the brand writes in: a version in another one stays in pack.json, unpublished
+    for (const lang of brand.languages.blog) {
       const version = pack.article[lang];
       if (!version) continue;
       const frontMatter = [
@@ -150,12 +176,12 @@ export function renderDrafts(
 
   if (pack.devto && mode('devto') !== 'off') {
     files.push(
-      channelDraft(dir, 'devto', mode('devto'), `Republishes the English article with its canonical URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`),
+      channelDraft(dir, 'devto', mode('devto'), `Republishes the ${republished(pack, brand)} article with its canonical URL set to ${articleLink(pack, brand.site, leadLanguage(pack.article, brand))}.\n\nTags: ${pack.devto.tags.map((t) => `\`${t}\``).join(', ')}`),
     );
   }
   if (pack.hashnode && mode('hashnode') !== 'off') {
     files.push(
-      channelDraft(dir, 'hashnode', mode('hashnode'), `Republishes the English article with its original URL set to ${articleLink(pack, brand.site, 'en')}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`),
+      channelDraft(dir, 'hashnode', mode('hashnode'), `Republishes the ${republished(pack, brand)} article with its original URL set to ${articleLink(pack, brand.site, leadLanguage(pack.article, brand))}.\n\nTags: ${pack.hashnode.tags.map((t) => `\`${t}\``).join(', ')}`),
     );
   }
   if (pack.telegram && mode('telegram') !== 'off') {
@@ -182,7 +208,7 @@ export function renderDrafts(
   if (pack.instagram && mode('instagram') !== 'off') {
     const ig = pack.instagram;
     const slides = [
-      `Cover: ${pack.article?.en?.title ?? pack.project.name}. ${ig.summary}`,
+      `Cover: ${coverTitle(pack, brand) ?? pack.project.name}. ${ig.summary}`,
       ...(hasDemo(config) ? ['The demo, as a video'] : []),
       ...ig.slides.map((s) => `${s.title}: ${s.text}`),
       'Closing: the full write-up is in my bio',
@@ -214,7 +240,8 @@ export function renderDrafts(
     }
   }
   if (pack.newsletter && mode('newsletter') !== 'off') {
-    for (const lang of ['en', 'es'] as const) {
+    // One issue per language the newsletter has a list for (the blog's when brand.yml has none yet)
+    for (const lang of newsletterLanguages(brand)) {
       const issue = pack.newsletter[lang];
       if (issue) {
         files.push(channelDraft(dir, 'newsletter', mode('newsletter'), issueDraftBody(issue), lang));
@@ -280,13 +307,16 @@ export function reviewSections(pack: ContentPack, config: LaunchConfig): string[
   ];
 }
 
+// The screenshot's alt text in the article's language; one Shipcast has no word for says it in English
+const SCREENSHOT: Partial<Record<Language, string>> = { en: 'screenshot', es: 'captura de pantalla', fr: 'capture d’écran', de: 'Bildschirmfoto', it: 'screenshot', pt: 'captura de ecrã' };
+
 /**
  * Puts the deployed project's first screenshot after the article's opening paragraph, where a reader
  * (and an image search) meets it with the paragraph that says what the project is.
  */
-export function withScreenshot(markdown: string, screenshot: string | undefined, project: string, lang: 'en' | 'es'): string {
+export function withScreenshot(markdown: string, screenshot: string | undefined, project: string, lang: Language): string {
   if (!screenshot || markdown.includes(screenshot)) return markdown;
-  const alt = lang === 'es' ? `${project}, captura de pantalla` : `${project}, screenshot`;
+  const alt = `${project}, ${SCREENSHOT[lang] ?? SCREENSHOT.en}`;
   const end = markdown.indexOf('\n\n');
   const image = `![${alt}](${screenshot})`;
   return end === -1 ? `${markdown}\n\n${image}` : `${markdown.slice(0, end)}\n\n${image}${markdown.slice(end)}`;

@@ -20,7 +20,7 @@ import {
 } from '../src/index.ts';
 import { FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'From brand.yml.' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] }, tone: 'From brand.yml.' });
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal' });
 const at = '2026-10-25T00:00:00.000Z';
 const launch: Launch = { id: 1, repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal', status: 'published', detail: null, createdAt: at, updatedAt: at };

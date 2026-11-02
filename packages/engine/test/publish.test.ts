@@ -5,7 +5,7 @@ import { Brand, parseLaunchConfig, draftBody, type Channel } from '@shipcast/sch
 import { absoluteLinks, cancelScheduledPost, deletePost, publishLaunch, PublishingService, reschedulePost, scheduleLaunch, ScheduleRefused, type Repositories, type Publishers } from '../src/index.ts';
 import { FakeConnectors, FakeGitHub, memoryRegistry } from '../src/testing/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const D = 'launches/claudio/v0.8.2';
 
 const pack = {
@@ -154,7 +154,7 @@ test('the newsletter sends one campaign per language with the edited issue, and 
     id: 'personal',
     displayName: 'Me',
     site: 'https://josegarrido.dev',
-    github: 'yeyo11',
+    github: 'yeyo11', languages: { blog: ['en', 'es'] },
     newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3, es: 4 } },
   });
   const issue = (s: string) => ({ subject: `${s} subject`, previewText: `${s} preview`, markdown: `${s} body` });
@@ -200,7 +200,7 @@ test('a newsletter with nobody subscribed is recorded once and not retried', asy
     id: 'personal',
     displayName: 'Me',
     site: 'https://josegarrido.dev',
-    github: 'yeyo11',
+    github: 'yeyo11', languages: { blog: ['en', 'es'] },
     newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3 } },
   });
   const files = {
@@ -281,7 +281,7 @@ test('a newsletter issue that went out is kept when the other language fails, an
     id: 'personal',
     displayName: 'Me',
     site: 'https://josegarrido.dev',
-    github: 'yeyo11',
+    github: 'yeyo11', languages: { blog: ['en', 'es'] },
     newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3, es: 4 } },
   });
   const issue = { subject: 's', previewText: 'p', markdown: 'm' };
@@ -533,7 +533,7 @@ test('the newsletter’s scheduled row goes once its issues are out', async () =
     id: 'personal',
     displayName: 'Me',
     site: 'https://josegarrido.dev',
-    github: 'yeyo11',
+    github: 'yeyo11', languages: { blog: ['en', 'es'] },
     newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3 } },
   });
   const files = {

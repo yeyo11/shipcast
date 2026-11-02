@@ -27,7 +27,7 @@ import {
  * invalid fail the launch with a readable problem and, on Claudio, the chat to read.
  */
 
-const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
+const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\nlanguages:\n  blog: [en, es]\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n  reddit: off\n';
 
 const article = { title: 'claudio', description: 'd', markdown: 'b' };

@@ -1,4 +1,5 @@
 import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import type { Language } from '../channels.ts';
 
 /*
  * YouTube: two videos a launch, a vertical Short and a horizontal video, drawn by packages/assets from
@@ -33,7 +34,7 @@ export interface YouTubeVideoPiece {
   title: string;
   description: string;
   tags: string[];
-  lang: 'en' | 'es';
+  lang: Language;
   scenes: YouTubeScene[];
 }
 

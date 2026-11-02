@@ -10,7 +10,7 @@ import { FakeGitHub, memoryRegistry, MemoryMediaStore } from '../src/testing/ind
  * and removing the article says how many posts still link it.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const LAUNCHES = 'yeyo11/launches';
 
 async function setup(options: { pullRequestState?: 'open' | 'merged' | 'closed' } = {}) {

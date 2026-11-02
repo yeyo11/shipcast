@@ -20,7 +20,7 @@ import {
   type SlideImage,
 } from '@shipcast/assets';
 import { playwrightCapture, type SiteCapture } from '@shipcast/capture';
-import { hasDemo, lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
+import { hasDemo, imageVersion, lookOf, PROJECTS_PATH, withCover, type Brand, type ContentPack, type LaunchConfig, type ProjectLook, type Projects } from '@shipcast/schema';
 import { isArticle, launchDir, projectLabel, projectSlug, type DraftFile } from './drafts.ts';
 import type { Launch } from './repositories/index.ts';
 import type { Checkout } from './workspace.ts';
@@ -136,8 +136,8 @@ export async function buildAssets(options: AssetOptions): Promise<BuiltAssets> {
     {
       project: pack.project.name,
       look,
-      title: pack.article?.en?.title ?? pack.project.name,
-      pitch: pack.article?.en?.description ?? pack.analysis.summary,
+      title: imageVersion(pack.article, brand)?.title ?? pack.project.name,
+      pitch: imageVersion(pack.article, brand)?.description ?? pack.analysis.summary,
       version: pack.project.version,
       author: brand.displayName,
       site: new URL(brand.site).host,
@@ -174,7 +174,7 @@ async function buildCarousel(options: AssetOptions, dir: string, look: ProjectLo
   // Every slide is in English: an article's own name (its title as written) would mix in another language
   const project = projectLabel(pack, launch);
   const site = new URL(brand.site).host;
-  const title = pack.article?.en?.title ?? pack.project.name;
+  const title = imageVersion(pack.article, brand)?.title ?? pack.project.name;
   const cover = listed ?? (await image(http, `${brand.site}${look.cover ?? coverPath(launch)}`)) ?? {
     bytes: await renderIllustration(look),
     mimeType: 'image/png' as const,

@@ -8,7 +8,7 @@ import { memoryRegistry } from '../src/testing.ts';
 import { mockRunner, textParts } from '../src/testing/index.ts';
 
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 /** One streamed answer of JSON text: how the runner gets a structured answer with no repo to read */
 function answer(value: unknown) {

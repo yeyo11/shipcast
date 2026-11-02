@@ -11,7 +11,7 @@ import { aPublishedLaunch, memoryRegistry } from '../src/testing/index.ts';
  * made before the permission was asked for says why once a day and never stops the counters.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const HOUR = 3_600_000;
 
 async function videos() {

@@ -58,7 +58,7 @@ export interface Review {
 }
 
 function describe(path: string, dir: string): Omit<Draft, 'content' | 'url'> {
-  const article = /^src\/content\/posts\/(en|es)\//.exec(path);
+  const article = /^src\/content\/posts\/([a-z]{2})\//.exec(path);
   if (article) return { path, label: `Article (${article[1]})`, kind: 'article' };
   const name = path.split('/').at(-1) ?? path;
   // A channel's draft is named as its definition says, and labelled with the heading it is written with

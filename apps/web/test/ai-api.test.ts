@@ -14,7 +14,7 @@ const unused = async (): Promise<never> => {
 };
 
 const CLAUDIO_TOKEN = 'claudio-token-never-served';
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'From brand.yml.' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] }, tone: 'From brand.yml.' });
 
 async function setup(options: { claudio?: boolean; wired?: boolean } = {}) {
   const registry = await memoryRegistry();

@@ -29,7 +29,7 @@ import {
  * network passes these or the suite says what it lacks.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const noNetwork = (async () => {
   throw new Error('no network in this test');
 }) as typeof fetch;

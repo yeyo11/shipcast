@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { chapterLines, durationSeconds, renderVideo, type Scene, type VideoFormat, type VideoRequest } from '@shipcast/assets';
 import { planScreenshots } from '@shipcast/capture';
 import { ConnectorError, type YouTubePublished, type YouTubeVideo } from '@shipcast/connectors';
-import { draftBody, draftFile, lookOf, parseYouTubeDraft, YOUTUBE_VIDEOS, type LinkTracking, type YouTubePiece, type YouTubeScene, type YouTubeVideoPart } from '@shipcast/schema';
+import { draftBody, draftFile, languageName, leadLanguage, lookOf, parseYouTubeDraft, YOUTUBE_VIDEOS, type Language, type LinkTracking, type YouTubePiece, type YouTubeScene, type YouTubeVideoPart } from '@shipcast/schema';
 import { isArticle, projectLabel, projectSlug } from '../drafts.ts';
 import { loadProjects } from '../pipeline.ts';
 import type { PublishContext, PublishStrategy } from '../publish.ts';
@@ -39,7 +39,8 @@ export const youtubePrivacyKey = (postId: number) => `youtube-privacy:${postId}`
 export const youtubeKind = (part: YouTubeVideoPart): Post['kind'] => `post:${part}`;
 
 const FORMAT: Record<YouTubeVideoPart, VideoFormat> = { short: 'short', video: 'horizontal' };
-const CAPTION_NAME = { en: 'English', es: 'Español' } as const;
+// A caption track is named in its own language where Shipcast knows the name, else in English (languages.ts)
+const CAPTION_NAME: Partial<Record<Language, string>> = { en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch', it: 'Italiano', pt: 'Português' };
 const DESCRIPTION_MAX = 5000;
 
 export interface YouTubeStrategyOptions {
@@ -101,11 +102,12 @@ async function launchMedia(context: PublishContext, work: string): Promise<Media
 }
 
 /**
- * The PNG and JPEG images of the English article's body (the one every channel links), as addresses
+ * The PNG and JPEG images of the lead article's body (the one every channel links), as addresses
  * on the article's own site; an image of another site is left out, since its bytes are not the launch's
  */
-export function articleImages(context: Pick<PublishContext, 'pack' | 'articleUrl'>): string[] {
-  const markdown = context.pack.article?.en?.markdown ?? context.pack.article?.es?.markdown ?? '';
+export function articleImages(context: Pick<PublishContext, 'pack' | 'articleUrl'> & Partial<Pick<PublishContext, 'brand'>>): string[] {
+  const lead = leadLanguage(context.pack.article, context.brand);
+  const markdown = (lead && context.pack.article?.[lead]?.markdown) ?? '';
   const site = new URL(context.articleUrl);
   const urls: string[] = [];
   for (const match of markdown.matchAll(/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?/g)) {
@@ -204,7 +206,7 @@ export function youtubeStrategy(options: YouTubeStrategyOptions = {}): PublishSt
                 bytes: new Uint8Array(await readFile(output)),
                 short: part === 'short',
                 privacy: 'public',
-                captions: [{ lang: video.lang, name: CAPTION_NAME[video.lang], srt: rendered.srt }],
+                captions: [{ lang: video.lang, name: CAPTION_NAME[video.lang] ?? languageName(video.lang), srt: rendered.srt }],
                 thumbnail: media.cover,
               };
             } catch (error) {

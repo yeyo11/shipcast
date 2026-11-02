@@ -6,7 +6,7 @@ import { channelsText } from '../sources/draft.ts';
 import { checkSources, InvalidSources, primaryRepoOf, type SourceInput, type SourcesLaunchInput } from '../sources/model.ts';
 import type { PageFetcher } from '../sources/pages.ts';
 import { sanitiseUpload } from '../sources/upload.ts';
-import { LaunchRefused, type LaunchService } from './launches.ts';
+import { LaunchRefused, notBrandLanguage, type LaunchService } from './launches.ts';
 
 export interface SourcesServiceDeps {
   /** The manual claim of a repo's release, with its pre-flight: what a launch with a primary repo is claimed by */
@@ -80,6 +80,7 @@ export class SourcesService {
       if (error instanceof InvalidSources) throw new LaunchRefused('invalid', error.message);
       throw error;
     }
+    if (input.lang !== undefined && !brand.languages.blog.includes(input.lang)) throw new LaunchRefused('invalid', notBrandLanguage(input.lang, brand));
     const title = input.title.trim();
     // Everything that can be refused is read before the claim, so a refused page never burns one
     const rows = await this.#rows(input.sources);

@@ -4,7 +4,7 @@ import { Brand } from '@shipcast/schema';
 import { ADAPT_TARGETS, AssistantRefused, buildActionPrompt, buildChat, checkAgainstCode, LOCKED_ASSISTANT_ARTICLE_RULES, LOCKED_ASSISTANT_LAUNCH_RULES, parseTitles, type AssistantContext } from '../src/index.ts';
 import { mockRunner, scriptedModel, textParts } from '../src/testing/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'plain and direct.' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] }, tone: 'plain and direct.' });
 
 const article: AssistantContext = { kind: 'article', lang: 'en', document: 'Intro.\n\nI built a small tool that reads my repos.\n\nThe end.' };
 const launch: AssistantContext = {

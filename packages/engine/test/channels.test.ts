@@ -24,7 +24,7 @@ import { memoryRegistry } from '../src/testing.ts';
  * check what each derives, and the drift the tables written by hand had (docs/plans/performance-refactor.md).
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const launch = (await (await memoryRegistry()).launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.9.0', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
 const article = { title: 'claudio', description: 'Claude Code as a service.', markdown: 'Body.' };
 const pack = ContentPack.parse({

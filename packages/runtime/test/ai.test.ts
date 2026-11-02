@@ -5,7 +5,7 @@ import { fakeClaudio, fakeJson, memoryRegistry } from '@shipcast/engine/testing'
 import { AiError, Brand } from '@shipcast/schema';
 import { accountSecretKey, aiProviderCheck, aiRunnerFor, aiRunSetup, Flags, buildConnector, MemoryStore, NETWORKS, type AiDeps } from '../src/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 async function deps(): Promise<AiDeps> {
   return { env: {}, registry: await memoryRegistry(), secrets: new MemoryStore(), claudio: () => ({ url: 'http://claudio:8798', token: 't' }), brand: async () => brand };

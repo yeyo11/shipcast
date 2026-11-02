@@ -13,7 +13,7 @@ import { aLaunch, FakeClock, FakeConnectors, FakeGitHub, LAUNCHES_REPO, memoryRe
  * behaviour looks wrong, the test says so and still pins it.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const D = 'launches/claudio/v1.0.0';
 const failed = (launchId: number, channel: string) => `publish-failed:${launchId}:${channel}`;
 

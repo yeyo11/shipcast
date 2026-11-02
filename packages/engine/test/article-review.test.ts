@@ -4,7 +4,7 @@ import { articleConfig, articleSlug, claimArticle, draftArticle, draftLaunch, is
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { FakeGitHub, memoryRegistry, mockRunner, promptOf, submitParts, textParts } from '../src/testing/index.ts';
 
-const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
+const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\nlanguages:\n  blog: [en, es]\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n';
 
 /** The launches repo whose drafts pull request is #7, launch/claudio-v0.9.0 */

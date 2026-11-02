@@ -1,6 +1,6 @@
 import { parseDocument } from 'yaml';
 import { draftOf, type Channel, type LaunchConfig } from '@shipcast/schema';
-import { launchDir } from './drafts.ts';
+import { ARTICLE_PATH, launchDir } from './drafts.ts';
 import type { ChannelRow, Launch, StoredDraft, StoredMediaRow, StoredPack } from './repositories/index.ts';
 
 /*
@@ -28,12 +28,10 @@ export const MAIN_PIECE = 'post';
 /** The channel the release notes are drafted under: they are a draft, not a channel that publishes */
 export const RELEASE_NOTES = 'releaseNotes';
 
-const ARTICLE = /^src\/content\/posts\/(en|es)\/[^/]+\.md$/;
-
 /** What a file of the launch's drafts pull request is stored as */
 export function storedFile(launch: Pick<Launch, 'repo' | 'ref'>, path: string): StoredFile {
   const dir = launchDir(launch);
-  const article = ARTICLE.exec(path);
+  const article = ARTICLE_PATH.exec(path);
   if (article) return { kind: 'draft', channel: 'blog', piece: `article:${article[1]}` };
   if (path === `${dir}/pack.json`) return { kind: 'pack' };
   if (path === `${dir}/launch.yml`) return { kind: 'channels' };

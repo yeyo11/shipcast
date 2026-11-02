@@ -21,8 +21,8 @@ export type SourceInput =
 export interface SourcesLaunchInput {
   /** What the launch is called; a launch with no repo takes its blog slug from it */
   title: string;
-  /** The language the owner wrote the title and the text in */
-  lang: Language;
+  /** The language the owner wrote the title and the text in: one of the brand's, its primary one when left out */
+  lang?: Language;
   /** The channels besides the blog, for a launch with no repo; a repo's launch.yml decides for one with a primary repo */
   channels: Channel[];
   sources: SourceInput[];

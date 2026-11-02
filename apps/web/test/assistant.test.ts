@@ -7,7 +7,7 @@ import { readEvents, type AssistantEvent } from '../src/components/assistant/pro
 import { handleAssistant, parseAssistantRequest, sessionTitle, type AssistantDeps } from '../src/server/assistant.ts';
 import { tourSteps } from '../src/components/tour/steps.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const at = '2026-10-26T00:00:00.000Z';
 const release: Launch = { id: 7, repo: 'yeyo11/claudio', ref: 'v1.0.0', trigger: 'release', kind: 'launch', brand: 'personal', status: 'drafted', detail: null, createdAt: at, updatedAt: at };
 

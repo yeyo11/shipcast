@@ -1,5 +1,5 @@
 import { and, asc, count, eq, gte, inArray, like, max, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import type { Channel, Language } from '@shipcast/schema';
+import { isLanguage, type Channel, type Language } from '@shipcast/schema';
 import type { Database } from '../db/connect.ts';
 import { nowIso, posts } from '../db/schema.ts';
 import { lockFor, transaction } from './transaction.ts';
@@ -47,8 +47,8 @@ export interface NewPost {
 
 /** The language of an `article:<lang>` or `issue:<lang>` piece */
 export function kindLanguage(kind: PostKind): Language | undefined {
-  const lang = /^(?:article|issue):(en|es)$/.exec(kind)?.[1];
-  return lang === 'en' || lang === 'es' ? lang : undefined;
+  const lang = /^(?:article|issue):([a-z]{2})$/.exec(kind)?.[1];
+  return isLanguage(lang) ? lang : undefined;
 }
 
 function toPost(row: typeof posts.$inferSelect): Post {

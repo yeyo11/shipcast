@@ -10,7 +10,7 @@ import { aPublishedLaunch, memoryRegistry } from '../src/testing/index.ts';
  * the post's on /stats, where it is a row of its own. And a batch reader's partial failures are said.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const HOUR = 3_600_000;
 
 async function withStory() {

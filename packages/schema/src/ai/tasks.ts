@@ -1,5 +1,6 @@
 import type { z } from 'zod';
-import { AiContentPack, AiSourcesPack, contentPackJsonSchema, sourcesPackJsonSchema } from '../content-pack.ts';
+import { aiContentPack, AiContentPack, aiSourcesPack, AiSourcesPack, contentPackJsonSchema, sourcesPackJsonSchema } from '../content-pack.ts';
+import type { PackLanguages } from '../languages.ts';
 import { CheckAnswer, checkJsonSchema, ProfileReviewAnswer, profileReviewJsonSchema, ReplyAnswer, replyJsonSchema } from './answers.ts';
 
 /*
@@ -185,3 +186,17 @@ export const SOURCES_PACK_TASK = task({
   needsRepo: 'always',
   limits: AI_TASK_DEFINITIONS.pack.limits,
 });
+
+/**
+ * A pack task (the pack, an article's, a launch from sources) asked for a brand's languages: the
+ * schema it is handed and checked with has an article and an issue key for exactly those, so a brand
+ * that writes in English alone is never asked for a Spanish version, and one in French is asked for
+ * French. The definitions above ask for English and Spanish.
+ */
+export function packTaskFor<T>(task: AiTaskDefinition<T>, languages: PackLanguages): AiTaskDefinition<T> {
+  const sources = task.output?.schema === (AiSourcesPack as unknown);
+  if (!task.output || (!sources && task.output.schema !== (AiContentPack as unknown))) return task;
+  const schema = (sources ? aiSourcesPack(languages) : aiContentPack(languages)) as unknown as z.ZodType<T>;
+  const jsonSchema = () => (sources ? sourcesPackJsonSchema(languages) : contentPackJsonSchema(languages));
+  return { ...task, output: { ...task.output, schema, jsonSchema } };
+}

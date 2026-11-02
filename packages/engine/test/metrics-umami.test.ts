@@ -10,7 +10,7 @@ import { aLaunch, aPublishedLaunch, memoryRegistry } from '../src/testing/index.
  * and kept per source, over the launch and per day (metric_days).
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const HOUR = 3_600_000;
 
 const VISITS: CampaignVisits = {

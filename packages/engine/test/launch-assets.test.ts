@@ -9,7 +9,7 @@ import { Brand, ContentPack, LaunchConfig, parseProjects } from '@shipcast/schem
 import { buildAssets, carouselPieces, mediaPath } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'José Antonio Garrido', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'José Antonio Garrido', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const launch = (await (await memoryRegistry()).launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' })).launch;
 const pack = ContentPack.parse({
   schemaVersion: 1,

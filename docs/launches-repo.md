@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:30:42.855415605Z
-updated_at: 2026-10-25T12:04:18.048620621Z
+updated_at: 2026-11-02T23:15:11.623318955Z
 tags:
     - launches-repo
     - blog
@@ -133,11 +133,12 @@ means a change to the code.
 
 What Shipcast writes there, and the content pack has to produce:
 
-- **Articles** at `src/content/posts/<en|es>/<slug>.md`, each language under its own slug, paired by
+- **Articles** at `src/content/posts/<lang>/<slug>.md`, one for each language of the brand's
+  `languages.blog` (any ISO 639-1 code; `en` and `es` here), each language under its own slug, paired by
   `translationKey` ([content-pack.md](content-pack.md#one-slug-per-language)). Front matter,
   validated at build time by `src/content.config.ts`: `title`, `description` (at most 200
-  characters), `pubDate`, optional `updatedDate`, `lang` (`en` or `es`), `translationKey` (shared by
-  both language versions), `repo` (the project's URL), optional `version`, `tags`, `draft`, `image`
+  characters), `pubDate`, optional `updatedDate`, `lang` (the language's code: `en` or `es` on this blog),
+  `translationKey` (shared by every language version), `repo` (the project's URL), optional `version`, `tags`, `draft`, `image`
   (the launch image's path, the page's `og:image`), `cover` (a drawn cover), and the optional
   `imageAlt` and `coverAlt`.
 - **The other channels' pieces** at `launches/<project>/<ref>/`: one readable draft per channel and

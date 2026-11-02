@@ -2,6 +2,8 @@
 // zod in the browser. The pack's piece is a factory the main index calls with zod in hand.
 import type { z } from 'zod';
 import type { EditorProfile } from './format.ts';
+import type { Language } from '../channels.ts';
+import type { PackLanguages } from '../languages.ts';
 
 /*
  * What Shipcast knows about one channel, as data: one module per channel under this folder, listed
@@ -95,7 +97,45 @@ export interface PostingWindow {
 /** What a piece's schema is built with: zod, and the shapes several pieces share */
 export interface PieceKit {
   z: typeof z;
-  Language: z.ZodEnum<{ en: 'en'; es: 'es' }>;
+  /** A language code: two lowercase letters (ISO 639-1) */
+  Language: z.ZodType<Language, Language>;
+  /**
+   * The languages a piece written per language has a key for: a brand's, in the pack the AI is
+   * asked for, so the schema it is handed names them; none in the pack as kept and read, which takes
+   * a version in any language (what a brand writes in is its brand.yml's to say, not the pack's).
+   */
+  languages?: PackLanguages;
+}
+
+/** A piece with one version per language beside fields of its own (an article's tags) */
+export type ByLanguage<Own, Version> = Own & { [L in Language]?: Version };
+
+/**
+ * A piece written per language: its own fields, and a version under each language's code. With the
+ * languages given, exactly those keys (a strict decoder needs every key named); without, any
+ * two-letter code. It needs at least one version either way.
+ */
+export function byLanguage<Shape extends z.core.$ZodShape, Version extends z.ZodType>(
+  { z }: PieceKit,
+  shape: Shape,
+  version: Version,
+  languages: readonly Language[] | undefined,
+  empty: string,
+): z.ZodType<ByLanguage<z.output<z.ZodObject<Shape>>, z.output<Version>>, ByLanguage<z.input<z.ZodObject<Shape>>, z.input<Version>>> {
+  const own = new Set(Object.keys(shape));
+  const versions = (piece: Record<string, unknown>) => Object.keys(piece).filter((key) => !own.has(key) && piece[key] !== undefined);
+  const schema: z.ZodType<Record<string, unknown>> = languages
+    ? z.strictObject({ ...shape, ...Object.fromEntries(languages.map((lang) => [lang, version.optional()])) })
+    : z
+        .strictObject(shape)
+        .catchall(version)
+        .superRefine((piece, ctx) => {
+          // Inline rather than channels.ts's pattern: a definition loads no zod, so imports no schema
+          for (const key of versions(piece)) {
+            if (!/^[a-z]{2}$/.test(key)) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is not a language: an ISO 639-1 code is two lowercase letters` });
+          }
+        });
+  return schema.refine((piece) => versions(piece).length > 0, empty) as unknown as z.ZodType<ByLanguage<z.output<z.ZodObject<Shape>>, z.output<Version>>, ByLanguage<z.input<z.ZodObject<Shape>>, z.input<Version>>>;
 }
 
 /** The article a piece may stand for (dev.to's is the English one): what a reply is grounded in */

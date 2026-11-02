@@ -15,7 +15,7 @@ import { aLaunch, FakeGitHub, LAUNCHES_REPO, memoryRegistry } from '../src/testi
  * generic paths every new network takes.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const D = 'launches/claudio/v1.0.0';
 const card = (title: string, seconds: number, chapter?: string) => ({ kind: 'card' as const, title, subtitle: `${title}, said`, seconds, ...(chapter && { chapter }) });
 const youtube = {

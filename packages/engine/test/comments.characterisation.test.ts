@@ -13,7 +13,7 @@ import { aPublishedLaunch, FakeConnectors, memoryRegistry, mockRunner, textParts
  * the run logs and what a second run does.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 const comment = (externalId: string, text: string): Comment => ({ externalId, author: { handle: '@ana@fosstodon.org' }, text, createdAt: '2026-11-03T09:00:00.000Z', own: false });
 

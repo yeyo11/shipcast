@@ -35,7 +35,7 @@ const brand = Brand.parse({
   id: 'personal',
   displayName: 'Me',
   site: 'https://josegarrido.dev',
-  github: 'yeyo11',
+  github: 'yeyo11', languages: { blog: ['en', 'es'] },
   newsletter: { sender: { name: 'Me', email: 'me@josegarrido.dev' }, lists: { en: 3 } },
 });
 

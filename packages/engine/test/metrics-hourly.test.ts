@@ -12,7 +12,7 @@ import { aLaunch, aPublishedLaunch, memoryRegistry, withPosts } from '../src/tes
  * what is read), where the six-hourly reads make one per piece. Unchanged values add no row.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const HOUR = 3_600_000;
 const CHANNELS: Channel[] = ['bluesky', 'mastodon', 'devto', 'hashnode', 'githubDiscussions', 'newsletter'];
 

@@ -20,10 +20,10 @@ const brand = Brand.parse({
   id: 'personal',
   displayName: 'Me',
   site: 'https://josegarrido.dev',
-  github: 'yeyo11',
+  github: 'yeyo11', languages: { blog: ['en', 'es'] },
   handles: { bluesky: 'https://bsky.app/profile/yeyo11.bsky.social', mastodon: 'https://mastodon.social/@yeyo11' },
 });
-const company = Brand.parse({ id: 'company', displayName: 'Co', site: 'https://co.example', github: 'co' });
+const company = Brand.parse({ id: 'company', displayName: 'Co', site: 'https://co.example', github: 'co', languages: { blog: ['en', 'es'] } });
 const github = new GitHubRest({ token: 'g' });
 
 async function deps(env: NodeJS.ProcessEnv, over: Partial<ServiceDeps> = {}): Promise<ServiceDeps> {

@@ -1,5 +1,5 @@
 import { ConnectorError, type BrevoCampaign, type Published } from '@shipcast/connectors';
-import { articleLink, campaignOf, CHANNEL_DEFINITIONS, ContentPack, contentPackFor, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type ChannelDefinition, type EngineChannelId, lookOf, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type LaunchConfig, type LinkTracking } from '@shipcast/schema';
+import { articleLink, campaignOf, CHANNEL_DEFINITIONS, ContentPack, contentPackFor, draftBody, draftFile, IDEMPOTENT_CHANNELS, PUBLISHED_BY_ENGINE, type ChannelDefinition, type EngineChannelId, leadLanguage, lookOf, newsletterLanguages, parseFrontMatter, parseLaunchConfig, pullRequestNumber, type Brand, type Channel, type Language, type LaunchConfig, type LinkTracking } from '@shipcast/schema';
 import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { isArticle, launchDir, parseDiscussionDraft, parseInstagramDraft, projectLabel, projectSlug, redditDraftFile } from './drafts.ts';
 import type { GitHubSource } from './github.ts';
@@ -46,7 +46,7 @@ export interface Publishers {
     comment?(mediaId: string, message: string): Promise<{ id: string }>;
   };
   /** `tracking` names the issue's language, which its links carry */
-  newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign, tracking?: LinkTracking & { lang: 'en' | 'es' }): Promise<Published> };
+  newsletter?: { subscribers(listId: number): Promise<number>; send(c: BrevoCampaign, tracking?: LinkTracking & { lang: Language }): Promise<Published> };
   hashnode?: { publish(a: { title: string; markdown: string; tags: string[]; canonicalUrl: string; coverImageUrl?: string }): Promise<Published> };
   telegram?: { publish(p: { text: string; imageUrl?: string }, tracking?: LinkTracking): Promise<Published> };
   discord?: { publish(p: { content: string; embed?: { title: string; url: string; description: string; imageUrl?: string } }, tracking?: LinkTracking): Promise<Published> };
@@ -360,9 +360,9 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const { pack, config, read, waits } = content;
   const dir = launchDir(launch);
 
-  // English is the canonical version every channel links to; Spanish only where that is the only one
-  const lead: 'en' | 'es' = pack.article?.en ? 'en' : 'es';
-  const slug = pack.article?.[lead]?.slug;
+  // English is the canonical version every channel links to; the brand's primary language where it is missing (languages.ts)
+  const lead = leadLanguage(pack.article, brand);
+  const slug = lead && pack.article?.[lead]?.slug;
   const articleUrl = articleLink(pack, brand.site, lead);
   const channels = (deps.channels ?? CHANNEL_DEFINITIONS).filter((d) => d.publishedBy === 'engine');
   // A channel the registry of this run adds (a test's) and launch.yml cannot name yet runs in its default mode
@@ -375,7 +375,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
     // The site gets the article and the media in one commit before anything links them; a failed commit is tried again, and nothing goes out meanwhile
     if (blogOn || channels.some((d) => modeOf(d) !== 'off' && !waits.has(d.id))) {
       try {
-        await app.publishSite(launch, { article: blogOn, title: pack.article?.[lead]?.title ?? pack.project.name });
+        await app.publishSite(launch, { article: blogOn, title: (lead && pack.article?.[lead]?.title) ?? pack.project.name });
       } catch (error) {
         return { state: 'waiting', launch, reason: `the article and its media could not be committed to ${deps.launchesRepo}, tried again shortly: ${error instanceof Error ? error.message : String(error)}` };
       }
@@ -395,7 +395,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
       await resubmitSitemap(registry, brand.site, deps.search, new Date(), true).catch(() => false);
     }
     // One article per language, each at its own URL, so the metrics read each one's visits
-    for (const lang of ['en', 'es'] as const) {
+    for (const lang of brand.languages.blog) {
       const piece = pack.article?.[lang];
       if (!piece) continue;
       await registry.posts.recordPost({ launchId: launch.id, channel: 'blog', kind: `article:${lang}`, url: articleLink(pack, brand.site, lang, lead), externalId: piece.slug });
@@ -404,8 +404,9 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
 
   const article = slug ? await read(`src/content/posts/${lead}/${slug}.md`) : undefined;
   const { data: front, body: articleBody } = article ? parseFrontMatter(article) : { data: {}, body: '' };
-  const title = typeof front.title === 'string' ? front.title : pack.article?.en?.title ?? pack.project.name;
-  const description = typeof front.description === 'string' ? front.description : pack.article?.en?.description ?? pack.analysis.summary;
+  const leadPiece = lead ? pack.article?.[lead] : undefined;
+  const title = typeof front.title === 'string' ? front.title : leadPiece?.title ?? pack.project.name;
+  const description = typeof front.description === 'string' ? front.description : leadPiece?.description ?? pack.analysis.summary;
   const ogJpegUrl = `${brand.site}${mediaPath(launch, 'og.jpg')}`;
   let ogJpeg: Uint8Array | undefined;
   const image = async () => {
@@ -421,7 +422,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   // language's article, read as merged like the lead one; without it, or without that article, the lead
   const linkedinLang = brand.languages.linkedin && pack.article?.[brand.languages.linkedin] ? brand.languages.linkedin : lead;
   const linkedinCard = async () => {
-    if (linkedinLang === lead) return { url: articleUrl, title, description };
+    if (!linkedinLang || linkedinLang === lead) return { url: articleUrl, title, description };
     const piece = pack.article![linkedinLang]!;
     const { data } = parseFrontMatter((await read(`src/content/posts/${linkedinLang}/${piece.slug}.md`)) ?? '');
     return {
@@ -436,7 +437,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
   const accountOf = (channel: Channel) => deps.accounts?.[channel] ?? null;
   const now = deps.now?.() ?? new Date();
   // The languages with a list and an issue in the pack: the newsletter is out once each has its issue
-  const issueLanguages = (['en', 'es'] as const).filter((lang) => brand.newsletter?.lists[lang] && pack.newsletter?.[lang]);
+  const issueLanguages = newsletterLanguages(brand).filter((lang) => brand.newsletter?.lists[lang] && pack.newsletter?.[lang]);
   // Whatever account a piece went out with: a launch whose account changed since is not posted again
   const subreddits = (pack.reddit ?? []).map((r) => r.subreddit);
   const builtInDone = (pieces: readonly Post[], channel: string) =>
@@ -657,7 +658,7 @@ export async function publishLaunch(launch: Launch, brand: Brand, deps: PublishD
             let sent = 0;
             const empty: string[] = [];
             const projects = await loadProjects(github, deps.launchesRepo);
-            for (const lang of ['en', 'es'] as const) {
+            for (const lang of newsletterLanguages(brand)) {
               const listId = settings.lists[lang];
               const fromPack = pack.newsletter![lang];
               if (!listId || !fromPack) continue;

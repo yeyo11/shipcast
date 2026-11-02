@@ -27,7 +27,7 @@ function fakeGitHub(seen: string[]): typeof fetch {
     }
     if (key === 'POST /app/installations/9/access_tokens') return Response.json({ token: 'ghs_t', expires_at: new Date(Date.now() + 3600_000).toISOString() }, { status: 201 });
     if (key === 'GET /repos/yeyo11/launches/contents/brand.yml') {
-      return new Response('id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n');
+      return new Response('id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\nlanguages:\n  blog: [en, es]\n');
     }
     throw new Error(`unexpected ${key}`);
   }) as typeof fetch;

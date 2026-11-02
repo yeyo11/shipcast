@@ -9,7 +9,10 @@ import {
   COMMENT_CHANNELS,
   ContentPack,
   formatIssues,
+  Language,
   missingPieces,
+  packLanguages,
+  packTaskFor,
   parseLaunchConfig,
   REPLY_LIMITS,
   resolvePack,
@@ -86,7 +89,7 @@ export const EvalCase = z.discriminatedUnion('task', [
     channel: z.string().refine((c) => editorProfile(c) !== undefined, 'a channel with a formatting profile'),
     /** For `adapt`: the network to adapt to */
     target: z.string().refine(isAdaptTarget, 'a network the assistant adapts to').optional(),
-    lang: z.enum(['en', 'es']).optional(),
+    lang: Language.optional(),
     text: z.string().min(1),
     analysis: AnalysisInput.optional(),
   }),
@@ -217,7 +220,7 @@ export async function askFor(c: EvalCase, brand: Brand, checkoutDir: string, ana
     const config = await launchConfigOf(c, checkoutDir);
     const now = new Date().toISOString();
     const launch: Launch = { id: 0, repo: c.repo, ref: c.ref, trigger: 'manual', kind: resolvePack(config, c.ref, c.previous), brand: brand.id, status: 'generating', detail: null, createdAt: now, updatedAt: now };
-    return { task: AI_TASK_DEFINITIONS.pack as AiTaskDefinition<unknown>, config, ...buildPrompt(launch, config, brand) };
+    return { task: packTaskFor(AI_TASK_DEFINITIONS.pack, packLanguages(brand)) as AiTaskDefinition<unknown>, config, ...buildPrompt(launch, config, brand) };
   }
   if (c.task === 'assistant') {
     const context = { kind: 'launch' as const, channel: c.channel, document: c.text, ...(c.lang && { lang: c.lang }), launch: { repo: c.repo, ref: c.ref, ...(c.analysis && { analysis: c.analysis }) } };

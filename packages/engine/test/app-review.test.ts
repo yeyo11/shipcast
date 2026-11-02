@@ -31,7 +31,7 @@ const LAUNCHES = 'yeyo11/launches';
 const D = 'launches/claudio/v1.0.0';
 const BRANCH = 'launch/claudio-v1.0.0';
 const NOW = new Date('2026-11-02T09:00:00Z');
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  blog: approval\n  bluesky: approval\n  mastodon: auto\n  devto: off\n  instagram: off\n  newsletter: off\n  githubDiscussions: off\n';
 const pack = {
   schemaVersion: 1,

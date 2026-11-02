@@ -10,7 +10,7 @@ import { FakeGitHub, memoryRegistry, mockRunner, promptOf, scriptedModel, submit
  * Action as a first `launch` on an empty registry, with no notes in its prompt and no tone.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me', languages: { blog: ['en', 'es'] } });
 const LAUNCH_YML = 'enabled: true\nbrand: personal\n';
 const REPO = 'me/sluice';
 const LAUNCHES = 'me/launches';

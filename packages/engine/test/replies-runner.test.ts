@@ -27,7 +27,7 @@ import {
  * Claudio workspace of the release; a failure leaves the comment failed with why, and the run goes on.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const answer = { classification: 'question', language: 'en', dismiss: false, reply: 'Not yet: Windows support is planned.', reason: 'They asked about Windows' };
 
 const comment = (id: string, text: string): Comment => ({ externalId: id, author: { handle: '@ana@fosstodon.org', displayName: 'Ana' }, text, createdAt: '2026-10-21T10:00:00.000Z', own: false });

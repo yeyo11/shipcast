@@ -11,7 +11,7 @@ import { accountSecretKey, buildConnector, buildServices, Flags, MemoryStore, Mi
  * it did before; on, a connected Umami account is the hourly reads' `umami` source.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 async function withUmamiAccount() {
   const registry = await memoryRegistry();

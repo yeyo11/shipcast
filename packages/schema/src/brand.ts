@@ -29,7 +29,12 @@ export const Brand = z.strictObject({
   handles: z.strictObject(handlesShape).prefault({}),
   languages: z
     .strictObject({
-      blog: z.array(Language).min(1).default(['en', 'es']),
+      // ISO 639-1 codes, in order: the first is the primary language. English alone when unset
+      blog: z
+        .array(Language)
+        .min(1)
+        .refine((l) => new Set(l).size === l.length, 'a language is listed once')
+        .default(['en']),
       // The language of the LinkedIn post and of the article its card shares; English when unset
       linkedin: Language.optional(),
     })

@@ -23,7 +23,7 @@ function bareRemote(): string {
   return dir;
 }
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'me', languages: { blog: ['en', 'es'] } });
 const RELEASE = { action: 'published', repository: { full_name: 'me/app' }, release: { id: 9, tag_name: 'v1.0.0', prerelease: false, draft: false } };
 
 /** The released repo with its launch.yml at the tag; the fake draft opens no pull request */

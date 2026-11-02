@@ -5,7 +5,7 @@ import type { PageVisits } from '@shipcast/connectors';
 import { collectMetrics, indexStatus, type Repositories, SITEMAP_SUBMITTED_KEY, type MetricSources } from '../src/index.ts';
 import { memoryRegistry } from '../src/testing.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 async function published(registry: Repositories) {
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/claudio', ref: 'v0.8.2', trigger: 'release', kind: 'launch', brand: 'personal' });

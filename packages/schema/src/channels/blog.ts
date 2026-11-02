@@ -1,9 +1,10 @@
-import { HOURLY_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { byLanguage, HOURLY_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { FULL_MARKDOWN } from './format.ts';
 
 const limits = { articleDescription: 200, imageAlt: 140 } as const;
 
-function piece({ z }: PieceKit) {
+function piece(kit: PieceKit) {
+  const { z } = kit;
   const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
   const version = z.strictObject({
     slug: slug.describe("The article's path in this language, in this language's words: claudio-claude-code-as-a-service, claudio-claude-code-como-servicio"),
@@ -26,13 +27,7 @@ function piece({ z }: PieceKit) {
       .optional()
       .describe("The launch image's alternative text in this language: what the image shows (the project's name, what it does), for people who cannot see it and for search"),
   });
-  return z
-    .strictObject({
-      tags: z.array(z.string().min(1)).max(8).default([]),
-      en: version.optional(),
-      es: version.optional(),
-    })
-    .refine((a) => a.en || a.es, 'the article needs at least one language')
+  return byLanguage(kit, { tags: z.array(z.string().min(1)).max(8).default([]) }, version, kit.languages?.blog, 'the article needs at least one language')
     .optional()
     .describe("The blog article, the launch's canonical page; one version per language the brand's blog uses");
 }

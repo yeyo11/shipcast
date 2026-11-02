@@ -16,7 +16,7 @@ import { aiLabelOf, ciPipeline } from '../src/ci.ts';
  * answered here.
  */
 
-const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://example.dev\ngithub: me\n';
+const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://example.dev\ngithub: me\nlanguages:\n  blog: [en, es]\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n  reddit: off\n';
 const NO_AI = 'no AI provider is configured (SHIPCAST_AI_PROVIDER, anthropic or openai, with ANTHROPIC_API_KEY or OPENAI_API_KEY)';
 

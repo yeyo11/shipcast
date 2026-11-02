@@ -9,7 +9,7 @@ import { buildActionPrompt, buildChat, type AssistantContext } from '../src/inde
  * shows here as a diff of these lines (docs/decisions/writing-assistant.md).
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', tone: 'plain and direct.' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] }, tone: 'plain and direct.' });
 const article = (channel?: string): AssistantContext => ({ kind: 'article', lang: 'en', document: 'x', ...(channel && { channel }) });
 const system = (context: AssistantContext) => buildActionPrompt({ action: 'improve', selection: 'x' }, context, brand).system.split('\n');
 

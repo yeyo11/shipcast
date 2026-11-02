@@ -11,6 +11,8 @@ export * from './markdown.ts';
 export * from './front-matter.ts';
 export * from './launch-detail.ts';
 export * from './languages.ts';
+// Both modules name it: the type is the same, the schema is channels.ts's
+export { Language } from './channels.ts';
 export * from './errors.ts';
 export * from './urls.ts';
 export * from './tracking.ts';

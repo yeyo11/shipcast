@@ -163,7 +163,7 @@ test("the comments, channels, automation, bell and profile loaders make no outbo
   await registry.comments.recordComment({ postId: post.id, channel: 'bluesky', externalId: 'c1', author: { handle: 'someone' }, text: 'Nice', createdAt: new Date().toISOString(), own: false });
   const account = await registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: 'Me', settings: { handle: 'me.bsky.social' } });
   await registry.jobs.recordJob({ id: 'job-1', queue: 'draft', title: 'Drafting', launchId: launch.id });
-  const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+  const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
   const calls = [
     ...(await counted('fn:listComments', async () => {
       const comments = commentService({ registry });

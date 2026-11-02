@@ -1,4 +1,4 @@
-import { Refused, type Brand } from '@shipcast/schema';
+import { languageName, Refused, type Brand } from '@shipcast/schema';
 import { claimArticle, type ArticleInput } from '../article.ts';
 import { claimManual, type PipelineDeps } from '../pipeline.ts';
 import type { LaunchCatalog } from '../ports.ts';
@@ -7,6 +7,11 @@ import { isAppLaunch } from '../app-review.ts';
 import type { Launch, LaunchFilter } from '../repositories/index.ts';
 import type { ReviewGitHub } from '../review.ts';
 import type { AppReviewService } from './app-review.ts';
+
+/** What a request in a language the brand does not write in is told */
+export function notBrandLanguage(lang: string, brand: Pick<Brand, 'languages'>): string {
+  return `The blog is not written in ${languageName(lang)} (${lang}): brand.yml's languages.blog is ${brand.languages.blog.join(', ')}`;
+}
 
 /** Why a launch was not started, approved or published again; `launch` is the one found in the way, when there is one */
 export class LaunchRefused extends Refused<'not_found' | 'not_ready' | 'launched' | 'state' | 'invalid'> {
@@ -102,6 +107,8 @@ export class LaunchService {
 
   /** Claims an article written in the app; one whose draft failed can be written again under the same title */
   async claimArticle(input: ArticleInput, brand: Brand): Promise<Launch> {
+    // Refused before the claim: the pack has a version for each of the brand's languages and no other
+    if (!brand.languages.blog.includes(input.lang)) throw new LaunchRefused('invalid', notBrandLanguage(input.lang, brand));
     const claim = await claimArticle(input, brand, this.#deps.claims);
     if (!claim.claimed && claim.launch.status !== 'failed') throw new LaunchRefused('launched', `An article titled like this exists already (${claim.launch.status}). Change the title.`, claim.launch);
     return claim.launch;

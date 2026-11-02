@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Brand } from './brand.ts';
 import { Language } from './channels.ts';
+import { languageName, newsletterLanguages, type PackLanguages } from './languages.ts';
 import { channelTables, CHANNEL_DEFINITIONS, PACK_KEYS, type PieceLimit } from './channels/registry.ts';
 import type { ChannelDefinition, PieceKit } from './channels/definition.ts';
 import { activeChannels, PackKind, type LaunchConfig } from './launch-config.ts';
@@ -29,7 +30,9 @@ type Definitions = (typeof CHANNEL_DEFINITIONS)[number];
 /** Each channel's piece, under its pack key, as its definition builds it */
 type Pieces = { [D in Definitions as D['pack']['key']]: ReturnType<D['pack']['piece']> };
 const KIT: PieceKit = { z, Language };
-const pieces = Object.fromEntries(CHANNEL_DEFINITIONS.map((d) => [d.pack.key, d.pack.piece(KIT)])) as Pieces;
+/** The pieces for a kit: a kept pack's take a version in any language, the AI's the brand's languages */
+const piecesFor = (kit: PieceKit) => Object.fromEntries(CHANNEL_DEFINITIONS.map((d) => [d.pack.key, d.pack.piece(kit)])) as Pieces;
+const pieces = piecesFor(KIT);
 
 const Analysis = z
   .strictObject({
@@ -76,14 +79,14 @@ const KeptAnalysis = Analysis.extend({ implemented: z.array(z.string().min(1)), 
 const projectName = z.string().min(1);
 const projectVersion = z.string().optional().describe('The release tag that triggered the launch, if any');
 
-const packOf = <P extends z.ZodType, A extends z.ZodType = typeof Analysis>(project: P, analysis: A = Analysis as unknown as A) =>
+const packOf = <P extends z.ZodType, A extends z.ZodType = typeof Analysis>(project: P, analysis: A = Analysis as unknown as A, packPieces: Pieces = pieces) =>
   z
     .strictObject({
       schemaVersion: z.literal(1),
       kind: PackKind,
       project,
       analysis,
-      ...pieces,
+      ...packPieces,
       releaseNotes: z.string().optional().describe('Improved release notes in Markdown, for the minor pack'),
     })
     .describe('Everything one launch publishes, written from the code of the project');
@@ -106,18 +109,46 @@ export const ContentPack = packOf(AppProject, KeptAnalysis);
 export type ContentPack = z.infer<typeof ContentPack>;
 
 /**
+ * The languages the AI task definitions ask for when no brand says otherwise: English and Spanish,
+ * the shape every pack was asked for before a brand's languages were configurable. A launch is
+ * asked for its brand's (`packTaskLanguages`, ai/tasks.ts).
+ */
+export const DEFAULT_PACK_LANGUAGES: PackLanguages = { blog: ['en', 'es'], newsletter: ['en', 'es'] };
+
+const languagesKey = (languages: PackLanguages) => `${languages.blog.join(',')}|${languages.newsletter.join(',')}`;
+const releaseProject = z.strictObject({ name: projectName, repo: z.url(), version: projectVersion });
+const aiPacks = new Map<string, { release: ReturnType<typeof aiRelease>; sources: ReturnType<typeof aiSources> }>();
+const aiRelease = (packPieces: Pieces) => packOf(releaseProject, Analysis, packPieces);
+const aiSources = (packPieces: Pieces) => packOf(AppProject, SourcesAnalysis, packPieces);
+
+/** The AI packs for some languages, made once per set: a strict decoder needs every language named */
+function aiPacksFor(languages: PackLanguages) {
+  const key = languagesKey(languages);
+  let made = aiPacks.get(key);
+  if (!made) {
+    const packPieces = piecesFor({ ...KIT, languages });
+    made = { release: aiRelease(packPieces), sources: aiSources(packPieces) };
+    aiPacks.set(key, made);
+  }
+  return made;
+}
+
+/**
  * The pack the AI tasks are asked for: the shape they were asked for before the launch model, a repo
  * required and no further repos, so what Claude is handed does not change until the sources phase
- * gives a launch something other than a repo to be about. Every pack it accepts is a ContentPack.
+ * gives a launch something other than a repo to be about. Its article and newsletter have a key per
+ * language given (the brand's). Every pack it accepts is a ContentPack.
  */
-export const AiContentPack = packOf(z.strictObject({ name: projectName, repo: z.url(), version: projectVersion }));
+export const aiContentPack = (languages: PackLanguages = DEFAULT_PACK_LANGUAGES) => aiPacksFor(languages).release;
+export const AiContentPack = aiContentPack();
 
 /**
  * The pack a launch made from sources is asked for (docs/sources.md): its project may have no repo or
  * several, and its analysis ties every statement to the sources that show it. Every pack it accepts
  * is a ContentPack.
  */
-export const AiSourcesPack = packOf(AppProject, SourcesAnalysis);
+export const aiSourcesPack = (languages: PackLanguages = DEFAULT_PACK_LANGUAGES) => aiPacksFor(languages).sources;
+export const AiSourcesPack = aiSourcesPack();
 
 /**
  * The pack's schema for a list of definitions: the registry's pack with the pieces of the channels it
@@ -130,7 +161,7 @@ export function contentPackFor(definitions: readonly ChannelDefinition[]): z.Zod
 }
 
 /** The URL of the article in one language, or undefined when the pack has no version in it */
-export function articleUrl(pack: ContentPack, site: string, lang: 'en' | 'es'): string | undefined {
+export function articleUrl(pack: ContentPack, site: string, lang: Language): string | undefined {
   const version = pack.article?.[lang];
   return version ? `${site}/${lang}/${version.slug}/` : undefined;
 }
@@ -139,9 +170,9 @@ export function articleUrl(pack: ContentPack, site: string, lang: 'en' | 'es'): 
  * The address a piece links to: the article in the first of these languages the pack has, or the
  * site's home when it has none of them (a pack without an article still links somewhere).
  */
-export function articleLink(pack: ContentPack, site: string, ...langs: Array<'en' | 'es'>): string {
+export function articleLink(pack: ContentPack, site: string, ...langs: Array<Language | undefined>): string {
   for (const lang of langs) {
-    const url = articleUrl(pack, site, lang);
+    const url = lang && articleUrl(pack, site, lang);
     if (url) return url;
   }
   return site;
@@ -164,11 +195,14 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
       if (!pack.article[lang]) missing.push(`blog: the article has no ${lang} version`);
     }
   }
-  if (config.publishing.devto !== 'off' && !pack.article?.en) {
-    missing.push('devto: dev.to republishes the English article, which is missing');
+  // dev.to and Hashnode republish the lead article (languages.ts): English for a brand that writes in it, else its primary language
+  const republished = brand.languages.blog.includes('en') ? 'en' : brand.languages.blog[0];
+  const republishedName = republished && languageName(republished);
+  if (config.publishing.devto !== 'off' && republished && !pack.article?.[republished]) {
+    missing.push(`devto: dev.to republishes the ${republishedName} article, which is missing`);
   }
-  if (config.publishing.hashnode !== 'off' && !pack.article?.en) {
-    missing.push('hashnode: Hashnode republishes the English article, which is missing');
+  if (config.publishing.hashnode !== 'off' && republished && !pack.article?.[republished]) {
+    missing.push(`hashnode: Hashnode republishes the ${republishedName} article, which is missing`);
   }
   // The post is the article's link card: without an article there is nothing to share
   if (config.publishing.linkedin !== 'off' && pack.linkedin && !pack.article) {
@@ -184,7 +218,7 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
   if (config.publishing.newsletter !== 'off') {
     if (!brand.newsletter) missing.push('newsletter: brand.yml has no newsletter');
     else if (pack.newsletter) {
-      for (const lang of Object.keys(brand.newsletter.lists) as Array<'en' | 'es'>) {
+      for (const lang of newsletterLanguages(brand)) {
         if (!pack.newsletter[lang]) missing.push(`newsletter: the issue has no ${lang} version`);
       }
     }
@@ -197,11 +231,11 @@ export function missingPieces(pack: ContentPack, config: LaunchConfig, brand: Br
  * The JSON Schema handed to Claude, so the pack comes back in this shape. Draft-07, because Claude
  * Code's `--json-schema` validator refuses a schema that declares draft 2020-12.
  */
-export function contentPackJsonSchema(): Record<string, unknown> {
-  return z.toJSONSchema(AiContentPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
+export function contentPackJsonSchema(languages: PackLanguages = DEFAULT_PACK_LANGUAGES): Record<string, unknown> {
+  return z.toJSONSchema(aiContentPack(languages), { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
 }
 
 /** The same for a launch made from sources: the pack with its claims */
-export function sourcesPackJsonSchema(): Record<string, unknown> {
-  return z.toJSONSchema(AiSourcesPack, { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
+export function sourcesPackJsonSchema(languages: PackLanguages = DEFAULT_PACK_LANGUAGES): Record<string, unknown> {
+  return z.toJSONSchema(aiSourcesPack(languages), { target: 'draft-7', io: 'input' }) as Record<string, unknown>;
 }

@@ -44,7 +44,7 @@ const fullPack = {
 
 // Reddit is off by default; turned on here so its posts are still checked
 const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { reddit: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://example.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 function parse(overrides: Record<string, unknown>) {
   return ContentPack.safeParse({ ...fullPack, ...overrides });
@@ -116,12 +116,12 @@ test('the JSON Schema for Claude is an object schema that keeps the field descri
 test('the newsletter needs a list in brand.yml and an issue for each list', () => {
   const config = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { newsletter: 'approval' }, reddit: { subreddits: ['ClaudeAI'] } });
   const issue = { subject: 'claudio is out', previewText: 'Claude Code as a service', markdown: 'It shipped.' };
-  const plain = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+  const plain = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
   const withLists = Brand.parse({
     id: 'personal',
     displayName: 'Me',
     site: 'https://josegarrido.dev',
-    github: 'yeyo11',
+    github: 'yeyo11', languages: { blog: ['en', 'es'] },
     newsletter: { sender: { name: 'Me', email: 'hola@josegarrido.dev' }, lists: { en: 3, es: 4 } },
   });
   const pack = ContentPack.parse({ ...fullPack, newsletter: { en: issue } });

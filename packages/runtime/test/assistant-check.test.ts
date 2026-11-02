@@ -32,7 +32,7 @@ import { MemoryEventBus } from '../src/redis/index.ts';
  */
 
 const quiet: QueueOptions = { schedule: false, supervise: false, pollingIntervalSeconds: 0.5, onError: () => {} };
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const answer = { revised: 'claudio has a REST API.', findings: [{ claim: 'claudio runs on Windows', verdict: 'planned', evidence: 'docs/status.md lists it as planned' }] };
 // The pack the launch's drafts committed: its analysis is what the check is grounded in
 const pack = {

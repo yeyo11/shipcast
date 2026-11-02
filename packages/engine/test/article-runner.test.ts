@@ -9,7 +9,7 @@ import { claudioAnswer, claudioChats, claudioRefusal, fakeClaudio, fakeClaudioRu
  * is read, so Claudio gets no workspace; a failure fails the launch with a readable problem.
  */
 
-const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
+const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\nlanguages:\n  blog: [en, es]\n';
 const version = { title: 'T', description: 'd', markdown: 'AI copy' };
 const pack = {
   schemaVersion: 1,

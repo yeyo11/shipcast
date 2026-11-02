@@ -1,4 +1,4 @@
-import { activeChannels, CHANNEL_BRIEFS, CHANNELS, hasDemo, languageName, LIMITS, type Brand, type Channel, type LaunchConfig, type PackKind, type ProfileFieldId, type ProfileLimits } from '@shipcast/schema';
+import { activeChannels, CHANNEL_BRIEFS, CHANNELS, hasDemo, languageName, LIMITS, newsletterLanguages, type Brand, type Channel, type LaunchConfig, type PackKind, type ProfileFieldId, type ProfileLimits } from '@shipcast/schema';
 import type { GitHubSource } from './github.ts';
 import type { Launch } from './repositories/index.ts';
 
@@ -131,12 +131,15 @@ export function promptVariables(brand: Brand, config: LaunchConfig, extra: Recor
   return {
     site: brand.site,
     blogLanguages: brand.languages.blog.join(' and '),
-    newsletterLanguages: Object.keys(brand.newsletter?.lists ?? { en: 1 }).join(' and '),
+    newsletterLanguages: newsletterLanguages(brand).join(' and '),
     redditTarget: subs.length > 0 ? `one post for each of r/${subs.join(', r/')}` : 'one or two posts, each naming a fitting subreddit',
     demoNote: hasDemo(config) ? ' (the demo plays as its second slide)' : '',
     otherLanguages: 'the other blog languages',
-    // The card shares the article in this language, so the post is written in it too
-    linkedinLanguage: brand.languages.linkedin && brand.languages.blog.includes(brand.languages.linkedin) ? languageName(brand.languages.linkedin) : 'English',
+    // The card shares the article in this language, so the post is written in it too; unset, the lead
+    // article's: English, or the primary language for a blog without English
+    linkedinLanguage: languageName(
+      brand.languages.linkedin && brand.languages.blog.includes(brand.languages.linkedin) ? brand.languages.linkedin : brand.languages.blog.includes('en') ? 'en' : (brand.languages.blog[0] ?? 'en'),
+    ),
     ...Object.fromEntries(Object.entries(LIMITS).map(([key, value]) => [`limit.${key}`, String(value)])),
     ...extra,
   };

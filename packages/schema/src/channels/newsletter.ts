@@ -1,9 +1,10 @@
-import { HOURLY_BATCHED, MIDWEEK, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { byLanguage, HOURLY_BATCHED, MIDWEEK, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { parseIssueDraft } from './text.ts';
 
 const limits = { newsletterSubject: 90, newsletterPreview: 140 } as const;
 
-function piece({ z }: PieceKit) {
+function piece(kit: PieceKit) {
+  const { z } = kit;
   const issue = z.strictObject({
     subject: z.string().min(1).max(limits.newsletterSubject),
     previewText: z.string().min(1).max(limits.newsletterPreview).describe('The preheader inbox apps show after the subject'),
@@ -12,14 +13,12 @@ function piece({ z }: PieceKit) {
       .min(1)
       .describe('The email body in Markdown: a short, personal note on what shipped and why it matters, linking the article; not the article itself'),
   });
-  return z
-    .strictObject({ en: issue.optional(), es: issue.optional() })
-    .refine((n) => n.en || n.es, 'the issue needs at least one language')
+  return byLanguage(kit, {}, issue, kit.languages?.newsletter, 'the issue needs at least one language')
     .optional()
     .describe("The newsletter issue, one per language the brand's newsletter has a list for");
 }
 
-const DRAFT = /^newsletter-(en|es)\.md$/;
+const DRAFT = /^newsletter-([a-z]{2})\.md$/;
 
 /** The newsletter, sent through Brevo: one issue per language the brand has a list for */
 export const newsletter = {

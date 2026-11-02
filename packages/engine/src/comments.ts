@@ -1,5 +1,5 @@
 import { ConnectorError, PostGone, type Comment, type CommentReader, type Replier } from '@shipcast/connectors';
-import { AI_TASK_DEFINITIONS, channelDefinition, channelName, COMMENT_CHANNELS, InvalidRequest, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type ContentPack, type Channel, type CommentChannelId, type ReplyCapability, ReplyAnswer } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, channelDefinition, channelName, COMMENT_CHANNELS, InvalidRequest, leadLanguage, Refused, REPLY_CAPABILITIES, REPLY_LIMITS, type ArticleSummary, type Brand, type ContentPack, type Channel, type CommentChannelId, type ReplyCapability, ReplyAnswer } from '@shipcast/schema';
 import { z } from 'zod';
 import type { AiTaskRunner } from './ai/runner.ts';
 import { isArticle } from './drafts.ts';
@@ -558,7 +558,9 @@ export function launchReplyContext(deps: { checkout: (repo: string, ref: string)
     // A pack that cannot be read grounds nothing; the reply is drafted from the post and the code
     const pack = await deps.stored.pack(launch).catch(() => undefined);
     const postText: ReplyContext['postText'] = {};
-    const english = pack?.article?.en ?? pack?.article?.es;
+    // The lead article: English, else whichever version the pack has
+    const lead = leadLanguage(pack?.article);
+    const english = lead ? pack?.article?.[lead] : undefined;
     // What each post said, as its channel's definition reads it from its piece (dev.to's is the article)
     for (const channel of COMMENT_CHANNELS) {
       const definition = channelDefinition(channel);

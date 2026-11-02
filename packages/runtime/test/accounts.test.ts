@@ -15,7 +15,7 @@ import {
   type AccountDeps,
 } from '../src/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
 /** dev.to answers its check with the key's owner, or refuses a key named "bad" */
 const devtoFetch = (async (_input: string | URL | Request, init?: RequestInit) => {

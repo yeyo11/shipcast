@@ -1,4 +1,4 @@
-import { AI_TASK_DEFINITIONS, missingPieces, type Brand, type ContentPack, type LaunchConfig } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, missingPieces, packLanguages, packTaskFor, type Brand, type ContentPack, type LaunchConfig } from '@shipcast/schema';
 import { chatIdOf, costOf, type AiTaskRunner } from './ai/runner.ts';
 import { buildPrompt, type LaunchPromptInput, type PromptOptions } from './prompt.ts';
 import type { Launch } from './repositories/index.ts';
@@ -45,7 +45,8 @@ export async function generatePack(options: GenerateOptions): Promise<Generated>
   const { prompt, system } = buildPrompt(launch, config, brand, { prompts: options.prompts, tone: options.tone, releaseNotes: options.releaseNotes });
   let result;
   try {
-    result = await runner.run(AI_TASK_DEFINITIONS.pack, {
+    // Asked for the brand's languages only: its article and newsletter name exactly those
+    result = await runner.run(packTaskFor(AI_TASK_DEFINITIONS.pack, packLanguages(brand)), {
       system,
       prompt,
       repo: { name: launch.repo, ref: options.ref, hostDir: checkout.hostPath },

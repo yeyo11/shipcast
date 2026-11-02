@@ -10,7 +10,7 @@ import { aLaunch, FakeConnectors, FakeGitHub, LAUNCHES_REPO, memoryRegistry } fr
  * the same race posts twice, which the first test shows, so the second proves the fix and not luck.
  */
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const D = 'launches/claudio/v1.0.0';
 const pack = {
   schemaVersion: 1,

@@ -4,9 +4,16 @@ import { Marked } from 'marked';
 // The issue's draft format is the newsletter channel's (packages/schema/src/channels/text.ts)
 export { issueDraftBody, parseIssueDraft, type NewsletterIssue } from '@shipcast/schema';
 
-const COPY: Record<Language, { read: string; why: string; unsubscribe: string }> = {
-  en: { read: 'Read the article', why: 'You get this because you subscribed at', unsubscribe: 'Unsubscribe' },
+type IssueCopy = { read: string; why: string; unsubscribe: string };
+const ENGLISH: IssueCopy = { read: 'Read the article', why: 'You get this because you subscribed at', unsubscribe: 'Unsubscribe' };
+// The issue's few fixed words; a language not here gets them in English, the rest of the issue being its own
+const COPY: Partial<Record<Language, IssueCopy>> = {
+  en: ENGLISH,
   es: { read: 'Leer el artículo', why: 'Te llega porque te suscribiste en', unsubscribe: 'Darte de baja' },
+  fr: { read: 'Lire l’article', why: 'Vous recevez ce message car vous vous êtes abonné sur', unsubscribe: 'Se désabonner' },
+  de: { read: 'Artikel lesen', why: 'Sie erhalten dies, weil Sie sich angemeldet haben auf', unsubscribe: 'Abmelden' },
+  it: { read: 'Leggi l’articolo', why: 'Ricevi questa email perché ti sei iscritto su', unsubscribe: 'Annulla l’iscrizione' },
+  pt: { read: 'Ler o artigo', why: 'Recebe isto porque se inscreveu em', unsubscribe: 'Cancelar a inscrição' },
 };
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -18,7 +25,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
  */
 export function renderIssueHtml(issue: NewsletterIssue, options: { brand: Brand; project: string; look: { colour: string }; title: string; articleUrl: string; imageUrl?: string; lang: Language }): string {
   const { brand, lang } = options;
-  const copy = COPY[lang];
+  const copy = COPY[lang] ?? ENGLISH;
   const colour = options.look.colour;
   const marked = new Marked({ gfm: true, breaks: false });
   const body = (marked.parse(issue.markdown, { async: false }) as string)

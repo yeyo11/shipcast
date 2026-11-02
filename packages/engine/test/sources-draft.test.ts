@@ -13,7 +13,7 @@ import { FakeGitHub, memoryRegistry, mockRunner, promptOf, scriptedModel, submit
  * names no sources, drafting is what it was: pipeline.test.ts and the first test here hold it.
  */
 
-const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\n';
+const BRAND_YML = 'id: personal\ndisplayName: Me\nsite: https://josegarrido.dev\ngithub: yeyo11\nlanguages:\n  blog: [en, es]\n';
 const LAUNCH_YML = 'enabled: true\nbrand: personal\npublishing:\n  instagram: off\n  reddit: off\n';
 const WITH_SOURCES = `${LAUNCH_YML}sources:\n  repos: [yeyo11/claudio-web]\n  urls: [https://claudio.example/]\n`;
 

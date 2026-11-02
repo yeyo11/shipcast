@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T09:14:12.677217672Z
-updated_at: 2026-11-02T09:25:29.925290294Z
+updated_at: 2026-11-02T23:15:22.858593697Z
 tags:
     - schema
     - content-pack
@@ -46,9 +46,9 @@ analysis with `claims`. It runs as the pack task, with its settings, ceilings an
 | `kind` | `launch`, `major` or `minor` ([launch-yml.md](launch-yml.md)) |
 | `project` | `name`; `repo`, the primary repo's URL (the one whose release triggered the launch), optional; `repos`, the URLs of further repos the launch is also about, optional; optional `version` (the release tag) |
 | `analysis` | `summary`, `implemented` (at least one, unless the pack has `claims`), `planned`, `documentedOnly`, `limitations`; and for a launch made from sources `claims`, each statement the pieces make with the ids of the sources that show it (`S1`, `S2`…) |
-| `article` | `tags`, and an `en` and/or `es` version, each with its own `slug`, `title`, `description` (≤ 200), `markdown` and an optional `imageAlt` (≤ 140) |
-| `devto` | `tags` (1–4, lowercase letters and digits); dev.to republishes the English article with the blog as canonical URL |
-| `hashnode` | `tags` (1–5); Hashnode republishes the English article with the blog as its original URL |
+| `article` | `tags`, and a version per language under its ISO 639-1 code (`en`, `es`, `fr`…), at least one, each with its own `slug`, `title`, `description` (≤ 200), `markdown` and an optional `imageAlt` (≤ 140) |
+| `devto` | `tags` (1–4, lowercase letters and digits); dev.to republishes the lead article (English, see [Languages](#languages)) with the blog as canonical URL |
+| `hashnode` | `tags` (1–5); Hashnode republishes the lead article (English, see [Languages](#languages)) with the blog as its original URL |
 | `bluesky` | `lang`, `text` (≤ 300 graphemes) |
 | `mastodon` | `lang`, `text` (≤ 500 characters) |
 | `instagram` | `caption` (≤ 5 hashtags, no links), `summary` (≤ 140) for the cover, `slides`: 2–3 features, each a `title` (≤ 40) and a `text` (≤ 140) ([publishing.md](publishing.md#the-launchs-media)) |
@@ -58,7 +58,7 @@ analysis with `claims`. It runs as the pack task, with its settings, ceilings an
 | `threads` | `text` (≤ 500, an emoji counting as its UTF-8 bytes) |
 | `linkedin` | `text` (≤ 1,300); the post shares the article as its link card |
 | `reddit` | One post per subreddit: `subreddit` (required, without `r/`), `title` (≤ 300), a Markdown `body` that links the article |
-| `newsletter` | An `en` and/or `es` issue: `subject` (≤ 90), `previewText` (≤ 140), `markdown` ([publishing.md](publishing.md#the-newsletter)) |
+| `newsletter` | An issue per language under its code, at least one: `subject` (≤ 90), `previewText` (≤ 140), `markdown` ([publishing.md](publishing.md#the-newsletter)) |
 | `youtube` | A `short` (6 to 59 s of scenes) and a `video` (60 to 180 s), each with a `title` (≤ 100), a `description` (the article link and the chapters are added around it, within YouTube's 5,000), up to 15 `tags`, a `lang`, and its `scenes`: at least two, each a `kind` (`card`, `demo`, `screenshot`, `cover`), a `subtitle` (≤ 120, the narration, since there is no voice), `seconds` (2 to 30), an optional card `title` and `text`, and for the horizontal video an optional `chapter` |
 | `releaseNotes` | Improved release notes, for the minor pack |
 
@@ -89,11 +89,42 @@ article has its own slug, in its own words** (`claudio-claude-code-as-a-service`
 multilingual sites is one URL per language, with the words of the reader's language in it, linked
 with `hreflang`, and never two languages on one page.
 
-The blog pairs the two versions by `translationKey`, which Shipcast sets to the English slug (the
-Spanish one when there is no English version). `articleUrl(pack, site, lang)` builds a version's URL;
+The blog pairs the versions by `translationKey`, which Shipcast sets to the lead language's slug
+([Languages](#languages)): the English one, as for every launch so far (the Spanish one when there
+was no English version). `articleUrl(pack, site, lang)` builds a version's URL;
 every channel links the URL of its language. Once published, the registry keeps one `article:<lang>`
 piece per language with its own URL ([decisions/post-model.md](decisions/post-model.md)), so the
 metrics and the index status read each article by its own path.
+
+## Languages
+
+Since 2026-11-03 a brand's languages are its own: `brand.yml`'s `languages.blog` lists ISO 639-1
+codes (two lowercase letters, any language), the first being the primary one, and English alone
+(`[en]`) when unset ([brands.md](brands.md#languages)). The owner's brand keeps `[en, es]`, and every
+launch made before keeps its files, slugs, `translationKey` and URLs.
+
+- **The pack as kept** takes a version in any language under its code: a pack names no languages of
+  its own, and a key that is not a code is refused.
+- **The pack the AI is asked for** names exactly the brand's: `packTaskFor(task, packLanguages(brand))`
+  hands the pack, article and sources tasks a schema whose `article` has a key for each blog language
+  and whose `newsletter` has one for each language the newsletter has a list for (the blog's when it
+  has none). A strict decoder needs every key named, so the schema is made per set of languages. The
+  task definitions alone (the AI settings' preview, the strict-schema tests) ask for English and
+  Spanish.
+- **The drafts** write `src/content/posts/<lang>/<slug>.md` only for the brand's blog languages, and
+  `newsletter-<lang>.md` only for its newsletter's; a version in another language stays in `pack.json`,
+  unpublished. Publishing records one `article:<lang>` piece per blog language and sends one issue per
+  list language.
+- **The lead language** is the one every channel links, dev.to and Hashnode republish and
+  `translationKey` follows: English when the article has it, otherwise the first of the brand's
+  languages it has. So a brand that writes in English keeps today's behaviour exactly, and one without
+  English (`[de]`, `[fr, es]`) republishes its primary language's article. The launch image and
+  Instagram's cover take the English title for a brand whose blog has English, as before, and the
+  lead one otherwise.
+- **Names**: `languageName(code)` names a code in English (`fr` → French) for the prompts and the app,
+  and falls back to the code itself for one it does not know. The few fixed words Shipcast writes into
+  a page or an email (a screenshot's alt text, the issue's "Read the article") come in English, Spanish,
+  French, German, Italian and Portuguese, and in English for any other language.
 
 ## Written for search engines and assistants
 
@@ -161,8 +192,8 @@ launch needs is `missingPieces(pack, config, brand)`, which lists, in plain sent
 - a channel turned on in `launch.yml` whose piece is missing (by `PACK_KEYS`, so a new channel is
   covered by its definition);
 - an article missing one of the languages of the brand's blog;
-- dev.to or Hashnode turned on without the English article they republish, and LinkedIn without the
-  article it shares;
+- dev.to or Hashnode turned on without the article they republish (the English one for a brand whose
+  blog has English, else its primary language's), and LinkedIn without the article it shares;
 - a subreddit listed in `launch.yml` without its post;
 - the newsletter turned on without a `newsletter` block in `brand.yml`, or without an issue for each
   of its lists.

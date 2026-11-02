@@ -5,8 +5,8 @@ import { memoryRegistry } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
 import { accountSecretKey, commentConnectors, MemoryStore, postEditors } from '../src/index.ts';
 
-const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11' });
-const company = Brand.parse({ id: 'company', displayName: 'Co', site: 'https://co.example', github: 'co' });
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
+const company = Brand.parse({ id: 'company', displayName: 'Co', site: 'https://co.example', github: 'co', languages: { blog: ['en', 'es'] } });
 
 /** Records which token each request carried */
 function recording(seen: string[]): typeof fetch {
