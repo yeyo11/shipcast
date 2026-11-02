@@ -19,6 +19,7 @@ import {
   LOCKED_PROFILE_RULES,
   LOCKED_REPLY_RULES,
   PROMPT_IDS,
+  releaseNotesOf,
   templateProblems,
   type Prompt,
   type PromptId,
@@ -271,5 +272,5 @@ export async function previewPrompt(
   if (text === undefined) throw new InvalidPrompt(`${launch.repo} has no ${LAUNCH_CONFIG_PATH} at ${ref}`);
   const parsed = parseLaunchConfig(text);
   if (!parsed.ok) throw new InvalidPrompt(formatIssues(LAUNCH_CONFIG_PATH, parsed.issues));
-  return { task: 'pack', ...buildPrompt(launch, parsed.value, brand, options) };
+  return { task: 'pack', ...buildPrompt(launch, parsed.value, brand, { ...options, releaseNotes: await releaseNotesOf(launch, deps.github) }) };
 }

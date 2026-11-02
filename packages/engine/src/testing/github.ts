@@ -31,6 +31,8 @@ export type GitHubMethod =
   | 'userEvents'
   | 'fileAt'
   | 'latestRelease'
+  | 'releases'
+  | 'releaseNotes'
   | 'pullRequestState'
   | 'openPullRequest'
   | 'commitToBranch'
@@ -63,6 +65,8 @@ export interface FakeGitHubOptions {
   /** The number the first pull request opened gets */
   firstPullRequest?: number;
   stats?: RepoStats;
+  /** Each repo's published releases, newest first, with their notes when they have some */
+  releases?: Record<string, Array<{ tag: string; prerelease?: boolean; notes?: string }>>;
 }
 
 export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewGitHub, PreviewWriter {
@@ -83,6 +87,8 @@ export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewG
   /** The state of a pull request the fake was not given; tests flip it to merge */
   state: PullRequestState;
   stats: RepoStats;
+  /** Each repo's releases, newest first; tests may add to it */
+  readonly releaseList: Record<string, Array<{ tag: string; prerelease?: boolean; notes?: string }>>;
   readonly defaultBranchName: string;
   #next: number;
   readonly #failures = new Map<GitHubMethod, Error>();
@@ -95,6 +101,7 @@ export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewG
     this.defaultBranchName = options.defaultBranch ?? 'main';
     this.#next = options.firstPullRequest ?? 1;
     this.stats = options.stats ?? { stars: 0, forks: 0, watchers: 0 };
+    this.releaseList = { ...options.releases };
   }
 
   static key(repo: string, path: string, ref = 'HEAD'): string {
@@ -171,6 +178,16 @@ export class FakeGitHub implements GitHubSource, GitHubWriter, BlogRepo, ReviewG
   async latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined> {
     this.#record('latestRelease', [repo]);
     return this.latest;
+  }
+
+  async releases(repo: string): Promise<Array<{ tag: string; prerelease: boolean }>> {
+    this.#record('releases', [repo]);
+    return (this.releaseList[repo] ?? []).map((r) => ({ tag: r.tag, prerelease: r.prerelease ?? false }));
+  }
+
+  async releaseNotes(repo: string, tag: string): Promise<string | undefined> {
+    this.#record('releaseNotes', [repo, tag]);
+    return this.releaseList[repo]?.find((r) => r.tag === tag)?.notes;
   }
 
   async pullRequestState(repo: string, number: number): Promise<PullRequestState> {

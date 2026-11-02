@@ -27,6 +27,17 @@ export interface GitHubSource {
   latestRelease(repo: string): Promise<{ tag: string; url: string } | undefined>;
   /** Whether a pull request is still open, was merged, or was closed without merging */
   pullRequestState(repo: string, number: number): Promise<'open' | 'merged' | 'closed'>;
+  /*
+   * Optional reads: a source without them (a test's narrow fake) just has less to go on. The kind of a
+   * launch reads the project's earlier releases and the launches repo's earlier launches
+   * (launch-history.ts); a draft reads the release's notes.
+   */
+  /** The repo's published releases (not drafts), newest first */
+  releases?(repo: string): Promise<Array<{ tag: string; prerelease: boolean }>>;
+  /** Every file under a folder at a ref, by path; none when the folder is not there */
+  filesUnder?(repo: string, ref: string, folder: string): Promise<string[]>;
+  /** A release's notes as its author wrote them (the release's body); undefined when the tag has no release or it has no notes */
+  releaseNotes?(repo: string, tag: string): Promise<string | undefined>;
 }
 
 /**
@@ -554,6 +565,13 @@ export class GitHubRest implements GitHubSource, GitHubWriter, RepoArchiveSource
     return releases
       .filter((r) => !r.draft && r.published_at)
       .map((r) => ({ tag: r.tag_name, name: r.name ?? r.tag_name, publishedAt: r.published_at!, prerelease: r.prerelease }));
+  }
+
+  async releaseNotes(repo: string, tag: string): Promise<string | undefined> {
+    const { status, data } = await this.#json('GET', `/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`);
+    if (status === 404) return undefined;
+    if (status >= 300) throw new GitHubError(`GitHub release ${tag} of ${repo}: ${status}`, status);
+    return (data as { body?: string | null }).body?.trim() || undefined;
   }
 
   async releaseByTag(repo: string, tag: string): Promise<{ tag: string; url: string; draft: boolean } | undefined> {

@@ -238,8 +238,13 @@ export function renderDrafts(
 }
 
 /** The pull request's description: what the code analysis found, and what merging does. */
-export function pullRequestBody(pack: ContentPack, launch: Launch, config: LaunchConfig): string {
-  return [`Launch of [${launch.repo}](https://github.com/${launch.repo}) at \`${launch.ref}\` (${launch.kind} pack), drafted by Shipcast from the code.`, '', ...reviewSections(pack, config)].join('\n');
+export function pullRequestBody(pack: ContentPack, launch: Launch, config: LaunchConfig, warnings: readonly string[] = []): string {
+  return [
+    `Launch of [${launch.repo}](https://github.com/${launch.repo}) at \`${launch.ref}\` (${launch.kind} pack), drafted by Shipcast from the code.`,
+    '',
+    ...warnings.flatMap((w) => [`> ${w}`, '']),
+    ...reviewSections(pack, config),
+  ].join('\n');
 }
 
 /** What a drafts pull request says below its first line: how merging works, the analysis and the channels */

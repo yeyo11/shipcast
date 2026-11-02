@@ -101,11 +101,11 @@ export async function ciLaunch(deps: CiDeps, target: LaunchTarget): Promise<CiRe
   const brand = await deps.brand();
   const claim = await deps.state.use(async (registry) => {
     if (target.kind === 'manual') {
-      const manual = await claimManual(target.repo, target.ref, brand, { github: deps.github, registry });
+      const manual = await claimManual(target.repo, target.ref, brand, { github: deps.github, registry, launchesRepo: deps.launchesRepo });
       if ('error' in manual) return { result: 'error' as const, reason: manual.error };
       return manual.claimed ? { result: 'claimed' as const, launch: manual.launch } : { result: 'already' as const, launch: manual.launch };
     }
-    const outcome = await claimEvent(target.event, { github: deps.github, registry, brand });
+    const outcome = await claimEvent(target.event, { github: deps.github, registry, brand, launchesRepo: deps.launchesRepo });
     if (outcome.result === 'claimed') return { result: 'claimed' as const, launch: outcome.launch };
     if (outcome.result === 'already-claimed') return { result: 'already' as const, launch: outcome.launch };
     if (outcome.result === 'invalid-config') return { result: 'error' as const, reason: outcome.launch.detail ?? 'launch.yml is invalid' };
@@ -218,7 +218,7 @@ export async function ciRound(deps: CiDeps, options: { detect: boolean }): Promi
   const claimed = await run(async (registry) => {
     const fresh: Launch[] = [];
     if (options.detect) {
-      for (const outcome of await detect({ github: deps.github, registry, brand })) {
+      for (const outcome of await detect({ github: deps.github, registry, brand, launchesRepo: deps.launchesRepo })) {
         if (outcome.result === 'claimed') fresh.push(outcome.launch);
         else if (outcome.result === 'invalid-config') deps.log(`${outcome.event.repo}: ${outcome.launch.detail ?? 'invalid launch.yml'}`);
       }

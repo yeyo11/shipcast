@@ -2,6 +2,7 @@ export * from './repositories/index.ts';
 export * from './github.ts';
 export * from './github-app.ts';
 export * from './detect.ts';
+export * from './launch-history.ts';
 export * from './ai/index.ts';
 export * from './ai-settings.ts';
 export * from './workspace.ts';

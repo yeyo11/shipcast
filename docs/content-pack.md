@@ -1,12 +1,13 @@
 ---
-created_at: 2026-10-26T21:05:17.808588978Z
-updated_at: 2026-10-30T03:14:47.659258472Z
+created_at: 2026-11-02T09:14:07.260883941Z
+updated_at: 2026-11-02T09:14:07.260883941Z
 tags:
     - schema
     - content-pack
     - ai
     - decision
     - sources
+    - release-notes
 ---
 # The content pack
 
@@ -128,6 +129,27 @@ A launch made from sources holds the principle per source: its analysis lists `c
 statement any piece will make with the sources that show it, and the draft is refused when a claim
 cites a source the launch does not have. Its `implemented` may be empty (an opinion shows nothing
 running), which only a pack with claims may leave so ([sources.md](sources.md)).
+
+## What a release's pack is written from
+
+Besides the code at the tag, a release's pack prompt (`buildPrompt` in
+`packages/engine/src/prompt.ts`) carries the release's notes, its body on GitHub, read when the launch
+is drafted (`releaseNotesOf`, through the GitHub source's `releaseNotes`). They are quoted between
+`<release-notes>` tags as the author's statement of what changed in this release and why, under the
+same rule as the README: each claim in them is checked against the code, and what the code does not
+back goes to `documentedOnly`, never into a piece. Past 12,000 characters (`RELEASE_NOTES_MAX`) they
+are cut at a line, with a note that the rest is on GitHub. A release with no notes tells a `major` or
+`minor` pack to find what changed from the code and its git history; a repo made public has no
+release and no notes. Reading the notes never stops a launch: a failure drafts without them.
+
+The default `pack.major` and `pack.minor` prompts lead with what changed in this release, so a later
+version is about that version and does not reintroduce the project (added on 2026-11-02, after the
+Action drafted Sluice v0.10.1 as a generic introduction that never named the 0.10 change its notes
+described). Which pack a release gets is in [launch-yml.md](launch-yml.md#which-pack-a-release-gets).
+
+The drafts pull request opens with a warning when the brand has no tone (neither brand.yml's `tone`
+nor the tone in the AI settings): "brand.yml has no tone: these drafts were written in a generic
+voice", with what to fill (`draftWarnings` in `pipeline.ts`).
 
 ## Valid is not complete
 

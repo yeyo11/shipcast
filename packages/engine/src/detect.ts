@@ -1,5 +1,6 @@
 import { formatIssues, matchingRule, parseLaunchConfig, resolvePack, type Brand, type PackKind } from '@shipcast/schema';
 import type { GitHubEvent, GitHubSource } from './github.ts';
+import { previousLaunchRef } from './launch-history.ts';
 import { dedupeKeyOf, ruleLaunchYml } from './launch-keys.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
 import type { TriggerService } from './services/triggers.ts';
@@ -26,6 +27,11 @@ export interface DetectOptions {
   triggers?: Pick<TriggerService, 'rules' | 'claimKeeping'> | undefined;
   /** Whether the owner removed the launch a dedupe key names; its events launch nothing again */
   removed?: ((dedupeKey: string) => Promise<boolean>) | undefined;
+  /**
+   * The launches repo, whose earlier launches and articles of a project tell its first launch from a
+   * later one (launch-history.ts); without it, the registry and the project's releases decide
+   */
+  launchesRepo?: string | undefined;
 }
 
 /**
@@ -110,7 +116,9 @@ export async function claimEvent(event: GitHubEvent, options: DetectOptions): Pr
   }
 
   const kind =
-    event.type === 'public' ? (value.pack ?? 'launch') : resolvePack(value, event.tag, await registry.launches.lastPublishedRef(event.repo));
+    event.type === 'public'
+      ? (value.pack ?? 'launch')
+      : resolvePack(value, event.tag, value.pack ? undefined : await previousLaunchRef(event.repo, event.tag, { github, registry, launchesRepo: options.launchesRepo }));
   let claimed: { claimed: boolean; launch: Launch };
   if (kept && options.triggers && rule) {
     try {

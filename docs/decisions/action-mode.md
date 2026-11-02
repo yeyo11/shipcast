@@ -1,12 +1,13 @@
 ---
-created_at: 2026-10-25T20:26:09.906777237Z
-updated_at: 2026-10-25T20:26:09.906777237Z
+created_at: 2026-11-02T09:14:28.349589671Z
+updated_at: 2026-11-02T09:14:28.349589671Z
 tags:
     - decision
     - github-action
     - ci
     - registry
     - phase-11
+    - pack
 ---
 # Decision: the GitHub Action mode
 
@@ -99,6 +100,21 @@ pack is written with the read-only **repo tools** over the release's checkout on
 article is still written from the code. Every task uses that provider, whatever the AI settings in
 the registry say (they may name claudio); the edited prompts and the tone override in the registry's
 settings still apply.
+
+## What a release is compared with: the launches repo, not only the registry
+
+Added on 2026-11-02. A fresh state branch has an empty registry, so the first Action run of a project
+the blog had already covered (Sluice v0.10.1, announced as an article four days earlier) found no
+earlier launch, got the `launch` pack and reintroduced the project. The kind of a pack is now decided
+from what exists (`previousLaunchRef`, [launch-yml.md](../launch-yml.md#which-pack-a-release-gets)):
+the registry, then the launches repo's earlier launch folders and blog posts that name the repo (their
+`repo:` and `version:` front matter), then the project's earlier releases. `ci launch`, `ci round
+--detect` and a manual launch pass the launches repo to the claim; the local install does the same, so
+both modes decide alike. `launch.yml`'s `pack` still wins.
+
+The draft also reads the release's notes into the pack prompt
+([content-pack.md](../content-pack.md#what-a-releases-pack-is-written-from)), and when the brand has
+no tone the drafts pull request says so at the top, which `shipcast init` now asks for.
 
 ## The networks' credentials: Actions secrets on the existing names
 

@@ -5,9 +5,10 @@ import { LAUNCH_CONFIG_PATH } from './detect.ts';
 import { asPublishedDirectly, draftsBranch, isArticle, keepPubDates, projectSlug, pullRequestBody, renderDrafts, screenshotPaths, type DraftFile } from './drafts.ts';
 import { draftFromSources, type SourcesDeps } from './sources/draft.ts';
 import { generatePack } from './generate.ts';
-import type { PromptOptions } from './prompt.ts';
+import { releaseNotesOf, type PromptOptions } from './prompt.ts';
 import type { SiteCapture } from '@shipcast/capture';
 import { buildAssets } from './launch-assets.ts';
+import { previousLaunchRef } from './launch-history.ts';
 import type { GitHubSource, GitHubWriter } from './github.ts';
 import type { Launch, Repositories } from './repositories/index.ts';
 import type { LaunchReadService } from './services/launch-read.ts';
@@ -186,7 +187,8 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   } catch (error) {
     return fail([`the AI settings: ${error instanceof Error ? error.message : String(error)}`]);
   }
-  const generated = await generatePack({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref });
+  const releaseNotes = await releaseNotesOf(launch, deps.github);
+  const generated = await generatePack({ runner: deps.aiRunner, ...texts, launch, config, brand, checkout, ref, releaseNotes });
   if (!generated.ok) {
     return fail([...generated.problems, ...(generated.chatId ? [`claudio chat: ${generated.chatId}`] : [])]);
   }
@@ -195,10 +197,18 @@ export async function draftLaunch(launch: Launch, brand: Brand, deps: PipelineDe
   return deliverPack(launch, generated.pack, config, brand, checkout, deps, options, {
     branch: draftsBranch(launch),
     title: `Launch ${name}`,
-    body: pullRequestBody(generated.pack, launch, config),
+    body: pullRequestBody(generated.pack, launch, config, draftWarnings(brand, texts)),
     message: `launch: ${name}\n\nDrafted by Shipcast from the code of ${launch.repo} at ${launch.ref}.`,
     source: { pack: generated.pack, configText: text },
   });
+}
+
+/** What the owner should know before merging a draft that is not about its content: a voice the AI never had */
+export function draftWarnings(brand: Pick<Brand, 'tone'>, texts: Pick<PromptOptions, 'tone'>): string[] {
+  if (texts.tone?.trim() || brand.tone.trim()) return [];
+  return [
+    '**brand.yml has no tone:** these drafts were written in a generic voice (first person, direct and technical). Describe how you write in `tone` in the launches repo\'s brand.yml, in a few sentences, and the next launch is written in your voice.',
+  ];
 }
 
 /** Records a launch's failure with its problems, and answers it as the draft's result */
@@ -250,7 +260,7 @@ export async function claimManual(
   repo: string,
   ref: string | undefined,
   brand: Brand,
-  deps: Pick<PipelineDeps, 'github' | 'registry'>,
+  deps: Pick<PipelineDeps, 'github' | 'registry'> & { launchesRepo?: string | undefined },
 ): Promise<{ claimed: boolean; launch: Launch } | { error: string }> {
   const tag = ref ?? (await deps.github.latestRelease(repo))?.tag;
   if (!tag) return { error: `${repo} has no published release; pass --ref <tag>` };
@@ -259,7 +269,7 @@ export async function claimManual(
   const parsed = parseLaunchConfig(text);
   if (!parsed.ok) return { error: formatIssues(LAUNCH_CONFIG_PATH, parsed.issues) };
   if (!parsed.value.triggers.manual) return { error: `manual launches are turned off in ${repo}'s launch.yml` };
-  const kind = resolvePack(parsed.value, tag, await deps.registry.launches.lastPublishedRef(repo));
+  const kind = resolvePack(parsed.value, tag, parsed.value.pack ? undefined : await previousLaunchRef(repo, tag, deps));
   const claim = await deps.registry.launches.claim({ repo, ref: tag, trigger: 'manual', kind, brand: brand.id });
   // A failed launch published nothing, so asking for it again by hand retries it; one that is drafted,
   // published or skipped stays claimed, which is what keeps a campaign from happening twice

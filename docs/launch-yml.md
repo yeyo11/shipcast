@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-25T10:29:05.41216436Z
-updated_at: 2026-10-30T03:14:02.144761572Z
+created_at: 2026-11-02T09:13:31.066318942Z
+updated_at: 2026-11-02T09:13:31.066318942Z
 tags:
     - schema
     - launch-yml
     - configuration
     - sources
+    - pack
 ---
 # launch.yml
 
@@ -125,6 +126,30 @@ with no repo ([sources.md](sources.md)).
 launch of a project is `launch`, a new major version is `major`, everything else `minor`. Before 1.0 a
 minor bump counts as major, semver's own rule for 0.y.z, so claudio's v0.8 → v0.9 is `major`. A tag
 that is not semver gets `minor`, the quiet choice.
+
+`previous` is the project's last announcement before this release, from `previousLaunchRef` in
+`packages/engine/src/launch-history.ts`. The same function decides for every claim (the watcher, a
+webhook, a launch by hand, and Action mode's `shipcast ci`), and each source is asked only when the
+ones before it found nothing:
+
+1. **The registry**: the repo's last launch that was published.
+2. **The launches repo**: an earlier `launches/<project>/<ref>/` folder (a launch whose drafts pull
+   request was merged), or a blog post under `src/content/posts/` whose front matter names the repo
+   (`repo:`), with its `version:`. Only posts whose file name contains the project's name are read,
+   at most 20. A post that names the repo with no version still counts as announced (`minor`).
+3. **The project's releases**: an earlier published release that is not a pre-release. A project with
+   an earlier release is not being launched for the first time, whether or not that release was
+   announced.
+
+Of what a source finds, the highest version below the release is `previous`. A lookup that fails is
+treated as finding nothing. So only a project's truly first release, with nothing in the launches
+repo, gets the `launch` pack; a project that adopts Shipcast after earlier releases and wants a full
+introduction sets `pack: launch` for that release. A forced `pack` skips the lookups. A repo made
+public has no release and keeps `launch` unless `pack` says otherwise.
+
+Added on 2026-11-02: before, only the registry counted, so Action mode, which starts with an empty
+registry on the state branch, drafted a project the blog had already covered as a first launch and
+reintroduced it.
 
 ## Related
 

@@ -92,6 +92,22 @@ test('ci launch: a release is claimed, drafted and recorded once; a re-run and a
   assert.equal(snapshot.tables.launches?.[0]?.status, 'drafted');
 });
 
+test('ci launch: on an empty state branch, a project already announced in the launches repo gets a later-version pack, not a launch', async () => {
+  // The Sluice v0.10.1 case (2026-11-02): the Action's registry knew no earlier launch, the blog did
+  const remote = bareRemote();
+  const kinds: string[] = [];
+  const { deps } = run(remote, 'run', []);
+  deps.draft = async (launch: Launch): Promise<DraftResult> => {
+    kinds.push(launch.kind);
+    return { ok: true, launch, pullRequest: 'https://github.com/me/launches/pull/1' };
+  };
+  const github = deps.github as FakeGitHub;
+  github.setFile('me/launches', 'src/content/posts/en/app-intro.md', '---\ntitle: "App"\nrepo: "https://github.com/me/app"\nversion: "v0.9.0"\n---\n\nBody.\n');
+  const result = await ciLaunch(deps, launchTarget({ eventName: 'release', payload: RELEASE }));
+  assert.equal(result.outputs.status, 'drafted');
+  assert.deepEqual(kinds, ['major'], 'v0.9.0 → v1.0.0, compared with the version the blog announced');
+});
+
 test('ci publish: a merged pull request is published once its article is live, polling while it deploys', async () => {
   const remote = bareRemote();
   const drafted: string[] = [];

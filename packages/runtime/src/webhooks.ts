@@ -95,6 +95,6 @@ export async function launchOfPullRequest(d: Pick<RoundDeps, 'registry'>, url: s
 }
 
 /** Claims the release a webhook announced, by the same rules as polling (the trigger rules and the deletions too, when on) */
-export function claimFromWebhook(d: Pick<RoundDeps, 'github' | 'registry' | 'brand'> & { pipeline?: Pick<PipelineDeps, 'triggers' | 'removed'> }, event: GitHubEvent): Promise<Outcome> {
-  return claimEvent(event, { github: d.github, registry: d.registry, brand: d.brand, triggers: d.pipeline?.triggers, removed: d.pipeline?.removed });
+export function claimFromWebhook(d: Pick<RoundDeps, 'github' | 'registry' | 'brand'> & { pipeline?: Pick<PipelineDeps, 'triggers' | 'removed' | 'launchesRepo'> }, event: GitHubEvent): Promise<Outcome> {
+  return claimEvent(event, { github: d.github, registry: d.registry, brand: d.brand, triggers: d.pipeline?.triggers, removed: d.pipeline?.removed, launchesRepo: d.pipeline?.launchesRepo });
 }
