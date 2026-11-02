@@ -1,33 +1,35 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sql } from 'drizzle-orm';
-import { draftFile, type Channel } from '@shipcast/schema';
+import { draftFile, parseLaunchConfig, type Channel } from '@shipcast/schema';
 import {
+  channelRows,
+  draftOfPiece,
   editPost,
-  gitBlobSha,
-  inTransaction,
   launchConfigOf,
+  launchDir,
   launchGrounding,
   launchMediaPath,
-  LaunchImportService,
   LaunchNotHeld,
   LaunchReadService,
   LaunchStoreService,
   launchReplyContext,
+  mediaKind,
+  mimeOf,
+  storedFile,
   type EditDeps,
-  type ImportGitHub,
   type Launch,
   type PostKind,
   type Review,
   type ReviewGitHub,
-  type TreeFile,
 } from '../src/index.ts';
 import { FakeGitHub, memoryRegistry, MemoryMediaStore } from '../src/testing/index.ts';
 
 /*
  * Reading launches from the launch model (docs/launch-store-read.md): a launch the tables hold is
- * read from them alone. Checked on launches imported from a launches repo with two merged pull
- * requests; a launch they do not hold is not read from GitHub any more (phase 8).
+ * read from them alone. Checked on two launches decided in merged pull requests, held as the import
+ * of those launches wrote them (docs/launch-import.md); a launch the tables do not hold is not read
+ * from GitHub any more (phase 8).
  */
 
 const LAUNCHES = 'yeyo11/launches';
@@ -88,27 +90,9 @@ const COMMITS: Record<string, Record<string, string | Uint8Array>> = {
 const PULLS: Record<number, { head: string; branch: string }> = { 1: { head: HEAD_RELEASE, branch: 'launch/claudio-v1.0.0' }, 2: { head: HEAD_ARTICLE, branch: 'article/my-post' } };
 const text = (content: string | Uint8Array | undefined) => (content === undefined ? undefined : typeof content === 'string' ? content : new TextDecoder().decode(content));
 
-/** The launches repo with two merged pull requests, as the import reads it and as the legacy page reads it */
-class LaunchesRepo implements ImportGitHub, ReviewGitHub {
-  readonly #blobs = new Map<string, Uint8Array>();
+/** The launches repo with two merged pull requests, which nothing should read once the tables hold them */
+class LaunchesRepo implements ReviewGitHub {
   calls: string[] = [];
-
-  async commitSha(repo: string, ref: string): Promise<string> {
-    return repo === LAUNCHES && ref === 'HEAD' ? MAIN : 'd'.repeat(40);
-  }
-
-  async tree(_repo: string, sha: string): Promise<TreeFile[]> {
-    return Object.entries(COMMITS[sha] ?? {}).map(([path, content]) => {
-      const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
-      const blob = gitBlobSha(bytes);
-      this.#blobs.set(blob, bytes);
-      return { path, sha: blob, size: bytes.byteLength };
-    });
-  }
-
-  async blob(_repo: string, sha: string): Promise<Uint8Array> {
-    return this.#blobs.get(sha)!;
-  }
 
   async fileAt(repo: string, path: string, ref: string): Promise<string | undefined> {
     this.calls.push(`fileAt ${repo} ${path}@${ref}`);
@@ -135,11 +119,69 @@ class LaunchesRepo implements ImportGitHub, ReviewGitHub {
   }
 }
 
-const never = async (): Promise<never> => {
-  throw new Error('the legacy path was taken');
-};
+const bytesOf = (content: string | Uint8Array) => (typeof content === 'string' ? new TextEncoder().encode(content) : content);
 
-/** Two launches published from merged pull requests, imported into the launch model */
+/**
+ * Holds a launch decided in a merged pull request as the import wrote it: the pack, the channel rows
+ * (a channel on that never published turned off), a version per text at the pull request's head and
+ * another where main changed it after the merge, the media, the merge as the approval, and each
+ * published piece pointed at its draft's current version.
+ */
+async function hold(registry: Awaited<ReturnType<typeof memoryRegistry>>, media: MemoryMediaStore, launch: Launch, number: number, channelsText: string) {
+  const head = COMMITS[PULLS[number]!.head]!;
+  const main = COMMITS[MAIN]!;
+  const batch = 'batch-1';
+  const pack = JSON.parse(text(head[`${launchDir(launch)}/pack.json`])!) as Record<string, unknown>;
+  const { id: packId } = await registry.launchStore.addPack(launch.id, pack, { aiTask: 'import (pull request)', importBatch: batch });
+
+  const published = await registry.posts.posts(launch.id);
+  const parsed = parseLaunchConfig(channelsText);
+  assert.ok(parsed.ok);
+  const rows = channelRows(parsed.value).map((row) => (row.mode === 'off' || published.some((p) => p.channel === row.channel) ? row : { ...row, mode: 'off' as const, note: 'not published before the import' }));
+  await registry.launchStore.replaceChannels(launch.id, rows, channelsText, batch);
+
+  const approved: Record<string, number> = {};
+  const current = new Map<string, number>();
+  const drafts: Array<{ channel: string; piece: string }> = [];
+  for (const path of Object.keys(head).sort()) {
+    const stored = storedFile(launch, path);
+    if (stored.kind === 'draft') {
+      const versions = [text(head[path])!, ...(text(main[path]) !== text(head[path]) ? [text(main[path])!] : [])];
+      const ids: number[] = [];
+      let draftId = 0;
+      for (const body of versions) {
+        const added = await registry.launchStore.addVersion(launch.id, { channel: stored.channel, piece: stored.piece, body, fields: { path }, origin: 'import', packId, importBatch: batch });
+        ids.push(added.versionId);
+        draftId = added.draftId;
+      }
+      approved[String(draftId)] = ids[0]!;
+      current.set(`${stored.channel}\n${stored.piece}`, ids.at(-1)!);
+      drafts.push({ channel: stored.channel, piece: stored.piece });
+    } else if (stored.kind === 'media') {
+      const put = await media.put(bytesOf(main[path] ?? head[path]!), mimeOf(path));
+      await registry.launchStore.addMedia({
+        launchId: stored.shared ? null : launch.id,
+        sha256: put.sha256,
+        kind: mediaKind(put.mime),
+        mime: put.mime,
+        bytes: put.bytes,
+        storage: media.storage,
+        path: put.key,
+        role: stored.role,
+        publicPath: stored.publicPath,
+        importBatch: batch,
+      });
+    }
+  }
+  await registry.launchStore.approveOnce(launch.id, { by: 'yeyo11', at: '2026-10-24T23:10:06Z', note: `merged https://github.com/${LAUNCHES}/pull/${number} (imported)`, versions: approved, importBatch: batch });
+  for (const post of published) {
+    const piece = draftOfPiece(post.channel, post.kind, drafts);
+    const versionId = piece === undefined ? undefined : current.get(`${post.channel}\n${piece}`);
+    if (versionId !== undefined) await registry.database.execute(sql`UPDATE posts SET draft_version_id = ${versionId} WHERE id = ${post.id}`);
+  }
+}
+
+/** Two launches published from merged pull requests, held by the launch model as the import left them */
 async function imported() {
   const registry = await memoryRegistry();
   const github = new LaunchesRepo();
@@ -152,9 +194,8 @@ async function imported() {
   };
   const release = await published('yeyo11/claudio', 'v1.0.0', 'manual', 1, 'claudio', [['blog', 'article:en'], ['bluesky', 'post']]);
   const article = await published(LAUNCHES, 'article:my-post', 'article', 2, 'my-post', [['blog', 'article:es'], ['bluesky', 'post']]);
-  const service = new LaunchImportService({ registry, inTransaction: (work) => inTransaction(registry, work), github, media, launchesRepo: LAUNCHES, dryPublishing: never as never, writable: true });
-  await service.apply(await service.plan({ deletions: [] }));
-  github.calls = [];
+  await hold(registry, media, release, 1, LAUNCH_YML);
+  await hold(registry, media, article, 2, ARTICLE_YML);
   return { registry, github, media, release, article, read: new LaunchReadService({ registry, media }) };
 }
 
@@ -226,7 +267,7 @@ test('a launch the tables do not hold: no review when nothing was drafted, a cle
   const { launch } = await registry.launches.claim({ repo: 'yeyo11/other', ref: 'v1.0.0', trigger: 'manual', kind: 'launch', brand: 'personal' });
   assert.equal(await read.review(launch), undefined);
   const inPullRequest = await registry.launches.setStatus(launch.id, 'drafted', `https://github.com/${LAUNCHES}/pull/3`);
-  await assert.rejects(read.review(inPullRequest), (error: unknown) => error instanceof LaunchNotHeld && /scripts\/import-launches\.ts --apply/.test(error.message) && error.httpStatus === 409);
+  await assert.rejects(read.review(inPullRequest), (error: unknown) => error instanceof LaunchNotHeld && /no longer reads/.test(error.message) && error.httpStatus === 409);
   assert.equal(await read.channelConfig(inPullRequest), undefined, 'nothing to schedule by');
   assert.equal(await read.pack(inPullRequest), undefined, 'nothing to ground in');
   assert.equal(await read.mediaFile(1), undefined);

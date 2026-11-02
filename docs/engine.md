@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-11-01T17:54:00.216819Z
+updated_at: 2026-11-02T07:04:22.800610444Z
 tags:
     - engine
     - registry
@@ -55,7 +55,6 @@ on 2026-10-29.)
 | `CommentService` | list, edit a reply's draft, send, dismiss, settings |
 | `MetricsService` | read now; the hourly reads (`readHourly`) |
 | `LaunchStoreService` | the launch model's write: a held launch's rows, and a published article's later edits ([launch-store.md](launch-store.md)) |
-| `LaunchImportService` | the import of the launches drafted before the shadow write, and the deletion of the ones decided away: plan, apply (with `launch-import`), verify, roll back; run by `scripts/import-launches.ts` ([launch-import.md](launch-import.md)) |
 | `LaunchReadService` | with `launch-store-read`: a launch's drafts (the review), its channels and its pack read from the launch model's tables for the launch page, the REST API, scheduling and the assistants' grounding, and its stored files for `/media/<id>`; a launch the tables do not hold is read as before ([launch-store-read.md](launch-store-read.md)) |
 | `AppReviewService` | with `app-review`: a new launch held by Shipcast with no pull request (`hold`), its edits as versions, its approval as a row, whether anything can go out, what publishing reads, the one commit of its article and media to the launches repo at publishing, and the preview on the real site ([app-review.md](app-review.md)) |
 | `TriggerService` | with `launch-triggers`: the owner's trigger rules (read, saved), and the channels a launch a rule created for a repo without launch.yml keeps ([launch-triggers.md](launch-triggers.md)); the claim itself stays `claimEvent` |
@@ -85,8 +84,7 @@ uses; `inTransaction` runs a use case over several in one transaction.
 | `metrics` | readings, history, `lastChecked` |
 | `accounts` | connected accounts and their daily snapshots |
 | `launchStore` | the launch model's packs, channel rows, drafts and versions, media and approvals |
-| `launchImports` | the import's batch log (`launch_imports`), the deletion of a launch with every row on it and its restore, a batch's rollback |
-| `launchDeletions` | the launches the owner deleted (`launch_deletions`), and whether a dedupe key's launch was removed |
+| `launchDeletions` | the launches the owner deleted (`launch_deletions`), whether a dedupe key's launch was removed, and the removal of a launch with every row on it (`removeLaunch`) |
 | `jobs`, `comments`, `settings`, `cursors`, `apiTokens`, `assistant`, `attention` | as named |
 | `queries` | the raw read-only SQL the query builder cannot say (stats, telemetry reports, checks) |
 

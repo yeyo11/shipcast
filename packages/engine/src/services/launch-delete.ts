@@ -123,7 +123,7 @@ export class LaunchDeletionService {
         if (locked.deletedAt) throw new DeletionRefused('state', `This launch cannot be deleted: it was deleted already, on ${locked.deletedAt.slice(0, 10)}.`);
         if (await this.#sentOrSending(tx, launch.id)) throw new DeletionRefused('state', 'This launch cannot be removed: a piece of it was published meanwhile, or is being published. Delete it again to hide it.');
         // Its scheduled pieces, attempts and snapshot go with it; jobs and assistant sessions stay, unlinked
-        await tx.launchImports.removeLaunch(launch.id);
+        await tx.launchDeletions.removeLaunch(launch.id);
         return tx.launchDeletions.record({ ...base, mode: 'removed', channels: [], articleLinks: null });
       });
       problems.push(...(await this.#dropUnusedMedia(files)));

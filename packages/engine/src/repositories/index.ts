@@ -10,7 +10,6 @@ import { JobRepository } from './jobs.ts';
 import { AccountRepository } from './accounts.ts';
 import { CursorRepository } from './cursors.ts';
 import { LaunchStoreRepository } from './launch-store.ts';
-import { LaunchImportRepository } from './launch-imports.ts';
 import { LaunchDeletionRepository } from './launch-deletions.ts';
 import { SettingRepository } from './settings.ts';
 import { LaunchSourceRepository } from './sources.ts';
@@ -40,7 +39,6 @@ export * from './jobs.ts';
 export * from './accounts.ts';
 export * from './cursors.ts';
 export * from './launch-store.ts';
-export * from './launch-imports.ts';
 export * from './launch-deletions.ts';
 export * from './settings.ts';
 export * from './sources.ts';
@@ -63,8 +61,6 @@ export interface Repositories {
   readonly cursors: CursorRepository;
   /** A launch's packs, channel rows, draft versions, media and approvals in Shipcast (the launch model) */
   readonly launchStore: LaunchStoreRepository;
-  /** The import of the launches drafted before Shipcast held them: its batch log, deletions and rollbacks */
-  readonly launchImports: LaunchImportRepository;
   /** The launches the owner deleted, and the keys a trigger never launches again */
   readonly launchDeletions: LaunchDeletionRepository;
   readonly settings: SettingRepository;
@@ -91,7 +87,6 @@ export function repositoriesOn(db: Database): Repositories {
     accounts: new AccountRepository(db),
     cursors: new CursorRepository(db),
     launchStore: new LaunchStoreRepository(db),
-    launchImports: new LaunchImportRepository(db),
     launchDeletions: new LaunchDeletionRepository(db),
     settings: new SettingRepository(db),
     sources: new LaunchSourceRepository(db),

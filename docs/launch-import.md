@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T03:59:25.123165739Z
-updated_at: 2026-11-01T16:04:59.361816994Z
+updated_at: 2026-11-02T07:04:04.57344425Z
 tags:
     - launches
     - launch-model
@@ -10,6 +10,14 @@ tags:
     - operations
 ---
 # The import of the existing launches
+
+> **Historical.** The import's script, its service, its repository and its tests were removed on
+> 2026-11-02, with the old draft folders of the launches repo it read
+> ([decisions/launch-model.md](decisions/launch-model.md#where-it-stands)). What stays is what it
+> wrote: the rows of the launches it imported, the `import_batch` columns and the `launch_imports`
+> log, from which a batch can still be told apart and, by hand, rolled back; and the pure mapping
+> (`packages/engine/src/launch-import.ts`) the launch page, the review and publishing read those rows
+> with. The `launch-import` flag name stays retired. The rest of this page is how it worked.
 
 The third phase of [decisions/launch-model.md](decisions/launch-model.md), built on 2026-10-30
 behind the `launch-import` flag, which was retired on 2026-11-01: the script's own `--apply` is the
@@ -136,13 +144,16 @@ deployed, the running one still wants `launch-import` in `SHIPCAST_FLAGS` for `-
 name is ignored and `--apply` alone writes. Capture BullMQ's article jobs before (launch 8's input),
 and run it before pg-boss drops launch 6's job, a week after it completed.
 
-### Why the script stays
+### Why the script went
 
-Phase 8 of the decision removes the pull-request path, and the import is how a launch of that path
-becomes one the app can read. It has not run in production yet, so the script is kept, working, with
-the command line as its guard instead of a flag. Once it has run and been verified there, and the old
-draft folders are deleted from the launches repo, it has nothing left to read: removing it then is
-part of that later step ([decisions/launch-model.md](decisions/launch-model.md)).
+Phase 8 of the decision removed the pull-request path, and the import was how a launch of that path
+became one the app can read, so the script was kept, working, with the command line as its guard
+instead of a flag. With the old draft folders deleted from the launches repo it has nothing left to
+read, and on 2026-11-02 it was removed with its service (`LaunchImportService`), its repository
+(`LaunchImportRepository`, whose deletion of a launch with every row on it moved to
+`launchDeletions.removeLaunch` for [launch-delete.md](launch-delete.md)), the runtime's
+`dryPublishing()` its verification ran, and its tests. A launch drafted in a pull request that the
+rows do not hold stays a `LaunchNotHeld` error ([launch-store-read.md](launch-store-read.md)).
 
 ## Related
 

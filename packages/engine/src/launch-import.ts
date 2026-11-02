@@ -1,41 +1,16 @@
-import { createHash } from 'node:crypto';
 import { isMap, isScalar, parseDocument } from 'yaml';
 import { CHANNELS, ContentPack, parseLaunchConfig, PublishMode, type LaunchConfig } from '@shipcast/schema';
 import { channelsAsLaunchYml, MAIN_PIECE } from './launch-store.ts';
-import type { ChannelRow, Launch } from './repositories/index.ts';
+import type { ChannelRow } from './repositories/index.ts';
 
 /*
- * The pure part of the import of the launches drafted before Shipcast held them (docs/launch-import.md):
- * how a launch, its published pieces and the owner's input map onto the launch model's rows. The
- * files themselves map through the shadow write's `storedFile`, so both read a pull request alike.
+ * How the rows of a launch decided in a pull request read today: the mapping the import of those
+ * launches used (docs/launch-import.md; its script is removed), kept for the rows it wrote, which
+ * the launch page, the review and publishing still read.
  */
-
-/** Why a channel the import turned off is off: nothing of it was ever published, so nothing old goes out now */
-export const NOT_PUBLISHED = 'not published before the import';
-
-/** The git blob hash of a file's bytes, which a commit's tree lists: a copy is checked against the commit without reading the file again */
-export function gitBlobSha(content: Uint8Array | string): string {
-  const bytes = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
-  return createHash('sha1').update(`blob ${bytes.byteLength}\0`).update(bytes).digest('hex');
-}
 
 /** Moved to launch-keys.ts, which core detection imports without the import's dependencies; re-exported for its callers */
 export { dedupeKeyOf } from './launch-keys.ts';
-
-/**
- * The launch's channel rows as imported: a channel that was on but never published anything (a
- * piece of any status) is turned off, so re-running the launch, or a retry, can never send a draft
- * of weeks ago. A channel off stays off; one with pieces keeps its mode.
- */
-export function importedChannels(rows: readonly ChannelRow[], published: ReadonlySet<string>): { rows: ChannelRow[]; turnedOff: string[] } {
-  const turnedOff: string[] = [];
-  const out = rows.map((row) => {
-    if (row.mode === 'off' || published.has(row.channel)) return row;
-    turnedOff.push(row.channel);
-    return { ...row, mode: 'off', note: NOT_PUBLISHED };
-  });
-  return { rows: out, turnedOff };
-}
 
 /**
  * A launch.yml read as today's schema reads it, even one written before a channel or a mode was
@@ -93,33 +68,4 @@ export function draftOfPiece(channel: string, kind: string, drafts: ReadonlyArra
   const own = drafts.filter((d) => d.channel === channel).map((d) => d.piece);
   const part = kind.includes(':') ? kind.slice(kind.indexOf(':') + 1) : undefined;
   return [kind, part, MAIN_PIECE].find((p) => p !== undefined && own.includes(p)) ?? (own.length === 1 ? own[0] : undefined);
-}
-
-/** The owner's input to an article launch, as the job that drafted it carried it */
-export interface CapturedArticleInput {
-  launchId: number;
-  input: { title?: string; lang?: string; markdown?: string; channels?: string[] };
-}
-
-/**
- * The article inputs of a capture, one job per line: pg-boss's `{ launchId, input }` or a BullMQ job's
- * `{ data: { launchId, input } }`. A line that is neither is reported rather than skipped.
- */
-export function parseArticleInputs(text: string, name: string): CapturedArticleInput[] {
-  return text
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line, i) => {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        throw new Error(`${name}:${i + 1}: not JSON`);
-      }
-      const record = parsed as { launchId?: unknown; input?: unknown; data?: { launchId?: unknown; input?: unknown } };
-      const job = record.data ?? record;
-      const launchId = Number(job.launchId);
-      if (!Number.isInteger(launchId) || typeof job.input !== 'object' || job.input === null) throw new Error(`${name}:${i + 1}: no launchId and input`);
-      return { launchId, input: job.input as CapturedArticleInput['input'] };
-    });
 }

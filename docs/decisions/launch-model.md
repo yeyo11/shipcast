@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T22:52:52.911566745Z
-updated_at: 2026-11-01T16:09:36.762469206Z
+updated_at: 2026-11-02T07:05:04.7085882Z
 tags:
     - decision
     - launches
@@ -88,26 +88,31 @@ code**:
   from GitHub: its review is a clear error (`LaunchNotHeld`, 409) that names the import, rather than a
   read-only fallback that would keep the whole pull-request read path alive. Such a launch is not
   edited or approved in the app.
-- The shadow write and its check are gone; the import script is kept, writing on `--apply` alone.
+- The shadow write and its check are gone. On 2026-11-02 the import's script went too, with its
+  service, repository and tests ([launch-import.md](../launch-import.md#why-the-script-went)); its rows,
+  the `import_batch` columns and `launch_imports` stay.
 
 What remains, each a separate step the owner must agree to:
 
-1. **Run the import in production** and verify it ([launch-import.md](../launch-import.md#in-production)),
-   before the image with phase 8 is deployed: until then a launch drafted in a pull request shows the
-   `LaunchNotHeld` error.
-2. **Delete the old draft folders from the launches repo** (they stay in git history): every
-   `launches/<project>/<ref>/` folder's drafts and `pack.json` (the channel drafts `*.md`,
-   `release-notes.md`, `pack.json`) and every `articles/<slug>/` folder (its drafts, `pack.json` and
-   `launch.yml`). Not `public/launches/…` (the media the published posts link), `public/covers/`,
-   `projects.yml`, `brand.yml` or the articles under `src/content/posts/`. Publishing reads none of
-   the folders since phase 8; Action mode, if anyone uses it, still reads them for its own launches.
-   With them gone, `scripts/import-launches.ts` has nothing left to read and can be removed.
-3. **Drop what nothing uses any more**, in a migration of its own after a `pg_dump` (migrations stay
-   additive until then): the `draft_snapshots` table, which nothing writes or reads since phase 8
-   (the import's rollback log and the SQLite converter still name it, and go with it). The
-   `launches.model` column keeps telling launches decided in a pull request (`legacy`) from the
-   others, and the `import_batch` columns and `launch_imports` keep the import's rollback until the
-   import is final.
+1. **The import in production** ([launch-import.md](../launch-import.md#in-production)) was the
+   precondition of deploying phase 8: a launch drafted in a pull request that the rows do not hold
+   shows the `LaunchNotHeld` error. Its script is removed now; the rows it wrote are what the app
+   reads.
+2. **The old draft folders of the launches repo are deleted** in a commit prepared on 2026-11-02 that
+   the owner pushes (they stay in git history): every `launches/<project>/<ref>/` folder's channel
+   drafts `*.md`, `release-notes.md` and `pack.json`, and every `articles/<slug>/` folder's drafts and
+   `pack.json`. Not `public/launches/…` (the media the published posts link), `public/articles/…`
+   (an article's images), `public/covers/`, `projects.yml`, `brand.yml` or the articles under
+   `src/content/posts/`; `launches/README.md` stays, and so does each `articles/<slug>/launch.yml`
+   while the AI settings' prompt preview of an article launch reads it (`previewPrompt`, which falls
+   back to the brand's default channels without it). Publishing reads none of the folders since phase
+   8; Action mode reads them only for its own launches, and the owner's launches repo does not run it.
+   With the folders gone, the import script had nothing left to read and was removed (above).
+3. **Drop what nothing uses any more**, in a migration of its own (migrations stay additive until
+   then): the `draft_snapshots` table, which nothing writes or reads since phase 8 (the SQLite
+   converter still names it, and goes with it). The `launches.model` column keeps telling launches
+   decided in a pull request (`legacy`) from the others, and the `import_batch` columns and
+   `launch_imports` keep the record of the import.
 
 ## Related
 

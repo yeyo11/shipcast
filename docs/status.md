@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-01T23:02:56.639557565Z
+updated_at: 2026-11-02T07:04:50.467299559Z
 tags:
     - status
     - roadmap
@@ -175,9 +175,10 @@ media on R2, every launch held, reviewed and approved in Shipcast, launches from
 rules and deletion. On 2026-11-01 its flags were retired and phase 8 was done in the code: no pull
 request for a new launch in the app, no drafts snapshot, the `pull_request` webhook ignored, launches
 decided in pull requests read and published from their rows. Before that image is deployed the
-import must have run in production ([launch-import.md](launch-import.md#in-production)); the old
-draft folders' deletion from the launches repo and the drop of `draft_snapshots` are later steps the
-owner agrees to.
+import must have run in production ([launch-import.md](launch-import.md#in-production)). On
+2026-11-02 the import's script was removed and the old draft folders' deletion from the launches repo
+was prepared for the owner to push; the drop of `draft_snapshots` is a later step the owner agrees
+to.
 
 ## Next
 

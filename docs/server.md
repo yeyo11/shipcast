@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-29T00:57:43.940170813Z
-updated_at: 2026-11-01T16:09:22.650375671Z
+updated_at: 2026-11-02T07:04:37.965969539Z
 tags:
     - server
     - deploy
@@ -232,7 +232,7 @@ retiring a flag never needs an environment change first. Retired so far:
 | `launch-sources` | 2026-11-01 | launches made from sources and per-repo stars ([sources.md](sources.md)) |
 | `launch-triggers` | 2026-11-01 | the owner's trigger rules ([launch-triggers.md](launch-triggers.md)) |
 | `launch-delete` | 2026-11-01 | deleting launches from the app, the API and MCP ([launch-delete.md](launch-delete.md)) |
-| `launch-import` | 2026-11-01 | `scripts/import-launches.ts` writes on `--apply` (or `--rollback`) alone ([launch-import.md](launch-import.md)) |
+| `launch-import` | 2026-11-01 | the import's script wrote on `--apply` (or `--rollback`) alone; the script itself was removed on 2026-11-02 ([launch-import.md](launch-import.md)) |
 
 ## Webhooks
 

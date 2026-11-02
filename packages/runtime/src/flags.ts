@@ -35,7 +35,7 @@ const RETIRED: ReadonlySet<string> = new Set([
   'launch-sources',
   'launch-triggers',
   'launch-delete',
-  // The import's write is `--apply` alone (scripts/import-launches.ts)
+  // The import of the launches drafted in pull requests, whose script is removed (docs/launch-import.md)
   'launch-import',
 ]);
 

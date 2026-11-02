@@ -18,13 +18,14 @@ export interface LaunchReadDeps {
 
 /**
  * A launch whose drafts went to a pull request but which the launch model does not hold: drafted
- * before the shadow write and not imported (scripts/import-launches.ts), or whose delivery could not
- * be stored. Since the pull-request path is gone (docs/decisions/launch-model.md, phase 8) nothing
- * reads its drafts from GitHub any more: the import brings it in.
+ * before the shadow write and left out of the import (docs/launch-import.md), or whose delivery could
+ * not be stored. Since the pull-request path is gone (docs/decisions/launch-model.md, phase 8) nothing
+ * reads its drafts from GitHub any more, and the import's script is removed: such a launch is not
+ * reviewed in the app.
  */
 export class LaunchNotHeld extends ShipcastError {
   constructor(launch: Pick<Launch, 'id' | 'detail'>) {
-    super(`launch ${launch.id} is not held by Shipcast: its drafts are only in its pull request (${launch.detail?.split('\n')[0] ?? 'unknown'}); import it with scripts/import-launches.ts --apply`, { code: 'not_held', httpStatus: 409 });
+    super(`launch ${launch.id} is not held by Shipcast: its drafts are only in its pull request (${launch.detail?.split('\n')[0] ?? 'unknown'}), which the app no longer reads`, { code: 'not_held', httpStatus: 409 });
   }
 }
 
