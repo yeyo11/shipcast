@@ -131,7 +131,11 @@ unchanged unless the redesign document says so.
   time, Edit and Delete or Unpublish where its network allows them, Retry when it failed, its time
   while it is not out yet; a **Select all** tick above the rows, checked, mixed or clear, that ticks
   every channel with something to edit or, when all are, clears them (`selectAll` in
-  `components/launch/published.ts`, tested); Edit selected and Delete everything above the panel), **Content** (what
+  `components/launch/published.ts`, tested); Edit selected and Delete everything above the panel;
+  **Edit N together** opens the "Edit N pieces" drawer, whose **What changes** list puts the pieces
+  edited together first and those left alone after, each group under its heading with its count
+  ("Edited together (5)", "Left alone (2)") and in the Channels list's order, never alphabetical
+  (`groupedPlan` in `server/pieces.ts`, tested)), **Content** (what
   went out, or the drafts, editable while the launch waits for approval: a save is a new version), **Search engines** and **Details** (properties, accounts, the last reading of every number,
   the launch's jobs). A launch that failed before its drafts were written opens on **Details**, and a
   release with nothing out has **Launch it again**. **The drafts editor** (`/launches/<id>/edit`,

@@ -279,6 +279,7 @@ export function LaunchActionsProvider({ launchId, name, version, rows, drafts, t
       {editing.length > 1 && (
         <EditManySheet
           rows={editing}
+          order={rows}
           onClose={close}
           onApply={async (changes) => {
             const answer = await editPieces({ data: { launchId, postIds: editing.map((r) => r.id), changes } });

@@ -8,6 +8,7 @@ import {
   composedText,
   countdown,
   draftPrefill,
+  groupedPlan,
   groupState,
   isoToZonedInput,
   multiEditPlan,
@@ -187,6 +188,28 @@ test('an edit of several pieces says, per network, what each field becomes and w
   assert.equal(multiEditPlan(rows, {})[0]?.ok, false, 'nothing asked, nothing to do');
   const telegramImage = multiEditPlan(rows, { imageUrl: 'https://img/x.png' })[1];
   assert.equal(telegramImage?.ok, false, 'a photo on Telegram needs its caption written again');
+});
+
+test('the edit of several pieces lists those edited together first, then those left alone, each in the Channels list’s order', () => {
+  // The launch's pieces, as the Channels list reads them: devto, then mastodon (two pieces), discord, bluesky
+  const order = rowsOf([post('devto'), post('mastodon'), post('discord'), post('mastodon'), post('bluesky')]);
+  const [devto, mastodon, discord, mastodon2, bluesky] = order;
+  // Ticked in another order than the list's
+  const chosen = [bluesky!, mastodon2!, discord!, devto!, mastodon!];
+  const plan = multiEditPlan(chosen, { link: 'https://josegarrido.dev/x' });
+  const { together, alone } = groupedPlan(plan, order);
+  assert.deepEqual(together.map((p) => p.id), [devto!.id]);
+  assert.deepEqual(alone.map((p) => p.id), [mastodon!.id, mastodon2!.id, discord!.id, bluesky!.id], 'a channel where its first piece is, its pieces in turn');
+  const withText = groupedPlan(multiEditPlan(chosen, { text: 'New text', link: 'https://josegarrido.dev/x' }), order);
+  assert.deepEqual(withText.together.map((p) => p.channel), ['devto', 'mastodon', 'mastodon', 'discord']);
+  assert.deepEqual(withText.alone.map((p) => p.channel), ['bluesky']);
+  // Not alphabetical, and the same however the pieces were ticked
+  assert.deepEqual(groupedPlan([...plan].reverse(), order), { together, alone });
+  // A piece the list does not have goes after, as it came
+  const stray = rowsOf([post('telegram'), post('reddit')]);
+  const mixed = groupedPlan(multiEditPlan([stray[1]!, discord!, stray[0]!], {}), order);
+  assert.deepEqual(mixed.alone.map((p) => p.channel), ['discord', 'reddit', 'telegram']);
+  assert.deepEqual(groupedPlan([], order), { together: [], alone: [] });
 });
 
 test('one piece’s edit sends what changed, and the text again where the network needs it whole', () => {

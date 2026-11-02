@@ -63,6 +63,8 @@
 .pub-pick { cursor: pointer; }
 .pub-more { padding-top: 0; }
 .pub-changes { padding: 12px; border-radius: 18px; gap: 4px; }
+.pub-plan-group { margin-top: 6px; }
+.pub-plan-head { font-size: 13px; }
 .pub-plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .pub-bad { color: var(--sc-failure); }
 .pub-input { font: inherit; font-size: 16px; width: 100%; }

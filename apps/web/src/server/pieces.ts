@@ -393,6 +393,26 @@ export function multiEditPlan(rows: readonly PieceRow[], changes: SharedChanges)
   });
 }
 
+/**
+ * An edit plan as the sheet lists it: the pieces edited together first, then those left alone, each
+ * group in the order of the launch's Channels list (`order`, the launch's pieces as `channelEntries`
+ * reads them: a channel where its first piece is, its pieces in turn). A piece the list does not
+ * have goes after those it has, as it came.
+ */
+export function groupedPlan(plan: readonly PlanEntry[], order: ReadonlyArray<Pick<PieceRow, 'id' | 'channel'>>): { together: PlanEntry[]; alone: PlanEntry[] } {
+  const channels: string[] = [];
+  for (const r of order) if (!channels.includes(r.channel)) channels.push(r.channel);
+  const at = (list: readonly unknown[], i: number) => (i === -1 ? list.length : i);
+  const key = (p: PlanEntry) => [at(channels, channels.indexOf(p.channel)), at(order, order.findIndex((r) => r.id === p.id))] as const;
+  // Array.prototype.sort is stable: equal keys keep the plan's order
+  const sorted = [...plan].sort((a, b) => {
+    const [ca, ra] = key(a);
+    const [cb, rb] = key(b);
+    return ca - cb || ra - rb;
+  });
+  return { together: sorted.filter((p) => p.ok), alone: sorted.filter((p) => !p.ok) };
+}
+
 /** The form of one piece's edit, as typed */
 export interface EditForm {
   text: string;

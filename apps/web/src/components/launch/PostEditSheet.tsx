@@ -2,7 +2,7 @@ import { channelDefinition } from '@shipcast/schema/channels';
 import { useId, useLayoutEffect, useRef, useState, type UIEvent } from 'react';
 import { diffSummary, wordDiff, type Part } from '../assistant/diff';
 import { Overlay } from '../kit/Overlay';
-import { multiEditPlan, networkName, singleEditChanges, type EditForm, type PieceRow, type SharedChanges } from '../../server/pieces';
+import { groupedPlan, multiEditPlan, networkName, singleEditChanges, type EditForm, type PieceRow, type PlanEntry, type SharedChanges } from '../../server/pieces';
 import { number } from '../ui';
 import { listWords } from './published';
 
@@ -156,7 +156,7 @@ export function PostEditSheet({
 }
 
 /** Several pieces at once: the same text, link or image to each, and what each network does with them */
-export function EditManySheet({ rows, onClose, onApply }: { rows: PieceRow[]; onClose: () => void; onApply: (changes: SharedChanges) => Promise<void> }) {
+export function EditManySheet({ rows, order, onClose, onApply }: { rows: PieceRow[]; /** The launch's pieces, in the Channels list's order */ order: readonly PieceRow[]; onClose: () => void; onApply: (changes: SharedChanges) => Promise<void> }) {
   const [form, setForm] = useState({ text: '', link: '', imageUrl: '', imageAlt: '' });
   const [busy, setBusy] = useState(false);
   const textId = useId();
@@ -166,8 +166,9 @@ export function EditManySheet({ rows, onClose, onApply }: { rows: PieceRow[]; on
     ...(clean(form.link) !== undefined && { link: form.link.trim() }),
     ...(clean(form.imageUrl) !== undefined && { imageUrl: form.imageUrl.trim(), ...(clean(form.imageAlt) !== undefined && { imageAlt: form.imageAlt.trim() }) }),
   };
-  const plan = multiEditPlan(rows, changes);
-  const doable = plan.filter((p) => p.ok).length;
+  // Edited together first, then left alone, each in the Channels list's order
+  const { together, alone } = groupedPlan(multiEditPlan(rows, changes), order);
+  const doable = together.length;
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
   return (
     <Overlay kind="drawer" wide label={`Edit ${rows.length} pieces`} open onOpenChange={(open) => !open && !busy && onClose()} heading={<>Edit {rows.length} pieces</>} footer={
@@ -204,26 +205,40 @@ export function EditManySheet({ rows, onClose, onApply }: { rows: PieceRow[]; on
       <Field label="What the image shows" value={form.imageAlt} onChange={set('imageAlt')} />
       <div className="k-card pub-changes" aria-live="polite">
         <span className="k-lbl">What changes</span>
-        <ul className="pub-plan">
-          {plan.map((p) => (
-            <li key={p.id} className="k-sm">
-              <strong>
-                {networkName(p.channel)}
-                {p.piece ? ` ${p.piece}` : ''}
-              </strong>{' '}
-              {p.ok ? (
-                <span>
-                  {p.changes.length > 0 ? p.changes.join(', ') : 'nothing yet'}
-                  {p.dropped.length > 0 && <span className="k-muted"> · leaves out {p.dropped.join(', ')}</span>}
-                  {p.warning && <span className="k-muted"> · {p.warning}</span>}
-                </span>
-              ) : (
-                <span className="k-muted">left alone: {p.reason}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        {together.length > 0 && <PlanGroup heading={`Edited together (${together.length})`} entries={together} />}
+        {alone.length > 0 && <PlanGroup heading={`Left alone (${alone.length})`} entries={alone} />}
       </div>
     </Overlay>
+  );
+}
+
+/** One group of the edit's plan under its heading with its count */
+function PlanGroup({ heading, entries }: { heading: string; entries: readonly PlanEntry[] }) {
+  const id = useId();
+  return (
+    <div className="k-stack k-g4 pub-plan-group">
+      <span className="k-lbl pub-plan-head" id={id}>
+        {heading}
+      </span>
+      <ul className="pub-plan" aria-labelledby={id}>
+        {entries.map((p) => (
+          <li key={p.id} className="k-sm">
+            <strong>
+              {networkName(p.channel)}
+              {p.piece ? ` ${p.piece}` : ''}
+            </strong>{' '}
+            {p.ok ? (
+              <span>
+                {p.changes.length > 0 ? p.changes.join(', ') : 'nothing yet'}
+                {p.dropped.length > 0 && <span className="k-muted"> · leaves out {p.dropped.join(', ')}</span>}
+                {p.warning && <span className="k-muted"> · {p.warning}</span>}
+              </span>
+            ) : (
+              <span className="k-muted">{p.reason}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
