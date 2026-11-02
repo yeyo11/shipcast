@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:17:21.050199301Z
-updated_at: 2026-11-02T20:17:21.050199301Z
+created_at: 2026-11-02T20:17:24.363838942Z
+updated_at: 2026-11-02T20:18:52.417276158Z
 tags:
     - install
     - cli
@@ -73,6 +73,13 @@ for claudio's address while no task runs on it (`missingNow` in `packages/runtim
 | `--skip-docker` | Postgres is the owner's own |
 | `--skip-github-app` | Create the App later |
 | `--yes` | Ask nothing; take the flags and the defaults |
+
+### An install from before Postgres
+
+An install from before Postgres keeps its registry in `data/shipcast.db`: stop the app and the CLI,
+start Postgres, then `pnpm sqlite-to-postgres` copies every row into the database at
+`SHIPCAST_DATABASE_URL` ([decisions/postgres.md](decisions/postgres.md)). It moved here from the
+README on 2026-11-02.
 
 ## The GitHub Action
 
