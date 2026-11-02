@@ -190,17 +190,19 @@
 .home-palette-back.k-btn { width: 32px; min-height: 32px; margin-left: -4px; }
 .home-palette-tok { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 160px; background: var(--sc-text); color: var(--sc-ground); font-size: 13px; font-weight: 600; white-space: nowrap; flex: none; }
 .home-palette-esc, .home-palette-foot, .home-palette-k, .home-palette-enter, .home-palette-m { display: none; }
-.home-palette-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 24px; display: flex; flex-direction: column; }
+.home-palette-list { flex: 1; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 24px; display: flex; flex-direction: column; }
 .home-palette-group { display: flex; align-items: center; gap: 8px; padding: 14px 10px 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--sc-muted); }
 .home-palette-n { letter-spacing: 0; font-weight: 600; text-transform: none; }
-.home-palette-item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 10px; border-radius: 14px; color: var(--sc-text); font-size: 16px; font-weight: 500; cursor: pointer; }
+.home-palette-item { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 52px; padding: 6px 10px; border-radius: 14px; color: var(--sc-text); font-size: 16px; font-weight: 500; cursor: pointer; }
 .home-palette-item[data-highlighted] { background: var(--sc-hairline); }
 .home-palette-ic { width: 34px; height: 34px; border-radius: 10px; border: 2px solid var(--sc-rail); display: flex; align-items: center; justify-content: center; flex: none; color: var(--sc-text); }
 .home-palette-ic.is-bad { border-color: var(--sc-failure); color: var(--sc-failure); }
 .home-palette-dia { width: 9px; height: 9px; background: var(--sc-failure); transform: rotate(45deg); }
-.home-palette-t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The title and the meta share one line: the meta takes at most half of it and both end in an ellipsis,
+   so a long account label (a service account, an analytics site) never pushes the line sideways */
+.home-palette-t { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-palette-v { font-family: var(--sc-font-mono); font-size: 13px; color: var(--sc-muted); margin-left: 6px; }
-.home-palette-m { font-size: 13px; color: var(--sc-muted); white-space: nowrap; flex: none; }
+.home-palette-m { font-size: 13px; color: var(--sc-muted); white-space: nowrap; flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; }
 .home-palette-item .k-pill { height: 24px; font-size: 12px; padding: 0 9px; }
 .home-palette-item .k-p-fail::before { width: 6px; height: 6px; }
 .home-palette-chev { display: inline-flex; flex: none; }
@@ -227,7 +229,8 @@
   .home-palette-item { min-height: 44px; font-size: 15px; }
   .home-palette-item:hover:not([data-highlighted]) { background: color-mix(in srgb, var(--sc-hairline) 55%, var(--sc-raised)); }
   .home-palette-ic { width: 30px; height: 30px; border-radius: 9px; }
-  .home-palette-m, .home-palette-k { display: inline-flex; }
+  .home-palette-m { display: block; }
+  .home-palette-k { display: inline-flex; }
   .home-palette-item[data-highlighted] .home-palette-enter { display: inline-block; flex: none; }
   .home-palette-foot { display: flex; }
 }
