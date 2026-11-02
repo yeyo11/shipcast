@@ -4,7 +4,7 @@
  * and each child owns its own path and anything under it, never a sibling that shares a prefix.
  */
 
-export const SETTINGS_PAGES = ['/settings', '/settings/ai', '/settings/automation', '/settings/api'] as const;
+export const SETTINGS_PAGES = ['/settings', '/settings/ai', '/settings/automation', '/settings/notifications', '/settings/api'] as const;
 export type SettingsPage = (typeof SETTINGS_PAGES)[number];
 
 /** A trailing slash is the same page: `/settings/ai/` is AI */

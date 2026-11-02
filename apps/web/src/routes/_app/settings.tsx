@@ -10,11 +10,12 @@ const SECTIONS = [
   { to: '/settings', label: 'General', exact: true },
   { to: '/settings/ai', label: 'AI', exact: false },
   { to: '/settings/automation', label: 'Automation', exact: false },
+  { to: '/settings/notifications', label: 'Notifications', exact: false },
   { to: '/settings/api', label: 'API', exact: false },
 ] as const;
 
 /**
- * Settings is one area of four sections (boards Settings*, DesktopSettings): on a phone, inside More,
+ * Settings is one area of five sections (boards Settings*, DesktopSettings): on a phone, inside More,
  * the title and tabs under a way back to More; from 960 px the title over a column of the sections.
  * Links rather than tabs, since each section is a route with its own data and address.
  */

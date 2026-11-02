@@ -12,6 +12,7 @@ import { jobsFeed } from './jobs.server';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
 import { editingDeps } from './posts.server';
 import { profileApi } from './profiles.server';
+import { pushApi } from './push.server';
 import { approve, armSchedule, startArticle, startLaunch, startPublishing, startSources, uploadSource } from './work.server';
 
 /**
@@ -55,5 +56,6 @@ export async function apiDeps(): Promise<ApiDeps> {
     repos: reposApi(ctx),
     automation: automationApi(ctx),
     ai: aiApi(ctx),
+    push: pushApi(ctx),
   };
 }

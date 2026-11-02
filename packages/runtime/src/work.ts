@@ -16,6 +16,9 @@ import { claimFromWebhook } from './webhooks.ts';
 import { COMMENTS_CRON, COMMENTS_KEY, commentsNotice, replyDeps } from './comments.ts';
 import { runProfileReview } from './profiles.ts';
 import { runAssistantCheck } from './assistant-check.ts';
+import { pushSetup } from './push/config.ts';
+import { draftEvent, publishEvent, type PushEvent } from './push/events.ts';
+import { deliverPush, queuePush, webPushTransport, type PushDelivery, type PushTransport } from './push/send.ts';
 
 /** What the jobs need: the engine's pieces, and the brand read when a job runs, not when it was sent */
 export interface WorkDeps {
@@ -38,7 +41,18 @@ export interface WorkDeps {
   cache?: Cache;
   /** The validators of the hourly reads' conditional requests; this process's memory when not given */
   etags?: EtagCache;
+  /** How a notification reaches a browser's push service; web-push with the VAPID keys unless a test gives its own */
+  pushTransport?: PushTransport;
 }
+
+/** What a `push` job's log says of its one delivery */
+const DELIVERED: Readonly<Record<PushDelivery, string>> = {
+  sent: 'Sent',
+  gone: 'The browser dropped this subscription (404 or 410): the device is removed',
+  refused: 'The push service refused it; the reason is on the device in Settings',
+  unwanted: 'The device no longer wants this kind of notification',
+  missing: 'The device was removed before it could be told',
+};
 
 /** The one key of the round queue: whichever process sends a round, there is one queued and one running at most */
 export const ROUND_KEY = 'round';
@@ -132,8 +146,16 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
    * A launch Shipcast holds whose `auto` channels need no approval goes out as soon as its drafts are
    * ready (docs/app-review.md); one whose drafts wait for the owner, or a pull request, waits
    */
-  const publishWhatIsReady = async (drafted: Launch) => {
-    if (drafted.model === 'app' && (await publishing.approval(drafted)).state === 'approved') await startPublishing(queue, drafted);
+  const publishWhatIsReady = async (drafted: Launch): Promise<boolean> => {
+    if (drafted.model === 'app' && (await publishing.approval(drafted)).state === 'approved') {
+      await startPublishing(queue, drafted);
+      return false;
+    }
+    return true;
+  };
+  /** The owner's devices told of an event, through a `push` job each (docs/push.md); never fails the work */
+  const tell = async (event: PushEvent | undefined, job: { log(line: string): void }) => {
+    if (event) await queuePush({ queue, registry, env: d.env, log: (line) => job.log(line) }, event);
   };
   // A launch's further repos have their numbers read too, apart from its primary repo's
   const withRepos = (services: Services): Services => ({ ...services, sources: { ...services.sources, furtherRepos: (ids) => registry.sources.furtherRepos(ids) } });
@@ -154,6 +176,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       const result = await draftLaunch(current, brand, d.pipeline, { direct: direct ?? false });
       if (!result.ok) {
         await notifications(services).drafted(current, result);
+        await tell(draftEvent(current, result, false), job);
         throw new Error(result.problems.join('\n'));
       }
       job.log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
@@ -161,7 +184,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       if (direct) await startPublishing(queue, result.launch);
       else {
         await notifications(services).drafted(current, result);
-        await publishWhatIsReady(result.launch);
+        await tell(draftEvent(result.launch, result, await publishWhatIsReady(result.launch)), job);
       }
     },
 
@@ -172,12 +195,15 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       const services = await servicesFor(brand);
       job.log('Translating the article and writing each channel’s piece…');
       const result = await draftArticle(current, input, brand, d.pipeline, { direct: direct ?? false });
-      if (!result.ok) throw new Error(result.problems.join('\n'));
+      if (!result.ok) {
+        await tell(draftEvent(current, result, false), job);
+        throw new Error(result.problems.join('\n'));
+      }
       job.log(direct ? `Committed to main: ${result.pullRequest}` : `Drafts are waiting: ${result.pullRequest}`);
       if (direct) await startPublishing(queue, result.launch);
       else {
         await notifications(services).drafted(current, result, { article: input.title });
-        await publishWhatIsReady(result.launch);
+        await tell(draftEvent(result.launch, result, await publishWhatIsReady(result.launch)), job);
       }
     },
 
@@ -216,6 +242,7 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       for (const p of result.scheduled) job.log(`${p.channel}: scheduled for ${p.at}`);
       // One rule for what the owner is told, the round's too: quiet while only retryable failures wait for the next attempt
       await notifications(services).published(current, result, { final: job.lastAttempt });
+      await tell(publishEvent(current, result, { final: job.lastAttempt }), job);
       const willRetry = result.state === 'partial' && result.failures.some((f) => f.retryable);
       if (willRetry && !job.lastAttempt) throw new RetryLater('some channels will try again');
     },
@@ -392,6 +419,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       if (result.drafted.length > 0) job.log(`Drafted ${result.drafted.length}; sent ${result.sent.length}`);
       const notice = commentsNotice(result, d.env.SHIPCAST_PUBLIC_URL);
       if (notice) await notify(await servicesFor(brand), notice);
+      const waiting = result.drafted.filter((c) => c.draft && c.status === 'draft-ready').length;
+      if (waiting > 0) await tell({ kind: 'comments', waiting }, job);
       // A run that could read nothing at all failed; one network failing is in the log
       if (result.posts === 0 && result.problems.length > 0) throw new Error(result.problems.join('; '));
     },
@@ -416,6 +445,16 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
     /** The writing assistant's check of a launch's text against its code, for the page that follows the job */
     async 'assistant-check'(data, job) {
       await runAssistantCheck({ registry, pipeline: d.pipeline, brand: await d.brand() }, data, job);
+    },
+
+    /** One notification to one device; a PushRetry is tried again by the queue (push/send.ts) */
+    async push({ subscriptionId, event }, job) {
+      const setup = pushSetup(d.env);
+      if (setup.state !== 'ready') {
+        job.log(setup.state === 'off' ? 'Push is not configured: nothing sent' : `Push is not configured: ${setup.problem}`);
+        return;
+      }
+      job.log(DELIVERED[await deliverPush(registry, d.pushTransport ?? webPushTransport(setup.config), subscriptionId, event)]);
     },
   };
 }

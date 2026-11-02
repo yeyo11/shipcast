@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T06:53:24.835786476Z
-updated_at: 2026-11-02T22:55:00.000000000Z
+updated_at: 2026-11-02T23:16:53.039449859Z
 tags:
     - web-app
     - dashboard
@@ -8,6 +8,8 @@ tags:
     - realtime
     - services
     - editor
+    - pwa
+    - push
 ---
 # The web app
 
@@ -213,8 +215,8 @@ which everything floating above it (a screen's save bar, toasts, the chat's bubb
 - **Stats** (`/stats`): how the launches did, in four tabs: Overview, Ranking, Accounts and Search.
   See [stats.md](stats.md#the-page).
 - **Settings** (`/settings`): one area with a submenu: General (`/settings`), AI (`/settings/ai`),
-  Automation (`/settings/automation`) and API (`/settings/api`); the old `/ai`, `/automation` and
-  `/tokens` redirect to them.
+  Automation (`/settings/automation`), Notifications (`/settings/notifications`, [push.md](push.md))
+  and API (`/settings/api`); the old `/ai`, `/automation` and `/tokens` redirect to them.
 
 Every action's outcome is a toast in Cartel, and every error is explained for a person, with the
 original text folded under Details (`src/components/errors.ts`). Scrolling is smoothed by Lenis, off
@@ -248,7 +250,7 @@ on the [approved design direction](decisions/app-design-direction.md).
 - **The shell** (`src/routes/_app.tsx`). On wide screens the top bar holds the lockup, the five
   working sections (Launches, Write, Channels, Comments, Stats), Search as an icon-only button, the
   **attention bell** and the signed-in user as a menu: **Settings is a submenu** (General, AI,
-  Automation, API), then Take the tour and Sign out. The submenu's item for the page on screen is
+  Automation, Notifications, API), then Take the tour and Sign out. The submenu's item for the page on screen is
   `aria-current="page"`; which page is current is the pure, tested `currentSettingsPage`
   (`src/server/settings-pages.ts`). Below 860 px the sections leave the top for a **bottom bar**:
   Launches, Write, Channels, Stats and **More**, which opens a drawer with the rest. There is a skip
@@ -411,6 +413,25 @@ same frame. A setting is configured in exactly one place. General:
   restart (on every replica, with `redis-state`), and a **Clear** removes a saved one.
 - **GitHub**: how the engine reaches it, the App's installation, how the owner signs in, and the
   owner's user token with its expiry.
+
+## The installable app and its notifications
+
+Since 2026-11-03 (v0.3.0) the app is a PWA ([decisions/pwa.md](decisions/pwa.md)): it installs on a
+phone or a desktop (`/manifest.webmanifest`, start at `/launches`, standalone, the night ground as its
+colours, icons and maskable icons in `design/pwa/`, the shortcuts Launches, Write, Comments and Stats)
+and on iOS it runs full screen under a translucent status bar, the bars clear of the notch through the
+safe-area insets. Its service worker (`/sw.js`, `src/pwa/sw.ts`, built by `pwa-plugin.ts`) precaches
+the build's public files and caches nothing the session guards: pages, server functions, `/api/*`,
+`/mcp`, media, uploads, avatars, auth and the health checks always go to the network, and a page that
+cannot be reached shows the offline page ("You're offline"). A new deploy's worker waits until the
+owner chooses Reload on the toast "New version available". The app registers it only in a build, not
+in `pnpm app:dev`.
+
+**Notifications** (Settings → Notifications, [push.md](push.md)): web push to each device the owner
+turns on, for comments waiting for a reply, drafts waiting for approval, a launch or a piece that
+failed and a launch out on every channel, each opening its page; never a comment's or a draft's text.
+They need the VAPID keys in the environment (`SHIPCAST_VAPID_*`); without them the page says push is
+not configured and nothing else changes.
 
 ## How it is built
 

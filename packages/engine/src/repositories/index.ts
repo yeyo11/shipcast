@@ -15,6 +15,7 @@ import { SettingRepository } from './settings.ts';
 import { LaunchSourceRepository } from './sources.ts';
 import { MetricRepository } from './metrics.ts';
 import { PostRepository } from './posts.ts';
+import { PushSubscriptionRepository } from './push-subscriptions.ts';
 import { RawQueries } from './sql.ts';
 import { transaction } from './transaction.ts';
 
@@ -44,6 +45,7 @@ export * from './settings.ts';
 export * from './sources.ts';
 export * from './metrics.ts';
 export * from './posts.ts';
+export * from './push-subscriptions.ts';
 export * from './sql.ts';
 export * from './transaction.ts';
 
@@ -68,6 +70,8 @@ export interface Repositories {
   readonly sources: LaunchSourceRepository;
   readonly metrics: MetricRepository;
   readonly posts: PostRepository;
+  /** The browsers that take web push notifications (docs/push.md) */
+  readonly pushSubscriptions: PushSubscriptionRepository;
   /** The posts' publish attempts, the outbox a worker claims a piece in before it calls the network */
   readonly attempts: PublishAttempts;
   /** The read-only SQL the query builder cannot say, for the reports and the checks */
@@ -92,6 +96,7 @@ export function repositoriesOn(db: Database): Repositories {
     sources: new LaunchSourceRepository(db),
     metrics: new MetricRepository(db),
     posts: new PostRepository(db),
+    pushSubscriptions: new PushSubscriptionRepository(db),
     attempts: new PublishAttempts(db),
     queries: new RawQueries(db),
   };

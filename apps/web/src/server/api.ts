@@ -45,6 +45,7 @@ import { DRAFTS_ROUTES, DRAFTS_SCHEMAS, type DraftsApi } from './drafts-api.ts';
 import { REPOS_ROUTES, REPOS_SCHEMAS, type ReposApi } from './repos-api.ts';
 import { AUTOMATION_ROUTES, AUTOMATION_SCHEMAS, type AutomationApi } from './automation-api.ts';
 import { AI_ROUTES, AI_SCHEMAS, type AiApi } from './ai-api.ts';
+import { PUSH_ROUTES, PUSH_SCHEMAS, type PushApi } from './push-api.ts';
 import { commentView } from './comment-view.ts';
 import { accountService, commentService, postService, scheduleService } from './app-services.ts';
 
@@ -115,6 +116,8 @@ export interface ApiDeps {
   repos?: ReposApi;
   automation?: AutomationApi;
   ai?: AiApi;
+  /** The devices that take web push notifications (docs/push.md) */
+  push?: PushApi;
 }
 
 /** The deletion service, or the 404 of a route these deps do not serve */
@@ -362,6 +365,7 @@ const PATH_PARAMS: Record<string, { description: string; schema: JsonSchema }> =
   postId: { description: 'The post id, as a launch lists its posts', schema: { type: 'integer', minimum: 1 } },
   accountId: { description: 'The account id, as /accounts lists them', schema: { type: 'integer', minimum: 1 } },
   commentId: { description: 'The comment id, as GET /comments lists them', schema: { type: 'integer', minimum: 1 } },
+  deviceId: { description: 'The device id, as GET /notifications lists them', schema: { type: 'integer', minimum: 1 } },
 };
 
 function commentId(value: string | undefined): number {
@@ -658,6 +662,7 @@ export const ROUTES: ApiRoute[] = [
   ...REPOS_ROUTES,
   ...AUTOMATION_ROUTES,
   ...AI_ROUTES,
+  ...PUSH_ROUTES,
   {
     method: 'POST',
     path: '/launches/{id}/schedule',
@@ -1253,6 +1258,7 @@ export function openApiDocument(publicUrl: string, availability: RouteAvailabili
         ...REPOS_SCHEMAS,
         ...AUTOMATION_SCHEMAS,
         ...AI_SCHEMAS,
+        ...PUSH_SCHEMAS,
       },
     },
   };

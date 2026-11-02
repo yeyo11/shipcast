@@ -155,6 +155,13 @@
       "when": 1793604232423,
       "tag": "0022_drop_draft_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793659675126,
+      "tag": "0023_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

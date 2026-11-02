@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T19:31:14.30492503Z
-updated_at: 2026-11-01T23:01:59.469305995Z
+updated_at: 2026-11-02T23:17:40.011304112Z
 tags:
     - mcp
     - api
@@ -8,6 +8,7 @@ tags:
     - phase-11
     - webmcp
     - parity
+    - push
 ---
 # The MCP server
 
@@ -213,6 +214,17 @@ the tools' own explanation of a feature turned off.
 | --- | --- | --- | --- | --- |
 | `list_attention` | `listAttention` `GET /attention` | What needs the user now, as the app's bell lists it; each kind names the tool that acts on it | read | |
 | `dismiss_attention` | `dismissAttention` `POST /attention/dismiss` | Hides lines until their condition changes; every key just read clears the list | write | |
+
+### Notifications (`notifications.ts`)
+
+| Tool | API operation | Does | Kind | Confirm |
+| --- | --- | --- | --- | --- |
+| `list_notification_devices` | `listNotificationDevices` `GET /notifications` | The devices that take web push, what each is told, and whether push is configured ([push.md](push.md)) | read | |
+| `set_notification_events` | `setNotificationEvents` `PATCH /notifications/devices/{deviceId}` | Turns kinds of notification on or off for one device | write | |
+| `delete_notification_device` | `deleteNotificationDevice` `DELETE /notifications/devices/{deviceId}` | Forgets a device; turning it on again takes the user, on that device | write | |
+| `send_test_notification` | `sendTestNotification` `POST /notifications/test` | A test notification to one device or every one | write | |
+
+Turning a device on has no tool: the subscription is made by that browser's service worker.
 
 ### Automation (`automation.ts`)
 

@@ -92,6 +92,7 @@ export const GO_TO: readonly PaletteEntry[] = [
   { id: 'go-settings', title: 'Settings', keywords: 'github app configuration brand general', icon: { kind: 'icon', name: 'more' }, run: { kind: 'href', href: '/settings' } },
   { id: 'go-ai', title: 'AI settings', keywords: 'provider model prompts tone claude', icon: { kind: 'icon', name: 'assist' }, run: { kind: 'href', href: '/settings/ai' } },
   { id: 'go-automation', title: 'Automation', keywords: 'rounds webhooks polling jobs', icon: { kind: 'icon', name: 'history' }, run: { kind: 'href', href: '/settings/automation' } },
+  { id: 'go-notifications', title: 'Notifications', keywords: 'push alerts phone devices', icon: { kind: 'icon', name: 'bell' }, run: { kind: 'href', href: '/settings/notifications' } },
   { id: 'go-api', title: 'API', keywords: 'tokens rest mcp', icon: { kind: 'icon', name: 'key' }, run: { kind: 'href', href: '/settings/api' } },
 ];
 

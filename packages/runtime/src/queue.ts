@@ -4,6 +4,7 @@ import { fromPglite, PgBoss, type ConstructorOptions, type PGliteLike, type Queu
 import { withOrigin } from './telemetry/origin.ts';
 import type { TelemetryRecorder } from './telemetry/recorder.ts';
 import type { WebhookAction } from './webhooks.ts';
+import type { PushEvent } from './push/events.ts';
 
 /*
  * The durable work: every job is a pg-boss job in the registry's Postgres, in pg-boss's own schema,
@@ -40,6 +41,8 @@ export interface JobData {
    * out of the page's request; the result is kept for the page under the job's id (assistant-check.ts)
    */
   'assistant-check': { launchId: number; text: string; lang?: string; channel?: string };
+  /** One web push notification to one device (docs/push.md): a job each, so a retry resends to that device alone */
+  push: { subscriptionId: number; event: PushEvent };
 }
 
 export type QueueName = keyof JobData;
@@ -86,6 +89,8 @@ export const QUEUES: Record<QueueName, QueueSpec> = {
   probe: { title: 'Timing the pages', policy: 'stately', retryLimit: 0, expireInSeconds: 10 * 60, concurrency: 1 },
   // A clone and an agent's run for a page that waits: no retries, the owner asks again; the AI's own timeout is 30 minutes
   'assistant-check': { title: 'Checking a text against the code', policy: 'standard', retryLimit: 0, expireInSeconds: 45 * 60, concurrency: 2 },
+  // A push service that is down or throttling is tried again a few times; a refusal is not (push/send.ts)
+  push: { title: 'Sending a notification', policy: 'standard', retryLimit: 4, retryDelay: 60, expireInSeconds: 2 * 60, concurrency: 4 },
 };
 
 export const QUEUE_NAMES = Object.keys(QUEUES) as QueueName[];

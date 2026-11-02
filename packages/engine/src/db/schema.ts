@@ -687,3 +687,32 @@ export const launchDeletions = pgTable(
   },
   (t) => [index('launch_deletions_by_key').on(t.dedupeKey), index('launch_deletions_by_launch').on(t.launchId)],
 );
+
+/*
+ * The browsers that take Shipcast's web push notifications (docs/push.md): one row per push
+ * subscription, which is one browser profile on one device. The endpoint is the push service's
+ * address for that browser and the two keys encrypt what is sent to it (RFC 8291), so the row is all
+ * it takes to reach the device and nothing more. `events` is the device's own choice of what it is
+ * told; a subscription the push service answers 404 or 410 for is deleted.
+ */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+    // The GitHub login signed in when the browser subscribed
+    login: text('login').notNull(),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    // What the owner sees in Settings to tell the devices apart, such as "Safari on iPhone"
+    label: text('label').notNull(),
+    // Event kind to whether this device is told of it; a kind left out is on
+    events: jsonb('events').$type<Record<string, boolean>>().notNull().default(sql`'{}'::jsonb`),
+    createdAt: text('created_at').notNull().default(nowIso),
+    lastSuccessAt: text('last_success_at'),
+    lastFailureAt: text('last_failure_at'),
+    // The push service's answer to the last failed send (a status and a short reason), for Settings
+    lastFailure: text('last_failure'),
+  },
+  (t) => [unique('push_subscriptions_endpoint').on(t.endpoint)],
+);

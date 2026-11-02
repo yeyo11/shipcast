@@ -11,6 +11,7 @@ test('each sub-page owns its path and what is under it', () => {
   assert.equal(currentSettingsPage('/settings/ai'), '/settings/ai');
   assert.equal(currentSettingsPage('/settings/automation/'), '/settings/automation');
   assert.equal(currentSettingsPage('/settings/api/tokens'), '/settings/api');
+  assert.equal(currentSettingsPage('/settings/notifications'), '/settings/notifications');
 });
 
 test('a shared prefix is not a match, and outside Settings nothing is current', () => {

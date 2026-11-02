@@ -106,6 +106,15 @@ export const SERVER_FUNCTIONS: Readonly<Record<string, Coverage>> = {
   useProviderForAll: { api: ['useAiProviderForAll'] },
   testProvider: { api: ['testAiProvider'] },
 
+  // notifications (push-api.ts): the devices that take web push, what each is told, a test (docs/push.md)
+  getNotifications: { api: ['listNotificationDevices'] },
+  subscribePush: {
+    appOnly: 'turns notifications on for this browser: the subscription is made by the browser’s own service worker and push service, which an API client has not got; it is a credential to reach the device',
+  },
+  removePushDevice: { api: ['deleteNotificationDevice'] },
+  savePushEvents: { api: ['setNotificationEvents'] },
+  sendTestPush: { api: ['sendTestNotification'] },
+
   // the writing assistant's chat
   listAssistantSessions: { appOnly: `the past sessions of ${ASSISTANT}` },
   loadAssistantSession: { appOnly: `one session of ${ASSISTANT}` },

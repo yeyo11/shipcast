@@ -40,6 +40,8 @@ export const QUEUE_ROLES: Readonly<Record<QueueName, 'worker' | 'heavy'>> = {
   'instagram-tokens': 'worker',
   snapshots: 'worker',
   checks: 'worker',
+  // A short HTTPS call to a browser's push service
+  push: 'worker',
 };
 
 /** SHIPCAST_ROLE, `all` when unset */

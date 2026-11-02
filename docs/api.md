@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:39.777988235Z
-updated_at: 2026-11-01T23:00:30.849935994Z
+updated_at: 2026-11-02T23:18:02.105097774Z
 tags:
     - api
     - reference
@@ -18,6 +18,7 @@ tags:
     - profiles
     - sources
     - parity
+    - push
 ---
 # The REST API
 
@@ -53,7 +54,7 @@ reason it stays in the app; two tests hold both ([decisions/mcp-parity.md](decis
 The OpenAPI 3.1 document is at `GET /api/v1/openapi.json`, public, built from the same table the
 routes are served from (`apps/web/src/server/api.ts`, which spreads in the area modules beside it:
 `stats-api.ts`, `profile-api.ts`, `sources-api.ts`, `attention-api.ts`, `accounts-api.ts`,
-`drafts-api.ts`, `repos-api.ts`, `automation-api.ts` and `ai-api.ts`), so it cannot drift.
+`drafts-api.ts`, `repos-api.ts`, `automation-api.ts`, `ai-api.ts` and `push-api.ts`), so it cannot drift.
 
 | Route | Scope | Does |
 | --- | --- | --- |
@@ -62,6 +63,7 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the area 
 | `GET /launches/{id}/draft?path=` | read | One draft with its whole text (an article's Markdown, a channel's piece), from the launch model; a medium comes with its address instead. `open` says whether the drafts can still be edited and approved. 409 for a launch the launch model does not hold |
 | `GET /launches/{id}/site-preview` | read | The article's preview on the real site as last asked for, with its `url` once the site deployed it (`urlSha` older than `sha` means the address still shows the previous version); 404 until one is asked for ([app-review.md](app-review.md)) |
 | `GET /launches/{id}/prompt-preview` | read | The final prompt and system prompt a past launch would get today with the saved prompts and tone, and its task: rendered only, no AI call |
+| `GET /notifications` | read | The devices that take web push ([push.md](push.md)) and whether push is configured: `{ configured, problem?, events, devices }`, each device `{ id, label, login, events, createdAt, lastSuccessAt, lastFailureAt, lastFailure, endpointHash }`; never its endpoint or keys |
 | `GET /attention` | read | What needs the owner, as the app's bell lists it, less what was dismissed: `{ count, items }`, each item `{ key, kind, text, action, launchId?, accountId?, url }`, `kind` one of `approve`, `retry`, `reply`, `reconnect`, `permission`, `scheduled` (informs, not counted), `canonical`, `drift` |
 | `GET /repos` | read | `{ owner, repos }`: the brand owner's GitHub repos to launch from, newest push first, forks and archived ones left out; cached for a few minutes |
 | `GET /repos/releases?repo=owner/name` | read | A repo's published releases, newest first, each with `launch: { id, status }` (the launch already made of it, a failed or deleted one included) or `null`: a release is launched once |
@@ -104,6 +106,9 @@ routes are served from (`apps/web/src/server/api.ts`, which spreads in the area 
 | `GET /launches/{id}/deletion` | read | what deleting the launch would do, nothing changed: `{ mode, refused, channels, articleLinks }`, `mode` `removed` (never published) or `hidden` (published), each channel with pieces out and what deleting there does (`yes`, `unpublish`, `no`) ([launch-delete.md](launch-delete.md)) |
 | `DELETE /launches/{id}?channels=a,b` | write | deletes the launch. One never published is removed; a published one is hidden (`deletedAt` on `GET /launches/{id}`, gone from `GET /launches`), its posts kept except on the channels named, deleted there too (`blog` removes the article). Answers `{ mode, outcomes, warning?, problems }`, `warning` saying how many posts still link a removed article; 409 while its drafts are being written or once deleted |
 | `POST /attention/dismiss` | write | `{ "keys": [...] }`, 1 to 100 of the `key`s `GET /attention` gave: hides those lines, in the app's bell too, until their condition changes. Answers `{ "dismissed" }`. "Clear all" is the same call with every key read |
+| `PATCH /notifications/devices/{deviceId}` | write | `{ "events": { "published": false } }`: what one device is told (`comments`, `approval`, `failed`, `published`); the kinds left out keep their choice. Answers `{ "device" }` |
+| `DELETE /notifications/devices/{deviceId}` | write | Forgets a device: it is told nothing more. Answers `{ "removed": true }` |
+| `POST /notifications/test` | write | `{ "deviceId"? }`: a test notification to one device or every one, queued (202, `{ "queued" }`); 409 when push is not configured |
 | `POST /accounts/{accountId}/check` | write | Checks the account's credential again on its network and records the answer. Answers `{ "account" }` with its `status`, `identity` or `problem` |
 | `POST /accounts/{accountId}/sync` | write | A job checks the account again and records today's followers, following and posts; a sync already queued for it is the one answered (202) |
 | `PATCH /accounts/{accountId}` | write | `{ "label" }`: the name Shipcast shows for the account; nothing changes on the network. Answers `{ "account" }` |
