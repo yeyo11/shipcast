@@ -14,6 +14,7 @@ import {
   DEFAULT_OPENAI_MODEL,
   type Launch,
   type PipelineDeps,
+  type PublishResult,
 } from '@shipcast/engine';
 import type { Brand } from '@shipcast/schema';
 import {
@@ -35,6 +36,7 @@ import {
   type CiConfig,
   type CiDeps,
   type CiResult,
+  type AnyChannelAdapter,
   type CiState,
   type SecretStore,
 } from '@shipcast/runtime';
@@ -176,6 +178,34 @@ export function ciPipeline(ai: CiAi | undefined, base: CiPipelineBase, launch?: 
   return { ...base, aiRunner: ciAiRunner(ai, launch), aiTexts: () => currentAiTexts(base.registry) };
 }
 
+/** What publishing one launch in Action mode is given; `adapters` only for a test whose networks are fake */
+export interface CiPublishDeps {
+  env: NodeJS.ProcessEnv;
+  workDir: string;
+  github: GitHubRest;
+  registry: Repositories;
+  pipeline: PipelineDeps;
+  log: (line: string) => void;
+  adapters?: readonly AnyChannelAdapter[];
+}
+
+/**
+ * One try at publishing a launch in Action mode: the networks' publishers built from the
+ * environment's secrets, then the same `publishOne` as `shipcast publish`, so every link to the site
+ * is tagged by the channels' adapters exactly as the local install's (docs/tracking.md)
+ */
+export async function ciPublishLaunch(launch: Launch, brand: Brand, deps: CiPublishDeps): Promise<PublishResult> {
+  const services = await buildServices({
+    env: networkEnv(deps.env, brand.id, deps.workDir, (path, content) => writeFileSync(path, content, { mode: 0o600 })),
+    brand,
+    registry: deps.registry,
+    github: deps.github,
+    secrets: new MemorySecrets(),
+    ...(deps.adapters && { adapters: deps.adapters }),
+  });
+  return publishOne(launch, { env: deps.env, registry: deps.registry, github: deps.github, secrets: new MemorySecrets(), brand, pipeline: deps.pipeline, log: deps.log }, services);
+}
+
 /** Everything a `ci` command needs, built from the environment */
 export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, options: { dryRun: boolean; log: (line: string) => void }): Promise<CiDeps> {
   const auth = config.github.kind === 'app' ? new GitHubApp({ appId: config.github.appId, ...(config.github.clientId && { clientId: config.github.clientId }), privateKey: config.github.privateKey, account: () => config.launchesRepo }) : undefined;
@@ -212,14 +242,7 @@ export async function buildCiDeps(config: CiConfig, env: NodeJS.ProcessEnv, opti
       return draftLaunch(launch, brandOf, pipelineFor(registry, { launch, brand: brandOf }));
     },
     async publish(launch, brandOf, registry) {
-      const services = await buildServices({
-        env: networkEnv(env, brandOf.id, config.workDir, (path, content) => writeFileSync(path, content, { mode: 0o600 })),
-        brand: brandOf,
-        registry,
-        github,
-        secrets: new MemorySecrets(),
-      });
-      return publishOne(launch, { env, registry, github, secrets: new MemorySecrets(), brand: brandOf, pipeline: pipelineFor(registry), log: options.log }, services);
+      return ciPublishLaunch(launch, brandOf, { env, workDir: config.workDir, github, registry, pipeline: pipelineFor(registry), log: options.log });
     },
   };
 }

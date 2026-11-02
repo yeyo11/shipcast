@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T21:53:50.371749325Z
-updated_at: 2026-10-30T21:54:09.429056116Z
+updated_at: 2026-11-02T22:40:00.000000000Z
 tags:
     - tracking
     - utm
@@ -59,7 +59,10 @@ rather than a repo and a tag (epic SHP-5, later).
 - **Hand-written tags win.** A link that already has any `utm_*` parameter is left alone, `ref`
   included.
 - **The prompt does not change.** Claude keeps writing `?ref=<channel>`: it is short, the drafts and
-  the limits are counted with it, and it is what a link keeps where the tags do not fit.
+  the limits are counted with it, and it is what a link keeps where the tags do not fit. So a
+  **draft** (the drafts pull request's files, the pack, the app's review) shows `?ref=`; the tags are
+  added as each piece goes out, by its channel's adapter. A `?ref=` in a draft is expected, in
+  either mode; a `?ref=` in a *published* link is the limit fallback below, or a bug.
 - **Limits.**
   - Bluesky shows a link without its query string while the link facet keeps the whole URL
     (`richText`, `packages/connectors/src/bluesky.ts`), so the tags cost no graphemes and a reader sees
@@ -87,6 +90,13 @@ rather than a repo and a tag (epic SHP-5, later).
   A channel published by its own strategy (`PublishStrategy`, YouTube) finds the same tracking in
   its `PublishContext` and hands it to its publisher: `packages/engine/src/publishing/youtube.ts`
   passes it with each upload.
+- **Both modes publish through the same code** (checked 2026-11-02, SHP-27). The local install and
+  the GitHub Action (`shipcast ci publish`, `ciPublishLaunch` in `apps/cli/src/ci.ts`) build the
+  networks' publishers with `buildServices` from the channels' adapters and publish with
+  `publishOne` → `publishLaunch`, which hands them the same `tracking`. There is no separate Action
+  path and no flag: an Action-mode launch's links carry the same tags as a local one's. Action
+  builds before 2026-10-29 had no tagging at all: `shipcast-action` v1.0.0 (built from Shipcast
+  0.2.0 on 2026-10-27) published `?ref=`; v1.1.0 and later (and so `@v1`) tag.
 - Each channel's adapter in `packages/runtime/src/channels/*` tags where its text, card or embed goes
   out: Bluesky's text and card, Mastodon's text, Threads' and Telegram's text, Discord's message and
   embed, LinkedIn's text and shared article, each Reddit body with its subreddit, GitHub Discussions'
@@ -105,7 +115,11 @@ rather than a repo and a tag (epic SHP-5, later).
   each adapter hands its network), the `richText` test in `packages/connectors/test/connectors.test.ts`,
   the newsletter's tracking in `packages/engine/test/publish.test.ts`, the YouTube strategy
   handing the tracking to its publisher in `packages/engine/test/youtube.test.ts`, and the edits'
-  tracking in `packages/engine/test/edit.test.ts` and `channel-links.test.ts`.
+  tracking in `packages/engine/test/edit.test.ts` and `channel-links.test.ts`, and
+  `apps/cli/test/action-utm.test.ts`: an Action-mode launch end to end (the fake AI provider's drafts,
+  written with `?ref=`, merged, then `ci publish`'s own path over connectors that record what they
+  are handed), asserting the tags on every link of every channel the Action publishes (dev.to and
+  Hashnode untagged and canonical) and no `?ref=` left in anything sent.
 
 ## The other half: where a visit came from
 

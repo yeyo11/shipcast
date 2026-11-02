@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-27T17:35:17.741040395Z
-updated_at: 2026-10-27T17:35:17.741040395Z
+updated_at: 2026-11-02T22:40:00.000000000Z
 tags:
     - decision
     - github-action
@@ -117,6 +117,17 @@ behind the registry and secrets abstraction (`CiState`, `SecretStore`, the envir
    the article is the merge itself, and every other channel publishes in the mode `launch.yml` gives
    it (`auto`, `approval`, `off`) once the article is live; a pull request closed without merging
    publishes nothing. The same workflow runs `ci round` hourly for scheduled pieces and retries.
+
+### Link tracking
+
+Publishing on merge is the local install's own publishing, so every link to the site goes out with
+the UTM tags of [tracking.md](../tracking.md) (`utm_source` the network, `utm_medium` `social` or
+`email`, `utm_campaign` the launch's `campaignOf`, `utm_content` the newsletter issue's language),
+added by the channels' adapters as each piece leaves; dev.to and Hashnode keep the clean canonical
+URL. The drafts pull request shows `?ref=<channel>`, as every draft does: the tags are not written
+into the drafts. `ci publish` builds its publishers in `ciPublishLaunch` (`apps/cli/src/ci.ts`), and
+`apps/cli/test/action-utm.test.ts` runs a fake-provider launch through it and checks each channel's
+links. The Action has tagged since v1.1.0; v1.0.0, built before tagging existed, sent `?ref=`.
 
 ### Dry run
 
