@@ -18,16 +18,18 @@ function tileWord(network: NetworkView): { word: string; connected: boolean } {
   return { word: failed ? STATE_WORD.failed : STATE_WORD.ok, connected: true };
 }
 
-/** The sheet's kinds: where posts and articles go together, then what only reads numbers, then the AI */
+/**
+ * The sheet's kinds: where posts and articles go together, then what only reads numbers. The AI
+ * providers are not offered here: they are connected from Settings → AI
+ */
 const KINDS = [
   { id: 'publish', name: 'Where posts go', groups: ['social', 'blog'] },
   { id: 'measurement', name: 'Measurement', groups: ['measurement'] },
-  { id: 'ai', name: 'AI providers', groups: ['ai'] },
 ] as const satisfies ReadonlyArray<{ id: string; name: string; groups: readonly NetworkGroup[] }>;
 
 type Kind = (typeof KINDS)[number]['id'];
 
-export const kindOf = (group: NetworkGroup): Kind => (group === 'measurement' || group === 'ai' ? group : 'publish');
+export const kindOf = (group: NetworkGroup): Kind => (group === 'measurement' ? group : 'publish');
 
 /**
  * Connect a network (board AddNetwork): the networks of one kind as tiles, their state under their

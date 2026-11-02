@@ -9,7 +9,7 @@ import { ProfileReview, reviewStanding, type ProfileView } from '../../../compon
 import { useToast } from '../../../components/Toasts';
 import { PickerSelect } from '../../../components/kit/Picker';
 import { connectWithForm, getChannels } from '../../../server/channels.functions';
-import { groupOf } from '../../../server/network-groups';
+import { groupOf, isAiNetwork } from '../../../server/network-groups';
 import { getProfileReview } from '../../../server/profiles.functions';
 
 export const Route = createFileRoute('/_app/channels/$network')({
@@ -128,7 +128,8 @@ function Connect() {
 
   return (
     <>
-      <TopBar back={{ label: 'Channels', to: '/channels', search: { tab: groupOf(network) } }} />
+      {/* An AI provider is configured in Settings → AI, which is where its page goes back to */}
+      <TopBar back={isAiNetwork(network) ? { label: 'AI settings', to: '/settings/ai' } : { label: 'Channels', to: '/channels', search: { tab: groupOf(network) } }} />
       <div className="k-page ch-page">
         <div className="k-px k-stack k-g16 ch-net ch-narrow">
           <div className="k-hrow k-g12">
@@ -166,8 +167,11 @@ function Connect() {
                     problem: error instanceof Error ? error.message : String(error),
                   }));
                   setBusy(false);
-                  // The new account is shown where it now lives: the channels list, scrolled to it
-                  if (answer.ok) await navigate({ to: '/channels', search: { connected: `Connected ${answer.identity}`, focus: String(answer.id) } });
+                  // The new account is shown where it now lives: the channels list, scrolled to it (an AI provider, Settings → AI)
+                  if (answer.ok && isAiNetwork(network)) {
+                    toast.done(`Connected ${answer.identity}`, 'Choose it per task in the AI settings.');
+                    await navigate({ to: '/settings/ai' });
+                  } else if (answer.ok) await navigate({ to: '/channels', search: { connected: `Connected ${answer.identity}`, focus: String(answer.id) } });
                   else toast.fail(answer.problem);
                 }}
               >

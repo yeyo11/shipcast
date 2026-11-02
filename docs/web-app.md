@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:04:13.825339496Z
-updated_at: 2026-11-02T20:06:45.683746665Z
+created_at: 2026-11-02T20:06:55.638365794Z
+updated_at: 2026-11-02T20:09:36.538724102Z
 tags:
     - web-app
     - dashboard
@@ -164,11 +164,11 @@ unchanged unless the redesign document says so.
   that keeps only that, and on Write images by paste, drop and an Image button, each uploaded at once
   and described (alt text) before the article can be prepared. A proposal in the Visual mode is a
   formatted diff, with "Show as Markdown" for the word diff.
-- **Channels** (`/channels`): see [accounts.md](accounts.md#the-channels-page). Four tabs by kind of
-  network (Social networks, Blog & newsletter, Measurement, AI providers; `?tab=`), each account a
-  card. The **Anthropic API** and an **OpenAI-compatible server** are connected here too, under AI
-  providers. The toolbar's **Connect a network** is a menu of every network that takes an account,
-  listed from the channel adapters; networks that still work from `.env` add **Import from .env**.
+- **Channels** (`/channels`): see [accounts.md](accounts.md#the-channels-page). Three tabs by kind of
+  network (Social networks, Blog & newsletter, Measurement; `?tab=`), each account a card. The AI
+  providers (the **Anthropic API**, an **OpenAI-compatible server**) left Channels on 2026-11-02: they
+  are configured in Settings → AI, and `?tab=ai` opens it. The toolbar's **Connect a network** is a
+  menu of every network that takes an account but the AI providers, listed from the channel adapters; networks that still work from `.env` add **Import from .env**.
   **Sync all**, beside it, syncs every working account of the tab on screen, with its progress and
   outcome in one toast.
 - **Comments** (`/comments`): the comments on the owner's posts and the replies drafted for them
@@ -329,6 +329,9 @@ Added on 2026-10-25 ([decisions/ai-providers.md](decisions/ai-providers.md), sup
 - **claudio**: its URL and token ([claudio.md](claudio.md)). The global AI budget that used to sit
   here (`ai-budget-usd`, `SHIPCAST_MAX_BUDGET_USD`) was removed on 2026-10-29: each task's spend
   limit, below, is the only one.
+- **The AI providers' accounts**: the Anthropic API's key and an OpenAI-compatible server are
+  connected from the Providers list here, each on its connect page (`/channels/<network>`), which
+  goes back here; they have no tab on Channels since 2026-11-02.
 - **Providers**: per task (the launch content pack, an article's distribution, the writing
   assistant, comment replies, profile reviews) a provider (claudio, the Anthropic API, an
   OpenAI-compatible server; the ones without a connected account say so) and a model, empty for the

@@ -1,5 +1,5 @@
 import { Tabs } from '@base-ui/react/tabs';
-import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate, useRouter } from '@tanstack/react-router';
 import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
 import { AccountSheet, AddNetworkSheet, kindOf, type AccountActions, type AccountView, type ChannelsData, type NetworkView } from '../../../components/channels/sheets';
@@ -12,10 +12,17 @@ import { useLiveEnabled, useLiveRoute } from '../../../components/live/Live';
 import { useToast } from '../../../components/Toasts';
 import { number } from '../../../components/ui';
 import { disconnect, getChannels, importEnv, makePrimary, recheckAccount, renameAccount, syncAccountNow } from '../../../server/channels.functions';
-import { groupOf, NETWORK_GROUPS, readGroup, type NetworkGroup } from '../../../server/network-groups';
+import { groupOf, isAiNetwork, NETWORK_GROUPS, readGroup } from '../../../server/network-groups';
+
+type Tab = (typeof NETWORK_GROUPS)[number]['id'];
 
 export const Route = createFileRoute('/_app/channels/')({
-  validateSearch: (search: Record<string, unknown>): { connected?: string; focus?: string; tab?: NetworkGroup } => ({
+  // The AI providers' tab moved to Settings → AI: an old link to it lands there
+  beforeLoad: ({ search }) => {
+    if ((search as { ai?: true }).ai) throw redirect({ to: '/settings/ai', replace: true });
+  },
+  validateSearch: (search: Record<string, unknown>): { connected?: string; focus?: string; tab?: Tab; ai?: true } => ({
+    ...(search.tab === 'ai' ? { ai: true as const } : {}),
     ...(typeof search.connected === 'string' ? { connected: search.connected } : {}),
     ...(typeof search.focus === 'string' && /^\d+$/.test(search.focus) ? { focus: search.focus } : {}),
     ...(readGroup(search.tab) ? { tab: readGroup(search.tab) } : {}),
@@ -261,10 +268,17 @@ function Channels() {
   };
   // The tab in the address; a new account's arrival opens the tab its network is in
   const focused = search.focus ? data.networks.find((n) => n.accounts.some((a) => String(a.id) === search.focus)) : undefined;
-  const tab: NetworkGroup = search.tab ?? (focused ? groupOf(focused) : (NETWORK_GROUPS.find((g) => data.networks.some((n) => groupOf(n) === g.id && n.accounts.length > 0))?.id ?? 'social'));
+  const focusedGroup = focused && groupOf(focused);
+  const tab: Tab = search.tab ?? (focusedGroup && focusedGroup !== 'ai' ? focusedGroup : (NETWORK_GROUPS.find((g) => data.networks.some((n) => groupOf(n) === g.id && n.accounts.length > 0))?.id ?? 'social'));
   // Just connected: say so, then bring the new account into view and give it the focus
   useEffect(() => {
     if (!search.connected && !search.focus) return;
+    // An AI provider's account (just connected, or named by the bell) lives in Settings → AI
+    if (focused && isAiNetwork(focused)) {
+      if (search.connected) toast.done(search.connected, 'Choose it per task in the AI settings.');
+      void navigate({ to: '/settings/ai', replace: true });
+      return;
+    }
     if (search.connected) toast.done(search.connected, 'It is checked and ready to publish.');
     const focus = search.focus;
     // Clearing the address is a navigation, which would scroll back to the top: scroll after it
@@ -276,8 +290,8 @@ function Channels() {
       else row.scrollIntoView({ block: 'center' });
       row.focus({ preventScroll: true });
     });
-  }, [search.connected, search.focus, tab, navigate, toast]);
-  const connected = data.networks.filter((n) => n.accounts.length > 0);
+  }, [search.connected, search.focus, focused, tab, navigate, toast]);
+  const connected = data.networks.filter((n) => n.accounts.length > 0 && !isAiNetwork(n));
   const envCount = data.networks.filter((n) => n.usesEnv).length;
   const importFromEnv = async () => {
     setImporting(true);
@@ -357,7 +371,7 @@ function Channels() {
           </div>
           {connectButton}
         </div>
-        <Tabs.Root value={tab} onValueChange={(next) => void navigate({ to: '/channels', search: { tab: next as NetworkGroup }, resetScroll: false })}>
+        <Tabs.Root value={tab} onValueChange={(next) => void navigate({ to: '/channels', search: { tab: next as Tab }, resetScroll: false })}>
           <div className="ch-tabs-wrap">
             <Tabs.List className="k-tabs ch-tabs" aria-label="Kinds of channel" activateOnFocus>
               {NETWORK_GROUPS.map((g) => {

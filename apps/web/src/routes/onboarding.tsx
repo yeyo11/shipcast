@@ -578,7 +578,7 @@ function AiStep({ data, saver, report, attempted }: StepProps) {
           <span className="k-lbl">The account</span>
           {ready ? (
             <Link id="ai-connect" className="k-input acc-onb-input" to="/channels/$network" params={{ network: provider }}>
-              Connected · manage it in Channels
+              Connected · change its key
             </Link>
           ) : (
             <Link id="ai-connect" className="k-input acc-onb-input acc-onb-connect" to="/channels/$network" params={{ network: provider }} aria-describedby={connectProblem ? 'ai-connect-error' : undefined}>

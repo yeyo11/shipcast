@@ -68,11 +68,12 @@ function Providers({ data }: { data: Data }) {
             {url?.set ? <span className="k-pill k-p-pub">Connected</span> : <span className="k-pill k-p-fail">Not set</span>}
           </button>
         ) : (
-          <Link key={p.id} to="/channels" className="k-row st-rowlink">
+          // Its key is an account, connected on its own page (it has no tab on Channels since 2026-11-02)
+          <Link key={p.id} to="/channels/$network" params={{ network: p.id }} className="k-row st-rowlink">
             <span className="k-grow">
               <strong className="k-sm">{p.name}</strong>
               <br />
-              <span className="k-xs k-muted">{p.connected ? 'A connected account in Channels' : 'Connect it in Channels'}</span>
+              <span className="k-xs k-muted">{p.connected ? 'Connected: change its key' : 'Connect it with its key'}</span>
             </span>
             {p.connected ? <span className="k-pill k-p-pub">Connected</span> : <span className="k-pill k-p-quiet">Not connected</span>}
           </Link>

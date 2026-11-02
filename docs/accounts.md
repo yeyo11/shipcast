@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:01:00.448169855Z
-updated_at: 2026-11-02T20:06:35.953405314Z
+created_at: 2026-11-02T20:09:28.908797631Z
+updated_at: 2026-11-02T20:10:02.54099853Z
 tags:
     - accounts
     - channels
@@ -96,13 +96,18 @@ primary) are the only ways in.
 
 Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
 
-- **Tabs by kind of network**, kept in the address (`/channels?tab=social|blog|measurement|ai`):
-  Social networks, Blog & newsletter, Measurement, AI providers. `groupOf`
+- **Tabs by kind of network**, kept in the address (`/channels?tab=social|blog|measurement`):
+  Social networks, Blog & newsletter, Measurement. `groupOf`
   (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives the tab from what
-  the catalog says: an AI provider is under AI providers; a network with no channel (Cloudflare,
-  Search Console, Bing, the GitHub profile) is Measurement; dev.to, Hashnode and the newsletter are
-  Blog & newsletter; every other channel is Social. Without a tab in the address the page opens on
-  the first tab with an account, and an account just connected opens its own tab.
+  the catalog says: a network with no channel (Cloudflare, Search Console, Bing, the GitHub profile)
+  is Measurement; dev.to, Hashnode and the newsletter are Blog & newsletter; every other channel is
+  Social. Without a tab in the address the page opens on the first tab with an account, and an
+  account just connected opens its own tab.
+- **No AI providers here** (since 2026-11-02). The Anthropic API and an OpenAI-compatible server are
+  configured in Settings → AI, whose Providers list links to each one's connect page
+  (`/channels/anthropic`, `/channels/openaiCompatible`); that page goes back to the AI settings, and
+  connecting lands there. Connect a network no longer offers them, and an old `/channels?tab=ai`
+  link, or the bell's "needs reconnecting" line for an AI account, opens Settings → AI.
 - **A card per account, in the launch card's skin**: a glyph tile with a state dot (green for a passed
   check, red for a failed one, a dotted ring while unchecked), the network's name and a state pill,
   the account's avatar, name and handle with its brand, the key number (followers; a Discord server's

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-25T16:02:37.786397876Z
-updated_at: 2026-10-29T15:31:04.168813039Z
+created_at: 2026-11-02T20:09:51.437643155Z
+updated_at: 2026-11-02T20:09:51.437643155Z
 tags:
     - decision
     - ai
@@ -55,7 +55,7 @@ Three providers:
 | Provider | How | Credentials |
 | --- | --- | --- |
 | `claudio` | claudio's REST API for `generateObject`; `@ai-sdk/openai-compatible` against claudio's `/api/v1` for `streamText` | claudio's URL and token in Settings (`.env`'s `SHIPCAST_CLAUDIO_URL` and `SHIPCAST_CLAUDIO_TOKEN` as a fallback) |
-| `anthropic` | `@ai-sdk/anthropic`; default model `claude-opus-5-5` | an **Anthropic API** account on the Channels page (secret store) |
+| `anthropic` | `@ai-sdk/anthropic`; default model `claude-opus-5-5` | an **Anthropic API** account, connected from Settings → AI (secret store; on the Channels page until 2026-11-02) |
 | `openaiCompatible` | `@ai-sdk/openai-compatible`, with `response_format` JSON Schema (`supportsStructuredOutputs`) | an **OpenAI-compatible server** account: base URL, model, optional key |
 
 The AI SDK is `ai` 7, `@ai-sdk/anthropic` 4, `@ai-sdk/openai-compatible` 3. `generateObject` from the
