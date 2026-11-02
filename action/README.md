@@ -105,7 +105,7 @@ The project's `.github/launch.yml` says what is launched and each channel's mode
 | `repo`, `ref` | the event's | `launch` by hand: the repo and the tag |
 | `pull-request` | the event's | `publish`: the merged pull request's URL |
 | `detect` | `false` | `round`: also poll your public events for releases no workflow claimed |
-| `wait-minutes` | `20` | `publish`: how long to wait for the blog to deploy the article |
+| `wait-minutes` | `20` | `publish`: how long to wait for the blog to deploy the article (the template sets 25; keep it under the job's `timeout-minutes`) |
 | `dry-run` | `false` | **Publishes nothing**: `launch` claims nothing, asks no AI and opens no pull request; `publish` and `round` list what each channel would post and whether its secrets are set. The launch record is not written |
 
 The networks' credentials are `env:` on the step, never inputs: `DEVTO_API_KEY`, `BLUESKY_HANDLE` and
@@ -121,6 +121,49 @@ channel without its secrets is not published to.
 | `launch-id` | The launch's id in the record |
 | `pull-request` | `launch`: the drafts pull request's URL |
 | `claimed` | `round`: how many releases it claimed |
+
+## Timing: do not rely on GitHub's cron
+
+`launch` (a release) and `publish` (a merged drafts pull request) start from events and run within
+seconds. The **round** (`command: round`: scheduled pieces, channels to retry, an article that took
+longer to deploy than `wait-minutes`) is only as punctual as what starts it, and GitHub delays or drops
+`schedule` events, more so on private repos (3 runs in 17 hours of an hourly cron, each over 40 minutes
+late, in a real test). A late round loses nothing; it delays a scheduled post or a retry.
+
+- **Recommended:** call the workflow from outside GitHub every 15 minutes (a Cloudflare Worker with a
+  Cron Trigger, [cron-job.org](https://cron-job.org), your own server) so a round is at most about 15
+  minutes late. Give the workflow an `on: workflow_dispatch` and call it with a fine-grained token for
+  the launches repo alone, with *Actions: read and write*:
+
+  ```bash
+  curl -fsS -X POST \
+    -H "Authorization: Bearer $SHIPCAST_DISPATCH_TOKEN" \
+    -H "Accept: application/vnd.github+json" \
+    https://api.github.com/repos/OWNER/launches/actions/workflows/shipcast-publish.yml/dispatches \
+    -d '{"ref":"main"}'
+  ```
+
+- **Backstop:** several `schedule` lines on quiet minutes (`7`, `27`, `47` past the hour), as
+  `npx @yeyo11/shipcast init` writes. Better odds, no guarantee.
+- **`detect: true` reads your public events**: it never sees releases of private repos. For those,
+  the launch starts from the repo's own `release: published` workflow.
+- **A release created by another workflow with `GITHUB_TOKEN` does not start your launch workflow**
+  (GitHub does not chain workflows from that token). Add a last step to the release workflow; dispatching
+  a workflow is the one thing that token may do:
+
+  ```yaml
+  permissions:
+    contents: write
+    actions: write
+  steps:
+    # ... create the release ...
+    - run: gh workflow run shipcast.yml -f tag="$TAG"
+      env:
+        GH_TOKEN: ${{ github.token }}
+  ```
+
+The honest numbers and the reasoning:
+[docs/action-timing.md](https://github.com/yeyo11/shipcast/blob/main/docs/action-timing.md).
 
 ## What it runs
 

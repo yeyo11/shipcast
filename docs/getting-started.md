@@ -68,7 +68,7 @@ channels, and writes:
 | `.github/launch.yml` | project | Whether and how the project is launched: each channel `auto`, `approval` or `off` ([launch-yml.md](launch-yml.md)) |
 | `.github/workflows/shipcast.yml` | project | On `release: published`, or run by hand with a tag: `launch` |
 | `brand.yml` | launches | Who the launches speak for: name, site, languages, tone ([brands.md](brands.md)) |
-| `.github/workflows/shipcast-publish.yml` | launches | When a `launch/*` pull request is merged: `publish`; hourly: `round` |
+| `.github/workflows/shipcast-publish.yml` | launches | When a `launch/*` pull request is merged: `publish`; when dispatched, or on three backstop cron lines: `round` ([action-timing.md](action-timing.md)) |
 
 **The tone** is how the AI writes for you: a few sentences on your voice, which every article and post
 is written with. `init` explains it and shows an example of the form ("First person, as the developer
@@ -122,9 +122,20 @@ Do it with a release you will not launch for real: that release counts as launch
 Publish a release, or run **Shipcast launch** by hand with a tag. In a few minutes the drafts pull
 request is in your launches repo, with the article in each language, one draft per channel and the
 launch's images. Merge it: the blog deploys the article, and **Shipcast publish** posts every channel
-in `approval` or `auto` mode whose secrets are set, waiting up to 20 minutes for the article to be
-live. Close it instead and nothing is published. A channel that failed is retried by the hourly
-round.
+in `approval` or `auto` mode whose secrets are set, waiting up to 25 minutes for the article to be
+live. Close it instead and nothing is published. A channel that failed, a scheduled piece and an
+article that took longer to deploy are picked up by the next **round**.
+
+## When the round runs
+
+A round is only as punctual as what starts it, and GitHub delays or drops scheduled workflows (on one
+private repo, 3 runs in 17 hours of an hourly cron). The template keeps three cron lines as a
+backstop; for a round every 15 minutes, call the workflow from outside GitHub (a Cloudflare Worker
+with a Cron Trigger, cron-job.org, your own server) with a fine-grained token for the launches repo
+and *Actions: read and write*. `init` prints the exact `curl`. A late round loses nothing, it only
+delays a scheduled post or a retry. Releases made by another workflow with `GITHUB_TOKEN` need one
+extra step to start the launch. All of it, with the honest numbers, is in
+[action-timing.md](action-timing.md).
 
 ## Channels in Action mode
 
@@ -153,4 +164,4 @@ Instagram and the newsletter (Brevo) read secrets too (`INSTAGRAM_USER_ID` and
 
 ## Related
 
-[[decisions/github-action.md]] · [[decisions/action-mode.md]] · [[install.md]] · [[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[plans/goal-v0.2.md]]
+[[decisions/github-action.md]] · [[decisions/action-mode.md]] · [[decisions/action-timing.md]] · [[action-timing.md]] · [[install.md]] · [[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[publishing.md]] · [[plans/goal-v0.2.md]]

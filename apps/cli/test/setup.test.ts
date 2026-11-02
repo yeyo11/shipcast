@@ -12,12 +12,14 @@ import {
   renderPublishWorkflow,
   renderReleaseWorkflow,
   repoFromRemote,
+  roundTriggerCurl,
   parseSetupArgs,
   renderBrandYml,
   runSetup,
   secretsToSet,
   setupFiles,
   setupOptions,
+  timingReport,
   type SetupOptions,
 } from '../src/setup.ts';
 
@@ -112,6 +114,8 @@ test('init in an empty repo writes the setup from its origin, prints the secrets
   assert.match(out, /gh secret set SHIPCAST_GITHUB_TOKEN --repo dev\/tool/);
   assert.match(out, /https:\/\/console\.anthropic\.com\/settings\/keys/);
   assert.match(out, /copy shipcast-launches\/brand\.yml/);
+  assert.match(out, /actions\/workflows\/shipcast-publish\.yml\/dispatches/, 'the exact call for an outside cron');
+  assert.match(out, /gh workflow run shipcast\.yml -f tag="\$TAG"/, 'and the step for a release made with GITHUB_TOKEN');
 
   const again = await runSetup(['--yes', '--site', 'https://dev.example'], dir, () => {});
   assert.equal(again, 1, 'a second run refuses to overwrite');
@@ -150,4 +154,26 @@ test('templates/ holds the workflows exactly as init writes them for a placehold
   const root = join(import.meta.dirname, '..', '..', '..', 'templates');
   assert.equal(readFileSync(join(root, 'shipcast-release.yml'), 'utf8'), renderReleaseWorkflow({ launchesRepo: 'your-login/launches', ai: 'anthropic' }));
   assert.equal(readFileSync(join(root, 'shipcast-publish.yml'), 'utf8'), renderPublishWorkflow({ channels: ['blog', 'devto', 'bluesky', 'mastodon', 'hashnode', 'telegram', 'discord', 'githubDiscussions'] }));
+});
+
+test('the publish workflow keeps a backstop cron off the busy minutes, and waits for the deploy inside its timeout', () => {
+  const workflow = parse(renderPublishWorkflow({ channels: ['blog', 'bluesky'] })) as {
+    on: { schedule: Array<{ cron: string }> };
+    jobs: { publish: { 'timeout-minutes': number; steps: Array<{ with: Record<string, unknown> }> } };
+  };
+  const minutes = workflow.on.schedule.map((s) => s.cron.split(' ')[0]);
+  assert.equal(minutes.length, 3, 'one dropped run is covered by the next');
+  assert.ok(minutes.every((m) => m !== '0' && m !== '30'), 'not the minutes everyone schedules at');
+  const wait = Number(workflow.jobs.publish.steps[0]?.with['wait-minutes']);
+  assert.ok(wait >= 20 && wait <= 25 && wait < workflow.jobs.publish['timeout-minutes'], 'the wait fits the job');
+});
+
+test('the timing report names the exact dispatch for the launches repo, never a token, and the GITHUB_TOKEN step', () => {
+  const curl = roundTriggerCurl('dev/launches');
+  assert.match(curl, /repos\/dev\/launches\/actions\/workflows\/shipcast-publish\.yml\/dispatches/);
+  assert.match(curl, /\$SHIPCAST_DISPATCH_TOKEN/, 'the token is named, not printed');
+  const report = timingReport({ launchesRepo: 'dev/launches' });
+  assert.match(report, /Actions read and write/);
+  assert.match(report, /GITHUB_TOKEN does not start "Shipcast launch"/);
+  assert.match(report, /GH_TOKEN: \$\{\{ github\.token \}\}/);
 });

@@ -1,8 +1,12 @@
 # Shipcast, in the launches repo (written by `npx @yeyo11/shipcast init`).
 #
 # When a drafts pull request (launch/*) is merged, Shipcast publishes that launch to every channel its
-# launch.yml turns on, once the article is live. Every hour it also publishes what is due (a scheduled
-# piece, a channel to retry). A channel without its secrets is not published to.
+# launch.yml turns on, once the article is live. It also runs a round (what is due: a scheduled piece,
+# a channel to retry) every time it is dispatched. A channel without its secrets is not published to.
+#
+# GitHub delays or drops `schedule` runs, so the three cron lines below are only a backstop: the round
+# is on time when something outside GitHub dispatches this workflow every 15 minutes (the exact curl is
+# in docs/action-timing.md and in what `init` printed). A late round only delays a post; it loses none.
 #
 # Secrets: SHIPCAST_GITHUB_TOKEN (this workflow's own token is the fallback), and each channel's.
 # Variables (optional): SHIPCAST_DRY_RUN=true lists what would be posted and posts nothing.
@@ -12,7 +16,11 @@ on:
   pull_request:
     types: [closed]
   schedule:
-    - cron: "17 * * * *"
+    # Minutes GitHub's scheduler is least busy at (not :00 or :30); the concurrency group below makes
+    # runs that overlap wait for each other
+    - cron: "7 * * * *"
+    - cron: "27 * * * *"
+    - cron: "47 * * * *"
   workflow_dispatch:
     inputs:
       dry-run:
@@ -41,6 +49,8 @@ jobs:
           command: ${{ github.event_name == 'pull_request' && 'publish' || 'round' }}
           launches-repo: ${{ github.repository }}
           github-token: ${{ secrets.SHIPCAST_GITHUB_TOKEN || github.token }}
+          # How long a merge waits for the blog to deploy before leaving it to the next round
+          wait-minutes: 25
           dry-run: ${{ inputs.dry-run == true || vars.SHIPCAST_DRY_RUN == 'true' }}
         env:
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}

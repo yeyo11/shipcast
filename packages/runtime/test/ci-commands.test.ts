@@ -7,7 +7,7 @@ import { after, test } from 'node:test';
 import { parseSnapshot, type DraftResult, type Launch, type PublishResult, type Repositories } from '@shipcast/engine';
 import { FakeGitHub } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
-import { BranchState, ciLaunch, ciPublish, GitStateStore, launchTarget, type CiDeps } from '../src/index.ts';
+import { BranchState, ciLaunch, ciPublish, ciRound, GitStateStore, launchTarget, type CiDeps } from '../src/index.ts';
 
 const parseSnapshotText = (text: string | undefined) => parseSnapshot(text ?? '');
 
@@ -133,4 +133,48 @@ test('ci publish: a merged pull request is published once its article is live, p
   assert.equal(tries, 3);
   const snapshot = parseSnapshotText((await new GitStateStore({ remote }).read()).registry);
   assert.equal(snapshot.tables.posts?.length, 1);
+});
+
+const releaseEvent = (id: string, tag: string) => ({ id, type: 'release' as const, repo: 'me/app', tag, prerelease: false, url: `https://github.com/me/app/releases/tag/${tag}`, at: '2026-11-02T10:00:00Z' });
+
+test('ci round: rounds GitHub never ran lose nothing, the next one claims every release that came meanwhile and drafts each once', async () => {
+  const remote = bareRemote();
+  const drafted: string[] = [];
+  const github = () =>
+    new FakeGitHub({
+      files: { 'me/app/.github/launch.yml@v1.0.0': 'enabled: true\nbrand: personal\n', 'me/app/.github/launch.yml@v1.1.0': 'enabled: true\nbrand: personal\n' },
+      // Two releases since the last round that did run, newest first, as the events API lists them
+      events: [{ notModified: false, etag: 'W/"1"', events: [releaseEvent('202', 'v1.1.0'), releaseEvent('201', 'v1.0.0')] }, { notModified: true }],
+    });
+
+  const first = run(remote, 'late round', drafted);
+  const late = await ciRound({ ...first.deps, github: github() }, { detect: true });
+  assert.equal(late.outputs.claimed, '2');
+  assert.deepEqual(drafted.sort(), ['me/app v1.0.0', 'me/app v1.1.0']);
+
+  // The next round, on a fresh runner whose events page shows the same two: nothing is drafted again
+  const next = run(remote, 'next round', drafted);
+  const gh = new FakeGitHub({
+    files: { 'me/app/.github/launch.yml@v1.0.0': 'enabled: true\nbrand: personal\n', 'me/app/.github/launch.yml@v1.1.0': 'enabled: true\nbrand: personal\n' },
+    events: [{ notModified: false, etag: 'W/"2"', events: [releaseEvent('202', 'v1.1.0'), releaseEvent('201', 'v1.0.0')] }],
+  });
+  const again = await ciRound({ ...next.deps, github: gh }, { detect: true });
+  assert.equal(again.outputs.claimed, '0');
+  assert.equal(drafted.length, 2, 'a launch happens once, however late or often the round runs');
+});
+
+test('ci round: whatever is drafted is tried on every round, so a piece due while no round ran goes out on the next', async () => {
+  const remote = bareRemote();
+  const drafted: string[] = [];
+  await ciLaunch(run(remote, 'launch', drafted).deps, launchTarget({ eventName: 'release', payload: RELEASE }));
+
+  const tried: string[] = [];
+  const publish = async (launch: Launch): Promise<PublishResult> => {
+    tried.push(`${launch.repo} ${launch.ref}`);
+    return { state: 'waiting', launch, reason: 'its slot has not come' };
+  };
+  // Three hours of rounds missed is no different from none: the round asks the publisher about each drafted launch
+  const { deps } = run(remote, 'round after the gap', drafted, { publish });
+  assert.equal((await ciRound(deps, { detect: false })).code, 0);
+  assert.deepEqual(tried, ['me/app v1.0.0']);
 });

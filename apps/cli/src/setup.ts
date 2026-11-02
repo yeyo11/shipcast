@@ -210,8 +210,12 @@ export function renderPublishWorkflow(options: Pick<SetupOptions, 'channels'>): 
   return `# Shipcast, in the launches repo (written by \`npx @yeyo11/shipcast init\`).
 #
 # When a drafts pull request (launch/*) is merged, Shipcast publishes that launch to every channel its
-# launch.yml turns on, once the article is live. Every hour it also publishes what is due (a scheduled
-# piece, a channel to retry). A channel without its secrets is not published to.
+# launch.yml turns on, once the article is live. It also runs a round (what is due: a scheduled piece,
+# a channel to retry) every time it is dispatched. A channel without its secrets is not published to.
+#
+# GitHub delays or drops \`schedule\` runs, so the three cron lines below are only a backstop: the round
+# is on time when something outside GitHub dispatches this workflow every 15 minutes (the exact curl is
+# in docs/action-timing.md and in what \`init\` printed). A late round only delays a post; it loses none.
 #
 # Secrets: SHIPCAST_GITHUB_TOKEN (this workflow's own token is the fallback), and each channel's.
 # Variables (optional): SHIPCAST_DRY_RUN=true lists what would be posted and posts nothing.
@@ -221,7 +225,11 @@ on:
   pull_request:
     types: [closed]
   schedule:
-    - cron: "17 * * * *"
+    # Minutes GitHub's scheduler is least busy at (not :00 or :30); the concurrency group below makes
+    # runs that overlap wait for each other
+    - cron: "7 * * * *"
+    - cron: "27 * * * *"
+    - cron: "47 * * * *"
   workflow_dispatch:
     inputs:
       dry-run:
@@ -250,8 +258,51 @@ jobs:
           command: \${{ github.event_name == 'pull_request' && 'publish' || 'round' }}
           launches-repo: \${{ github.repository }}
           github-token: \${{ secrets.SHIPCAST_GITHUB_TOKEN || github.token }}
+          # How long a merge waits for the blog to deploy before leaving it to the next round
+          wait-minutes: 25
           dry-run: \${{ inputs.dry-run == true || vars.SHIPCAST_DRY_RUN == 'true' }}${env}
 `;
+}
+
+/**
+ * The call an outside cron makes to run the launches repo's round on time: GitHub delays or drops
+ * `schedule` runs on private repos, but a dispatch is immediate. The token is a fine-grained one for
+ * the launches repo alone, with Actions read and write; it is never printed, only named.
+ */
+export function roundTriggerCurl(launchesRepo: string): string {
+  return [
+    'curl -fsS -X POST \\',
+    '  -H "Authorization: Bearer $SHIPCAST_DISPATCH_TOKEN" \\',
+    '  -H "Accept: application/vnd.github+json" \\',
+    `  https://api.github.com/repos/${launchesRepo}/actions/workflows/shipcast-publish.yml/dispatches \\`,
+    `  -d '{"ref":"main"}'`,
+  ].join('\n');
+}
+
+/** What `init` tells the owner about timing: the external trigger, and releases made by another workflow */
+export function timingReport(options: Pick<SetupOptions, 'launchesRepo'>): string {
+  return [
+    'Timing. GitHub delays or drops scheduled workflows, so the hourly round in shipcast-publish.yml is a backstop.',
+    'For a round every 15 minutes, call the workflow from outside GitHub (a Cloudflare Worker with a Cron Trigger,',
+    'cron-job.org, your own server). Make a fine-grained token for',
+    `${options.launchesRepo} only, with Actions read and write, keep it as SHIPCAST_DISPATCH_TOKEN there, and run:`,
+    '',
+    roundTriggerCurl(options.launchesRepo)
+      .split('\n')
+      .map((l) => `  ${l}`)
+      .join('\n'),
+    '',
+    'A late round only delays a scheduled post or a retry; it loses none. Without it, those wait for the next backstop run.',
+    '',
+    'A release made by another workflow with GITHUB_TOKEN does not start "Shipcast launch" (GitHub does not chain',
+    "workflows from that token). Add this as the last step of that release workflow, with 'permissions: actions: write':",
+    '',
+    '  - run: gh workflow run shipcast.yml -f tag="$TAG"',
+    '    env:',
+    '      GH_TOKEN: ${{ github.token }}',
+    '',
+    '(dispatching a workflow is the one thing GITHUB_TOKEN may do; a release made by hand or with a PAT needs nothing.)',
+  ].join('\n');
 }
 
 const TOKEN_HOW =
@@ -477,6 +528,8 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
       log(toneWarning(options.launchesRepo));
       log('');
     }
+    log(timingReport(options));
+    log('');
     log('Then publish a release (or run "Shipcast launch" by hand with a tag): the drafts pull request arrives in');
     log(`${options.launchesRepo}; merge it to publish. To try it first, set the variable SHIPCAST_DRY_RUN=true in both repos.`);
     log('Guide: https://github.com/yeyo11/shipcast/blob/main/docs/getting-started.md');
