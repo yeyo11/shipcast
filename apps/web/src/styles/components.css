@@ -169,7 +169,7 @@
 .toast-details .ui-collapsible-inner { padding-top: 0; }
 .toast-details pre { margin: 8px 0 0; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--sc-black); color: var(--sc-on-black); border-radius: var(--sc-radius-chip); font: 12.5px/1.5 var(--sc-font-mono); user-select: text; }
 .toast.wait .toast-details .ui-collapsible-trigger { color: #2a2a2a; }
-@media (max-width: 860px) { .toasts { right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); } }
+@media (max-width: 860px) { .toasts { right: 16px; bottom: calc(var(--k-bottombar-h) + 8px); } }
 
 /* ---------- The components' review page (/design/components) ---------- */
 

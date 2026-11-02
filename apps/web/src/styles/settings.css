@@ -19,7 +19,7 @@
 .stats-tabs-wrap.st-ai-tabs-wrap { margin-top: 10px; }
 
 /* Settings' save bar: above the bottom bar on a phone */
-.st-savebar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
+.st-savebar { position: fixed; bottom: var(--k-bottombar-h); z-index: 45; }
 
 @media (min-width: 960px) {
   .st-page:has(.st-savebar) { padding-bottom: 64px; }

@@ -24,7 +24,7 @@
 }
 
 /* The one yellow action: fixed above the bottom bar on a phone, in the flow from 960 px */
-.wr-actionbar { position: fixed; z-index: 45; bottom: calc(76px + env(safe-area-inset-bottom)); }
+.wr-actionbar { position: fixed; z-index: 45; bottom: var(--k-bottombar-h); }
 @media (min-width: 960px) {
   .wr-actionbar { position: static; padding: 24px 0 0; border-top: 0; background: none; }
 }
@@ -174,7 +174,7 @@ button.wr-chat-session { padding: 12px 0; }
 .wr-chat-card { gap: 12px; position: sticky; top: 96px; min-height: 560px; max-height: calc(100vh - 120px); }
 .wr-chat-card .wr-chat-proposal { background: var(--sc-ground); }
 .wr-chat-card .wr-chat-form { padding: 0; border-top: 0; }
-.wr-chat-fab { position: fixed; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 44; background: var(--sc-raised); }
+.wr-chat-fab { position: fixed; right: 16px; bottom: calc(var(--k-bottombar-h) + 16px); z-index: 44; background: var(--sc-raised); }
 @media (min-width: 960px) { .wr-chat-fab { bottom: 24px; right: 24px; } }
 /* Above other sheets' `textarea.k-input` (settings.css resets the font on every one) */
 .wr-assisted textarea.wr-textarea { font-size: 16px; line-height: 1.6; }

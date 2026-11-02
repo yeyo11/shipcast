@@ -44,7 +44,7 @@
 
 /* ---------- The yellow bar over the bottom bar (phone) ---------- */
 .ap-bar-space { height: 160px; }
-.k-bar.ap-bar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); flex-direction: column; align-items: stretch; gap: 10px; z-index: 45; }
+.k-bar.ap-bar { position: fixed; bottom: var(--k-bottombar-h); flex-direction: column; align-items: stretch; gap: 10px; z-index: 45; }
 
 /* ---------- Desktop (board DesktopLaunchReview) ---------- */
 .ap-crumb { text-decoration: none; color: var(--sc-muted); }
@@ -99,7 +99,7 @@
 .ap-chip-on { background: var(--sc-text); color: var(--sc-ground); border-color: var(--sc-text); }
 .ap-check-card { flex-direction: row; align-items: center; text-decoration: none; padding: 12px 14px; border-radius: 18px; color: var(--sc-text); }
 .ap-check-card:hover { color: var(--sc-text); border-color: var(--sc-rail); }
-.k-bar.ap-save { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
+.k-bar.ap-save { position: fixed; bottom: var(--k-bottombar-h); z-index: 45; }
 .ap-save-space { height: 110px; }
 .ap-lang { width: 110px; }
 .ap-lang button { min-height: 30px; }

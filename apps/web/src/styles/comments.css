@@ -43,7 +43,7 @@
 }
 .cm-editor[readonly] { resize: none; }
 .cm-over { color: var(--sc-failure); }
-.cm-bar { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 45; }
+.cm-bar { position: fixed; bottom: var(--k-bottombar-h); z-index: 45; }
 .cm-after-reply { height: 94px; }
 
 /* ---------- The sheets ---------- */

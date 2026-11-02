@@ -264,7 +264,13 @@ button.k-date-trigger { width: 100%; font: inherit; font-size: 16px; text-align:
 .k-topbar-tool { position: relative; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--sc-text); background: none; border: 0; padding: 0; cursor: pointer; }
 .k-topbar-bell .k-badge { position: absolute; top: 3px; right: 1px; }
 
-.k-bottombar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; height: calc(76px + env(safe-area-inset-bottom)); padding-bottom: calc(6px + env(safe-area-inset-bottom)); background: var(--sc-ground); border-top: 1px solid var(--sc-hairline); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; font-size: 12px; font-weight: 600; }
+/* The phone's bottom bar is sticky at the end of the page's flow, never fixed: the shell's main is at
+   least the screen's height less the bar (100dvh, the height iOS shows between its toolbars), so on a
+   short page the bar ends the screen, and on a long one it sticks to the screen's bottom. Being in the
+   flow, it takes its own room after the content: nothing is ever hidden under it. What floats above it
+   (a screen's save bar, toasts, the chat's bubble) stands on --k-bottombar-h, its one height */
+:root { --k-bottombar-h: calc(76px + env(safe-area-inset-bottom)); }
+.k-bottombar { position: sticky; bottom: 0; z-index: 50; height: var(--k-bottombar-h); padding-bottom: calc(6px + env(safe-area-inset-bottom)); background: var(--sc-ground); border-top: 1px solid var(--sc-hairline); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; font-size: 12px; font-weight: 600; }
 .k-bottombar-item { display: flex; flex-direction: column; align-items: center; gap: 3px; text-decoration: none; position: relative; color: var(--sc-muted); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; line-height: 1.5; }
 .k-bottombar-item:hover { color: var(--sc-text); }
 .k-bottombar-chip { display: flex; padding: 4px 16px; border-radius: 160px; }
@@ -299,10 +305,11 @@ button.k-date-trigger { width: 100%; font: inherit; font-size: 16px; text-align:
   .k-topbar, .k-bottombar, .k-phone { display: none; }
   .k-desktop { display: contents; }
 }
-/* Every screen draws its own top: the shell's main adds nothing above it, only room for the bottom bar */
+/* Every screen draws its own top, and the bottom bar takes its own room after main (above): the shell's
+   main adds no padding. On a phone it fills the screen above the bar, so the bar never ends up mid-screen */
 main.k-main { padding: 0; }
 @media (max-width: 959px) {
-  main.k-main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  main.k-main { min-height: calc(100vh - var(--k-bottombar-h)); min-height: calc(100dvh - var(--k-bottombar-h)); }
 }
 /* A desktop page's column (boards Desktop*, v26): 1200 px with 32 px sides, as the header's, so the
    logo and every page title share one left edge. Narrow content caps its own width inside it, left-aligned */

@@ -111,6 +111,14 @@ ellipsis, the full text in the link's `title`; two lines fit in the 64 px, so a 
 grows the bar or spills over the page (fixed on 2026-11-02, when a three-line title covered the
 start of the drafts screen).
 
+**The phone's bottom bar** (`BottomBar`) is treated the same way: sticky at the end of the page's
+flow, never fixed. The shell's `main` is at least `100dvh` less the bar's height (the height iOS
+shows between its toolbars, with `100vh` as the fallback), so on a short page the bar ends the
+screen and on a long one it sticks to its bottom; in the flow it takes its own room, so nothing is
+hidden under it. Its height, 76 px plus the bottom safe area, is one variable, `--k-bottombar-h`,
+which everything floating above it (a screen's save bar, toasts, the chat's bubble) stands on
+(fixed on 2026-11-02, when on iPhone the fixed bar sat mid-screen under a short page's content).
+
 - **Launches** (`/`): one summary card per launch in a grid (two columns on a desktop): its title
   and state pill, the repo and the date in the owner's zone, its views, reactions, comments and
   clicks, the views per day since the launch as an area chart (a line in `--sc-chart` over a fill

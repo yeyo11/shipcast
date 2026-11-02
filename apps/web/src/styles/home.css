@@ -163,7 +163,7 @@
 .home-bell-empty { outline: none; }
 
 /* Toasts (board Toasts): above the phone's bottom bar, in the corner on a desktop */
-.home-toasts { position: fixed; left: 12px; right: 12px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 70; display: flex; flex-direction: column; gap: 10px; outline: none; pointer-events: none; }
+.home-toasts { position: fixed; left: 12px; right: 12px; bottom: calc(var(--k-bottombar-h) + 12px); z-index: 70; display: flex; flex-direction: column; gap: 10px; outline: none; pointer-events: none; }
 .home-toast { pointer-events: auto; }
 .home-toast-title { line-height: 1.5; }
 .home-toast-close { position: relative; }
