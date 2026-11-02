@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:01:09.996705077Z
-updated_at: 2026-11-02T20:03:56.24529613Z
+created_at: 2026-11-02T20:04:13.825339496Z
+updated_at: 2026-11-02T20:06:45.683746665Z
 tags:
     - web-app
     - dashboard
@@ -169,6 +169,8 @@ unchanged unless the redesign document says so.
   card. The **Anthropic API** and an **OpenAI-compatible server** are connected here too, under AI
   providers. The toolbar's **Connect a network** is a menu of every network that takes an account,
   listed from the channel adapters; networks that still work from `.env` add **Import from .env**.
+  **Sync all**, beside it, syncs every working account of the tab on screen, with its progress and
+  outcome in one toast.
 - **Comments** (`/comments`): the comments on the owner's posts and the replies drafted for them
   ([decisions/comment-assistant.md](decisions/comment-assistant.md)). One page at a time (25), every
   filter in the address and applied by the database: state, channel, launch, post and words

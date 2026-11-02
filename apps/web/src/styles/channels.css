@@ -18,6 +18,10 @@
 .ch-head { padding-top: 18px; align-items: flex-end; }
 .ch-title { font-size: 48px; }
 .ch-connect { min-height: 40px; padding: 0 16px; font-size: 14px; }
+/* Sync all beside Connect a network, kept together; on a phone they drop under the title when the
+   row has no room for all three (390 px has not) */
+.ch-head { flex-wrap: wrap; row-gap: 12px; }
+.ch-head-actions { flex: none; }
 
 .ch-tabs-wrap { margin: 14px 16px 0; }
 .ch-tabs { padding: 0; }

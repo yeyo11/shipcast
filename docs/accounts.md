@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-10-29T20:58:37.118915621Z
+created_at: 2026-11-02T20:01:00.448169855Z
+updated_at: 2026-11-02T20:06:35.953405314Z
 tags:
     - accounts
     - channels
@@ -111,6 +111,12 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
   an account**.
 - **Every action is kept**: Sync now is a button on the card; the rest are in its Menu: Check the
   credential, Publish with this one, Rename, Connect another account and Disconnect, which asks first.
+- **Sync all** (since 2026-11-02), beside Connect a network in the header, phone and desktop: Sync now
+  for every working account of the tab on screen, three at a time, through the same `syncAccountNow`
+  server function as the cards (a loop in the page, so the REST API's `syncAccount` per account is
+  still its parity). An account that needs reconnecting is named, not synced. The button is disabled
+  while it runs; one toast follows it ("Synced 3 of 8") and becomes the outcome, "Synced 7 of 8"
+  with each failure named (`syncAllSummary` in `components/channels/view.ts`, tested).
 - **Live**: with `realtime-ui` the page reloads on `account` events ([web-app.md](web-app.md#live-pages)).
 
 ## Pictures, numbers and freshness

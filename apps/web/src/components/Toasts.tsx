@@ -12,7 +12,8 @@ import { Icon } from './kit/Icon';
  * pointer or the focus is on a toast, a toast can be swiped away, and it animates out before it is
  * removed. The API the pages use (`useToast().show/done/fail`) is the one from before Base UI.
  */
-export type ToastTone = 'ok' | 'bad' | 'wait';
+/** `run` is work still going on: a toast that `progress` keeps updating until it ends */
+export type ToastTone = 'ok' | 'bad' | 'wait' | 'run';
 
 export interface ToastInput {
   tone: ToastTone;
@@ -26,6 +27,13 @@ interface ToastApi {
   /** A failure as the server said it, explained for a person */
   fail(raw: string): void;
   done(title: string, text?: string): void;
+  /** Work that takes a while, followed in one toast that stays until `finish` swaps it for the outcome */
+  progress(title: string, text?: string): ToastProgress;
+}
+
+export interface ToastProgress {
+  update(title: string, text?: string): void;
+  finish(outcome: ToastInput): void;
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
@@ -34,6 +42,7 @@ const LABEL: Record<ToastTone, { word: string; pill: string; card: string }> = {
   ok: { word: 'Done', pill: 'k-p-pub', card: '' },
   bad: { word: 'Failed', pill: 'k-p-fail', card: ' k-fail' },
   wait: { word: 'Waiting for you', pill: 'k-p-wait', card: ' k-wait' },
+  run: { word: 'Running', pill: 'k-p-run', card: '' },
 };
 
 const OK_FOR_MS = 6000;
@@ -42,7 +51,7 @@ const WAIT_FOR_MS = 12000;
 /** At most four at once: older ones wait, hidden, until a newer one leaves */
 const LIMIT = 4;
 
-const isTone = (type: string | undefined): type is ToastTone => type === 'ok' || type === 'bad' || type === 'wait';
+const isTone = (type: string | undefined): type is ToastTone => type === 'ok' || type === 'bad' || type === 'wait' || type === 'run';
 
 function ToastList() {
   const { toasts } = Toast.useToastManager<{ details?: string }>();
@@ -56,7 +65,7 @@ function ToastList() {
           <div className="k-hrow k-g8">
             <span className={`k-pill ${label.pill}`}>{label.word}</span>
             <Toast.Title className="k-sm k-grow home-toast-title" render={<strong />} />
-            {tone !== 'wait' && (
+            {tone !== 'wait' && tone !== 'run' && (
               <Toast.Close className="k-btn k-icon k-sm k-ghost home-toast-close" aria-label="Close">
                 <Icon name="close" size={20} />
               </Toast.Close>
@@ -95,6 +104,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       show,
       fail: (raw) => show({ tone: 'bad', ...explain(raw) }),
       done: (title, text) => show({ tone: 'ok', title, text }),
+      progress: (title, text) => {
+        const id = manager.add({ type: 'run', title, description: text, timeout: 0, priority: 'low', data: {} });
+        return {
+          update: (next, nextText) => manager.update(id, { title: next, description: nextText }),
+          // A new toast for the outcome rather than an update, so its own timeout and priority apply
+          finish: (outcome) => {
+            manager.close(id);
+            show(outcome);
+          },
+        };
+      },
     };
   }, [manager]);
   // In development only: a way for the pixel checks to raise each kind of toast (board Toasts)

@@ -4,7 +4,7 @@ import { useLenis } from 'lenis/react';
 import { useEffect, useRef, useState } from 'react';
 import { AccountSheet, AddNetworkSheet, kindOf, type AccountActions, type AccountView, type ChannelsData, type NetworkView } from '../../../components/channels/sheets';
 import { NetworkGlyph } from '../../../components/channels/NetworkGlyph';
-import { ago, brokenLine, keyMetric, namesToConnect, shortDay, stateOf, STATE_PILL, STATE_WORD } from '../../../components/channels/view';
+import { ago, brokenLine, keyMetric, namesToConnect, shortDay, stateOf, STATE_PILL, STATE_WORD, syncAllSummary, type SyncOutcome } from '../../../components/channels/view';
 import { NoAccounts } from '../../../components/illustrations';
 import { TopBar } from '../../../components/kit/Bars';
 import { Icon } from '../../../components/kit/Icon';
@@ -26,6 +26,66 @@ export const Route = createFileRoute('/_app/channels/')({
 });
 
 type Target = { network: NetworkView; account: AccountView };
+
+/** How many accounts Sync all reads at once: each sync is a job the page waits on for up to 20 s */
+const SYNC_AT_ONCE = 3;
+
+/**
+ * Sync all (the header's button): Sync now for every working account of the tab, a few at a time,
+ * through the same server function as each card's button (so the REST API's syncAccount, called per
+ * account, does the same). One toast follows it and becomes the outcome.
+ */
+function useSyncAll() {
+  const router = useRouter();
+  const toast = useToast();
+  const [running, setRunning] = useState(false);
+  // The accounts being synced now, whose cards say so
+  const [syncing, setSyncing] = useState<ReadonlySet<number>>(new Set());
+  const mark = (id: number, on: boolean) =>
+    setSyncing((ids) => {
+      const next = new Set(ids);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const run = async (networks: readonly NetworkView[]) => {
+    const nameOf = (n: NetworkView, a: AccountView) => (n.accounts.length > 1 ? `${n.name} (${a.display})` : n.name);
+    const all = networks.flatMap((n) => n.accounts.map((a) => ({ n, a })));
+    // A broken account shows Reconnect, not Sync now: it is named, not synced
+    const targets = all.filter(({ a }) => stateOf(a.status) !== 'failed');
+    const skipped = all.filter(({ a }) => stateOf(a.status) === 'failed').map(({ n, a }) => nameOf(n, a));
+    if (targets.length === 0) return;
+    setRunning(true);
+    const progress = toast.progress(`Syncing ${targets.length === 1 ? nameOf(targets[0]!.n, targets[0]!.a) : `${targets.length} accounts`}`);
+    const outcomes: SyncOutcome[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < targets.length) {
+        const { n, a } = targets[next++]!;
+        const name = nameOf(n, a);
+        mark(a.id, true);
+        const outcome: SyncOutcome = await syncAccountNow({ data: a.id }).then(
+          (r) => ({ name, state: r.state === 'completed' || r.state === 'failed' ? r.state : 'queued', problem: r.state === 'failed' ? r.lines[0] : undefined }),
+          (error: unknown) => ({ name, state: 'failed', problem: error instanceof Error ? error.message : String(error) }),
+        );
+        mark(a.id, false);
+        outcomes.push(outcome);
+        if (outcomes.length < targets.length) progress.update(`Synced ${outcomes.length} of ${targets.length}`, `${name} ${outcome.state === 'failed' ? 'failed' : 'done'}`);
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: Math.min(SYNC_AT_ONCE, targets.length) }, worker));
+    } finally {
+      setSyncing(new Set());
+      setRunning(false);
+    }
+    // In the tab's order, not the order the syncs finished in
+    const order = targets.map(({ n, a }) => nameOf(n, a));
+    progress.finish(syncAllSummary([...outcomes].sort((x, y) => order.indexOf(x.name) - order.indexOf(y.name)), skipped));
+    await router.invalidate();
+  };
+  return { running, syncing, run };
+}
 
 /** The account actions, each a toast when it ends and a fresh read of the page */
 function useAccountActions(setBusy: (id: number | null) => void): AccountActions {
@@ -194,6 +254,7 @@ function Channels() {
   const [target, setTarget] = useState<Target | null>(null);
   const [view, setView] = useState<'menu' | 'rename' | 'disconnect'>('menu');
   const actions = useAccountActions(setBusy);
+  const syncAll = useSyncAll();
   const open = (t: Target) => {
     setView('menu');
     setTarget(t);
@@ -239,12 +300,20 @@ function Channels() {
       <AccountSheet target={target} view={view} onViewChange={setView} onClose={() => setTarget(null)} actions={actions} busy={busy !== null} />
     </>
   );
+  const tabNetworks = data.networks.filter((n) => groupOf(n) === tab);
+  const syncable = tabNetworks.some((n) => n.accounts.some((a) => stateOf(a.status) !== 'failed'));
   const connectButton = (
-    <button type="button" className="k-btn ch-connect" onClick={() => setAdding(true)}>
-      <Icon name="plus" size={18} />
-      <span className="ch-ph">Connect</span>
-      <span className="ch-dt">Connect a network</span>
-    </button>
+    <div className="k-hrow k-g8 ch-head-actions">
+      <button type="button" className="k-btn ch-connect" disabled={syncAll.running || busy !== null || !syncable} onClick={() => void syncAll.run(tabNetworks)}>
+        <Icon name="retry" size={18} />
+        {syncAll.running ? 'Syncing…' : 'Sync all'}
+      </button>
+      <button type="button" className="k-btn ch-connect" onClick={() => setAdding(true)}>
+        <Icon name="plus" size={18} />
+        <span className="ch-ph">Connect</span>
+        <span className="ch-dt">Connect a network</span>
+      </button>
+    </div>
   );
 
   if (connected.length === 0)
@@ -327,7 +396,7 @@ function Channels() {
                           account={a}
                           now={data.now}
                           siblings={n.accounts.length}
-                          busy={busy === a.id}
+                          busy={busy === a.id || syncAll.syncing.has(a.id)}
                           onMore={() => open({ network: n, account: a })}
                           onSync={() => void actions.sync(a)}
                         />

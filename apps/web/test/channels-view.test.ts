@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ago, brokenLine, credentialWord, dayWord, keyMetric, namesToConnect, shortDay, stateOf } from '../src/components/channels/view.ts';
+import { ago, brokenLine, credentialWord, dayWord, keyMetric, namesToConnect, shortDay, stateOf, syncAllSummary } from '../src/components/channels/view.ts';
 
 test('a card leads with what its network counts, and the rest beside it', () => {
   assert.deepEqual(keyMetric('bluesky', { followers: 1842, following: 312, posts: null }), { value: 1842, label: 'Followers', others: '312 following' });
@@ -38,4 +38,20 @@ test('the connect card names a few networks, and the disconnect what reconnectin
   assert.equal(namesToConnect([]), 'Another account on a network you use');
   assert.equal(credentialWord({ auth: 'form', name: 'Bluesky', fields: [{ label: 'Handle', secret: false }, { label: 'App password', secret: true }] }), 'a new app password');
   assert.equal(credentialWord({ auth: 'oauth', name: 'LinkedIn', fields: [] }), 'authorising Shipcast on LinkedIn again');
+});
+
+test('Sync all says how many of the tab synced, and names what did not', () => {
+  const ok = (name: string) => ({ name, state: 'completed' as const });
+  assert.deepEqual(syncAllSummary([ok('Bluesky'), ok('Mastodon')]), { tone: 'ok', title: 'Synced all 2' });
+  assert.deepEqual(syncAllSummary([ok('Bluesky')]), { tone: 'ok', title: 'Synced Bluesky' });
+  assert.deepEqual(syncAllSummary([ok('Bluesky'), { name: 'Threads', state: 'failed', problem: 'the token expired' }, ok('Mastodon')]), {
+    tone: 'bad',
+    title: 'Synced 2 of 3',
+    text: 'Threads failed: the token expired',
+  });
+  assert.deepEqual(syncAllSummary([ok('Bluesky'), { name: 'Reddit', state: 'queued' }], ['Instagram']), {
+    tone: 'ok',
+    title: 'Synced 1 of 2',
+    text: 'Reddit still syncs: reload the page in a minute · Instagram needs reconnecting first',
+  });
 });

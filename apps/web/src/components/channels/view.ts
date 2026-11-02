@@ -116,3 +116,27 @@ export function dayWord(iso: string, now: string): string {
   if (days === 1) return 'yesterday';
   return `on ${shortDay(iso)}`;
 }
+
+/** How one account's sync ended: Sync now's answer, or the error its call threw */
+export interface SyncOutcome {
+  name: string;
+  state: 'completed' | 'failed' | 'queued';
+  problem?: string | undefined;
+}
+
+/**
+ * Sync all's toast: how many of the tab's accounts synced, then what did not, by name. A failure
+ * makes it a failed toast; a sync still running when the page stopped waiting is not one.
+ */
+export function syncAllSummary(outcomes: readonly SyncOutcome[], skipped: readonly string[] = []): { tone: 'ok' | 'bad'; title: string; text?: string } {
+  const synced = outcomes.filter((o) => o.state === 'completed').length;
+  const failed = outcomes.filter((o) => o.state === 'failed');
+  const running = outcomes.filter((o) => o.state === 'queued');
+  const title = synced === outcomes.length ? (synced === 1 ? `Synced ${outcomes[0]?.name ?? 'the account'}` : `Synced all ${synced}`) : `Synced ${synced} of ${outcomes.length}`;
+  const lines = [
+    ...failed.map((o) => `${o.name} failed: ${o.problem ?? 'it could not be synced'}`),
+    running.length > 0 && `${running.map((o) => o.name).join(', ')} still ${running.length === 1 ? 'syncs' : 'sync'}: reload the page in a minute`,
+    skipped.length > 0 && `${skipped.join(', ')} ${skipped.length === 1 ? 'needs' : 'need'} reconnecting first`,
+  ].filter((l): l is string => Boolean(l));
+  return { tone: failed.length > 0 ? 'bad' : 'ok', title, ...(lines.length > 0 && { text: lines.join(' · ') }) };
+}
