@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T13:06:09.095720895Z
-updated_at: 2026-11-02T12:00:00Z
+updated_at: 2026-11-02T22:46:18Z
 tags:
     - stats
     - metrics
@@ -260,7 +260,7 @@ their input checked by the server functions' own `parseGrowthInput` and `parseSe
 
 What the page shows and the routes do not answer as such is presentation over the same numbers: the
 ranking sorted by a raw column (the API ranks by score; every entry carries its raw numbers), the
-previous period laid over the chart (a second series call over the previous window), "All" as a
+previous period's series with `?compare` (a second series call over the previous window), "All" as a
 period (a `from` on the first reading's day, `firstReadingDay`, with no comparison) and the filters' option lists (`GET /accounts`,
 `GET /launches`).
 
@@ -270,43 +270,69 @@ period (a `from` on the first reading's day, `firstReadingDay`, with no comparis
 `apps/web/src/components/stats/`), laid out on 2026-10-26 from the mock-up the owner approved so that
 no part needs a long scroll: each tab fits about one screen on a desktop.
 
-- **The toolbar**: the period, one **Filters** button and Export CSV (the chart's series as a file;
-  its glyph alone on a phone); the range is the caption under it.
-- **Filters**: a popover with what the view is narrowed to (channels, accounts, launches, and Clear
-  the filters), how the chart is drawn (grouped by channel, account or launch; lines, areas or bars;
-  days or weeks, weeks only past 120 days; compared with the previous period or not) and a custom
-  range in one calendar (the `DateRangePicker` of the [component layer](decisions/component-layer.md),
-  no later than today). The button counts what is set. "All" starts on the day of the first reading
-  (`firstReadingDay`), at most 731 days back, so it holds every reading; past 120 days it is charted in
-  weeks, which keep every reading too. It has no period before it, so its totals show no change and
-  the chart no previous period, whatever the address asks. Until 2026-11-02 it started on the day the
-  first published launch was made: a launch made, or marked published, after its pieces were first
-  read started it too late, and every counter started at its readings from before, so "All" counted
-  less than 90 days and compared itself with the days before it.
-- **The tabs**: Overview, Ranking, Accounts, Search, as Base UI Tabs. The tab is in the address
-  (`/stats?tab=accounts`; `?tab=posts` still opens Ranking); it is left out of the loader's
+- **The toolbar**: on a desktop, the period chips (7 days, 30 days, 90 days, All), a Custom chip
+  (the custom range's days once one is set) and a chip naming the channels counted ("All channels",
+  one channel by name, or how many), both of which open **Filters**; then Export CSV, a glyph-only
+  button on every screen (the chart's series as a file, with the previous period's columns after
+  them when the address asks for `?compare`).
+- **Filters** (`Filters.tsx`): a drawer from the right on a desktop, a bottom sheet on a phone, with
+  three things only: the **period** (the four chips and Custom, which shows a From and a To day,
+  each the app's own `DatePicker`, no later than today, at most 731 days apart), the **channels** to
+  count (a chip each, all ticked by default, with Tick all / Untick all at the foot) and the
+  **launch** (Every launch or one; several chosen through the address show as "N launches" and are
+  kept). Nothing changes while it is open: **Show the numbers** puts the whole choice in the address
+  at once. Accounts can be narrowed only through the address (`?accounts=`), and the sheet has no
+  Clear: the empty state's **Clear the filters** clears channels, accounts and launches.
+  "All" starts on the day of the first reading (`firstReadingDay`), at most 731 days back, so it
+  holds every reading. It has no period before it, so its totals show no change and no previous
+  period is read, whatever the address asks. Until 2026-11-02 it started on the day the first
+  published launch was made: a launch made, or marked published, after its pieces were first read
+  started it too late, and every counter started at its readings from before, so "All" counted less
+  than 90 days and compared itself with the days before it.
+- **How the chart is drawn** is not in the sheet. **Group by** Total, Channel or Launch is a row of
+  chips on the chart's card (beside its title on a desktop, under the chart on a phone); grouping by
+  account stays reachable through the address (`?groupBy=account`). The chart is a line (over a
+  fading yellow area when it is the total, a line per series in its channel's colour otherwise)
+  whatever `?chart` says: the address accepts `line`, `area` and `bar`, but the page draws no other
+  kind. It is in days unless the address says `?bucket=week`, and in weeks whatever it says past 120
+  days. The comparison with the previous period is only `?compare=1`: the page has no control for
+  it, and the previous period's series it then reads is not drawn on the chart; it goes only into
+  Export CSV. The totals' change against the period before does not depend on it (below).
+- **The tabs**: Overview, Ranking, Accounts, Search, a tab list of the page's own. The tab is in the
+  address (`/stats?tab=accounts`; `?tab=posts` still opens Ranking); it is left out of the loader's
   dependencies, so moving between tabs never reads the numbers again.
-- **Overview**: the totals as one strip that is also the chart's metric switch, each with its
-  lifetime under it, and the time chart with its zoom and its "Show the data" table. Under the chart,
-  **More numbers** (`Details.tsx`, since 2026-10-29): the second tier's families the sources picked
-  count, each with each channel's part, this period (and its change when comparing) and its lifetime;
-  then the averages as the period ends, by source, with how many pieces they are the mean of.
-- **Ranking**: posts, launches or accounts by score, with the raw numbers beside it and each
-  number's lifetime under it, sortable by any column, ten to a page.
-- **Accounts**: one table of the accounts with snapshots: followers, following and posts with their
-  change in the period, a sparkline of the chosen measure, when it was last synced, and Sync now.
+- **Overview**: the totals as one strip that is also the chart's metric switch, each with its change
+  against the period of the same length before it (none for "All"); then the time chart, with the
+  launches that went out marked on it, a pointer or arrow-key readout and a table of every value for
+  screen readers only. Beside it on a desktop, **Top this period**: the three most popular pieces
+  and a way to the whole ranking; on a phone, the best launch of the period under it. Then **More
+  numbers** (`Details.tsx`, since 2026-10-29): the second tier's families the sources picked count,
+  each with each channel's part, this period with its change against the period before (none for
+  "All") and its lifetime ("in all"); then the averages as the period ends, by source, with how
+  many pieces they are the mean of.
+- **Ranking**: posts, launches or accounts (a switch), ranked by score, each row with its period's
+  raw numbers in the network's own words and its score, ten to a page with Previous and Next. The
+  page reads the whole ranking (up to 1,000 entries) so it can be sorted by any raw column, but that
+  sort is only in the address (`?sort=`, `?order=asc`): the page shows no column headers.
+- **Accounts**: a switch between Followers, Following and Posts, then a card per account with
+  snapshots whose network counts that measure: its latest value, its change in the period, a
+  sparkline of it over the period and when it was last synced. An account whose credential failed
+  is a failure card with Reconnect (to Channels); one not synced for over 36 hours, with Sync now.
   `GET /stats/accounts` answers the same view.
-- **Search**: each published launch's article pages with what Google (URL Inspection) and Bing last
-  said of each ([search-indexing.md](search-indexing.md)), and each engine's impressions and clicks
-  for the launch in the period, with their lifetime under them, read by `loadSearch` in
+- **Search**: a row per published launch with its article's languages and a Google and a Bing pill
+  (indexed when every page is, waiting while one is not, dashed before the engine was asked; what
+  each engine said of each page is the pill's tooltip, [search-indexing.md](search-indexing.md));
+  then one card per engine with the clicks and impressions all those launches gained in the period
+  (Search Console's with the average position), read by `loadSearch` in
   `apps/web/src/server/stats.server.ts` from what the engine already keeps. `GET /stats/search`
-  answers the same view.
+  answers the same view, with each launch's numbers and their lifetime.
 - **Live**: with `realtime-ui` the page reloads when a `metrics`, `account` or `post` event arrives
   ([web-app.md](web-app.md#live-pages)).
 
-On a phone (up to 640 px, or a coarse pointer) the period becomes a Select beside **Filters** (a
-bottom sheet there), the tabs scroll sideways, the ranking's rows become blocks, and the Accounts and
-Search tables scroll inside their own box.
+On a phone (below 960 px) the toolbar keeps only Export CSV: the Overview starts with the period
+chips and a filter icon that opens **Filters** (a bottom sheet there), the Ranking and Search tabs
+start with three chips (the period, the channels and Filters), each opening it, and the group-by
+chips move under the chart.
 
 ## Checked
 
