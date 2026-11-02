@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T20:06:55.638365794Z
-updated_at: 2026-11-02T20:09:36.538724102Z
+created_at: 2026-11-02T20:09:47.951910895Z
+updated_at: 2026-11-02T20:11:03.542794191Z
 tags:
     - web-app
     - dashboard
@@ -272,7 +272,11 @@ on the [approved design direction](decisions/app-design-direction.md).
   toasts and the palette, the date pickers (`DatePicker`, `DateRangePicker`) and the **time field**
   (`TimeField`, 24 hours, its pure parts in `ui/dates.ts`, tested). **ResponsiveMenu** is the Popover
   on a desktop and the Drawer on a phone. **Collapsible** and **Accordion** replaced the native
-  `<details>`; **ScrollArea** is Cartel's scrollbar for regions inside a page. See
+  `<details>`; **ScrollArea** is Cartel's scrollbar for regions inside a page. **A chevron down means
+  a dropdown** (a Select, a Combobox, a Menu) or a disclosure that opens in place; a button that
+  opens a side sheet or a drawer has none, and leads with the icon of what it sets instead (since
+  2026-11-02: Stats' channels chip, the filter icon on a desktop and the channels icon on a phone,
+  where the Filters chip beside it has the filter one). See
   [decisions/component-layer.md](decisions/component-layer.md); reviewed at `/design/components`.
 - **Illustrations wired in**: the 404 page, the error boundary, the empty states, the sign-in page,
   the Stats page's loading and empty states, a launch's picture when it has no avatar.

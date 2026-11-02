@@ -153,7 +153,9 @@ function Stats() {
           {chip}
         </button>
         <button type="button" className={`k-chip${search.channels ? ' k-on' : ''}`} onClick={() => setFiltersOpen(true)} aria-label={`Channels: ${channelsChip}. Change the filters`}>
-          <span className="k-ellipsis">{channelsChip}</span> <Icon name="chevronDown" size={16} />
+          {/* It opens the filters sheet, not a dropdown: no chevron (the Filters chip beside it has the filter icon) */}
+          <Icon name="channels" size={16} />
+          <span className="k-ellipsis">{channelsChip}</span>
         </button>
         <button type="button" className={`k-chip${filtered ? ' k-on' : ''}`} onClick={() => setFiltersOpen(true)}>
           <Icon name="filter" size={16} />
@@ -302,7 +304,9 @@ function Stats() {
                   {search.period === 'custom' ? chip : 'Custom'}
                 </button>
                 <button type="button" className={`k-chip${filtered ? ' k-on' : ''}`} onClick={() => setFiltersOpen(true)} aria-label={`Channels: ${channelsChip}. Change the filters`}>
-                  {channelsChip} <Icon name="chevronDown" size={16} />
+                  {/* It opens the filters sheet, not a dropdown: the filter icon leads, no chevron */}
+                  <Icon name="filter" size={16} />
+                  {channelsChip}
                 </button>
               </div>
             </div>
