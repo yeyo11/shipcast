@@ -30,6 +30,13 @@ const BASE_UI = ['accordion', 'alert-dialog', 'autocomplete', 'collapsible', 'co
 const VISX = ['axis', 'curve', 'grid', 'group', 'scale', 'shape'].map((p) => `@visx/${p}`);
 
 /**
+ * TipTap's React binding imports use-sync-external-store's shim (CommonJS) the same way. Every TipTap
+ * entry the editor imports is pre-bundled together: one left out would bring its own copy of
+ * ProseMirror, whose plugins then clash ("Adding different instances of a keyed plugin")
+ */
+const TIPTAP = ['core', 'react', 'starter-kit', 'markdown', 'extension-image', 'extension-list', 'extension-table'].map((p) => `@tiptap/${p}`);
+
+/**
  * Discovery would crawl from the routes into the engine's source (a linked package) and try to
  * pre-bundle its native renderers for the browser. Start sets the client's dependency options itself,
  * so this runs after it; the browser only needs what Start already lists.
@@ -38,7 +45,7 @@ const serverOnlyDeps = (): Plugin => ({
   name: 'shipcast-server-only-deps',
   enforce: 'post',
   configEnvironment(name) {
-    if (name === 'client') return { optimizeDeps: { noDiscovery: true, include: [...BASE_UI, ...VISX], exclude: [...WORKSPACE, ...NATIVE] } };
+    if (name === 'client') return { optimizeDeps: { noDiscovery: true, include: [...BASE_UI, ...VISX, ...TIPTAP], exclude: [...WORKSPACE, ...NATIVE] } };
     return undefined;
   },
 });

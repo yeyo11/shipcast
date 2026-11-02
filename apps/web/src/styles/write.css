@@ -97,8 +97,7 @@
   .wr-title-field .wr-title-input { font-size: 30px; min-height: 64px; border-color: transparent; border-bottom-color: var(--sc-rail); border-radius: 0; padding-left: 0; }
   .wr-title-field .wr-title-input:focus-visible { box-shadow: none; border-color: transparent; border-bottom-color: var(--sc-yellow); }
   .wr-write-editor .wr-assisted-label, .wr-write-editor .wr-assisted-help { display: none; }
-  .wr-write-editor .wr-assisted-meta { margin-left: auto; }
-  .wr-write-editor .wr-textarea.wr-tall { min-height: 460px; }
+    .wr-write-editor .wr-textarea.wr-tall { min-height: 460px; }
   .wr-write-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 96px; }
   .wr-write-side.wr-chat-open .wr-out { display: none; }
   .wr-out { gap: 14px; padding: 16px; }
@@ -188,26 +187,57 @@ button.wr-chat-session { padding: 12px 0; }
 /* ---------- The rich editor (boards EditorWrite, EditorDrafts, EditorAssistVisual) ---------- */
 /* The bar: the mode switch, then the profile's buttons; it scrolls sideways rather than wrap on a phone */
 /* It wraps rather than scroll: every button stays in sight, at any width */
-.ed-bar { flex-wrap: wrap; row-gap: 6px; padding: 2px 0; }
-.ed-bar .k-seg { flex: none; }
-.ed-tools { flex-wrap: wrap; gap: 2px; min-width: 0; }
-.ed-bar-sep { width: 1px; height: 22px; background: var(--sc-hairline); margin: 0 6px; flex: none; }
-.ed-tool { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--sc-text); font: 700 14px var(--sc-font-text); cursor: pointer; }
+.ed-frame { display: flex; flex-direction: column; border: 2px solid var(--sc-rail); border-radius: 14px; background: var(--sc-ground); overflow: hidden; }
+.ed-frame:focus-within { border-color: var(--sc-yellow); box-shadow: 0 0 0 3px rgba(255, 212, 59, .25); }
+.ed-frame-bare { display: contents; }
+.ed-bar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; row-gap: 6px; padding: 6px 8px; background: var(--sc-raised); border-bottom: 1px solid var(--sc-hairline); }
+.ed-bar-plain { min-height: 54px; padding: 6px 16px; }
+.ed-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; flex: 1; }
+.ed-tool-slot { display: inline-flex; align-items: center; gap: 2px; }
+.ed-bar-sep { width: 1px; height: 24px; background: var(--sc-hairline); margin: 0 6px; flex: none; }
+.ed-tool { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--sc-text); font: 700 15px var(--sc-font-text); cursor: pointer; flex: none; }
+.ed-tool-heading { width: auto; padding: 0 8px; }
 .ed-tool:hover { background: var(--sc-hairline); }
 .ed-tool:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 1px; }
-.ed-tool.ed-on { background: var(--sc-text); color: var(--sc-ground); }
-.ed-tool-italic span { font-style: italic; font-family: var(--sc-font-display); }
+.ed-tool.ed-on { background: var(--sc-hairline); color: var(--sc-yellow); }
+.ed-tool-bold span { font-weight: 800; }
+.ed-tool-italic span { font-style: italic; font-family: Georgia, 'Times New Roman', serif; font-size: 17px; }
 .ed-tool-underline span { text-decoration: underline; text-underline-offset: 3px; }
 .ed-tool-strike span { text-decoration: line-through; }
-.ed-tool-code span, .ed-tool-codeBlock span { font: 600 13px var(--sc-font-mono); }
-@media (pointer: coarse) { .ed-tool { min-width: 44px; height: 44px; } }
-.ed-note, .ed-status { margin-top: 2px; }
+.ed-tool-spoiler span { font: 600 14px var(--sc-font-mono); }
+@media (pointer: coarse) { .ed-tool { width: 44px; height: 44px; } .ed-tool-heading { width: auto; } }
+/* A phone keeps the buttons on one row that scrolls sideways (board EditorPhone) */
+@media (max-width: 959px) {
+  .ed-bar { flex-wrap: nowrap; }
+  .ed-tools { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .ed-tools::-webkit-scrollbar { display: none; }
+}
+.ed-heading-menu { min-width: 180px; }
+.ed-heading-heading2 { font-size: 18px; font-weight: 700; }
+.ed-heading-heading3 { font-size: 16px; font-weight: 700; }
+/* Markdown | Visual, compact at the bar's end */
+.ed-mode { display: flex; flex: none; border: 2px solid var(--sc-rail); border-radius: 160px; padding: 2px; gap: 2px; margin-left: auto; }
+.ed-mode button { min-height: 32px; padding: 0 12px; border-radius: 160px; border: 0; background: transparent; color: var(--sc-text); font: 600 13px var(--sc-font-text); cursor: pointer; white-space: nowrap; }
+.ed-mode button.ed-mode-on { background: var(--sc-yellow); color: var(--sc-black); }
+.ed-mode button:focus-visible { outline: 3px solid var(--sc-yellow); outline-offset: 2px; }
+@media (pointer: coarse) { .ed-mode button { min-height: 40px; } }
+/* The text inside the frame: no box of its own */
+.ed-frame .wr-textarea, .ed-frame .ed-visual { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.ed-frame .wr-textarea:focus-visible, .ed-frame .ed-visual:focus-visible { box-shadow: none; outline: none; border: 0; }
+.ed-frame .wr-assisted-box textarea.wr-textarea { resize: none; font: 400 14px/1.8 var(--sc-font-mono); padding: 20px 24px; }
+.ed-frame .ed-visual { padding: 24px 32px; font-size: 17px; line-height: 1.65; }
+@media (max-width: 959px) { .ed-frame .wr-assisted-box textarea.wr-textarea { padding: 14px 16px; } .ed-frame .ed-visual { padding: 16px; } }
+@media (min-width: 960px) {
+  .wr-write-editor .ed-frame .wr-textarea.wr-tall, .wr-write-editor .ed-frame .ed-visual.ed-tall { height: 520px; min-height: 520px; overflow-y: auto; scrollbar-width: none; }
+  .wr-write-editor .ed-frame .wr-textarea.wr-tall::-webkit-scrollbar, .wr-write-editor .ed-frame .ed-visual.ed-tall::-webkit-scrollbar { display: none; }
+}
+/* The band under the text: the count, then where it goes or what the network shows */
+.ed-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--sc-hairline); background: var(--sc-raised); font-size: 13px; color: var(--sc-muted); }
+.ed-status-count { font-variant-numeric: tabular-nums; }
 
-/* The Visual mode: the text as it reads, in the kit's input box */
 .ed-visual-box { display: block; }
 .ed-visual { display: block; min-height: 160px; max-width: 100%; font-size: 16px; line-height: 1.6; outline: none; overflow-wrap: anywhere; }
 .ed-visual.ed-tall { min-height: 260px; }
-@media (min-width: 960px) { .wr-write-editor .ed-visual.ed-tall { min-height: 460px; } }
 .ed-visual:focus-visible { border-color: var(--sc-yellow); }
 .ed-dimmed .ed-visual { opacity: .55; }
 .ed-visual ::selection { background: rgba(255, 212, 59, .35); }

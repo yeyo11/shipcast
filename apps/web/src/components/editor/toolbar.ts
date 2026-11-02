@@ -15,7 +15,8 @@ export interface Tool {
   glyph: string;
   /** The keyboard shortcut, as aria-keyshortcuts writes it */
   keys?: string;
-  group: 'marks' | 'blocks' | 'insert';
+  /** The bar's groups, split by a rule (board EditorWrite): text, code, blocks, insert */
+  group: 'text' | 'code' | 'blocks' | 'insert';
 }
 
 const MARK_TOOLS: Readonly<Record<Mark, Omit<Tool, 'id' | 'group'>>> = {
@@ -37,18 +38,23 @@ const BLOCK_TOOLS: Readonly<Record<Exclude<Block, 'heading'>, Omit<Tool, 'id' | 
   table: { label: 'Table', glyph: '▦' },
 };
 
-/** The buttons a profile offers, in the toolbar's order; none for a plain one */
+/** The buttons a profile offers, in the board's order (EditorWrite); none for a plain one */
 export function toolsFor(profile: EditorProfile): Tool[] {
   const tools: Tool[] = [];
   const deepest = maxHeading(profile);
-  if (deepest >= 2) tools.push({ id: 'heading2', label: 'Heading', glyph: 'H2', group: 'blocks' });
-  if (deepest >= 3) tools.push({ id: 'heading3', label: 'Subheading', glyph: 'H3', group: 'blocks' });
-  for (const mark of ['bold', 'italic', 'underline', 'strike', 'code', 'spoiler', 'link'] as const) {
-    if (profile.marks.includes(mark)) tools.push({ id: mark, group: 'marks', ...MARK_TOOLS[mark] });
+  if (deepest >= 2) tools.push({ id: 'heading2', label: 'Heading', glyph: 'H2', group: 'text' });
+  if (deepest >= 3) tools.push({ id: 'heading3', label: 'Subheading', glyph: 'H3', group: 'text' });
+  for (const mark of ['bold', 'italic', 'underline', 'strike', 'spoiler'] as const) {
+    if (profile.marks.includes(mark)) tools.push({ id: mark, group: 'text', ...MARK_TOOLS[mark] });
   }
-  for (const block of ['quote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'table'] as const) {
+  for (const mark of ['link', 'code'] as const) {
+    if (profile.marks.includes(mark)) tools.push({ id: mark, group: 'code', ...MARK_TOOLS[mark] });
+  }
+  if (profile.blocks.includes('codeBlock')) tools.push({ id: 'codeBlock', group: 'code', ...BLOCK_TOOLS.codeBlock });
+  for (const block of ['quote', 'bulletList', 'orderedList', 'taskList'] as const) {
     if (profile.blocks.includes(block)) tools.push({ id: block, group: 'blocks', ...BLOCK_TOOLS[block] });
   }
+  if (profile.blocks.includes('table')) tools.push({ id: 'table', group: 'insert', ...BLOCK_TOOLS.table });
   if (profile.images) tools.push({ id: 'image', label: 'Image', glyph: 'image', group: 'insert' });
   return tools;
 }
@@ -142,6 +148,16 @@ export function applyTool(text: string, range: Range, tool: ToolId): Edit {
   return { text, selection: range };
 }
 
+/**
+ * The one Code button the board draws, when a profile has both inline code and code blocks: a block
+ * over a selection that spans lines or on an empty line, inline code otherwise
+ */
+export function codeToolAt(text: string, range: Range): 'code' | 'codeBlock' {
+  if (text.slice(range.start, range.end).includes('\n')) return 'codeBlock';
+  const span = lineSpan(text, range);
+  return text.slice(span.start, span.end).trim() === '' ? 'codeBlock' : 'code';
+}
+
 /** A block on lines of its own at the caret, a blank line around it, the selection inside it */
 function insertBlock(text: string, range: Range, block: string, selectFrom: number, selectTo: number): Edit {
   const before = text.slice(0, range.start);
@@ -172,5 +188,5 @@ export function insertImage(text: string, range: Range, image: { alt: string; sr
 export function articleDestinations(): string {
   const names = CHANNEL_DEFINITIONS.filter((d) => 'article' in d.edit && d.edit.article).map((d) => d.name);
   const listed = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'The blog');
-  return `${listed}; the other channels are written from it`;
+  return `Goes as written to ${listed}; the other channels are written from it`;
 }

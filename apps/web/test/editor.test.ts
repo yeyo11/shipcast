@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { EDITOR_PROFILES } from '@shipcast/schema/channels';
 import { escapeText, roundTrip } from '../src/components/editor/extensions.ts';
-import { applyTool, articleDestinations, insertImage, insertLink, toolsFor } from '../src/components/editor/toolbar.ts';
+import { applyTool, articleDestinations, codeToolAt, insertImage, insertLink, toolsFor } from '../src/components/editor/toolbar.ts';
 import { markedDiff, MARKS, rangeOf, renderMarkdown, splitRuns } from '../src/components/editor/visual.ts';
 
 /*
@@ -78,10 +78,10 @@ test('a light profile keeps its own syntax through the Visual mode: Telegram’s
 
 test('the toolbar is the profile: the article has every button, Discord no table, Bluesky none', () => {
   const ids = (channel: keyof typeof EDITOR_PROFILES) => toolsFor(EDITOR_PROFILES[channel]!).map((t) => t.id);
-  assert.deepEqual(ids('blog'), ['heading2', 'heading3', 'bold', 'italic', 'strike', 'code', 'link', 'quote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'table', 'image']);
+  assert.deepEqual(ids('blog'), ['heading2', 'heading3', 'bold', 'italic', 'strike', 'link', 'code', 'codeBlock', 'quote', 'bulletList', 'orderedList', 'taskList', 'table', 'image']);
   assert.ok(!ids('discord').includes('table'));
   assert.ok(ids('discord').includes('heading3'));
-  assert.deepEqual(ids('telegram'), ['bold', 'italic', 'underline', 'strike', 'code', 'spoiler', 'link', 'quote']);
+  assert.deepEqual(ids('telegram'), ['bold', 'italic', 'underline', 'strike', 'spoiler', 'link', 'code', 'quote']);
   assert.deepEqual(ids('bluesky'), []);
 });
 
@@ -97,6 +97,13 @@ test('in the Markdown mode a button writes its syntax, and a second press takes 
   assert.equal(applyTool('Text.', { start: 5, end: 5 }, 'table').text, 'Text.\n\n| Column | Column |\n| --- | --- |\n|  |  |');
   assert.equal(insertLink('see the docs', { start: 8, end: 12 }, 'https://x.dev').text, 'see the [docs](https://x.dev)');
   assert.equal(insertImage('Before.\nAfter.', { start: 7, end: 7 }, { alt: 'A [cat]', src: '/articles/a/cat.png' }).text, 'Before.\n\n![A cat](/articles/a/cat.png)\n\nAfter.');
+});
+
+test('the one Code button is a block over lines or on an empty line, inline code in a line', () => {
+  assert.equal(codeToolAt('run npm test now', { start: 4, end: 12 }), 'code');
+  assert.equal(codeToolAt('run npm test now', { start: 4, end: 4 }), 'code');
+  assert.equal(codeToolAt('one\ntwo', { start: 0, end: 7 }), 'codeBlock');
+  assert.equal(codeToolAt('Text.\n\nMore.', { start: 6, end: 6 }), 'codeBlock');
 });
 
 test('a selection made in the Visual mode is found in the Markdown, the occurrence nearest where it was', () => {
@@ -128,5 +135,5 @@ test('a proposal is shown formatted: its runs marked through the Markdown, block
 });
 
 test('Write’s status line says where the article goes as written, from the channel definitions', () => {
-  assert.equal(articleDestinations(), 'Blog, dev.to and Hashnode; the other channels are written from it');
+  assert.equal(articleDestinations(), 'Goes as written to Blog, dev.to and Hashnode; the other channels are written from it');
 });

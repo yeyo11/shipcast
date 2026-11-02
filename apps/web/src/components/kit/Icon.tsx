@@ -109,6 +109,34 @@ const PATHS = {
       <path d="M10.5 12.5L19 4M16 7l2.5 2.5M14 9l2 2" />
     </>
   ),
+  // The editor's bar (board EditorWrite)
+  code: <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />,
+  codeBlock: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M10 9.5L7.5 12l2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" />
+    </>
+  ),
+  quote: <path d="M5 6v12M9 8h11M9 12h11M9 16h7" />,
+  listBullet: (
+    <>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path strokeWidth="3.2" d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+    </>
+  ),
+  listNumber: <path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v5M3.5 14.5a1.5 1.5 0 1 1 2.6 1L3.5 19H6.5" />,
+  listTask: (
+    <>
+      <rect x="3.5" y="4.5" width="6" height="6" rx="1.5" />
+      <path d="M4.8 16.2l1.6 1.6 2.6-3M13 7.5h7.5M13 16.5h7.5" />
+    </>
+  ),
+  table: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M3.5 10h17M3.5 15h17M10 4.5v15" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

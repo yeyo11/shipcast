@@ -1,15 +1,17 @@
+import { Menu } from '@base-ui/react/menu';
 import type { Editor } from '@tiptap/core';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EditorProfile } from '@shipcast/schema/channels';
 import { Icon, type IconName } from '../kit/Icon';
 import { Overlay } from '../kit/Overlay';
-import { Seg } from '../write/Form';
 import { toolsFor, type Tool, type ToolId } from './toolbar';
 import { markedDiff, paintDiff, renderMarkdown } from './visual';
 
 /*
- * The editor's bar (board EditorWrite): the Markdown | Visual switch, then only the buttons the
- * channel's profile offers. A plain channel has no bar at all. See docs/decisions/rich-editor.md
+ * The editor's bar (board EditorWrite): the band on top of the editor's frame, the profile's buttons
+ * in their groups, then the Markdown | Visual switch at its end. The two heading levels share one
+ * button with a menu, as the board draws it. A plain channel has no bar at all. See
+ * docs/decisions/rich-editor.md
  */
 
 export type EditorMode = 'markdown' | 'visual';
@@ -19,7 +21,18 @@ const MODES = [
   { value: 'visual', label: 'Visual' },
 ] as const;
 
-const ICONS: Partial<Record<string, IconName>> = { image: 'image', link: 'link' };
+/** The board's line icons, by button; the marks (B, I, U, S, ||) are letters */
+const ICONS: Partial<Record<ToolId, IconName>> = {
+  image: 'image',
+  link: 'link',
+  code: 'code',
+  codeBlock: 'codeBlock',
+  quote: 'quote',
+  bulletList: 'listBullet',
+  orderedList: 'listNumber',
+  taskList: 'listTask',
+  table: 'table',
+};
 
 export interface EditorToolbarProps {
   profile: EditorProfile;
@@ -35,30 +48,91 @@ export interface EditorToolbarProps {
 
 export function EditorToolbar({ profile, mode, onMode, onTool, active, images, controls }: EditorToolbarProps) {
   const tools = toolsFor(profile).filter((t) => t.id !== 'image' || images);
+  const headings = tools.filter((t) => t.id === 'heading2' || t.id === 'heading3');
+  // Two levels fold into one button with a menu; a single one stays a plain button
+  // Inline code and code blocks share the Code button, as the board draws it: see codeToolAt
+  const oneCode = tools.some((t) => t.id === 'code') && tools.some((t) => t.id === 'codeBlock');
+  const buttons = tools.filter((t) => !(headings.length > 1 && headings.includes(t)) && !(oneCode && t.id === 'codeBlock')).map((t) => (oneCode && t.id === 'code' ? { ...t, label: 'Code' } : t));
+  const isOn = (id: ToolId) => Boolean(active?.has(id) || (oneCode && id === 'code' && active?.has('codeBlock')));
+  const button = (tool: Tool) => (
+    <button
+      type="button"
+      className={`ed-tool ed-tool-${tool.id}${isOn(tool.id) ? ' ed-on' : ''}`}
+      aria-label={tool.label}
+      title={tool.keys ? `${tool.label} (${tool.keys.replace('Control', 'Ctrl')})` : tool.label}
+      aria-pressed={active ? isOn(tool.id) : undefined}
+      {...(tool.keys && { 'aria-keyshortcuts': tool.keys })}
+      // The text keeps its selection while a button is pressed
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => onTool(tool)}
+    >
+      {ICONS[tool.id] ? <Icon name={ICONS[tool.id]!} size={20} /> : <span aria-hidden="true">{tool.glyph}</span>}
+    </button>
+  );
+  const headingOn = headings.some((h) => active?.has(h.id));
   return (
-    <div className="k-hrow k-g8 ed-bar" role="toolbar" aria-label="Formatting" aria-controls={controls}>
-      <Seg label="Editing mode" options={MODES} value={mode} onChange={onMode} tone="text" />
-      <span className="ed-bar-sep" aria-hidden="true" />
-      <div className="k-hrow ed-tools">
-        {tools.map((tool, i) => (
-          <span key={tool.id} className="k-hrow">
-            {i > 0 && tools[i - 1]!.group !== tool.group && <span className="ed-bar-sep" aria-hidden="true" />}
-            <button
-              type="button"
-              className={`ed-tool ed-tool-${tool.id}${active?.has(tool.id) ? ' ed-on' : ''}`}
-              aria-label={tool.label}
-              title={tool.keys ? `${tool.label} (${tool.keys.replace('Control', 'Ctrl')})` : tool.label}
-              aria-pressed={active ? active.has(tool.id) : undefined}
-              {...(tool.keys && { 'aria-keyshortcuts': tool.keys })}
-              // The text keeps its selection while a button is pressed
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onTool(tool)}
-            >
-              {ICONS[tool.glyph] ? <Icon name={ICONS[tool.glyph]!} size={18} /> : <span aria-hidden="true">{tool.glyph}</span>}
-            </button>
+    <div className="ed-bar" role="toolbar" aria-label="Formatting" aria-controls={controls}>
+      <div className="ed-tools">
+        {headings.length > 1 && (
+          <Menu.Root>
+            <Menu.Trigger
+              render={
+                <button type="button" className={`ed-tool ed-tool-heading${headingOn ? ' ed-on' : ''}`} aria-label="Heading" title="Heading" onMouseDown={(e) => e.preventDefault()}>
+                  <span aria-hidden="true">H</span>
+                  <Icon name="chevronDown" size={14} />
+                </button>
+              }
+            />
+            <Menu.Portal>
+              <Menu.Positioner className="k-pop-positioner" sideOffset={6} align="start">
+                <Menu.Popup className="k-menu k-pop-list ed-heading-menu">
+                  {headings.map((h) => (
+                    <Menu.Item key={h.id} className={`k-mi k-option ed-heading-${h.id}`} onClick={() => onTool(h)}>
+                      {h.label}
+                    </Menu.Item>
+                  ))}
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
+        )}
+        {buttons.map((tool, i) => (
+          <span key={tool.id} className="ed-tool-slot">
+            {(i > 0 ? buttons[i - 1]!.group !== tool.group : headings.length > 1 && tool.group !== 'text') && <span className="ed-bar-sep" aria-hidden="true" />}
+            {button(tool)}
           </span>
         ))}
       </div>
+      <ModeSwitch mode={mode} onMode={onMode} />
+    </div>
+  );
+}
+
+/** Markdown | Visual, the compact switch at the bar's end (board EditorWrite) */
+function ModeSwitch({ mode, onMode }: { mode: EditorMode; onMode: (mode: EditorMode) => void }) {
+  return (
+    <div className="ed-mode" role="radiogroup" aria-label="Editing mode">
+      {MODES.map((m) => (
+        <button
+          key={m.value}
+          type="button"
+          role="radio"
+          aria-checked={m.value === mode}
+          className={m.value === mode ? 'ed-mode-on' : undefined}
+          tabIndex={m.value === mode ? 0 : -1}
+          onClick={() => onMode(m.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+            e.preventDefault();
+            const next = m.value === 'markdown' ? 'visual' : 'markdown';
+            onMode(next);
+            const group = e.currentTarget.parentElement;
+            requestAnimationFrame(() => group?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus());
+          }}
+        >
+          {m.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -73,6 +147,12 @@ export function activeTools(editor: Editor | null): Set<ToolId> {
   const blocks = { blockquote: 'quote', bulletList: 'bulletList', orderedList: 'orderedList', taskList: 'taskList', codeBlock: 'codeBlock', table: 'table' } as const;
   for (const [node, tool] of Object.entries(blocks)) if (editor.isActive(node)) on.add(tool);
   return on;
+}
+
+/** The Code button in the Visual mode: a block inside one, across blocks or on an empty line; inline code otherwise */
+export function visualCodeTool(editor: Editor): 'code' | 'codeBlock' {
+  const { $from, $to } = editor.state.selection;
+  return editor.isActive('codeBlock') || !$from.sameParent($to) || $from.parent.content.size === 0 ? 'codeBlock' : 'code';
 }
 
 /** A button's command in the Visual mode; `link` and `image` ask first, so they are the caller's */

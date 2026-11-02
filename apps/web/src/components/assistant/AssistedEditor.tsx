@@ -2,10 +2,10 @@ import { Menu } from '@base-ui/react/menu';
 import type { Editor } from '@tiptap/core';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { stripFormat, type EditorProfile } from '@shipcast/schema/channels';
-import { activeTools, EditorToolbar, FormattedDiff, LinkDialog, runVisual, type EditorMode } from '../editor/EditorToolbar';
+import { activeTools, EditorToolbar, FormattedDiff, LinkDialog, runVisual, visualCodeTool, type EditorMode } from '../editor/EditorToolbar';
 import { imageFiles, type ImageSupport } from '../editor/images';
 import { ImageDialog, MissingAlt } from '../editor/ImageParts';
-import { applyTool, insertImage, insertLink, type Edit, type Tool, type ToolId } from '../editor/toolbar';
+import { applyTool, codeToolAt, insertImage, insertLink, type Edit, type Tool, type ToolId } from '../editor/toolbar';
 import { VisualEditor } from '../editor/VisualEditor';
 import { Icon } from '../kit/Icon';
 import { Overlay } from '../kit/Overlay';
@@ -289,7 +289,7 @@ export interface AssistedEditorProps {
   help?: ReactNode;
   /** Opens the assistant's chat: offered in the Assist menu and, from 960 px, beside Assist */
   onOpenChat?: () => void;
-  /** What the toolbar says on its right from 960 px (Write's "Markdown · 412 words") */
+  /** The count, at the start of the frame's status band (Write's "412 words", board EditorWrite) */
   meta?: ReactNode;
   className?: string;
   /**
@@ -386,13 +386,16 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
       setImageOpen(true);
       return;
     }
+    // The one Code button (EditorToolbar) means a block or inline code by where it is pressed
+    const oneCode = tool.id === 'code' && profile?.blocks.includes('codeBlock');
     if (inVisual) {
-      if (visual) runVisual(visual, tool.id);
+      if (visual) runVisual(visual, oneCode ? visualCodeTool(visual) : tool.id);
       return;
     }
     const el = ref.current;
     if (!el) return;
-    applyEdit(applyTool(target.value, { start: el.selectionStart, end: el.selectionEnd }, tool.id));
+    const range = { start: el.selectionStart, end: el.selectionEnd };
+    applyEdit(applyTool(target.value, range, oneCode ? codeToolAt(target.value, range) : tool.id));
   };
 
   const onImage = (image: { src: string; alt: string }) => {
@@ -498,16 +501,21 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
             Open the chat
           </button>
         )}
-        {meta && <span className="k-xs k-muted wr-desk-inline wr-assisted-meta">{meta}</span>}
       </div>
+      {images && <MissingAlt value={target.value} onChange={target.onChange} images={images} />}
+      <ProposalCard assistant={assistant} onAccept={accept} formatted={inVisual} />
+      {/* One frame (board EditorWrite): the bar on top, the text, the status band under it */}
+      <div className={`ed-frame${profile ? '' : ' ed-frame-bare'}`}>
       {formatting && <EditorToolbar profile={profile} mode={mode} onMode={(m) => {
         setMode(m);
         setFloating(null);
         assistant.setSelection({ start: 0, end: 0 });
       }} onTool={onTool} active={inVisual ? active : undefined} images={Boolean(images)} controls={id} />}
-      {images && <MissingAlt value={target.value} onChange={target.onChange} images={images} />}
-      {profile && profile.format !== 'markdown' && !status && <p className="k-xs k-muted wr-flush ed-note">{profile.note}</p>}
-      <ProposalCard assistant={assistant} onAccept={accept} formatted={inVisual} />
+      {profile && !formatting && (
+        <div className="ed-bar ed-bar-plain">
+          <span className="k-sm k-muted">Plain text</span>
+        </div>
+      )}
       <div
         className="wr-assisted-box"
         ref={boxRef}
@@ -592,7 +600,14 @@ export function AssistedEditor({ id, label, assistant, mono = false, tall, requi
           </div>
         )}
       </div>
-      {status && <p className="k-xs k-muted wr-flush ed-status">{status}</p>}
+      {(meta || status || (profile && profile.format !== 'markdown')) && (
+        <div className="ed-status">
+          {meta && <span className="ed-status-count">{meta}</span>}
+          <span className="k-grow" />
+          <span className="ed-status-note">{status ?? (profile && profile.format !== 'markdown' ? profile.note : null)}</span>
+        </div>
+      )}
+      </div>
       <span id={`${id}-help`} className="k-help wr-assisted-help">
         {help}
         <span className="visually-hidden"> Select a passage for the assistant, or press Alt+J.</span>
