@@ -153,7 +153,8 @@ unchanged unless the redesign document says so.
   drafts for one Shipcast holds, uploads included), which the review lists with its `/media/<id>`
   address, behind the session; `launchImageSrc` in `components/editor/images.ts` (tested) shows each
   image from there, the way the article preview does on the server, and an image the launch does not
-  hold as a dashed "Image not found" box, never a broken icon. Only the page's `src` changes: the
+  hold, or whose file does not load (`useMissingImages` in `components/editor/missing-images.ts`), as
+  a dashed "Image not found" box, never a broken icon. Only the page's `src` changes: the
   Markdown saved, committed and published keeps its links. **Where the drafts come from**: the launch
   model's rows, never GitHub ([launch-store-read.md](launch-store-read.md)); a launch drafted in a pull
   request and not imported shows the error that names the import. The drafts snapshot and its

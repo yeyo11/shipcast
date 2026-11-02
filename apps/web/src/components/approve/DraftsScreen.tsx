@@ -10,6 +10,7 @@ import { Icon } from '../kit/Icon';
 import { useToast } from '../Toasts';
 import { AssistedEditor } from '../assistant/AssistedEditor';
 import { launchImageSrc } from '../editor/images';
+import { useMissingImages } from '../editor/missing-images';
 import { renderMarkdown } from '../editor/visual';
 import { ChatPanel } from '../assistant/ChatPanel';
 import { checkSummary, draftProfile, draftsView, joinDraft, langName, langOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
@@ -349,6 +350,8 @@ const reviewHeld = (launch: LaunchData['launch']) => !launch.pullRequest;
  */
 function ReadOnlyText({ id, label, value, plain, lang, help, imageSrc }: { id: string; label: string; value: string; plain: boolean; lang: string | undefined; help: ReactNode; imageSrc: ((src: string) => string) | undefined }) {
   const html = useMemo(() => (plain ? '' : renderMarkdown(value, imageSrc ? { imageSrc } : {})), [plain, value, imageSrc]);
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  useMissingImages(box);
   return (
     <div className="k-field">
       <span className="k-lbl" id={`${id}-label`}>
@@ -359,7 +362,7 @@ function ReadOnlyText({ id, label, value, plain, lang, help, imageSrc }: { id: s
           {value}
         </div>
       ) : (
-        <div id={id} className="k-input ap-readonly ed-prose" role="region" aria-labelledby={`${id}-label`} tabIndex={0} lang={lang} dangerouslySetInnerHTML={{ __html: html }} />
+        <div ref={setBox} id={id} className="k-input ap-readonly ed-prose" role="region" aria-labelledby={`${id}-label`} tabIndex={0} lang={lang} dangerouslySetInnerHTML={{ __html: html }} />
       )}
       {help && <span className="k-help">{help}</span>}
     </div>

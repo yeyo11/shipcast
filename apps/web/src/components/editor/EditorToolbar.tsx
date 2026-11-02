@@ -5,6 +5,7 @@ import type { EditorProfile } from '@shipcast/schema/channels';
 import { Icon, type IconName } from '../kit/Icon';
 import { Overlay } from '../kit/Overlay';
 import { toolsFor, type Tool, type ToolId } from './toolbar';
+import { useMissingImages } from './missing-images';
 import { markedDiff, paintDiff, renderMarkdown } from './visual';
 
 /*
@@ -261,12 +262,19 @@ export function LinkDialog({ open, onOpenChange, initial, onSubmit }: { open: bo
 export function FormattedDiff({ before, after, label, imageSrc }: { before: string; after: string; label: string; imageSrc?: (src: string) => string }) {
   const ref = useRef<HTMLDivElement>(null);
   const html = renderMarkdown(markedDiff(before, after), imageSrc ? { imageSrc } : {});
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  useMissingImages(box);
   useLayoutEffect(() => {
     if (ref.current) paintDiff(ref.current);
   }, [html]);
   return (
     <figure className="wr-diff ed-formatted-diff" aria-label={label}>
-      <div ref={ref} className="wr-diff-text ed-prose" role="region" aria-label={label} tabIndex={0} dangerouslySetInnerHTML={{ __html: html }} />
+      <div
+        ref={(el) => {
+          ref.current = el;
+          setBox(el);
+        }}
+        className="wr-diff-text ed-prose" role="region" aria-label={label} tabIndex={0} dangerouslySetInnerHTML={{ __html: html }} />
     </figure>
   );
 }

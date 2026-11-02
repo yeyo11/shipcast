@@ -82,7 +82,8 @@ export const linkedImages = (markdown: string, images: readonly KeptImage[]): Ke
 export const MISSING_IMAGE =
   'data:image/svg+xml,' +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200"><rect x="1" y="1" width="638" height="198" rx="12" fill="#f4f3ef" stroke="#d6d4cc" stroke-width="2" stroke-dasharray="8 6"/><g fill="none" stroke="#8a877e" stroke-width="3" stroke-linejoin="round"><rect x="296" y="58" width="48" height="38" rx="5"/><path d="M300 92l12-14 9 10 7-7 12 11"/></g><text x="320" y="134" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#6b685f">Image not found</text></svg>',
+    // Mid grey over a faint wash of it: as quiet on the dark theme as on the light one
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160"><rect x="1" y="1" width="638" height="158" rx="12" fill="#8a877e" fill-opacity=".08" stroke="#8a877e" stroke-opacity=".55" stroke-width="2" stroke-dasharray="8 6"/><g fill="none" stroke="#8a877e" stroke-width="3" stroke-linejoin="round"><rect x="300" y="40" width="40" height="32" rx="5"/><path d="M303 69l10-12 8 8 6-6 10 10"/></g><text x="320" y="108" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#8a877e">Image not found</text></svg>',
   );
 
 /** A launch's file as its review lists it: its path in the launches repo and where the app serves it */

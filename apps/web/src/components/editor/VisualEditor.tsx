@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { useEffect, useMemo, useRef } from 'react';
 import type { EditorProfile } from '@shipcast/schema/channels';
 import { extensionsFor, markdownManager, parseFor, serialize } from './extensions';
+import { useMissingImages } from './missing-images';
 import { rangeOf, type Range } from './visual';
 
 /*
@@ -81,6 +82,9 @@ export function VisualEditor({ id, value, onChange, profile, onSelect, onReady, 
     },
   });
 
+  // An image whose file cannot be read shows the placeholder, not a broken icon
+  useMissingImages(viewDom(editor));
+
   useEffect(() => {
     onReady?.(editor);
     return () => onReady?.(null);
@@ -97,4 +101,13 @@ export function VisualEditor({ id, value, onChange, profile, onSelect, onReady, 
   }, [editor, value, manager, profile]);
 
   return <EditorContent editor={editor} className={`ed-visual-box${dimmed ? ' ed-dimmed' : ''}`} />;
+}
+
+/** The editor's element once it is mounted; none before */
+function viewDom(editor: Editor | null): HTMLElement | null {
+  try {
+    return (editor?.view.dom as HTMLElement | undefined) ?? null;
+  } catch {
+    return null;
+  }
 }
