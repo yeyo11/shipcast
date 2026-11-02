@@ -1,5 +1,5 @@
 import { McpServer, ResourceTemplate, type CallToolResult } from '@modelcontextprotocol/server';
-import { LANGUAGE_NAMES } from '@shipcast/schema';
+import { languageName } from '@shipcast/schema';
 import { z } from 'zod';
 import type { ShipcastApi } from './client.ts';
 import { describeError, invoke } from './errors.ts';
@@ -124,7 +124,7 @@ Then summarise: a table with one row per channel (its posts, the launch's views,
       argsSchema: z.object({
         repo: z.string().describe('owner/name'),
         ref: z.string().optional().describe('The release tag'),
-        lang: z.enum(['en', 'es']).optional().describe('The article\'s language; English by default'),
+        lang: z.string().regex(/^[a-z]{2}$/, 'an ISO 639-1 code: two lowercase letters').optional().describe('The article\'s language, one of the blog\'s (brand.yml\'s languages.blog); its primary language by default'),
       }),
     },
     ({ repo, ref, lang }) => ({
@@ -133,11 +133,11 @@ Then summarise: a table with one row per channel (its posts, the launch's views,
           role: 'user',
           content: {
             type: 'text',
-            text: `Write an article announcing ${repo}${ref ? ` ${ref}` : ''} in ${LANGUAGE_NAMES[lang ?? 'en']}.
+            text: `Write an article announcing ${repo}${ref ? ` ${ref}` : ''} in ${lang ? languageName(lang) : 'the blog’s primary language (the first of brand.yml’s languages.blog)'}.
 - Tell only what the release really ships: read the repo's code and release notes, and keep anything planned or only documented clearly apart from what is implemented.
 - Open with a paragraph that answers what the project is and what changed; use questions as section headings; no top-level heading (the title is separate).
 - Show me the title and the Markdown and wait for my changes.
-- When I approve it, call write_article with lang "${lang ?? 'en'}" and the channels I name (without direct, so its drafts wait for my review), then follow the job with list_jobs and summarise the drafts from get_launch.`,
+- When I approve it, call write_article with lang ${lang ? `"${lang}"` : 'set to that language’s code'} and the channels I name (without direct, so its drafts wait for my review), then follow the job with list_jobs and summarise the drafts from get_launch.`,
           },
         },
       ],

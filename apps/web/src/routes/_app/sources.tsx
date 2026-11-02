@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { TopBar } from '../../components/kit/Bars';
 import { Icon } from '../../components/kit/Icon';
 import { useToast } from '../../components/Toasts';
-import { ActionBar, ChannelChips, LANGS, Seg } from '../../components/write/Form';
+import { ActionBar, ChannelChips, langOptions, Seg } from '../../components/write/Form';
 import { PickerCombobox, type PickerOption } from '../../components/kit/Picker';
 import { getChannels } from '../../server/channels.functions';
 import { launchFromSources, listRepos } from '../../server/launches.functions';
@@ -31,7 +31,7 @@ export const Route = createFileRoute('/_app/sources')({
   loader: async () => {
     const [repos, channels] = await Promise.all([listRepos(), getChannels()]);
     const ready = channels.networks.filter((n) => n.channel && n.channel !== 'blog' && (n.accounts.some((a) => a.status === 'ok') || n.usesEnv)).map((n) => n.channel!);
-    return { ...repos, ready };
+    return { ...repos, ready, languages: channels.languages };
   },
   component: LaunchFromSources,
 });
@@ -63,11 +63,12 @@ function describe(source: Source): string {
 const EMPTY = { text: '', title: '', url: '', repo: '', ref: '', alt: '' };
 
 function LaunchFromSources() {
-  const { repos, ready } = Route.useLoaderData();
+  const { repos, ready, languages } = Route.useLoaderData();
   const navigate = useNavigate();
   const toast = useToast();
   const [title, setTitle] = useState('');
-  const [lang, setLang] = useState<'en' | 'es'>('es');
+  // The brand's primary language first
+  const [lang, setLang] = useState(languages[0] ?? 'en');
   const [channels, setChannels] = useState<string[]>(ready);
   const [sources, setSources] = useState<Source[]>([]);
   const [kind, setKind] = useState<Kind>('url');
@@ -127,12 +128,14 @@ function LaunchFromSources() {
             </label>
             <input id="sources-title" className="k-input" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
           </div>
-          <div className="k-stack k-g8">
-            <span className="k-lbl" id="sources-lang">
-              Written in
-            </span>
-            <Seg label="Written in" options={LANGS} value={lang} onChange={setLang} />
-          </div>
+          {languages.length > 1 && (
+            <div className="k-stack k-g8">
+              <span className="k-lbl" id="sources-lang">
+                Written in
+              </span>
+              <Seg label="Written in" options={langOptions(languages)} value={lang} onChange={setLang} />
+            </div>
+          )}
 
           <section className="k-stack k-g8" aria-labelledby="sources-list">
             <span className="k-lbl" id="sources-list">

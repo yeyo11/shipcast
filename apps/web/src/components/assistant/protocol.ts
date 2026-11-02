@@ -4,6 +4,7 @@
  */
 
 import { CHANNEL_DEFINITIONS, draftOf } from '@shipcast/schema/channels';
+import { draftLanguage, languageName, translationTarget, type Language } from '@shipcast/schema/languages';
 
 export const ACTIONS = ['improve', 'shorten', 'translate', 'titles', 'adapt', 'check'] as const;
 export type Action = (typeof ACTIONS)[number];
@@ -22,7 +23,7 @@ export interface AssistantRequest {
   /** The selected text; empty means the whole text */
   selection: string;
   document: string;
-  lang?: 'en' | 'es';
+  lang?: Language;
   /** The network of the piece being edited, when it is one */
   channel?: string;
   /** For `adapt`: the network to adapt to */
@@ -74,10 +75,20 @@ export function channelOfDraft(path: string): string | undefined {
   return draftOf(path)?.channel;
 }
 
-/** A draft's language, when its path says it (`src/content/posts/es/…`, `newsletter-es.md`) */
-export function langOfDraft(path: string): 'en' | 'es' | undefined {
-  const match = /(?:\/|-)(en|es)(?:\/|\.md$)/.exec(path);
-  return match?.[1] === 'en' || match?.[1] === 'es' ? match[1] : undefined;
+/** A draft's language, when its path says it (`src/content/posts/es/…`, `newsletter-fr.md`), in any language */
+export function langOfDraft(path: string): Language | undefined {
+  return draftLanguage(path);
+}
+
+/**
+ * The translate action's label: into the brand's other language when the text's is known (the
+ * server translates into the same, translationTarget), else between the brand's first two.
+ */
+export function translateLabel(lang: string | undefined, languages: readonly Language[]): string {
+  const into = translationTarget(lang, languages);
+  if (into) return `Translate to ${languageName(into)}`;
+  const [first, second] = languages;
+  return first && second && lang === undefined ? `Translate ${first.toUpperCase()} ↔ ${second.toUpperCase()}` : 'Translate';
 }
 
 /** Reads the answer's NDJSON stream as events, as they arrive */

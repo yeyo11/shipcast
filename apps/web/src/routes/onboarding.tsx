@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ComponentType, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
+import { LANGUAGE_NAMES, languageName } from '@shipcast/schema/languages';
 import { OnboardAI, OnboardAutomation, OnboardBrand, OnboardChannels, OnboardMeasure, Shipped, type IllustrationProps } from '../components/illustrations';
 import { Diamond, Icon } from '../components/kit/Icon';
 import { Overlay, OverlayClose } from '../components/kit/Overlay';
@@ -201,13 +202,18 @@ const BRAND_SHORT: Record<BrandField, string> = {
 };
 const BRAND_ORDER: BrandField[] = ['displayName', 'site', 'github', 'languages'];
 
+// English and Spanish first, then every language Shipcast has a name for; brand.yml takes any ISO 639-1 code
 const LANGUAGES = [
-  { id: 'es', name: 'Spanish' },
   { id: 'en', name: 'English' },
-] as const;
+  { id: 'es', name: 'Spanish' },
+  ...Object.entries(LANGUAGE_NAMES)
+    .filter(([id]) => id !== 'en' && id !== 'es')
+    .map(([id, name]) => ({ id, name: name! }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'en')),
+];
 
-/** "Spanish, English": the blog's languages as a field shows them */
-const languageWords = (chosen: readonly string[]) => LANGUAGES.filter((l) => chosen.includes(l.id)).map((l) => l.name).join(', ');
+/** "English, Spanish": the blog's languages as a field shows them, in the order chosen (the first is the primary one) */
+const languageWords = (chosen: readonly string[]) => chosen.map(languageName).join(', ');
 
 /**
  * The blog's languages: a field that reads like the others ("Spanish, English") and opens a sheet with
@@ -243,7 +249,7 @@ function LanguagesField({ value, onChange, problem, onLeave }: { value: string[]
           if (!next) onLeave();
         }}
       >
-        <p className="k-sm k-muted acc-onb-sheet-lead">The blog is written in these; every article comes in each of them.</p>
+        <p className="k-sm k-muted acc-onb-sheet-lead">The blog is written in these; every article comes in each of them. The first one chosen is the main language.</p>
         <div className="k-stack" role="group" aria-label="The blog’s languages">
           {LANGUAGES.map((l) => {
             const on = value.includes(l.id);
@@ -283,7 +289,7 @@ function BrandStep({ data, saver, report, attempted }: StepProps) {
   const [reposProblem, setReposProblem] = useState<string | null>(null);
   const [repo, setRepo] = useState<string | null>(data.brand.launchesRepo);
   const [brandFile, setBrandFile] = useState<{ state: 'missing' | 'valid' | 'invalid'; problems?: string } | null>(null);
-  const [form, setForm] = useState({ displayName: '', site: 'https://', github: data.login ?? '', languages: ['es', 'en'] });
+  const [form, setForm] = useState({ displayName: '', site: 'https://', github: data.login ?? '', languages: ['en'] });
   const [serverFields, setServerFields] = useState<BrandFieldProblems>({});
   const [yaml, setYaml] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

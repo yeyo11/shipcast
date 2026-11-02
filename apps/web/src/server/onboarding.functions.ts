@@ -1,6 +1,6 @@
 import { readAiSettings, AI_PROVIDERS, AI_TASKS, type AiProviderId } from '@shipcast/engine';
 import { InvalidSetting, NETWORKS, readAutomation } from '@shipcast/runtime';
-import { parseBrand, formatIssues } from '@shipcast/schema';
+import { isLanguage, parseBrand, formatIssues } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
 import { aiApi } from './ai.server';
 import { accountService, launchService, settingsService } from './app-services';
@@ -193,7 +193,7 @@ function brandInput(input: unknown) {
   const displayName = text(o.displayName, 'displayName', 120).trim();
   const site = text(o.site, 'site', 300).trim();
   const github = text(o.github, 'github', 60).trim();
-  const languages = Array.isArray(o.languages) ? o.languages.filter((l): l is string => l === 'en' || l === 'es') : [];
+  const languages = Array.isArray(o.languages) ? o.languages.filter(isLanguage) : [];
   const id = github.toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'personal';
   return { repo: text(o.repo, 'repo', 140), id, displayName, site, github, languages };
 }

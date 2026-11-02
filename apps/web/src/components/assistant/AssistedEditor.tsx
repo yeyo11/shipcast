@@ -14,7 +14,7 @@ import { usePhone } from '../kit/usePhone';
 import { caretPoint } from './caret';
 import { sentenceContext } from './diff';
 import { DiffView } from './DiffView';
-import { ADAPT_NETWORKS, type Action } from './protocol';
+import { ADAPT_NETWORKS, translateLabel as translateLabelFor, type Action } from './protocol';
 import type { Assistant } from './session';
 
 /**
@@ -42,8 +42,7 @@ function scope(assistant: Assistant): string {
 }
 
 function translateLabel(assistant: Assistant): string {
-  const lang = assistant.target.lang;
-  return lang === 'es' ? 'Translate to English' : lang === 'en' ? 'Translate to Spanish' : 'Translate EN ↔ ES';
+  return translateLabelFor(assistant.target.lang, assistant.target.languages ?? []);
 }
 
 const QUICK: ReadonlyArray<[Exclude<Action, 'adapt' | 'check' | 'translate'>, string]> = [

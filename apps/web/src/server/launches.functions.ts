@@ -97,6 +97,8 @@ export const getLaunch = createServerFn({ method: 'GET' })
       ...page,
       /** A preview whose networks are fake says so, so nobody takes its "Deleted" for a real one */
       fakeNetworks: fakeNetworks(),
+      /** The brand's blog languages, the primary first: what the writing assistant translates between */
+      languages: await ctx.brand().then((b) => b.languages.blog, () => undefined),
     };
   });
 

@@ -58,7 +58,9 @@ test('the launch tools refuse what the API would, before calling it', async () =
     ['list_launches', { repo: 'claudio' }],
     ['list_launches', { q: 'x'.repeat(201) }],
     ['retry_channel', { launch_id: 3, channel: 'myspace' }],
-    ['write_article', { title: 'x', markdown: 'y', lang: 'fr' }],
+    // Any ISO 639-1 code is a language (the brand decides which it writes in); anything else is not
+    ['write_article', { title: 'x', markdown: 'y', lang: 'FR' }],
+    ['write_article', { title: 'x', markdown: 'y', lang: 'french' }],
   ] as const) {
     assert.match(await refusal(api, name, args), new RegExp(`Invalid arguments for ${name}`), `${name} ${JSON.stringify(args)}`);
   }

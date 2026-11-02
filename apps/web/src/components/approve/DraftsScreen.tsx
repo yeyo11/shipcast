@@ -13,8 +13,9 @@ import { launchImageSrc } from '../editor/images';
 import { useMissingImages } from '../editor/missing-images';
 import { renderMarkdown } from '../editor/visual';
 import { ChatPanel } from '../assistant/ChatPanel';
-import { checkSummary, draftProfile, draftsView, joinDraft, langName, langOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
+import { checkSummary, draftProfile, draftsView, joinDraft, langName, langOf, langsOf, measure, piecesOf, splitDraft, VERDICT_WORDS, verdictCounts, words, plainText, type Piece, type Verdict } from './model';
 import { Glyph, type DraftView, type LaunchData } from './parts';
+import type { Language } from '@shipcast/schema/languages';
 
 /*
  * The drafts editor (boards DraftEditor, DesktopDraftEditor and CodeCheck). The text edited is the
@@ -24,7 +25,7 @@ import { Glyph, type DraftView, type LaunchData } from './parts';
 
 export interface EditSearch {
   draft?: string;
-  lang?: 'en' | 'es';
+  lang?: Language;
   check?: true;
 }
 
@@ -81,7 +82,8 @@ export function DraftsScreen({ data, search, onSearch }: { data: LaunchData; sea
       pieces={pieces}
       pieceId={piece.id}
       draft={draft}
-      langs={piece.drafts.map((d) => langOf(d.path)).filter((l): l is 'en' | 'es' => Boolean(l))}
+      langs={langsOf(piece.drafts)}
+      languages={data.languages}
       editable={editable}
       title={title}
       waiting={waiting}
@@ -103,7 +105,9 @@ interface PieceEditorProps {
   pieces: Piece<DraftView>[];
   pieceId: string;
   draft: DraftView;
-  langs: Array<'en' | 'es'>;
+  langs: Language[];
+  /** The brand's languages, what the assistant translates between; unknown when brand.yml could not be read */
+  languages: readonly Language[] | undefined;
   editable: boolean;
   /** Drafts while editable, else the launch's state */
   title: string;
@@ -118,7 +122,7 @@ interface PieceEditorProps {
   imageSrc: (src: string) => string;
 }
 
-function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, editable, title, waiting, body, setBody, check, setCheck, search, onSearch, imageSrc }: PieceEditorProps) {
+function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, languages, editable, title, waiting, body, setBody, check, setCheck, search, onSearch, imageSrc }: PieceEditorProps) {
   const router = useRouter();
   const toast = useToast();
   const parts = useMemo(() => splitDraft(draft.content ?? '', draft.kind), [draft.content, draft.kind]);
@@ -143,6 +147,7 @@ function PieceEditor({ launch, params, project, pieces, pieceId, draft, langs, e
     draftPath: draft.path,
     draftLabel: draft.label,
     ...(lang && { lang }),
+    ...(languages && { languages }),
     ...(draft.kind !== 'article' && { channel }),
     ...(article && { checkDisabled: 'This launch is an article you wrote: there is no code to check it against, the article is the truth.' }),
   });

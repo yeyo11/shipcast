@@ -35,6 +35,8 @@ export async function channelsViewOf(ctx: { registry: Repositories; secrets: Sec
     /** When the view was read: the cards say "synced 2 h ago" from it, the same on the server and in the browser */
     now: now.toISOString(),
     brands: [{ id: current.id, name: current.displayName }],
+    /** The brand's blog languages (brand.yml's languages.blog), the primary first: what Write and Sources offer */
+    languages: current.languages.blog,
     secretsKind: secrets.kind,
     instagramOAuth: ctx.settings.oauthApp('instagram') !== undefined,
     /** Which OAuth networks have the owner's app set in Settings, from their specs; Mastodon registers itself */

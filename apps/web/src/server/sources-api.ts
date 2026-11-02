@@ -145,7 +145,7 @@ export const SOURCES_ROUTES: ApiRoute[] = [
       required: ['title', 'sources'],
       properties: {
         title: { type: 'string', maxLength: 200 },
-        lang: { type: 'string', enum: ['en', 'es'], description: 'The language of the title and your text; en when left out' },
+        lang: { type: 'string', pattern: '^[a-z]{2}$', description: 'The language of the title and your text: an ISO 639-1 code, one of brand.yml’s languages.blog; its first (the primary language) when left out' },
         channels: { type: 'array', items: { type: 'string' }, description: 'Channels besides the blog, for a launch with no repo; a repo’s launch.yml decides for one with a primary repo' },
         sources: { type: 'array', minItems: 1, maxItems: 12, items: sourceSchema },
       },

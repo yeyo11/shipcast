@@ -128,7 +128,8 @@ test('a malformed request is refused before the AI is asked', async () => {
   assert.equal(model.doStreamCalls.length, 0);
   assert.throws(() => parseAssistantRequest({ action: 'chat', document: 'x', messages: [{ role: 'assistant', content: 'hi' }] }), /ends with your message/);
   assert.throws(() => parseAssistantRequest({ action: 'adapt', document: 'x', target: 'myspace' }), /network/);
-  assert.throws(() => parseAssistantRequest({ action: 'improve', document: 'x', lang: 'fr' }), /en or es/);
+  assert.throws(() => parseAssistantRequest({ action: 'improve', document: 'x', lang: 'FR' }), /two lowercase letters/);
+  assert.equal(parseAssistantRequest({ action: 'improve', document: 'x', lang: 'fr' }).lang, 'fr');
 });
 
 test('the tour chains its pages, and leaves the launch page out when there is no launch', () => {

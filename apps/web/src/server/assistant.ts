@@ -12,7 +12,7 @@ import {
   type Launch,
   type AssistantRepository,
 } from '@shipcast/engine';
-import { AI_TASK_DEFINITIONS, type Brand, type Syntax } from '@shipcast/schema';
+import { AI_TASK_DEFINITIONS, isLanguage, LANG_PROBLEM, type Brand, type Syntax } from '@shipcast/schema';
 import type { AssistantEvent, AssistantRequest, ChatTurn } from '../components/assistant/protocol.ts';
 import { splitProposals } from '../components/assistant/diff.ts';
 import { id, InvalidInput, object, text } from './input.ts';
@@ -69,7 +69,7 @@ export function parseAssistantRequest(input: unknown): AssistantRequest {
     document: text(o.document ?? '', 'document', MAX_DOCUMENT),
   };
   if (o.lang !== undefined && o.lang !== null) {
-    if (o.lang !== 'en' && o.lang !== 'es') throw new InvalidInput('lang is en or es');
+    if (!isLanguage(o.lang)) throw new InvalidInput(LANG_PROBLEM);
     request.lang = o.lang;
   }
   if (typeof o.channel === 'string' && o.channel) request.channel = text(o.channel, 'channel', 40);

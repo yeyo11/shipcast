@@ -8,12 +8,13 @@ import { useAssistant } from '../../components/assistant/session';
 import { TopBar } from '../../components/kit/Bars';
 import { Icon } from '../../components/kit/Icon';
 import { useToast } from '../../components/Toasts';
-import { ActionBar, ChannelChips, LANGS, RadioRow, Seg } from '../../components/write/Form';
+import { ActionBar, ChannelChips, langOptions, RadioRow, Seg } from '../../components/write/Form';
 import { ago, count, words } from '../../components/write/format';
 import { getChannels } from '../../server/channels.functions';
 import { writeArticle } from '../../server/launches.functions';
 import { CHANNEL_NAMES } from '../../server/view';
 import { editorProfile, imageAltProblem } from '@shipcast/schema/channels';
+import { languageName, type Language } from '@shipcast/schema/languages';
 
 /** The article's formatting: the blog's, which dev.to and Hashnode take as written */
 const ARTICLE_PROFILE = editorProfile(undefined)!;
@@ -24,7 +25,8 @@ export const Route = createFileRoute('/_app/write')({
     const data = await getChannels();
     // The channels an article can go to: those with a connected account or credentials
     const ready = data.networks.filter((n) => n.channel && n.channel !== 'blog' && (n.accounts.some((a) => a.status === 'ok') || n.usesEnv)).map((n) => n.channel!);
-    return { ready };
+    // The brand's languages, its primary one first: an article starts in it
+    return { ready, languages: data.languages };
   },
   component: Write,
 });
@@ -39,7 +41,7 @@ const DRAFT_KEY = 'shipcast:write-draft';
 interface Kept {
   title: string;
   markdown: string;
-  lang: 'en' | 'es';
+  lang: string;
   channels: string[];
   direct: boolean;
   /** The images uploaded for it, which its body links by name */
@@ -56,7 +58,7 @@ function readKept(): Kept | null {
     return {
       title: kept.title,
       markdown: kept.markdown,
-      lang: kept.lang === 'en' ? 'en' : 'es',
+      lang: typeof kept.lang === 'string' ? kept.lang : '',
       channels: Array.isArray(kept.channels) ? kept.channels.filter((c): c is string => typeof c === 'string') : [],
       direct: kept.direct === true,
       images: Array.isArray(kept.images) ? kept.images.filter((i): i is KeptImage => typeof i?.sha256 === 'string' && typeof i.name === 'string') : [],
@@ -87,11 +89,12 @@ function useTick(ms: number): number {
 }
 
 function Write() {
-  const { ready } = Route.useLoaderData();
+  const { ready, languages } = Route.useLoaderData();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [markdown, setMarkdown] = useState('');
-  const [lang, setLang] = useState<'en' | 'es'>('es');
+  const primary: Language = languages[0] ?? 'en';
+  const [lang, setLang] = useState<Language>(primary);
   const [channels, setChannels] = useState<string[]>(ready);
   const [direct, setDirect] = useState(false);
   const [images, setImages] = useState<KeptImage[]>([]);
@@ -140,6 +143,7 @@ function Write() {
     value: markdown,
     onChange: setMarkdown,
     lang,
+    languages,
     draftLabel: title.trim() || 'Article on Write',
     checkDisabled: 'An article of your own has no code behind it: it is the truth the pieces follow.',
   });
@@ -150,7 +154,8 @@ function Write() {
     if (kept) {
       setTitle(kept.title);
       setMarkdown(kept.markdown);
-      setLang(kept.lang);
+      // A kept draft in a language the brand no longer writes in starts over in its primary one
+      setLang(languages.find((l) => l === kept.lang) ?? primary);
       setChannels(kept.channels.filter((c): c is (typeof ready)[number] => (ready as readonly string[]).includes(c)));
       setDirect(kept.direct);
       setImages(kept.images);
@@ -176,8 +181,7 @@ function Write() {
     return () => window.clearTimeout(timer);
   }, [restored, title, markdown, lang, channels, direct, images]);
 
-  const langName = LANGS.find((l) => l.value === lang)?.label ?? lang;
-  const summary = `In ${langName} · ${['Blog', ...channels.map((c) => CHANNEL_NAMES[c] ?? c)].join(', ')} · ${direct ? 'publish without review' : 'review first'}`;
+  const summary = `In ${languageName(lang)} · ${['Blog', ...channels.map((c) => CHANNEL_NAMES[c] ?? c)].join(', ')} · ${direct ? 'publish without review' : 'review first'}`;
   const length = count(words(markdown), 'word');
   const kept = savedAt !== null && <span className="k-xs k-muted wr-kept">Draft kept {ago(savedAt, Math.max(now, savedAt))}</span>;
   const reviewing = assistant.proposal !== null;
@@ -266,10 +270,12 @@ function Write() {
                 How it goes out
               </h2>
               <div id="write-out-body" className="k-stack k-g16 wr-out-body" data-open={outOpen}>
-                <div className="k-stack k-g8">
-                  <span className="k-lbl">Written in</span>
-                  <Seg label="Written in" options={LANGS} value={lang} onChange={setLang} />
-                </div>
+                {languages.length > 1 && (
+                  <div className="k-stack k-g8">
+                    <span className="k-lbl">Written in</span>
+                    <Seg label="Written in" options={langOptions(languages)} value={lang} onChange={setLang} />
+                  </div>
+                )}
                 <div className="k-stack k-g8">
                   <span className="k-lbl">Also on</span>
                   <ChannelChips ready={ready} chosen={channels} onChange={setChannels} />

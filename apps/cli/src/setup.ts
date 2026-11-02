@@ -38,7 +38,8 @@ merging it publishes the article and every channel you turned on.
   --brand <id>                   The brand's id (default: your login, lowercase)
   --name <display name>          Who the launches speak for (default: git's user.name)
   --site <https://…>             Your blog's address, where articles are published
-  --languages <en|es|en,es>      The blog's languages (default: en)
+  --languages <codes>            The blog's languages, as ISO 639-1 codes, the primary first,
+                                 such as en, en,es or de (default: en)
   --tone "<text>"                How the AI writes for you, in a few sentences (brand.yml's tone;
                                  without it the drafts are in a generic voice until you fill it)
   --ai <anthropic|openai>        The AI the content is written with (default: anthropic)
@@ -481,7 +482,7 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
     const launchesRepo = await ask('Your launches repo (your blog), owner/name', parsed.launchesRepo, owner ? `${owner}/launches` : undefined);
     const site = await ask('Your blog’s address, https://…', parsed.site, owner ? `https://${owner.toLowerCase()}.github.io` : undefined);
     const name = await ask('Who the launches speak for', parsed.name, gitUserName(cwd) ?? owner);
-    const languages = await ask('The blog’s languages (en, es or en,es)', parsed.languages, 'en');
+    const languages = await ask('The blog’s languages (ISO 639-1 codes, the primary first: en, es, en,es, de…)', parsed.languages, 'en');
     if (prompt && parsed.tone === undefined) {
       log('');
       for (const line of TONE_HELP) log(line);

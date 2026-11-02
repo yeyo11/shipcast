@@ -7,6 +7,7 @@ import { signed, type AccountRow } from '../../server/pieces';
 import { number } from '../ui';
 import { ChannelGlyph, channelTitle } from './ChannelGlyph';
 import { ago, dayOnly, dayTime, elapsed } from './dates';
+import { LANGUAGE_NAMES, type Language } from '@shipcast/schema/languages';
 
 /*
  * The rest of a launch's page (boards LaunchSearch, LaunchDetails, LaunchDrafting, LaunchFailed):
@@ -36,7 +37,6 @@ export interface IndexRow {
 }
 
 const engineName = (engine: string) => (engine === 'bing' ? 'Bing' : engine === 'google' ? 'Google' : engine.charAt(0).toUpperCase() + engine.slice(1));
-const LANGUAGES: Record<string, string> = { en: 'English', es: 'Spanish' };
 
 export function SearchPanel({ index, timezone }: { index: IndexRow[]; timezone: string }) {
   const now = useNow();
@@ -61,7 +61,7 @@ export function SearchPanel({ index, timezone }: { index: IndexRow[]; timezone: 
                 <strong>
                   {engine} ·{' '}
                   <a href={i.url} target="_blank" rel="noreferrer">
-                    {LANGUAGES[i.lang] ?? i.lang.toUpperCase()}
+                    {LANGUAGE_NAMES[i.lang as Language] ?? i.lang.toUpperCase()}
                     <span className="visually-hidden"> (opens in a new tab)</span>
                   </a>
                 </strong>

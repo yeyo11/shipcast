@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from '@tanstack/react-router';
+import { isLanguage } from '@shipcast/schema/languages';
 import { DraftsScreen, type EditSearch } from '../../../components/approve/DraftsScreen';
 import { launchName } from '../../../server/launch-list';
 import { getLaunch } from '../../../server/launches.functions';
@@ -12,7 +13,7 @@ import { getLaunch } from '../../../server/launches.functions';
 export const Route = createFileRoute('/_app/launches/$id_/edit')({
   validateSearch: (search: Record<string, unknown>): EditSearch => ({
     ...(typeof search.draft === 'string' && search.draft !== '' && { draft: search.draft }),
-    ...((search.lang === 'en' || search.lang === 'es') && { lang: search.lang }),
+    ...(isLanguage(search.lang) && { lang: search.lang }),
     ...((search.check === true || search.check === 'true' || search.check === 1) && { check: true as const }),
   }),
   loader: async ({ params }) => {

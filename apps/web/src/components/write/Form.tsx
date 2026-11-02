@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { languageName, type Language } from '@shipcast/schema/languages';
 import { CHANNEL_NAMES } from '../../server/view';
 import { Icon } from '../kit/Icon';
 
@@ -49,10 +50,8 @@ export function Seg<V extends string>({ label, options, value, onChange, tone = 
   );
 }
 
-export const LANGS: ReadonlyArray<SegOption<'es' | 'en'>> = [
-  { value: 'es', label: 'Spanish' },
-  { value: 'en', label: 'English' },
-];
+/** The languages an article may be written in: the brand's, named, its primary first */
+export const langOptions = (languages: readonly Language[]): ReadonlyArray<SegOption<Language>> => languages.map((value) => ({ value, label: languageName(value) }));
 
 /** The channels to publish on besides the blog, as chips that toggle */
 export function ChannelChips({ ready, chosen, onChange, disabled }: { ready: readonly string[]; chosen: readonly string[]; onChange: (next: string[]) => void; disabled?: boolean }) {

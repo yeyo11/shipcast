@@ -2,7 +2,8 @@ import { createFileRoute, Link, notFound, useRouter } from '@tanstack/react-rout
 import { useState } from 'react';
 import { TopBar } from '../../../components/kit/Bars';
 import { Icon } from '../../../components/kit/Icon';
-import { articleLine, langOf, splitDraft } from '../../../components/approve/model';
+import { articleLine, langName, langOf, langsOf, splitDraft } from '../../../components/approve/model';
+import { isLanguage, type Language } from '@shipcast/schema/languages';
 import type { DraftView } from '../../../components/approve/parts';
 import { useToast } from '../../../components/Toasts';
 import { launchName } from '../../../server/launch-list';
@@ -15,11 +16,11 @@ import { findSitePreview, getLaunch, previewOnSite } from '../../../server/launc
  */
 
 interface PreviewSearch {
-  lang?: 'en' | 'es';
+  lang?: Language;
 }
 
 export const Route = createFileRoute('/_app/launches/$id_/preview')({
-  validateSearch: (search: Record<string, unknown>): PreviewSearch => (search.lang === 'en' || search.lang === 'es' ? { lang: search.lang } : {}),
+  validateSearch: (search: Record<string, unknown>): PreviewSearch => (isLanguage(search.lang) ? { lang: search.lang } : {}),
   loader: async ({ params }) => {
     const data = await getLaunch({ data: Number(params.id) });
     if (!data) throw notFound();
@@ -28,8 +29,6 @@ export const Route = createFileRoute('/_app/launches/$id_/preview')({
   head: ({ loaderData }) => ({ meta: [{ title: `Preview · ${loaderData ? launchName(loaderData.launch) : 'Launch'} · Shipcast` }] }),
   component: PreviewPage,
 });
-
-const LANG_WORDS = { en: 'English', es: 'Spanish' } as const;
 
 function PreviewPage() {
   const data = Route.useLoaderData();
@@ -42,7 +41,8 @@ function PreviewPage() {
   const reviewOk = review && !('error' in review) ? review : undefined;
   const app = reviewOk?.app;
   const articles: DraftView[] = reviewOk?.drafts.filter((d) => d.kind === 'article') ?? [];
-  const langs = articles.map((a) => langOf(a.path)).filter((l): l is 'en' | 'es' => Boolean(l));
+  // The switch offers the article's languages, whichever they are; English first when it has it, as every channel links
+  const langs = langsOf(articles);
   const lang = search.lang && langs.includes(search.lang) ? search.lang : (langs.includes('en') ? 'en' : langs[0]);
   const article = articles.find((a) => langOf(a.path) === lang) ?? articles[0];
   const preview = app?.preview;
@@ -70,7 +70,7 @@ function PreviewPage() {
         {langs.length > 1 && (
           <div className="k-seg ap-seg" role="group" aria-label="Language">
             {langs.map((l) => (
-              <button key={l} type="button" className={l === lang ? 'k-on' : undefined} aria-pressed={l === lang} aria-label={LANG_WORDS[l]} onClick={() => navigate({ search: { lang: l }, replace: true, resetScroll: false })}>
+              <button key={l} type="button" className={l === lang ? 'k-on' : undefined} aria-pressed={l === lang} aria-label={langName(l)} onClick={() => navigate({ search: { lang: l }, replace: true, resetScroll: false })}>
                 {l.toUpperCase()}
               </button>
             ))}

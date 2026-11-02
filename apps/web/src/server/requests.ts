@@ -1,5 +1,5 @@
 import { ARTICLE_IMAGE_NAME, SOURCE_LIMITS, type ArticleImage, type ArticleInput, type SourceInput, type SourcesLaunchInput } from '@shipcast/engine';
-import { CHANNELS, imageAltProblem, LIMITS, type Channel } from '@shipcast/schema';
+import { CHANNELS, imageAltProblem, isLanguage, LANG_PROBLEM, LIMITS, type Channel } from '@shipcast/schema';
 import { id, InvalidInput, list, object, text } from './input.ts';
 
 /*
@@ -23,8 +23,9 @@ export function launchRequest(input: unknown): LaunchRequest {
 
 export function articleRequest(input: unknown): { input: ArticleInput; direct: boolean } {
   const o = object(input, 'input');
+  // Any ISO 639-1 code here; the launch service refuses one the brand does not write in
   const lang = text(o.lang, 'lang', 2);
-  if (lang !== 'en' && lang !== 'es') throw new InvalidInput('lang is en or es');
+  if (!isLanguage(lang)) throw new InvalidInput(LANG_PROBLEM);
   const channels = list(o.channels ?? [], 'channels').filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
   const title = text(o.title, 'title', 200).trim();
   const markdown = text(o.markdown, 'markdown', 200_000);
@@ -71,12 +72,13 @@ function sourceInput(value: unknown, name: string): SourceInput {
 /** A launch made from sources: its title, language, channels and sources (the engine's checkSources judges the rest) */
 export function sourcesRequest(input: unknown): SourcesLaunchInput {
   const o = object(input, 'input');
-  const lang = text(o.lang ?? 'en', 'lang', 2);
-  if (lang !== 'en' && lang !== 'es') throw new InvalidInput('lang is en or es');
+  // Left out, the brand's primary language; one it does not write in is refused by the sources service
+  const lang = o.lang === undefined || o.lang === null ? undefined : text(o.lang, 'lang', 2);
+  if (lang !== undefined && !isLanguage(lang)) throw new InvalidInput(LANG_PROBLEM);
   const channels = list(o.channels ?? [], 'channels').filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
   if (!Array.isArray(o.sources)) throw new InvalidInput('sources must be a list');
   if (o.sources.length > SOURCE_LIMITS.sources) throw new InvalidInput(`a launch has at most ${SOURCE_LIMITS.sources} sources`);
-  return { title: text(o.title, 'title', SOURCE_LIMITS.titleChars).trim(), lang, channels, sources: o.sources.map((s, i) => sourceInput(s, `sources[${i}]`)) };
+  return { title: text(o.title, 'title', SOURCE_LIMITS.titleChars).trim(), ...(lang && { lang }), channels, sources: o.sources.map((s, i) => sourceInput(s, `sources[${i}]`)) };
 }
 
 /** A moment with its offset; a time without one would be read in the server's zone, which is nobody's choice */

@@ -123,7 +123,8 @@ test('launch_from_sources sends every kind of source in the API\'s shape and ans
     'POST /launches/sources {"title":"Shipcast 1.0","lang":"es","channels":["bluesky"],"sources":[{"kind":"text","text":"Why I built it","title":"Notes"},{"kind":"url","url":"https://example.com/post"},{"kind":"repo","repo":"yeyo11/shipcast","ref":"v1.0.0","primary":true},{"kind":"repo","repo":"yeyo11/claudio"},{"kind":"media","sha256":"' +
       SHA +
       '","alt":"The launch page"}]}',
-    'POST /launches/sources {"title":"Notes","lang":"en","channels":[],"sources":[{"kind":"text","text":"Hi"}]}',
+    // No language given: the server takes the brand's primary one
+    'POST /launches/sources {"title":"Notes","channels":[],"sources":[{"kind":"text","text":"Hi"}]}',
   ]);
 });
 

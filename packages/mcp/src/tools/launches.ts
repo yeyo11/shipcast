@@ -97,7 +97,7 @@ export const tools: ShipcastTool[] = [
     input: z.object({
       title: z.string().min(1).max(200).describe('The article\'s title'),
       markdown: z.string().min(1).max(200_000).describe('The body in Markdown, without a top-level heading. An image is ![what it shows](/articles/<slug>/<name>), its alt text required (at most 140 characters)'),
-      lang: z.enum(['en', 'es']).describe('The language it is written in'),
+      lang: z.string().regex(/^[a-z]{2}$/, 'an ISO 639-1 code: two lowercase letters').describe('The language it is written in: an ISO 639-1 code, one of the blog\'s (brand.yml\'s languages.blog)'),
       channels: z.array(channel).optional().describe('Channels to announce it on, besides the blog'),
       images: z
         .array(z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/), name: z.string().describe('The articleName upload_media answered') }))

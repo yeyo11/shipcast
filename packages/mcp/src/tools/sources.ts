@@ -68,7 +68,7 @@ export const tools: ShipcastTool[] = [
     operations: ['launchFromSources'],
     input: z.object({
       title: z.string().min(1).max(200).describe('The launch\'s title'),
-      lang: z.enum(['en', 'es']).optional().describe('The language of the title and the user\'s text; en by default'),
+      lang: z.string().regex(/^[a-z]{2}$/, 'an ISO 639-1 code: two lowercase letters').optional().describe('The language of the title and the user\'s text: an ISO 639-1 code, one of the blog\'s; its primary language by default'),
       channels: z.array(channel).optional().describe('Channels to announce it on besides the blog, for a launch with no repo; a repo\'s launch.yml decides for one with a primary repo'),
       sources: z.array(source).min(1).max(12).describe('What the launch is made from; each one\'s `kind` is text, url, repo or media'),
     }),
@@ -86,7 +86,8 @@ export const tools: ShipcastTool[] = [
             return { kind: s.kind, sha256: s.sha256, ...(s.name !== undefined && { name: s.name }), ...(s.alt !== undefined && { alt: s.alt }) };
         }
       });
-      const body = { title: args.title, lang: args.lang ?? 'en', channels: args.channels ?? [], sources };
+      // Left out, the server takes the brand's primary language
+      const body = { title: args.title, ...(args.lang && { lang: args.lang }), channels: args.channels ?? [], sources };
       return accepted(await api.call('POST', '/launches/sources', { body }), `Launching "${args.title}" from ${sources.length} source${sources.length === 1 ? '' : 's'}`);
     },
   }),

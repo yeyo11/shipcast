@@ -3,7 +3,8 @@ import { assistantCheckJob, loadAssistantSession, settleAssistantProposal } from
 import { useLiveClient } from '../live/Live';
 import { applyProposal } from './diff';
 import { followJob } from './follow';
-import { readEvents, type Action, type AssistantEvent, type AssistantRequest, type ChatTurn, type CheckVerdict } from './protocol';
+import { readEvents, translateLabel, type Action, type AssistantEvent, type AssistantRequest, type ChatTurn, type CheckVerdict } from './protocol';
+import type { Language } from '@shipcast/schema/languages';
 
 /** A range of the text, as the textarea reports a selection */
 export interface Range {
@@ -15,7 +16,9 @@ export interface Range {
 export interface AssistantTarget {
   value: string;
   onChange: (next: string) => void;
-  lang?: 'en' | 'es';
+  lang?: Language;
+  /** The brand's languages, the primary first: what "Translate" goes between */
+  languages?: readonly Language[];
   channel?: string;
   launchId?: number;
   /** What the history shows the session under: the draft's file in the launches repo (none on Write) and its name */
@@ -140,7 +143,7 @@ export function useAssistant(target: AssistantTarget) {
       actionAbort.current = controller;
       const range = selected ? { ...selection } : undefined;
       const id = nextId();
-      const label = action === 'adapt' && adaptTo ? `Adapt to ${adaptTo.name}` : action === 'translate' ? (latest.current.lang === 'es' ? 'Translate to English' : latest.current.lang === 'en' ? 'Translate to Spanish' : 'Translate') : LABELS[action];
+      const label = action === 'adapt' && adaptTo ? `Adapt to ${adaptTo.name}` : action === 'translate' ? translateLabel(latest.current.lang, latest.current.languages ?? []) : LABELS[action];
       setProposal({ id, label, range, original: selected || latest.current.value, text: '', streaming: true, whole: false });
       setAnnounce(`${label}: working`);
       const update = (change: (p: Proposal) => Proposal) => setProposal((p) => (p && p.id === id ? change(p) : p));

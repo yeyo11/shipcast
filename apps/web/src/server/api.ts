@@ -521,7 +521,7 @@ export const ROUTES: ApiRoute[] = [
       properties: {
         title: { type: 'string', maxLength: 200 },
         markdown: { type: 'string', description: 'The body, without a top-level heading. An image is `![what it shows](/articles/<slug>/<name>)`, its alt text required (at most 140 characters)' },
-        lang: { type: 'string', enum: ['en', 'es'] },
+        lang: { type: 'string', pattern: '^[a-z]{2}$', description: 'The language it is written in: an ISO 639-1 code, one of brand.yml’s languages.blog' },
         channels: { type: 'array', items: { type: 'string' }, description: 'Channels besides the blog' },
         images: {
           type: 'array',

@@ -98,9 +98,11 @@ test('the OpenAPI document describes both routes, the upload as bytes', async ()
 });
 
 test('the request shape: a source of each kind, nothing else, and the title trimmed', () => {
-  assert.deepEqual(sourcesRequest({ title: ' T ', sources: [{ kind: 'media', sha256: 'a'.repeat(64), alt: 'x', extra: 'ignored' }] }), { title: 'T', lang: 'en', channels: [], sources: [{ kind: 'media', sha256: 'a'.repeat(64), alt: 'x' }] });
+  // No language given: none in the request, so the sources service takes the brand's primary one
+  assert.deepEqual(sourcesRequest({ title: ' T ', sources: [{ kind: 'media', sha256: 'a'.repeat(64), alt: 'x', extra: 'ignored' }] }), { title: 'T', channels: [], sources: [{ kind: 'media', sha256: 'a'.repeat(64), alt: 'x' }] });
   assert.throws(() => sourcesRequest({ title: 'T', sources: 'all of them' }), /must be a list/);
-  assert.throws(() => sourcesRequest({ title: 'T', lang: 'fr', sources: [] }), /en or es/);
+  assert.throws(() => sourcesRequest({ title: 'T', lang: 'FR', sources: [] }), /two lowercase letters/);
+  assert.equal(sourcesRequest({ title: 'T', lang: 'fr', sources: [] }).lang, 'fr', 'any code; the service refuses one the brand does not write in');
   assert.throws(() => sourcesRequest({ title: 'T', sources: [{ kind: 'url' }] }), /url must be text/);
 });
 

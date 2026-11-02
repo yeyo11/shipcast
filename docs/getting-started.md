@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T09:14:15.634162071Z
-updated_at: 2026-11-02T20:17:40.544920489Z
+updated_at: 2026-11-02T23:15:39.851049589Z
 tags:
     - guide
     - getting-started
@@ -37,7 +37,7 @@ app's onboarding.
 
 - **A project repo** on GitHub, with releases.
 - **A launches repo**: your blog, deployed at an `https://` address. Shipcast writes each article as
-  Markdown at `src/content/posts/<en|es>/<slug>.md` with front matter (`title`, `description`,
+  Markdown at `src/content/posts/<lang>/<slug>.md`, one per language of your blog, with front matter (`title`, `description`,
   `pubDate`, `lang`, `translationKey`, `repo`, `tags`, `image`), the posts at
   `launches/<project>/<tag>/` and the images at `public/launches/<project>/<tag>/`; an Astro content
   collection reads it as it is ([launches-repo.md](launches-repo.md) is the full contract). It can be a
@@ -60,7 +60,8 @@ npx @yeyo11/shipcast init
 ```
 
 It detects the project from `origin`, asks for the launches repo (`<you>/launches` by default), your
-blog's address, your name, the blog's languages (`en`, `es` or both), your tone, the AI and the
+blog's address, your name, the blog's languages (ISO 639-1 codes, the primary first: `en` by default, `en,es`,
+`de`…), your tone, the AI and the
 channels, and writes:
 
 | File | Repo | What it does |
@@ -143,7 +144,7 @@ extra step to start the launch. All of it, with the honest numbers, is in
 | --- | --- |
 | Blog | Nothing: the merge publishes it |
 | GitHub Discussions | Nothing: the GitHub token posts it in the project's Discussions |
-| dev.to, Hashnode | Their API key (Hashnode also the publication's host); they republish the English article with your blog as canonical |
+| dev.to, Hashnode | Their API key (Hashnode also the publication's host); they republish the English article (your primary language's, for a blog without English) with your blog as canonical |
 | Bluesky, Mastodon | An app password, an access token |
 | Telegram, Discord | A bot and a channel, a webhook |
 

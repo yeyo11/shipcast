@@ -1,5 +1,6 @@
 // Pure and import-light: the launch-to-approve screens' shaping of the drafts, testable without a browser
 import { channelDefinition, editorProfile, type EditorProfile } from '@shipcast/schema/channels';
+import { draftLanguage, draftLanguages, languageName, type Language } from '@shipcast/schema/languages';
 
 /** A draft as the launch page reads it: one file of the content pack */
 export interface DraftLike {
@@ -62,15 +63,14 @@ export function plainText(markdown: string): string {
 
 export const words = (text: string): number => (text.trim() ? text.trim().split(/\s+/).length : 0);
 
-const LANGS: Record<string, string> = { en: 'English', es: 'Spanish' };
+/** A draft's language from its path (`src/content/posts/fr/…`, `newsletter-de.md`), in any language */
+export const langOf = (path: string): Language | undefined => draftLanguage(path);
 
-/** A draft's language from its path (`src/content/posts/es/…`) */
-export function langOf(path: string): 'en' | 'es' | undefined {
-  const m = /(?:\/|-)(en|es)(?:\/|\.md$)/.exec(path);
-  return m?.[1] === 'en' || m?.[1] === 'es' ? m[1] : undefined;
-}
+/** The languages a piece's drafts are in: its language switch, shown only when there are two or more */
+export const langsOf = (drafts: ReadonlyArray<{ path: string }>): Language[] => draftLanguages(drafts.map((d) => d.path));
 
-export const langName = (lang: string | undefined): string => (lang ? (LANGS[lang] ?? lang) : '');
+/** A language's name (`French`); a code with no name known is shown as itself */
+export const langName = (lang: string | undefined): string => (lang ? languageName(lang) : '');
 
 /** A channel's text measured as its network counts it, against its cap, when it has one */
 export function measure(channel: string, text: string): { length: number; max: number } | undefined {

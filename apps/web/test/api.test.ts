@@ -318,7 +318,7 @@ test('the writes start the same work the pages do, with their checks', async () 
 
   const article = await call(s.deps, 'POST', '/articles', { token: s.write, body: { title: ' Hello ', markdown: 'Body', lang: 'en', channels: ['devto', 'nowhere'] } });
   assert.equal(article.status, 202);
-  assert.equal((await call(s.deps, 'POST', '/articles', { token: s.write, body: { title: 'x', markdown: 'y', lang: 'fr' } })).status, 400);
+  assert.equal((await call(s.deps, 'POST', '/articles', { token: s.write, body: { title: 'x', markdown: 'y', lang: 'FR' } })).status, 400);
 
   assert.deepEqual(s.calls, ['launch yeyo11/claudio v2.0.0 true', 'launch yeyo11/old - false', `approve ${launch.id}`, `publish ${launch.id} drafted`, 'article Hello en devto false']);
 });
