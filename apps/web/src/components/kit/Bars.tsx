@@ -67,20 +67,29 @@ export interface TopBarProps {
   actions?: ReactNode;
 }
 
+/**
+ * A way back's words, at most two lines with an ellipsis: a launch's name can be a whole article
+ * title, and the bar must never grow past two lines or spill over the page. The full words stay in the
+ * DOM (the link's accessible name) and in its `title`.
+ */
+function TopBarLabel({ text }: { text: string }) {
+  return <span className="k-topbar-label k-clamp2">{text}</span>;
+}
+
 /** A phone's top bar (board TopBar): hidden from 960 px, where the desktop header takes over */
 export function TopBar({ back, actions }: TopBarProps) {
   const { setPaletteOpen, setMoreOpen } = useShell();
   return (
     <header className="k-topbar">
       {back && 'more' in back ? (
-        <button type="button" className="k-topbar-back" onClick={() => setMoreOpen(true)}>
+        <button type="button" className="k-topbar-back" title={back.label} onClick={() => setMoreOpen(true)}>
           <Icon name="chevronLeft" />
-          {back.label}
+          <TopBarLabel text={back.label} />
         </button>
       ) : back ? (
-        <Link to={back.to} search={back.search} className="k-topbar-back">
+        <Link to={back.to} search={back.search} className="k-topbar-back" title={back.label}>
           <Icon name="chevronLeft" />
-          {back.label}
+          <TopBarLabel text={back.label} />
         </Link>
       ) : (
         <Link to="/" className="k-topbar-brand" aria-label="Shipcast, the launches" activeOptions={EXACT}>

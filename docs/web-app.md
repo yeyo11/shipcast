@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T06:53:24.835786476Z
-updated_at: 2026-11-02T20:13:49.279837901Z
+updated_at: 2026-11-02T22:00:00.000000000Z
 tags:
     - web-app
     - dashboard
@@ -102,6 +102,14 @@ Launch a repo and Settings inside More) below 960 px, a desktop header from ther
 kit (`src/styles/kit.css`, `src/components/kit/`). Where the descriptions below name an older
 layout (toolbars, bands, popovers), the redesign's screens replace it; what each section does is
 unchanged unless the redesign document says so.
+
+**The phone's top bar** (`TopBar`, each screen renders its own) is sticky in the page's flow, never
+fixed, so a screen's content always starts right under it, whatever its height: there is no offset
+to keep in step with it. It is 64 px, the board's height, plus the safe area under a notch. A way
+back's label (a launch's name can be a whole article title) is clamped to two lines with an
+ellipsis, the full text in the link's `title`; two lines fit in the 64 px, so a long label never
+grows the bar or spills over the page (fixed on 2026-11-02, when a three-line title covered the
+start of the drafts screen).
 
 - **Launches** (`/`): one summary card per launch in a grid (two columns on a desktop): its title
   and state pill, the repo and the date in the owner's zone, its views, reactions, comments and

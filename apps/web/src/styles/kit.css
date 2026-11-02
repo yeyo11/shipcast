@@ -250,11 +250,17 @@ button.k-date-trigger { width: 100%; font: inherit; font-size: 16px; text-align:
 }
 
 /* ---------- The bars (boards TopBar, BottomBar and the desktop header) ---------- */
-.k-topbar { position: sticky; top: 0; z-index: 40; height: 64px; padding: 0 12px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--sc-hairline); background: var(--sc-ground); }
-.k-topbar-back { display: flex; align-items: center; gap: 4px; min-height: 44px; margin-left: -6px; padding-right: 8px; color: var(--sc-text); text-decoration: none; font-weight: 600; font-size: 16px; }
+/* The phone's top bar is sticky in the page's flow, never fixed: the content starts right under it at
+   whatever height it has, so no offset elsewhere can drift from it. 64 px is the board's height and the
+   least it takes; a way back's label is at most two lines (.k-topbar-label), which fit in it, and only
+   a larger text size makes the bar taller. Under a notch (viewport-fit=cover) it pads the safe area */
+.k-topbar { position: sticky; top: 0; z-index: 40; min-height: calc(64px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--sc-hairline); background: var(--sc-ground); }
+.k-topbar-back { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; margin-left: -6px; padding-right: 8px; color: var(--sc-text); text-decoration: none; font-weight: 600; font-size: 16px; text-align: left; }
+.k-topbar-back > svg { flex: none; }
+.k-topbar-label { line-height: 1.25; }
 .k-topbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .k-topbar-brand:hover { color: var(--sc-text); }
-.k-topbar-tools { display: flex; gap: 4px; }
+.k-topbar-tools { display: flex; flex: none; gap: 4px; }
 .k-topbar-tool { position: relative; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--sc-text); background: none; border: 0; padding: 0; cursor: pointer; }
 .k-topbar-bell .k-badge { position: absolute; top: 3px; right: 1px; }
 
