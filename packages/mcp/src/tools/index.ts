@@ -1,9 +1,14 @@
 import * as accounts from './accounts.ts';
+import * as ai from './ai.ts';
+import * as attention from './attention.ts';
+import * as automation from './automation.ts';
 import * as comments from './comments.ts';
+import * as drafts from './drafts.ts';
 import * as jobs from './jobs.ts';
 import * as launches from './launches.ts';
 import * as posts from './posts.ts';
 import * as profiles from './profiles.ts';
+import * as repos from './repos.ts';
 import type { ShipcastTool } from './shared.ts';
 import * as schedule from './schedule.ts';
 import * as sources from './sources.ts';
@@ -24,7 +29,8 @@ export interface ToolArea {
   guide: string;
 }
 
-const AREAS: readonly ToolArea[] = [launches, posts, accounts, jobs, stats, schedule, comments, profiles, sources];
+// The model reads the guides in this order: launches and what leads to them first, the settings last
+const AREAS: readonly ToolArea[] = [launches, repos, drafts, posts, accounts, jobs, stats, schedule, comments, profiles, sources, attention, automation, ai];
 
 export const TOOLS: ShipcastTool[] = AREAS.flatMap((area) => area.tools);
 

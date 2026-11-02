@@ -4,7 +4,7 @@ import { accepted, accountId, confirm, HINTS, requireConfirm, tool, ToolRefused,
 /* Account profiles: what each network lets Shipcast change, the review of a profile, and editing it on its network */
 
 export const guide =
-  'Profiles: list_profile_capabilities says what each network lets Shipcast read and edit; review_profile starts an AI review that changes nothing, get_profile_review reads its proposals, and edit_profile applies them on the network.';
+  'Profiles: list_profile_capabilities says what each network lets Shipcast read and edit; review_profile starts an AI review that changes nothing, get_profile_review reads its proposals, apply_profile_proposal applies one of them on the network (edit_profile sets any field), and apply_brand_picture sets the brand\'s avatar as the picture.';
 
 // The API's own limits (profileEditInput and reviewInput of apps/web), which the network's own may narrow further
 const displayName = z.string().max(500);
@@ -25,7 +25,7 @@ export const tools: ShipcastTool[] = [
     name: 'get_profile_review',
     title: 'Get a profile review',
     description:
-      'One account\'s profile capability, narrowed by its credential (`edit: reconnect` means the network could edit it but the account must be connected again), and its latest AI review: a summary, the profile as it was read and a proposal per field with the current text, the proposed one, why, any problem with it (such as a limit) and when it was applied. The review is null until review_profile has run. edit_profile applies a proposal.',
+      'One account\'s profile capability, narrowed by its credential (`edit: reconnect` means the network could edit it but the account must be connected again), and its latest AI review: a summary, the profile as it was read and a proposal per field with the current text, the proposed one, why, any problem with it (such as a limit) and when it was applied. The review is null until review_profile has run. apply_profile_proposal applies a proposal; apply_brand_picture sets the brand\'s avatar where `brandPicture` is true.',
     operations: ['getProfileReview'],
     input: z.object({ account_id: accountId }),
     hints: HINTS.read,
@@ -93,6 +93,37 @@ export const tools: ShipcastTool[] = [
       if (Object.keys(edit).length === 0) throw new ToolRefused('edit_profile needs at least one field to change: display_name, bio or links');
       requireConfirm(args.confirm, 'edit_profile', `Changing the public profile of account ${args.account_id}`);
       return api.call('PATCH', `/accounts/${args.account_id}/profile`, { body: edit });
+    },
+  }),
+  tool({
+    name: 'apply_profile_proposal',
+    title: 'Apply a profile proposal',
+    description:
+      'Apply one field of an account\'s latest profile review on its network: read the proposals with get_profile_review first, then send the field and its `proposed` text, or the user\'s change to it (links one per line as `Label: value`, the whole list). The change is public at once and replaces what was there; the review marks the proposal applied when the text is the proposed one. A proposal with a `problem` (over a limit) is refused until the text is fixed. Show the user the text and ask first, then call with `confirm: true`; without it nothing is changed.',
+    operations: ['applyProfileProposal'],
+    input: z.object({
+      account_id: accountId,
+      field: z.enum(['displayName', 'bio', 'links']).describe('The proposal\'s `field`; a picture is set with apply_brand_picture'),
+      value: z.string().max(5000).describe('The text to set: the proposal\'s `proposed`, or the user\'s change to it'),
+      confirm,
+    }),
+    hints: HINTS.destructive,
+    run: (api, args) => {
+      requireConfirm(args.confirm, 'apply_profile_proposal', `Changing the ${args.field} of account ${args.account_id}'s public profile`);
+      return api.call('POST', `/accounts/${args.account_id}/profile-review/apply`, { body: { field: args.field, value: args.value } });
+    },
+  }),
+  tool({
+    name: 'apply_brand_picture',
+    title: 'Apply the brand picture',
+    description:
+      'Set the brand\'s own avatar (brand.yml\'s `avatar`) as an account\'s profile picture on its network, where its credential can (`brandPicture` in get_profile_review\'s capability: a Telegram channel, a Discord webhook). Call get_profile_review first to check it can; the picture is only ever the brand\'s, never an address of the caller\'s. The change is public at once and replaces the picture there. Ask the user first, then call with `confirm: true`; without it nothing is changed.',
+    operations: ['applyBrandPicture'],
+    input: z.object({ account_id: accountId, confirm }),
+    hints: HINTS.destructive,
+    run: (api, args) => {
+      requireConfirm(args.confirm, 'apply_brand_picture', `Changing the public picture of account ${args.account_id}`);
+      return api.call('POST', `/accounts/${args.account_id}/profile/picture`);
     },
   }),
 ];

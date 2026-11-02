@@ -1,10 +1,9 @@
-import { proposalEdit } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { appContext } from './context.server';
 import { apiErrorOf } from './errors';
-import { id, InvalidInput, object, text } from './input';
-import { profileView, reviewInput } from './profile-api';
-import { applyBrandPicture, applyEdit, startReview } from './profiles.server';
+import { id, object, text } from './input';
+import { profileView, proposalInput, reviewInput } from './profile-api';
+import { applyBrandPicture, applyProposal, startReview } from './profiles.server';
 
 /** An account's profile capability and latest review, for its panel on the network's page */
 export const getProfileReview = createServerFn({ method: 'GET' })
@@ -27,23 +26,15 @@ export const profileReviewJob = createServerFn({ method: 'GET' })
     return job ? { state: job.state, log: job.log } : null;
   });
 
-const FIELDS = ['displayName', 'bio', 'links'] as const;
-
-/**
- * Applies one proposal on the network, after the page asked the owner to confirm it. The value is
- * the proposal's text as the owner may have changed it; the engine checks the capability and the
- * limits again before anything is sent.
- */
+/** Applies one proposal on the network (applyProposal), after the page asked the owner to confirm it */
 export const applyProfileProposal = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
-    const field = text(o.field, 'field', 20);
-    if (!(FIELDS as readonly string[]).includes(field)) throw new InvalidInput(`field is one of ${FIELDS.join(', ')}`);
-    return { id: id(o.id), field: field as (typeof FIELDS)[number], value: text(o.value, 'value', 5000) };
+    return { id: id(o.id), proposal: proposalInput(o) };
   })
   .handler(async ({ data }) => {
     try {
-      const profile = await applyEdit(data.id, proposalEdit({ field: data.field, proposed: data.value }));
+      const profile = await applyProposal(data.id, data.proposal);
       return { ok: true as const, profile: profile ?? null };
     } catch (error) {
       // A refusal or the network's answer is the page's to show; a bug is the log's

@@ -1,19 +1,20 @@
 import { imageUrl } from '@shipcast/schema';
-import { isAppLaunch, preflight, type Launch } from '@shipcast/engine';
+import { isAppLaunch, type Launch } from '@shipcast/engine';
 import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { launchService } from './app-services';
 import { appContext } from './context.server';
 import { deletionService } from './deletion.server';
+import { draftsApi } from './drafts.server';
 import { channelList } from './post-changes';
-import { repoList } from './repo-list';
+import { reposApi } from './repos.server';
 import { id, object, text } from './input';
 import { draftingNote, ownerAvatarUrl, readyPieces } from './launch-list';
 import { readLaunchesSearch } from './launches-search';
 import { cookieOf, readSession, SESSION_COOKIE } from './session.server';
 import { launchPage } from './launch-page.server';
 import { launchNumbers, postAccounts, readTimezone } from './launch-summary.server';
-import { fakeNetworks, PREVIEW_REFUSAL } from './preview.server';
+import { fakeNetworks } from './preview.server';
 import { launchView, publishAgain as publishAgainFor } from './launches.server';
 import { CHANNEL_NAMES } from './view';
 import { approvalRequest, articleRequest, channelName, launchRequest, sourcesRequest } from './requests';
@@ -140,26 +141,7 @@ export const saveDraft = createServerFn({ method: 'POST' })
     const o = object(input, 'input');
     return { id: id(o.id), path: text(o.path, 'path', 300), content: text(o.content, 'content', 200_000) };
   })
-  .handler(async ({ data }) => {
-    const launches = launchService(await appContext());
-    const launch = await launches.get(data.id);
-    if (!launch) return { ok: false as const, problem: 'no such launch' };
-    try {
-      await launches.editDraft(launch.id, data.path, data.content, await signedIn());
-      return { ok: true as const };
-    } catch (error) {
-      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
-/** A launch Shipcast holds, for its preview on the real site; a refusal when it is not one */
-async function heldLaunch(launchId: number): Promise<{ ok: true; launch: Launch; service: Awaited<ReturnType<typeof appContext>>['appReview'] } | { ok: false; problem: string }> {
-  const ctx = await appContext();
-  const launch = await launchService(ctx).get(launchId);
-  if (!launch) return { ok: false, problem: 'no such launch' };
-  if (!isAppLaunch(launch)) return { ok: false, problem: 'this launch was decided in its pull request, which had its own preview' };
-  return { ok: true, launch, service: ctx.appReview };
-}
+  .handler(async ({ data }) => asProblem(async () => draftsApi(await appContext()).edit(data.id, data.path, data.content, await signedIn())));
 
 /**
  * "Preview on the real site" (docs/app-review.md): the article and its media pushed to a preview
@@ -167,31 +149,21 @@ async function heldLaunch(launchId: number): Promise<{ ok: true; launch: Launch;
  */
 export const previewOnSite = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
-  .handler(async ({ data }) => {
-    // It writes a branch and a pull request on the real launches repo
-    if (fakeNetworks()) return { ok: false as const, problem: PREVIEW_REFUSAL };
-    const held = await heldLaunch(data);
-    if (!held.ok) return held;
-    try {
-      return { ok: true as const, preview: await held.service.requestPreview(held.launch) };
-    } catch (error) {
-      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
-    }
-  });
+  .handler(async ({ data }) => asProblem(async () => draftsApi(await appContext()).requestPreview(data)));
 
 /** Looks for the preview's address, which the site's workflow writes on its pull request once deployed */
 export const findSitePreview = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
-  .handler(async ({ data }) => {
-    const held = await heldLaunch(data);
-    if (!held.ok) return held;
-    try {
-      const preview = await held.service.findPreview(held.launch);
-      return preview ? { ok: true as const, preview } : { ok: false as const, problem: 'no preview was asked for' };
-    } catch (error) {
-      return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
-    }
-  });
+  .handler(async ({ data }) => asProblem(async () => draftsApi(await appContext()).findPreview(data)));
+
+/** A drafts action's answer to the page: what went wrong in words, rather than a thrown error, as its refusals are */
+async function asProblem<T>(run: () => Promise<T>): Promise<T | { ok: false; problem: string }> {
+  try {
+    return await run();
+  } catch (error) {
+    return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
+  }
+}
 
 /** The signed-in login, which a launch Shipcast holds records on an edit or an approval */
 async function signedIn(): Promise<string | null> {
@@ -211,25 +183,19 @@ export const publishAgain = createServerFn({ method: 'POST' })
   })
   .handler(async ({ data }) => publishAgainFor((await appContext()).registry, data.id, data.channel, startPublishing));
 
-export const listRepos = createServerFn({ method: 'GET' }).handler(async () => {
-  const ctx = await appContext();
-  const b = await ctx.brand();
-  return {
-    owner: b.github,
-    repos: await repoList({ github: ctx.github, cache: ctx.process.shared.cache }, b.github),
-  };
-});
+export const listRepos = createServerFn({ method: 'GET' }).handler(async () => reposApi(await appContext()).repos());
 
+/** Each release with the launch already made of it, the same answer GET /repos/releases gives */
 export const listReleases = createServerFn({ method: 'GET' })
   .validator((input: unknown) => text(input, 'repo', 140))
-  .handler(async ({ data }) => (await appContext()).github.releases(data));
+  .handler(async ({ data }) => reposApi(await appContext()).releases(data));
 
 export const checkRepo = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
     return { repo: text(o.repo, 'repo', 140), ref: o.ref === undefined || o.ref === '' ? undefined : text(o.ref, 'ref', 140) };
   })
-  .handler(async ({ data }) => preflight(data.repo, data.ref, { github: (await appContext()).github }));
+  .handler(async ({ data }) => reposApi(await appContext()).check(data.repo, data.ref));
 
 export const launchRepo = createServerFn({ method: 'POST' })
   .validator((input: unknown) => launchRequest(input))

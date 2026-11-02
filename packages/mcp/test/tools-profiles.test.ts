@@ -43,3 +43,29 @@ test('edit_profile changes nothing without a field and confirm: true', async () 
   assert.match(await refusal(api, 'get_profile_review', { account_id: 0 }), /Invalid arguments for get_profile_review/);
   assert.deepEqual(fake.calls, [], 'the API was never called');
 });
+
+test('apply_profile_proposal and apply_brand_picture call the API once each with confirm: true', async () => {
+  const { fake, api } = fakeClient({
+    'POST /accounts/1/profile-review/apply': { profile: { bio: 'Builds things' } },
+    'POST /accounts/1/profile/picture': { profile: { hasAvatar: true } },
+    'POST /accounts/2/profile/picture': () => apiError(409, 'refused', 'mastodon cannot change the picture through its API'),
+  });
+  await runTool(api, 'apply_profile_proposal', { account_id: 1, field: 'bio', value: 'Builds things', confirm: true });
+  await runTool(api, 'apply_brand_picture', { account_id: 1, confirm: true });
+  assert.match(await refusal(api, 'apply_brand_picture', { account_id: 2, confirm: true }), /cannot change the picture/);
+  assert.deepEqual(fake.calls, ['POST /accounts/1/profile-review/apply {"field":"bio","value":"Builds things"}', 'POST /accounts/1/profile/picture', 'POST /accounts/2/profile/picture']);
+});
+
+test('apply_profile_proposal and apply_brand_picture change nothing without confirm: true or with a field they do not take', async () => {
+  const { fake, api } = fakeClient();
+  for (const confirm of [undefined, false]) {
+    assert.match(
+      await refusal(api, 'apply_profile_proposal', { account_id: 1, field: 'bio', value: 'New', ...(confirm !== undefined && { confirm }) }),
+      /Nothing was changed\. Changing the bio of account 1's public profile cannot be undone.*apply_profile_proposal again with confirm: true/,
+    );
+    assert.match(await refusal(api, 'apply_brand_picture', { account_id: 1, ...(confirm !== undefined && { confirm }) }), /Nothing was changed\. Changing the public picture of account 1.*apply_brand_picture again/);
+  }
+  assert.match(await refusal(api, 'apply_profile_proposal', { account_id: 1, field: 'avatar', value: 'x', confirm: true }), /Invalid arguments for apply_profile_proposal/);
+  assert.match(await refusal(api, 'apply_profile_proposal', { account_id: 1, field: 'bio', confirm: true }), /Invalid arguments for apply_profile_proposal/);
+  assert.deepEqual(fake.calls, [], 'the API was never called');
+});

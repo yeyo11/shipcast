@@ -1,5 +1,7 @@
 import { CANONICAL_PREFIX, failurePrefix, LAUNCH_STORE_PREFIX, METRIC_PROBLEM_PREFIX, type CanonicalMismatch, type Repositories } from '@shipcast/engine';
 import { attentionItems, buildAttention, type Attention, type AttentionInput } from './attention.ts';
+import type { AttentionApi } from './attention-api.ts';
+import type { AppContext } from './context.server.ts';
 
 type AttentionRegistry = Pick<Repositories, 'launches' | 'cursors' | 'accounts' | 'comments' | 'posts' | 'attention'>;
 
@@ -66,4 +68,15 @@ export async function attentionFor(registry: AttentionRegistry): Promise<Attenti
   const keys = attentionItems(input).map((i) => i.key);
   await registry.attention.clearAttentionDismissals(keys);
   return buildAttention({ ...input, dismissed: await registry.attention.dismissedAttention(keys) });
+}
+
+/** What the attention routes (attention-api.ts) run in the app's process, built per request by api-deps.server.ts */
+export function attentionApi(ctx: AppContext): AttentionApi {
+  return {
+    list: () => attentionFor(ctx.registry),
+    dismiss: async (keys) => {
+      await ctx.registry.attention.dismissAttention(keys);
+      return { dismissed: keys.length };
+    },
+  };
 }

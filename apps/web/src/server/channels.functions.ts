@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { checkAccount, connectAccount, disconnectAccount, importFromEnv, MissingField, splitFields, syncNow } from '@shipcast/runtime';
+import { connectAccount, disconnectAccount, importFromEnv, MissingField, splitFields } from '@shipcast/runtime';
 import { createServerFn } from '@tanstack/react-start';
+import { recheck, startSync } from './accounts.server';
 import { accountService } from './app-services';
 import { appContext } from './context.server';
 import { id, object, text, texts } from './input';
@@ -26,7 +27,8 @@ export const connectWithForm = createServerFn({ method: 'POST' })
 export const recheckAccount = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    const account = await checkAccount(await accountDeps(), data);
+    const account = await recheck(await appContext(), data);
+    if (!account) return { status: 'failed' as const, problem: 'That account is no longer connected', identity: null };
     return { status: account.status, problem: account.problem, identity: account.identity };
   });
 
@@ -38,16 +40,15 @@ export const recheckAccount = createServerFn({ method: 'POST' })
 export const syncAccountNow = createServerFn({ method: 'POST' })
   .validator((input: unknown) => id(input))
   .handler(async ({ data }) => {
-    const { queue, registry } = await appContext();
-    const account = await accountService({ registry }).get(data);
-    if (!account) return { state: 'failed' as const, lines: ['That account is no longer connected'] };
-    const job = await syncNow(queue, account);
-    if (!job) return { state: 'failed' as const, lines: ['The sync could not be queued'] };
-    const done = await queue.wait(job, 20_000, 500);
+    const ctx = await appContext();
+    const started = await startSync(ctx, data);
+    if (!started) return { state: 'failed' as const, lines: ['That account is no longer connected'] };
+    if (!started.ok) return { state: 'failed' as const, lines: ['The sync could not be queued'] };
+    const done = await ctx.queue.wait(started.job, 20_000, 500);
     return { state: done?.state ?? ('queued' as const), lines: done?.log ?? [] };
   });
 
-export const renameAccount =createServerFn({ method: 'POST' })
+export const renameAccount = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     const o = object(input, 'input');
     return { id: id(o.id), label: text(o.label, 'label', 200) };

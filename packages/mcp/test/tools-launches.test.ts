@@ -9,6 +9,7 @@ test('the launch tools make their one API call each', async () => {
   const launched = await runTool(api, 'launch_repo', { repo: 'yeyo11/claudio', ref: 'v1.0.0' });
   assert.match(JSON.stringify(launched), /"job":"j1".*list_jobs/);
   await runTool(api, 'approve_drafts', { launch_id: 3, confirm: true });
+  await runTool(api, 'approve_drafts', { launch_id: 3, versions: { '11': 2 }, confirm: true });
   await runTool(api, 'write_article', { title: 'Hello', markdown: 'Body', lang: 'en', channels: ['devto'] });
   await runTool(api, 'write_article', { title: 'Shot', markdown: '![The setup](/articles/shot/0123456789abcdef.png)', lang: 'en', images: [{ sha256: `0123456789abcdef${'0'.repeat(48)}`, name: '0123456789abcdef.png' }] });
   await runTool(api, 'retry_channel', { launch_id: 3, channel: 'devto' });
@@ -17,6 +18,7 @@ test('the launch tools make their one API call each', async () => {
     'GET /launches/3',
     'POST /launches {"repo":"yeyo11/claudio","ref":"v1.0.0","direct":false}',
     'POST /launches/3/approve',
+    'POST /launches/3/approve {"versions":{"11":2}}',
     'POST /articles {"title":"Hello","markdown":"Body","lang":"en","channels":["devto"],"direct":false}',
     `POST /articles {"title":"Shot","markdown":"![The setup](/articles/shot/0123456789abcdef.png)","lang":"en","channels":[],"images":[{"sha256":"0123456789abcdef${'0'.repeat(48)}","name":"0123456789abcdef.png"}],"direct":false}`,
     'POST /launches/3/retry/devto',

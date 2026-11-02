@@ -5,7 +5,7 @@ import { accepted, channel, confirm, confirmDirect, cursor, HINTS, launchId, lim
 /* Launches: finding them, starting one from a release or an article, approving its drafts, retrying a channel */
 
 export const guide =
-  'Launches: list_launches finds them and get_launch reads one in full (posts, failures, drafts). launch_repo and write_article draft one into a pull request for review, approve_drafts publishes it, retry_channel publishes a failed channel again.';
+  'Launches: list_launches finds them and get_launch reads one in full (posts, failures, drafts). launch_repo and write_article draft one for review (the repos area checks a repo first, the drafts area reads and edits the drafts), approve_drafts publishes it, retry_channel publishes a failed channel again.';
 
 // The API's own lists (LAUNCH_STATUSES, TRIGGERS and LAUNCH_ORDERS of the engine), which this browser-safe package cannot import
 const STATUSES = ['detected', 'generating', 'drafted', 'published', 'skipped', 'failed'] as const;
@@ -19,7 +19,7 @@ export const tools: ShipcastTool[] = [
     name: 'list_launches',
     title: 'List launches',
     description:
-      'List Shipcast launches (a release of a GitHub repo, or an article written by hand), newest first, with each one\'s status (detected, generating, drafted, published, skipped, failed), drafts pull request, posts and headline numbers. Filter by status, trigger, kind or repo, search with `q`, and page with `cursor` (the `next` of the previous page, sent with the same filters and sort).',
+      'List Shipcast launches (a release of a GitHub repo, or an article written by hand), newest first, with each one\'s status (detected, generating, drafted, published, skipped, failed), posts and headline numbers. Filter by status, trigger, kind or repo, search with `q`, and page with `cursor` (the `next` of the previous page, sent with the same filters and sort).',
     operations: ['listLaunches'],
     input: z.object({
       limit: limit(20),
@@ -41,7 +41,7 @@ export const tools: ShipcastTool[] = [
     name: 'get_launch',
     title: 'Get a launch',
     description:
-      'One launch in full: its posts with their ids and status (published ones for edit_post and delete_post, `scheduled` ones for reschedule_post and cancel_scheduled_post), failures per channel (retry_channel), the latest metrics, whether each search engine has indexed its articles, and its drafts pull request with the list of draft files (their text stays in the pull request; approve_drafts publishes them). Its numbers over time are in get_stats_overview with its id in launch_ids.',
+      'One launch in full: its posts with their ids and status (published ones for edit_post and delete_post, `scheduled` ones for reschedule_post and cancel_scheduled_post), failures per channel (retry_channel), the latest metrics, whether each search engine has indexed its articles, and its drafts: the list of draft files, which ones are approved, why a channel waits, and `versions` (get_draft reads a file\'s text, edit_draft changes it, approve_drafts publishes them). Its numbers over time are in get_stats_overview with its id in launch_ids.',
     operations: ['getLaunch'],
     input: z.object({ launch_id: launchId }),
     hints: HINTS.read,
@@ -51,13 +51,13 @@ export const tools: ShipcastTool[] = [
     name: 'launch_repo',
     title: 'Launch a repo',
     description:
-      'Launch a GitHub repo\'s release: Shipcast runs its pre-flight check (release, launch.yml, license, README, demo), analyses the repo and writes the content for every channel into a drafts pull request to review; approve_drafts publishes it. With `direct: true` it skips the review, commits to main and publishes at once, which needs `confirm: true` after the user agrees. A release is launched only once: launching it again is refused. ' +
+      'Launch a GitHub repo\'s release: Shipcast runs its pre-flight check (release, launch.yml, license, README, demo), analyses the repo and writes the content for every channel as drafts to review; approve_drafts publishes them. check_repo runs the same pre-flight without launching. With `direct: true` the drafts are approved as written and published at once, which needs `confirm: true` after the user agrees. A release is launched only once: launching it again is refused. ' +
       PUBLISHES,
     operations: ['launchRepo'],
     input: z.object({
       repo: repo.describe('The GitHub repo, owner/name'),
       ref: z.string().min(1).max(140).optional().describe('The release tag, like v1.2.0; the latest release when left out'),
-      direct: z.boolean().optional().describe('Publish without a drafts pull request to review; false by default'),
+      direct: z.boolean().optional().describe('Approve the drafts as written and publish at once, without a review; false by default'),
       confirm: confirmDirect,
     }),
     hints: HINTS.work,
@@ -70,21 +70,28 @@ export const tools: ShipcastTool[] = [
     name: 'approve_drafts',
     title: 'Approve the drafts',
     description:
-      'Approve a launch\'s drafts: merges its drafts pull request on GitHub, then publishes every channel in its mode (scheduled channels at their time). This is the owner\'s approval: show the user the drafts pull request (get_launch) and call with `confirm: true` only once they say the drafts are good; without it nothing happens. ' +
+      'Approve a launch\'s drafts, then publish every channel in its mode (scheduled channels at their time). This is the owner\'s approval: show the user the drafts (get_launch, get_draft) and call with `confirm: true` only once they say the drafts are good; without it nothing happens. Pass the `versions` get_launch gave with the drafts the user saw, so a draft edited since is refused rather than approved unseen. ' +
       PUBLISHES,
     operations: ['approveLaunch'],
-    input: z.object({ launch_id: launchId, confirm }),
+    input: z.object({
+      launch_id: launchId,
+      versions: z
+        .record(z.string().regex(/^\d+$/), z.number().int().positive())
+        .optional()
+        .describe('The drafts\' `versions` from get_launch, as the user saw them; left out, the drafts are approved as they are now'),
+      confirm,
+    }),
     hints: HINTS.work,
     run: async (api, args) => {
       requireConfirm(args.confirm, 'approve_drafts', `Approving launch ${args.launch_id}, which publishes it,`);
-      return accepted(await api.call('POST', `/launches/${args.launch_id}/approve`), `Approving launch ${args.launch_id}`);
+      return accepted(await api.call('POST', `/launches/${args.launch_id}/approve`, args.versions ? { body: { versions: args.versions } } : {}), `Approving launch ${args.launch_id}`);
     },
   }),
   tool({
     name: 'write_article',
     title: 'Write an article',
     description:
-      'Publish an article written by hand (not a release): it goes on the blog and Shipcast writes the pieces for the channels named, into a drafts pull request to review, or straight to publishing with `direct: true` and `confirm: true`. ' +
+      'Publish an article written by hand (not a release): it goes on the blog and Shipcast writes the pieces for the channels named, as drafts to review, or straight to publishing with `direct: true` and `confirm: true`. ' +
       PUBLISHES,
     operations: ['writeArticle'],
     input: z.object({
@@ -97,7 +104,7 @@ export const tools: ShipcastTool[] = [
         .max(30)
         .optional()
         .describe('Images uploaded with upload_media that the body links by name; they go to the article\'s folder on the site'),
-      direct: z.boolean().optional().describe('Publish without a drafts pull request to review; false by default'),
+      direct: z.boolean().optional().describe('Approve the drafts as written and publish at once, without a review; false by default'),
       confirm: confirmDirect,
     }),
     hints: HINTS.work,

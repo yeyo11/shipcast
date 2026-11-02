@@ -1,11 +1,15 @@
 import { exchangeMastodonCode, MASTODON_SCOPES, mastodonAuthorizeUrl, registerMastodonApp } from '@shipcast/connectors';
 import { connectAccount, getJson, network, networkSpec, type AccountDeps, type Credentials } from '@shipcast/runtime';
 import { processState } from '@shipcast/runtime/redis';
-import { appContext } from './context.server';
+import { appContext, type AppContext } from './context.server';
 import { channelsViewOf } from './channels-view.server.ts';
 
 export async function accountDeps(): Promise<AccountDeps> {
-  const { registry, secrets, brands, preview } = await appContext();
+  return accountDepsOf(await appContext());
+}
+
+/** Over a context already in hand, as the account routes get theirs (accounts.server.ts) */
+export async function accountDepsOf({ registry, secrets, brands, preview }: Pick<AppContext, 'registry' | 'secrets' | 'brands' | 'preview'>): Promise<AccountDeps> {
   // A preview checks a credential itself and reads through its own fetch: connecting reaches no network
   return { registry, secrets, brands: await brands(), ...(preview && { fetch: preview.fetch, check: preview.oauth.check }) };
 }

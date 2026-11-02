@@ -1,7 +1,7 @@
-import { newWebhookSecret, WEBHOOK_SECRET_KEY, writeAutomation, type AutomationMode } from '@shipcast/runtime';
+import { newWebhookSecret, WEBHOOK_SECRET_KEY, type AutomationMode } from '@shipcast/runtime';
 import { CHANNELS } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
-import { automationChanged, automationView, roundNow } from './automation.server';
+import { automationState, changeAutomation, roundNow, saveTriggerRules } from './automation.server';
 import { appContext } from './context.server';
 import { jobsPage, type JobStateFilter } from './jobs.server';
 import { InvalidInput, object } from './input';
@@ -9,17 +9,11 @@ import { InvalidInput, object } from './input';
 export const getAutomation = createServerFn({ method: 'GET' }).handler(async () => {
   const ctx = await appContext();
   return {
-    ...(await automationView(ctx)),
-    webhookUrl: `${ctx.app.publicUrl}/api/github/webhook`,
-    hasSecret: Boolean(await ctx.secrets.get(WEBHOOK_SECRET_KEY)),
-    // The App delivers for every repo it is installed on, signed with its own secret
-    appWebhooks: Boolean(ctx.config.githubApp?.webhookSecret),
+    ...(await automationState(ctx)),
     launchesRepo: ctx.settings.launchesRepo(),
     owner: (await ctx.brand()).github,
     /** The queue's work of the last day: drafting, publishing, GitHub's deliveries (moved here from the launches list) */
     jobs: await jobsPage(ctx.registry, { page: 1, state: 'all' }),
-    /** The rules that decide which GitHub events create a launch (docs/launch-triggers.md) */
-    triggers: await ctx.triggers.rules(),
     channels: [...CHANNELS],
   };
 });
@@ -31,9 +25,8 @@ export const saveTriggers = createServerFn({ method: 'POST' })
     return input as unknown[];
   })
   .handler(async ({ data }) => {
-    const ctx = await appContext();
     try {
-      return { ok: true as const, rules: await ctx.triggers.save(data) };
+      return { ok: true as const, rules: await saveTriggerRules(await appContext(), data) };
     } catch (error) {
       return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
     }
@@ -56,12 +49,7 @@ export const saveAutomation = createServerFn({ method: 'POST' })
     if (typeof o.intervalSeconds !== 'number' || !Number.isFinite(o.intervalSeconds)) throw new InvalidInput('the interval is a number of seconds');
     return { mode: o.mode as AutomationMode, intervalSeconds: o.intervalSeconds };
   })
-  .handler(async ({ data }) => {
-    const ctx = await appContext();
-    const saved = await writeAutomation(ctx.registry, data);
-    await automationChanged(ctx);
-    return saved;
-  });
+  .handler(async ({ data }) => changeAutomation(await appContext(), data));
 
 /** A new secret replaces the old one at once: GitHub's webhooks must be given the new one */
 export const rotateWebhookSecret = createServerFn({ method: 'POST' }).handler(async () => {
@@ -71,5 +59,5 @@ export const rotateWebhookSecret = createServerFn({ method: 'POST' }).handler(as
 });
 
 export const runRoundNow = createServerFn({ method: 'POST' }).handler(async () => {
-  return { started: await roundNow(await appContext()) };
+  return { started: (await roundNow(await appContext())).ok };
 });

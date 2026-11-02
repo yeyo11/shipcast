@@ -39,6 +39,12 @@ export { ApiError } from './errors.ts';
 import { STATS_ROUTES, STATS_SCHEMAS } from './stats-api.ts';
 import { PROFILE_ROUTES, PROFILE_SCHEMAS, type ProfileApi } from './profile-api.ts';
 import { SOURCES_ROUTES, SOURCES_SCHEMAS, type SourcesApi } from './sources-api.ts';
+import { ATTENTION_ROUTES, ATTENTION_SCHEMAS, type AttentionApi } from './attention-api.ts';
+import { ACCOUNTS_ROUTES, ACCOUNTS_SCHEMAS, type AccountsApi } from './accounts-api.ts';
+import { DRAFTS_ROUTES, DRAFTS_SCHEMAS, type DraftsApi } from './drafts-api.ts';
+import { REPOS_ROUTES, REPOS_SCHEMAS, type ReposApi } from './repos-api.ts';
+import { AUTOMATION_ROUTES, AUTOMATION_SCHEMAS, type AutomationApi } from './automation-api.ts';
+import { AI_ROUTES, AI_SCHEMAS, type AiApi } from './ai-api.ts';
 import { commentView } from './comment-view.ts';
 import { accountService, commentService, postService, scheduleService } from './app-services.ts';
 
@@ -99,6 +105,16 @@ export interface ApiDeps {
   sources?: SourcesApi;
   /** Deleting a launch (docs/launch-delete.md); the app always has it, without it (a test's deps) the routes answer 404 */
   deletion?: Pick<LaunchDeletionService, 'plan' | 'delete'> | undefined;
+  /*
+   * What the pages' server functions do, offered to the API too (docs/decisions/mcp-parity.md): each
+   * area's services, typed in its route module and built in api-deps.server.ts
+   */
+  attention?: AttentionApi;
+  accounts?: AccountsApi;
+  drafts?: DraftsApi;
+  repos?: ReposApi;
+  automation?: AutomationApi;
+  ai?: AiApi;
 }
 
 /** The deletion service, or the 404 of a route these deps do not serve */
@@ -188,7 +204,7 @@ async function launchResource(deps: ApiDeps, launch: Launch) {
         : {
             ...(review.pullRequest && { pullRequest: review.pullRequest }),
             // A launch Shipcast holds has no pull request: its approval and what each channel waits for (docs/app-review.md)
-            ...(review.app && { approval: review.app.approval, waiting: review.app.waiting }),
+            ...(review.app && { approval: review.app.approval, waiting: review.app.waiting, versions: review.app.versions }),
             count: review.drafts.length,
             files: review.drafts.map((d) => ({ path: d.path, label: d.label, kind: d.kind, ...(d.approved !== undefined && { approved: d.approved }) })),
           };
@@ -453,7 +469,7 @@ export const ROUTES: ApiRoute[] = [
       properties: {
         repo: { type: 'string', description: 'owner/name', pattern: '^[\\w.-]+/[\\w.-]+$' },
         ref: { type: 'string', description: 'A release tag; the latest release when left out' },
-        direct: { type: 'boolean', default: false, description: 'Commit to main and publish, without a drafts pull request' },
+        direct: { type: 'boolean', default: false, description: 'Approve the drafts as written and publish, without a review' },
       },
     },
     response: { status: 202, description: 'Accepted: a job drafts the launch', schema: ref('Accepted') },
@@ -467,10 +483,10 @@ export const ROUTES: ApiRoute[] = [
     path: '/launches/{id}/approve',
     scope: 'write',
     operationId: 'approveLaunch',
-    summary: 'Approve the drafts: merge their pull request, then publish. For a launch Shipcast holds, send the versions read (its review’s app.versions): a draft changed since is refused with a 409',
+    summary: 'Approve the drafts, then publish. Send the versions read (GET /launches/{id}’s drafts.versions): a draft changed since is refused with a 409',
     body: {
       type: 'object',
-      properties: { versions: { type: 'object', additionalProperties: { type: 'integer' }, description: 'Draft id to the version id read, as GET /launches/{id} gives them under review.app.versions' } },
+      properties: { versions: { type: 'object', additionalProperties: { type: 'integer' }, description: 'Draft id to the version id read, as GET /launches/{id} gives them under drafts.versions' } },
     },
     bodyOptional: true,
     response: { status: 202, description: 'Accepted: a job publishes the launch', schema: ref('Accepted') },
@@ -636,6 +652,12 @@ export const ROUTES: ApiRoute[] = [
   ...STATS_ROUTES,
   ...PROFILE_ROUTES,
   ...SOURCES_ROUTES,
+  ...ATTENTION_ROUTES,
+  ...ACCOUNTS_ROUTES,
+  ...DRAFTS_ROUTES,
+  ...REPOS_ROUTES,
+  ...AUTOMATION_ROUTES,
+  ...AI_ROUTES,
   {
     method: 'POST',
     path: '/launches/{id}/schedule',
@@ -1089,6 +1111,7 @@ export function openApiDocument(publicUrl: string, availability: RouteAvailabili
                 pullRequest: { type: 'object', properties: { number: { type: 'integer' }, url: { type: 'string' }, state: { type: 'string', enum: ['open', 'merged', 'closed'] }, branch: { type: 'string' } } },
                 approval: { type: ['object', 'null'], description: 'A launch Shipcast holds: the approval in force', properties: { by: { type: 'string' }, at: { type: 'string' } } },
                 waiting: { type: 'object', description: 'A launch Shipcast holds: why each channel may not go out yet, by channel', additionalProperties: { type: 'string' } },
+                versions: { type: 'object', description: 'A launch Shipcast holds: each draft’s id to its current version, what POST /launches/{id}/approve takes', additionalProperties: { type: 'integer' } },
                 count: { type: 'integer' },
                 files: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, label: { type: 'string' }, kind: { type: 'string' }, approved: { type: 'boolean', description: 'A launch Shipcast holds: whether this version is the approved one' } } } },
                 error: { type: 'string' },
@@ -1224,6 +1247,12 @@ export function openApiDocument(publicUrl: string, availability: RouteAvailabili
         ...STATS_SCHEMAS,
         ...PROFILE_SCHEMAS,
         ...SOURCES_SCHEMAS,
+        ...ATTENTION_SCHEMAS,
+        ...ACCOUNTS_SCHEMAS,
+        ...DRAFTS_SCHEMAS,
+        ...REPOS_SCHEMAS,
+        ...AUTOMATION_SCHEMAS,
+        ...AI_SCHEMAS,
       },
     },
   };

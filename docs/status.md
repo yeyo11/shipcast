@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-01T16:10:01.633082753Z
+updated_at: 2026-11-01T23:02:56.639557565Z
 tags:
     - status
     - roadmap
@@ -102,7 +102,9 @@ accounts per brand, the phase 5 channels and what the MVP had left
   queue (BullMQ with Redis, pg-boss for a single process without it), Redis, the flags, the shared round, the GitHub webhook handling and the
   automation settings, shared by the CLI and the app.
 - **`packages/mcp`** ([mcp.md](mcp.md)): the MCP server over the REST API, one tool per `/api/v1`
-  operation since 2026-11-01 (41), kept at parity by a test
+  operation (69), and since 2026-11-01 one route per page action too, the attention list, accounts,
+  drafts, repos, automation and AI settings included; what stays in the app (credentials, tokens,
+  onboarding) has its written reason. Two tests keep the parity
   ([decisions/mcp-parity.md](decisions/mcp-parity.md)).
 - **`apps/cli`**: `launch` (after the pre-flight), `preflight`, `watch`, `publish [--retry]`,
   `metrics`, `status`, `secrets migrate`.

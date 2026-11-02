@@ -31,7 +31,7 @@ export const tools: ShipcastTool[] = [
     name: 'schedule_launch',
     title: 'Schedule a launch\'s channels',
     description:
-      `Set the time each named channel's piece of a launch goes out, instead of the moment the launch is published; a channel scheduled already is moved. Approval still comes first: nothing goes out while the drafts pull request is open (approve_drafts), and a piece whose time passed before then goes out with the approval. Every time carries its own offset, a time without one is refused: give the owner's zone's offset (get_timezone, recommend_times give the times in it). The channels are ${channels}; a channel off in launch.yml or already out, a time over 60 days ahead and a launch already published, skipped or failed are refused. A time already past publishes it publicly on the next run: confirm the times with the user.`,
+      `Set the time each named channel's piece of a launch goes out, instead of the moment the launch is published; a channel scheduled already is moved. Approval still comes first: nothing goes out while the drafts wait for approve_drafts, and a piece whose time passed before then goes out with the approval. Every time carries its own offset, a time without one is refused: give the owner's zone's offset (get_timezone, recommend_times give the times in it). The channels are ${channels}; a channel off in launch.yml or already out, a time over 60 days ahead and a launch already published, skipped or failed are refused. A time already past publishes it publicly on the next run: confirm the times with the user.`,
     operations: ['scheduleLaunch'],
     input: z.object({
       launch_id: launchId,

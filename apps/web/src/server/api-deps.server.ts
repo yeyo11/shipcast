@@ -1,6 +1,12 @@
 import { processState } from '@shipcast/runtime/redis';
+import { accountsApi } from './accounts.server';
+import { aiApi } from './ai.server';
 import { FailureLimiter, sharedLimiter, type ApiDeps, type SignInLimiter } from './api';
+import { attentionApi } from './attention.server';
+import { automationApi } from './automation.server';
 import { appContext } from './context.server';
+import { draftsApi } from './drafts.server';
+import { reposApi } from './repos.server';
 import { deletionService } from './deletion.server';
 import { jobsFeed } from './jobs.server';
 import { checkComments, commentDeps, redraftComment } from './comments.server';
@@ -43,5 +49,11 @@ export async function apiDeps(): Promise<ApiDeps> {
     profiles: profileApi,
     sources: { start: startSources, upload: uploadSource },
     deletion: deletionService(ctx),
+    attention: attentionApi(ctx),
+    accounts: accountsApi(ctx),
+    drafts: draftsApi(ctx),
+    repos: reposApi(ctx),
+    automation: automationApi(ctx),
+    ai: aiApi(ctx),
   };
 }

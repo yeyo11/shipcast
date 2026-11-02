@@ -1,7 +1,7 @@
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
-import { editProfile, setBrandPicture, type ProfileDeps } from '@shipcast/engine';
+import { editProfile, proposalEdit, setBrandPicture, type ProfileDeps } from '@shipcast/engine';
 import { profileDeps, startProfileReview, type ProfileReviewRequest } from '@shipcast/runtime';
-import type { ProfileApi } from './profile-api';
+import type { ProfileApi, ProposalInput } from './profile-api';
 import { appContext } from './context.server';
 import { fakeNetworks } from './preview.server';
 
@@ -51,5 +51,13 @@ export async function applyBrandPicture(accountId: number): Promise<Profile | un
   return setBrandPicture(d, accountId);
 }
 
+/**
+ * Applies one proposal of the review; the value is the proposal's text as the owner may have changed
+ * it, and the engine checks the capability and the limits again before anything is sent
+ */
+export function applyProposal(accountId: number, proposal: ProposalInput): Promise<Profile | undefined> {
+  return applyEdit(accountId, proposalEdit({ field: proposal.field, proposed: proposal.value }));
+}
+
 /** What the REST API runs for profiles in this process */
-export const profileApi: ProfileApi = { review: startReview, edit: applyEdit };
+export const profileApi: ProfileApi = { review: startReview, edit: applyEdit, applyProposal, brandPicture: applyBrandPicture };

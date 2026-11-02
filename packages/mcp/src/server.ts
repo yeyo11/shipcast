@@ -13,7 +13,7 @@ import { TOOL_GUIDES, TOOLS } from './tools/index.ts';
 
 export const SERVER_INFO = { name: 'shipcast', version: '1.0.0' };
 
-const INTRO = `Shipcast launches GitHub projects and the owner's articles: it writes a content pack for every channel (blog, dev.to, Bluesky, Mastodon...) into a drafts pull request, publishes it once the owner approves, then reads each post's numbers and comments.
+const INTRO = `Shipcast launches GitHub projects and the owner's articles: it writes a content pack for every channel (blog, dev.to, Bluesky, Mastodon...) as drafts it holds for the owner to review, publishes them once the owner approves, then reads each post's numbers and comments. list_attention says what needs the user now.
 Read-only tools only look. Ask the user before anything that publishes, changes or deletes something public; the tools that do it at once take confirm: true and do nothing without it. A tool that starts work answers a job: follow it with list_jobs until it ends.`;
 
 /** The intro, then each area's guide (src/tools/<area>.ts), so an area describes its tools without editing this file */
@@ -77,12 +77,12 @@ export function createShipcastServer(api: ShipcastApi): McpServer {
           content: {
             type: 'text',
             text: `Help me launch ${repo}${ref ? ` ${ref}` : ' (its latest release)'} with Shipcast, one step at a time:
-1. Call list_launches and check this release was not launched already; a release is launched only once.
+1. Call list_releases for ${repo} and check this release was not launched already (its launch); a release is launched only once. Call check_repo and tell me what its pre-flight would refuse.
 2. Call list_accounts and tell me which networks are connected and whether any account failed its last check.
-3. Ask me to confirm, then call launch_repo with repo "${repo}"${ref ? ` and ref "${ref}"` : ''} (without direct, so the drafts go to a pull request).
+3. Ask me to confirm, then call launch_repo with repo "${repo}"${ref ? ` and ref "${ref}"` : ''} (without direct, so the drafts wait for my review).
 4. Follow the job with list_jobs until it ends; if the pre-flight failed, tell me which checks to fix.
-5. Call get_launch and summarise the drafts pull request and its files, with its link, so I can review them on GitHub.
-6. Only when I say the drafts are good, call approve_drafts with confirm: true, then follow the job and report each channel's post URL and any failure.`,
+5. Call get_launch and summarise its drafts; read the ones I ask about with get_draft and change them with edit_draft when I say so.
+6. Only when I say the drafts are good, call approve_drafts with the versions get_launch gave and confirm: true, then follow the job and report each channel's post URL and any failure.`,
           },
         },
       ],
@@ -137,7 +137,7 @@ Then summarise: a table with one row per channel (its posts, the launch's views,
 - Tell only what the release really ships: read the repo's code and release notes, and keep anything planned or only documented clearly apart from what is implemented.
 - Open with a paragraph that answers what the project is and what changed; use questions as section headings; no top-level heading (the title is separate).
 - Show me the title and the Markdown and wait for my changes.
-- When I approve it, call write_article with lang "${lang ?? 'en'}" and the channels I name (without direct, so it goes to a drafts pull request), then follow the job with list_jobs and give me the pull request's link from get_launch.`,
+- When I approve it, call write_article with lang "${lang ?? 'en'}" and the channels I name (without direct, so its drafts wait for my review), then follow the job with list_jobs and summarise the drafts from get_launch.`,
           },
         },
       ],

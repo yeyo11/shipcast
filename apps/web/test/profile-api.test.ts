@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConnectorError, type ProfileEdit } from '@shipcast/connectors';
-import { editProfile, type ReviewGitHub } from '@shipcast/engine';
+import { editProfile, proposalEdit, readProfileReview, setBrandPicture, type ProfileDeps, type ReviewGitHub } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { createApiToken, MemoryStore } from '@shipcast/runtime';
+import { Brand } from '@shipcast/schema';
 import { FailureLimiter, handleApi, openApiDocument, type ApiDeps } from '../src/server/api.ts';
 import type { ReviewInput } from '../src/server/profile-api.ts';
 
@@ -13,11 +14,25 @@ const unused = async (): Promise<never> => {
   throw new Error('the profile routes start no other work');
 };
 
-async function setup(options: { networkFails?: boolean } = {}) {
+const AVATAR = 'https://cdn.example/me.png';
+const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['es', 'en'] }, tone: 'plain' });
+
+async function setup(options: { networkFails?: boolean; noAvatar?: boolean } = {}) {
   const registry = await memoryRegistry();
   const secrets = new MemoryStore();
   const reviews: Array<[number, ReviewInput]> = [];
   const edits: ProfileEdit[] = [];
+  // The engine's own checks, with the network faked
+  const network: Pick<ProfileDeps, 'registry' | 'connector' | 'brand'> = {
+    registry,
+    connector: async () => ({
+      editProfile: async (e) => {
+        if (options.networkFails) throw new ConnectorError('Bluesky', 'the profile changed while it was being edited', 409, false);
+        edits.push(e);
+      },
+    }),
+    brand: options.noAvatar ? brand : { ...brand, avatar: AVATAR },
+  };
   const deps: ApiDeps = {
     registry,
     secrets,
@@ -42,21 +57,10 @@ async function setup(options: { networkFails?: boolean } = {}) {
         reviews.push([id, input]);
         return { ok: true, job: 'job-1' };
       },
-      // The engine's own checks, with the network faked
-      edit: (id, edit) =>
-        editProfile(
-          {
-            registry,
-            connector: async () => ({
-              editProfile: async (e) => {
-                if (options.networkFails) throw new ConnectorError('Bluesky', 'the profile changed while it was being edited', 409, false);
-                edits.push(e);
-              },
-            }),
-          },
-          id,
-          edit,
-        ),
+      edit: (id, edit) => editProfile(network, id, edit),
+      // As profiles.server.ts's applyProposal, over the faked network
+      applyProposal: (id, proposal) => editProfile(network, id, proposalEdit({ field: proposal.field, proposed: proposal.value })),
+      brandPicture: (id) => setBrandPicture(network, id),
     },
   };
   const tokens = { registry, secrets };
@@ -125,11 +129,55 @@ test('an edit goes through the engine’s checks before the network, and the net
   assert.equal(refused.body.error?.code, 'upstream');
 });
 
+test('a review’s proposal is applied through the engine’s checks, as sent, and marked applied', async () => {
+  const s = await setup();
+  const bsky = await s.registry.accounts.addAccount({ network: 'bluesky', brand: 'personal', label: '@me.bsky.social', settings: {} });
+  const proposal = { field: 'bio', current: 'Hi', proposed: 'I build launch tools', why: 'Say what you make' };
+  const review = { accountId: bsky.id, network: 'bluesky', reviewedAt: '2026-10-30T10:00:00.000Z', language: 'en', summary: 'Say it', profile: { displayName: 'Me', bio: 'Hi', links: [], hasAvatar: false }, proposals: [proposal] };
+  await s.registry.cursors.setCursor(`profile-review:${bsky.id}`, JSON.stringify(review));
+  const path = `/accounts/${bsky.id}/profile-review/apply`;
+
+  assert.equal((await call(s.deps, 'POST', path, s.read, { field: 'bio', value: proposal.proposed })).status, 403);
+  for (const body of [{}, { field: 'avatar', value: 'x' }, { field: 'bio' }, { field: 'bio', value: 'x'.repeat(5001) }]) {
+    assert.equal((await call(s.deps, 'POST', path, s.write, body)).status, 400, JSON.stringify(body));
+  }
+  assert.equal((await call(s.deps, 'POST', path, s.write, { field: 'bio', value: 'x'.repeat(300) })).status, 400, 'over the network’s limit');
+  assert.equal((await call(s.deps, 'POST', path, s.write, { field: 'links', value: 'not a link line' })).status, 400);
+  assert.equal((await call(s.deps, 'POST', '/accounts/999/profile-review/apply', s.write, { field: 'bio', value: 'x' })).status, 404);
+  assert.deepEqual(s.edits, [], 'nothing reached the network');
+
+  const done = await call(s.deps, 'POST', path, s.write, { field: 'bio', value: proposal.proposed });
+  assert.equal(done.status, 200);
+  assert.equal(done.body.profile, null);
+  assert.deepEqual(s.edits, [{ bio: proposal.proposed }]);
+  assert.ok((await readProfileReview(s.registry, bsky.id))?.proposals[0]?.appliedAt, 'the proposal is marked applied');
+});
+
+test('the brand picture is brand.yml’s avatar, where the network takes one', async () => {
+  const s = await setup();
+  const discord = await s.registry.accounts.addAccount({ network: 'discord', brand: 'personal', label: '#releases', settings: {} });
+  const mastodon = await s.registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me@m.example', settings: { instance: 'https://m.example', scopes: 'read write' } });
+  assert.equal((await call(s.deps, 'POST', `/accounts/${discord.id}/profile/picture`, s.read)).status, 403);
+  assert.equal((await call(s.deps, 'POST', `/accounts/${mastodon.id}/profile/picture`, s.write)).status, 409);
+  assert.equal((await call(s.deps, 'POST', '/accounts/999/profile/picture', s.write)).status, 404);
+  const done = await call(s.deps, 'POST', `/accounts/${discord.id}/profile/picture`, s.write);
+  assert.equal(done.status, 200);
+  assert.deepEqual(s.edits, [{ picture: AVATAR }]);
+
+  const without = await setup({ noAvatar: true });
+  const other = await without.registry.accounts.addAccount({ network: 'discord', brand: 'personal', label: '#releases', settings: {} });
+  const refused = await call(without.deps, 'POST', `/accounts/${other.id}/profile/picture`, without.write);
+  assert.equal(refused.status, 400);
+  assert.match(refused.body.error?.message ?? '', /avatar/);
+});
+
 test('the OpenAPI document lists the profile routes and their schemas', () => {
   const doc = openApiDocument('https://shipcast.example', {}) as { paths: Record<string, Record<string, unknown>>; components: { schemas: Record<string, unknown> } };
   assert.ok(doc.paths['/profile-capabilities']?.get);
   assert.ok(doc.paths['/accounts/{accountId}/profile-review']?.get);
   assert.ok(doc.paths['/accounts/{accountId}/profile-review']?.post);
   assert.ok(doc.paths['/accounts/{accountId}/profile']?.patch);
+  assert.ok(doc.paths['/accounts/{accountId}/profile-review/apply']?.post);
+  assert.ok(doc.paths['/accounts/{accountId}/profile/picture']?.post);
   for (const name of ['ProfileCapability', 'ProfileReview', 'Profile']) assert.ok(doc.components.schemas[name], name);
 });

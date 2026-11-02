@@ -1,7 +1,8 @@
-import { readAiSettings, writeAiSettings, AI_PROVIDERS, AI_TASKS, type AiProviderId } from '@shipcast/engine';
-import { aiProviderCheck, InvalidSetting, NETWORKS, readAutomation } from '@shipcast/runtime';
+import { readAiSettings, AI_PROVIDERS, AI_TASKS, type AiProviderId } from '@shipcast/engine';
+import { InvalidSetting, NETWORKS, readAutomation } from '@shipcast/runtime';
 import { parseBrand, formatIssues } from '@shipcast/schema';
 import { createServerFn } from '@tanstack/react-start';
+import { aiApi } from './ai.server';
 import { accountService, launchService, settingsService } from './app-services';
 import { appContext, type AppContext } from './context.server';
 import { InvalidInput, object, text } from './input';
@@ -265,10 +266,7 @@ export const useProviderForAll = createServerFn({ method: 'POST' })
     return input as AiProviderId;
   })
   .handler(async ({ data }) => {
-    const ctx = await appContext();
-    const current = await readAiSettings(ctx.registry);
-    const tasks = Object.fromEntries(AI_TASKS.map((t) => [t, current.tasks[t].provider === data ? current.tasks[t] : { provider: data }]));
-    await writeAiSettings(ctx.registry, { tasks, ...(current.tone && { tone: current.tone }) });
+    await aiApi(await appContext()).useForAll(data);
     return { ok: true as const };
   });
 
@@ -282,12 +280,6 @@ export const testProvider = createServerFn({ method: 'POST' })
     return input as AiProviderId;
   })
   .handler(async ({ data }) => {
-    const ctx = await appContext();
-    try {
-      // The provider module's own readiness (Claudio's /api/ready says when Claude is not signed in) or one cheap call, its failure in AiError's words
-      const checked = await aiProviderCheck(ctx.deps.aiRunner, data, { env: process.env, registry: ctx.registry, secrets: ctx.secrets, claudio: () => ctx.settings.claudio(), brand: () => ctx.brand() });
-      return checked.ok ? { ok: true as const, detail: checked.detail } : { ok: false as const, problem: checked.problem };
-    } catch (error) {
-      return { ok: false as const, problem: message(error) };
-    }
+    const checked = await aiApi(await appContext()).test(data);
+    return checked.ok ? { ok: true as const, detail: checked.detail } : { ok: false as const, problem: checked.problem };
   });

@@ -1,11 +1,12 @@
 import type { Profile, ProfileEdit } from '@shipcast/connectors';
-import { capabilityWithReview, PROFILE_CAPABILITIES, profileCapability, readProfileReview, type Repositories } from '@shipcast/engine';
+import { capabilityWithReview, PROFILE_CAPABILITIES, profileCapability, readProfileReview, type EditableField, type Repositories } from '@shipcast/engine';
 import type { ApiRoute } from './api.ts';
 import { InvalidInput, object } from './input.ts';
 
 /*
  * The account analysis routes of the REST API: an account's profile capability and latest review,
- * a review started as a job, and an edit made on the network. Kept apart from api.ts, which spreads
+ * a review started as a job, and an edit made on the network: fields given, a review's proposal, or
+ * brand.yml's picture. Kept apart from api.ts, which spreads
  * them into its routes and its OpenAPI document; only types come back from api.ts, so the two
  * modules never need each other at load time. See docs/decisions/account-analysis.md
  */
@@ -16,15 +17,27 @@ type JsonSchema = Record<string, unknown>;
 export interface ProfileApi {
   review(accountId: number, request: ReviewInput): Promise<{ ok: true; job: string } | { ok: false; problem: string }>;
   edit(accountId: number, edit: ProfileEdit): Promise<Profile | undefined>;
+  /** One field of the review's proposals applied on the network, with its text as the owner may have changed it */
+  applyProposal(accountId: number, proposal: ProposalInput): Promise<Profile | undefined>;
+  /** brand.yml's avatar set as the account's picture on the network */
+  brandPicture(accountId: number): Promise<Profile | undefined>;
 }
+
+export interface ProposalInput {
+  field: EditableField;
+  value: string;
+}
+
+/** The fields a proposal is applied to; the picture is only ever brand.yml's (brandPicture) */
+const PROPOSAL_FIELDS: readonly EditableField[] = ['displayName', 'bio', 'links'];
 
 export interface ReviewInput {
   pasted?: { displayName?: string; bio?: string; links?: string };
   language?: string;
 }
 
-const answer = (status: number, body: unknown) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
-const failure = (status: number, code: string, message: string) => answer(status, { error: { code, message } });
+export const answer = (status: number, body: unknown) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
+export const failure = (status: number, code: string, message: string) => answer(status, { error: { code, message } });
 
 function optionalText(value: unknown, name: string, max: number): string | undefined {
   if (value === undefined) return undefined;
@@ -44,6 +57,16 @@ export function reviewInput(value: unknown): ReviewInput {
     ...(pastedBody.links !== undefined && { links: optionalText(pastedBody.links, 'pasted.links', 5000) }),
   };
   return { ...(pasted && { pasted: pasted as ReviewInput['pasted'] }), ...(language && { language }) };
+}
+
+/** A proposal to apply: its field, and its text as proposed or as the owner changed it (links one per line as `Label: value`) */
+export function proposalInput(value: unknown): ProposalInput {
+  const body = object(value, 'the body');
+  const field = body.field;
+  if (typeof field !== 'string' || !(PROPOSAL_FIELDS as readonly string[]).includes(field)) throw new InvalidInput(`field is one of ${PROPOSAL_FIELDS.join(', ')}`);
+  const text = optionalText(body.value, 'value', 5000);
+  if (text === undefined) throw new InvalidInput('value is the text to apply: the proposal’s, or the owner’s change to it');
+  return { field: field as EditableField, value: text };
 }
 
 /** An edit's body: the name, the bio and the links, each left out to keep it */
@@ -66,13 +89,15 @@ export function profileEditInput(value: unknown): ProfileEdit {
   return edit;
 }
 
-function accountId(value: string | undefined): number {
+/** An account id from the path */
+export function accountId(value: string | undefined): number {
   const n = /^\d{1,10}$/.test(value ?? '') ? Number(value) : NaN;
   if (!Number.isInteger(n) || n <= 0) throw new InvalidInput('the account id must be a positive integer');
   return n;
 }
 
-async function readBody(request: Request, optional: boolean): Promise<unknown> {
+/** A JSON body, checked for its type and size; `optional`: none at all is undefined */
+export async function readBody(request: Request, optional: boolean): Promise<unknown> {
   const text = await request.text();
   if (text === '' && optional) return undefined;
   if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) throw new InvalidInput('send JSON, with content-type: application/json');
@@ -178,6 +203,41 @@ export const PROFILE_ROUTES: ApiRoute[] = [
       if (!deps.profiles) return unavailable();
       const profiles = deps.profiles;
       return answer(200, { profile: (await profiles.edit(id, edit)) ?? null });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/accounts/{accountId}/profile-review/apply',
+    scope: 'write',
+    operationId: 'applyProfileProposal',
+    summary: 'Apply one field of an account’s profile review on its network, with the proposal’s text or a change to it; the review marks the proposal applied when the text is the proposed one',
+    body: {
+      type: 'object',
+      required: ['field', 'value'],
+      properties: {
+        field: { type: 'string', enum: PROPOSAL_FIELDS },
+        value: { type: 'string', maxLength: 5000, description: 'The text to set: the proposal’s `proposed`, or the owner’s change to it; links one per line as `Label: value`' },
+      },
+    },
+    response: { status: 200, description: 'The profile as the network has it now, when it can be read', schema: { type: 'object', required: ['profile'], properties: { profile: { oneOf: [ref('Profile'), { type: 'null' }] } } } },
+    async handle(deps, { params, request }) {
+      const id = accountId(params.accountId);
+      const proposal = proposalInput(await readBody(request, false));
+      if (!deps.profiles) return unavailable();
+      return answer(200, { profile: (await deps.profiles.applyProposal(id, proposal)) ?? null });
+    },
+  },
+  {
+    method: 'POST',
+    path: '/accounts/{accountId}/profile/picture',
+    scope: 'write',
+    operationId: 'applyBrandPicture',
+    summary: 'Set brand.yml’s avatar as an account’s picture on its network, where its credential can (see the capability’s brandPicture)',
+    response: { status: 200, description: 'The profile as the network has it now, when it can be read', schema: { type: 'object', required: ['profile'], properties: { profile: { oneOf: [ref('Profile'), { type: 'null' }] } } } },
+    async handle(deps, { params }) {
+      const id = accountId(params.accountId);
+      if (!deps.profiles) return unavailable();
+      return answer(200, { profile: (await deps.profiles.brandPicture(id)) ?? null });
     },
   },
 ];
