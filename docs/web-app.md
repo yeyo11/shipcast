@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T06:53:24.835786476Z
-updated_at: 2026-11-02T06:53:24.835786476Z
+created_at: 2026-11-02T20:00:56.904351317Z
+updated_at: 2026-11-02T20:00:56.904351317Z
 tags:
     - web-app
     - dashboard
@@ -129,7 +129,9 @@ unchanged unless the redesign document says so.
   One quiet line links what waits on the owner. Below, four tabs kept in the address (`?tab=`,
   `?channel=`): **Channels** (a strip of channel chips; each piece with its link, its numbers over
   time, Edit and Delete or Unpublish where its network allows them, Retry when it failed, its time
-  while it is not out yet; Edit selected and Delete everything above the panel), **Content** (what
+  while it is not out yet; a **Select all** tick above the rows, checked, mixed or clear, that ticks
+  every channel with something to edit or, when all are, clears them (`selectAll` in
+  `components/launch/published.ts`, tested); Edit selected and Delete everything above the panel), **Content** (what
   went out, or the drafts, editable while the launch waits for approval: a save is a new version), **Search engines** and **Details** (properties, accounts, the last reading of every number,
   the launch's jobs). A launch that failed before its drafts were written opens on **Details**, and a
   release with nothing out has **Launch it again**. **Where the drafts come from**: the launch

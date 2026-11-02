@@ -36,6 +36,8 @@
 .pub-chart { width: 100%; }
 .pub-chart svg { display: block; overflow: visible; }
 .pub-rows { margin-top: 8px; }
+/* Select all: the rows' tick column, quieter than a channel's row */
+.pub-select-all { padding: 8px 0; cursor: pointer; }
 .pub-name { font-weight: 700; text-decoration: none; color: var(--sc-text); align-self: flex-start; }
 .pub-name:hover { text-decoration: underline; color: var(--sc-text); }
 .pub-ic-fail { border-color: var(--sc-failure); color: var(--sc-failure); }

@@ -6,11 +6,21 @@ import { channelTitle } from './ChannelGlyph';
 import { listWords, unpublishGroups } from './published';
 
 /** A tick in the board's shape over a real checkbox, so the keyboard and screen readers get one */
-export function Tick({ checked, disabled, onChange, label }: { checked: boolean; disabled?: boolean; onChange: (on: boolean) => void; label?: string }) {
+export function Tick({ checked, mixed, disabled, onChange, label }: { checked: boolean; mixed?: boolean; disabled?: boolean; onChange: (on: boolean) => void; label?: string }) {
   return (
-    <span className={`k-check pub-tick${checked ? ' k-on' : ''}${disabled ? ' pub-tick-off' : ''}`}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-label={label} />
-      {checked && <Icon name="check" size={16} strokeWidth={3} />}
+    <span className={`k-check pub-tick${checked || mixed ? ' k-on' : ''}${disabled ? ' pub-tick-off' : ''}`}>
+      {/* `indeterminate` is a property only, never an attribute: set it on the element itself */}
+      <input
+        ref={(el) => {
+          if (el) el.indeterminate = !checked && Boolean(mixed);
+        }}
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        aria-label={label}
+      />
+      {checked ? <Icon name="check" size={16} strokeWidth={3} /> : mixed ? <Icon name="minus" size={16} strokeWidth={3} /> : null}
     </span>
   );
 }

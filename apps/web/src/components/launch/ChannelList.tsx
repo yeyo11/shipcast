@@ -8,7 +8,7 @@ import type { ChannelNumbers, Day, Totals } from '../../server/launch-summary';
 import { number } from '../ui';
 import { ChannelGlyph, channelTitle } from './ChannelGlyph';
 import { useLaunchActions } from './LaunchActions';
-import { channelRows, chartDay, chartPoints, viewSources, type ChannelRow } from './published';
+import { channelRows, chartDay, chartPoints, selectAll, viewSources, type ChannelRow } from './published';
 import { Tick } from './UnpublishSheet';
 
 /*
@@ -191,11 +191,19 @@ export function ChannelList({
   const [ticked, setTicked] = useState<string[]>([]);
   const chosen = list.filter((r) => ticked.includes(r.channel)).flatMap((r) => r.editable);
   const removable = rows.some((r) => r.remove.allowed);
+  const all = selectAll(list, ticked);
 
   if (list.length === 0) return <p className="k-px k-sm k-muted pub-none">Nothing went out on a channel yet, and none waits for a time. The drafts are in Content.</p>;
   return (
     <>
       <div className="k-px k-stack pub-rows">
+        {all.tickable.length > 1 && (
+          // A label, so its words take the click as well as the tick
+          <label className="k-row k-sm pub-select-all">
+            <Tick checked={all.state === 'all'} mixed={all.state === 'some'} onChange={() => setTicked(all.next)} />
+            <span className="k-muted">{all.state === 'all' ? 'Unselect all' : 'Select all'}</span>
+          </label>
+        )}
         {list.map((row) => (
           <Row key={row.channel} row={row} ticked={ticked.includes(row.channel)} onTick={(on) => setTicked(on ? [...ticked, row.channel] : ticked.filter((c) => c !== row.channel))} />
         ))}

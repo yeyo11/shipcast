@@ -21,6 +21,8 @@ const PATHS = {
   ),
   comments: <path d="M5 5h14v10H10l-5 4z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  /** A tick that is neither on nor off: some of a list chosen */
+  minus: <path d="M6 12h12" />,
   launches: (
     <>
       <path d="M4 8l8-4 8 4v8l-8 4-8-4z" />

@@ -125,6 +125,18 @@ export function unpublishGroups(rows: readonly PieceRow[]): UnpublishGroup[] {
   });
 }
 
+/**
+ * The Channels tab's select-all tick: only rows with something to edit can be ticked, so "all" is
+ * every one of those. `state` drives the tick (checked, indeterminate or clear) and `next` is what a
+ * press leaves ticked: everything when not all were, nothing when all were.
+ */
+export function selectAll(rows: ReadonlyArray<Pick<ChannelRow, 'channel' | 'editable'>>, ticked: readonly string[]): { tickable: string[]; state: 'all' | 'some' | 'none'; next: string[] } {
+  const tickable = rows.filter((r) => r.editable.length > 0).map((r) => r.channel);
+  const on = tickable.filter((c) => ticked.includes(c)).length;
+  const state = tickable.length > 0 && on === tickable.length ? 'all' : on > 0 ? 'some' : 'none';
+  return { tickable, state, next: state === 'all' ? [] : tickable };
+}
+
 /** A list in words: `a`, `a and b`, `a, b and c` */
 export function listWords(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? '';

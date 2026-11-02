@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ago, dayOnly, dayTime, elapsed } from '../src/components/launch/dates.ts';
-import { channelRows, chartPoints, listWords, metricCaption, pillClass, unpublishGroups, viewSources, withScheduled } from '../src/components/launch/published.ts';
+import { channelRows, chartPoints, listWords, metricCaption, pillClass, selectAll, unpublishGroups, viewSources, withScheduled } from '../src/components/launch/published.ts';
 import { channelEntries, type PieceRow } from '../src/server/pieces.ts';
 
 const TZ = 'Europe/Madrid';
@@ -129,4 +129,17 @@ test('the views card names where its Views come from, so the total adds up to it
     sources.reduce((n, s) => n + s.views, 0),
     267,
   );
+});
+
+test('select all ticks every channel that can be edited, and a second press clears them', () => {
+  const editable = [row({ id: 1, channel: 'bluesky' })];
+  const rows = [
+    { channel: 'blog', editable },
+    { channel: 'devto', editable },
+    { channel: 'reddit', editable: [] },
+  ];
+  assert.deepEqual(selectAll(rows, []), { tickable: ['blog', 'devto'], state: 'none', next: ['blog', 'devto'] });
+  assert.deepEqual(selectAll(rows, ['devto']), { tickable: ['blog', 'devto'], state: 'some', next: ['blog', 'devto'] });
+  assert.deepEqual(selectAll(rows, ['devto', 'blog']), { tickable: ['blog', 'devto'], state: 'all', next: [] });
+  assert.equal(selectAll([{ channel: 'reddit', editable: [] }], []).state, 'none');
 });
