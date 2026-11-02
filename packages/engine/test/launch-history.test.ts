@@ -153,7 +153,8 @@ test("the release's notes reach the pack prompt as the author's claims, and a la
   assert.ok(result.ok, JSON.stringify(result));
   assert.ok(prompt.includes('kernel ceiling on every gate job'), 'the notes are in the prompt');
   assert.ok(prompt.includes("The release notes of v0.10.1, as the author wrote them. They are the author's statement of what changed in this release and why, and what the pieces lead with"));
-  assert.ok(prompt.includes('check each one against the code'), 'under the same truth rule as any claim');
+  assert.ok(prompt.includes("What they say the software does is a claim like the README's: check it against the code"), 'under the same truth rule as any claim');
+  assert.ok(prompt.includes("What they tell of the author's own experience (the problem that led to the change, what they measured and where) is theirs to tell"), 'the lived story is usable as the author wrote it');
   assert.ok(prompt.includes('Lead with what changed in this release'), 'the minor pack leads with the change');
 });
 

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T09:14:07.260883941Z
-updated_at: 2026-11-02T09:14:07.260883941Z
+created_at: 2026-11-02T09:14:12.677217672Z
+updated_at: 2026-11-02T09:25:29.925290294Z
 tags:
     - schema
     - content-pack
@@ -135,9 +135,11 @@ running), which only a pack with claims may leave so ([sources.md](sources.md)).
 Besides the code at the tag, a release's pack prompt (`buildPrompt` in
 `packages/engine/src/prompt.ts`) carries the release's notes, its body on GitHub, read when the launch
 is drafted (`releaseNotesOf`, through the GitHub source's `releaseNotes`). They are quoted between
-`<release-notes>` tags as the author's statement of what changed in this release and why, under the
-same rule as the README: each claim in them is checked against the code, and what the code does not
-back goes to `documentedOnly`, never into a piece. Past 12,000 characters (`RELEASE_NOTES_MAX`) they
+`<release-notes>` tags as the author's statement of what changed in this release and why. What they
+say the software does is held to the same rule as the README: checked against the code, and what the
+code does not back goes to `documentedOnly`, never into a piece. What they tell of the author's own
+experience (the problem that led to the change, what was measured and where) is the author's to tell
+and may be used as written, never added to. Past 12,000 characters (`RELEASE_NOTES_MAX`) they
 are cut at a line, with a note that the rest is on GitHub. A release with no notes tells a `major` or
 `minor` pack to find what changed from the code and its git history; a repo made public has no
 release and no notes. Reading the notes never stops a launch: a failure drafts without them.
