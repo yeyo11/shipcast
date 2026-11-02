@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-27T17:33:42.976520284Z
-updated_at: 2026-10-27T17:34:11.777935329Z
+created_at: 2026-11-02T09:14:15.634162071Z
+updated_at: 2026-11-02T09:14:15.634162071Z
 tags:
     - guide
     - getting-started
@@ -8,6 +8,7 @@ tags:
     - install
     - npm
     - phase-11
+    - tone
 ---
 # Getting started: Shipcast on your own repos
 
@@ -56,8 +57,8 @@ npx @yeyo11/shipcast init
 ```
 
 It detects the project from `origin`, asks for the launches repo (`<you>/launches` by default), your
-blog's address, your name, the blog's languages (`en`, `es` or both), the AI and the channels, and
-writes:
+blog's address, your name, the blog's languages (`en`, `es` or both), your tone, the AI and the
+channels, and writes:
 
 | File | Repo | What it does |
 | --- | --- | --- |
@@ -65,6 +66,14 @@ writes:
 | `.github/workflows/shipcast.yml` | project | On `release: published`, or run by hand with a tag: `launch` |
 | `brand.yml` | launches | Who the launches speak for: name, site, languages, tone ([brands.md](brands.md)) |
 | `.github/workflows/shipcast-publish.yml` | launches | When a `launch/*` pull request is merged: `publish`; hourly: `round` |
+
+**The tone** is how the AI writes for you: a few sentences on your voice, which every article and post
+is written with. `init` explains it and shows an example of the form ("First person, as the developer
+who built it. Start with the problem it solves, then show the real commands. Plain words, short
+sentences, no hype or superlatives."); `--tone "<text>"` gives it without the question. Left empty
+(or with `--yes` and no `--tone`), `brand.yml` gets `tone: ""` under a comment marked `TODO` with
+that example, `init` warns with the secrets that the AI has no voice of yours until `tone` is filled,
+and every drafts pull request says so at the top until it is. Shipcast never makes a tone up for you.
 
 Without a checkout of the launches repo beside the project, its two files go to `shipcast-launches/`
 for you to copy over (or pass `--launches-dir <path>`). `init` never overwrites a file (`--force`

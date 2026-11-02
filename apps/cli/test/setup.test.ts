@@ -12,6 +12,8 @@ import {
   renderPublishWorkflow,
   renderReleaseWorkflow,
   repoFromRemote,
+  parseSetupArgs,
+  renderBrandYml,
   runSetup,
   secretsToSet,
   setupFiles,
@@ -113,6 +115,35 @@ test('init in an empty repo writes the setup from its origin, prints the secrets
 
   const again = await runSetup(['--yes', '--site', 'https://dev.example'], dir, () => {});
   assert.equal(again, 1, 'a second run refuses to overwrite');
+});
+
+test('--tone writes the owner’s tone into brand.yml, as given, and no warning', async () => {
+  assert.deepEqual(parseSetupArgs(['--tone', 'First person, plain words.']), { force: false, yes: false, tone: 'First person, plain words.' });
+  const dir = mkdtempSync(join(tmpdir(), 'shipcast-init-'));
+  const lines: string[] = [];
+  const tone = 'First person, as the developer who built it: "the problem", then the commands.';
+  const code = await runSetup(['--yes', '--repo', 'dev/tool', '--site', 'https://dev.example', '--name', 'A Dev', '--tone', tone], dir, (line) => lines.push(line));
+  assert.equal(code, 0);
+  const brand = parseBrand(readFileSync(join(dir, 'shipcast-launches/brand.yml'), 'utf8'));
+  assert.ok(brand.ok);
+  assert.equal(brand.value.tone, tone, 'quotes and colons survive the YAML');
+  assert.doesNotMatch(lines.join('\n'), /has no tone/);
+});
+
+test('with --yes and no tone, brand.yml gets a marked placeholder and init warns that the AI has no voice', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'shipcast-init-'));
+  const lines: string[] = [];
+  assert.equal(await runSetup(['--yes', '--repo', 'dev/tool', '--site', 'https://dev.example', '--name', 'A Dev'], dir, (line) => lines.push(line)), 0);
+  const text = readFileSync(join(dir, 'shipcast-launches/brand.yml'), 'utf8');
+  assert.match(text, /^# TODO: fill in your tone\. Until you do, the AI has no voice of yours/m);
+  assert.match(text, /^tone: ""$/m, 'no voice is invented: the value stays empty');
+  const brand = parseBrand(text);
+  assert.ok(brand.ok);
+  assert.equal(brand.value.tone, '');
+  const out = lines.join('\n');
+  assert.match(out, /Warning: brand\.yml has no tone, so the AI has no voice of yours: until you fill `tone` in dev\/launches's brand\.yml/);
+  assert.ok(out.indexOf('Warning: brand.yml has no tone') > out.indexOf('gh secret set'), 'with the secrets and the next steps');
+  assert.match(renderBrandYml({ ...options(), brand: { ...options().brand, tone: '  ' } }), /# TODO: fill in your tone/, 'a blank tone is no tone');
 });
 
 test('templates/ holds the workflows exactly as init writes them for a placeholder launches repo', () => {

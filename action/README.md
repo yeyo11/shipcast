@@ -23,6 +23,17 @@ It writes `.github/launch.yml` and the launch workflow in the project, `brand.ym
 workflow for the launches repo, and prints every secret to set with the link to get it. The two
 workflows it writes are in [`templates/`](templates).
 
+It also asks for your **tone**: a few sentences on how you write, which every article and post is
+written with (for example: "First person, as the developer who built it. Start with the problem it
+solves, then show the real commands. Plain words, no hype."). Pass it as `--tone "<text>"`, or leave it
+empty and fill `tone` in `brand.yml` later: until then the drafts are in a generic voice, and `init`
+and every drafts pull request say so.
+
+A release is compared with what was announced before: earlier launches and blog posts of the project
+in the launches repo, and its earlier releases. Only a project's first release gets the full
+introduction (`launch` pack); later ones lead with what changed, using the release notes. Set
+`pack: launch | major | minor` in `launch.yml` to choose.
+
 ## By hand
 
 Two workflows, two repos.

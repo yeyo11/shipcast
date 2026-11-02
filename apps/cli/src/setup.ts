@@ -39,6 +39,8 @@ merging it publishes the article and every channel you turned on.
   --name <display name>          Who the launches speak for (default: git's user.name)
   --site <https://…>             Your blog's address, where articles are published
   --languages <en|es|en,es>      The blog's languages (default: en)
+  --tone "<text>"                How the AI writes for you, in a few sentences (brand.yml's tone;
+                                 without it the drafts are in a generic voice until you fill it)
   --ai <anthropic|openai>        The AI the content is written with (default: anthropic)
   --channels <list>              Comma-separated, from ${ACTION_CHANNELS.join(', ')}
                                  (default: ${DEFAULT_CHANNELS.join(', ')})
@@ -51,7 +53,8 @@ export type SetupAi = 'anthropic' | 'openai';
 export interface SetupOptions {
   repo: string;
   launchesRepo: string;
-  brand: { id: string; displayName: string; site: string; github: string; languages: Language[] };
+  /** `tone` is brand.yml's; empty, the file gets a marked placeholder and init a warning */
+  brand: { id: string; displayName: string; site: string; github: string; languages: Language[]; tone?: string };
   ai: SetupAi;
   channels: ActionChannel[];
 }
@@ -100,6 +103,30 @@ export function renderLaunchYml(options: SetupOptions): string {
   return lines.join('\n');
 }
 
+/** What the tone is, for the question and for brand.yml's placeholder: an example of the form, not a voice to copy */
+export const TONE_HELP = [
+  'The tone is how the AI writes for you: a few sentences on your voice, read before every article and post.',
+  'For example: "First person, as the developer who built it. Start with the problem it solves, then show',
+  'the real commands. Plain words, short sentences, no hype or superlatives."',
+];
+
+/** The next-steps line when brand.yml has no tone yet */
+export function toneWarning(launchesRepo: string): string {
+  return `Warning: brand.yml has no tone, so the AI has no voice of yours: until you fill \`tone\` in ${launchesRepo}'s brand.yml, every draft is written in a generic voice.`;
+}
+
+function toneLines(tone: string | undefined): string[] {
+  if (tone?.trim()) return ['# How the AI writes for you, read before every article and post', `tone: ${q(tone.trim())}`];
+  return [
+    '# TODO: fill in your tone. Until you do, the AI has no voice of yours and writes every draft in a',
+    '# generic one. A few sentences on how you write, for example:',
+    '#   tone: >',
+    '#     First person, as the developer who built it. Start with the problem it solves, then show the',
+    '#     real commands. Plain words, short sentences, no hype or superlatives.',
+    'tone: ""',
+  ];
+}
+
 export function renderBrandYml(options: SetupOptions): string {
   const b = options.brand;
   return [
@@ -111,8 +138,7 @@ export function renderBrandYml(options: SetupOptions): string {
     `github: ${b.github}`,
     'languages:',
     `  blog: [${b.languages.join(', ')}]`,
-    '# How the AI writes for you, in a few sentences',
-    'tone: ""',
+    ...toneLines(b.tone),
     'handles: {}',
     '# handles:',
     '#   bluesky: https://bsky.app/profile/you.bsky.social',
@@ -295,6 +321,7 @@ interface SetupArgs {
   name?: string;
   site?: string;
   languages?: string;
+  tone?: string;
   ai?: string;
   channels?: string;
   force: boolean;
@@ -309,6 +336,7 @@ const FLAGS: Record<string, keyof Omit<SetupArgs, 'force' | 'yes'>> = {
   '--name': 'name',
   '--site': 'site',
   '--languages': 'languages',
+  '--tone': 'tone',
   '--ai': 'ai',
   '--channels': 'channels',
 };
@@ -330,7 +358,17 @@ export function parseSetupArgs(argv: string[]): SetupArgs | { error: string } {
 }
 
 /** Turns the answers into options, or every problem with them */
-export function setupOptions(answers: { repo?: string | undefined; launchesRepo?: string | undefined; brand?: string | undefined; name?: string | undefined; site?: string | undefined; languages?: string | undefined; ai?: string | undefined; channels?: string | undefined }): SetupOptions | { errors: string[] } {
+export function setupOptions(answers: {
+  repo?: string | undefined;
+  launchesRepo?: string | undefined;
+  brand?: string | undefined;
+  name?: string | undefined;
+  site?: string | undefined;
+  languages?: string | undefined;
+  tone?: string | undefined;
+  ai?: string | undefined;
+  channels?: string | undefined;
+}): SetupOptions | { errors: string[] } {
   const errors: string[] = [];
   const repo = answers.repo ?? '';
   if (!REPO.test(repo)) errors.push(`the project must be owner/name, not "${repo}"`);
@@ -343,7 +381,8 @@ export function setupOptions(answers: { repo?: string | undefined; launchesRepo?
   const channels = (answers.channels ?? DEFAULT_CHANNELS.join(',')).split(',').map((c) => c.trim()).filter(Boolean);
   const unknown = channels.filter((c) => !(ACTION_CHANNELS as readonly string[]).includes(c));
   if (unknown.length > 0) errors.push(`unknown channels ${unknown.join(', ')}: choose from ${ACTION_CHANNELS.join(', ')}`);
-  const brand = Brand.safeParse({ id: answers.brand ?? owner.toLowerCase(), displayName: answers.name ?? owner, site: answers.site ?? '', github: owner, languages: { blog: languages } });
+  const tone = answers.tone?.trim() ?? '';
+  const brand = Brand.safeParse({ id: answers.brand ?? owner.toLowerCase(), displayName: answers.name ?? owner, site: answers.site ?? '', github: owner, languages: { blog: languages }, tone });
   if (!brand.success) for (const issue of brand.error.issues) errors.push(`brand ${issue.path.join('.')}: ${issue.message}`);
   if (errors.length > 0 || !brand.success) return { errors };
   return {
@@ -351,7 +390,7 @@ export function setupOptions(answers: { repo?: string | undefined; launchesRepo?
     launchesRepo,
     ai: ai as SetupAi,
     channels: channels as ActionChannel[],
-    brand: { id: brand.data.id, displayName: brand.data.displayName, site: brand.data.site, github: owner, languages: brand.data.languages.blog },
+    brand: { id: brand.data.id, displayName: brand.data.displayName, site: brand.data.site, github: owner, languages: brand.data.languages.blog, ...(tone && { tone }) },
   };
 }
 
@@ -392,9 +431,15 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
     const site = await ask('Your blog’s address, https://…', parsed.site, owner ? `https://${owner.toLowerCase()}.github.io` : undefined);
     const name = await ask('Who the launches speak for', parsed.name, gitUserName(cwd) ?? owner);
     const languages = await ask('The blog’s languages (en, es or en,es)', parsed.languages, 'en');
+    if (prompt && parsed.tone === undefined) {
+      log('');
+      for (const line of TONE_HELP) log(line);
+      log('Leave it empty to write it in brand.yml later; until then the drafts are in a generic voice.');
+    }
+    const tone = await ask('Your tone', parsed.tone, undefined);
     const ai = await ask('The AI (anthropic or openai)', parsed.ai, 'anthropic');
     const channels = await ask(`Channels (from ${ACTION_CHANNELS.join(', ')})`, parsed.channels, DEFAULT_CHANNELS.join(','));
-    const options = setupOptions({ repo, launchesRepo, brand: parsed.brand, name, site, languages, ai, channels });
+    const options = setupOptions({ repo, launchesRepo, brand: parsed.brand, name, site, languages, tone, ai, channels });
     if ('errors' in options) {
       console.error(`shipcast init cannot go on:\n${options.errors.map((e) => `  - ${e}`).join('\n')}`);
       return 2;
@@ -428,6 +473,10 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
     log('');
     log(secretsReport(secretsToSet(options)));
     log('');
+    if (!options.brand.tone) {
+      log(toneWarning(options.launchesRepo));
+      log('');
+    }
     log('Then publish a release (or run "Shipcast launch" by hand with a tag): the drafts pull request arrives in');
     log(`${options.launchesRepo}; merge it to publish. To try it first, set the variable SHIPCAST_DRY_RUN=true in both repos.`);
     log('Guide: https://github.com/yeyo11/shipcast/blob/main/docs/getting-started.md');
