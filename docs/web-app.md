@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T06:53:24.835786476Z
-updated_at: 2026-11-02T22:00:00.000000000Z
+updated_at: 2026-11-02T22:55:00.000000000Z
 tags:
     - web-app
     - dashboard
@@ -288,7 +288,10 @@ on the [approved design direction](decisions/app-design-direction.md).
   Reconnect), the three newest launches and the main actions; typing searches every launch and
   article (`listLaunches` with `q`), the connected accounts (`getChannels`), the sections and the
   actions, at most four lines per group, one line each with an ellipsis. "Connect an account" is a
-  step inside the palette (Backspace or the back arrow returns). Nothing matching offers "Launch a
+  step inside the palette (Backspace or the back arrow returns): the broken accounts, the networks to
+  add and those connected, then, since 2026-11-02, one "AI providers · Settings › AI" line to
+  `/settings/ai?tab=providers` (found by any provider's name, with the broken pill when a key failed)
+  instead of the AI providers as networks to connect. Nothing matching offers "Launch a
   repo called …" (`/launch?repo=`) and "Search all launches" (`/?q=`). N then L and N then W open
   Launch a repo and Write when no field or dialog has the keys. Comments are not searched. Boards:
   DesktopSearch*, SearchPalette* (redesign board v27).

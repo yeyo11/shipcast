@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { AttentionItem } from '../src/server/attention.ts';
 import {
   ACTIONS,
+  AI_PROVIDERS_HREF,
   connectGroups,
   emptyGroups,
   filterEntries,
@@ -167,6 +168,55 @@ test('the Connect step: broken accounts first, then the networks to add, then th
   assert.deepEqual(
     connectGroups(networks, 'red').map((g) => g.items.map((e) => e.title)),
     [['Reddit']],
+  );
+});
+
+test('the Connect step: the AI providers are one line to Settings → AI, not networks to add', () => {
+  const withAi: PaletteNetwork[] = [
+    ...networks,
+    { id: 'anthropic', name: 'Anthropic API', ai: true, accounts: [{ id: 20, label: 'Anthropic', status: 'ok', problem: null }] },
+    { id: 'openaiCompatible', name: 'OpenAI-compatible server', ai: true, accounts: [] },
+  ];
+  const groups = connectGroups(withAi, '');
+  const titles = groups.flatMap((g) => g.items.map((e) => e.title));
+  assert.equal(titles.includes('Anthropic API'), false);
+  assert.equal(titles.includes('OpenAI-compatible server'), false);
+  assert.deepEqual(
+    groups.map((g) => [g.id, g.items.length]),
+    [
+      ['needs', 1],
+      ['add', 2],
+      ['connected', 1],
+      ['ai', 1],
+    ],
+  );
+  const line = groups.at(-1)!.items[0]!;
+  assert.deepEqual([line.title, line.meta, line.pill, line.run], ['AI providers', 'Settings › AI', undefined, { kind: 'href', href: AI_PROVIDERS_HREF }]);
+  assert.equal(AI_PROVIDERS_HREF, '/settings/ai?tab=providers');
+  // Found by any provider's name, claudio's too; a network's search leaves it out
+  for (const q of ['anthropic', 'openai', 'claudio', 'ai provider']) {
+    assert.deepEqual(
+      connectGroups(withAi, q).map((g) => g.items.map((e) => e.id)),
+      [['ai-providers']],
+      q,
+    );
+  }
+  assert.deepEqual(
+    connectGroups(withAi, 'red').map((g) => g.items.map((e) => e.title)),
+    [['Reddit']],
+  );
+  // A failed key shows on the one line, not as a Reconnect among the channels
+  const failing = withAi.map((n) => (n.id === 'anthropic' ? { ...n, accounts: [{ id: 20, label: 'Anthropic', status: 'failed', problem: '401 Unauthorized' }] } : n));
+  const broken = connectGroups(failing, '');
+  assert.deepEqual(
+    broken[0]!.items.map((e) => e.title),
+    ['Reconnect LinkedIn'],
+  );
+  assert.deepEqual(broken.at(-1)!.items[0]!.pill, { tone: 'failed', label: 'Expired' });
+  // No AI provider in the catalog, no line
+  assert.equal(
+    connectGroups(networks, '').some((g) => g.id === 'ai'),
+    false,
   );
 });
 

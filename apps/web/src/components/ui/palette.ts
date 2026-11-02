@@ -1,6 +1,7 @@
 import { channelName } from '@shipcast/schema/channels';
 import type { AttentionItem } from '../../server/attention.ts';
 import { agoLabel, launchTitle, shortDate } from '../../server/launch-list.ts';
+import { isAiNetwork } from '../../server/network-groups.ts';
 import type { Tone } from '../../server/view.ts';
 import type { IconName } from '../kit/Icon.tsx';
 
@@ -74,8 +75,13 @@ export interface PaletteLaunch {
 export interface PaletteNetwork {
   id: string;
   name: string;
+  /** An AI provider: configured in Settings → AI, not connected as a channel */
+  ai?: boolean;
   accounts: ReadonlyArray<{ id: number; label: string; identity?: string | null; status: string | null; problem: string | null }>;
 }
+
+/** Where the Connect step sends the AI providers: Settings → AI's Providers tab (since 2026-11-02 they are not on Channels) */
+export const AI_PROVIDERS_HREF = '/settings/ai?tab=providers';
 
 export const GO_TO: readonly PaletteEntry[] = [
   { id: 'go-launches', title: 'Launches', keywords: 'home releases', icon: { kind: 'icon', name: 'launches' }, run: { kind: 'href', href: '/' } },
@@ -294,12 +300,32 @@ export function typedGroups(query: string, s: PaletteSources): PaletteGroup[] {
     .filter((g) => g.items.length > 0);
 }
 
-/** The "Connect an account" step: the broken accounts, the networks not connected and those that are */
+/**
+ * The "Connect an account" step: the broken accounts, the networks not connected and those that are.
+ * The AI providers are not among them: they are one line to Settings → AI, found by their names,
+ * with the broken pill when one of their keys failed.
+ */
 export function connectGroups(networks: readonly PaletteNetwork[], query: string): PaletteGroup[] {
   const broken: PaletteEntry[] = [];
   const add: PaletteEntry[] = [];
   const connected: PaletteEntry[] = [];
-  for (const n of networks) {
+  const ai = networks.filter(isAiNetwork);
+  const aiBroken = ai.flatMap((n) => n.accounts).find(isBroken);
+  const providers: PaletteEntry[] =
+    ai.length === 0
+      ? []
+      : [
+          {
+            id: 'ai-providers',
+            title: 'AI providers',
+            meta: 'Settings › AI',
+            keywords: `ai model key ${ai.map((n) => `${n.id} ${n.name}`).join(' ')} openai claudio`,
+            ...(aiBroken && { pill: { tone: 'failed' as const, label: brokenWord(aiBroken.problem) } }),
+            icon: { kind: 'icon', name: 'assist', ...(aiBroken && { bad: true }) },
+            run: { kind: 'href', href: AI_PROVIDERS_HREF },
+          },
+        ];
+  for (const n of networks.filter((x) => !isAiNetwork(x))) {
     for (const a of n.accounts.filter(isBroken)) {
       broken.push({ id: `reconnect-${a.id}`, title: `Reconnect ${n.name}`, meta: a.identity ?? a.label, keywords: n.id, pill: { tone: 'failed', label: brokenWord(a.problem) }, icon: { kind: 'network', network: n.id, bad: true }, run: { kind: 'href', href: `/channels/${n.id}` } });
     }
@@ -314,7 +340,7 @@ export function connectGroups(networks: readonly PaletteNetwork[], query: string
   const b = narrowed(broken);
   const a = narrowed(add);
   const c = narrowed(connected);
-  return [group('needs', 'Needs you', b), group('add', 'Add a network', a, a.length), group('connected', 'Already connected', c, c.length)].filter((g) => g.items.length > 0);
+  return [group('needs', 'Needs you', b), group('add', 'Add a network', a, a.length), group('connected', 'Already connected', c, c.length), group('ai', 'In Settings', narrowed(providers))].filter((g) => g.items.length > 0);
 }
 
 /** A repo's name as GitHub allows it, the part after the owner */
