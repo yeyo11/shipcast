@@ -382,19 +382,25 @@ export class AiTaskRunner {
     });
   }
 
-  /** The answer as the submit tool's input, after as many tool rounds as the task allows; a repair may only submit */
+  /**
+   * The answer as the submit tool's input, after as many tool rounds as the task allows. A repair may
+   * only submit, but it is offered the very same tools: a current Claude model's thinking is bound to
+   * the tools and the history it was made with, and a later call whose tool list differs is refused
+   * with a 400. So the repo's tools stay declared, byte for byte, and only refuse to run: a model that
+   * calls one in a repair is told, in that call's result, to submit, and gets one step more to do it.
+   */
   #submitCall(plan: Plan, answer: AnswerSchema, messages: ModelMessage[], repair: boolean): Promise<Called> {
     const submit = tool({
       description: 'Submit the final answer. Call it once, with the whole answer, when you are done; nothing after it is read.',
       inputSchema: jsonSchema(answer.sent),
       strict: answer.strict,
     });
-    const tools: ToolSet = repair ? { [SUBMIT_TOOL]: submit } : { ...plan.tools, [SUBMIT_TOOL]: submit };
+    const tools: ToolSet = { ...(repair ? refusing(plan.tools) : plan.tools), [SUBMIT_TOOL]: submit };
     return this.#call(plan, messages, {
       tools,
       toolChoice: 'auto',
       instruction: SUBMIT_INSTRUCTION,
-      stopWhen: repair ? stepCountIs(1) : [hasToolCall(SUBMIT_TOOL), stepCountIs(plan.limits.maxSteps)],
+      stopWhen: [hasToolCall(SUBMIT_TOOL), stepCountIs(repair ? REPAIR_STEPS : plan.limits.maxSteps)],
     });
   }
 
@@ -441,9 +447,24 @@ export class AiTaskRunner {
     }
     if (plan.signal.aborted) throw plan.signal.reason ?? new Error('aborted');
     if (failure) throw failure.error;
-    const [steps, usage, response, providerMetadata] = await Promise.all([result.steps, result.totalUsage, result.response, result.providerMetadata]);
-    return { text, steps: steps.length, usage, responseMessages: response.messages, providerMetadata, ...(submitted && { submitted }) };
+    // Every step's messages, not the last step's (`response.messages`): a conversation continued from
+    // only the last step would drop the tool rounds before it, and the thinking replayed after them
+    // would no longer match the history it was made with
+    const [steps, usage, responseMessages, providerMetadata] = await Promise.all([result.steps, result.totalUsage, result.responseMessages, result.providerMetadata]);
+    return { text, steps: steps.length, usage, responseMessages, providerMetadata, ...(submitted && { submitted }) };
   }
+}
+
+/** Model calls a repair may make: one to submit, and one more after calling a tool it may not run */
+const REPAIR_STEPS = 2;
+
+/**
+ * The same tools, declared as they were, that no longer run: what a repair offers beside the submit
+ * tool, so the tool list a model's earlier thinking was made with is the one it is sent again.
+ */
+function refusing(tools: ToolSet): ToolSet {
+  const refusal = `Only ${SUBMIT_TOOL} may be called now. Call it with the whole answer.`;
+  return Object.fromEntries(Object.entries(tools).map(([name, t]) => [name, { ...t, execute: async () => refusal }]));
 }
 
 /** The owner's ceiling for a task, when the task is one the AI settings budget and the owner set one */

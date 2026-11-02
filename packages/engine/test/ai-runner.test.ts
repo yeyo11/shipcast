@@ -141,7 +141,7 @@ test('an invalid answer is sent back once with what is wrong, and the repaired o
   const submitted = await runnerWith({ provider: mockProvider(submitModel, 'none'), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' });
   assert.deepEqual(submitted.output, { answer: 'fixed' });
   assert.deepEqual(submitModel.doStreamCalls[1]!.toolChoice, { type: 'auto' }, 'the repair asks for the submit call, never forces it');
-  assert.deepEqual((submitModel.doStreamCalls[1]!.tools ?? []).map((t) => t.name), [SUBMIT_TOOL], 'the repair offers only the submit tool');
+  assert.deepEqual((submitModel.doStreamCalls[1]!.tools ?? []).map((t) => t.name), [SUBMIT_TOOL], 'with no repo, the submit tool is all there was, and all the repair offers');
 
   const stubborn = scripted(textParts('not json'));
   await assert.rejects(
@@ -369,4 +369,103 @@ test('a provider that caches gets its breakpoints on a run with the repo’s too
   await runnerWith({ provider: cachingProvider(plain), settings: { apiKey: 'k' } }).run(answerTask(), { system: 'Be brief.', prompt: 'Answer.' });
   assert.deepEqual(plain.doStreamCalls[0]!.providerOptions, { anthropic: { sendReasoning: false } });
   assert.equal(plain.doStreamCalls[0]!.prompt[0]!.providerOptions, undefined);
+});
+
+/** One Anthropic Messages API turn, streamed: a signed thinking block, then a tool call or text */
+function anthropicTurn(n: number, then: { tool: string; input: unknown } | { text: string }): Response {
+  const block = 'tool' in then ? { type: 'tool_use', id: `toolu_${n}`, name: then.tool, input: {} } : { type: 'text', text: '' };
+  const delta = 'tool' in then ? { type: 'input_json_delta', partial_json: JSON.stringify(then.input) } : { type: 'text_delta', text: then.text };
+  const events = [
+    { type: 'message_start', message: { id: `msg_${n}`, type: 'message', role: 'assistant', model: 'claude-haiku-5-5', content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: `thinking ${n}` } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: `sig-${n}` } },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'content_block_start', index: 1, content_block: block },
+    { type: 'content_block_delta', index: 1, delta },
+    { type: 'content_block_stop', index: 1 },
+    { type: 'message_delta', delta: { stop_reason: 'tool' in then ? 'tool_use' : 'end_turn', stop_sequence: null }, usage: { output_tokens: 5 } },
+    { type: 'message_stop' },
+  ];
+  return new Response(events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
+/** A request body as preserved thinking compares it: cache breakpoints do not count */
+const comparable = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, v: unknown) => (key === 'cache_control' ? undefined : v)));
+
+/**
+ * Every call of one task must only append to the one before: same system prompt, same tools, the
+ * earlier messages byte for byte. A current Claude model's thinking is bound to that prefix, and a
+ * replayed block whose prefix changed is a 400 ("bound to a different conversation").
+ */
+function assertAppendOnly(requests: Request[]): void {
+  for (let i = 1; i < requests.length; i++) {
+    const [before, after] = [requests[i - 1]!.body, requests[i]!.body];
+    assert.deepEqual(comparable(after.system), comparable(before.system), `request ${i + 1}: the same system prompt`);
+    assert.deepEqual(after.tools, before.tools, `request ${i + 1}: the same tools, byte for byte`);
+    const earlier = before.messages as unknown[];
+    assert.deepEqual(comparable((after.messages as unknown[]).slice(0, earlier.length)), comparable(earlier), `request ${i + 1}: the earlier messages unchanged`);
+    assert.ok((after.messages as unknown[]).length > earlier.length, `request ${i + 1}: something appended`);
+  }
+}
+
+const thinkingIn = (request: Request): string[] =>
+  (request.body.messages as Array<{ content: Array<{ type: string; signature?: string }> | string }>).flatMap((m) => (Array.isArray(m.content) ? m.content : [])).filter((c) => c.type === 'thinking').map((c) => c.signature!);
+
+test('the Anthropic API is sent an append-only conversation: tool rounds, then a repair that keeps every tool and every earlier turn', async () => {
+  const { repo } = await workspace();
+  const requests: Request[] = [];
+  const turns = [
+    () => anthropicTurn(1, { tool: 'repo_overview', input: {} }),
+    () => anthropicTurn(2, { tool: 'read_files', input: { files: [{ path: 'src/main.ts' }] } }),
+    () => anthropicTurn(3, { tool: SUBMIT_TOOL, input: { answer: '' } }),
+    // In the repair, a repo tool is still declared but refuses to run: the model is told to submit
+    () => anthropicTurn(4, { tool: 'search', input: { pattern: 'answer' } }),
+    () => anthropicTurn(5, { tool: SUBMIT_TOOL, input: { answer: '42' } }),
+  ];
+  const fetch = recording(requests, () => turns[requests.length - 1]!());
+  const runner = runnerWith({ provider: anthropicAiProvider, settings: { apiKey: 'k' } }, { fetch });
+  const result = await runner.run(answerTask('always'), { system: 'Read the code.', prompt: 'What is the answer?', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } });
+  assert.deepEqual(result.output, { answer: '42' });
+  assert.equal(result.repaired, true);
+  assert.equal(requests.length, 5);
+  assertAppendOnly(requests);
+  assert.deepEqual(thinkingIn(requests[4]!), ['sig-1', 'sig-2', 'sig-3', 'sig-4'], 'every thinking block replayed, signed, in order');
+  const names = (requests[3]!.body.tools as Array<{ name: string }>).map((t) => t.name).sort();
+  assert.deepEqual(names, ['git', 'list_files', 'read_files', 'repo_overview', 'search', SUBMIT_TOOL], 'the repair offers every tool the task started with');
+  const repairTail = JSON.stringify((requests[4]!.body.messages as unknown[]).at(-1));
+  assert.match(repairTail, /Only submit_answer may be called now/, 'a repo tool called in the repair refuses to run');
+  assert.doesNotMatch(repairTail, /export const answer/, 'and reads nothing');
+  for (const request of requests) {
+    assert.deepEqual(request.body.thinking, { block_binding: { prefix_mismatch_behavior: 'drop_block' } }, 'the safety net: a stale block is dropped, not a 400');
+    assert.match(request.headers.get('anthropic-beta') ?? '', /thinking-binding-controls-2026-08-01/, 'with the beta the setting needs');
+    assert.equal(request.body.tool_choice && (request.body.tool_choice as { type: string }).type, 'auto', 'never a forced tool_choice');
+  }
+});
+
+test('a model that ends without submitting is asked to in an appended turn, with the same tools', async () => {
+  const { repo } = await workspace();
+  const requests: Request[] = [];
+  const turns = [
+    () => anthropicTurn(1, { tool: 'repo_overview', input: {} }),
+    () => anthropicTurn(2, { text: 'The answer is 42.' }),
+    () => anthropicTurn(3, { tool: SUBMIT_TOOL, input: { answer: '42' } }),
+  ];
+  const fetch = recording(requests, () => turns[requests.length - 1]!());
+  const result = await runnerWith({ provider: anthropicAiProvider, settings: { apiKey: 'k' } }, { fetch }).run(answerTask('always'), { prompt: 'What is the answer?', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } });
+  assert.deepEqual(result.output, { answer: '42' });
+  assert.equal(requests.length, 3);
+  assertAppendOnly(requests);
+  assert.deepEqual(thinkingIn(requests[2]!), ['sig-1', 'sig-2']);
+  assert.match(JSON.stringify((requests[2]!.body.messages as unknown[]).at(-1)), /You ended without calling submit_answer/);
+});
+
+test('a response-format task’s repair appends to the conversation too', async () => {
+  const requests: Request[] = [];
+  const turns = [() => anthropicTurn(1, { text: '{"answer":""}' }), () => anthropicTurn(2, { text: '{"answer":"fixed"}' })];
+  const fetch = recording(requests, () => turns[requests.length - 1]!());
+  const result = await runnerWith({ provider: anthropicAiProvider, settings: { apiKey: 'k' } }, { fetch }).run(answerTask(), { system: 'Be brief.', prompt: 'Answer.' });
+  assert.deepEqual(result.output, { answer: 'fixed' });
+  assertAppendOnly(requests);
+  assert.deepEqual(thinkingIn(requests[1]!), ['sig-1']);
 });

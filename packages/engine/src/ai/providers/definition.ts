@@ -97,8 +97,8 @@ export interface RemoteWorkspace {
 /** Whether a provider can answer now, and in the owner's words why not */
 export type AiReadiness = { ready: true } | { ready: false; reason: string; message: string };
 
-/** What every provider's JSON options are, as the AI SDK takes them per call */
-export type AiProviderOptions = Record<string, Record<string, string | number | boolean | null>>;
+/** What every provider's JSON options are, as the AI SDK takes them per call, nested values included */
+export type AiProviderOptions = AiMessageOptions;
 
 export interface AiProviderDefinition<Id extends string = string> {
   id: Id;
