@@ -167,6 +167,7 @@
 .home-toast { pointer-events: auto; }
 .home-toast-title { line-height: 1.5; }
 .home-toast-close { position: relative; }
+.home-toast-action { align-self: flex-start; }
 .k-toast.k-wait .home-toast-text { color: var(--sc-black); }
 .home-toast-details summary { cursor: pointer; }
 .home-toast-details pre { margin: 6px 0 0; white-space: pre-wrap; font: 12px var(--sc-font-mono); max-height: 160px; overflow: auto; }

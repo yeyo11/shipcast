@@ -20,6 +20,10 @@ export interface ToastInput {
   title: string;
   text?: string;
   details?: string;
+  /** A button on the toast, such as the new version's Reload; the toast closes when it is pressed */
+  action?: { label: string; onClick(): void };
+  /** Stays until it is closed or acted on, whatever its tone */
+  stay?: boolean;
 }
 
 interface ToastApi {
@@ -72,6 +76,7 @@ function ToastList() {
             )}
           </div>
           {toast.description && <Toast.Description className={`k-xs${tone === 'wait' ? '' : ' k-muted'} home-toast-text`} />}
+          <Toast.Action className="k-btn k-sm k-pri home-toast-action" />
           {details && (
             <details className="home-toast-details">
               <summary className="k-xs">Details</summary>
@@ -94,10 +99,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         type: toast.tone,
         title: toast.title,
         description: toast.text,
-        timeout: toast.tone === 'ok' ? OK_FOR_MS : toast.tone === 'wait' ? WAIT_FOR_MS : 0,
+        timeout: toast.stay ? 0 : toast.tone === 'ok' ? OK_FOR_MS : toast.tone === 'wait' ? WAIT_FOR_MS : 0,
         // A failure interrupts the screen reader; the rest wait their turn
         priority: toast.tone === 'bad' ? 'high' : 'low',
         data: { details: toast.details },
+        ...(toast.action && { actionProps: { children: toast.action.label, onClick: toast.action.onClick } }),
       });
     };
     return {

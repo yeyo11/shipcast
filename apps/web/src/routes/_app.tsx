@@ -13,6 +13,7 @@ import { requestTour } from '../components/tour/request';
 import { TourHost } from '../components/tour/TourHost';
 import { WebMcpHost } from '../components/WebMcpHost';
 import { ToastProvider } from '../components/Toasts';
+import { PwaUpdates } from '../pwa/PwaUpdates';
 import { CommandPalette } from '../components/ui/CommandPalette';
 import { Menu } from '../components/ui/Menu';
 import { TooltipProvider } from '../components/ui/Tooltip';
@@ -37,11 +38,12 @@ export const Route = createFileRoute('/_app')({
   errorComponent: (props) => <ErrorPage {...props} place="app" />,
 });
 
-/** Settings is one group of four, behind the owner's menu on a desktop */
+/** Settings is one group of five, behind the owner's menu on a desktop */
 const SETTINGS_GROUP = [
   { to: '/settings', label: 'General' },
   { to: '/settings/ai', label: 'AI' },
   { to: '/settings/automation', label: 'Automation' },
+  { to: '/settings/notifications', label: 'Notifications' },
   { to: '/settings/api', label: 'API' },
 ] as const;
 
@@ -74,6 +76,7 @@ function Shell() {
             <Palette owner={login || null} />
             <TourHost />
             <WebMcpHost enabled={webMcp} />
+            <PwaUpdates />
           </TooltipProvider>
         </ToastProvider>
       </ShellProvider>

@@ -7,5 +7,5 @@
     // Start's compiler relies on dropping imports only used by server code; verbatim syntax keeps them
     "verbatimModuleSyntax": false
   },
-  "include": ["src", "test", "scripts", "vite.config.ts", "server.ts", "main.ts", "tls.ts"]
+  "include": ["src", "test", "scripts", "vite.config.ts", "pwa-plugin.ts", "server.ts", "main.ts", "tls.ts"]
 }

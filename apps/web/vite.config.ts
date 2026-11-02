@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { pwa } from './pwa-plugin.ts';
 import { consoleLinks, signInPath } from './src/server/console-links.ts';
 
 // The engine and its packages run as they are, through Node's own TypeScript support, as they do for
@@ -77,5 +78,5 @@ export default defineConfig(({ command }) => ({
       build: { rollupOptions: { external: (id: string) => WORKSPACE.some((p) => id === p || id.startsWith(`${p}/`)) } },
     },
   },
-  plugins: [tanstackStart(), viteReact(), serverOnlyDeps(), printSignInLink()],
+  plugins: [tanstackStart(), viteReact(), serverOnlyDeps(), printSignInLink(), ...pwa()],
 }));

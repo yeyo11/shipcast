@@ -17,7 +17,8 @@
     "app": "pnpm --filter @shipcast/web build && node apps/web/main.ts",
     "app:dev": "pnpm --filter @shipcast/web dev",
     "sqlite-to-postgres": "node scripts/sqlite-to-postgres.ts",
-    "illustrations:specimen": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/illustrations-specimen.tsx"
+    "illustrations:specimen": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/illustrations-specimen.tsx",
+    "pwa:assets": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/pwa-assets.tsx"
   },
   "devDependencies": {
     "@swc/core": "^1.16.20",

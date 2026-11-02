@@ -28,7 +28,21 @@ const TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.json': 'application/json',
   '.txt': 'text/plain; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
 };
+
+/**
+ * Files the browser must check on every visit: the service worker and what it is made of, whose
+ * names stay the same from one deploy to the next (docs/decisions/pwa.md)
+ */
+const REVALIDATE = new Set(['/sw.js', '/manifest.webmanifest', '/offline.html']);
+
+function cacheControl(pathname: string): string {
+  if (pathname.startsWith('/assets/')) return 'public, max-age=31536000, immutable';
+  if (REVALIDATE.has(pathname)) return 'no-cache';
+  return 'public, max-age=3600';
+}
 
 /** A file of the client build, never outside it; hashed assets are cached for a year */
 function serveStatic(pathname: string, response: ServerResponse): boolean {
@@ -36,7 +50,7 @@ function serveStatic(pathname: string, response: ServerResponse): boolean {
   if (!path.startsWith(clientDir) || !existsSync(path) || !statSync(path).isFile()) return false;
   response.writeHead(200, {
     'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
-    'cache-control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
+    'cache-control': cacheControl(pathname),
   });
   createReadStream(path).pipe(response);
   return true;

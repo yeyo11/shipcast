@@ -46,11 +46,13 @@ import { Route as AppChannelsIndexRouteImport } from './routes/_app/channels/ind
 import { Route as AppChannelsNetworkRouteImport } from './routes/_app/channels/$network'
 import { Route as AppDesignComponentsRouteImport } from './routes/_app/design/components'
 import { Route as AppDesignIllustrationsRouteImport } from './routes/_app/design/illustrations'
+import { Route as AppLaunchesIndexRouteImport } from './routes/_app/launches/index'
 import { Route as AppLaunchesIdRouteImport } from './routes/_app/launches/$id'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings/ai'
 import { Route as AppSettingsApiRouteImport } from './routes/_app/settings/api'
 import { Route as AppSettingsAutomationRouteImport } from './routes/_app/settings/automation'
+import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
 import { Route as ApiSourcesMediaRouteImport } from './routes/api/sources/media'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
@@ -250,6 +252,11 @@ const AppDesignIllustrationsRoute = AppDesignIllustrationsRouteImport.update({
   path: '/design/illustrations',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLaunchesIndexRoute = AppLaunchesIndexRouteImport.update({
+  id: '/launches/',
+  path: '/launches/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLaunchesIdRoute = AppLaunchesIdRouteImport.update({
   id: '/launches/$id',
   path: '/launches/$id',
@@ -275,6 +282,12 @@ const AppSettingsAutomationRoute = AppSettingsAutomationRouteImport.update({
   path: '/automation',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsNotificationsRoute =
+  AppSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AppSettingsRoute,
+  } as any)
 const ApiGithubWebhookRoute = ApiGithubWebhookRouteImport.update({
   id: '/api/github/webhook',
   path: '/api/github/webhook',
@@ -387,6 +400,7 @@ export interface FileRoutesByFullPath {
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/api': typeof AppSettingsApiRoute
   '/settings/automation': typeof AppSettingsAutomationRoute
+  '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -398,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/channels/': typeof AppChannelsIndexRoute
+  '/launches/': typeof AppLaunchesIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
   '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
@@ -443,6 +458,7 @@ export interface FileRoutesByTo {
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/api': typeof AppSettingsApiRoute
   '/settings/automation': typeof AppSettingsAutomationRoute
+  '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -454,6 +470,7 @@ export interface FileRoutesByTo {
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/channels': typeof AppChannelsIndexRoute
+  '/launches': typeof AppLaunchesIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/launches/$id/edit': typeof AppLaunchesIdEditRoute
   '/launches/$id/preview': typeof AppLaunchesIdPreviewRoute
@@ -502,6 +519,7 @@ export interface FileRoutesById {
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/api': typeof AppSettingsApiRoute
   '/_app/settings/automation': typeof AppSettingsAutomationRoute
+  '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
@@ -513,6 +531,7 @@ export interface FileRoutesById {
   '/auth/threads/callback': typeof AuthThreadsCallbackRoute
   '/auth/youtube/callback': typeof AuthYoutubeCallbackRoute
   '/_app/channels/': typeof AppChannelsIndexRoute
+  '/_app/launches/': typeof AppLaunchesIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/launches/$id_/edit': typeof AppLaunchesIdEditRoute
   '/_app/launches/$id_/preview': typeof AppLaunchesIdPreviewRoute
@@ -561,6 +580,7 @@ export interface FileRouteTypes {
     | '/settings/ai'
     | '/settings/api'
     | '/settings/automation'
+    | '/settings/notifications'
     | '/api/github/webhook'
     | '/api/sources/media'
     | '/api/v1/$'
@@ -572,6 +592,7 @@ export interface FileRouteTypes {
     | '/auth/threads/callback'
     | '/auth/youtube/callback'
     | '/channels/'
+    | '/launches/'
     | '/settings/'
     | '/launches/$id/edit'
     | '/launches/$id/preview'
@@ -617,6 +638,7 @@ export interface FileRouteTypes {
     | '/settings/ai'
     | '/settings/api'
     | '/settings/automation'
+    | '/settings/notifications'
     | '/api/github/webhook'
     | '/api/sources/media'
     | '/api/v1/$'
@@ -628,6 +650,7 @@ export interface FileRouteTypes {
     | '/auth/threads/callback'
     | '/auth/youtube/callback'
     | '/channels'
+    | '/launches'
     | '/settings'
     | '/launches/$id/edit'
     | '/launches/$id/preview'
@@ -675,6 +698,7 @@ export interface FileRouteTypes {
     | '/_app/settings/ai'
     | '/_app/settings/api'
     | '/_app/settings/automation'
+    | '/_app/settings/notifications'
     | '/api/github/webhook'
     | '/api/sources/media'
     | '/api/v1/$'
@@ -686,6 +710,7 @@ export interface FileRouteTypes {
     | '/auth/threads/callback'
     | '/auth/youtube/callback'
     | '/_app/channels/'
+    | '/_app/launches/'
     | '/_app/settings/'
     | '/_app/launches/$id_/edit'
     | '/_app/launches/$id_/preview'
@@ -982,6 +1007,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDesignIllustrationsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/launches/': {
+      id: '/_app/launches/'
+      path: '/launches'
+      fullPath: '/launches/'
+      preLoaderRoute: typeof AppLaunchesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/launches/$id': {
       id: '/_app/launches/$id'
       path: '/launches/$id'
@@ -1015,6 +1047,13 @@ declare module '@tanstack/react-router' {
       path: '/automation'
       fullPath: '/settings/automation'
       preLoaderRoute: typeof AppSettingsAutomationRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/notifications': {
+      id: '/_app/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AppSettingsNotificationsRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/api/github/webhook': {
@@ -1122,6 +1161,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAiRoute: typeof AppSettingsAiRoute
   AppSettingsApiRoute: typeof AppSettingsApiRoute
   AppSettingsAutomationRoute: typeof AppSettingsAutomationRoute
+  AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
@@ -1129,6 +1169,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAiRoute: AppSettingsAiRoute,
   AppSettingsApiRoute: AppSettingsApiRoute,
   AppSettingsAutomationRoute: AppSettingsAutomationRoute,
+  AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }
 
@@ -1153,6 +1194,7 @@ interface AppRouteChildren {
   AppDesignIllustrationsRoute: typeof AppDesignIllustrationsRoute
   AppLaunchesIdRoute: typeof AppLaunchesIdRoute
   AppChannelsIndexRoute: typeof AppChannelsIndexRoute
+  AppLaunchesIndexRoute: typeof AppLaunchesIndexRoute
   AppLaunchesIdEditRoute: typeof AppLaunchesIdEditRoute
   AppLaunchesIdPreviewRoute: typeof AppLaunchesIdPreviewRoute
   AppSettingsAiPromptsRoute: typeof AppSettingsAiPromptsRoute
@@ -1176,6 +1218,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDesignIllustrationsRoute: AppDesignIllustrationsRoute,
   AppLaunchesIdRoute: AppLaunchesIdRoute,
   AppChannelsIndexRoute: AppChannelsIndexRoute,
+  AppLaunchesIndexRoute: AppLaunchesIndexRoute,
   AppLaunchesIdEditRoute: AppLaunchesIdEditRoute,
   AppLaunchesIdPreviewRoute: AppLaunchesIdPreviewRoute,
   AppSettingsAiPromptsRoute: AppSettingsAiPromptsRoute,
