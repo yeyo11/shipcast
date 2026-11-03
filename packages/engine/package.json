@@ -1,6 +1,6 @@
 {
   "name": "@shipcast/engine",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Shipcast's engine: what triggers a launch, the launch registry and the AI client",
   "license": "MIT",
