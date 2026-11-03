@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-02T07:25:39.811631093Z
+updated_at: 2026-11-03T01:01:20.000000000Z
 tags:
     - status
     - roadmap
@@ -17,6 +17,11 @@ on ([server.md](server.md#what-production-runs-2026-10-29)); the same day `ai-ru
 runner the only AI path, and the global AI budget went with the first AI layer
 ([decisions/ai-layer.md](decisions/ai-layer.md)). On 2026-11-01 the other seven were retired: each new
 path is the only one, and Redis is required by the split processes ([server.md](server.md#the-flags)). Shipcast v0.2.0 was released on 2026-10-27.
+
+**v0.3.0 is prepared (2026-11-03) and waits for the owner to publish the release**: every package is at
+`0.3.0`, the [CHANGELOG](../CHANGELOG.md) has its entry, and publishing the GitHub release `v0.3.0`
+publishes `@yeyo11/shipcast` 0.3.0 to npm (`.github/workflows/npm-publish.yml`, whose tag must match
+`apps/cli`'s version). npm carries `0.3.0-rc.0` until then. The GitHub Action is at v1.3.1 (`@v1`).
 
 **The MVP closed on 2026-10-25: phases 0 to 5 done, and Shipcast v0.1.0 was launched with Shipcast,
 from its app.** The same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app,
@@ -77,7 +82,7 @@ accounts per brand, the phase 5 channels and what the MVP had left
   ([knowledge-base.md](knowledge-base.md)). Until a stable version, changes go straight to `main`,
   without pull requests ([decisions/main-until-mvp.md](decisions/main-until-mvp.md)). The README says
   what Shipcast does today, with a demo of the app (`docs/media/tour.gif`). Releases v0.1.0 and v0.2.0
-  on GitHub.
+  on GitHub, v0.3.0 prepared; the CLI on npm as `@yeyo11/shipcast` (`npx @yeyo11/shipcast init`).
 - **`packages/schema`**: `launch.yml` ([launch-yml.md](launch-yml.md)), `brand.yml`
   ([brands.md](brands.md)), `projects.yml` (the project looks) and the content pack
   ([content-pack.md](content-pack.md)), with line-aware YAML errors and the pack's draft-07 JSON Schema.
@@ -162,6 +167,11 @@ accounts per brand, the phase 5 channels and what the MVP had left
   YouTube videos are the first Shipcast uploaded, and they came out **public**: Shipcast asks for
   `public`, and Google did not hold this project's uploads private although it is not audited
   ([decisions/youtube.md](decisions/youtube.md#privacy-and-googles-audit)).
+- **The GitHub Action, end to end** (2026-11-02): Action v1.1.0 drafted a real release of another
+  project with a real Anthropic key into a private test launches repo, nothing published; v1.0.0 had
+  only run with the fake provider.
+- **Shipcast v0.3.0** (prepared 2026-11-03, not yet released): its `.github/launch.yml` turns YouTube
+  on and Reddit off, since Reddit closed self-service API apps and the owner's brand drops it.
 
 ## Waiting on the owner
 
@@ -184,11 +194,12 @@ was prepared for the owner to push, and migration `0022_drop_draft_snapshots` dr
 ## Next
 
 The refactor is closed ([plans/refactor-report.md](plans/refactor-report.md), and its goal's
-[outcome](plans/goal-refactor.md#outcome-2026-10-29)). What comes next is in
-[plans/handoff-2026-10-29.md](plans/handoff-2026-10-29.md#pending): launches owned by Shipcast
-rather than by the launches repo, then v0.2.0's YouTube videos, which wait for it; UTM tracking on
-every channel's links; the scale and chaos tests on a preview stack; and the design items waiting for
-the owner. The roadmap after that is [plans/after-mvp.md](plans/after-mvp.md).
+[outcome](plans/goal-refactor.md#outcome-2026-10-29)). Launches owned by Shipcast and UTM tracking on
+every channel's links, the first items of
+[plans/handoff-2026-10-29.md](plans/handoff-2026-10-29.md#pending), are done and part of v0.3.0.
+Next: the owner publishes the v0.3.0 release, which publishes the CLI to npm, and Shipcast launches
+it; web push notifications follow once deployed. After that, the scale and chaos tests on a preview
+stack and the roadmap in [plans/after-mvp.md](plans/after-mvp.md).
 
 ## Related
 
