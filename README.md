@@ -29,7 +29,8 @@ I built it to launch my own projects: claudio, Sluice and Shipcast itself went o
 **Is it for you?**
 
 - **You need** a GitHub repo with releases and a launches repo: an Astro blog, deployed, that reads
-  Shipcast's articles ([the contract](docs/launches-repo.md)). Every post links the article.
+  Shipcast's articles ([the contract](docs/launches-repo.md)). Every post links the article. No blog
+  yet? Start from [the template](https://github.com/yeyo11/shipcast-blog), which already reads them.
 - **GitHub Action**: an Anthropic or OpenAI key (or an OpenAI-compatible server), a fine-grained GitHub
   token and Node 24 to run `npx` once. Nothing to host.
 - **Self-hosted**: Node 24 and Docker (for Postgres), and claudio, an Anthropic or OpenAI key or an

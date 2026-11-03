@@ -9,6 +9,7 @@ import { parseBrand, parseLaunchConfig } from '@shipcast/schema';
 import {
   ACTION,
   launchesDirFor,
+  NO_BLOG_YET,
   renderPublishWorkflow,
   renderReleaseWorkflow,
   repoFromRemote,
@@ -176,4 +177,8 @@ test('the timing report names the exact dispatch for the launches repo, never a 
   assert.match(report, /Actions read and write/);
   assert.match(report, /GITHUB_TOKEN does not start "Shipcast launch"/);
   assert.match(report, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+});
+
+test('without a blog, init points to the starter template that already reads Shipcast’s articles', () => {
+  assert.match(NO_BLOG_YET, /^No blog yet\? Create one from https:\/\/github\.com\/yeyo11\/shipcast-blog \(Use this template\), then run init again\.$/);
 });

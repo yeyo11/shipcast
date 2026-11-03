@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T09:14:15.634162071Z
-updated_at: 2026-11-02T23:15:39.851049589Z
+updated_at: 2026-11-03T05:18:04.550842891Z
 tags:
     - guide
     - getting-started
@@ -41,7 +41,8 @@ app's onboarding.
   `pubDate`, `lang`, `translationKey`, `repo`, `tags`, `image`), the posts at
   `launches/<project>/<tag>/` and the images at `public/launches/<project>/<tag>/`; an Astro content
   collection reads it as it is ([launches-repo.md](launches-repo.md) is the full contract). It can be a
-  new, empty repo while you try it.
+  new, empty repo while you try it. No blog yet? [shipcast-blog](https://github.com/yeyo11/shipcast-blog)
+  is a template (Use this template) that already follows the contract and deploys on GitHub Pages.
 - **An AI key**: [Anthropic](https://console.anthropic.com/settings/keys) or
   [OpenAI](https://platform.openai.com/api-keys), or an OpenAI-compatible server (`ai-provider:
   openai-compatible` with its `ai-base-url`).

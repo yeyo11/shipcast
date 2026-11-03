@@ -105,6 +105,9 @@ export function renderLaunchYml(options: SetupOptions): string {
 }
 
 /** What the tone is, for the question and for brand.yml's placeholder: an example of the form, not a voice to copy */
+/** Shown before asking for the launches repo: a starter blog that already reads Shipcast's articles */
+export const NO_BLOG_YET = 'No blog yet? Create one from https://github.com/yeyo11/shipcast-blog (Use this template), then run init again.';
+
 export const TONE_HELP = [
   'The tone is how the AI writes for you: a few sentences on your voice, read before every article and post.',
   'For example: "First person, as the developer who built it. Start with the problem it solves, then show',
@@ -479,6 +482,7 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
     };
     const repo = await ask('This project, owner/name', parsed.repo, originOf(cwd));
     const owner = repo?.split('/')[0] ?? '';
+    if (prompt && parsed.launchesRepo === undefined) log(NO_BLOG_YET);
     const launchesRepo = await ask('Your launches repo (your blog), owner/name', parsed.launchesRepo, owner ? `${owner}/launches` : undefined);
     const site = await ask('Your blog’s address, https://…', parsed.site, owner ? `https://${owner.toLowerCase()}.github.io` : undefined);
     const name = await ask('Who the launches speak for', parsed.name, gitUserName(cwd) ?? owner);

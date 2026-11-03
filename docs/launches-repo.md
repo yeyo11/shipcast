@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T10:30:42.855415605Z
-updated_at: 2026-11-02T23:15:11.623318955Z
+updated_at: 2026-11-03T05:18:04.550842891Z
 tags:
     - launches-repo
     - blog
@@ -131,7 +131,8 @@ means a change to the code.
 
 ## The contract with Shipcast
 
-What Shipcast writes there, and the content pack has to produce:
+What Shipcast writes there, and the content pack has to produce. The starter template,
+[shipcast-blog](https://github.com/yeyo11/shipcast-blog) (Use this template), implements this contract.
 
 - **Articles** at `src/content/posts/<lang>/<slug>.md`, one for each language of the brand's
   `languages.blog` (any ISO 639-1 code; `en` and `es` here), each language under its own slug, paired by
