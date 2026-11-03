@@ -24,7 +24,7 @@ or self-host it with an app to review, schedule and measure every launch.
 
 I built it to launch my own projects: claudio, Sluice and Shipcast itself went out through it.
 
-![Shipcast's app: launches, launching a repo, channels and writing an article](docs/media/tour.gif)
+![Shipcast's app on a real launch: the launches, an article's drafts in the editor, approving them, the pieces published per channel and the views per day](docs/media/tour.gif)
 
 **Is it for you?**
 
