@@ -471,3 +471,87 @@ test('a response-format task’s repair appends to the conversation too', async 
   assertAppendOnly(requests);
   assert.deepEqual(thinkingIn(requests[1]!), ['sig-1']);
 });
+
+/** One Anthropic turn calling the submit tool with this raw input text, ended for this reason */
+function anthropicRawSubmit(n: number, partialJson: string, stopReason: 'tool_use' | 'max_tokens'): Response {
+  const events = [
+    { type: 'message_start', message: { id: `msg_${n}`, type: 'message', role: 'assistant', model: 'claude-haiku-5-5', content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: `toolu_${n}`, name: SUBMIT_TOOL, input: {} } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: partialJson } },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 5 } },
+    { type: 'message_stop' },
+  ];
+  return new Response(events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
+const toolResultsIn = (request: Request): string[] =>
+  (request.body.messages as Array<{ content: Array<{ type: string; tool_use_id?: string }> | string }>)
+    .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+    .filter((c) => c.type === 'tool_result')
+    .map((c) => c.tool_use_id!);
+
+test('the Anthropic API gets the submit tool without eager input streaming, so its input comes back checked as JSON', async () => {
+  const { repo } = await workspace();
+  const requests: Request[] = [];
+  const fetch = recording(requests, () => anthropicTurn(1, { tool: SUBMIT_TOOL, input: { answer: '42' } }));
+  await runnerWith({ provider: anthropicAiProvider, settings: { apiKey: 'k' } }, { fetch }).run(answerTask('always'), { prompt: 'Answer.', repo: { name: 'yeyo11/demo', ref: 'v1', hostDir: repo } });
+  const tools = requests[0]!.body.tools as Array<{ name: string; eager_input_streaming?: boolean }>;
+  assert.equal(tools.find((t) => t.name === SUBMIT_TOOL)!.eager_input_streaming, undefined, 'the API buffers and validates the answer');
+  assert.equal(tools.find((t) => t.name === 'read_files')!.eager_input_streaming, true, 'the repo tools keep the SDK’s default');
+});
+
+test('a submit input that is not JSON is told as such, never as “expected object, received string”, and repaired with one result per call', async () => {
+  const { repo } = await workspace();
+  const input = { name: 'yeyo11/demo', ref: 'v1', hostDir: repo };
+
+  // Cut off by the output token limit, then answered whole in the repair
+  const requests: Request[] = [];
+  const turns = [() => anthropicRawSubmit(1, '{"answer":"the pack, cut o', 'max_tokens'), () => anthropicTurn(2, { tool: SUBMIT_TOOL, input: { answer: '42' } })];
+  const fetch = recording(requests, () => turns[requests.length - 1]!());
+  const result = await runnerWith({ provider: anthropicAiProvider, settings: { apiKey: 'k' } }, { fetch }).run(answerTask('always'), { prompt: 'Answer.', repo: input });
+  assert.deepEqual(result.output, { answer: '42' });
+  assert.equal(result.repaired, true);
+  assertAppendOnly(requests);
+  const repair = requests[1]!;
+  assert.deepEqual(toolResultsIn(repair), ['toolu_1'], 'the cut-off call has exactly one result, the SDK’s');
+  const tail = JSON.stringify((repair.body.messages as unknown[]).at(-1));
+  assert.match(tail, /submit_answer input was cut off at the output token limit \(1000\)/);
+  assert.doesNotMatch(tail, /expected object/);
+
+  // Not JSON twice: the error says so
+  let calls = 0;
+  const broken = (async () => anthropicRawSubmit(++calls, '{"answer": "unterminated', 'tool_use')) as typeof globalThis.fetch;
+  await assert.rejects(
+    runnerWith({ provider: anthropicAiProvider, settings: { apiKey: 'k' } }, { fetch: broken }).run(answerTask('always'), { prompt: 'Answer.', repo: input }),
+    (error: unknown) => error instanceof AiError && error.code === 'ai_invalid_output' && /the submit_answer input is not valid JSON/.test(error.message) && !/expected object/.test(error.message),
+  );
+  assert.equal(calls, 2, 'one repair, no more');
+});
+
+test('an answer sent as a JSON string holding the object is read once as that object, and still held to the schema', async () => {
+  // Through the submit tool
+  const model = scripted([{ type: 'tool-call' as const, toolCallId: 'c1', toolName: SUBMIT_TOOL, input: JSON.stringify(JSON.stringify({ answer: 'ok' })) }, finish('tool-calls')]);
+  const result = await runnerWith({ provider: mockProvider(model, 'none'), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' });
+  assert.deepEqual(result.output, { answer: 'ok' });
+  assert.equal(result.repaired, false);
+
+  // Through the response format
+  const native = scripted(textParts(JSON.stringify(JSON.stringify({ answer: 'yes' }))));
+  assert.deepEqual((await runnerWith({ provider: mockProvider(native), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' })).output, { answer: 'yes' });
+
+  // Unwrapped to an object that breaks the schema: repaired like any invalid answer
+  const invalid = scripted(textParts(JSON.stringify(JSON.stringify({ answer: '' }))), textParts('{"answer":"fixed"}'));
+  const repaired = await runnerWith({ provider: mockProvider(invalid), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' });
+  assert.deepEqual(repaired.output, { answer: 'fixed' });
+  assert.equal(repaired.repaired, true);
+
+  // Only once: a string encoded twice over, or a string that is not an object, is no answer
+  for (const text of [JSON.stringify(JSON.stringify(JSON.stringify({ answer: 'ok' }))), JSON.stringify('just text')]) {
+    const stubborn = scripted(textParts(text));
+    await assert.rejects(
+      runnerWith({ provider: mockProvider(stubborn), settings: { apiKey: 'k' } }).run(answerTask(), { prompt: 'Answer.' }),
+      (error: unknown) => error instanceof AiError && error.code === 'ai_invalid_output' && /expected object, received string/.test(error.message),
+    );
+  }
+});

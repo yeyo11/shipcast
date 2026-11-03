@@ -23,12 +23,19 @@ const EPHEMERAL = { anthropic: { cacheControl: { type: 'ephemeral' } } };
  */
 const ANTHROPIC_STRICT_LIMITS = { optionalParams: 24, unionParams: 16 };
 
+/**
+ * The submit tool without eager input streaming: the API then buffers its input and checks it is
+ * JSON before streaming it. With it (@ai-sdk/anthropic's default), the input is passed through
+ * unchecked, and a pack's long answer could arrive as JSON that does not parse.
+ */
+const SUBMIT_TOOL_OPTIONS = { anthropic: { eagerInputStreaming: false } };
+
 
 /** The Anthropic API; a repo is read through Shipcast's own tools over the checkout */
 export const anthropicAiProvider = aiProvider({
   ...self,
   listed: true,
-  capabilities: { streaming: true, tools: true, structuredOutput: 'native', repoAccess: 'local-tools', promptCaching: { system: EPHEMERAL, call: EPHEMERAL }, strictSchemas: ANTHROPIC_STRICT_LIMITS },
+  capabilities: { streaming: true, tools: true, structuredOutput: 'native', repoAccess: 'local-tools', promptCaching: { system: EPHEMERAL, call: EPHEMERAL }, strictSchemas: ANTHROPIC_STRICT_LIMITS, submitToolOptions: SUBMIT_TOOL_OPTIONS },
   defaultModel: () => DEFAULT_ANTHROPIC_MODEL,
   model(settings: AiProviderSettings, modelId: string | undefined, options: { fetch?: typeof fetch } = {}): LanguageModel {
     const anthropic = createAnthropic({ apiKey: need(self, settings, 'apiKey'), ...(options.fetch && { fetch: options.fetch }) });

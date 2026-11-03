@@ -65,6 +65,13 @@ export interface AiCapabilities {
    * property required, which an answer with optional fields is not).
    */
   strictSchemas?: StrictSchemaLimits;
+  /**
+   * Provider options the submit tool is declared with. The Anthropic API's: no eager input
+   * streaming, which @ai-sdk/anthropic turns on for every tool by default and which streams a tool's
+   * input without validating it as JSON; a long answer (a whole pack) then comes back as text that
+   * does not parse, and the SDK hands the runner that text instead of an object.
+   */
+  submitToolOptions?: AiMessageOptions;
 }
 
 /** A provider's settings, by its fields' keys; an empty value is as good as none */

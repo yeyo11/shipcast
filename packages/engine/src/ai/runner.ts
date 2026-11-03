@@ -169,8 +169,14 @@ interface Called {
   usage: LanguageModelUsage | undefined;
   /** The assistant's and the tools' messages, to continue the conversation with */
   responseMessages: ModelMessage[];
-  /** The submit tool's call, when the model made one */
-  submitted?: { toolCallId: string; input: unknown };
+  /**
+   * The submit tool's call, when the model made one. `unparsed`: its input was not JSON, so the AI
+   * SDK marked the call invalid, already answered it with its own error result, and handed over the
+   * raw text as the input; why it did not parse is said here.
+   */
+  submitted?: { toolCallId: string; input: unknown; unparsed?: string };
+  /** Why the last step ended: `length` when the output token limit cut it off */
+  finishReason: string | undefined;
   providerMetadata: ProviderMetadata | undefined;
 }
 
@@ -212,20 +218,21 @@ export class AiTaskRunner {
       if (submit && !first.submitted && first.steps >= plan.limits.maxSteps) {
         throw new AiError('ai_no_answer', `the ${plan.setup.provider.name} used all ${plan.limits.maxSteps} steps of ${task.id} without answering`, { provider: plan.setup.provider.id, ...withChat(chat()) });
       }
-      const checked = check(output.schema, submit ? first.submitted?.input : parseJson(first.text));
+      const checked = checkAnswer(output.schema, first, submit, plan.limits.maxOutputTokens);
       const done = (value: T, repaired: boolean): AiRunResult<T> => ({ output: value, usage, steps, repaired, provider: plan.setup.provider.id, model: plan.modelId, ...(last && { providerMetadata: last }) });
       if (checked.ok) return done(checked.value, false);
 
       // One repair: the answer goes back with what is wrong with it, and only the answer may follow
       const why = first.submitted || !submit ? `That answer is not valid: ${checked.problems}. Answer again, the whole answer, following the schema.` : `You ended without calling ${SUBMIT_TOOL}. Call it now with the whole answer.`;
       const conversation: ModelMessage[] = [...plan.messages, ...first.responseMessages];
-      if (first.submitted) conversation.push({ role: 'tool', content: [{ type: 'tool-result', toolCallId: first.submitted.toolCallId, toolName: SUBMIT_TOOL, output: { type: 'error-text', value: why } }] });
+      // An unparsed call already has the SDK's error result: a second result for the same call is not sent, the reason follows as text
+      if (first.submitted && !first.submitted.unparsed) conversation.push({ role: 'tool', content: [{ type: 'tool-result', toolCallId: first.submitted.toolCallId, toolName: SUBMIT_TOOL, output: { type: 'error-text', value: why } }] });
       else conversation.push({ role: 'user', content: why });
       const second = submit ? await this.#submitCall(plan, answer, conversation, true) : await this.#nativeCall(plan, answer, conversation);
       usage = add(usage, second.usage);
       steps += second.steps;
       last = second.providerMetadata ?? last;
-      const again = check(output.schema, submit ? second.submitted?.input : parseJson(second.text));
+      const again = checkAnswer(output.schema, second, submit, plan.limits.maxOutputTokens);
       if (again.ok) return done(again.value, true);
       throw new AiError('ai_invalid_output', `the ${plan.setup.provider.name}'s answer to ${task.id} is not valid, even after a repair: ${again.problems}`.slice(0, 2000), { provider: plan.setup.provider.id, ...withChat(chat()) });
     }));
@@ -394,6 +401,7 @@ export class AiTaskRunner {
       description: 'Submit the final answer. Call it once, with the whole answer, when you are done; nothing after it is read.',
       inputSchema: jsonSchema(answer.sent),
       strict: answer.strict,
+      ...(plan.setup.provider.capabilities.submitToolOptions && { providerOptions: plan.setup.provider.capabilities.submitToolOptions }),
     });
     const tools: ToolSet = { ...(repair ? refusing(plan.tools) : plan.tools), [SUBMIT_TOOL]: submit };
     return this.#call(plan, messages, {
@@ -442,7 +450,10 @@ export class AiTaskRunner {
         onText?.(part.text);
       } else if (part.type === 'tool-call') {
         plan.observer?.toolCall?.({ name: part.toolName, input: part.input });
-        if (part.toolName === SUBMIT_TOOL) submitted = { toolCallId: part.toolCallId, input: part.input };
+        if (part.toolName === SUBMIT_TOOL) {
+          submitted = { toolCallId: part.toolCallId, input: part.input };
+          if ('invalid' in part && part.invalid) submitted.unparsed = part.error instanceof Error ? part.error.message : String(part.error);
+        }
       } else if (part.type === 'finish-step') plan.observer?.step?.(part.usage);
     }
     if (plan.signal.aborted) throw plan.signal.reason ?? new Error('aborted');
@@ -450,8 +461,8 @@ export class AiTaskRunner {
     // Every step's messages, not the last step's (`response.messages`): a conversation continued from
     // only the last step would drop the tool rounds before it, and the thinking replayed after them
     // would no longer match the history it was made with
-    const [steps, usage, responseMessages, providerMetadata] = await Promise.all([result.steps, result.totalUsage, result.responseMessages, result.providerMetadata]);
-    return { text, steps: steps.length, usage, responseMessages, providerMetadata, ...(submitted && { submitted }) };
+    const [steps, usage, responseMessages, providerMetadata, finishReason] = await Promise.all([result.steps, result.totalUsage, result.responseMessages, result.providerMetadata, result.finishReason]);
+    return { text, steps: steps.length, usage, responseMessages, providerMetadata, finishReason, ...(submitted && { submitted }) };
   }
 }
 
@@ -516,6 +527,36 @@ function parseJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * An answer encoded twice, a JSON string holding the JSON object, as that object; anything else as
+ * it came. Unwrapped once and only to an object, then held to the task's whole schema like any
+ * answer: what it says is checked exactly as if it had come as an object. Text that does not parse
+ * is never patched up into an answer (a cut-off pack would lose its last pieces without a word).
+ */
+function unwrapStringified(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : value;
+  } catch {
+    return value;
+  }
+}
+
+/** One call's answer checked: the submit tool's input or the response format's text */
+function checkAnswer<T>(schema: z.ZodType<T>, called: Called, submit: boolean, maxOutputTokens: number): { ok: true; value: T } | { ok: false; problems: string } {
+  const cutOff = called.finishReason === 'length';
+  if (submit && called.submitted?.unparsed) {
+    // Not a schema problem: the input was not JSON at all, and zod would only say it got a string
+    const problems = cutOff
+      ? `the ${SUBMIT_TOOL} input was cut off at the output token limit (${maxOutputTokens}), so it is not complete JSON`
+      : `the ${SUBMIT_TOOL} input is not valid JSON`;
+    return { ok: false, problems };
+  }
+  const checked = check(schema, unwrapStringified(submit ? called.submitted?.input : parseJson(called.text)));
+  return !checked.ok && cutOff ? { ok: false, problems: `${checked.problems} (the answer was cut off at the output token limit, ${maxOutputTokens})` } : checked;
 }
 
 function check<T>(schema: z.ZodType<T>, value: unknown): { ok: true; value: T } | { ok: false; problems: string } {

@@ -45,7 +45,11 @@ server:
     `search` (ripgrep or a JS fallback, with context), `list_files`, `git` — confined to the clone,
     no shell; the answer arrives through a strict `submit_answer` tool. The call is never forced:
     current Claude models refuse a forced `tool_choice`, so the model is told to submit and `auto` is
-    used. Prompt caching where the provider supports it;
+    used. On the Anthropic API the submit tool is declared without eager input streaming (the
+    SDK's default for every tool), so the API checks its input is JSON before streaming it; an input
+    that still does not parse (cut off at the output token limit) is repaired and reported as not
+    JSON, and an answer encoded twice (a JSON string holding the object) is read once as that object
+    and validated like any other (2026-11-03). Prompt caching where the provider supports it;
   - `remote-workspace` (Claudio): Claude Code explores with its own tools in a workspace Claudio
     downloads itself.
 - **One definition per task** (packages/schema/src/ai/tasks.ts): its output schema, whether it reads
