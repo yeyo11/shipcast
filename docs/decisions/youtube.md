@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T17:09:24.256588256Z
-updated_at: 2026-10-29T20:59:18.250784165Z
+updated_at: 2026-11-03T12:00:00Z
 tags:
     - decision
     - youtube
@@ -38,7 +38,13 @@ cover) and the scene script the content pack writes for each:
   seconds). A script that cannot fit its format is refused before anything is rendered.
 - **The renderer** is `packages/assets/src/youtube.ts` (`renderVideo`): each scene a clip of its own
   (satori frame, ffmpeg overlay), joined without re-encoding. The server's image carries `ffmpeg` and
-  `ffprobe` for it since 2026-10-28.
+  `ffprobe` for it since 2026-10-28. A demo or image is fitted by its own shape and centred in the
+  window under the header, on the brand's colour: never padded to the window with black.
+- **The demo** is the site's `demo.gif` (the recording of `assets.site`), else the carousel's
+  `instagram-02.mp4` cropped to its `DEMO_WINDOW`: a demo named in launch.yml reaches the site only
+  inside that slide. Until 2026-11-03 the whole 4:5 slide was fitted into the 1680×500 window and
+  padded with black, so Shipcast v0.3.0's horizontal video showed a small "See it run" slide between
+  two black panels (and its Short the slide inside the frame).
 
 ## The connector and its quota
 

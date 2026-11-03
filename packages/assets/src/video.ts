@@ -19,6 +19,14 @@ export async function durationSeconds(file: string, ffprobe = 'ffprobe'): Promis
   return seconds;
 }
 
+/** A media file's picture size in pixels (its first video stream), through ffprobe. */
+export async function mediaSize(file: string, ffprobe = 'ffprobe'): Promise<{ width: number; height: number }> {
+  const { stdout } = await run(ffprobe, ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', file]);
+  const [width, height] = stdout.trim().split(',').map(Number);
+  if (!(width! > 0 && height! > 0)) throw new Error(`could not read the size of ${file}`);
+  return { width: width!, height: height! };
+}
+
 /**
  * The project's demo (a GIF, usually) laid over a backdrop image, inside the window the backdrop
  * leaves for it: the demo scaled to fit, centred on black. H.264 in yuv420p at 30 fps with a silent

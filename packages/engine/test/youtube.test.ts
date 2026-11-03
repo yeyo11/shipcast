@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { DEMO_WINDOW, type Scene } from '@shipcast/assets';
 import type { YouTubePublished, YouTubeVideo } from '@shipcast/connectors';
 import { Brand, campaignOf, ContentPack, parseLaunchConfig, parseYouTubeDraft, YOUTUBE_VIDEOS, youtubeDraft, type LinkTracking } from '@shipcast/schema';
 import { bindStrategy, collectMetrics, editPost, PRIVATE_UNTIL_AUDIT, PublishingService, renderDrafts, youtubeKind, youtubePrivacyKey, youtubeStrategy, type ChangeEditor, type Editors, type YouTubeStrategyOptions } from '../src/index.ts';
@@ -149,6 +150,24 @@ test('a script the renderer refuses fails the channel for good, and the other vi
   assert.equal((await registry.posts.posts(launch.id, { channel: 'youtube' })).length, 1);
   assert.ok(result.state === 'published' || result.state === 'partial');
   assert.deepEqual(result.failures.map((f) => [f.channel, f.retryable]), [['youtube', false]]);
+});
+
+test("the demo is the site's demo.gif as it is, else only the window of the carousel's video, never its whole slide", async () => {
+  const bytes = { bytes: new Uint8Array([1]), type: 'application/octet-stream' };
+  const demoOf = async (media: Parameters<typeof site>[0]) => {
+    const demos: Scene[] = [];
+    await publish({
+      ...fakeRender,
+      render: async (request) => {
+        demos.push(...request.scenes.filter((s) => s.kind === 'demo'));
+        return fakeRender.render!(request);
+      },
+    }, media);
+    return demos.map((s) => (s.kind === 'demo' ? [s.file.split('/').at(-1), s.crop] : []));
+  };
+  // Shipcast v0.3.0: launch.yml names a GIF in the repo, so the site has only the carousel's video of it
+  assert.deepEqual(await demoOf({ 'instagram-02.mp4': bytes }), [['instagram-02.mp4', DEMO_WINDOW]], "the horizontal video's demo scene");
+  assert.deepEqual(await demoOf({ 'demo.gif': bytes, 'instagram-02.mp4': bytes }), [['demo.gif', undefined]]);
 });
 
 const hasFfmpeg = spawnSync('ffprobe', ['-version']).status === 0 && spawnSync('ffmpeg', ['-version']).status === 0;

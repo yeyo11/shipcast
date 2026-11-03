@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chapterLines, durationSeconds, renderVideo, type Scene, type VideoFormat, type VideoRequest } from '@shipcast/assets';
+import { chapterLines, DEMO_WINDOW, durationSeconds, renderVideo, type Rect, type Scene, type VideoFormat, type VideoRequest } from '@shipcast/assets';
 import { planScreenshots } from '@shipcast/capture';
 import { ConnectorError, type YouTubePublished, type YouTubeVideo } from '@shipcast/connectors';
 import { draftBody, draftFile, languageName, leadLanguage, lookOf, parseYouTubeDraft, YOUTUBE_VIDEOS, type Language, type LinkTracking, type YouTubePiece, type YouTubeScene, type YouTubeVideoPart } from '@shipcast/schema';
@@ -56,8 +56,17 @@ export interface YouTubeStrategyOptions {
 interface Media {
   cover: { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' };
   screenshots: Array<{ bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' }>;
-  demo: string | undefined;
+  /** The demo's file, and the part of it that is the recording when the file is the carousel's framed video */
+  demo: { file: string; crop?: Rect } | undefined;
 }
+
+/**
+ * Where the launch's demo is on the site, in order: the recording of `assets.site` as it is
+ * (`demo.gif`), else the carousel's video, which is the demo on a 1080x1350 slide (its title, the
+ * project and version around it). Of that one only the slide's window is the demo: shown whole, the
+ * slide sat in the middle of the frame between black bars, as in Shipcast v0.3.0's videos.
+ */
+const DEMO_SOURCES: ReadonlyArray<{ file: string; crop?: Rect }> = [{ file: 'demo.gif' }, { file: 'instagram-02.mp4', crop: DEMO_WINDOW }];
 
 async function fetched(context: PublishContext, file: string): Promise<{ bytes: Uint8Array; type: string } | undefined> {
   const response = await context.fetch(context.mediaUrl(file)).catch(() => undefined);
@@ -67,7 +76,7 @@ async function fetched(context: PublishContext, file: string): Promise<{ bytes: 
 
 /**
  * The cover (the launch image), the screenshots the launch captured and its demo, as the site serves
- * them: the demo the repo's recording turned into (`demo.gif`), else the carousel's video of it.
+ * them (the demo from the first of `DEMO_SOURCES` the site has).
  */
 async function launchMedia(context: PublishContext, work: string): Promise<Media> {
   const png = await fetched(context, 'og.png');
@@ -90,12 +99,12 @@ async function launchMedia(context: PublishContext, work: string): Promise<Media
     if (!response || !(type.startsWith('image/png') || type.startsWith('image/jpeg'))) continue;
     screenshots.push({ bytes: new Uint8Array(await response.arrayBuffer()), mimeType: type.startsWith('image/png') ? 'image/png' : 'image/jpeg' });
   }
-  let demo: string | undefined;
-  for (const file of ['demo.gif', 'instagram-02.mp4']) {
+  let demo: Media['demo'];
+  for (const { file, crop } of DEMO_SOURCES) {
     const found = await fetched(context, file);
     if (!found) continue;
-    demo = join(work, file);
-    await writeFile(demo, found.bytes);
+    demo = { file: join(work, file), ...(crop && { crop }) };
+    await writeFile(demo.file, found.bytes);
     break;
   }
   return { cover, screenshots, demo };
@@ -135,9 +144,9 @@ async function scenesOf(script: readonly YouTubeScene[], media: Media, duration:
     if (s.kind === 'card') {
       scenes.push({ kind: 'card', title: s.title ?? project, ...(s.text && { text: s.text }), subtitle: s.subtitle, seconds, ...chapter });
     } else if (s.kind === 'demo' && media.demo) {
-      const length = Math.min(seconds, await duration(media.demo));
+      const length = Math.min(seconds, await duration(media.demo.file));
       carried = seconds - length;
-      scenes.push({ kind: 'demo', file: media.demo, subtitle: s.subtitle, maxSeconds: length, ...chapter });
+      scenes.push({ kind: 'demo', file: media.demo.file, ...(media.demo.crop && { crop: media.demo.crop }), subtitle: s.subtitle, maxSeconds: length, ...chapter });
     } else {
       const image = s.kind === 'screenshot' ? (media.screenshots[(s.screenshot ?? 1) - 1] ?? media.screenshots[0] ?? media.cover) : media.cover;
       scenes.push({ kind: 'image', image, subtitle: s.subtitle, seconds, ...chapter });

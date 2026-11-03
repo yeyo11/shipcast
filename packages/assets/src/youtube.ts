@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
 import { box, editorialFonts, el, headline, INK, MUTED, TEXT, type Look, type OgNode } from './og.ts';
-import { durationSeconds } from './video.ts';
+import { durationSeconds, mediaSize } from './video.ts';
 
 const run = promisify(execFile);
 
@@ -22,14 +22,24 @@ export const VIDEO_SIZES: Record<VideoFormat, { width: number; height: number }>
 export const SHORT_MAX_SECONDS = 59;
 export const HORIZONTAL_SECONDS = { min: 60, max: 180 } as const;
 
+/** A rectangle of a frame, in pixels */
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /**
  * One scene of a video, with the line said over it as the subtitle (no voice: the subtitle is
  * the narration). A card is the brand's look with a title and a few words; a demo is the project's
- * recording inside the frame; an image is a screenshot or the cover, fitted.
+ * recording inside the frame; an image is a screenshot or the cover, fitted. A demo's `crop` is the
+ * part of its file that is the recording, when the file is a framed video of it (the carousel's,
+ * whose recording sits at `DEMO_WINDOW`): only that part is shown, never the frame around it.
  */
 export type Scene =
   | { kind: 'card'; title: string; text?: string; subtitle: string; seconds: number; chapter?: string }
-  | { kind: 'demo'; file: string; subtitle: string; maxSeconds: number; chapter?: string }
+  | { kind: 'demo'; file: string; crop?: Rect; subtitle: string; maxSeconds: number; chapter?: string }
   | { kind: 'image'; image: { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' }; subtitle: string; seconds: number; chapter?: string };
 
 export interface VideoRequest {
@@ -65,15 +75,37 @@ function subtitleBand(format: VideoFormat, text: string): OgNode {
   );
 }
 
-/** A scene's frame: the card or a backdrop with a window for the demo or image, and its subtitle */
-function frame(request: VideoRequest, scene: Scene): { node: OgNode; window: { x: number; y: number; width: number; height: number } } {
+const layout = (format: VideoFormat) => {
+  const short = format === 'short';
+  return { short, margin: short ? 72 : 120, top: short ? 220 : 120, header: short ? 200 : 150 };
+};
+
+/** The room a scene's demo or image has under its header, above the footer and the subtitle band */
+export function mediaWindow(format: VideoFormat): Rect {
+  const { width, height } = VIDEO_SIZES[format];
+  const { margin, top, header } = layout(format);
+  return { x: margin, y: top + header, width: width - margin * 2, height: height - SUBTITLE_BAND[format] - top - header - margin };
+}
+
+/**
+ * Where a picture of the given size goes in the window: as large as fits whole, with even sides
+ * (H.264 in yuv420p wants them), centred. Only this rectangle is the media's: the rest of the window
+ * is the backdrop, never bars of black, so a demo of any shape sits on the brand's colour.
+ */
+export function placeInWindow(window: Rect, media: { width: number; height: number }): Rect {
+  const scale = Math.min(window.width / media.width, window.height / media.height);
+  const even = (n: number) => Math.max(2, Math.floor((n * scale) / 2) * 2);
+  const width = Math.min(even(media.width), window.width - (window.width % 2));
+  const height = Math.min(even(media.height), window.height - (window.height % 2));
+  return { x: window.x + Math.floor((window.width - width) / 2), y: window.y + Math.floor((window.height - height) / 2), width, height };
+}
+
+/** A scene's frame: the card, or a backdrop with a dark panel where the demo or image is laid, and its subtitle */
+function frame(request: VideoRequest, scene: Scene, place?: Rect): OgNode {
   const { width, height } = VIDEO_SIZES[request.format];
   const band = SUBTITLE_BAND[request.format];
-  const short = request.format === 'short';
-  const margin = short ? 72 : 120;
+  const { short, margin, top } = layout(request.format);
   const eyebrow = [request.project, request.version].filter(Boolean).join(' ');
-  const top = short ? 220 : 120;
-  const window = { x: margin, y: top + (short ? 200 : 150), width: width - margin * 2, height: height - band - top - (short ? 200 : 150) - margin };
   const header = [
     ...(eyebrow ? [box({ fontFamily: 'Instrument Sans', fontSize: short ? 44 : 36, color: INK, marginBottom: 18 }, eyebrow)] : []),
     ...(scene.kind === 'card' ? [] : [headline(scene.chapter ?? request.project ?? '', { fontSize: short ? 72 : 60, color: INK })]),
@@ -87,12 +119,13 @@ function frame(request: VideoRequest, scene: Scene): { node: OgNode; window: { x
             ...(scene.text ? [box({ fontFamily: 'Instrument Sans', fontSize: short ? 50 : 44, color: INK, marginTop: 40, lineHeight: 1.3 }, scene.text)] : []),
           ]),
         ]
-      : [box({ position: 'absolute', left: margin, top, flexDirection: 'column' }, header), box({ position: 'absolute', left: window.x, top: window.y, width: window.width, height: window.height, background: INK })];
+      : [
+          box({ position: 'absolute', left: margin, top, flexDirection: 'column' }, header),
+          // Behind the media only (a transparent GIF shows it), the same size as what is laid over it
+          ...(place ? [box({ position: 'absolute', left: place.x, top: place.y, width: place.width, height: place.height, background: INK })] : []),
+        ];
   const footer = box({ position: 'absolute', right: margin, bottom: band + 32, fontFamily: 'Instrument Sans', fontSize: short ? 34 : 28, color: INK }, [el('span', {}, `${request.author} · ${request.site}`)]);
-  return {
-    node: box({ width, height, background: request.look.colour, position: 'relative', color: MUTED }, [...children, footer, subtitleBand(request.format, scene.subtitle)]),
-    window,
-  };
+  return box({ width, height, background: request.look.colour, position: 'relative', color: MUTED }, [...children, footer, subtitleBand(request.format, scene.subtitle)]);
 }
 
 async function png(node: OgNode, width: number, height: number): Promise<Uint8Array> {
@@ -141,22 +174,25 @@ export async function renderVideo(request: VideoRequest): Promise<RenderedVideo>
     const clips: string[] = [];
     for (const [i, scene] of request.scenes.entries()) {
       const seconds = lengths[i]!;
-      const { node, window } = frame(request, scene);
       const still = join(dir, `frame-${i}.png`);
-      await writeFile(still, await png(node, width, height));
       const clip = join(dir, `clip-${i}.mp4`);
       if (scene.kind === 'card') {
+        await writeFile(still, await png(frame(request, scene), width, height));
         await run(ffmpeg, ['-y', '-v', 'error', '-loop', '1', '-i', still, ...SILENCE, '-t', seconds.toFixed(2), '-vf', `scale=${width}:${height}`, ...ENCODE, clip]);
       } else {
         const media = scene.kind === 'demo' ? scene.file : join(dir, `image-${i}.${scene.image.mimeType === 'image/png' ? 'png' : 'jpg'}`);
         if (scene.kind === 'image') await writeFile(media, scene.image.bytes);
-        const fit = `scale=${window.width}:${window.height}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,pad=${window.width}:${window.height}:(ow-iw)/2:(oh-ih)/2:color=black`;
+        const crop = scene.kind === 'demo' ? scene.crop : undefined;
+        // Fitted by its own shape, so the window around it stays the backdrop instead of black bars
+        const place = placeInWindow(mediaWindow(request.format), crop ?? (await mediaSize(media, request.ffprobe)));
+        await writeFile(still, await png(frame(request, scene, place), width, height));
+        const fit = `${crop ? `crop=${crop.width}:${crop.height}:${crop.x}:${crop.y},` : ''}scale=${place.width}:${place.height}:flags=lanczos,setsar=1`;
         await run(ffmpeg, [
           '-y', '-v', 'error',
           '-loop', '1', '-i', still,
           ...(scene.kind === 'image' ? ['-loop', '1'] : []), '-i', media,
           ...SILENCE,
-          '-filter_complex', `[1:v]${fit}[m];[0:v][m]overlay=${window.x}:${window.y}:shortest=0,format=yuv420p[v]`,
+          '-filter_complex', `[1:v]${fit}[m];[0:v][m]overlay=${place.x}:${place.y}:shortest=0,format=yuv420p[v]`,
           '-map', '[v]', '-map', '2:a',
           '-t', seconds.toFixed(2),
           ...ENCODE, clip,
