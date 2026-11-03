@@ -3,7 +3,6 @@
 What changed in each release of Shipcast. Each launch is drafted by Shipcast from the code at its tag;
 this file is the plain list.
 
-<!-- TODO(release): set the date when the owner publishes the v0.3.0 release. -->
 ## v0.3.0
 
 Shipcast for other developers without a server, a redesigned app you can install, and launches that
@@ -29,8 +28,13 @@ live in Shipcast instead of pull requests.
 - **An installable app (PWA).** Shipcast installs on a phone or a desktop and opens standalone,
   shows its own offline page when the connection is gone, and offers each new deploy as a "New
   version available" toast instead of swapping it in. It never caches a page with your data.
-<!-- TODO(coordinator): web push notifications wait on branch deploy/push-later. Add a "Push
-     notifications" highlight here once that branch is deployed, or leave them for the next release. -->
+- **Push notifications.** Shipcast tells your devices when replies to comments or a launch's drafts
+  wait for your approval, something fails, or a launch is out. Turn it on per device in Settings ›
+  Notifications, with a switch per event; on iPhone and iPad it works once Shipcast is on the Home
+  Screen. A notification never shows a comment or a draft's text. A server needs VAPID keys
+  (`SHIPCAST_VAPID_PUBLIC_KEY`, `SHIPCAST_VAPID_PRIVATE_KEY`; see docs/push.md).
+- **A starter blog.** No blog yet? [shipcast-blog](https://github.com/yeyo11/shipcast-blog) is a
+  template that already reads Shipcast's articles and deploys on GitHub Pages.
 - **Your blog's languages.** The article, the newsletter issue and the posts are written in the
   languages `brand.yml` lists (`languages.blog`, any ISO 639-1 code); language switches and inputs in
   the app and the MCP follow them. dev.to and Hashnode republish the English version when there is
@@ -90,7 +94,7 @@ live in Shipcast instead of pull requests.
 - node-forge 1.4.2 and follow-redirects 1.16.2 for new high advisories.
 
 **Upgrade notes**
-- **Migrations 0012 to 0022** run when Shipcast starts. 0022 drops the `draft_snapshots` table, the
+- **Migrations 0012 to 0023** run when Shipcast starts. 0022 drops the `draft_snapshots` table, the
   one migration that is not additive. Take a `pg_dump` of the registry first.
 - **Settle v0.2.0's drafts pull requests first.** The pull-request path and the import of launches
   drafted in pull requests are gone; a launch still open in a drafts pull request that the app does
