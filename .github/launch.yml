@@ -15,6 +15,9 @@ publishing:
   telegram: approval
   discord: approval
   githubDiscussions: approval
+  youtube: approval
+  # Off for this brand: Reddit closed self-service API apps
+  reddit: off
 
 assets:
   demo: docs/media/tour.gif
