@@ -8,6 +8,7 @@ import { ToastProvider, useToast } from '../components/Toasts';
 import { PickerCombobox, PickerSelect } from '../components/kit/Picker';
 import { TooltipProvider } from '../components/ui/Tooltip';
 import { requestTour } from '../components/tour/request';
+import { ClaudioHelp } from '../components/settings/ClaudioHelp';
 import { saveAutomation } from '../server/automation.functions';
 import {
   answerTourOffer,
@@ -565,6 +566,7 @@ function AiStep({ data, saver, report, attempted }: StepProps) {
       <ChoiceField id="ai-provider" label="Provider" value={provider} options={PROVIDERS} onChange={setProvider} />
       {provider === 'claudio' ? (
         <>
+          <ClaudioHelp className="k-xs k-muted acc-onb-note" />
           <TextField id="c-url" label="claudio’s URL" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} onBlur={() => leave('c-url')} placeholder="http://localhost:8798" problem={shown('c-url')} />
           <TextField
             id="c-token"

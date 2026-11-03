@@ -77,6 +77,10 @@
 .st-tone { min-height: 90px; }
 .st-log { margin: 0; max-height: 320px; overflow: auto; padding: 12px 14px; border-radius: 14px; background: var(--sc-black); font: 12px/1.6 var(--sc-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .st-rowlink { text-decoration: none; color: inherit; }
+/* claudio's row and its help line under it, one row to the eye: the line carries the row's rule */
+.st-provider > .k-row { border-bottom: 0; padding-bottom: 6px; }
+.st-provider-help { margin: 0; padding-bottom: 14px; border-bottom: 1px solid var(--sc-hairline); }
+.st-provider:last-child .st-provider-help { border-bottom: 0; }
 @media (min-width: 960px) {
   .k-card.k-desktop { display: flex; }
   .st-tone { min-height: 80px; }

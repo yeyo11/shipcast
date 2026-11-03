@@ -5,6 +5,7 @@ import { Overlay } from '../../../components/kit/Overlay';
 import { PickerSelect } from '../../../components/kit/Picker';
 import { SaveBar } from '../../../components/SaveBar';
 import { AI_TAB_NAMES, AI_TABS, aiTabOf, BUDGETS_OF, lockedRuleCount, promptEdited, promptLabel as promptName, readAiTab, TASK_TEXT, usd, type AiTab } from '../../../components/settings/ai';
+import { ClaudioHelp } from '../../../components/settings/ClaudioHelp';
 import { changesText, hostOf } from '../../../components/settings/view';
 import { AI_SETTING_NAMES, SettingsForm, type SettingView } from '../../../components/SettingsForm';
 import { useToast } from '../../../components/Toasts';
@@ -68,16 +69,20 @@ function Providers({ data }: { data: Data }) {
       </h2>
       {data.providers.map((p) =>
         p.id === 'claudio' ? (
-          <button key={p.id} type="button" className="k-row" onClick={() => setOpen(true)}>
-            <span className="k-grow">
-              <strong className="k-sm">{p.name}</strong>
-              <br />
-              <span className="k-xs k-muted">
-                {url?.value ? hostOf(url.value) : 'Its address is not set'} · {token?.set ? 'token kept' : 'no token'}
+          // The help line sits under the row, not in it: its link cannot live inside the row's button
+          <div key={p.id} className="st-provider">
+            <button type="button" className="k-row" onClick={() => setOpen(true)}>
+              <span className="k-grow">
+                <strong className="k-sm">{p.name}</strong>
+                <br />
+                <span className="k-xs k-muted">
+                  {url?.value ? hostOf(url.value) : 'Its address is not set'} · {token?.set ? 'token kept' : 'no token'}
+                </span>
               </span>
-            </span>
-            {url?.set ? <span className="k-pill k-p-pub">Connected</span> : <span className="k-pill k-p-fail">Not set</span>}
-          </button>
+              {url?.set ? <span className="k-pill k-p-pub">Connected</span> : <span className="k-pill k-p-fail">Not set</span>}
+            </button>
+            <ClaudioHelp className="k-xs k-muted st-provider-help" />
+          </div>
         ) : (
           // Its key is an account, connected on its own page (it has no tab on Channels since 2026-11-02)
           <Link key={p.id} to="/channels/$network" params={{ network: p.id }} className="k-row st-rowlink">
@@ -91,6 +96,7 @@ function Providers({ data }: { data: Data }) {
         ),
       )}
       <Overlay kind="drawer" label="claudio" open={open} onOpenChange={setOpen} heading="claudio">
+        <ClaudioHelp className="k-sm k-muted st-m0" />
         <p className="k-sm k-muted st-m0">Shipcast calls claudio’s OpenAI-compatible API, and Claude Code reads each release in a workspace claudio makes for it.</p>
         <SettingsForm settings={data.runtime} onSaved={() => setOpen(false)} />
       </Overlay>

@@ -27,6 +27,15 @@ export function aiTabOf(tab: AiTab | undefined, hash: string): AiTab {
   return isAiTab(anchored) ? anchored : 'providers';
 }
 
+/**
+ * What claudio is, for someone who has not met it, wherever the app offers it as a provider (the
+ * Providers list, its sheet, onboarding's AI step): one sentence and its repository.
+ */
+export const CLAUDIO_HELP = {
+  text: 'claudio runs Claude Code as an API on your own machine, signed in to your Claude account instead of an API key.',
+  href: 'https://github.com/yeyo11/claudio',
+} as const;
+
 /** Each task's name and what it covers, in the board's short form */
 export const TASK_TEXT: Record<string, { label: string; text: string }> = {
   pack: { label: 'Launch content pack', text: 'The article and every post of a release' },

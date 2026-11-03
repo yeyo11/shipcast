@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { aiTabOf, lockedRuleCount, promptEdited, promptLabel, readAiTab } from '../src/components/settings/ai.ts';
+import { aiTabOf, CLAUDIO_HELP, lockedRuleCount, promptEdited, promptLabel, readAiTab } from '../src/components/settings/ai.ts';
 import { ago, changesText, everyText, hostOf, listeningText, oauthPart, settingHelp, tokenUse } from '../src/components/settings/view.ts';
 import { ruleTitle, ruleWithout } from '../src/components/settings/rules.ts';
 
@@ -76,4 +76,10 @@ test('Settings › AI opens the tab its address or an old section anchor names',
   assert.equal(aiTabOf(undefined, 'st-prompts'), 'prompts');
   assert.equal(aiTabOf(undefined, '#elsewhere'), 'providers');
   assert.equal(aiTabOf(undefined, ''), 'providers');
+});
+
+test('claudio is explained in one short sentence that links to its repository', () => {
+  assert.match(CLAUDIO_HELP.text, /^claudio /, 'written lowercase, as the app names it');
+  assert.ok(CLAUDIO_HELP.text.split(/\s+/).length <= 25);
+  assert.equal(CLAUDIO_HELP.href, 'https://github.com/yeyo11/claudio');
 });
