@@ -116,6 +116,8 @@ test("each OAuth network's app is two settings, named and kept as before", () =>
   assert.deepEqual(app('threadsAppId'), ['THREADS_APP_ID', 'setting', 'threads-app-id', 'The Threads app id']);
   assert.deepEqual(app('linkedinClientSecret'), ['LINKEDIN_CLIENT_SECRET', 'secret', 'app:linkedin-client-secret', 'The LinkedIn client secret']);
   assert.deepEqual(app('redditClientId'), ['REDDIT_CLIENT_ID', 'setting', 'reddit-client-id', 'The Reddit client id']);
+  assert.deepEqual(app('metaAppId'), ['META_APP_ID', 'setting', 'meta-app-id', 'The Meta app id']);
+  assert.deepEqual(app('metaAppSecret'), ['META_APP_SECRET', 'secret', 'app:meta-app-secret', 'The Meta app secret']);
   assert.deepEqual(Object.keys(SETTINGS).slice(0, 3), ['launchesRepo', 'claudioUrl', 'claudioToken']);
 });
 
