@@ -44,6 +44,8 @@ export function settingHelp(setting: { name: string; label: string; source: stri
   const from = setting.source === '.env' ? ' Read from .env until it is saved here.' : '';
   if (setting.name === 'launchesRepo') return `Where the drafts and the blog’s articles are committed.${from}`;
   const oauth = oauthPart(setting.label);
+  // The one app no network is named after: Facebook and two of Instagram's logins sign in with it
+  if (oauth?.part === 'id' && oauth.network === 'Meta') return `From your Meta app. Needed to connect Facebook, and Instagram through Unified or Facebook Login.${from}`;
   if (oauth?.part === 'id') return `From your ${oauth.network} app. Needed to connect ${oauth.network}.${from}`;
   return from ? from.trim() : null;
 }

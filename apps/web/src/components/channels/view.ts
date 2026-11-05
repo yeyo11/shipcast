@@ -111,6 +111,15 @@ export function credentialWord(network: { auth: 'oauth' | 'form'; name: string; 
   return secret ? `a new ${secret.label.toLowerCase()}` : 'its details again';
 }
 
+/**
+ * What stops an OAuth network's sign-in, in the words Settings labels the field with. A network's app
+ * is not always its own (Facebook signs in with the Meta app), so its name cannot be assumed here.
+ */
+export function needsAppLine(network: string, missing: string | undefined): string {
+  const what = missing ? `${missing.charAt(0).toLowerCase()}${missing.slice(1)}` : 'its app’s id and secret';
+  return `Connecting ${network} needs ${what}: set that in Settings.`;
+}
+
 /** When something was read, as a sentence ends it: "today", "yesterday", "on 26 Oct" (UTC days) */
 export function dayWord(iso: string, now: string): string {
   const day = (s: string) => Math.floor(Date.parse(s) / 86_400_000);

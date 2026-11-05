@@ -6,7 +6,7 @@ import { accountAvatar } from './pieces.ts';
 import { sourceName } from './source-name.ts';
 
 /** The page's view from what it reads: the registry, the keychain and the cached brand, never a network */
-export async function channelsViewOf(ctx: { registry: Repositories; secrets: SecretStore; brand(): Promise<Brand>; settings: Pick<RuntimeSettings, 'oauthApp' | 'current'>; flags: Flags }) {
+export async function channelsViewOf(ctx: { registry: Repositories; secrets: SecretStore; brand(): Promise<Brand>; settings: Pick<RuntimeSettings, 'oauthApp' | 'missingFor' | 'current'>; flags: Flags }) {
   const { registry, secrets, brand } = ctx;
   // A network behind a flag (Umami) is not offered while its flag is off
   const networks = networksOn(ctx.flags);
@@ -46,6 +46,14 @@ export async function channelsViewOf(ctx: { registry: Repositories; secrets: Sec
     instagramOAuth: ready(networkSpec('instagram')),
     /** Which OAuth networks have the owner's app set in Settings, from their specs; Mastodon registers itself */
     oauthReady: Object.fromEntries(NETWORK_SPECS.filter((n) => n.oauth).map((n) => [n.id, ready(n)])) as Record<string, boolean>,
+    /** The setting each OAuth network's chosen sign-in lacks first, as Settings labels it */
+    oauthMissing: Object.fromEntries(
+      NETWORK_SPECS.flatMap((n) => {
+        const signIn = oauthSpecOf(n, ctx.settings.current());
+        const missing = signIn && ctx.settings.missingFor(signIn.spec);
+        return missing ? [[n.id, missing]] : [];
+      }),
+    ) as Record<string, string>,
     networks: networks.map((n) => ({
       ...n,
       accounts: accounts.filter((a) => a.network === n.id),

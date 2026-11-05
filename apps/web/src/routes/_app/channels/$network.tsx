@@ -2,7 +2,7 @@ import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-ro
 import { useEffect, useState } from 'react';
 import { NetworkGlyph } from '../../../components/channels/NetworkGlyph';
 import type { AccountView, NetworkView } from '../../../components/channels/sheets';
-import { stateOf } from '../../../components/channels/view';
+import { needsAppLine, stateOf } from '../../../components/channels/view';
 import { TopBar } from '../../../components/kit/Bars';
 import { Icon } from '../../../components/kit/Icon';
 import { ProfileReview, reviewStanding, type ProfileView } from '../../../components/ProfileReview';
@@ -24,7 +24,7 @@ export const Route = createFileRoute('/_app/channels/$network')({
     if (!network) throw notFound();
     // Each account's profile capability and latest review; null for a network with no profile
     const reviews = await Promise.all(network.accounts.map((a) => getProfileReview({ data: a.id })));
-    return { network, brands: data.brands, oauthReady: data.oauthReady, secretsKind: data.secretsKind, reviews, now: data.now };
+    return { network, brands: data.brands, oauthReady: data.oauthReady, oauthMissing: data.oauthMissing, secretsKind: data.secretsKind, reviews, now: data.now };
   },
   head: ({ loaderData }) => ({ meta: [{ title: `${loaderData?.network.name ?? 'Channel'} · Shipcast` }] }),
   component: NetworkPage,
@@ -36,10 +36,9 @@ function oauthHref(network: NetworkView, brand: string, label: string, instance:
 }
 
 /** What the network needs set up before it can be authorised, when the owner's app is missing */
-function needsApp(network: NetworkView, oauthReady: Record<string, boolean>): string | null {
+function needsApp(network: NetworkView, oauthReady: Record<string, boolean>, oauthMissing: Record<string, string>): string | null {
   if (!(network.id in oauthReady) || oauthReady[network.id]) return null;
-  const what = network.id === 'linkedin' || network.id === 'reddit' ? `${network.name} app’s client id and secret` : `${network.name} app id and secret`;
-  return `Connecting ${network.name} needs your ${what}: set them in Settings.`;
+  return needsAppLine(network.name, oauthMissing[network.id]);
 }
 
 function NetworkPage() {
@@ -96,7 +95,7 @@ function Reconnect({ network, account, brand, ready }: { network: NetworkView; a
 }
 
 function Connect() {
-  const { network, brands, oauthReady, secretsKind, reviews } = Route.useLoaderData();
+  const { network, brands, oauthReady, oauthMissing, secretsKind, reviews } = Route.useLoaderData();
   const search = Route.useSearch();
   const [brand, setBrand] = useState(brands[0]?.id ?? 'personal');
   const [label, setLabel] = useState('');
@@ -111,7 +110,7 @@ function Connect() {
     void navigate({ to: '/channels/$network', params: { network: network.id }, search: (prev) => ({ ...prev, problem: undefined }), replace: true });
   }, [search.problem, network.id, navigate, toast]);
   const failed = network.accounts.filter((a) => stateOf(a.status) === 'failed');
-  const ready = needsApp(network, oauthReady);
+  const ready = needsApp(network, oauthReady, oauthMissing);
   const oauth = network.auth === 'oauth';
   const pasting = oauth && Boolean(values.accessToken?.trim());
   // An OAuth network with a broken account is authorised again from its card; the form is for a new one

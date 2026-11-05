@@ -28,6 +28,8 @@ test('a network app setting says which network it is for; others say what they a
   assert.deepEqual(oauthPart('The Instagram app secret'), { network: 'Instagram', part: 'secret' });
   assert.equal(oauthPart('The launches repo'), null);
   assert.equal(settingHelp({ name: 'linkedinClientId', label: 'The LinkedIn client id', source: 'unset' }), 'From your LinkedIn app. Needed to connect LinkedIn.');
+  // No network is called Meta: its app is what Facebook and Instagram's Meta logins sign in with
+  assert.equal(settingHelp({ name: 'metaAppId', label: 'The Meta app id', source: 'unset' }), 'From your Meta app. Needed to connect Facebook, and Instagram through Unified or Facebook Login.');
   assert.equal(settingHelp({ name: 'linkedinClientSecret', label: 'The LinkedIn client secret', source: 'keychain' }), null);
   assert.equal(settingHelp({ name: 'linkedinClientSecret', label: 'The LinkedIn client secret', source: '.env' }), 'Read from .env until it is saved here.');
   assert.match(settingHelp({ name: 'launchesRepo', label: 'The launches repo', source: 'settings' }) ?? '', /drafts/);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ago, brokenLine, credentialWord, dayWord, keyMetric, namesToConnect, shortDay, stateOf, syncAllSummary } from '../src/components/channels/view.ts';
+import { ago, brokenLine, credentialWord, dayWord, keyMetric, namesToConnect, needsAppLine, shortDay, stateOf, syncAllSummary } from '../src/components/channels/view.ts';
 
 test('a card leads with what its network counts, and the rest beside it', () => {
   assert.deepEqual(keyMetric('bluesky', { followers: 1842, following: 312, posts: null }), { value: 1842, label: 'Followers', others: '312 following' });
@@ -55,4 +55,12 @@ test('Sync all says how many of the tab synced, and names what did not', () => {
     title: 'Synced 1 of 2',
     text: 'Reddit still syncs: reload the page in a minute · Instagram needs reconnecting first',
   });
+});
+
+test('a network whose sign-in lacks a setting names that setting, as Settings labels it', () => {
+  // Facebook signs in with the Meta app: "the Facebook app id" is a field Settings does not have
+  assert.equal(needsAppLine('Facebook', 'The Meta app id'), 'Connecting Facebook needs the Meta app id: set that in Settings.');
+  assert.equal(needsAppLine('Facebook', 'The Facebook configuration id'), 'Connecting Facebook needs the Facebook configuration id: set that in Settings.');
+  assert.equal(needsAppLine('LinkedIn', 'The LinkedIn client secret'), 'Connecting LinkedIn needs the LinkedIn client secret: set that in Settings.');
+  assert.equal(needsAppLine('Threads', undefined), 'Connecting Threads needs its app’s id and secret: set that in Settings.');
 });

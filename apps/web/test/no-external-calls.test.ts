@@ -172,7 +172,7 @@ test("the comments, channels, automation, bell and profile loaders make no outbo
       await comments.settings();
     })),
     ...(await counted('fn:getChannels', async () => {
-      const view = await channelsViewOf({ registry, secrets: new MemoryStore(), brand: async () => brand, settings: { oauthApp: () => undefined, current: () => ({}) as SettingsValues }, flags: new Flags() });
+      const view = await channelsViewOf({ registry, secrets: new MemoryStore(), brand: async () => brand, settings: { oauthApp: () => undefined, missingFor: () => undefined, current: () => ({}) as SettingsValues }, flags: new Flags() });
       assert.equal(view.networks.find((n) => n.id === 'bluesky')?.accounts.length, 1);
     })),
     ...(await counted('fn:getAutomation', async () => {
