@@ -21,9 +21,11 @@ export const Route = createFileRoute('/_app/channels/')({
   beforeLoad: ({ search }) => {
     if ((search as { ai?: true }).ai) throw redirect({ to: '/settings/ai', replace: true });
   },
-  validateSearch: (search: Record<string, unknown>): { connected?: string; focus?: string; tab?: Tab; ai?: true } => ({
+  validateSearch: (search: Record<string, unknown>): { connected?: string; problem?: string; focus?: string; tab?: Tab; ai?: true } => ({
     ...(search.tab === 'ai' ? { ai: true as const } : {}),
     ...(typeof search.connected === 'string' ? { connected: search.connected } : {}),
+    // Another account of the same sign-in that was refused, said beside the one that connected
+    ...(typeof search.problem === 'string' ? { problem: search.problem } : {}),
     ...(typeof search.focus === 'string' && /^\d+$/.test(search.focus) ? { focus: search.focus } : {}),
     ...(readGroup(search.tab) ? { tab: readGroup(search.tab) } : {}),
   }),
@@ -280,6 +282,7 @@ function Channels() {
       return;
     }
     if (search.connected) toast.done(search.connected, 'It is checked and ready to publish.');
+    if (search.problem) toast.fail(search.problem);
     const focus = search.focus;
     // Clearing the address is a navigation, which would scroll back to the top: scroll after it
     void navigate({ to: '/channels', search: { tab }, replace: true, resetScroll: false }).then(() => {
@@ -290,7 +293,7 @@ function Channels() {
       else row.scrollIntoView({ block: 'center' });
       row.focus({ preventScroll: true });
     });
-  }, [search.connected, search.focus, focused, tab, navigate, toast]);
+  }, [search.connected, search.problem, search.focus, focused, tab, navigate, toast]);
   const connected = data.networks.filter((n) => n.accounts.length > 0 && !isAiNetwork(n));
   const envCount = data.networks.filter((n) => n.usesEnv).length;
   const importFromEnv = async () => {
