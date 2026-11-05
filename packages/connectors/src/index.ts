@@ -21,3 +21,4 @@ export * from './threads.ts';
 export * from './linkedin.ts';
 export * from './reddit.ts';
 export * from './youtube.ts';
+export * from './meta/index.ts';
