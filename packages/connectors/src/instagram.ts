@@ -18,7 +18,7 @@ import {
   type ReplyTarget,
   type SentReply,
 } from './http.ts';
-import { META_GRAPH_VERSION } from './meta/graph.ts';
+import { META_GRAPH_VERSION, readInsights } from './meta/graph.ts';
 
 /** One insight as the Graph API answers it: a lifetime total, or a value per breakdown */
 interface Insight {
@@ -66,15 +66,6 @@ const FOLLOWS_MIN_FOLLOWERS = 100;
 const NOT_ENOUGH_VIEWERS = /not enough viewers/i;
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-/** Graph API's (#100) when a set names a metric the piece's type no longer has: the names follow */
-const UNSUPPORTED = /does not support the metrics?:?\s*([a-z_]+(?:\s*,\s*[a-z_]+)*)/i;
-
-/**
- * The metrics Meta refused by name, by account and set, for as long as the process runs: a set is
- * asked without them from then on, so one retired metric costs one extra call, not every reading.
- */
-const REFUSED = new Map<string, Set<string>>();
 
 /** A public URL Instagram fetches when the container is created: a JPEG, or an MP4 */
 export type InstagramMedia = { kind: 'image' | 'video'; url: string };
@@ -324,21 +315,10 @@ export class Instagram implements CommentReader, Replier {
 
   /**
    * A piece's main set of insights. When Meta refuses metrics by name, the set is asked again once
-   * without them, and they are remembered (`REFUSED`), so the rest of the piece's numbers still count.
+   * without them, and they are remembered (`readInsights`), so the rest of the piece's numbers still count.
    */
   async #counters(id: string, metrics: string, what: string): Promise<Insight[]> {
-    const key = `${this.#user}:${metrics}`;
-    const refused = REFUSED.get(key) ?? new Set<string>();
-    const ask = () => metrics.split(',').filter((m) => !refused.has(m));
-    try {
-      return await this.#insights(id, { metric: ask().join(',') }, what);
-    } catch (error) {
-      const named = UNSUPPORTED.exec(message(error))?.[1]?.split(/\s*,\s*/).filter((m) => ask().includes(m)) ?? [];
-      if (!named.length || named.length === ask().length) throw error;
-      for (const m of named) refused.add(m);
-      REFUSED.set(key, refused);
-      return this.#insights(id, { metric: ask().join(',') }, what);
-    }
+    return readInsights(`${this.#user}:${metrics}`, metrics.split(','), (asked) => this.#insights(id, { metric: asked.join(',') }, what));
   }
 
   #numbers(data: Insight[]): Metrics {
