@@ -22,7 +22,7 @@ test('each channel’s source and medium; content only where the channel tells i
   assert.deepEqual(utmFor('discord', 'c', 'ignored'), { source: 'discord', medium: 'social', campaign: 'c' });
   assert.deepEqual(
     Object.keys(UTM_CHANNELS).sort(),
-    ['bluesky', 'discord', 'githubDiscussions', 'linkedin', 'mastodon', 'newsletter', 'reddit', 'telegram', 'threads', 'youtube'],
+    ['bluesky', 'discord', 'facebook', 'githubDiscussions', 'linkedin', 'mastodon', 'newsletter', 'reddit', 'telegram', 'threads', 'youtube'],
     'dev.to and Hashnode keep a clean canonical URL; Instagram has no clickable links',
   );
 });

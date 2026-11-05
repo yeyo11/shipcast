@@ -129,3 +129,12 @@ test('a launch.yml may name further repos and pages; left out, the parsed file i
   assert.match(said, /owner\/name/);
   assert.match(said, /http or https/);
 });
+
+test('Facebook is a channel: approval parses, and it is off when the file does not mention it', () => {
+  const on = parseLaunchConfig('enabled: true\nbrand: personal\npublishing:\n  facebook: approval\n');
+  assert.ok(on.ok);
+  assert.equal(on.value.publishing.facebook, 'approval');
+  const plain = parseLaunchConfig('enabled: true\nbrand: personal\n');
+  assert.ok(plain.ok);
+  assert.equal(plain.value.publishing.facebook, 'off');
+});

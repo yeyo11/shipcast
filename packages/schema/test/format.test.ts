@@ -26,6 +26,7 @@ test('each channel’s profile, derived from its definition', () => {
     discord: 'light | bold italic strike code link spoiler | heading quote bulletList orderedList codeBlock h3 | no images',
     githubDiscussions: full,
     threads: plain,
+    facebook: plain,
     youtube: undefined,
   });
   // A text of no channel is the article, as on Write

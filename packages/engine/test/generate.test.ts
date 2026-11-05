@@ -96,3 +96,10 @@ test('the prompt briefs the phase 5 channels when they are on', () => {
   assert.match(prompt, /discord: one message in English, at most 1800 characters.*\?ref=discord/);
   assert.doesNotMatch(prompt, /hackerNews|productHunt|Show HN/);
 });
+
+test('the Facebook brief is written in the brand’s Facebook language, one of the blog’s', () => {
+  const on = LaunchConfig.parse({ enabled: true, brand: 'personal', publishing: { facebook: 'approval' } });
+  const spanish = Brand.parse({ ...brand, languages: { blog: ['es', 'en'], facebook: 'es' } });
+  assert.match(buildPrompt(launch(), on, spanish).prompt, /facebook: one post in Spanish/);
+  assert.match(buildPrompt(launch(), on, brand).prompt, /facebook: one post in English/);
+});

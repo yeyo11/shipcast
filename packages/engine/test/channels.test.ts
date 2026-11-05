@@ -40,6 +40,7 @@ const pack = ContentPack.parse({
   instagram: { caption: 'Caption.', summary: 'S', slides: [{ title: 'a', text: 'b' }, { title: 'c', text: 'd' }] },
   reddit: [{ subreddit: 'ClaudeAI', title: 'I built claudio', body: 'What and why.' }],
   linkedin: { text: 'LinkedIn post' },
+  facebook: { text: 'Facebook post' },
   newsletter: { en: { subject: 'Out', previewText: 'P', markdown: 'Note.' }, es: { subject: 'Sale', previewText: 'P', markdown: 'Nota.' } },
   telegram: { text: 'Telegram post' },
   discord: { text: 'Discord post' },
@@ -121,6 +122,7 @@ test('Threads and GitHub Discussions are measured, adapted to and answered like 
     instagram: 'Caption.',
     githubDiscussions: 'claudio 0.9\n\nWhat shipped.',
     threads: 'Threads post',
+    facebook: 'Facebook post',
     youtube: 'claudio, a walk-through\n\nWhat it shows.',
   });
 });

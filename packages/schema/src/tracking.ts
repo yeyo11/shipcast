@@ -28,6 +28,7 @@ export const UTM_CHANNELS = {
   mastodon: { source: 'mastodon', medium: 'social' },
   threads: { source: 'threads', medium: 'social' },
   linkedin: { source: 'linkedin', medium: 'social' },
+  facebook: { source: 'facebook', medium: 'social' },
   telegram: { source: 'telegram', medium: 'social' },
   discord: { source: 'discord', medium: 'social' },
   reddit: { source: 'reddit', medium: 'social', content: 'subreddit' },
@@ -155,7 +156,7 @@ export function trackWithinLimit(channel: TrackedChannel, text: string, tracking
  * Where a visit came from by its referrer's host, the other half of attribution: the analytics that
  * keep no query string (Cloudflare Web Analytics, dev.to's referrers) cannot read the UTM tags, so the
  * referrer is all they have. Named as the channels are (and as their `utm_source`, where they are
- * tagged); `x`, `hackernews` and `facebook` are not channels but send readers all the same. A host
+ * tagged); `x` and `hackernews` are not channels but send readers all the same. A host
  * matches itself and its subdomains. Mastodon readers arrive from their own instance, which can be
  * any host: only mastodon.social is told apart, every other counts as `other`.
  */

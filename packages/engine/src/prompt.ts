@@ -140,6 +140,10 @@ export function promptVariables(brand: Brand, config: LaunchConfig, extra: Recor
     linkedinLanguage: languageName(
       brand.languages.linkedin && brand.languages.blog.includes(brand.languages.linkedin) ? brand.languages.linkedin : brand.languages.blog.includes('en') ? 'en' : (brand.languages.blog[0] ?? 'en'),
     ),
+    // Resolved as LinkedIn's: the card shares the article in this language
+    facebookLanguage: languageName(
+      brand.languages.facebook && brand.languages.blog.includes(brand.languages.facebook) ? brand.languages.facebook : brand.languages.blog.includes('en') ? 'en' : (brand.languages.blog[0] ?? 'en'),
+    ),
     ...Object.fromEntries(Object.entries(LIMITS).map(([key, value]) => [`limit.${key}`, String(value)])),
     ...extra,
   };
@@ -154,6 +158,7 @@ export const PROMPT_VARIABLES: readonly string[] = [
   'demoNote',
   'otherLanguages',
   'linkedinLanguage',
+  'facebookLanguage',
   ...Object.keys(LIMITS).map((key) => `limit.${key}`),
 ];
 

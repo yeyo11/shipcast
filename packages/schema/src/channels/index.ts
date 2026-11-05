@@ -13,6 +13,7 @@ export { blog } from './blog.ts';
 export { bluesky } from './bluesky.ts';
 export { devto } from './devto.ts';
 export { discord } from './discord.ts';
+export { facebook } from './facebook.ts';
 export { githubDiscussions } from './github-discussions.ts';
 export { hashnode } from './hashnode.ts';
 export { instagram } from './instagram.ts';

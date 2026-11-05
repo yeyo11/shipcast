@@ -4,6 +4,7 @@ import type { EditorProfile } from './format.ts';
 import type { AverageMetric, ChannelDefinition, EditField, MetricFamily, PostingWindow, ProfileCapability } from './definition.ts';
 import { devto } from './devto.ts';
 import { discord } from './discord.ts';
+import { facebook } from './facebook.ts';
 import { githubDiscussions } from './github-discussions.ts';
 import { hashnode } from './hashnode.ts';
 import { instagram } from './instagram.ts';
@@ -34,6 +35,7 @@ export const CHANNEL_DEFINITIONS = [
   discord,
   githubDiscussions,
   threads,
+  facebook,
   youtube,
 ] as const;
 

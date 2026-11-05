@@ -199,6 +199,9 @@ export function renderDrafts(
   if (pack.linkedin && mode('linkedin') !== 'off') {
     files.push(channelDraft(dir, 'linkedin', mode('linkedin'), pack.linkedin.text));
   }
+  if (pack.facebook && mode('facebook') !== 'off') {
+    files.push(channelDraft(dir, 'facebook', mode('facebook'), pack.facebook.text));
+  }
   if (pack.bluesky && mode('bluesky') !== 'off') {
     files.push(channelDraft(dir, 'bluesky', mode('bluesky'), pack.bluesky.text));
   }

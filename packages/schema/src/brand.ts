@@ -37,6 +37,8 @@ export const Brand = z.strictObject({
         .default(['en']),
       // The language of the LinkedIn post and of the article its card shares; English when unset
       linkedin: Language.optional(),
+      // The language of the Facebook post and of the article its card shares; English when unset
+      facebook: Language.optional(),
     })
     .prefault({}),
   /** How the AI writes for this brand; empty until it is defined from examples (phase 5) */

@@ -243,3 +243,10 @@ test('a launch made from sources is asked for claims, each naming the sources th
   const legacy = (contentPackJsonSchema() as { properties: { analysis: { properties: Record<string, unknown> } } }).properties.analysis;
   assert.ok(!('claims' in legacy.properties), 'what Claude is handed for a release is unchanged');
 });
+
+test('a Facebook post is valid within 2000 characters and refused beyond them', () => {
+  assert.ok(parse({ facebook: { text: 'a'.repeat(2000) } }).success);
+  const long = parse({ facebook: { text: 'x'.repeat(2001) } });
+  assert.ok(!long.success);
+  assert.match(JSON.stringify(long.error?.issues), /at most 2000 characters/);
+});
