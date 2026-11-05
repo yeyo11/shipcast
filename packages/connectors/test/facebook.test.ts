@@ -169,10 +169,33 @@ test('Facebook comments map the author’s name, mark the Page’s own, and foll
     { externalId: 'c3', author: { handle: 'José’s Page', displayName: 'José’s Page' }, text: 'Thanks!', createdAt: '2026-11-05T10:02:00+0000', own: true },
   ]);
   const first = new URL(calls[0]!.url).searchParams;
-  assert.equal(first.get('fields'), 'id,message,created_time,from');
+  assert.equal(first.get('fields'), 'id,message,created_time,from,parent{id}');
   assert.equal(first.get('filter'), 'stream');
   assert.equal(first.get('limit'), '100');
   assert.equal(calls[1]?.url, next);
+});
+
+test('a Facebook reply in the comment stream names its parent, so the Page’s own answer marks the comment answered', async () => {
+  const facebook = page(
+    [
+      [
+        `GET ${G}/${POST}/comments`,
+        () =>
+          Response.json({
+            data: [
+              { id: 'c1', message: 'Does it run on a server?', created_time: '2026-11-05T10:00:00+0000', from: { id: '5550001', name: 'Ana López' } },
+              { id: 'c1_r1', message: 'Yes, anywhere Node runs', created_time: '2026-11-05T10:05:00+0000', from: { id: PAGE, name: 'José’s Page' }, parent: { id: 'c1' } },
+            ],
+          }),
+      ],
+    ],
+    [],
+  );
+  const [question, answer] = await facebook.comments(POST);
+  assert.equal(question?.inReplyTo, undefined);
+  assert.equal(question?.own, false);
+  assert.equal(answer?.inReplyTo, 'c1');
+  assert.equal(answer?.own, true);
 });
 
 test('a Facebook reply is a comment under the comment', async () => {

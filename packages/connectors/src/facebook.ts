@@ -65,7 +65,7 @@ export interface FacebookPageOptions {
   cache?: IdentityCache;
 }
 
-type FbComment = { id: unknown; message?: string; created_time: string; from?: { id?: string; name?: string } };
+type FbComment = { id: unknown; message?: string; created_time: string; from?: { id?: string; name?: string }; parent?: { id?: unknown } };
 
 /**
  * A Facebook Page through the Graph API with a Page access token: a link post on its feed (the card
@@ -167,15 +167,18 @@ export class FacebookPage implements CommentReader, Replier, Editable<{ text: st
   async comments(postExternalId: string): Promise<Comment[]> {
     type Page = { data: FbComment[]; paging?: { next?: string } };
     const out: Comment[] = [];
-    let answer = await this.#get<Page>(`/${postExternalId}/comments`, { fields: 'id,message,created_time,from', filter: 'stream', limit: '100' }, 'read the comments');
+    let answer = await this.#get<Page>(`/${postExternalId}/comments`, { fields: 'id,message,created_time,from,parent{id}', filter: 'stream', limit: '100' }, 'read the comments');
     for (let page = 0; ; page++) {
       for (const c of answer.data) {
         const name = c.from?.name?.trim();
+        // The stream is flat: `parent`, set only on a reply, is what marks a comment answered and threads it
+        const parent = typeof c.parent?.id === 'string' && c.parent.id ? c.parent.id : undefined;
         out.push({
           externalId: graphId(c.id, 'read the comments', NETWORK),
           author: { handle: name || 'unknown', ...(name && { displayName: name }) },
           text: c.message ?? '',
           createdAt: c.created_time,
+          ...(parent && { inReplyTo: parent }),
           own: c.from?.id === this.#page,
         });
       }
@@ -196,7 +199,7 @@ export class FacebookPage implements CommentReader, Replier, Editable<{ text: st
   async check(): Promise<Check> {
     try {
       const me = await this.#get<{ id?: unknown; name?: string; picture?: { data?: { url?: string } } }>(`/${this.#page}`, { fields: 'id,name,picture{url}' }, 'check');
-      const name = me.name ?? String(me.id);
+      const name = me.name ?? (typeof me.id === 'string' ? me.id : 'another Page');
       if (me.id !== this.#page) return { ok: false, problem: `the token belongs to the Page ${name}, not to the Page ${this.#page}` };
       return okCheck(name, { avatarUrl: me.picture?.data?.url, displayName: me.name });
     } catch (error) {
