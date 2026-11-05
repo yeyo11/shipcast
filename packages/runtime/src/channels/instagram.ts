@@ -1,5 +1,5 @@
 import { countFeed } from './feeds.ts';
-import { ConnectorError, exchangeInstagramCode, facebookDialogUrl, Instagram, instagramAuthorizeUrl, unifiedAccess } from '@shipcast/connectors';
+import { ConnectorError, exchangeFacebookCode, exchangeInstagramCode, facebookDialogUrl, Instagram, instagramAuthorizeUrl, listPages, longLivedUserToken, unifiedAccess } from '@shipcast/connectors';
 import { instagram } from '@shipcast/schema';
 import { channelAdapter, MissingField } from './adapter.ts';
 
@@ -19,7 +19,7 @@ export function instagramLoginOf(settings: Record<string, string>): 'instagram' 
   return login === 'unified' || login === 'facebook' ? login : 'instagram';
 }
 
-/** Instagram: Instagram Login or Unified Login with the owner's Meta app; the carousel, the story, its comments, their numbers and the profile */
+/** Instagram: Instagram Login, Unified Login or Facebook Login with the owner's Meta app; the carousel, the story, its comments, their numbers and the profile */
 export const instagramAdapter = channelAdapter({
   definition: instagram,
   connect: {
@@ -28,7 +28,7 @@ export const instagramAdapter = channelAdapter({
       id: 'instagram',
       auth: 'oauth',
       fields: [],
-      // Instagram Login asks for the instagram_business_* family, Unified Login for the instagram_* one
+      // Instagram Login asks for the instagram_business_* family, Unified and Facebook Login for the instagram_* one
       permissions: [
         'Publishes the carousel and the story (instagram_business_content_publish or instagram_content_publish)',
         'Comments on its own post (instagram_business_manage_comments or instagram_manage_comments)',
@@ -36,7 +36,7 @@ export const instagramAdapter = channelAdapter({
         'Reads the profile’s name, bio, website and picture for a review (instagram_business_basic or instagram_basic)',
       ],
       howTo:
-        "A professional (Creator or Business) account. Set your Meta app's Instagram setup in Settings. Instagram Login: Shipcast sends you to Instagram to authorise it; the token is renewed every 30 days. Unified Login: create a configuration in Instagram → API setup with Unified login whose token never expires, and set its id and the Meta app id and secret in Settings.",
+        "A professional (Creator or Business) account. Set your Meta app's Instagram setup in Settings. Instagram Login: Shipcast sends you to Instagram to authorise it; the token is renewed every 30 days. Unified Login: create a configuration in Instagram → API setup with Unified login whose token never expires, and set its id and the Meta app id and secret in Settings. Facebook Login: for an Instagram account linked to a Facebook Page; create a Facebook Login for Business configuration with a User access token and the permissions instagram_basic, instagram_content_publish, instagram_manage_comments, instagram_manage_insights, pages_show_list, pages_read_engagement and business_management, and set its id and the Meta app id and secret in Settings.",
       env: [
         { name: 'INSTAGRAM_USER_ID', key: 'userId', secret: false },
         { name: 'INSTAGRAM_ACCESS_TOKEN', key: 'accessToken', secret: true },
@@ -77,11 +77,35 @@ export const instagramAdapter = channelAdapter({
             },
             errorParams: ['error_description', 'error_reason', 'error_message'],
           },
+          facebook: {
+            label: 'Facebook Login (Instagram linked to a Page)',
+            app: { id: 'meta', term: 'app', name: 'Meta' },
+            config: 'instagramConfigId',
+            authorizeUrl: (app, redirectUri, state) => {
+              if (!app.configId) throw new MissingField('Facebook Login needs the Instagram configuration id in Settings');
+              return facebookDialogUrl({ appId: app.clientId, configId: app.configId }, redirectUri, state);
+            },
+            exchange: async (app, redirectUri, code, http) => {
+              const credentials = { appId: app.clientId, appSecret: app.clientSecret };
+              const short = await exchangeFacebookCode(credentials, redirectUri, code, http);
+              const long = await longLivedUserToken(credentials, short.accessToken, http);
+              const pages = (await listPages(long.accessToken, http)).filter((page) => page.instagram);
+              if (pages.length === 0) {
+                throw new ConnectorError('Meta', 'none of the Pages you shared has an Instagram professional account linked: link one to a Page, or share that Page when Meta asks');
+              }
+              // The Page token of a long-lived user token does not expire, so these accounts need no refresher
+              return pages.map((page) => ({
+                label: page.instagram!.username ? `@${page.instagram!.username}` : page.instagram!.id,
+                credentials: { settings: { login: 'facebook', userId: page.instagram!.id, pageId: page.pageId }, secrets: { accessToken: page.pageToken } },
+              }));
+            },
+            errorParams: ['error_description', 'error_reason', 'error_message'],
+          },
         },
       },
       refresh: {
         everyMs: THIRTY_DAYS_MS,
-        // Only Instagram Login's tokens expire: a Unified Login token is a system user's, which does not
+        // Only Instagram Login's tokens expire: a Unified Login token is a system user's and a Page token a long-lived user's, which do not
         refresher: (settings, accessToken, http) =>
           settings.userId && instagramLoginOf(settings) === 'instagram' ? new Instagram({ userId: settings.userId, accessToken, fetch: http }) : undefined,
         envToken: { tokenKey: INSTAGRAM_TOKEN_KEY, refreshedKey: INSTAGRAM_REFRESHED_KEY },

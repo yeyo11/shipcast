@@ -106,6 +106,63 @@ test('unified sign-in with no Instagram account shared says so', async () => {
   await assert.rejects(unified.exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'code', http), /no Instagram professional account/);
 });
 
+test('a facebook account reads graph.facebook.com and is never refreshed', async () => {
+  const settings = { login: 'facebook', userId: '17841416971174401', pageId: '100000000000001' };
+  assert.equal(instagramLoginOf(settings), 'facebook');
+  assert.equal(network.refresh!.refresher(settings, 't'), undefined);
+  const calls: string[] = [];
+  const http = recording([['https://graph.facebook.com/v27.0/17841416971174401?', { id: '17841416971174401', username: 'someone' }]], calls);
+  const built = buildConnector('instagram', { settings, secrets: { accessToken: 't' } }, brand, http);
+  const check = await built.check();
+  assert.equal(check.ok, true, JSON.stringify(check));
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0]!.startsWith('https://graph.facebook.com/v27.0/17841416971174401?'), calls[0]);
+});
+
+const facebookRoutes = (pages: unknown[]): Array<[string, unknown]> => [
+  ['https://graph.facebook.com/v27.0/oauth/access_token?', { access_token: 'user-token', expires_in: 5000 }],
+  ['https://graph.facebook.com/v27.0/me/accounts?', { data: pages }],
+];
+
+test('the setting offers Facebook Login on the Meta app and its configuration', () => {
+  const oauth = network.oauth!;
+  assert.ok(isVariants(oauth));
+  assert.deepEqual(oauth.variants.facebook?.app, { id: 'meta', term: 'app', name: 'Meta' });
+  assert.equal(oauth.variants.facebook?.config, 'instagramConfigId');
+  assert.equal(oauth.variants.facebook?.label, 'Facebook Login (Instagram linked to a Page)');
+});
+
+test('facebook sign-in keeps one account per Page with Instagram, with the Page token', async () => {
+  const facebook = oauthSpecOf(network, { instagramLogin: 'facebook' } as SettingsValues)!.spec;
+  const http = recording(
+    facebookRoutes([
+      { id: '100000000000001', name: 'First', access_token: 'pt1', instagram_business_account: { id: '17841416971174401', username: 'first' } },
+      { id: '100000000000002', name: 'Second', access_token: 'pt2' },
+    ]),
+    [],
+  );
+  const accounts = await facebook.exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'code', http);
+  assert.deepEqual(accounts, [
+    { label: '@first', credentials: { settings: { login: 'facebook', userId: '17841416971174401', pageId: '100000000000001' }, secrets: { accessToken: 'pt1' } } },
+  ]);
+});
+
+test('Pages with no Instagram account say what to link', async () => {
+  const facebook = oauthSpecOf(network, { instagramLogin: 'facebook' } as SettingsValues)!.spec;
+  const http = recording(facebookRoutes([{ id: '100000000000002', name: 'Second', access_token: 'pt2' }]), []);
+  await assert.rejects(
+    facebook.exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'code', http),
+    /none of the Pages you shared has an Instagram professional account linked/,
+  );
+});
+
+test('Facebook Login asks by configuration and fails clearly without one', () => {
+  const facebook = oauthSpecOf(network, { instagramLogin: 'facebook' } as SettingsValues)!.spec;
+  const url = new URL(facebook.authorizeUrl({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'st'));
+  assert.equal(url.searchParams.get('config_id'), 'cfg1');
+  assert.throws(() => facebook.authorizeUrl({ clientId: 'app1', clientSecret: 's' }, 'https://example.test/callback', 'st'), /configuration id/);
+});
+
 test('every spec that shares an app agrees on what the app is called', () => {
   const apps = new Map<string, { term: string; name: string }>();
   for (const spec of NETWORK_SPECS.flatMap((n) => oauthSpecsOf(n))) {
