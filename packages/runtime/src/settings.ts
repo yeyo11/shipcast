@@ -1,7 +1,8 @@
 import { readAiSettings, type Repositories } from '@shipcast/engine';
 import { InvalidRequest, ShipcastError } from '@shipcast/schema';
-import { NETWORK_SPECS, networkSpec } from './catalog.ts';
-import type { OAuthApp } from './channels/adapter.ts';
+import { NETWORK_SPECS } from './catalog.ts';
+import type { NetworkSpec, OAuthApp, OAuthSpec } from './channels/adapter.ts';
+import { oauthSpecsOf } from './oauth-specs.ts';
 import type { SecretStore } from './secrets.ts';
 
 /**
@@ -14,12 +15,21 @@ interface BaseValues {
   launchesRepo: string | undefined;
   claudioUrl: string | undefined;
   claudioToken: string | undefined;
+  /** How the owner's Meta app signs in to Instagram: one of INSTAGRAM_LOGINS; unset is `instagram` */
+  instagramLogin: string | undefined;
+  /** The Facebook Login for Business configurations the Meta app signs in with, for Instagram and for Pages */
+  instagramConfigId: string | undefined;
+  facebookConfigId: string | undefined;
 }
+
+/** The Instagram setups a Meta app may have: Instagram Login, both logins, or Facebook Login for Business */
+export const INSTAGRAM_LOGINS = ['instagram', 'unified', 'facebook'] as const;
 
 /**
  * The owner's app on each network that signs in through one (its `oauth` spec in
  * packages/runtime/src/channels): `instagramAppId` and `instagramAppSecret`, `redditClientId` and
- * `redditClientSecret`, named by how the network names the app.
+ * `redditClientSecret`, named by the app's id (a network's, or `meta` shared by several) and by how
+ * the network names the app.
  */
 export type OAuthSettingName = `${string}${'App' | 'Client'}${'Id' | 'Secret'}`;
 
@@ -35,31 +45,41 @@ interface Definition {
   label: string;
   /** Says what is wrong with a value, or nothing when it is fine */
   check?: (value: string) => string | undefined;
+  /** The only values it takes, which the Settings page offers as a list */
+  choices?: readonly string[];
 }
 
 const TERMS = { app: 'App', client: 'Client' } as const;
 
-/** The two settings of each network's app, its id public and its secret in the keychain, from the networks' specs */
-function oauthAppSettings(): Record<OAuthSettingName, Definition> {
+const appSettingName = (app: OAuthSpec['app'], part: 'Id' | 'Secret'): OAuthSettingName => `${app.id}${TERMS[app.term]}${part}`;
+
+/**
+ * The two settings of each app the networks sign in with, its id public and its secret in the
+ * keychain, from the networks' specs: an app several specs share (Meta's) is derived once.
+ */
+export function oauthAppSettings(networks: readonly NetworkSpec[] = NETWORK_SPECS): Record<OAuthSettingName, Definition> {
   const out: Record<string, Definition> = {};
-  for (const spec of NETWORK_SPECS) {
-    if (!spec.oauth) continue;
-    const { term, name } = spec.oauth.app;
-    const env = `${spec.id.toUpperCase()}_${term.toUpperCase()}`;
-    out[oauthSettingName(spec.id, 'Id')] = { env: `${env}_ID`, store: { kind: 'setting', key: `${spec.id}-${term}-id` }, label: `The ${name} ${term} id` };
-    out[oauthSettingName(spec.id, 'Secret')] = {
-      env: `${env}_SECRET`,
-      store: { kind: 'secret', key: `app:${spec.id}-${term}-secret`, label: `${name} ${term} secret` },
-      label: `The ${name} ${term} secret`,
-    };
+  for (const network of networks) {
+    for (const { app } of oauthSpecsOf(network)) {
+      const id = appSettingName(app, 'Id');
+      if (id in out) continue;
+      const { term, name } = app;
+      const env = `${app.id.toUpperCase()}_${term.toUpperCase()}`;
+      out[id] = { env: `${env}_ID`, store: { kind: 'setting', key: `${app.id}-${term}-id` }, label: `The ${name} ${term} id` };
+      out[appSettingName(app, 'Secret')] = {
+        env: `${env}_SECRET`,
+        store: { kind: 'secret', key: `app:${app.id}-${term}-secret`, label: `${name} ${term} secret` },
+        label: `The ${name} ${term} secret`,
+      };
+    }
   }
   return out;
 }
 
-/** The setting of a network's app id or secret: `instagramAppId`, `redditClientSecret` */
-export function oauthSettingName(networkId: string, part: 'Id' | 'Secret'): OAuthSettingName {
-  const term = networkSpec(networkId)?.oauth?.app.term ?? 'client';
-  return `${networkId}${TERMS[term]}${part}`;
+/** The setting of an app's id or secret, by the app's id: `instagramAppId`, `redditClientSecret`, `metaAppId` */
+export function oauthSettingName(appId: string, part: 'Id' | 'Secret'): OAuthSettingName {
+  const app = NETWORK_SPECS.flatMap(oauthSpecsOf).find((s) => s.app.id === appId)?.app;
+  return appSettingName(app ?? { id: appId, term: 'client', name: appId }, part);
 }
 
 export const SETTINGS: Record<SettingName, Definition> = {
@@ -80,6 +100,16 @@ export const SETTINGS: Record<SettingName, Definition> = {
   // `ai` settings row) is the only one. An install that set the old one keeps an `ai-budget-usd` row
   // and maybe SHIPCAST_MAX_BUDGET_USD in its env; neither is read, so both are left as they are.
   ...oauthAppSettings(),
+  instagramLogin: {
+    env: 'INSTAGRAM_LOGIN',
+    store: { kind: 'setting', key: 'instagram-login' },
+    label: 'The Instagram setup of the Meta app',
+    choices: INSTAGRAM_LOGINS,
+    check: (v) => ((INSTAGRAM_LOGINS as readonly string[]).includes(v) ? undefined : `the Instagram setup must be ${INSTAGRAM_LOGINS.join(', ')}, not "${v}"`),
+  },
+  // Not secrets: Meta says a configuration id identifies a configuration and gives no access
+  instagramConfigId: { env: 'INSTAGRAM_CONFIG_ID', store: { kind: 'setting', key: 'instagram-config-id' }, label: 'The Instagram configuration id' },
+  facebookConfigId: { env: 'FACEBOOK_CONFIG_ID', store: { kind: 'setting', key: 'facebook-config-id' }, label: 'The Facebook configuration id' },
 };
 
 const NAMES = Object.keys(SETTINGS) as SettingName[];
@@ -127,13 +157,16 @@ async function stored(deps: SettingsDeps, name: SettingName): Promise<string | u
 }
 
 /** The settings that are not a network's app */
-const BASE: Record<keyof BaseValues, true> = { launchesRepo: true, claudioUrl: true, claudioToken: true };
+const BASE: Record<keyof BaseValues, true> = { launchesRepo: true, claudioUrl: true, claudioToken: true, instagramLogin: true, instagramConfigId: true, facebookConfigId: true };
 
 function parse(values: Partial<Record<SettingName, string>>): SettingsValues {
   return {
     launchesRepo: values.launchesRepo,
     claudioUrl: values.claudioUrl?.replace(/\/+$/, ''),
     claudioToken: values.claudioToken,
+    instagramLogin: values.instagramLogin,
+    instagramConfigId: values.instagramConfigId,
+    facebookConfigId: values.facebookConfigId,
     ...Object.fromEntries(NAMES.filter((n) => !(n in BASE)).map((n) => [n, values[n]])),
   };
 }
@@ -198,11 +231,25 @@ export class RuntimeSettings {
     return repo;
   }
 
-  /** The owner's app on a network that signs in through one; undefined until both its id and secret are set */
-  oauthApp(networkId: string): OAuthApp | undefined {
-    const clientId = this.#current[oauthSettingName(networkId, 'Id')];
-    const clientSecret = this.#current[oauthSettingName(networkId, 'Secret')];
-    return clientId && clientSecret ? { clientId, clientSecret } : undefined;
+  /**
+   * The owner's app a sign-in uses; undefined until its id and secret are set, and its configuration
+   * id when the spec names one
+   */
+  oauthApp(spec: OAuthSpec): OAuthApp | undefined {
+    const clientId = this.#current[appSettingName(spec.app, 'Id')];
+    const clientSecret = this.#current[appSettingName(spec.app, 'Secret')];
+    if (!clientId || !clientSecret) return undefined;
+    if (!spec.config) return { clientId, clientSecret };
+    const configId = this.#current[spec.config];
+    return configId ? { clientId, clientSecret, configId } : undefined;
+  }
+
+  /** What a sign-in still lacks, by the label of the first missing setting: the id, the secret, then the configuration id */
+  missingFor(spec: OAuthSpec): string | undefined {
+    const needed: SettingName[] = [appSettingName(spec.app, 'Id'), appSettingName(spec.app, 'Secret'), ...(spec.config ? [spec.config] : [])];
+    const name = needed.find((n) => !this.#current[n]);
+    // An app no network's spec derives has no definition: its setting's name is the best label there is
+    return name === undefined ? undefined : (SETTINGS[name]?.label ?? name);
   }
 
   claudio(): { url: string; token: string } {

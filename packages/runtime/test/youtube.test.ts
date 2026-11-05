@@ -11,6 +11,7 @@ import {
   MemoryStore,
   networkSpec,
   NETWORKS,
+  oauthSpecsOf,
   settingDefinition,
   uploadUnits,
   YOUTUBE_BUCKET,
@@ -21,6 +22,13 @@ import {
   YouTubeQuota,
 } from '../src/index.ts';
 import { MemoryTokenBucket } from '../src/redis/index.ts';
+
+/** YouTube's one sign-in */
+function youtubeOAuth() {
+  const [spec] = oauthSpecsOf(networkSpec('youtube')!);
+  assert.ok(spec, 'YouTube signs in through Google');
+  return spec;
+}
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 
@@ -48,7 +56,7 @@ test('YouTube is a network of the catalog that signs in with the client set in S
   const id = settingDefinition('youtubeClientId');
   const secret = settingDefinition('youtubeClientSecret');
   assert.deepEqual([id.env, id.store.key, secret.env, secret.store.kind, secret.store.key], ['YOUTUBE_CLIENT_ID', 'youtube-client-id', 'YOUTUBE_CLIENT_SECRET', 'secret', 'app:youtube-client-secret']);
-  const url = new URL(networkSpec('youtube')!.oauth!.authorizeUrl({ clientId: 'c', clientSecret: 's' }, 'https://app.example/auth/youtube/callback', 'state-1'));
+  const url = new URL(youtubeOAuth().authorizeUrl({ clientId: 'c', clientSecret: 's' }, 'https://app.example/auth/youtube/callback', 'state-1'));
   assert.equal(url.origin, 'https://accounts.google.com');
   assert.equal(url.searchParams.get('access_type'), 'offline', 'a refresh token, so the account stays connected');
   assert.match(url.searchParams.get('scope') ?? '', /youtube\.upload .*youtube\.readonly .*youtube\.force-ssl/);
@@ -57,8 +65,9 @@ test('YouTube is a network of the catalog that signs in with the client set in S
 
 test("the code exchange's answer is kept as the import keeps a file: the client with the account", async () => {
   const http = (async () => Response.json({ access_token: 'a', refresh_token: 'r-from-code' })) as unknown as typeof fetch;
-  const token = await networkSpec('youtube')!.oauth!.exchange({ clientId: 'c', clientSecret: 's' }, 'https://app.example/auth/youtube/callback', 'code', http);
-  assert.deepEqual(token.credentials, { settings: { clientId: 'c' }, secrets: { clientSecret: 's', refreshToken: 'r-from-code' } });
+  const accounts = await youtubeOAuth().exchange({ clientId: 'c', clientSecret: 's' }, 'https://app.example/auth/youtube/callback', 'code', http);
+  assert.equal(accounts.length, 1);
+  assert.deepEqual(accounts[0]?.credentials, { settings: { clientId: 'c' }, secrets: { clientSecret: 's', refreshToken: 'r-from-code' } });
 });
 
 test('a token file is imported through the connection path: checked, its secrets in the store, nothing quoted', async () => {

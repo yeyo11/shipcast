@@ -114,9 +114,9 @@ export const youtubeAdapter = channelAdapter({
       howTo:
         'Needs your Google Cloud project with the YouTube Data API v3 and the YouTube Analytics API on, and an OAuth client (Web application) whose redirect URI is this app’s /auth/youtube/callback, its client id and secret set in Settings. Shipcast sends you to Google to authorise it once. Publish the consent screen (In production): while it is in Testing, Google ends the sign-in after 7 days and YouTube has to be connected again.',
       oauth: {
-        app: { term: 'client', name: 'YouTube' },
+        app: { id: 'youtube', term: 'client', name: 'YouTube' },
         authorizeUrl: (app, redirectUri, state) => youtubeAuthorizeUrl(app.clientId, redirectUri, state),
-        exchange: async (app, redirectUri, code, http) => ({ credentials: youtubeCredentials(app, (await exchangeYouTubeCode(app, redirectUri, code, http)).refreshToken) }),
+        exchange: async (app, redirectUri, code, http) => [{ credentials: youtubeCredentials(app, (await exchangeYouTubeCode(app, redirectUri, code, http)).refreshToken) }],
         errorParams: ['error_description', 'error'],
       },
       build: ({ need, fetch, buckets, cache }) => {

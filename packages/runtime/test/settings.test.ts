@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { AI_TASKS, writeAiSettings } from '@shipcast/engine';
-import { IMPORTED_KEY, importEnvSettings, InvalidSetting, MemoryStore, RuntimeSettings, SettingMissing } from '../src/index.ts';
+import { IMPORTED_KEY, importEnvSettings, InvalidSetting, MemoryStore, RuntimeSettings, settingDefinition, SettingMissing, type OAuthSpec } from '../src/index.ts';
 
 const OLD_ENV = {
   SHIPCAST_LAUNCHES_REPO: 'yeyo11/launches',
@@ -60,6 +60,29 @@ test('a value that does not pass its check is refused, and nothing of that save 
   await assert.rejects(settings.write({ claudioUrl: 'http://claudio:8798', launchesRepo: 'launches' }), (e) => e instanceof InvalidSetting && /owner\/name/.test(e.message));
   await assert.rejects(settings.write({ claudioUrl: 'claudio' }), /http\(s\)/);
   assert.equal((await settings.read()).claudioUrl, undefined);
+});
+
+test("the Meta app's Instagram setup is one of three, and nothing else is kept", async () => {
+  const settings = new RuntimeSettings({ registry: await memoryRegistry(), secrets: new MemoryStore(), env: {} });
+  await assert.rejects(settings.write({ instagramLogin: 'tiktok' }), (e) => e instanceof InvalidSetting && /instagram/.test(e.message) && /unified/.test(e.message) && /facebook/.test(e.message) && /tiktok/.test(e.message));
+  assert.equal((await settings.read()).instagramLogin, undefined);
+  await settings.write({ instagramLogin: 'unified' });
+  assert.equal(settings.current().instagramLogin, 'unified');
+  assert.deepEqual(settingDefinition('instagramLogin').choices, ['instagram', 'unified', 'facebook']);
+});
+
+test("a sign-in's app needs its id, its secret and, where the spec names one, its configuration id", async () => {
+  const settings = new RuntimeSettings({ registry: await memoryRegistry(), secrets: new MemoryStore(), env: {} });
+  const spec: OAuthSpec = { app: { id: 'instagram', term: 'app', name: 'Instagram' }, config: 'instagramConfigId', authorizeUrl: () => '', exchange: async () => [], errorParams: [] };
+  await settings.read();
+  assert.equal(settings.missingFor(spec), 'The Instagram app id');
+  await settings.write({ instagramAppId: '1234567890', instagramAppSecret: 'made-up-secret' });
+  assert.equal(settings.oauthApp(spec), undefined, 'the configuration id is still missing');
+  assert.equal(settings.missingFor(spec), 'The Instagram configuration id');
+  await settings.write({ instagramConfigId: '9876543210' });
+  assert.deepEqual(settings.oauthApp(spec), { clientId: '1234567890', clientSecret: 'made-up-secret', configId: '9876543210' });
+  assert.equal(settings.missingFor(spec), undefined);
+  assert.deepEqual(settings.oauthApp({ ...spec, config: undefined }), { clientId: '1234567890', clientSecret: 'made-up-secret' }, 'a spec with no configuration does without it');
 });
 
 test('an ai-budget-usd row left by the old single AI budget is ignored, and kept', async () => {

@@ -31,11 +31,11 @@ export const instagramAdapter = channelAdapter({
         { name: 'INSTAGRAM_ACCESS_TOKEN', key: 'accessToken', secret: true },
       ],
       oauth: {
-        app: { term: 'app', name: 'Instagram' },
+        app: { id: 'instagram', term: 'app', name: 'Instagram' },
         authorizeUrl: (app, redirectUri, state) => instagramAuthorizeUrl(app.clientId, redirectUri, state),
         exchange: async (app, redirectUri, code, http) => {
           const token = await exchangeInstagramCode({ appId: app.clientId, appSecret: app.clientSecret }, redirectUri, code, http);
-          return { credentials: { settings: { userId: token.userId, refreshedAt: new Date().toISOString() }, secrets: { accessToken: token.accessToken } } };
+          return [{ credentials: { settings: { userId: token.userId, refreshedAt: new Date().toISOString() }, secrets: { accessToken: token.accessToken } } }];
         },
         errorParams: ['error_description', 'error_reason'],
       },

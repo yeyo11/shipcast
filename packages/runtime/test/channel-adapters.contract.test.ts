@@ -16,10 +16,14 @@ import {
   NETWORK_VARIABLES,
   NETWORKS,
   networkOf,
+  oauthAppSettings,
   SETTINGS,
   settingDefinition,
   VARIABLE_HOW,
   type AnyChannelAdapter,
+  type NetworkSpec,
+  type OAuthSettingName,
+  type OAuthSpec,
   type SettingName,
 } from '../src/index.ts';
 
@@ -113,6 +117,20 @@ test("each OAuth network's app is two settings, named and kept as before", () =>
   assert.deepEqual(app('linkedinClientSecret'), ['LINKEDIN_CLIENT_SECRET', 'secret', 'app:linkedin-client-secret', 'The LinkedIn client secret']);
   assert.deepEqual(app('redditClientId'), ['REDDIT_CLIENT_ID', 'setting', 'reddit-client-id', 'The Reddit client id']);
   assert.deepEqual(Object.keys(SETTINGS).slice(0, 3), ['launchesRepo', 'claudioUrl', 'claudioToken']);
+});
+
+test('an app shared by several networks (Meta) is two settings named after the app, not a network', () => {
+  // No adapter signs in with the Meta app yet: a spec that does is enough to derive its settings
+  const meta: OAuthSpec = { app: { id: 'meta', term: 'app', name: 'Meta' }, authorizeUrl: () => '', exchange: async () => [], errorParams: [] };
+  const network = (id: string): NetworkSpec => ({ id, auth: 'oauth', fields: [], permissions: [], howTo: '', oauth: meta, build: () => ({ connector: undefined, check: async () => ({ ok: true, account: id }) }) });
+  const derived = oauthAppSettings([network('instagram'), network('facebook')]);
+  const app = (name: SettingName) => {
+    const d = derived[name as OAuthSettingName];
+    assert.ok(d, `${name} is derived`);
+    return [d.env, d.store.kind, d.store.key, d.label];
+  };
+  assert.deepEqual(app('metaAppId'), ['META_APP_ID', 'setting', 'meta-app-id', 'The Meta app id']);
+  assert.deepEqual(app('metaAppSecret'), ['META_APP_SECRET', 'secret', 'app:meta-app-secret', 'The Meta app secret']);
 });
 
 test('every channel the engine publishes has an adapter, and only those', () => {

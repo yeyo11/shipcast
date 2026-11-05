@@ -21,15 +21,17 @@ export const redditAdapter = channelAdapter({
       ],
       howTo: 'Needs your Reddit app (a "web app" at reddit.com/prefs/apps, whose API access Reddit has approved), its client id and secret set in Settings, and its redirect uri set to this app’s /auth/reddit/callback. Shipcast sends you to Reddit to authorise it once; the account stays connected.',
       oauth: {
-        app: { term: 'client', name: 'Reddit' },
+        app: { id: 'reddit', term: 'client', name: 'Reddit' },
         authorizeUrl: (app, redirectUri, state) => redditAuthorizeUrl(app.clientId, redirectUri, state),
         exchange: async (app, redirectUri, code, http) => {
           const token = await exchangeRedditCode(app, redirectUri, code, http);
-          return {
-            label: `u/${token.username}`,
-            // The app's client goes with the account: its refresh token is only good with that app
-            credentials: { settings: { username: token.username, clientId: app.clientId }, secrets: { refreshToken: token.refreshToken, clientSecret: app.clientSecret } },
-          };
+          return [
+            {
+              label: `u/${token.username}`,
+              // The app's client goes with the account: its refresh token is only good with that app
+              credentials: { settings: { username: token.username, clientId: app.clientId }, secrets: { refreshToken: token.refreshToken, clientSecret: app.clientSecret } },
+            },
+          ];
         },
         errorParams: ['error'],
       },

@@ -18,15 +18,17 @@ export const linkedinAdapter = channelAdapter({
       ],
       howTo: 'Needs your LinkedIn app with Sign In with LinkedIn using OpenID Connect and Share on LinkedIn, its client id and secret set in Settings. The token lasts 60 days; connect again when it runs out.',
       oauth: {
-        app: { term: 'client', name: 'LinkedIn' },
+        app: { id: 'linkedin', term: 'client', name: 'LinkedIn' },
         authorizeUrl: (app, redirectUri, state) => linkedinAuthorizeUrl(app.clientId, redirectUri, state),
         exchange: async (app, redirectUri, code, http) => {
           const token = await exchangeLinkedInCode(app, redirectUri, code, http);
-          return {
-            ...(token.name && { label: token.name }),
-            // No refresh token for most apps: the expiry is kept so the account says when to connect again
-            credentials: { settings: { personId: token.personId, expiresAt: new Date(Date.now() + token.expiresIn * 1000).toISOString() }, secrets: { accessToken: token.accessToken } },
-          };
+          return [
+            {
+              ...(token.name && { label: token.name }),
+              // No refresh token for most apps: the expiry is kept so the account says when to connect again
+              credentials: { settings: { personId: token.personId, expiresAt: new Date(Date.now() + token.expiresIn * 1000).toISOString() }, secrets: { accessToken: token.accessToken } },
+            },
+          ];
         },
         errorParams: ['error_description', 'error'],
       },

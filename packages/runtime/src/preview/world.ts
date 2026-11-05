@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BrevoCampaign, Check, Published, YouTubePublished, YouTubeVideo } from '@shipcast/connectors';
 import { bindStrategy, describeSent, redditKind, type ChangeEditor, type ChannelPublishing, type EditDeps, type Editors, type FakeAction, type FakeNetworkLedger, type Notifier, type Publishers, type YouTubePublisher } from '@shipcast/engine';
-import type { AnyChannelAdapter, Credentials } from '../channels/adapter.ts';
+import type { AnyChannelAdapter, ConnectedAccount, Credentials } from '../channels/adapter.ts';
 import { CHANNEL_ADAPTERS } from '../channels/registry.ts';
 import type { Services } from '../services.ts';
 import { withSiteFixtures, type PreviewFixtures } from './fixtures.ts';
@@ -176,7 +176,8 @@ export const PREVIEW_OAUTH_CODE = 'preview-fake-consent';
  */
 export interface PreviewOAuth {
   authorizeUrl(publicUrl: string, network: string, state: string): string;
-  exchange(network: string, code: string, label: string | undefined): Promise<{ label: string; credentials: Credentials }>;
+  /** One made-up account, as a real sign-in's list of the accounts the owner shared */
+  exchange(network: string, code: string, label: string | undefined): Promise<ConnectedAccount[]>;
   check(network: string, credentials: Credentials): Promise<Check>;
 }
 
@@ -188,7 +189,7 @@ function previewOAuth(options: PreviewWorldOptions): PreviewOAuth {
       if (code !== PREVIEW_OAUTH_CODE) throw new Error(`${network}: this preview only takes its own consent's code`);
       const name = label?.trim() || `preview-${network}`;
       await send(network, 'connect', 'account', { label: name });
-      return { label: name, credentials: { settings: { preview: 'true', label: name }, secrets: { accessToken: `preview-${randomUUID()}` } } };
+      return [{ label: name, credentials: { settings: { preview: 'true', label: name }, secrets: { accessToken: `preview-${randomUUID()}` } } }];
     },
     check: async (_network, credentials) => ({ ok: true, account: credentials.settings.label ?? 'preview' }),
   };

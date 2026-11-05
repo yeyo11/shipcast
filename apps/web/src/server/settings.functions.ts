@@ -15,14 +15,17 @@ export const getSettings = createServerFn({ method: 'GET' }).handler(async () =>
   const sources = ctx.settings.sources();
   const settings = NAMES.map((name) => {
     const value = values[name];
+    const definition = settingDefinition(name);
     return {
       name,
-      label: settingDefinition(name).label,
-      env: settingDefinition(name).env,
+      label: definition.label,
+      env: definition.env,
       secret: SECRET.includes(name),
       value: SECRET.includes(name) || value === undefined ? null : String(value),
       set: value !== undefined,
       source: sources[name] ?? 'unset',
+      /** The only values it takes, offered as a list */
+      choices: definition.choices ? [...definition.choices] : null,
     };
   });
 

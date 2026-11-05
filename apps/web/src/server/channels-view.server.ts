@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { accountGrowth, type Repositories } from '@shipcast/engine';
-import { credentialsFor, isStale, lastSynced, NETWORK_SPECS, networksOn, type Flags, type RuntimeSettings, type SecretStore } from '@shipcast/runtime';
+import { credentialsFor, isStale, lastSynced, NETWORK_SPECS, networkSpec, networksOn, oauthSpecOf, type Flags, type NetworkSpec, type RuntimeSettings, type SecretStore } from '@shipcast/runtime';
 import type { Brand } from '@shipcast/schema';
 import { accountAvatar } from './pieces.ts';
 import { sourceName } from './source-name.ts';
 
 /** The page's view from what it reads: the registry, the keychain and the cached brand, never a network */
-export async function channelsViewOf(ctx: { registry: Repositories; secrets: SecretStore; brand(): Promise<Brand>; settings: Pick<RuntimeSettings, 'oauthApp'>; flags: Flags }) {
+export async function channelsViewOf(ctx: { registry: Repositories; secrets: SecretStore; brand(): Promise<Brand>; settings: Pick<RuntimeSettings, 'oauthApp' | 'current'>; flags: Flags }) {
   const { registry, secrets, brand } = ctx;
   // A network behind a flag (Umami) is not offered while its flag is off
   const networks = networksOn(ctx.flags);
@@ -25,6 +25,11 @@ export async function channelsViewOf(ctx: { registry: Repositories; secrets: Sec
       return { ...account, display: sourceName(account.network, current.site) ?? account.label, avatarUrl: accountAvatar(account), snapshot, weekChange, activity: activity.get(account.id) ?? { count: 0, last: null }, syncedAt, stale: isStale(syncedAt, now) };
     }),
   );
+  // Whether the sign-in Settings chose for the network has every value it needs
+  const ready = (spec: NetworkSpec | undefined) => {
+    const signIn = spec && oauthSpecOf(spec, ctx.settings.current());
+    return signIn !== undefined && ctx.settings.oauthApp(signIn.spec) !== undefined;
+  };
   const fromEnv: string[] = [];
   for (const network of networks) {
     if (accounts.some((a) => a.network === network.id && a.brand === current.id)) continue;
@@ -38,9 +43,9 @@ export async function channelsViewOf(ctx: { registry: Repositories; secrets: Sec
     /** The brand's blog languages (brand.yml's languages.blog), the primary first: what Write and Sources offer */
     languages: current.languages.blog,
     secretsKind: secrets.kind,
-    instagramOAuth: ctx.settings.oauthApp('instagram') !== undefined,
+    instagramOAuth: ready(networkSpec('instagram')),
     /** Which OAuth networks have the owner's app set in Settings, from their specs; Mastodon registers itself */
-    oauthReady: Object.fromEntries(NETWORK_SPECS.filter((n) => n.oauth).map((n) => [n.id, ctx.settings.oauthApp(n.id) !== undefined])) as Record<string, boolean>,
+    oauthReady: Object.fromEntries(NETWORK_SPECS.filter((n) => n.oauth).map((n) => [n.id, ready(n)])) as Record<string, boolean>,
     networks: networks.map((n) => ({
       ...n,
       accounts: accounts.filter((a) => a.network === n.id),

@@ -88,7 +88,18 @@ export interface EnvVariable {
 export interface OAuthApp {
   clientId: string;
   clientSecret: string;
+  /** The configuration Facebook Login for Business signs in with, when the spec names one */
+  configId?: string;
 }
+
+/** One account a sign-in produced: its credentials and, when the network says, its label */
+export interface ConnectedAccount {
+  label?: string;
+  credentials: Credentials;
+}
+
+/** The settings a sign-in's configuration id is kept in */
+export type ConfigSetting = 'instagramConfigId' | 'facebookConfigId';
 
 /**
  * A sign-in through the network's own consent page, with the owner's app (its id and secret in
@@ -96,13 +107,30 @@ export interface OAuthApp {
  * registers itself on each instance.
  */
 export interface OAuthSpec {
-  /** How the network names the app (Meta: "app id" and "app secret"; the others, "client id" and "client secret") */
-  app: { term: 'app' | 'client'; name: string };
+  /**
+   * The app it signs in with. `id` names the app's settings: the network's own (`instagram`) or one
+   * several networks share (`meta`). `term` is how the network names it (Meta: "app id" and "app
+   * secret"; the others, "client id" and "client secret").
+   */
+  app: { id: string; term: 'app' | 'client'; name: string };
+  /** The configuration id Facebook Login for Business needs, from this setting */
+  config?: ConfigSetting;
   authorizeUrl(app: OAuthApp, redirectUri: string, state: string): string;
-  /** The code the callback got, as the account's credentials and, when the network says, its label */
-  exchange(app: OAuthApp, redirectUri: string, code: string, http?: typeof fetch): Promise<{ label?: string; credentials: Credentials }>;
+  /** The code the callback got, as every account the owner shared in the consent (one, on most networks) */
+  exchange(app: OAuthApp, redirectUri: string, code: string, http?: typeof fetch): Promise<ConnectedAccount[]>;
   /** The callback's query parameters that explain a refusal, the most useful first */
   errorParams: readonly string[];
+}
+
+/**
+ * A network that signs in more than one way, depending on how the owner's app is set up (Instagram:
+ * Instagram Login, Facebook Login for Business, or both): the setting names the variant, and an
+ * unset or unknown value means `fallback`.
+ */
+export interface OAuthVariants {
+  setting: 'instagramLogin';
+  fallback: string;
+  variants: Readonly<Record<string, OAuthSpec & { label: string }>>;
 }
 
 /** A token that lasts some weeks and is refreshed before it runs out, where it is kept */
@@ -127,7 +155,7 @@ export interface NetworkSpec<C = unknown> {
   /** Where the credential comes from */
   howTo: string;
   env?: readonly EnvVariable[];
-  oauth?: OAuthSpec;
+  oauth?: OAuthSpec | OAuthVariants;
   refresh?: TokenRefresh;
   /** Builds the connector; a missing value throws MissingField, so an account is never half-built */
   build(context: BuildContext): Connection<C>;

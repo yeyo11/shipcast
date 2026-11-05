@@ -23,11 +23,11 @@ export const threadsAdapter = channelAdapter({
       ],
       howTo: 'Needs your Meta app’s Threads use case, its app id and secret set in Settings. Shipcast sends you to Threads to authorise it; the token is renewed every 30 days.',
       oauth: {
-        app: { term: 'app', name: 'Threads' },
+        app: { id: 'threads', term: 'app', name: 'Threads' },
         authorizeUrl: (app, redirectUri, state) => threadsAuthorizeUrl(app.clientId, redirectUri, state),
         exchange: async (app, redirectUri, code, http) => {
           const token = await exchangeThreadsCode({ appId: app.clientId, appSecret: app.clientSecret }, redirectUri, code, http);
-          return { credentials: { settings: { userId: token.userId, refreshedAt: new Date().toISOString() }, secrets: { accessToken: token.accessToken } } };
+          return [{ credentials: { settings: { userId: token.userId, refreshedAt: new Date().toISOString() }, secrets: { accessToken: token.accessToken } } }];
         },
         errorParams: ['error_description', 'error_reason'],
       },

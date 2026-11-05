@@ -226,7 +226,9 @@ test("a preview's sign-in never leaves the app: its consent comes back to the ca
   assert.equal(url.pathname, '/auth/youtube/callback');
   assert.equal(url.searchParams.get('state'), 'st4te');
   assert.equal(url.searchParams.get('code'), PREVIEW_OAUTH_CODE);
-  const token = await oauth.exchange('youtube', PREVIEW_OAUTH_CODE, 'scale-1');
+  const [token, ...more] = await oauth.exchange('youtube', PREVIEW_OAUTH_CODE, 'scale-1');
+  assert.ok(token);
+  assert.equal(more.length, 0, 'one account per preview sign-in');
   assert.equal(token.label, 'scale-1');
   assert.deepEqual(await oauth.check('youtube', token.credentials), { ok: true, account: 'scale-1' });
   await assert.rejects(oauth.exchange('youtube', 'a-real-code', undefined));

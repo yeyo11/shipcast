@@ -18,6 +18,7 @@ export * from './comments.ts';
 export * from './profiles.ts';
 export * from './assistant-check.ts';
 export * from './settings.ts';
+export * from './oauth-specs.ts';
 export * from './github-user.ts';
 export * from './webmcp.ts';
 export * from './runtime.ts';

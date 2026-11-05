@@ -1,6 +1,7 @@
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { saveSettings } from '../server/settings.functions';
+import { PickerSelect } from './kit/Picker';
 import { SaveBar } from './SaveBar';
 import { changesText, settingHelp } from './settings/view';
 import { useToast } from './Toasts';
@@ -13,6 +14,8 @@ export interface SettingView {
   value: string | null;
   set: boolean;
   source: string;
+  /** The only values it takes: a list to pick from instead of a field to type in */
+  choices?: readonly string[] | null;
 }
 
 /** The AI's settings (claudio's address and token) live in Settings › AI only, so nothing is configured twice */
@@ -96,6 +99,21 @@ export function SettingsForm({ settings, missing = [], bar = false, heading, onS
         const help = settingHelp(s);
         const kept = s.secret && s.set && !replacing[s.name];
         const bad = missing.includes(s.label) && !(draft ?? initialOf(s)).trim();
+        if (s.choices?.length) {
+          const current = draft ?? initialOf(s);
+          return (
+            <PickerSelect
+              key={s.name}
+              id={id}
+              label={s.label}
+              options={s.choices.map((choice) => ({ value: choice, label: choice }))}
+              value={current || null}
+              placeholder="Not set"
+              onValueChange={(value) => setEdits({ ...edits, [s.name]: value })}
+              help={help ?? undefined}
+            />
+          );
+        }
         return (
           <div className="k-field" key={s.name}>
             <label className="k-lbl" htmlFor={kept ? undefined : id}>

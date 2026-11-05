@@ -1,5 +1,5 @@
 import { exchangeMastodonCode, MASTODON_SCOPES, mastodonAuthorizeUrl, registerMastodonApp } from '@shipcast/connectors';
-import { connectAccount, getJson, network, networkSpec, type AccountDeps, type Credentials } from '@shipcast/runtime';
+import { connectAccount, getJson, network, networkSpec, oauthSpecOf, type AccountDeps, type ConnectedAccount } from '@shipcast/runtime';
 import { processState } from '@shipcast/runtime/redis';
 import { appContext, type AppContext } from './context.server';
 import { channelsViewOf } from './channels-view.server.ts';
@@ -30,6 +30,8 @@ interface Flow {
   brand: string;
   instance?: string;
   label?: string;
+  /** The sign-in it started with, for a network that has several: its callback finishes that one */
+  variant?: string;
 }
 const OAUTH_NAMESPACE = 'oauth-state';
 
@@ -38,6 +40,7 @@ function remember(entry: Flow): Promise<string> {
   const value: Record<string, string> = { network: entry.network, brand: entry.brand };
   if (entry.instance !== undefined) value.instance = entry.instance;
   if (entry.label !== undefined) value.label = entry.label;
+  if (entry.variant !== undefined) value.variant = entry.variant;
   return processState().shared.oneTime.put(OAUTH_NAMESPACE, value, 10 * 60);
 }
 
@@ -47,7 +50,13 @@ async function takeFlow(url: URL, network: OAuthNetwork): Promise<Flow | undefin
   if (!state) return undefined;
   const flow = await processState().shared.oneTime.take<Record<string, string>>(OAUTH_NAMESPACE, state);
   if (!flow || flow.network !== network || flow.brand === undefined) return undefined;
-  return { network, brand: flow.brand, ...(flow.instance !== undefined && { instance: flow.instance }), ...(flow.label !== undefined && { label: flow.label }) };
+  return {
+    network,
+    brand: flow.brand,
+    ...(flow.instance !== undefined && { instance: flow.instance }),
+    ...(flow.label !== undefined && { label: flow.label }),
+    ...(flow.variant !== undefined && { variant: flow.variant }),
+  };
 }
 
 const redirect = (location: string) => new Response(null, { status: 302, headers: { location } });
@@ -123,32 +132,36 @@ export async function finishMastodon(request: Request): Promise<Response> {
  */
 export async function startOAuth(networkId: string, request: Request): Promise<Response> {
   const ctx = await appContext();
-  const spec = networkSpec(networkId)?.oauth;
-  if (!spec) return back(networkId, `${networkId} has no sign-in.`);
-  const app = ctx.settings.oauthApp(networkId);
+  const found = networkSpec(networkId);
+  const signIn = found && oauthSpecOf(found, ctx.settings.current());
+  if (!signIn) return back(networkId, `${networkId} has no sign-in.`);
+  const { spec, variant } = signIn;
+  const app = ctx.settings.oauthApp(spec);
   const url = new URL(request.url);
-  const flow = { network: networkId, brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined };
+  const flow: Flow = { network: networkId, brand: url.searchParams.get('brand') ?? 'personal', label: url.searchParams.get('label') ?? undefined, variant };
   // A preview's consent is its own, with no app of the owner's: the browser comes straight back to the callback, which may be another replica's
   if (ctx.preview) return redirect(ctx.preview.oauth.authorizeUrl(ctx.app.publicUrl, networkId, await remember(flow)));
-  if (!app) return back(networkId, `Set the ${spec.app.name} ${spec.app.term} id and secret in Settings (/settings) first.`);
+  if (!app) return back(networkId, `Set ${lowerFirst(ctx.settings.missingFor(spec) ?? `the ${spec.app.name} ${spec.app.term} id and secret`)} in Settings (/settings) first.`);
   const state = await remember(flow);
   return redirect(spec.authorizeUrl(app, `${ctx.app.publicUrl}/auth/${networkId}/callback`, state));
 }
 
 export async function finishOAuth(networkId: string, request: Request): Promise<Response> {
   const ctx = await appContext();
-  const spec = networkSpec(networkId)?.oauth;
-  const app = ctx.settings.oauthApp(networkId);
   const url = new URL(request.url);
   const flow = await takeFlow(url, networkId);
+  const found = networkSpec(networkId);
+  // The variant the flow started with, whatever Settings says now
+  const spec = flow && found ? oauthSpecOf(found, ctx.settings.current(), flow.variant)?.spec : undefined;
   if (!flow || !spec) return back(networkId, 'This authorisation is stale or was not started here: try again.');
+  const app = ctx.settings.oauthApp(spec);
   const code = url.searchParams.get('code');
   const name = network(networkId)?.name ?? networkId;
   if (code && ctx.preview) return finishPreview(networkId, flow, code);
   if (!code || !app) return back(networkId, `${name} did not authorise Shipcast: ${spec.errorParams.map((p) => url.searchParams.get(p)).find(Boolean) ?? 'cancelled'}.`);
   try {
-    const token = await spec.exchange(app, `${ctx.app.publicUrl}/auth/${networkId}/callback`, code);
-    return await connectWith(networkId, flow, token);
+    const accounts = await spec.exchange(app, `${ctx.app.publicUrl}/auth/${networkId}/callback`, code);
+    return await connectAll(networkId, flow, accounts);
   } catch (error) {
     return back(networkId, error instanceof Error ? error.message : String(error));
   }
@@ -158,18 +171,35 @@ export async function finishOAuth(networkId: string, request: Request): Promise<
 async function finishPreview(networkId: string, flow: Flow, code: string, settings: Record<string, string> = {}): Promise<Response> {
   const { preview } = await appContext();
   try {
-    const token = await preview!.oauth.exchange(networkId, code, flow.label);
-    return await connectWith(networkId, flow, { label: token.label, credentials: { ...token.credentials, settings: { ...token.credentials.settings, ...settings } } });
+    const accounts = await preview!.oauth.exchange(networkId, code, flow.label);
+    return await connectAll(
+      networkId,
+      flow,
+      accounts.map((a) => ({ ...a, credentials: { ...a.credentials, settings: { ...a.credentials.settings, ...settings } } })),
+    );
   } catch (error) {
     return back(networkId, error instanceof Error ? error.message : String(error));
   }
 }
 
 /**
- * Keeps the account a sign-in (or an import of the same credentials) produced, through the one path
- * every connection takes: checked first, its secrets in the keychain
+ * Keeps every account a sign-in produced (Meta's consent may share several Pages or Instagram
+ * accounts at once), each through the one path every connection takes: checked first, its secrets in
+ * the keychain. The label the owner typed names one account, never several. The browser lands on the
+ * first one connected; one that fails does not undo the others.
  */
-async function connectWith(networkId: string, flow: { brand: string; label?: string }, token: { label?: string; credentials: Credentials }): Promise<Response> {
-  const result = await connectAccount(await accountDeps(), { network: networkId, brand: flow.brand, label: flow.label ?? token.label, credentials: token.credentials });
-  return result.ok ? connected(result.account) : back(networkId, result.problem);
+async function connectAll(networkId: string, flow: { brand: string; label?: string }, accounts: ConnectedAccount[]): Promise<Response> {
+  if (accounts.length === 0) return back(networkId, `${network(networkId)?.name ?? networkId} shared no account with Shipcast.`);
+  const deps = await accountDeps();
+  const label = accounts.length === 1 ? flow.label : undefined;
+  let first: Parameters<typeof connected>[0] | undefined;
+  const problems: string[] = [];
+  for (const account of accounts) {
+    const result = await connectAccount(deps, { network: networkId, brand: flow.brand, label: label ?? account.label, credentials: account.credentials });
+    if (result.ok) first ??= result.account;
+    else problems.push(result.problem);
+  }
+  return first ? connected(first) : back(networkId, problems.join('; '));
 }
+
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
