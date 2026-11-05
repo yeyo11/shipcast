@@ -18,6 +18,7 @@ import {
   type ReplyTarget,
   type SentReply,
 } from './http.ts';
+import { META_GRAPH_VERSION } from './meta/graph.ts';
 
 /** One insight as the Graph API answers it: a lifetime total, or a value per breakdown */
 interface Insight {
@@ -96,6 +97,11 @@ export interface InstagramOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Where the account's username is kept between runs */
   cache?: IdentityCache;
+  /**
+   * The Graph API host: `instagram` (Instagram Login, the default) or `facebook` (Unified Login and
+   * Facebook Login for Business), where `/me` is not the Instagram account, so it is read by its id.
+   */
+  host?: 'instagram' | 'facebook';
 }
 
 /**
@@ -110,6 +116,7 @@ export class Instagram implements CommentReader, Replier {
   readonly #token: string;
   readonly #fetch: typeof fetch;
   readonly #base: string;
+  readonly #host: 'instagram' | 'facebook';
   readonly #pollMs: number;
   readonly #timeoutMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
@@ -121,10 +128,16 @@ export class Instagram implements CommentReader, Replier {
     this.#token = options.accessToken;
     this.#cache = options.cache;
     this.#fetch = options.fetch ?? globalThis.fetch;
-    this.#base = `https://graph.instagram.com/${options.version ?? 'v25.0'}`;
+    this.#host = options.host ?? 'instagram';
+    this.#base = this.#host === 'facebook' ? `https://graph.facebook.com/${options.version ?? META_GRAPH_VERSION}` : `https://graph.instagram.com/${options.version ?? 'v25.0'}`;
     this.#pollMs = options.pollMs ?? 10_000;
     this.#timeoutMs = options.timeoutMs ?? 10 * 60_000;
     this.#sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  }
+
+  /** The account itself: `/me` is the Instagram account only with Instagram Login */
+  #self(): string {
+    return this.#host === 'facebook' ? `/${this.#user}` : '/me';
   }
 
   async #post<T>(path: string, params: Record<string, string>, what: string): Promise<T> {
@@ -201,7 +214,7 @@ export class Instagram implements CommentReader, Replier {
 
   /** The account's own username, read once: what tells the owner's replies from the others' */
   async #ownName(): Promise<string> {
-    const load = () => this.#get<{ username: string }>('/me', { fields: 'username' }, 'read the account').then((me) => me.username);
+    const load = () => this.#get<{ username: string }>(this.#self(), { fields: 'username' }, 'read the account').then((me) => me.username);
     // Kept a day between runs, so /me is not asked hourly
     this.#username ??= (this.#cache ? this.#cache.remember(`instagram-me:${secretTag(this.#token)}`, 86_400, load) : load()).then(
       (name) => name,
@@ -448,8 +461,8 @@ export class Instagram implements CommentReader, Replier {
   async check(): Promise<Check> {
     try {
       const me = await this.#get<{ user_id?: string; id: string; username: string; name?: string; profile_picture_url?: string }>(
-        '/me',
-        { fields: 'user_id,username,name,profile_picture_url' },
+        this.#self(),
+        { fields: this.#host === 'facebook' ? 'id,username,name,profile_picture_url' : 'user_id,username,name,profile_picture_url' },
         'check',
       );
       // `user_id` is the professional account's id, the one media is published under; `id` is app-scoped
@@ -470,7 +483,7 @@ export class Instagram implements CommentReader, Replier {
    */
   async profileStats(): Promise<ProfileStats> {
     const me = await this.#get<{ followers_count?: number; follows_count?: number; media_count?: number }>(
-      '/me',
+      this.#self(),
       { fields: 'followers_count,follows_count,media_count' },
       'read the profile',
     );
@@ -502,7 +515,7 @@ export class Instagram implements CommentReader, Replier {
    * one link the API gives of up to five. Instagram's API changes none of them.
    */
   async profile(): Promise<Profile> {
-    const me = await this.#get<{ name?: string; biography?: string; website?: string; profile_picture_url?: string }>('/me', { fields: 'name,biography,website,profile_picture_url' }, 'read the profile');
+    const me = await this.#get<{ name?: string; biography?: string; website?: string; profile_picture_url?: string }>(this.#self(), { fields: 'name,biography,website,profile_picture_url' }, 'read the profile');
     return {
       ...(me.name?.trim() && { displayName: me.name }),
       ...(me.biography?.trim() && { bio: me.biography }),
@@ -513,6 +526,9 @@ export class Instagram implements CommentReader, Replier {
 
   /** Swaps the long-lived token for a fresh one (valid 60 more days); allowed once it is 24 h old. */
   async refreshToken(): Promise<{ accessToken: string; expiresIn: number }> {
+    if (this.#host === 'facebook') {
+      throw new ConnectorError('Instagram', 'this token is not refreshed: connect Instagram again when it stops working', 400, false);
+    }
     const query = new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: this.#token });
     const response = await this.#fetch(`https://graph.instagram.com/refresh_access_token?${query}`);
     const refreshed = await json<{ access_token: string; expires_in: number }>('Instagram', response, 'refresh the token');
