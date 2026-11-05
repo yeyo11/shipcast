@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-05T11:35:50.520266711Z
-updated_at: 2026-11-05T11:35:50.520266711Z
+created_at: 2026-11-05T11:42:08.344657615Z
+updated_at: 2026-11-05T11:42:08.344657615Z
 tags:
     - plan
     - design
@@ -84,13 +84,14 @@ Rejected:
   A `config_id` is not a secret: Meta says it identifies a configuration and gives no access.
 - **The contract changes**: today each network's two app settings are derived from its `OAuthSpec`
   (`oauthAppSettings` in `packages/runtime/src/settings.ts`). A spec now names the app it uses
-  (`app.id`: its own network's, or `meta`) and the extra public settings it asks for (the
+  (`app.id`: its own network's, or `meta`) and the extra public setting it asks for (the
   configuration id), so two networks can share one app.
 
 ### 2. The adapter contract
 
 - `NetworkSpec.oauth` is an `OAuthSpec` or `{ setting, variants, fallback }`: `/auth/<network>` reads
-  the setting and runs that variant; the callback runs the same one.
+  the setting and runs that variant; the callback runs the same one, remembered with the flow's
+  state, even if the setting changed in between.
 - **`exchange` returns a list of accounts.** In Facebook Login for Business the owner may share
   several Pages or Instagram accounts in Meta's dialog; Shipcast makes one account per shared asset,
   through `connectAccount` as today (checked first; the first becomes primary when the brand has
@@ -109,9 +110,10 @@ Rejected:
   the BISU token, the Instagram account id and the client business id.
 - **Facebook Login for Business** (Instagram through a Page, and the Facebook channel): the same
   dialog and exchange with a *user access token* configuration; the user token swapped for a 60-day
-  one (`grant_type=fb_exchange_token`); `/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}`
-  lists the Pages, each with its Page token and its linked Instagram account. The account keeps the
-  Page token, which does not expire.
+  one (`grant_type=fb_exchange_token`);
+  `/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}` lists the
+  Pages, each with its Page token and its linked Instagram account. The account keeps the Page
+  token, which does not expire.
 - An answer with no usable asset (no professional Instagram account, a Page without an Instagram
   account, no Page shared) is an error said in words; nothing is kept.
 
@@ -119,22 +121,24 @@ Rejected:
 
 - `Instagram` takes `{ host, accessToken, userId, version }`. With `graph.instagram.com` nothing
   changes.
-- With `graph.facebook.com`, `check()`, `profile()` and `profileStats()` read `/{userId}?fields=…`
-  instead of `/me` (with a BISU token `/me` is the system user). Publishing, comments and insights
-  already address `/{userId}` and `/{mediaId}`; insights Meta refuses by name are already dropped.
+- With `graph.facebook.com`, `check()`, `profile()`, `profileStats()` and the own-username read behind
+  the comments read `/{userId}?fields=…` instead of `/me` (with a BISU token `/me` is the system
+  user). Publishing, comments and insights already address `/{userId}` and `/{mediaId}`; insights
+  Meta refuses by name are already dropped.
 - **Refresh**: Instagram Login every 30 days, as today; Page tokens never; BISU tokens never when
   the configuration says "never", which the connection's instructions ask for. A BISU token that does
-  expire is flagged by the daily check ("reconnect before …"), not refreshed.
+  expire is not refreshed: once it runs out, the daily check fails and the account asks to be
+  connected again, as any account whose token stops working.
 
 ### 5. The Facebook channel (`facebook`)
 
 - **Definition** `packages/schema/src/channels/facebook.ts`: a `facebook` piece in the content pack
-  (one post in the brand's language, linking the article, with the launch image), `off` by default in
-  `launch.yml`, schedulable, its posting windows and metric families.
-- **Connector** `FacebookPage` (`packages/connectors/src/facebook.ts`): publish a photo with its text
-  (`/{page}/photos`) or a link post (`/{page}/feed`); edit (`POST /{post}`) and delete
-  (`DELETE /{post}`); read and answer comments (`/{post}/comments`); the post's and the Page's
-  insights; the profile (name, about, picture, followers), read only.
+  (one post in the brand's language, linking the article, whose card shows the article's image),
+  `off` by default in `launch.yml`, schedulable, its posting windows and metric families.
+- **Connector** `FacebookPage` (`packages/connectors/src/facebook.ts`): publish a link post
+  (`/{page}/feed` with the text and the article's link, so the card carries the click); edit
+  (`POST /{post}`) and delete (`DELETE /{post}`); read and answer comments (`/{post}/comments`); the
+  post's and the Page's insights; the profile (name, about, picture, followers), read only.
 - **Permissions**: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`,
   `pages_manage_engagement`, `read_insights`, `business_management`.
 - **Parity**: publishing, editing, comments, metrics and accounts are already REST routes and MCP
