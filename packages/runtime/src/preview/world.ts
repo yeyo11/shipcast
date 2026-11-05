@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { BrevoCampaign, Check, Published, YouTubePublished, YouTubeVideo } from '@shipcast/connectors';
-import { bindStrategy, describeSent, redditKind, type ChangeEditor, type ChannelPublishing, type EditDeps, type Editors, type FakeAction, type FakeNetworkLedger, type Notifier, type Publishers, type YouTubePublisher } from '@shipcast/engine';
+import { bindStrategy, describeSent, redditKind, type ChangeEditor, type ChannelPublishing, type EditDeps, type Editors, type FakeAction, type FakeNetworkLedger, type Notifier, type Publishers, type TextPostPublisher, type YouTubePublisher } from '@shipcast/engine';
 import type { AnyChannelAdapter, ConnectedAccount, Credentials } from '../channels/adapter.ts';
 import { CHANNEL_ADAPTERS } from '../channels/registry.ts';
 import type { Services } from '../services.ts';
@@ -96,6 +96,7 @@ export function fakePublishers(options: PreviewWorldOptions): Required<Publisher
  * only the upload is faked.
  */
 export const FAKE_STRATEGY_PUBLISHERS: Readonly<Record<string, (send: Send) => unknown>> = {
+  facebook: (send): TextPostPublisher => ({ publish: (post) => send('facebook', 'publish', 'post', post) }),
   youtube: (send): YouTubePublisher => ({
     async publish(video: YouTubeVideo): Promise<YouTubePublished> {
       const { bytes, thumbnail, ...rest } = video;

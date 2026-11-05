@@ -114,7 +114,7 @@ export function scalePack(launch: PlannedLaunch): Record<string, unknown> {
   if (has('devto')) pack.devto = { tags: ['scale'] };
   if (has('hashnode')) pack.hashnode = { tags: ['scale'] };
   for (const c of ['bluesky', 'mastodon'] as const) if (has(c)) pack[c] = { lang: 'en', text: `${c} ${m}` };
-  for (const c of ['telegram', 'discord', 'threads', 'linkedin'] as const) if (has(c)) pack[c] = { text: `${c} ${m}` };
+  for (const c of ['telegram', 'discord', 'threads', 'facebook', 'linkedin'] as const) if (has(c)) pack[c] = { text: `${c} ${m}` };
   if (has('instagram')) pack.instagram = { caption: `instagram ${m}`, summary: `Scale ${launch.index}`, slides: [{ title: 'One', text: 'A slide.' }, { title: 'Two', text: 'Another slide.' }] };
   if (has('newsletter')) pack.newsletter = { en: { subject: `Newsletter ${m}`, previewText: `Preview ${m}`, markdown: `An issue ${m}.` } };
   if (has('reddit')) pack.reddit = [{ subreddit: SCALE_SUBREDDIT, title: `Reddit ${m}`, body: `A post ${m}.` }];

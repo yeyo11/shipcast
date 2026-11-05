@@ -142,6 +142,14 @@ test('every channel the engine publishes has an adapter, and only those', () => 
   assert.equal(new Set(networks).size, networks.length, 'one adapter per network');
 });
 
+test('Facebook is among the adapters and its network in the catalog, signed in through the app with no .env variables', () => {
+  assert.ok(CHANNEL_ADAPTERS.some((a) => a.definition.id === 'facebook'));
+  const entry = NETWORKS.find((n) => n.id === 'facebook');
+  assert.deepEqual(entry && [entry.name, entry.channel, entry.auth], ['Facebook', 'facebook', 'oauth']);
+  assert.equal(ACTION_VARIABLES.facebook, undefined, 'facebook signs in through the app');
+  assert.ok(!NETWORK_VARIABLES.some((v) => v.startsWith('FACEBOOK_')), 'no FACEBOOK_* variable');
+});
+
 for (const adapter of CHANNEL_ADAPTERS) {
   const d: ChannelDefinition = adapter.definition;
   test(`${d.id}: the adapter wires what the definition declares, and nothing else`, () => {

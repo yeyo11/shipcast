@@ -50,6 +50,9 @@ export function keyMetric(network: string, snapshot: Snapshot): KeyMetric | null
       return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.following, 'following'), n(snapshot?.posts, 'posts'), n(extra.views1d, 'views, last day')) };
     case 'threads':
       return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(extra.profileViews1d, 'profile views, last day')) };
+    // A Page's likes are its own count, beside its followers
+    case 'facebook':
+      return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(extra.likes, 'likes')) };
     case 'devto':
     case 'hashnode':
       return { value: snapshot?.followers ?? null, label: 'Followers', others: line(n(snapshot?.posts, 'articles')) };

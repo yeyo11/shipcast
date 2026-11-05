@@ -30,6 +30,7 @@ import { Route as ApiAssistantRouteImport } from './routes/api/assistant'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLaunchesRouteImport } from './routes/api/launches'
+import { Route as AuthFacebookRouteImport } from './routes/auth/facebook'
 import { Route as AuthGithubRouteImport } from './routes/auth/github'
 import { Route as AuthInstagramRouteImport } from './routes/auth/instagram'
 import { Route as AuthLinkRouteImport } from './routes/auth/link'
@@ -56,6 +57,7 @@ import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/sett
 import { Route as ApiGithubWebhookRouteImport } from './routes/api/github/webhook'
 import { Route as ApiSourcesMediaRouteImport } from './routes/api/sources/media'
 import { Route as ApiV1SplatRouteImport } from './routes/api/v1/$'
+import { Route as AuthFacebookCallbackRouteImport } from './routes/auth/facebook.callback'
 import { Route as AuthGithubCallbackRouteImport } from './routes/auth/github.callback'
 import { Route as AuthInstagramCallbackRouteImport } from './routes/auth/instagram.callback'
 import { Route as AuthLinkedinCallbackRouteImport } from './routes/auth/linkedin.callback'
@@ -170,6 +172,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
 const ApiLaunchesRoute = ApiLaunchesRouteImport.update({
   id: '/api/launches',
   path: '/api/launches',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthFacebookRoute = AuthFacebookRouteImport.update({
+  id: '/auth/facebook',
+  path: '/auth/facebook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthGithubRoute = AuthGithubRouteImport.update({
@@ -303,6 +310,11 @@ const ApiV1SplatRoute = ApiV1SplatRouteImport.update({
   path: '/api/v1/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthFacebookCallbackRoute = AuthFacebookCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthFacebookRoute,
+} as any)
 const AuthGithubCallbackRoute = AuthGithubCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -381,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
+  '/auth/facebook': typeof AuthFacebookRouteWithChildren
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
@@ -404,6 +417,7 @@ export interface FileRoutesByFullPath {
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
+  '/auth/facebook/callback': typeof AuthFacebookCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
@@ -438,6 +452,7 @@ export interface FileRoutesByTo {
   '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
+  '/auth/facebook': typeof AuthFacebookRouteWithChildren
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
@@ -462,6 +477,7 @@ export interface FileRoutesByTo {
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
+  '/auth/facebook/callback': typeof AuthFacebookCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
@@ -499,6 +515,7 @@ export interface FileRoutesById {
   '/api/events': typeof ApiEventsRoute
   '/api/health': typeof ApiHealthRoute
   '/api/launches': typeof ApiLaunchesRoute
+  '/auth/facebook': typeof AuthFacebookRouteWithChildren
   '/auth/github': typeof AuthGithubRouteWithChildren
   '/auth/instagram': typeof AuthInstagramRouteWithChildren
   '/auth/link': typeof AuthLinkRoute
@@ -523,6 +540,7 @@ export interface FileRoutesById {
   '/api/github/webhook': typeof ApiGithubWebhookRoute
   '/api/sources/media': typeof ApiSourcesMediaRoute
   '/api/v1/$': typeof ApiV1SplatRoute
+  '/auth/facebook/callback': typeof AuthFacebookCallbackRoute
   '/auth/github/callback': typeof AuthGithubCallbackRoute
   '/auth/instagram/callback': typeof AuthInstagramCallbackRoute
   '/auth/linkedin/callback': typeof AuthLinkedinCallbackRoute
@@ -561,6 +579,7 @@ export interface FileRouteTypes {
     | '/api/events'
     | '/api/health'
     | '/api/launches'
+    | '/auth/facebook'
     | '/auth/github'
     | '/auth/instagram'
     | '/auth/link'
@@ -584,6 +603,7 @@ export interface FileRouteTypes {
     | '/api/github/webhook'
     | '/api/sources/media'
     | '/api/v1/$'
+    | '/auth/facebook/callback'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/linkedin/callback'
@@ -618,6 +638,7 @@ export interface FileRouteTypes {
     | '/api/events'
     | '/api/health'
     | '/api/launches'
+    | '/auth/facebook'
     | '/auth/github'
     | '/auth/instagram'
     | '/auth/link'
@@ -642,6 +663,7 @@ export interface FileRouteTypes {
     | '/api/github/webhook'
     | '/api/sources/media'
     | '/api/v1/$'
+    | '/auth/facebook/callback'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/linkedin/callback'
@@ -678,6 +700,7 @@ export interface FileRouteTypes {
     | '/api/events'
     | '/api/health'
     | '/api/launches'
+    | '/auth/facebook'
     | '/auth/github'
     | '/auth/instagram'
     | '/auth/link'
@@ -702,6 +725,7 @@ export interface FileRouteTypes {
     | '/api/github/webhook'
     | '/api/sources/media'
     | '/api/v1/$'
+    | '/auth/facebook/callback'
     | '/auth/github/callback'
     | '/auth/instagram/callback'
     | '/auth/linkedin/callback'
@@ -729,6 +753,7 @@ export interface RootRouteChildren {
   ApiEventsRoute: typeof ApiEventsRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLaunchesRoute: typeof ApiLaunchesRoute
+  AuthFacebookRoute: typeof AuthFacebookRouteWithChildren
   AuthGithubRoute: typeof AuthGithubRouteWithChildren
   AuthInstagramRoute: typeof AuthInstagramRouteWithChildren
   AuthLinkRoute: typeof AuthLinkRoute
@@ -893,6 +918,13 @@ declare module '@tanstack/react-router' {
       path: '/api/launches'
       fullPath: '/api/launches'
       preLoaderRoute: typeof ApiLaunchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/facebook': {
+      id: '/auth/facebook'
+      path: '/auth/facebook'
+      fullPath: '/auth/facebook'
+      preLoaderRoute: typeof AuthFacebookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/github': {
@@ -1077,6 +1109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/facebook/callback': {
+      id: '/auth/facebook/callback'
+      path: '/callback'
+      fullPath: '/auth/facebook/callback'
+      preLoaderRoute: typeof AuthFacebookCallbackRouteImport
+      parentRoute: typeof AuthFacebookRoute
+    }
     '/auth/github/callback': {
       id: '/auth/github/callback'
       path: '/callback'
@@ -1227,6 +1266,18 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface AuthFacebookRouteChildren {
+  AuthFacebookCallbackRoute: typeof AuthFacebookCallbackRoute
+}
+
+const AuthFacebookRouteChildren: AuthFacebookRouteChildren = {
+  AuthFacebookCallbackRoute: AuthFacebookCallbackRoute,
+}
+
+const AuthFacebookRouteWithChildren = AuthFacebookRoute._addFileChildren(
+  AuthFacebookRouteChildren,
+)
+
 interface AuthGithubRouteChildren {
   AuthGithubCallbackRoute: typeof AuthGithubCallbackRoute
 }
@@ -1322,6 +1373,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiEventsRoute: ApiEventsRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiLaunchesRoute: ApiLaunchesRoute,
+  AuthFacebookRoute: AuthFacebookRouteWithChildren,
   AuthGithubRoute: AuthGithubRouteWithChildren,
   AuthInstagramRoute: AuthInstagramRouteWithChildren,
   AuthLinkRoute: AuthLinkRoute,

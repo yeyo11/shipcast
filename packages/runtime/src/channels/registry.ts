@@ -2,6 +2,7 @@ import type { AnyChannelAdapter } from './adapter.ts';
 import { blueskyAdapter } from './bluesky.ts';
 import { devtoAdapter } from './devto.ts';
 import { discordAdapter } from './discord.ts';
+import { facebookAdapter } from './facebook.ts';
 import { githubDiscussionsAdapter } from './github-discussions.ts';
 import { hashnodeAdapter } from './hashnode.ts';
 import { instagramAdapter } from './instagram.ts';
@@ -25,6 +26,7 @@ export const CHANNEL_ADAPTERS: readonly AnyChannelAdapter[] = [
   mastodonAdapter,
   instagramAdapter,
   threadsAdapter,
+  facebookAdapter,
   linkedinAdapter,
   redditAdapter,
   newsletterAdapter,

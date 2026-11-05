@@ -9,6 +9,7 @@ test('a card leads with what its network counts, and the rest beside it', () => 
   assert.equal(keyMetric('discord', null), null);
   assert.deepEqual(keyMetric('reddit', { followers: 5, extra: { karma: 1200 } }), { value: 1200, label: 'Karma', others: '5 followers' });
   assert.equal(keyMetric('mastodon', null)?.value, null);
+  assert.deepEqual(keyMetric('facebook', { followers: 410, extra: { likes: 395, follows1d: 2 } }), { value: 410, label: 'Followers', others: '395 likes' });
 });
 
 test('freshness reads in the board’s short words', () => {
