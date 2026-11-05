@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Published } from '@shipcast/connectors';
 import type { PublishContext, TextPostPublisher } from '@shipcast/engine';
-import { Brand, type LinkTracking } from '@shipcast/schema';
+import { Brand, facebook, type LinkTracking } from '@shipcast/schema';
 import { buildConnector, networkOf, oauthSpecOf, type OAuthSpec, type SettingsValues } from '../src/index.ts';
 import { facebookAdapter } from '../src/channels/facebook.ts';
 
@@ -42,6 +42,26 @@ test('the sign-in is the Meta app with the Facebook configuration, and its token
   assert.equal(url.host, 'www.facebook.com');
   assert.equal(url.searchParams.get('config_id'), 'cfg1');
   assert.throws(() => oauth.authorizeUrl({ clientId: 'app1', clientSecret: 's' }, 'https://example.test/auth/facebook/callback', 'st'), /configuration id/);
+});
+
+test('the card and the instructions name the seven permissions the configuration needs', () => {
+  const said = network.permissions.join(' ');
+  for (const permission of ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement', 'pages_read_user_content', 'pages_manage_engagement', 'read_insights', 'business_management']) {
+    assert.ok(said.includes(permission), `${permission} in the permissions`);
+    assert.ok(network.howTo.includes(permission), `${permission} in the instructions`);
+  }
+  const reading = network.permissions.find((p) => p.includes('pages_read_user_content'));
+  assert.ok(reading?.includes('pages_read_engagement') && /comments/.test(reading), 'reading comments takes both');
+  assert.ok(network.permissions.some((p) => p.includes('pages_manage_engagement') && /Answers/.test(p)), 'answering is pages_manage_engagement');
+});
+
+test('the numbers are declared as read: one post a call, which is what the adapter offers', () => {
+  assert.equal(facebook.metrics.cadence.read, 'single');
+  assert.equal(facebook.metrics.cadence.hours, 1);
+  const connector = buildConnector('facebook', { settings: { pageId: '100000000000001' }, secrets: { accessToken: 'pt1' } }, brand, recording([], [])).connector;
+  const reader = facebookAdapter.metrics!(connector as never);
+  assert.equal(reader.read, undefined);
+  assert.equal(reader.metricsMany, undefined);
 });
 
 test('a sign-in sharing two Pages makes two accounts, each with its own Page token', async () => {

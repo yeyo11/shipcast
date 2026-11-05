@@ -15,12 +15,13 @@ export const facebookAdapter = channelAdapter({
       permissions: [
         'Lists the Pages you share, to connect each one as an account (pages_show_list), including those a business portfolio owns (business_management)',
         'Publishes a post with the article as its link card on the Page, edits it and deletes it when you ask (pages_manage_posts)',
-        'Reads the comments on its posts, the Page’s followers and likes, and its About text and picture (pages_read_engagement)',
+        'Reads the comments on its posts (pages_read_engagement, pages_read_user_content)',
+        'Reads the Page’s followers and likes, and its About text and picture (pages_read_engagement)',
         'Answers a comment as the Page when you approve (pages_manage_engagement)',
         'Reads the posts’ reach, clicks and reactions and the Page’s follows and engagement (read_insights)',
       ],
       howTo:
-        'Add the Manage everything on your Page use case to your Meta app, create a Facebook Login for Business configuration with a User access token and the Pages permissions, and set its id and the Meta app id and secret in Settings.',
+        'Add the Manage everything on your Page use case to your Meta app, create a Facebook Login for Business configuration with a User access token and the permissions pages_show_list, pages_manage_posts, pages_read_engagement, pages_read_user_content, pages_manage_engagement, read_insights and business_management, and set its id and the Meta app id and secret in Settings.',
       oauth: {
         app: { id: 'meta', term: 'app', name: 'Meta' },
         config: 'facebookConfigId',

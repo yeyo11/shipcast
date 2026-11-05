@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { PLAIN_TEXT } from './format.ts';
 import { characters, singleDraft } from './text.ts';
 
@@ -50,6 +50,6 @@ export const facebook = {
   metrics: {
     families: { views: ['views'], reactions: ['reactions'], comments: ['comments'], shares: ['shares'], clicks: ['clicks'] },
     primary: ['views', 'reactions'],
-    cadence: HOURLY_BATCHED,
+    cadence: { hours: 1, read: 'single', why: 'changes within the hour; one post a call' },
   },
 } as const satisfies ChannelDefinition<'facebook'>;

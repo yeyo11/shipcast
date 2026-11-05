@@ -20,7 +20,7 @@ function launch(kind: Launch['kind'] = 'launch'): Launch {
   return { id: 1, repo: 'someone/Tiny_Tool', ref: 'v0.1.0', trigger: 'release', kind, brand: 'dev', status: 'detected', detail: null, createdAt: at, updatedAt: at };
 }
 
-const everyChannel = 'enabled: true\nbrand: dev\npublishing:\n  reddit: approval\n  hashnode: approval\n  linkedin: approval\n  newsletter: approval\n  telegram: approval\n  discord: approval\n  threads: approval\nreddit:\n  subreddits: [node, programming]\n';
+const everyChannel = 'enabled: true\nbrand: dev\npublishing:\n  reddit: approval\n  hashnode: approval\n  linkedin: approval\n  newsletter: approval\n  telegram: approval\n  discord: approval\n  threads: approval\n  facebook: approval\nreddit:\n  subreddits: [node, programming]\n';
 
 function checkoutWith(launchYml: string): { hostPath: string } {
   const dir = mkdtempSync(join(tmpdir(), 'shipcast-fake-ai-'));

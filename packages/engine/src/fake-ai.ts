@@ -69,6 +69,7 @@ export function fakePack(launch: Launch, config: LaunchConfig, brand: Brand): Co
     ...(channels.has('telegram') && { telegram: { text: `${short} ${url(lead, 'telegram')}` } }),
     ...(channels.has('discord') && { discord: { text: `${short} ${url(lead, 'discord')}` } }),
     ...(channels.has('threads') && { threads: { text: `${title} (test) ${url(lead, 'threads')}` } }),
+    ...(channels.has('facebook') && { facebook: { text: short } }),
     ...(channels.has('linkedin') && { linkedin: { text: short } }),
     ...(channels.has('githubDiscussions') && { githubDiscussions: { title: `${title} (test)`, body: `${FAKE_NOTICE}\n\n${url(lead, 'github')}` } }),
     ...(channels.has('instagram') && {
