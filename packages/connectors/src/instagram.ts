@@ -206,8 +206,9 @@ export class Instagram implements CommentReader, Replier {
   /** The account's own username, read once: what tells the owner's replies from the others' */
   async #ownName(): Promise<string> {
     const load = () => this.#get<{ username: string }>(this.#self(), { fields: 'username' }, 'read the account').then((me) => me.username);
-    // Kept a day between runs, so /me is not asked hourly
-    this.#username ??= (this.#cache ? this.#cache.remember(`instagram-me:${secretTag(this.#token)}`, 86_400, load) : load()).then(
+    // Kept a day between runs, so /me is not asked hourly. Keyed by the account too: Unified Login
+    // hands one token to every account shared in the sign-in, so the token alone is not one account.
+    this.#username ??= (this.#cache ? this.#cache.remember(`instagram-me:${secretTag(this.#token)}:${this.#user}`, 86_400, load) : load()).then(
       (name) => name,
       (error: unknown) => {
         this.#username = undefined;
@@ -219,11 +220,13 @@ export class Instagram implements CommentReader, Replier {
 
   /**
    * Graph API refusals for a missing permission (#10, #200) and a token without the comments scope
-   * read as a code, never as what to do; this says it.
+   * read as a code, never as what to do; this says it, with the permission's name on the account's
+   * own host (graph.facebook.com logins grant `instagram_manage_comments`, not the business one).
    */
   #permission(error: unknown): unknown {
     if (error instanceof ConnectorError && /"code"\s*:\s*(10|200|3)\b|permission/i.test(error.message)) {
-      return new ConnectorError('Instagram', 'the account was connected without instagram_business_manage_comments: connect it again and allow comments', 403, false);
+      const scope = this.#host === 'facebook' ? 'instagram_manage_comments' : 'instagram_business_manage_comments';
+      return new ConnectorError('Instagram', `the account was connected without ${scope}: connect it again and allow comments`, 403, false);
     }
     return error;
   }
