@@ -1,5 +1,5 @@
 import { countFeed } from './feeds.ts';
-import { ConnectorError, exchangeFacebookCode, exchangeInstagramCode, facebookDialogUrl, Instagram, instagramAuthorizeUrl, listPages, longLivedUserToken, unifiedAccess } from '@shipcast/connectors';
+import { ConnectorError, exchangeFacebookCode, exchangeInstagramCode, facebookDialogUrl, Instagram, instagramAuthorizeUrl, listPages, longLivedUserToken, tokenlessProblem, unifiedAccess } from '@shipcast/connectors';
 import { instagram } from '@shipcast/schema';
 import { channelAdapter, MissingField } from './adapter.ts';
 
@@ -36,7 +36,7 @@ export const instagramAdapter = channelAdapter({
         'Reads the profile’s name, bio, website and picture for a review (instagram_business_basic or instagram_basic)',
       ],
       howTo:
-        "A professional (Creator or Business) account. Set your Meta app's Instagram setup in Settings. Instagram Login: Shipcast sends you to Instagram to authorise it; the token is renewed every 30 days. Unified Login: create a configuration in Instagram → API setup with Unified login whose token never expires, and set its id and the Meta app id and secret in Settings. Facebook Login: for an Instagram account linked to a Facebook Page; create a Facebook Login for Business configuration with a User access token and the permissions instagram_basic, instagram_content_publish, instagram_manage_comments, instagram_manage_insights, pages_show_list, pages_read_engagement and business_management, and set its id and the Meta app id and secret in Settings.",
+        "A professional (Creator or Business) account. Set your Meta app's Instagram setup in Settings. Instagram Login: Shipcast sends you to Instagram to authorise it; the token is renewed every 30 days. Unified Login: create a configuration in Instagram → API setup with Unified login whose token never expires, and set its id and the Meta app id and secret in Settings. Facebook Login: for an Instagram account linked to a Facebook Page; create a Facebook Login for Business configuration with a User access token and the permissions instagram_basic, instagram_content_publish, instagram_manage_comments, instagram_manage_insights, pages_show_list, pages_read_engagement and business_management, and set its id and the Meta app id and secret in Settings. If your role on the Page comes through a business portfolio (Business Manager), Meta also needs ads_read or ads_management in that configuration.",
       env: [
         { name: 'INSTAGRAM_USER_ID', key: 'userId', secret: false },
         { name: 'INSTAGRAM_ACCESS_TOKEN', key: 'accessToken', secret: true },
@@ -89,14 +89,19 @@ export const instagramAdapter = channelAdapter({
               const credentials = { appId: app.clientId, appSecret: app.clientSecret };
               const short = await exchangeFacebookCode(credentials, redirectUri, code, http);
               const long = await longLivedUserToken(credentials, short.accessToken, http);
-              const pages = (await listPages(long.accessToken, http)).filter((page) => page.instagram);
+              const shared = await listPages(long.accessToken, http);
+              const pages = shared.pages.filter((page) => page.instagram);
+              // Only a tokenless Page with an Instagram account linked is one the owner meant to connect here
+              const tokenless = shared.tokenless.filter((page) => page.instagram).map((page) => page.name);
+              const skipped = tokenless.length ? tokenlessProblem(tokenless) : undefined;
               if (pages.length === 0) {
-                throw new ConnectorError('Meta', 'none of the Pages you shared has an Instagram professional account linked: link one to a Page, or share that Page when Meta asks');
+                throw new ConnectorError('Meta', skipped ?? 'none of the Pages you shared has an Instagram professional account linked: link one to a Page, or share that Page when Meta asks');
               }
               // The Page token of a long-lived user token does not expire, so these accounts need no refresher
-              return pages.map((page) => ({
+              return pages.map((page, i) => ({
                 label: page.instagram!.username ? `@${page.instagram!.username}` : page.instagram!.id,
                 credentials: { settings: { login: 'facebook', userId: page.instagram!.id, pageId: page.pageId }, secrets: { accessToken: page.pageToken } },
+                ...(i === 0 && skipped !== undefined && { problem: skipped }),
               }));
             },
             errorParams: ['error_description', 'error_reason', 'error_message'],

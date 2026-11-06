@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { saveSettings } from '../server/settings.functions';
 import { PickerSelect } from './kit/Picker';
 import { SaveBar } from './SaveBar';
-import { changesText, settingHelp } from './settings/view';
+import { changesText, choiceLabel, choicePlaceholder, settingHelp } from './settings/view';
 import { useToast } from './Toasts';
 
 export interface SettingView {
@@ -106,9 +106,9 @@ export function SettingsForm({ settings, missing = [], bar = false, heading, onS
               key={s.name}
               id={id}
               label={s.label}
-              options={s.choices.map((choice) => ({ value: choice, label: choice }))}
+              options={s.choices.map((choice) => ({ value: choice, label: choiceLabel(s.name, choice) }))}
               value={current || null}
-              placeholder="Not set"
+              placeholder={choicePlaceholder(s.name)}
               onValueChange={(value) => setEdits({ ...edits, [s.name]: value })}
               help={help ?? undefined}
             />

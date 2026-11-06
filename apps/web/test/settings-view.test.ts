@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { aiTabOf, CLAUDIO_HELP, lockedRuleCount, promptEdited, promptLabel, readAiTab } from '../src/components/settings/ai.ts';
-import { ago, changesText, everyText, hostOf, listeningText, oauthPart, settingHelp, tokenUse } from '../src/components/settings/view.ts';
+import { ago, changesText, choiceLabel, choicePlaceholder, everyText, hostOf, listeningText, oauthPart, settingHelp, tokenUse } from '../src/components/settings/view.ts';
 import { ruleTitle, ruleWithout } from '../src/components/settings/rules.ts';
 
 const NOW = Date.parse('2026-10-31T12:00:00Z');
@@ -84,4 +84,15 @@ test('claudio is explained in one short sentence that links to its repository', 
   assert.match(CLAUDIO_HELP.text, /^claudio /, 'written lowercase, as the app names it');
   assert.ok(CLAUDIO_HELP.text.split(/\s+/).length <= 25);
   assert.equal(CLAUDIO_HELP.href, 'https://github.com/yeyo11/claudio');
+});
+
+test("Meta's login settings say when each is needed, so an Instagram Login install does not read them as missing", () => {
+  assert.match(settingHelp({ name: 'instagramLogin', label: 'The Instagram setup of the Meta app', source: 'unset' }) ?? '', /Leave it on Instagram Login unless/);
+  assert.match(settingHelp({ name: 'instagramConfigId', label: 'The Instagram configuration id', source: 'unset' }) ?? '', /^Needed only when Instagram signs in through Unified or Facebook Login/);
+  assert.match(settingHelp({ name: 'facebookConfigId', label: 'The Facebook configuration id', source: 'unset' }) ?? '', /^Needed only to connect a Facebook Page/);
+  assert.match(settingHelp({ name: 'facebookConfigId', label: 'The Facebook configuration id', source: '.env' }) ?? '', /Read from \.env until it is saved here\.$/);
+  assert.equal(choicePlaceholder('instagramLogin'), 'Instagram Login (default)');
+  assert.deepEqual(['instagram', 'unified', 'facebook'].map((c) => choiceLabel('instagramLogin', c)), ['Instagram Login', 'Unified Login', 'Facebook Login (Instagram linked to a Page)']);
+  assert.equal(choicePlaceholder('other'), 'Not set');
+  assert.equal(choiceLabel('other', 'x'), 'x');
 });

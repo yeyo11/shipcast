@@ -88,7 +88,8 @@ export async function connectAll(connect: Connect, networkId: string, flow: { br
   if (accounts.length === 0) return back(networkId, `${network(networkId)?.name ?? networkId} shared no account with Shipcast.`);
   const label = accounts.length === 1 ? flow.label : undefined;
   let first: Parameters<typeof connected>[0] | undefined;
-  const problems: string[] = [];
+  // What the exchange itself left out comes first, then what the connections refused
+  const problems: string[] = accounts.flatMap((account) => (account.problem ? [account.problem] : []));
   for (const account of accounts) {
     const result = await connect({ network: networkId, brand: flow.brand, label: label ?? account.label, credentials: account.credentials });
     if (result.ok) first ??= result.account;

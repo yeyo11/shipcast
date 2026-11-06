@@ -1,4 +1,4 @@
-import { ConnectorError, exchangeFacebookCode, FacebookPage, facebookDialogUrl, listPages, longLivedUserToken } from '@shipcast/connectors';
+import { ConnectorError, exchangeFacebookCode, FacebookPage, facebookDialogUrl, listPages, longLivedUserToken, tokenlessProblem } from '@shipcast/connectors';
 import { textPostStrategy, type ChangeEditor, type TextPostPublisher } from '@shipcast/engine';
 import { articleLink, facebook, leadLanguage, trackUrl } from '@shipcast/schema';
 import { channelAdapter, MissingField } from './adapter.ts';
@@ -34,10 +34,15 @@ export const facebookAdapter = channelAdapter({
           const credentials = { appId: app.clientId, appSecret: app.clientSecret };
           const short = await exchangeFacebookCode(credentials, redirectUri, code, http);
           const long = await longLivedUserToken(credentials, short.accessToken, http);
-          const pages = await listPages(long.accessToken, http);
-          if (pages.length === 0) throw new ConnectorError('Meta', 'the sign-in shared no Facebook Page: choose at least one when Meta asks');
+          const { pages, tokenless } = await listPages(long.accessToken, http);
+          const skipped = tokenless.length ? tokenlessProblem(tokenless.map((page) => page.name)) : undefined;
+          if (pages.length === 0) throw new ConnectorError('Meta', skipped ?? 'the sign-in shared no Facebook Page: choose at least one when Meta asks');
           // The Page token of a long-lived user token does not expire, so these accounts need no refresher
-          return pages.map((page) => ({ label: page.name || page.pageId, credentials: { settings: { pageId: page.pageId }, secrets: { accessToken: page.pageToken } } }));
+          return pages.map((page, i) => ({
+            label: page.name || page.pageId,
+            credentials: { settings: { pageId: page.pageId }, secrets: { accessToken: page.pageToken } },
+            ...(i === 0 && skipped !== undefined && { problem: skipped }),
+          }));
         },
         errorParams: ['error_description', 'error_reason', 'error_message'],
       },

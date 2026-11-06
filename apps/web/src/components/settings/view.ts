@@ -43,11 +43,28 @@ export function oauthPart(label: string): { network: string; part: 'id' | 'secre
 export function settingHelp(setting: { name: string; label: string; source: string }): string | null {
   const from = setting.source === '.env' ? ' Read from .env until it is saved here.' : '';
   if (setting.name === 'launchesRepo') return `Where the drafts and the blog’s articles are committed.${from}`;
+  // Meta's three logins: an install on Instagram Login (the default) needs none of these set
+  if (setting.name === 'instagramLogin') return `How Instagram signs in. Leave it on Instagram Login unless your Meta app uses Unified or Facebook Login for Instagram.${from}`;
+  if (setting.name === 'instagramConfigId') return `Needed only when Instagram signs in through Unified or Facebook Login: the id of that configuration in your Meta app.${from}`;
+  if (setting.name === 'facebookConfigId') return `Needed only to connect a Facebook Page: the id of its Facebook Login for Business configuration.${from}`;
   const oauth = oauthPart(setting.label);
   // The one app no network is named after: Facebook and two of Instagram's logins sign in with it
   if (oauth?.part === 'id' && oauth.network === 'Meta') return `From your Meta app. Needed to connect Facebook, and Instagram through Unified or Facebook Login.${from}`;
   if (oauth?.part === 'id') return `From your ${oauth.network} app. Needed to connect ${oauth.network}.${from}`;
   return from ? from.trim() : null;
+}
+
+/** A choice setting's options as words, and what an unset one means; the stored value otherwise */
+const CHOICES: Readonly<Record<string, { unset: string; labels: Readonly<Record<string, string>> }>> = {
+  instagramLogin: { unset: 'Instagram Login (default)', labels: { instagram: 'Instagram Login', unified: 'Unified Login', facebook: 'Facebook Login (Instagram linked to a Page)' } },
+};
+
+export function choiceLabel(setting: string, choice: string): string {
+  return CHOICES[setting]?.labels[choice] ?? choice;
+}
+
+export function choicePlaceholder(setting: string): string {
+  return CHOICES[setting]?.unset ?? 'Not set';
 }
 
 /** A token's line under its name: "Read, Write · used 1 h ago" */

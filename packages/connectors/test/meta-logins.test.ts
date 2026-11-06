@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConnectorError, exchangeFacebookCode, facebookDialogUrl, listPages, longLivedUserToken, unifiedAccess } from '../src/index.ts';
+import { ConnectorError, exchangeFacebookCode, facebookDialogUrl, listPages, longLivedUserToken, tokenlessProblem, unifiedAccess } from '../src/index.ts';
 import { type Call, fakeFetch, sequence } from './fake.ts';
 
 const app = { appId: '1', appSecret: 'shh' };
@@ -69,9 +69,49 @@ test('listPages follows paging.next and keeps each Page token and its Instagram 
     ],
     calls,
   );
-  const pages = await listPages('ut', http);
+  const { pages, tokenless } = await listPages('ut', http);
+  assert.deepEqual(tokenless, []);
   assert.deepEqual(pages.map((p) => [p.pageId, p.pageToken, p.instagram?.id]), [['17841400000000001', 'pt1', '17841416971174402'], ['2', 'pt2', undefined]]);
   assert.match(decodeURIComponent(calls[0]!.url), /fields=id,name,access_token,instagram_business_account\{id,username\}/);
+});
+
+test('a Page that came without its token is left out and named, and the others still come', async () => {
+  const http = fakeFetch(
+    [
+      [
+        'GET https://graph.facebook.com/v27.0/me/accounts',
+        reply(
+          JSON.stringify({
+            data: [
+              { id: '100000000000001', name: 'Mine', access_token: 'pt1' },
+              { id: '100000000000002', name: 'Agency', instagram_business_account: { id: '17841416971174402' } },
+              { id: '100000000000003', name: 'Plain' },
+            ],
+          }),
+        ),
+      ],
+    ],
+    [],
+  );
+  const { pages, tokenless } = await listPages('ut', http);
+  assert.deepEqual(pages.map((p) => p.pageId), ['100000000000001']);
+  assert.deepEqual(tokenless, [{ name: 'Agency', instagram: true }, { name: 'Plain', instagram: false }]);
+  assert.match(tokenlessProblem(['Agency']), /no Page token for “Agency”.*that Page.*it was left out/);
+  assert.match(tokenlessProblem(['Agency', 'Plain']), /“Agency”, “Plain”.*those Pages.*they were left out/);
+});
+
+test('a Unified Login configuration that issues a user token is told to issue a system-user one', async () => {
+  const http = fakeFetch(
+    [
+      ['GET https://graph.facebook.com/v27.0/oauth/access_token', reply('{"access_token":"user"}')],
+      ['GET https://graph.facebook.com/v27.0/me?', reply('{"id":"9"}')],
+    ],
+    [],
+  );
+  await assert.rejects(
+    () => unifiedAccess(app, 'https://x/cb', 'c', http),
+    (e: unknown) => e instanceof ConnectorError && /issued a user token/.test(e.message) && /system-user \(business integration\) token/.test(e.message),
+  );
 });
 
 test('an id that is a number is refused', async () => {

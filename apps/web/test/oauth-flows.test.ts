@@ -122,6 +122,14 @@ test('several accounts each keep their own label; one refused is said beside the
   assert.equal(to.searchParams.get('problem'), '17841400000000001 is not a professional account');
 });
 
+test("what the sign-in itself left out (a tokenless Page) is said beside the account that connected", async () => {
+  const { connect } = fakeConnect(['17841400000000001']);
+  const accounts: ConnectedAccount[] = [{ ...shared('17841416971174401', 'first'), problem: 'Meta gave no Page token for “Agency”' }, shared('17841400000000001', 'second')];
+  const to = location(await connectAll(connect, 'instagram', { brand: 'personal' }, accounts));
+  assert.equal(to.pathname, '/channels');
+  assert.equal(to.searchParams.get('problem'), 'Meta gave no Page token for “Agency”; 17841400000000001 is not a professional account');
+});
+
 test('when no account connects, every problem goes back to the network', async () => {
   const { connect } = fakeConnect(['1', '2']);
   const to = location(await connectAll(connect, 'instagram', { brand: 'personal' }, [shared('1'), shared('2')]));

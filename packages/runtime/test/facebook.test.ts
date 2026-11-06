@@ -84,6 +84,24 @@ test('a sign-in that shares no Page says so', async () => {
   await assert.rejects(spec().exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/auth/facebook/callback', 'code', http), /no Facebook Page/);
 });
 
+test('a Page that came without its token is left out and named; the others still connect', async () => {
+  const http = recording(
+    loginRoutes([
+      { id: '100000000000001', name: 'First Page', access_token: 'pt1' },
+      { id: '100000000000002', name: 'Agency Page' },
+    ]),
+    [],
+  );
+  const accounts = await spec().exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/auth/facebook/callback', 'code', http);
+  assert.deepEqual(
+    accounts.map((a) => a.credentials.settings.pageId),
+    ['100000000000001'],
+  );
+  assert.match(accounts[0]!.problem ?? '', /no Page token for “Agency Page”/);
+  const none = recording(loginRoutes([{ id: '100000000000002', name: 'Agency Page' }]), []);
+  await assert.rejects(spec().exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/auth/facebook/callback', 'code', none), /no Page token for “Agency Page”/);
+});
+
 test("the publisher hands the Page a link tagged as a visit from Facebook, the launch's campaign", async () => {
   const calls: Array<{ url: string; body?: string }> = [];
   const http = recording(

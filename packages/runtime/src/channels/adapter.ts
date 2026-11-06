@@ -96,6 +96,8 @@ export interface OAuthApp {
 export interface ConnectedAccount {
   label?: string;
   credentials: Credentials;
+  /** What else the sign-in could not connect (a Page Meta gave no token for), said beside this account */
+  problem?: string;
 }
 
 /** The settings a sign-in's configuration id is kept in */

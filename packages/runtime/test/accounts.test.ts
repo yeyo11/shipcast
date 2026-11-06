@@ -77,3 +77,40 @@ test('importing from .env connects what it holds for the brand it speaks for', a
   assert.deepEqual(results.map((r) => [r.network, r.result.ok]), [['devto', true]]);
   assert.deepEqual(await importFromEnv(d, { DEVTO_API_KEY: 'good' }, () => ''), [], 'already connected');
 });
+
+test("a reconnected account is found by its network's id: two Pages with one name stay two, a renamed one stays one", async () => {
+  const d: AccountDeps = { ...(await deps()), check: async () => ({ ok: true, account: 'Page' }) };
+  const page = (pageId: string, label: string) => ({ network: 'facebook', brand: 'personal', label, credentials: { settings: { pageId }, secrets: { accessToken: `t-${pageId}` } } });
+  const first = await connectAccount(d, page('100000000000001', 'Same name'));
+  const second = await connectAccount(d, page('100000000000002', 'Same name'));
+  assert.ok(first.ok && second.ok);
+  assert.notEqual(first.account.id, second.account.id);
+  assert.deepEqual((await d.registry.accounts.accounts({ network: 'facebook' })).map((a) => a.settings.pageId).sort(), ['100000000000001', '100000000000002']);
+  assert.equal(second.account.label, 'Same name (100000000000002)', 'the second Page of that name is told apart by its id');
+  const twice = await connectAccount(d, page('100000000000002', 'Same name'));
+  assert.ok(twice.ok);
+  assert.equal(twice.account.id, second.account.id, 'reconnecting it finds it by its id, not by the first one’s label');
+
+  const renamed = await connectAccount(d, page('100000000000001', 'New name'));
+  assert.ok(renamed.ok);
+  assert.equal(renamed.account.id, first.account.id, 'the renamed Page is the same account');
+  assert.equal((await d.registry.accounts.accounts({ network: 'facebook' })).length, 2);
+  assert.equal(await d.secrets.get(accountSecretKey(first.account.id)), JSON.stringify({ accessToken: 't-100000000000001' }));
+
+  // Instagram and Threads are matched by their user id the same way
+  const ig = (userId: string, label: string) => ({ network: 'instagram', brand: 'personal', label, credentials: { settings: { userId }, secrets: { accessToken: 't' } } });
+  const a = await connectAccount(d, ig('17841416971174401', '@old'));
+  const b = await connectAccount(d, ig('17841416971174401', '@new'));
+  assert.ok(a.ok && b.ok);
+  assert.equal(b.account.id, a.account.id);
+  assert.equal((await d.registry.accounts.accounts({ network: 'instagram' })).length, 1);
+});
+
+test('a row kept before it had its id is still found by its label', async () => {
+  const d: AccountDeps = { ...(await deps()), check: async () => ({ ok: true, account: '@me' }) };
+  const old = await d.registry.accounts.addAccount({ network: 'instagram', brand: 'personal', label: '@me', settings: {} });
+  const again = await connectAccount(d, { network: 'instagram', brand: 'personal', label: '@me', credentials: { settings: { userId: '17841416971174401' }, secrets: { accessToken: 't' } } });
+  assert.ok(again.ok);
+  assert.equal(again.account.id, old.id);
+  assert.equal((await d.registry.accounts.account(old.id))?.settings.userId, '17841416971174401');
+});

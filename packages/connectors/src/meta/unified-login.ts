@@ -28,6 +28,13 @@ export async function unifiedAccess(
 ): Promise<UnifiedAccess> {
   const { accessToken } = await exchangeFacebookCode(app, redirectUri, code, http);
   const me = await graphGet<{ client_business_id?: unknown }>('/me', { fields: 'client_business_id' }, accessToken, 'read the business', http);
+  // Only a business integration system user belongs to a business: a user token has no client_business_id
+  if (me.client_business_id === undefined) {
+    throw new ConnectorError(
+      'Meta',
+      'the Unified Login configuration issued a user token, not a business one: in the Meta app, set the configuration’s access token to a system-user (business integration) token, then sign in again',
+    );
+  }
   const businessId = graphId(me.client_business_id, 'read the business');
   const instagram: UnifiedAccess['instagram'] = [];
   let answer = await graphGet<AssignedAnswer>('/me/assigned_instagram_accounts', { fields: 'id,username' }, accessToken, 'list the Instagram accounts', http);

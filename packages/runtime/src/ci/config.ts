@@ -159,7 +159,7 @@ export const NETWORK_VARIABLES: readonly string[] = NETWORK_SPECS.flatMap((spec)
  * channels' `.env` variables (packages/runtime/src/channels): every one the Action takes, then, where
  * some can come from brand.yml's profile links, the set without them. The channels Action mode can
  * publish, which `shipcast init` offers from (apps/cli/src/setup.ts). The blog and GitHub Discussions
- * need none of their own; a channel that signs in through the app (Reddit, LinkedIn, Threads) has none.
+ * need none of their own; a channel that signs in through the app (Reddit, LinkedIn, Threads, Facebook) has none.
  */
 export const ACTION_VARIABLES: Readonly<Partial<Record<Channel, readonly (readonly string[])[]>>> = Object.fromEntries(
   CHANNEL_DEFINITIONS.flatMap((definition): Array<[string, string[][]]> => {
@@ -189,8 +189,8 @@ export interface ChannelPlan {
 
 /**
  * What publishing a launch would do, channel by channel, for a dry run. Only the variables' names are
- * looked at, never a value. Reddit, LinkedIn and Threads sign in through the app, which Action mode
- * does not have.
+ * looked at, never a value. Reddit, LinkedIn, Threads and Facebook sign in through the app, which
+ * Action mode does not have.
  */
 export function channelPlan(config: LaunchConfig, env: NodeJS.ProcessEnv): ChannelPlan[] {
   const set = (name: string) => Boolean(env[name]?.trim());

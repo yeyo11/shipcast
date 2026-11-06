@@ -56,6 +56,23 @@ async function check(networkId: string, credentials: Credentials, brand: Brand, 
 }
 
 /**
+ * The public setting that names an account on its network for good: a Page or a user id survives a
+ * rename, where the label (a Page's name, a username) does not, and two Pages may share a name.
+ */
+const IDENTITY_SETTING: Readonly<Record<string, string>> = { facebook: 'pageId', instagram: 'userId', threads: 'userId' };
+
+/**
+ * The account a connection is the same one as: by the network's stable id when the settings carry
+ * one, else by label. A row kept before it had that id is still found by its label.
+ */
+function sameAccount(accounts: Account[], networkId: string, settings: Record<string, string>, label: string): Account | undefined {
+  const key = IDENTITY_SETTING[networkId];
+  const id = key ? settings[key] : undefined;
+  if (!key || !id) return accounts.find((a) => a.label === label);
+  return accounts.find((a) => a.settings[key] === id) ?? accounts.find((a) => !a.settings[key] && a.label === label);
+}
+
+/**
  * Connects an account: the credential is checked first and only kept when it works, so the Channels
  * page never lists an account that could not post. Its secrets go to the keychain.
  */
@@ -69,12 +86,18 @@ export async function connectAccount(
   const result = deps.check ? await deps.check(input.network, input.credentials) : await check(input.network, input.credentials, brand, deps.fetch);
   if (!result.ok) return result;
   const label = input.label?.trim() || result.account;
-  const existing = (await deps.registry.accounts.accounts({ brand: input.brand, network: input.network })).find((a) => a.label === label);
+  const accounts = await deps.registry.accounts.accounts({ brand: input.brand, network: input.network });
+  const existing = sameAccount(accounts, input.network, input.credentials.settings, label);
+  // A label is unique per network and brand: another account with this name (two Pages called the
+  // same) gets its id beside the name, which also tells the two apart on the Channels page
+  const key = IDENTITY_SETTING[input.network];
+  const id = key ? input.credentials.settings[key] : undefined;
+  const free = existing || !id || !accounts.some((a) => a.label === label) ? label : `${label} (${id})`;
   // Connecting the same account again (a new token, a reconnection) updates it instead of failing
   const account = existing
     ? await deps.registry.accounts.updateAccount(existing.id, { settings: input.credentials.settings })
-    : await deps.registry.accounts.addAccount({ network: input.network, brand: input.brand, label, settings: input.credentials.settings });
-  await deps.secrets.set(accountSecretKey(account.id), JSON.stringify(input.credentials.secrets), `${info.name} ${label}`);
+    : await deps.registry.accounts.addAccount({ network: input.network, brand: input.brand, label: free, settings: input.credentials.settings });
+  await deps.secrets.set(accountSecretKey(account.id), JSON.stringify(input.credentials.secrets), `${info.name} ${account.label}`);
   return { ok: true, account: await deps.registry.accounts.recordCheck(account.id, result) };
 }
 

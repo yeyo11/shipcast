@@ -156,6 +156,31 @@ test('Pages with no Instagram account say what to link', async () => {
   );
 });
 
+test('a Page with Instagram that came without its token is named beside the accounts that connected', async () => {
+  const facebook = oauthSpecOf(network, { instagramLogin: 'facebook' } as SettingsValues)!.spec;
+  const pages = [
+    { id: '100000000000001', name: 'First', access_token: 'pt1', instagram_business_account: { id: '17841416971174401', username: 'first' } },
+    { id: '100000000000002', name: 'Agency', instagram_business_account: { id: '17841416971174402', username: 'agency' } },
+    { id: '100000000000003', name: 'Plain' },
+  ];
+  const accounts = await facebook.exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'code', recording(facebookRoutes(pages), []));
+  assert.deepEqual(
+    accounts.map((a) => a.label),
+    ['@first'],
+  );
+  assert.match(accounts[0]!.problem ?? '', /“Agency”/);
+  assert.doesNotMatch(accounts[0]!.problem ?? '', /Plain/, 'a Page without Instagram was never one to connect here');
+  // Only tokenless Pages: the sign-in fails naming them
+  await assert.rejects(
+    facebook.exchange({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'code', recording(facebookRoutes(pages.slice(1)), [])),
+    /no Page token for “Agency”/,
+  );
+});
+
+test('the Facebook Login instructions say a business portfolio role also needs ads_read or ads_management', () => {
+  assert.match(network.howTo, /business portfolio[^.]*ads_read or ads_management/);
+});
+
 test('Facebook Login asks by configuration and fails clearly without one', () => {
   const facebook = oauthSpecOf(network, { instagramLogin: 'facebook' } as SettingsValues)!.spec;
   const url = new URL(facebook.authorizeUrl({ clientId: 'app1', clientSecret: 's', configId: 'cfg1' }, 'https://example.test/callback', 'st'));
