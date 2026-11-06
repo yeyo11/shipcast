@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -120,6 +120,60 @@ test('init in an empty repo writes the setup from its origin, prints the secrets
 
   const again = await runSetup(['--yes', '--site', 'https://dev.example'], dir, () => {});
   assert.equal(again, 1, 'a second run refuses to overwrite');
+});
+
+const TEMPLATE_BRAND = `id: personal
+displayName: A Dev
+site: https://dev.github.io/blog
+github: dev
+handles: {}
+languages:
+  blog: [en, es]
+tone: "Plain words."
+`;
+
+/** A project with its launches repo's checkout beside it, holding a brand.yml */
+const projectBesideBlog = (brandText: string) => {
+  const root = mkdtempSync(join(tmpdir(), 'shipcast-init-'));
+  const project = join(root, 'tool');
+  const blog = join(root, 'blog');
+  mkdirSync(project);
+  mkdirSync(blog);
+  writeFileSync(join(blog, 'brand.yml'), brandText);
+  return { project, blog };
+};
+const BESIDE_BLOG = ['--yes', '--repo', 'dev/tool', '--launches-repo', 'dev/blog', '--launches-dir', '../blog'];
+
+test('a brand.yml already in the launches repo is kept, and launch.yml uses its brand', async () => {
+  const { project, blog } = projectBesideBlog(TEMPLATE_BRAND);
+  const lines: string[] = [];
+  const code = await runSetup(BESIDE_BLOG, project, (line) => lines.push(line));
+  assert.equal(code, 0);
+  assert.equal(readFileSync(join(blog, 'brand.yml'), 'utf8'), TEMPLATE_BRAND, 'not a byte changed');
+  assert.ok(existsSync(join(blog, '.github/workflows/shipcast-publish.yml')), 'the rest is written');
+  const launch = parseLaunchConfig(readFileSync(join(project, '.github/launch.yml'), 'utf8'));
+  assert.ok(launch.ok);
+  assert.match(readFileSync(join(project, '.github/launch.yml'), 'utf8'), /^brand: personal$/m);
+  const out = lines.join('\n');
+  assert.match(out, /kept .*brand\.yml/);
+  assert.doesNotMatch(out, /wrote .*brand\.yml/);
+  assert.match(out, /commit \.github\/workflows\/shipcast-publish\.yml/);
+  assert.doesNotMatch(out, /commit brand\.yml/);
+});
+
+test('a kept brand.yml that does not parse stops init before it writes anything', async () => {
+  const { project, blog } = projectBesideBlog('id: personal\nnot_a_key: 1\n');
+  const code = await runSetup(BESIDE_BLOG, project, () => {});
+  assert.equal(code, 2);
+  assert.ok(!existsSync(join(project, '.github/launch.yml')));
+  assert.ok(!existsSync(join(blog, '.github/workflows/shipcast-publish.yml')));
+});
+
+test('--force still replaces an existing brand.yml with the one from the flags', async () => {
+  const { project, blog } = projectBesideBlog(TEMPLATE_BRAND);
+  const code = await runSetup([...BESIDE_BLOG, '--force', '--site', 'https://other.example', '--name', 'Other'], project, () => {});
+  assert.equal(code, 0);
+  assert.match(readFileSync(join(blog, 'brand.yml'), 'utf8'), /https:\/\/other\.example/);
 });
 
 test('--tone writes the owner’s tone into brand.yml, as given, and no warning', async () => {

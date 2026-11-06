@@ -81,8 +81,10 @@ that example, `init` warns with the secrets that the AI has no voice of yours un
 and every drafts pull request says so at the top until it is. Shipcast never makes a tone up for you.
 
 Without a checkout of the launches repo beside the project, its two files go to `shipcast-launches/`
-for you to copy over (or pass `--launches-dir <path>`). `init` never overwrites a file (`--force`
-does), never writes a secret, and asks nothing with `--yes` (flags and defaults: `init --help`).
+for you to copy over (or pass `--launches-dir <path>`). A `brand.yml` already in the launches repo,
+as in a blog made from the template, is kept: `init` takes the brand from it and asks nothing about
+it. Otherwise `init` never overwrites a file (`--force` does, that `brand.yml` included), never writes
+a secret, and asks nothing with `--yes` (flags and defaults: `init --help`).
 
 Then commit the files in both repos and set what `init` printed, each with the link to get it:
 

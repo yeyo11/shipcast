@@ -185,7 +185,7 @@ provider and the channels, and writes:
   `gh secret set` line.
 
 It validates what it writes against the same schemas the engine reads (`parseLaunchConfig`,
-`parseBrand`), never overwrites a file that exists (`--force` does) and never writes a secret. Run
+`parseBrand`), keeps a `brand.yml` the launches repo already has and reads the brand from it, never overwrites any other file that exists (`--force` does, that `brand.yml` included) and never writes a secret. Run
 **inside Shipcast's own checkout**, `shipcast init` is still the local install it was (`.env`,
 Postgres, the GitHub App); `--local` and `--action` choose explicitly.
 

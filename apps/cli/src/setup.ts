@@ -9,7 +9,8 @@ import { Brand, CHANNELS, parseBrand, parseLaunchConfig, type Channel, type Lang
  * `shipcast init` in a developer's own project repo: the GitHub Action setup in one command
  * (docs/decisions/github-action.md). It writes launch.yml and the launch workflow in the project,
  * brand.yml and the publish workflow in the launches repo's checkout, and prints the secrets to set,
- * each with where to get it. It never writes a secret, and never overwrites a file without --force.
+ * each with where to get it. It never writes a secret, never overwrites a file without --force, and
+ * keeps a brand.yml the launches repo already has (a blog made from the template), reading the brand from it.
  */
 
 /** The Action every workflow uses; its major tag moves with compatible releases */
@@ -45,7 +46,8 @@ merging it publishes the article and every channel you turned on.
   --ai <anthropic|openai>        The AI the content is written with (default: anthropic)
   --channels <list>              Comma-separated, from ${ACTION_CHANNELS.join(', ')}
                                  (default: ${DEFAULT_CHANNELS.join(', ')})
-  --force                        Overwrite files that exist
+  --force                        Overwrite files that exist, brand.yml included (without it, a
+                                 brand.yml already there is kept and the flags about the brand ignored)
   --yes                          Ask nothing: take the flags and the defaults
 `;
 
@@ -462,6 +464,14 @@ export function setupFiles(options: SetupOptions, projectDir: string, launchesDi
   return [...project, ...launches];
 }
 
+/** The brand.yml a launches checkout already has: undefined without one, its problems when it does not parse */
+function keptBrand(launchesDir: string | undefined): Brand | { errors: string[] } | undefined {
+  const path = launchesDir && join(launchesDir, 'brand.yml');
+  if (!path || !existsSync(path)) return undefined;
+  const parsed = parseBrand(readFileSync(path, 'utf8'));
+  return parsed.ok ? parsed.value : { errors: parsed.issues.map((i) => `${i.path}: ${i.message}`) };
+}
+
 /** `shipcast init` for the GitHub Action: the exit code */
 export async function runSetup(argv: string[], cwd: string, log: (line: string) => void = console.log): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -484,25 +494,30 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
     const owner = repo?.split('/')[0] ?? '';
     if (prompt && parsed.launchesRepo === undefined) log(NO_BLOG_YET);
     const launchesRepo = await ask('Your launches repo (your blog), owner/name', parsed.launchesRepo, owner ? `${owner}/launches` : undefined);
-    const site = await ask('Your blog’s address, https://…', parsed.site, owner ? `https://${owner.toLowerCase()}.github.io` : undefined);
-    const name = await ask('Who the launches speak for', parsed.name, gitUserName(cwd) ?? owner);
-    const languages = await ask('The blog’s languages (ISO 639-1 codes, the primary first: en, es, en,es, de…)', parsed.languages, 'en');
-    if (prompt && parsed.tone === undefined) {
+    const kept = parsed.force ? undefined : keptBrand(repo && launchesRepo ? launchesDirFor(cwd, repo, launchesRepo, parsed.launchesDir).dir : undefined);
+    if (kept && 'errors' in kept) {
+      console.error(`shipcast init cannot go on: the brand.yml already there does not parse (--force replaces it):\n${kept.errors.map((e) => `  - ${e}`).join('\n')}`);
+      return 2;
+    }
+    const site = kept ? kept.site : await ask('Your blog’s address, https://…', parsed.site, owner ? `https://${owner.toLowerCase()}.github.io` : undefined);
+    const name = kept ? kept.displayName : await ask('Who the launches speak for', parsed.name, gitUserName(cwd) ?? owner);
+    const languages = kept ? kept.languages.blog.join(',') : await ask('The blog’s languages (ISO 639-1 codes, the primary first: en, es, en,es, de…)', parsed.languages, 'en');
+    if (prompt && !kept && parsed.tone === undefined) {
       log('');
       for (const line of TONE_HELP) log(line);
       log('Leave it empty to write it in brand.yml later; until then the drafts are in a generic voice.');
     }
-    const tone = await ask('Your tone', parsed.tone, undefined);
+    const tone = kept ? kept.tone : await ask('Your tone', parsed.tone, undefined);
     const ai = await ask('The AI (anthropic or openai)', parsed.ai, 'anthropic');
     const channels = await ask(`Channels (from ${ACTION_CHANNELS.join(', ')})`, parsed.channels, DEFAULT_CHANNELS.join(','));
-    const options = setupOptions({ repo, launchesRepo, brand: parsed.brand, name, site, languages, tone, ai, channels });
+    const options = setupOptions({ repo, launchesRepo, brand: kept ? kept.id : parsed.brand, name, site, languages, tone, ai, channels });
     if ('errors' in options) {
       console.error(`shipcast init cannot go on:\n${options.errors.map((e) => `  - ${e}`).join('\n')}`);
       return 2;
     }
 
     const where = launchesDirFor(cwd, options.repo, options.launchesRepo, parsed.launchesDir);
-    const files = setupFiles(options, cwd, where.dir);
+    const files = setupFiles(options, cwd, where.dir).filter((f) => !(kept && basename(f.path) === 'brand.yml'));
     const existing = files.filter((f) => existsSync(f.path));
     if (existing.length > 0 && !parsed.force) {
       console.error(`shipcast init never overwrites a file (--force does):\n${existing.map((f) => `  ${relative(cwd, f.path) || f.path}`).join('\n')}`);
@@ -519,12 +534,14 @@ export async function runSetup(argv: string[], cwd: string, log: (line: string) 
       log(`wrote ${relative(cwd, f.path) || f.path}`);
     }
 
+    if (kept) log(`kept ${relative(cwd, join(where.dir, 'brand.yml'))}, and took the brand from it`);
+
     log('');
     log(`In ${options.repo}: commit .github/launch.yml and .github/workflows/shipcast.yml.`);
     log(
       where.copy
-        ? `In ${options.launchesRepo}: copy shipcast-launches/brand.yml and shipcast-launches/.github/ into its root and commit them (or run init again with --launches-dir <its checkout>).`
-        : `In ${options.launchesRepo} (${relative(cwd, where.dir) || '.'}): commit brand.yml and .github/workflows/shipcast-publish.yml.`,
+        ? `In ${options.launchesRepo}: copy shipcast-launches/${kept ? '' : 'brand.yml and shipcast-launches/'}.github/ into its root and commit ${kept ? 'it' : 'them'} (or run init again with --launches-dir <its checkout>).`
+        : `In ${options.launchesRepo} (${relative(cwd, where.dir) || '.'}): commit ${kept ? '' : 'brand.yml and '}.github/workflows/shipcast-publish.yml.`,
     );
     log('');
     log(secretsReport(secretsToSet(options)));
