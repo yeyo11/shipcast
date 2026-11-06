@@ -1,12 +1,13 @@
 ---
-created_at: 2026-11-02T09:13:31.066318942Z
-updated_at: 2026-11-02T09:13:31.066318942Z
+created_at: 2026-11-02T11:59:34.120379678Z
+updated_at: 2026-11-06T07:17:17.823189125Z
 tags:
     - schema
     - launch-yml
     - configuration
     - sources
     - pack
+    - facebook
 ---
 # launch.yml
 
@@ -44,6 +45,7 @@ publishing:              # auto | approval | off, per channel
   hashnode: approval     # phase 5 channels: off by default
   telegram: approval
   discord: approval
+  facebook: approval     # off by default: a post on the brand's Facebook Page
   reddit: approval       # off by default: one post per subreddit below
 
 assets:
@@ -103,10 +105,13 @@ A fourth, `manual` (a draft the owner posted by hand), was removed on 2026-10-26
 Shipcast cannot publish itself ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)).
 Defaults (`DEFAULT_MODES` in `channels.ts`) turn on the MVP's channels — blog, dev.to, Bluesky,
 Mastodon, Instagram on `approval`, and GitHub Discussions, which needs no account (the newsletter,
-off by default, is turned on per project) — and leave every other channel `off`, Reddit included,
-so a network that needs an account is never drafted for before one is connected. A project that
-wants Reddit sets `publishing.reddit: approval` and lists its subreddits. An article written in the
-app has no `launch.yml` of its own: the channels chosen there are written beside its drafts
+off by default, is turned on per project) — and leave every other channel `off`, Reddit and Facebook
+included, so a network that needs an account is never drafted for before one is connected. A project
+that wants Reddit sets `publishing.reddit: approval` and lists its subreddits; one that wants its
+launch on the brand's Facebook Page sets `publishing.facebook: approval` (added on 2026-11-05,
+[decisions/meta-logins.md](decisions/meta-logins.md); the post's language is brand.yml's
+`languages.facebook`, [brands.md](brands.md)). An article written in the app has no `launch.yml` of
+its own: the channels chosen there are written beside its drafts
 ([engine.md](engine.md#articles-written-in-the-app)), and so are those of a launch made from sources
 with no repo ([sources.md](sources.md)).
 
@@ -153,4 +158,4 @@ reintroduced it.
 
 ## Related
 
-[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]] · [[sources.md]]
+[[content-pack.md]] · [[brands.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[engine.md]] · [[plans/mvp-close.md]] · [[publishing.md]] · [[sources.md]] · [[decisions/meta-logins.md]]

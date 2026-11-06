@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-05T11:44:52.291489772Z
-updated_at: 2026-11-05T11:52:18.609764112Z
+created_at: 2026-11-06T07:20:21.312873427Z
+updated_at: 2026-11-06T07:20:21.312873427Z
 tags:
     - plan
     - goal
@@ -21,13 +21,17 @@ this brief and a guess disagree, this brief wins; where it is silent, the spec, 
 **The run never waits for the owner.** Everything that needs them is collected at the end, in the
 report and in "What the owner does after the run".
 
+What the run built, and every way it departed from the plan, is in the decision record
+[decisions/meta-logins.md](../decisions/meta-logins.md) and the plan's
+[Outcome](meta-logins-implementation.md#outcome).
+
 ## Decisions the owner took for this run
 
 | Question | Decision |
 | --- | --- |
 | Scope | Instagram through Instagram Login, Unified Login and Facebook Login for Business; Facebook Pages as a full channel; a Facebook account only as a way to log in; Threads unchanged |
 | Who uses it | Each install with its own Meta app; Shipcast is not a Tech Provider |
-| The spike (plan, Task 0) | **Skipped in this run**: it needs the owner's app. Build with the plan's stated fallbacks (the Page token for Instagram; the post metrics `post_impressions_unique`, `post_clicks`, `post_reactions_by_type_total` and the Page metrics `page_follows`, `page_post_engagements`), each refused metric dropped by name at run time as Instagram's are. The spike's three questions go into the owner's test list |
+| The spike (plan, Task 0) | **Skipped in this run**: it needs the owner's app. Build with the plan's stated fallbacks (the Page token for Instagram; the Page metrics `page_follows`, `page_post_engagements`), each refused metric dropped by name at run time as Instagram's are. The post metrics as built are `post_total_media_view_unique`, `post_clicks` and `post_reactions_by_type_total`: the plan's fallback `post_impressions_unique` was retired by Meta on 2025-06-15, and `post_total_media_view_unique` is its documented replacement. The spike's three questions go into the owner's test list |
 | Real accounts | **No real Meta call** in the run: every flow is proven with fakes and in a preview. The owner's Instagram account keeps working on Instagram Login untouched |
 | Execution | Subagent-driven: one fresh implementer per task and a fresh reviewer after it; a whole-branch review on the most capable model before the last push |
 | Pushes | After Tasks 4, 5, 8 and 9, each only when Sluice's gates pass; a push to `main` deploys to apps-1 on its own |
@@ -85,21 +89,30 @@ report and in "What the owner does after the run".
 ## What the owner does after the run
 
 1. **Meta app for Unified Login** (a new app, or the user's): owned by a business portfolio;
-   Instagram use case → API setup with Unified login → a configuration whose token never expires,
+   Instagram use case → API setup with Unified login → a configuration whose token never expires
+   (a system-user, business integration token: a user token is refused with words saying so),
    with the redirect URL `https://<app>/auth/instagram/callback`. In Shipcast Settings: the Meta app
    id and secret, the Instagram setup `unified`, the configuration id. Connect Instagram; publish a
    test launch with Instagram on `approval`.
 2. **Facebook Page**: the "Manage everything on your Page" use case, a Facebook Login for Business
-   configuration with a User access token and the Pages permissions, the redirect URL
+   configuration with a User access token and the **seven** Page permissions (`pages_show_list`,
+   `pages_manage_posts`, `pages_read_engagement`, `pages_read_user_content`,
+   `pages_manage_engagement`, `read_insights`, `business_management`), the redirect URL
    `https://<app>/auth/facebook/callback`. In Settings the Facebook configuration id. Connect
    Facebook, publish a test launch with Facebook on `approval`, edit it, delete it, read its numbers
-   the next hour.
+   the next hour (`views` from `post_total_media_view_unique`, `clicks`, `reactions`, `comments`,
+   `shares`), and answer a comment.
 3. **Facebook Login for an Instagram linked to a Page** (optional): the Instagram setup `facebook`
-   in an app with that setup; connect and check.
+   in an app with that setup, a configuration with `instagram_basic`, `instagram_content_publish`,
+   `instagram_manage_comments`, `instagram_manage_insights`, `pages_show_list`,
+   `pages_read_engagement` and `business_management` (plus `ads_read` or `ads_management` when the
+   role on the Page comes through a business portfolio); connect and check.
 4. **The spike's three questions**, answered by those tests: does Instagram on `graph.facebook.com`
-   take the Page token; which Page metrics Meta accepts (the account's sync line names any it
-   refused); does the Unified configuration's token report no expiry.
+   take the Page token; which Page metrics Meta accepts (`post_total_media_view_unique`,
+   `post_clicks`, `post_reactions_by_type_total`, `page_follows`, `page_post_engagements`; the
+   account's sync line names any it refused); does the Unified configuration's token report no
+   expiry.
 
 ## Related
 
-[[plans/meta-logins.md]] · [[plans/meta-logins-implementation.md]] · [[accounts.md]] · [[status.md]]
+[[plans/meta-logins.md]] · [[plans/meta-logins-implementation.md]] · [[accounts.md]] · [[status.md]] · [[decisions/meta-logins.md]]

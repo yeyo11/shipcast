@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-27T18:21:54.106414194Z
-updated_at: 2026-11-02T20:10:02.54099853Z
+created_at: 2026-11-05T11:02:46.516416362Z
+updated_at: 2026-11-06T07:14:35.584628227Z
 tags:
     - accounts
     - channels
@@ -15,6 +15,9 @@ tags:
     - profiles
     - secrets
     - youtube
+    - instagram
+    - facebook
+    - meta
 ---
 # Accounts and channels
 
@@ -41,7 +44,8 @@ that is a channel publishes through its connector
 | dev.to | API key | the English article, canonical to the blog | views, reactions, comments; daily, saves, read time and referrers (Forem's analytics) |
 | Bluesky | handle and app password | a post with a link card | likes, reposts, quotes, replies, saves |
 | Mastodon | OAuth on the owner's instance | a status with an image | favourites, boosts, quotes, replies |
-| Instagram | Instagram Login (OAuth) | carousel, story, comment | views, reach and interactions of posts and stories; the account's last day; the profile |
+| Instagram | OAuth, one of three logins: Instagram Login (the Instagram app), Unified Login or Facebook Login for Business (the Meta app) | carousel, story, comment | views, reach and interactions of posts and stories; the account's last day; the profile |
+| Facebook | OAuth, Facebook Login for Business with the owner's Meta app; one account per Page shared | a post with the article as its link card | views, clicks, reactions, comments, shares per post; the Page's followers, likes, follows and post engagements; its About text and picture |
 | Threads | OAuth with the owner's Meta app | a post with the launch image | views, likes, replies, reposts, link clicks; the profile's views; the profile |
 | LinkedIn | OAuth with the owner's LinkedIn app | a post sharing the article | — (Community Management API only) |
 | Reddit | OAuth with the owner's Reddit app, a permanent refresh token | one text post per subreddit | score, comments, crossposts, upvote ratio; followers, karma |
@@ -84,10 +88,20 @@ primary) are the only ways in.
   credential and its permissions; a failing credential is not saved, and the problem is said in words
   ("the token belongs to another account", "rejected: wrong, revoked or expired", "lacks a
   permission"), not as a status code. Connecting the same account again replaces its credential.
+- **The same account is found by its network id** (since 2026-11-06,
+  [decisions/meta-logins.md](decisions/meta-logins.md)). Where a network's settings carry a stable id
+  (`pageId` for Facebook, `userId` for Instagram and Threads), reconnecting matches on it, so a renamed
+  Page or account updates its row and two Pages with the same name stay two accounts. A row stored
+  before it had that id is still found by its label, and the other networks match by label alone. A
+  label is unique per network and brand, so a new account whose name is taken is labelled
+  "Name (id)"; an account found by its id keeps the label it has, which may be one the owner typed.
 - **Import from .env.** One button checks every credential `.env` holds and moves it into the secret
   store as a connected account. The app-level settings that were in `.env` (the launches repo,
-  claudio, the networks' OAuth apps) are imported on their own at start, into the Settings page
-  ([decisions/github-app.md](decisions/github-app.md)).
+  claudio, the networks' OAuth apps, the Instagram setup and the Meta configuration ids) are imported
+  on their own at start, into the Settings page ([decisions/github-app.md](decisions/github-app.md)).
+  `INSTAGRAM_USER_ID` and `INSTAGRAM_ACCESS_TOKEN` always mean an Instagram Login account: a Unified
+  or Facebook Login token cannot come from `.env`, nor through Action mode, and Facebook has no `.env`
+  variables at all.
 - **`shipcast youtube import <file>`** connects YouTube once from a file with the OAuth client and a
   refresh token, through the same path as the callback, printing no value
   ([decisions/youtube.md](decisions/youtube.md)).
@@ -101,8 +115,8 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
   (`apps/web/src/server/network-groups.ts`, tested against the real catalog) derives the tab from what
   the catalog says: a network with no channel (Cloudflare, Search Console, Bing, the GitHub profile)
   is Measurement; dev.to, Hashnode and the newsletter are Blog & newsletter; every other channel is
-  Social. Without a tab in the address the page opens on the first tab with an account, and an
-  account just connected opens its own tab.
+  Social, Facebook included. Without a tab in the address the page opens on the first tab with an
+  account, and an account just connected opens its own tab.
 - **No AI providers here** (since 2026-11-02). The Anthropic API and an OpenAI-compatible server are
   configured in Settings → AI, whose Providers list links to each one's connect page
   (`/channels/anthropic`, `/channels/openaiCompatible`); that page goes back to the AI settings, and
@@ -111,9 +125,10 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
 - **A card per account, in the launch card's skin**: a glyph tile with a state dot (green for a passed
   check, red for a failed one, a dotted ring while unchecked), the network's name and a state pill,
   the account's avatar, name and handle with its brand, the key number (followers; a Discord server's
-  members, when its account has an invite) with following and posts and the last sync under it, and
-  the last problem explained. A network with no account yet is a quieter dashed card with **Connect
-  an account**.
+  members, when its account has an invite; a Facebook Page's followers with its likes beside them)
+  with following and posts and the last sync under it, and the last problem explained. A network with
+  no account yet is a quieter dashed card with **Connect an account**; an OAuth network whose app is
+  not set yet says which setting it needs, by its label in Settings.
 - **Every action is kept**: Sync now is a button on the card; the rest are in its Menu: Check the
   credential, Publish with this one, Rename, Connect another account and Disconnect, which asks first.
 - **Sync all** (since 2026-11-02), beside Connect a network in the header, phone and desktop: Sync now
@@ -129,18 +144,20 @@ Reshaped on 2026-10-26 (`apps/web/src/routes/_app/channels/index.tsx`).
 Built on 2026-10-25 ([decisions/account-snapshots.md](decisions/account-snapshots.md)).
 
 - **Avatars.** A working `check()` also returns the profile's picture and name where the same answer
-  has them: Bluesky, Mastodon, Instagram, dev.to, Hashnode, Reddit, the GitHub profile and a Discord
-  webhook's own picture. A check that finds none, or fails, leaves the last one. Only plain `https`
-  addresses are kept, never one that carries a credential, so a Telegram channel has none. Pictures
-  are plain `<img>` elements, lazy, with `referrerpolicy="no-referrer"`.
+  has them: Bluesky, Mastodon, Instagram, a Facebook Page, dev.to, Hashnode, Reddit, the GitHub
+  profile and a Discord webhook's own picture. A check that finds none, or fails, leaves the last one.
+  Only plain `https` addresses are kept, never one that carries a credential, so a Telegram channel
+  has none. Pictures are plain `<img>` elements, lazy, with `referrerpolicy="no-referrer"`.
 - **Snapshots.** Each connector whose API counts them has `profileStats()`, returning followers,
   following and posts and an `extra` map. The daily `snapshots` job (04:00 UTC) runs
   `takeSnapshots`: every account of a known brand is checked again and, where its network counts,
   gets the day's row in `account_snapshots`. One account failing never stops the others.
   Instagram's `extra` holds the account's insights of the last 24 hours (`views1d`, `reach1d`,
   `accountsEngaged1d`, `interactions1d`, `linkTaps1d`, and from 100 followers `follows1d` and
-  `unfollows1d`); Threads' the profile's views of the day before (`profileViews1d`). An insight
-  the network refuses is named in the sync's line and never fails the counts.
+  `unfollows1d`); Threads' the profile's views of the day before (`profileViews1d`); a Facebook
+  Page's its `likes` (`fan_count`) and, from its insights of the last day, `follows1d`
+  (`page_follows`) and `engagements1d` (`page_post_engagements`). An insight the network refuses is
+  named in the sync's line and never fails the counts.
   `shipcast sync [<account id>]` runs the same job from the terminal. The newsletter counts the
   subscribers of brand.yml's lists only, and Discord the members of the server its invite opens.
   dev.to's followers are `/users/me`'s `followers_count` since 2026-10-29 (its articles are still
@@ -169,10 +186,11 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
   country and trailer as the links `Keywords: …`, `Country: ES`, `Trailer: <video>`, through
   `brandingSettings` with the `youtube.force-ssl` scope it already had (its name, picture and banner
   stay YouTube Studio's; [decisions/youtube.md](decisions/youtube.md#the-channels-profile)). dev.to,
-  Hashnode, Reddit, the GitHub profile, Instagram (name, bio, website, picture) and Threads (name,
-  bio, picture) are read but not edited; the links Instagram's and Threads' APIs leave out may be
-  pasted beside the read (`profile.paste`). LinkedIn reads the name and photo with its token and the
-  owner pastes the About section, then copies the proposals.
+  Hashnode, Reddit, the GitHub profile, Instagram (name, bio, website, picture), Threads (name,
+  bio, picture) and a Facebook Page (its About text and picture) are read but not edited; the links
+  Instagram's and Threads' APIs leave out may be pasted beside the read (`profile.paste`). LinkedIn
+  reads the name and photo with its token and the owner pastes the About section, then copies the
+  proposals.
 - **The picture** is set only to brand.yml's `avatar`, never to a proposal: **Use brand.yml's
   picture**, beside a review, asks first and then uploads it as a Telegram channel's photo
   (`setChatPhoto`, the same "Change channel info" right) or a Discord webhook's picture (Modify
@@ -195,15 +213,32 @@ Built on 2026-10-27 ([decisions/account-analysis.md](decisions/account-analysis.
 Besides the accounts, the store keeps the app's session key and API-token pepper (each created once,
 under a lock across processes), the TLS and ACME keys (never in the table), each Mastodon instance's
 client, the owner's GitHub user token (`app:github-user`), claudio's token, the webhook secret and
-the networks' OAuth app secrets.
+the networks' OAuth app secrets (the Meta app's among them, `app:meta-app-secret`).
 
 ## OAuth flows
 
-`packages/connectors/src/oauth.ts` has the networks' flows as plain functions; each adapter's OAuth
-spec says its URLs, scopes and app, and the routes under `/auth/<network>` run them. A flow's
-`state` is a one-time value for ten minutes in the process's one-time store: memory, or Redis with
-`redis-state`, so a callback reaching another replica still finds it.
+`packages/connectors/src/oauth.ts` has most networks' flows as plain functions, and
+`packages/connectors/src/meta/` Meta's (Instagram Login, Unified Login, Facebook Login for Business).
+Each adapter's OAuth spec says its URLs, scopes and app, and the routes under `/auth/<network>` run
+them. A flow's `state` is a one-time value for ten minutes in the process's one-time store: memory, or
+Redis with `redis-state`, so a callback reaching another replica still finds it.
 
+- **The app a spec signs in with** is named by its id: a network's own (`instagram`, `threads`,
+  `reddit`…) or one several networks share (`meta`). Each app's id and secret are derived once as
+  settings, `<app><App|Client>Id` and `…Secret` (`metaAppId`, `META_APP_ID`; `metaAppSecret` in the
+  secret store). A spec may also need a configuration id (`instagramConfigId`, `facebookConfigId`),
+  a public setting: Meta says it identifies a configuration and gives no access. A sign-in whose
+  settings are missing says which, by its label in Settings.
+- **Variants.** A network that signs in more than one way declares variants and the setting that
+  picks one (`oauthSpecOf` in `packages/runtime/src/oauth-specs.ts`; an unset or unknown value is the
+  fallback). The flow keeps its variant with its state, so the callback finishes the sign-in it
+  started even if Settings changed in between.
+- **Several accounts per sign-in.** A spec's exchange returns a list: Meta's consent may share
+  several Pages or Instagram accounts at once, and each becomes its own account, checked and kept
+  through the one path every connection takes (`connectAll`, `apps/web/src/server/oauth-flows.ts`).
+  The label the owner typed names one account, never several. The browser lands on the first one
+  connected; what the sign-in itself left out (a Page Meta gave no token for) and any account that
+  was refused are said beside it, and one that fails never undoes the others.
 - **Mastodon** has no central developer portal: Shipcast registers itself on the instance the owner
   names (`POST /api/v1/apps`, scopes `read:accounts read:statuses read:notifications write:statuses
   write:media write:accounts`) the first time, keeps that client in the secret store with its scopes,
@@ -211,10 +246,38 @@ spec says its URLs, scopes and app, and the routes under `/auth/<network>` run t
   next connection. The token does not expire. `read:notifications`, which the hourly comment feed
   needs, joined on 2026-10-29: a token from before keeps publishing and reading, and its comments
   come with the daily sweep until it is connected again.
-- **Instagram Login** needs the Instagram app id and secret of the owner's Meta app, set in the
-  Settings page, and the callback listed exactly in its business login settings. The code becomes a
-  short-lived token, swapped at once for a 60-day one, refreshed every 30 days by the
-  `instagram-tokens` job.
+- **Instagram** has three variants, picked by the `instagramLogin` setting (`instagram` when unset)
+  ([decisions/meta-logins.md](decisions/meta-logins.md)); each account keeps the `login` it came
+  from, and an account without one is an Instagram Login account, as every account from before is:
+  - **Instagram Login** (`instagram`, apps created before Meta closed it to new ones) needs the
+    Instagram app id and secret of the owner's Meta app, and the callback listed exactly in its
+    business login settings. The code becomes a short-lived token, swapped at once for a 60-day one,
+    refreshed every 30 days by the `instagram-tokens` job. Its account is read on
+    `graph.instagram.com`.
+  - **Unified Login** (`unified`) needs the Meta app id and secret and `instagramConfigId`: a
+    configuration under Instagram → API setup with Unified login, whose token never expires. Meta's
+    dialog asks by configuration, never by scope; the code becomes a business integration system
+    user token, which reaches every Instagram account assigned to it
+    (`/me/assigned_instagram_accounts`); each account keeps it with its id and business id. Never
+    refreshed.
+  - **Facebook Login for Business** (`facebook`), for an Instagram account linked to a Page, needs the
+    Meta app and `instagramConfigId`: a configuration with a User access token and `instagram_basic`,
+    `instagram_content_publish`, `instagram_manage_comments`, `instagram_manage_insights`,
+    `pages_show_list`, `pages_read_engagement` and `business_management` (plus `ads_read` or
+    `ads_management` when the owner's role on the Page comes through a business portfolio). The user
+    token is swapped for a long-lived one, and every shared Page with an Instagram account linked
+    gives an account holding that Page's token, which does not expire.
+
+  Unified and Facebook Login accounts are read on `graph.facebook.com`, by their id. Each setup is
+  one per Meta app, which is why the choice is a setting.
+- **Facebook** signs in with the Meta app and `facebookConfigId`: a Facebook Login for Business
+  configuration with a User access token and `pages_show_list`, `pages_manage_posts`,
+  `pages_read_engagement`, `pages_read_user_content`, `pages_manage_engagement`, `read_insights` and
+  `business_management`, in an app with the "Manage everything on your Page" use case, its callback
+  `/auth/facebook/callback`. The user token is swapped for a long-lived one and every Page shared
+  becomes an account with its own Page token (no refresh). A Page Meta lists without a token (the
+  owner's role on it allows no task) is left out and named; when none is usable, the sign-in fails
+  and says why.
 - **Threads** and **LinkedIn** use the owner's own app, its id and secret in Settings.
 - **Reddit** needs the owner's Reddit app, its client id and secret in Settings and its redirect uri
   set to `/auth/reddit/callback`. It asks for `identity submit read history edit` with
@@ -232,6 +295,22 @@ spec says its URLs, scopes and app, and the routes under `/auth/<network>` run t
   token and never delete the good one.
 - Callbacks are behind the session: the `SameSite=Lax` cookie comes along on the redirect back.
 
+## The Meta settings
+
+Added on 2026-11-05 ([decisions/meta-logins.md](decisions/meta-logins.md)). In Settings, each with
+its `.env` name for an install that sets it there:
+
+| Setting | `.env` | What it is |
+| --- | --- | --- |
+| `metaAppId`, `metaAppSecret` | `META_APP_ID`, `META_APP_SECRET` | The owner's Meta app, for Facebook and Instagram's Unified and Facebook logins; the secret in the secret store |
+| `instagramLogin` | `INSTAGRAM_LOGIN` | Instagram's setup in that app: `instagram` (Instagram Login, the default), `unified` or `facebook`; offered as a list, "Instagram Login (default)" when unset |
+| `instagramConfigId` | `INSTAGRAM_CONFIG_ID` | The Unified or Facebook Login configuration Instagram signs in with |
+| `facebookConfigId` | `FACEBOOK_CONFIG_ID` | The Facebook Login for Business configuration a Page signs in with |
+| `instagramAppId`, `instagramAppSecret` | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` | Instagram Login's app, unchanged |
+
+Each has a help line in Settings saying when it is needed, so an install on Instagram Login needs
+none of the Meta ones.
+
 ## Related
 
-[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[server.md]] · [[decisions/architecture.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/dated-metrics.md]]
+[[web-app.md]] · [[publishing.md]] · [[brands.md]] · [[engine.md]] · [[server.md]] · [[decisions/architecture.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[plans/goal-finish.md]] · [[status.md]] · [[decisions/account-snapshots.md]] · [[decisions/account-analysis.md]] · [[decisions/github-app.md]] · [[decisions/component-layer.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/dated-metrics.md]] · [[decisions/meta-logins.md]] · [[plans/meta-logins.md]]

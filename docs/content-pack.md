@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-02T09:14:12.677217672Z
-updated_at: 2026-11-02T23:15:22.858593697Z
+created_at: 2026-11-05T11:03:03.60135146Z
+updated_at: 2026-11-06T07:18:07.59269778Z
 tags:
     - schema
     - content-pack
@@ -8,6 +8,7 @@ tags:
     - decision
     - sources
     - release-notes
+    - facebook
 ---
 # The content pack
 
@@ -57,6 +58,7 @@ analysis with `claims`. It runs as the pack task, with its settings, ceilings an
 | `githubDiscussions` | `title` (≤ 120) and a Markdown `body` (≤ 4,000) for the launched repo's Discussions |
 | `threads` | `text` (≤ 500, an emoji counting as its UTF-8 bytes) |
 | `linkedin` | `text` (≤ 1,300); the post shares the article as its link card |
+| `facebook` | `text` (≤ 2,000, hashtags included, at most three of them), in brand.yml's `languages.facebook`, the first line carrying the point and no link: the post shares the article in that language as its link card ([publishing.md](publishing.md#facebook)) |
 | `reddit` | One post per subreddit: `subreddit` (required, without `r/`), `title` (≤ 300), a Markdown `body` that links the article |
 | `newsletter` | An issue per language under its code, at least one: `subject` (≤ 90), `previewText` (≤ 140), `markdown` ([publishing.md](publishing.md#the-newsletter)) |
 | `youtube` | A `short` (6 to 59 s of scenes) and a `video` (60 to 180 s), each with a `title` (≤ 100), a `description` (the article link and the chapters are added around it, within YouTube's 5,000), up to 15 `tags`, a `lang`, and its `scenes`: at least two, each a `kind` (`card`, `demo`, `screenshot`, `cover`), a `subtitle` (≤ 120, the narration, since there is no voice), `seconds` (2 to 30), an optional card `title` and `text`, and for the horizontal video an optional `chapter` |
@@ -64,8 +66,12 @@ analysis with `claims`. It runs as the pack task, with its settings, ceilings an
 
 Hashnode, Telegram and Discord were added on 2026-10-25; GitHub Discussions, Threads and LinkedIn on
 2026-10-26 ([decisions/new-networks.md](decisions/new-networks.md)); YouTube on 2026-10-28, the first
-channel added as a module ([decisions/youtube.md](decisions/youtube.md)). Every piece is published by
-Shipcast ([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)). A YouTube
+channel added as a module ([decisions/youtube.md](decisions/youtube.md)); Facebook on 2026-11-05, a
+Page of the brand's ([decisions/meta-logins.md](decisions/meta-logins.md)). The prompt names the
+Facebook post's language as `{{facebookLanguage}}`, resolved as LinkedIn's is: brand.yml's
+`languages.facebook` when the blog has that language, else English when it has English, else the
+blog's first. Every piece is published by Shipcast
+([decisions/automatic-channels-only.md](decisions/automatic-channels-only.md)). A YouTube
 script that cannot fit its format is refused by the schema, before anything is rendered; its draft
 shows the title, tags, description and the script scene by scene for the owner to read.
 
@@ -117,10 +123,11 @@ launch made before keeps its files, slugs, `translationKey` and URLs.
   list language.
 - **The lead language** is the one every channel links, dev.to and Hashnode republish and
   `translationKey` follows: English when the article has it, otherwise the first of the brand's
-  languages it has. So a brand that writes in English keeps today's behaviour exactly, and one without
-  English (`[de]`, `[fr, es]`) republishes its primary language's article. The launch image and
-  Instagram's cover take the English title for a brand whose blog has English, as before, and the
-  lead one otherwise.
+  languages it has. LinkedIn's and Facebook's cards share the article in their own language from
+  brand.yml (`languages.linkedin`, `languages.facebook`) when the pack has it, the lead one otherwise.
+  So a brand that writes in English keeps today's behaviour exactly, and one without English (`[de]`,
+  `[fr, es]`) republishes its primary language's article. The launch image and Instagram's cover take
+  the English title for a brand whose blog has English, as before, and the lead one otherwise.
 - **Names**: `languageName(code)` names a code in English (`fr` → French) for the prompts and the app,
   and falls back to the code itself for one it does not know. The few fixed words Shipcast writes into
   a page or an email (a screenshot's alt text, the issue's "Read the article") come in English, Spanish,
@@ -190,7 +197,7 @@ Every piece is optional, so one schema serves every `launch.yml`. Whether a pack
 launch needs is `missingPieces(pack, config, brand)`, which lists, in plain sentences:
 
 - a channel turned on in `launch.yml` whose piece is missing (by `PACK_KEYS`, so a new channel is
-  covered by its definition);
+  covered by its definition, Facebook's included);
 - an article missing one of the languages of the brand's blog;
 - dev.to or Hashnode turned on without the article they republish (the English one for a brand whose
   blog has English, else its primary language's), and LinkedIn without the article it shares;
@@ -205,8 +212,9 @@ rejected never reaches review; each definition also says how its text is counted
 graphemes (`Intl.Segmenter`), so `👩‍💻` is one, as a reader sees it. Instagram captions carry no URL
 because links there are not clickable. Telegram's text is kept under a photo caption's 1,024
 characters; Discord's under a message's 2,000; a Reddit title under its 300; a YouTube title under
-its 100.
+its 100. Facebook's Page post takes far more than 2,000 characters, but few read past the fold, so the
+definition keeps it a post, not an article.
 
 ## Related
 
-[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/architecture.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[sources.md]]
+[[launch-yml.md]] · [[brands.md]] · [[launches-repo.md]] · [[decisions/architecture.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[plans/shipcast.md]] · [[plans/stack.md]] · [[publishing.md]] · [[engine.md]] · [[decisions/post-model.md]] · [[decisions/ai-providers.md]] · [[decisions/edit-delete.md]] · [[plans/goal-after-mvp.md]] · [[decisions/launch-model.md]] · [[media-store.md]] · [[sources.md]] · [[decisions/meta-logins.md]]

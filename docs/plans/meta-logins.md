@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-05T11:42:08.344657615Z
-updated_at: 2026-11-05T11:42:08.344657615Z
+created_at: 2026-11-06T07:19:54.660555965Z
+updated_at: 2026-11-06T07:19:54.660555965Z
 tags:
     - plan
     - design
@@ -13,8 +13,26 @@ tags:
 ---
 # Every Meta login: Instagram's three setups and Facebook Pages
 
-Designed on 2026-11-05 with the owner. Status: **design approved, not built**. The implementation plan
-is [plans/meta-logins-implementation.md](meta-logins-implementation.md).
+Designed on 2026-11-05 with the owner. Status: **built** on 2026-11-05 and 2026-11-06, deployed, and
+waiting for the owner's tests against Meta. The implementation plan is
+[plans/meta-logins-implementation.md](meta-logins-implementation.md), whose
+[Outcome](meta-logins-implementation.md#outcome) lists what changed from this design; the decision
+record is [decisions/meta-logins.md](../decisions/meta-logins.md).
+
+Commits on `main`:
+
+- `323e0b4`, `17332c6`: sign-in variants, shared OAuth apps and several accounts per sign-in.
+- `d85832d`: Meta's Facebook Login for Business and Unified Login flows.
+- `0cb2c7a`: Instagram on `graph.facebook.com` for Unified and Facebook logins.
+- `58b2b00`: Instagram through Unified Login.
+- `6e89ef4`: Instagram linked to a Facebook Page, through Facebook Login.
+- `d6f439a`: the Facebook Page channel's definition.
+- `076d28b`, `d51c6d2`: the `FacebookPage` connector, and a comment's replies threaded under it.
+- `d65e99e`, `5965972`, `e85f447`: the Facebook adapter, its seventh permission, its read cadence,
+  and the settings' words.
+- `cf59ac2`, `1959bae`, `ae3139f`: the final review's fixes (each account's own username, the views
+  metric Meta still offers, matching accounts by their network id, tokenless Pages, the settings'
+  help).
 
 ## Why
 
@@ -139,8 +157,11 @@ Rejected:
   (`/{page}/feed` with the text and the article's link, so the card carries the click); edit
   (`POST /{post}`) and delete (`DELETE /{post}`); read and answer comments (`/{post}/comments`); the
   post's and the Page's insights; the profile (name, about, picture, followers), read only.
-- **Permissions**: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`,
-  `pages_manage_engagement`, `read_insights`, `business_management`.
+- **Permissions** (seven, as built): `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`,
+  `pages_read_user_content`, `pages_manage_engagement`, `read_insights`, `business_management`. The
+  design named six; `pages_read_user_content` joined because Meta's comments guide asks for a third
+  read permission to read a post's comments
+  ([decisions/meta-logins.md](../decisions/meta-logins.md#deviations-from-the-spec-and-the-plan)).
 - **Parity**: publishing, editing, comments, metrics and accounts are already REST routes and MCP
   tools per channel; the `app-parity` and `mcp-parity` tests prove the new channel is reachable.
 
@@ -162,6 +183,23 @@ Rejected:
   metric names today (Meta retired several in 2024 and 2025); and whether a BISU configuration of
   one's own can be set to never expire.
 
+## Spike findings: not run; open questions
+
+The autonomous run skipped the spike, which needs the owner's Meta app, and built on the stated
+fallbacks. Its three questions are open and go to the owner's tests
+([plans/goal-meta-logins.md](goal-meta-logins.md#what-the-owner-does-after-the-run)):
+
+1. **Does Instagram on `graph.facebook.com` take a Page token?** Built with the Page token. If Meta
+   refuses it, the fallback is the long-lived user token with a 30-day refresher.
+2. **Which Page insights metric names does Meta accept?** Built with `post_total_media_view_unique`
+   (Meta's documented replacement for `post_impressions_unique`, retired on 2025-06-15),
+   `post_clicks` and `post_reactions_by_type_total` for a post, and `page_follows` and
+   `page_post_engagements` for the Page. A refused name is dropped at run time and named in the
+   account's sync line.
+3. **Can a Unified Login configuration of one's own issue a token that never expires?** Built
+   assuming it can; a token that expires is not refreshed and asks for the account to be connected
+   again.
+
 ## Delivery order
 
 Independent commits to `main`, each through the gates:
@@ -182,9 +220,10 @@ Independent commits to `main`, each through the gates:
 - [Facebook Login for Business](https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business)
 - [Long-lived access tokens](https://developers.facebook.com/documentation/facebook-login/guides/access-tokens/get-long-lived)
 - [Pages API overview](https://developers.facebook.com/documentation/pages-api/overview), [get started](https://developers.facebook.com/documentation/pages-api/getting-started)
+- [Page Insights deprecated metrics](https://developers.facebook.com/documentation/pages-api/platforminsights/page/deprecated-metrics)
 - [Threads: get access tokens](https://developers.facebook.com/documentation/threads/get-started/get-access-tokens-and-permissions)
 - [Permissions reference](https://developers.facebook.com/docs/permissions)
 
 ## Related
 
-[[accounts.md]] · [[publishing.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[decisions/architecture.md]] · [[plans/meta-logins-implementation.md]]
+[[accounts.md]] · [[publishing.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/new-networks.md]] · [[decisions/architecture.md]] · [[plans/meta-logins-implementation.md]] · [[decisions/meta-logins.md]] · [[plans/goal-meta-logins.md]]

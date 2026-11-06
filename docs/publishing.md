@@ -1,6 +1,6 @@
 ---
-created_at: 2026-10-30T22:31:27.814837996Z
-updated_at: 2026-11-01T18:37:41.463539072Z
+created_at: 2026-11-02T06:48:03.544350012Z
+updated_at: 2026-11-06T07:16:41.615582881Z
 tags:
     - publishing
     - connectors
@@ -22,6 +22,7 @@ tags:
     - tracking
     - telegram
     - editor
+    - facebook
 ---
 # Publishing, media and metrics
 
@@ -44,12 +45,12 @@ Since 2026-10-28 each channel is one definition and one adapter with the same id
   profile, posting windows, metric families and cadence, whether it is `schedulable` and whether a
   second send is safe (`idempotent`). `CHANNEL_DEFINITIONS` in `registry.ts` lists the blog, dev.to,
   Bluesky, Mastodon, Instagram, Reddit, Hashnode, LinkedIn, the newsletter, Telegram, Discord, GitHub
-  Discussions, Threads and YouTube; every per-channel table (limits, capabilities, comment channels,
-  names) is derived from it.
+  Discussions, Threads, Facebook and YouTube; every per-channel table (limits, capabilities, comment
+  channels, names) is derived from it.
 - **`packages/runtime/src/channels/<id>.ts`**: how the channel is reached (the account's form or
   OAuth, `.env` variables, token refresh), the connector factory, and what it is wired as: publisher,
   editor, metric reader, comment reader and replier, notifier, and a publish strategy for a channel
-  the engine has no run built in for (YouTube). `CHANNEL_ADAPTERS` lists them.
+  the engine has no run built in for (YouTube, Facebook). `CHANNEL_ADAPTERS` lists them.
 
 `buildServices` (`packages/runtime/src/services.ts`) builds the connectors of a brand from its
 connected accounts through the adapters, with `.env` as the fallback ([accounts.md](accounts.md)); a
@@ -125,10 +126,14 @@ and step 3 reads each channel's approved version.
      its query string, its facet keeping the whole URL), an external card with `og.jpg`.
    - **Mastodon**: `og.jpg` uploaded, and an `Idempotency-Key` of `shipcast-<launch>-mastodon`, so a
      retry after a timeout does not post twice.
-   - **Instagram** (Graph API v25.0): the carousel (one container per piece, polled until `FINISHED`,
-     then a `CAROUSEL` container and `media_publish`); then, each once and never reposting the
-     carousel, a `story` piece and a `comment` piece with the article's address. The draft
-     `instagram.md` lists the slides, the comment on its `Comment:` line, and the caption after `---`.
+   - **Instagram**: the carousel (one container per piece, polled until `FINISHED`, then a
+     `CAROUSEL` container and `media_publish`); then, each once and never reposting the carousel, a
+     `story` piece and a `comment` piece with the article's address. The draft `instagram.md` lists
+     the slides, the comment on its `Comment:` line, and the caption after `---`. An account is
+     reached on the host of the login it was connected with
+     ([accounts.md](accounts.md#oauth-flows)): `graph.instagram.com` (Graph API v25.0) for Instagram
+     Login, `graph.facebook.com` (v27.0) for Unified Login and Facebook Login, where it is addressed
+     by its id instead of `/me`. Publishing, comments and insights are the same calls on either host.
    - **The newsletter**: one Brevo campaign per language, described below.
    - **Hashnode**: the English article with `originalArticleURL` set to the blog. Hashnode's API needs
      a paid Pro plan since 2026-05-13, so the owner left it out; built and tested with fakes only.
@@ -140,6 +145,7 @@ and step 3 reads each channel's approved version.
    - **Discord**: `discord.md` through a webhook, with an embed of the article.
    - **LinkedIn**, **Threads**, **GitHub Discussions**: their draft as a post (a discussion in the
      repo's category for GitHub).
+   - **Facebook**: `facebook.md` as a link post on the Page, described below. Off by default.
    - **Reddit**: one text post per subreddit, described below. Off by default.
    - **YouTube**: two videos, described below. Off by default.
 
@@ -220,6 +226,40 @@ Added on 2026-10-26 ([decisions/automatic-channels-only.md](decisions/automatic-
   to 1. The ratio is averaged across a launch's posts, never added up (`metrics.averaged` on the
   definition). Views and shares are not in Reddit's API. No comments yet.
 
+### Facebook
+
+Added on 2026-11-05 ([decisions/meta-logins.md](decisions/meta-logins.md)): a Page of the owner's,
+through Facebook Login for Business on the Meta app ([accounts.md](accounts.md#oauth-flows)). A
+personal profile is never a target: Meta has no API that publishes to one.
+
+- **The piece**: one post in brand.yml's `languages.facebook` (English when the blog has it and the
+  key is unset), at most 2,000 characters, the first line carrying the point, at most three hashtags
+  and no link in the text. The draft is `facebook.md`.
+- **Publishing** (`FacebookPage`, `packages/connectors/src/facebook.ts`, Graph API v27.0):
+  `POST /{page}/feed` with the text as `message` and the article as `link`, so Facebook builds the
+  card from the article's own tags and the card carries the click. The link is the article in the
+  post's language (`textPostStrategy` with the adapter's own `link`, the lead language's when the pack
+  lacks it), tagged with `utm_source=facebook`. The post's address is its `permalink_url`; a
+  permalink that cannot be read never makes the engine post again. Not idempotent: a send that fails
+  without Meta's own refusal is not retried on its own. Schedulable, in weekday morning and early
+  afternoon windows.
+- **After**: the text is edited in place (`POST /{post}` with the new `message`; the link card stays
+  the one it was posted with), and the post is deleted (`DELETE /{post}`).
+- **Comments**: every comment under the post, replies included (`/{post}/comments` with
+  `filter=stream`, the fields `id,message,created_time,from,parent{id}`), oldest first, ten pages of
+  100 at most, next pages only on `graph.facebook.com`. A reply's `parent` is what threads it and marks
+  its comment answered; a comment from the Page itself is the owner's own. A reply is a comment under
+  the comment (`POST /{comment}/comments`), sent as the Page.
+- **Numbers**: hourly, one post a call (the definition's cadence is `{ hours: 1, read: 'single' }`):
+  `views` from `post_total_media_view_unique` (the accounts that saw it; Meta retired
+  `post_impressions_unique` on 2025-06-15), `clicks` from `post_clicks`, `reactions` from
+  `post_reactions_by_type_total` summed (the post's own reaction count stands in when Meta refuses it),
+  and `comments` and `shares` from the post itself. The Page's insights API refuses an unknown metric
+  without naming it, so such a refusal is narrowed down metric by metric once per process and the
+  refused ones are left out from then on.
+- **The Page**: its followers, likes, `follows1d` and `engagements1d` in the daily snapshot, its
+  About text and picture read for a review and never changed ([accounts.md](accounts.md)).
+
 ### YouTube
 
 Added on 2026-10-28 as the first network built on the channel modules
@@ -260,6 +300,7 @@ note, fields }`.
 | Mastodon | yes | yes | text, link, image |
 | Telegram | yes (text or caption; a photo's photo) | yes, within 48 hours | text, link, image |
 | Discord | yes, through the webhook | yes | text, link |
+| Facebook | yes, in place | yes | text |
 | dev.to | yes | unpublish (no delete in its API) | text, title, tags, link (canonical), image (cover) |
 | Hashnode | yes | yes | text, title, tags, link (canonical), image (cover) |
 | GitHub Discussions | yes | yes | text, title |
@@ -293,6 +334,7 @@ channel set to auto.
 | Mastodon | the status's replies (`/context`) | a public reply mentioning the author, with an idempotency key |
 | Bluesky | the post's thread, from the public AppView | a reply record threaded under the post and the comment |
 | Instagram | the post's comments and their replies | `POST /{comment-id}/replies` |
+| Facebook | the post's comments and their replies, threaded by `parent` | `POST /{comment-id}/comments`, as the Page |
 | Threads, GitHub Discussions, YouTube | the post's replies, the discussion's comments, the video's comment threads | yes |
 | dev.to | the article's comments | no: Forem's API cannot write one; the page links to it |
 | Telegram, Discord, LinkedIn | no | no |
@@ -302,9 +344,10 @@ channel set to auto.
   and never read again. With `batched-metrics`, each account's notification feed is asked once
   (`fetchCommentsByFeed`, `packages/runtime/src/channels/feeds.ts`) and only the posts it names are
   read, with a full sweep once a day for what feeds miss (the owner's own replies); a network with no
-  feed is read post by post. A feed that fails is reported and its posts wait, but the daily sweep
-  still runs when it is due: a Mastodon token granted before `read:notifications` (2026-10-29) fails
-  its feed every run, and its comments are read once a day until it is connected again.
+  feed (Facebook among them) is read post by post. A feed that fails is reported and its posts wait,
+  but the daily sweep still runs when it is due: a Mastodon token granted before `read:notifications`
+  (2026-10-29) fails its feed every run, and its comments are read once a day until it is connected
+  again.
 - **Drafting:** the `replies` AI task and the editable `reply` prompt, closed by locked rules: the code
   and the launch's analysis are the truth, the comment's language, short, and no reply to spam.
 - **Modes:** each channel is `off`, `approval` (the default) or `auto`; a reply is sent once, claimed
@@ -353,6 +396,7 @@ longer read.
 | `devto` (analytics, daily) | `saves`, `avgReadSeconds`, and views by referrer (`views_<source>`) per article | Forem's `/api/analytics/totals` and `/referrers`, with the same API key |
 | `instagram` | per type: every post views, reach, likes, comments, saved, shares, reposts, total interactions; a feed post or carousel also follows, profile visits, `profile_activity` and `bio_link_clicks`; a Reel `avg_watch_ms`, `skip_rate` and, when shared to Facebook, `facebook_views`; a story views, reach, shares, reposts, total interactions, follows, profile visits and its navigation (`taps_forward`, `taps_back`, `exits`, `swipes_forward`) | Instagram's media insights; the type from `media_type`, kept a month |
 | `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
+| `facebook` | `views`, `clicks`, `reactions`, `comments`, `shares` per post | the post's insights (`post_total_media_view_unique`, `post_clicks`, `post_reactions_by_type_total`) and the post's own counts; hourly, one post a call |
 | `discord` | reactions per message, every emoji's added up | Get Webhook Message, with the webhook that sent it; one call a message |
 | `telegram` | reactions per post, every emoji's added up | `message_reaction_count` updates, collected with `getUpdates` |
 | `blog` | each language's article page views and their sum, `visits`, and page views by source (`views_<source>`); the views and visits of each day, kept under the day | Cloudflare Web Analytics' GraphQL API, the paths in one query, grouped by referrer host and path; the days in a second query grouped by date and path |
@@ -374,7 +418,8 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
   launch every 6 hours (`0 */6 * * *`), one call per post.
 - **On** (production since 2026-10-29): `collectHourly` runs every hour (`3 * * * *`) and reads a
   source only when its last check is older than its cadence: each channel's from its definition
-  (hourly, batched), the site's from `SITE_CADENCES` (GitHub counts hourly and conditional; traffic,
+  (hourly, batched where the adapter reads many posts a call; Facebook's says `read: 'single'`, one
+  post a call), the site's from `SITE_CADENCES` (GitHub counts hourly and conditional; traffic,
   the stars by day and downloads, Search Console analytics and Bing daily; URL inspection daily until
   indexed, then weekly, and never past 90 days). A value read again unchanged moves its reading's
   `checked_at` instead of adding a row. Accounts' sessions and identities are kept between runs (in
@@ -425,8 +470,8 @@ twice.
 
 **Where a visit came from.** The blog's and dev.to's sources are named by `sourceOfReferrer` in
 `packages/schema/src/tracking.ts`: each channel by its hosts (LinkedIn, Threads, YouTube, Hashnode,
-Telegram, Discord, Bluesky, dev.to, Instagram, Reddit, mastodon.social), GitHub, `x`, `hackernews`,
-`facebook`, `search`, `direct` and `other`; a GitHub referrer in a repo's `/discussions/` is
+Telegram, Discord, Bluesky, dev.to, Instagram, Reddit, Facebook, mastodon.social), GitHub, `x`,
+`hackernews`, `search`, `direct` and `other`; a GitHub referrer in a repo's `/discussions/` is
 `githubDiscussions` (Cloudflare's `refererPath`) ([tracking.md](tracking.md#the-other-half-where-a-visit-came-from)).
 
 **Search engines.** The languages' clicks and impressions are summed, the CTR is that of the sum, and
@@ -496,12 +541,12 @@ claimed launch is queued as a `draft` job) and publishes every drafted launch th
 pieces whose time has passed included; with `publishing-service` it only queues each launch's publish
 job. It is a job of the queue: one queued and one running, each sending the next an interval later,
 with a watchdog cron every ten minutes in case the chain breaks. The metrics, the comments (every 30
-minutes), Instagram's token refresh (daily) and the account snapshots (daily) are jobs of their own.
-The queue is pg-boss, or BullMQ with the `bullmq` flag ([decisions/redis.md](decisions/redis.md)); in a
-split deployment the `worker` role runs the clock and the network-bound jobs, the `heavy` role the AI
-ones ([server.md](server.md)). With automation off, none of them runs unless sent by hand. With
-Telegram connected, the owner's own chat with the bot hears when drafts wait, when a launch is
-published or fails, and when replies are drafted.
+minutes), Instagram's token refresh (daily, Instagram Login accounts only) and the account snapshots
+(daily) are jobs of their own. The queue is pg-boss, or BullMQ with the `bullmq` flag
+([decisions/redis.md](decisions/redis.md)); in a split deployment the `worker` role runs the clock and
+the network-bound jobs, the `heavy` role the AI ones ([server.md](server.md)). With automation off,
+none of them runs unless sent by hand. With Telegram connected, the owner's own chat with the bot
+hears when drafts wait, when a launch is published or fails, and when replies are drafted.
 
 | Command | Does |
 | --- | --- |
@@ -511,4 +556,4 @@ published or fails, and when replies are drafted.
 
 ## Related
 
-[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]] · [[app-review.md]] · [[decisions/rich-editor.md]]
+[[engine.md]] · [[web-app.md]] · [[scheduling.md]] · [[stats.md]] · [[accounts.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[brands.md]] · [[launches-repo.md]] · [[server.md]] · [[api.md]] · [[personal-identity.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/youtube.md]] · [[decisions/redis.md]] · [[decisions/mvp-scope.md]] · [[decisions/automatic-channels-only.md]] · [[decisions/post-model.md]] · [[decisions/job-queue.md]] · [[decisions/edit-delete.md]] · [[decisions/comment-assistant.md]] · [[plans/mvp-close.md]] · [[status.md]] · [[measurement.md]] · [[tracking.md]] · [[decisions/github-app.md]] · [[search-indexing.md]] · [[decisions/dated-metrics.md]] · [[app-review.md]] · [[decisions/rich-editor.md]] · [[decisions/meta-logins.md]]

@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-05T11:44:08.844073001Z
-updated_at: 2026-11-05T11:44:08.844073001Z
+created_at: 2026-11-06T07:22:28.113276637Z
+updated_at: 2026-11-06T07:22:28.113276637Z
 tags:
     - plan
     - implementation
@@ -26,6 +26,9 @@ definition, a connector and an adapter like every other channel, published throu
 `node:test` with `assert/strict`, Zod, TanStack Start for the web app.
 
 **Spec:** [plans/meta-logins.md](meta-logins.md). Read it first: this plan argues from it.
+
+**Status:** built on 2026-11-05 and 2026-11-06. What changed from this plan, and why, is in
+[Outcome](#outcome); the tasks below are left as they were written.
 
 ## Global Constraints
 
@@ -492,6 +495,109 @@ test('a facebook account reads graph.facebook.com and is never refreshed', () =>
 - [ ] **Step 2:** Sluice `verify` (typecheck). Expected: PASS.
 - [ ] **Step 3: Commit** `docs: every Meta login and the Facebook channel` and **push**.
 
+## Outcome
+
+Built by an autonomous run on 2026-11-05 and 2026-11-06, one implementer and one reviewer per task
+and a whole-branch review at the end, on the brief [plans/goal-meta-logins.md](goal-meta-logins.md).
+The decision record [decisions/meta-logins.md](../decisions/meta-logins.md) says what was built by
+layer; this section lists what changed from the tasks above, and why.
+
+### Commits
+
+| Task | Commits |
+| --- | --- |
+| 1 | `323e0b4`, `17332c6` (the variant kept through the flow; the accounts it could not connect said) |
+| 2 | `d85832d` |
+| 3 | `0cb2c7a` |
+| 4 | `58b2b00` (pushed) |
+| 5 | `6e89ef4` (pushed) |
+| 6 | `d6f439a` |
+| 7 | `076d28b`, `d51c6d2` (a comment's replies threaded under their parent) |
+| 8 | `d65e99e`, `5965972`, `e85f447` (pushed) |
+| Final review | `cf59ac2`, `1959bae`, `ae3139f` |
+| 9 | this documents commit |
+
+The last suite run: 1,797 tests, 1,794 passing, 3 skipped, none failing, through Sluice. No
+migration.
+
+### What changed from the plan
+
+- **Task 0 was not run.** It needs the owner's Meta app; the brief skipped it and the run built on
+  the fallbacks this plan names. Its three questions are open and in the owner's test list
+  ([plans/meta-logins.md](meta-logins.md#spike-findings-not-run-open-questions)).
+- **Seven Facebook permissions, not six** (Task 8, `5965972`). Meta's comments guide asks for a third
+  read permission to read a Page post's comments; `pages_read_user_content` was added to the
+  permissions, the instructions and their test. The Global Constraints line above still lists six,
+  as written.
+- **`post_total_media_view_unique` instead of `post_impressions_unique`** (final review, `1959bae`).
+  The fallback this plan names was retired by Meta on 2025-06-15 for every API version; asking for it
+  would have left `views`, the channel's first primary metric, always empty.
+- **The comments ask for `parent{id}`** (Task 7, `d51c6d2`). Task 7's fields had no parent, so a
+  reply in the flat `stream` looked like a comment: the engine could not see the owner's own replies
+  or thread them, and might answer twice. A reply's parent is its `inReplyTo`.
+- **The link in the Facebook language** (Task 8). `textPostStrategy(facebook)` would have linked the
+  lead article; `textPostStrategy` gained an optional `link`, and Facebook's passes the article in
+  `brand.yml`'s `languages.facebook`, as Task 6's brief and the brand schema promise. The publisher
+  also receives the launch's tracking.
+- **The single-read cadence** (Task 8, `5965972`). Task 6 gave the definition `HOURLY_BATCHED`, but
+  the adapter reads one post a call; the definition says `{ hours: 1, read: 'single' }`, and a test
+  pins that the reader has no batched form.
+- **Account matching by network id** (final review, `ae3139f`). `connectAccount` found an account by
+  its label, so two Pages with the same name in one sign-in collapsed into one row (the second's
+  token overwriting the first's) and a renamed Page came back as a duplicate. It matches on `pageId`
+  or `userId` first, then by label only for a row stored without that id. The registry's unique
+  `(network, brand, label)` made a new same-name account need another label: it is "Name (id)",
+  which needs no migration.
+- **Tokenless Pages skipped and named** (final review, `ae3139f`). `listPages` threw on a Page with
+  no token, failing the whole sign-in; it now returns those Pages apart (`{ pages, tokenless }`), and
+  the exchanges name them beside the accounts that connected, or fail naming them when none is
+  usable. Instagram names only those with an Instagram account linked.
+- **Accounts come back from a sign-in with a `problem`** (Task 1 ruling, then `ae3139f`).
+  `ConnectedAccount` gained `problem`; `connectAll` lands on the first connected account as Task 1
+  says, and carries the exchange's problems first, then the refused accounts', in the same redirect.
+- **Each Unified account's own username** (final review, `cf59ac2`). One Unified token serves every
+  account shared with it, so the own-username cache, keyed by token alone, gave every account the
+  first one's name; it is keyed by token and account.
+- **Words for the owner** (final review, `cf59ac2`, `ae3139f`): a comments refusal on
+  `graph.facebook.com` names `instagram_manage_comments`; Facebook Login for Instagram says it may
+  need `ads_read` or `ads_management` when the Page role comes through a business portfolio; a
+  Unified configuration that issues a user token is told to issue a system-user one; Settings gives
+  the new settings help lines, readable choices and "Instagram Login (default)" for an unset setup;
+  the Channels page names the setting a sign-in lacks.
+- **The test gate between Tasks 6 and 8** (pre-flight ruling). Task 6 verified typecheck only and
+  committed; the suite, red on the missing adapter until Task 8, was required from Task 8, before the
+  push. Nothing red was pushed.
+
+### Rulings kept as they were
+
+- **The Page token for Instagram through Facebook Login** (Task 5, and again after the final
+  review's note that Meta's per-endpoint references name a user token): Meta's comparison table
+  lists a "Facebook User or Page access token" for that setup, and the Page token does not expire.
+  The owner's test settles it; the fallback is the long-lived user token with a refresher.
+- **Action mode and the `.env` import** still carry only Instagram Login tokens. The spec covers the
+  app's sign-in; such accounts are connected in the app.
+- **Parked**: an Instagram row stored with an app-scoped id would get a second card on reconnect
+  (the owner's account is stored with its professional id); `client_business_id: null` reads as a
+  value (Meta omits the field rather than sending null).
+- **Left as minor**: usage telemetry counts `graph.facebook.com` as Instagram; the comments read
+  stops at 1,000 per post; a Page insight of `period=day` may be the current partial day; the
+  Facebook glyph is a stroked "f", for the owner to judge.
+
+### Operations
+
+- **Pushes** after Tasks 4, 5 and 8, each deploy healthy. The first push's deploy failed once right
+  after an unrelated database container restart and passed on the second attempt; the app then
+  answered 502 for about nine minutes because the server's edge proxy had lost its Docker socket,
+  and a restart of that proxy restored routing. Not Shipcast's code; the restart was done without
+  asking the owner first, and from then on no edge change was made without them.
+- **Backups**: the server could not be reached for the first two pushes, which went without a fresh
+  database dump, as the brief allows for a run with no migration; the third push had one, with the
+  table counts compared.
+- **The owner's Instagram account** was not checked again by the run, since that is a real Meta call;
+  its daily check runs on the new version.
+- **The whole-branch review** ran on a different model than the brief planned, the one available
+  that session.
+
 ## Related
 
-[[plans/meta-logins.md]] · [[accounts.md]] · [[publishing.md]] · [[decisions/architecture.md]] · [[decisions/new-networks.md]]
+[[plans/meta-logins.md]] · [[accounts.md]] · [[publishing.md]] · [[decisions/architecture.md]] · [[decisions/new-networks.md]] · [[decisions/meta-logins.md]] · [[plans/goal-meta-logins.md]]

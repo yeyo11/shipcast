@@ -1,11 +1,12 @@
 ---
-created_at: 2026-10-25T10:57:26.1120447Z
-updated_at: 2026-11-03T01:01:20.000000000Z
+created_at: 2026-11-05T11:03:46.73985748Z
+updated_at: 2026-11-06T07:19:07.084853619Z
 tags:
     - status
     - roadmap
     - phase-0
     - phase-1
+    - meta
 ---
 # Status
 
@@ -23,11 +24,42 @@ path is the only one, and Redis is required by the split processes ([server.md](
 publishes `@yeyo11/shipcast` 0.3.0 to npm (`.github/workflows/npm-publish.yml`, whose tag must match
 `apps/cli`'s version). npm carries `0.3.0-rc.0` until then. The GitHub Action is at v1.3.1 (`@v1`).
 
+**Every Meta login and the Facebook channel are built and deployed (2026-11-05 and 2026-11-06), and
+wait for the owner's tests against Meta** ([decisions/meta-logins.md](decisions/meta-logins.md)):
+Instagram connects through Instagram Login, Unified Login or Facebook Login for Business, whichever
+the owner's Meta app has, and a Facebook Page is a channel Shipcast publishes on. Proven with fakes and
+in a preview only: no call to Meta was made. The owner's test list, with the spike's three open
+questions, is in [plans/goal-meta-logins.md](plans/goal-meta-logins.md#what-the-owner-does-after-the-run).
+
 **The MVP closed on 2026-10-25: phases 0 to 5 done, and Shipcast v0.1.0 was launched with Shipcast,
 from its app.** The same day the [goal to finish Shipcast](plans/goal-finish.md) built the web app,
 accounts per brand, the phase 5 channels and what the MVP had left
 ([its outcome](plans/goal-finish.md#outcome-2026-10-25)). Closing the MVP is
 [its own plan](plans/mvp-close.md).
+
+## Every Meta login (2026-11-05)
+
+A new Meta app can no longer set up Instagram Login, so nobody with one could connect Instagram. The
+owner asked for every login Meta offers ([plans/meta-logins.md](plans/meta-logins.md)), and an
+autonomous run built it by its [implementation plan](plans/meta-logins-implementation.md#outcome).
+
+- **Built**: sign-in variants chosen in Settings (`instagramLogin`), the shared Meta app and its
+  configuration ids, several accounts per sign-in, Meta's flows in `packages/connectors/src/meta/`,
+  the Instagram connector on `graph.instagram.com` or `graph.facebook.com` by the account's login, and
+  the `facebook` channel: a link post on a Page, edited, deleted, its comments answered, its numbers
+  read hourly ([accounts.md](accounts.md#oauth-flows), [publishing.md](publishing.md#facebook)).
+  Accounts are now matched on reconnection by their network id.
+- **Deployed**: pushed to `main` in three steps (after Unified Login, after Facebook Login for
+  Instagram, after the Facebook channel), each deploy healthy; the final review's fixes and these
+  documents follow. No migration.
+- **The owner's existing Instagram account** stays on Instagram Login, untouched; tests pin its host,
+  calls and refresh.
+- **Pending, the owner's**: a Meta app with Unified Login to connect Instagram; a Facebook Login for
+  Business configuration to connect a Page and publish, edit, delete and read a test post; optionally
+  Facebook Login for an Instagram account linked to a Page. Those tests answer the spike the run
+  skipped (does Instagram on `graph.facebook.com` take a Page token; which Page metrics Meta
+  accepts; does a Unified configuration's token never expire).
+- **Known limit**: Action mode and the `.env` import carry only Instagram Login tokens.
 
 ## Production (2026-10-29)
 
@@ -94,10 +126,11 @@ accounts per brand, the phase 5 channels and what the MVP had left
   channel ([decisions/architecture.md](decisions/architecture.md),
   [decisions/publishing-state.md](decisions/publishing-state.md)), the newsletter and metrics
   ([publishing.md](publishing.md)).
-- **`packages/connectors`**: dev.to, Hashnode, Bluesky, Mastodon, Instagram (carousel, story, comment),
-  Telegram, Discord and Brevo, the Cloudflare Web Analytics, Search Console and Bing Webmaster readers,
-  and connectors for Threads, LinkedIn, Reddit, YouTube and GitHub Discussions; a `check()` per
-  connector, and the OAuth flows.
+- **`packages/connectors`**: dev.to, Hashnode, Bluesky, Mastodon, Instagram (carousel, story, comment;
+  on either of Meta's hosts), Telegram, Discord and Brevo, the Cloudflare Web Analytics, Search
+  Console and Bing Webmaster readers, and connectors for Threads, LinkedIn, Reddit, YouTube, GitHub
+  Discussions and Facebook Pages; a `check()` per connector, and the OAuth flows, Meta's three among
+  them.
 - **`packages/assets`**: the launch image, the Instagram carousel and story, generated covers, and the
   demo as a video, in the blog's editorial identity.
 - **`packages/capture`**: screenshots and the demo GIF of a deployed project, through Playwright and
@@ -177,6 +210,9 @@ accounts per brand, the phase 5 channels and what the MVP had left
 
 - **Hashnode is out for now** (the owner's decision, 2026-10-25): its API needs a paid Pro plan since
   2026-05-13; the connector stays ready.
+- **The Meta logins' tests** (since 2026-11-06): setting up the Meta app's Unified Login and Facebook
+  Login for Business configurations, connecting, and a test launch on Instagram and on a Facebook
+  Page ([plans/goal-meta-logins.md](plans/goal-meta-logins.md#what-the-owner-does-after-the-run)).
 
 ## Launches owned by Shipcast
 
@@ -198,9 +234,10 @@ The refactor is closed ([plans/refactor-report.md](plans/refactor-report.md), an
 every channel's links, the first items of
 [plans/handoff-2026-10-29.md](plans/handoff-2026-10-29.md#pending), are done and part of v0.3.0.
 Next: the owner publishes the v0.3.0 release, which publishes the CLI to npm, and Shipcast launches
-it; web push notifications follow once deployed. After that, the scale and chaos tests on a preview
-stack and the roadmap in [plans/after-mvp.md](plans/after-mvp.md).
+it; web push notifications follow once deployed. The owner tries the Meta logins and the Facebook
+channel against Meta, and what those tests find is fixed forward. After that, the scale and chaos
+tests on a preview stack and the roadmap in [plans/after-mvp.md](plans/after-mvp.md).
 
 ## Related
 
-[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/mcp-parity.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[plans/refactor-report.md]] · [[plans/handoff-2026-10-29.md]] · [[decisions/migration-lock.md]]
+[[plans/shipcast.md]] · [[plans/after-mvp.md]] · [[plans/performance-refactor.md]] · [[plans/goal-refactor.md]] · [[plans/search-presence.md]] · [[search-indexing.md]] · [[plans/mvp-close.md]] · [[plans/goal-finish.md]] · [[server.md]] · [[measurement.md]] · [[web-app.md]] · [[accounts.md]] · [[engine.md]] · [[publishing.md]] · [[launches-repo.md]] · [[knowledge-base.md]] · [[decisions/mvp-scope.md]] · [[claudio.md]] · [[content-pack.md]] · [[launch-yml.md]] · [[brands.md]] · [[mcp.md]] · [[decisions/mcp-parity.md]] · [[decisions/main-until-mvp.md]] · [[decisions/web-app-stack.md]] · [[decisions/postgres.md]] · [[decisions/architecture.md]] · [[decisions/publishing-state.md]] · [[decisions/ai-layer.md]] · [[decisions/youtube.md]] · [[plans/refactor-report.md]] · [[plans/handoff-2026-10-29.md]] · [[decisions/migration-lock.md]] · [[decisions/meta-logins.md]] · [[plans/meta-logins.md]] · [[plans/meta-logins-implementation.md]] · [[plans/goal-meta-logins.md]]
