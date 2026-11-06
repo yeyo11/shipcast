@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-06T07:22:28.113276637Z
-updated_at: 2026-11-06T07:22:28.113276637Z
+created_at: 2026-11-06T07:33:48.622114509Z
+updated_at: 2026-11-06T07:33:48.622114509Z
 tags:
     - plan
     - implementation
@@ -320,7 +320,7 @@ test('graph.instagram.com is unchanged: /me and v25.0', async () => { /* default
 
 ```ts
 test('an account connected before keeps graph.instagram.com and its 30-day refresh', () => {
-  const settings = { userId: '17841416971174400', refreshedAt: '2026-10-24T00:00:00Z' };
+  const settings = { userId: '17841400000000077', refreshedAt: '2026-10-24T00:00:00Z' };
   assert.equal(instagramLoginOf(settings), 'instagram');
   assert.ok(network.refresh!.refresher(settings, 't'));
   // build() with these credentials and a recording fetch: check() calls graph.instagram.com/v25.0/me
