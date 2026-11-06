@@ -1,6 +1,6 @@
 {
   "name": "@shipcast/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "The shipcast command: launch a release by hand, watch for releases and publish them, see the launches and their numbers; published to npm as @yeyo11/shipcast by scripts/build.ts",
   "license": "MIT",

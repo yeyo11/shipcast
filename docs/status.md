@@ -19,10 +19,10 @@ runner the only AI path, and the global AI budget went with the first AI layer
 ([decisions/ai-layer.md](decisions/ai-layer.md)). On 2026-11-01 the other seven were retired: each new
 path is the only one, and Redis is required by the split processes ([server.md](server.md#the-flags)). Shipcast v0.2.0 was released on 2026-10-27.
 
-**v0.3.0 is prepared (2026-11-03) and waits for the owner to publish the release**: every package is at
-`0.3.0`, the [CHANGELOG](../CHANGELOG.md) has its entry, and publishing the GitHub release `v0.3.0`
-publishes `@yeyo11/shipcast` 0.3.0 to npm (`.github/workflows/npm-publish.yml`, whose tag must match
-`apps/cli`'s version). npm carries `0.3.0-rc.0` until then. The GitHub Action is at v1.3.1 (`@v1`).
+**v0.3.0 was released and launched on 2026-11-03; v0.3.1 is prepared (2026-11-06) and waits for the owner to
+publish the release**: every package is at `0.3.1`, the [CHANGELOG](../CHANGELOG.md) has its entry, and publishing the
+GitHub release publishes `@yeyo11/shipcast` to npm (`.github/workflows/npm-publish.yml`, whose tag must match
+`apps/cli`'s version). The GitHub Action is at v1.3.1 (`@v1`).
 
 **Every Meta login and the Facebook channel are built and deployed (2026-11-05 and 2026-11-06), and
 wait for the owner's tests against Meta** ([decisions/meta-logins.md](decisions/meta-logins.md)):

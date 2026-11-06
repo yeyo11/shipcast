@@ -1,7 +1,7 @@
 {
   "name": "shipcast",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Launch your GitHub projects: on each release, analyse the repo with the AI you choose, generate the launch content and publish it per channel after your approval",
   "license": "MIT",
   "type": "module",

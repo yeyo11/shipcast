@@ -3,6 +3,18 @@
 What changed in each release of Shipcast. Each launch is drafted by Shipcast from the code at its tag;
 this file is the plain list.
 
+## v0.3.1
+
+A fix for a blog made from the template, and the Meta sign-ins.
+
+- **`init` keeps a `brand.yml` that already exists.** A launches repo made from the starter blog template
+  has one, so `npx @yeyo11/shipcast init` stopped and wrote nothing. It now keeps the file, takes the brand
+  from it and asks nothing about it; `--force` still replaces it.
+- **Facebook Pages.** A launch can publish on a Facebook Page, with its numbers, comments and replies.
+- **Every Meta sign-in.** Instagram connects through its own login, Unified Login or a linked Facebook Page,
+  one sign-in can connect several accounts, and the app names the setting a sign-in lacks.
+- **YouTube.** The video shows the demo itself on the brand's colour, not the carousel's slide between black bars.
+
 ## v0.3.0
 
 Shipcast for other developers without a server, a redesigned app you can install, and launches that

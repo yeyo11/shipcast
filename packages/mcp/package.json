@@ -1,6 +1,6 @@
 {
   "name": "@shipcast/mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Shipcast's MCP server over its REST API, for stdio and the app's /mcp endpoint, and the same tools for WebMCP in the browser",
   "license": "MIT",

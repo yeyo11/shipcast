@@ -1,6 +1,6 @@
 {
   "name": "@shipcast/capture",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "A launch's media from the deployed project: screenshots and a recorded tour, with Playwright",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@shipcast/assets",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "A launch's images and video: the OG image and the demo as a vertical MP4",
   "license": "MIT",
