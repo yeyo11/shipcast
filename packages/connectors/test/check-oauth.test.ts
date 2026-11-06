@@ -87,7 +87,7 @@ test('Instagram: the code becomes a long-lived token in two steps', async () => 
       ['POST https://api.instagram.com/oauth/access_token', () => Response.json({ access_token: 'short', user_id: 178 })],
       ['GET https://graph.instagram.com/access_token?', () => Response.json({ access_token: 'long', expires_in: 5_184_000 })],
       // A real id past 2^53: as a number it would come back rounded
-      ['GET https://graph.instagram.com/v25.0/me?', () => new Response('{"user_id":"17841400000000077","username":"me","id":"29290907873858696"}')],
+      ['GET https://graph.instagram.com/v25.0/me?', () => new Response('{"user_id":"17841400000000077","username":"me","id":"20000000000000001"}')],
     ],
     calls,
   );

@@ -8,7 +8,7 @@ test('the errors seen in real use become sentences a person can act on', () => {
   assert.match(refused.text, /professional/);
   assert.match(refused.details ?? '', /IGApiException/, 'the original stays as details');
 
-  assert.match(explain('the token belongs to @trendify__media, not to the account 29290907873858696').text, /@trendify__media/);
+  assert.match(explain('the token belongs to @another__account, not to the account 20000000000000001').text, /@another__account/);
   assert.equal(explain('Mastodon rejected the credential: it is wrong, revoked or expired').title, 'Mastodon refused the credential');
   assert.equal(explain('Solicitud no válida: Invalid redirect_uri').title, 'Meta does not know this address');
   assert.equal(explain('could not reach the network: fetch failed').title, 'The network did not answer');
