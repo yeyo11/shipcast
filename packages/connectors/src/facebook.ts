@@ -24,15 +24,17 @@ import { graphId, META_GRAPH_VERSION, readInsights, refusedInsights } from './me
 const NETWORK = 'Facebook';
 
 /*
- * A Page post's insights: unique accounts reached (`views`), clicks on it, and its reactions by type,
- * summed. Comments and shares come from the post itself, which counts them without insights.
+ * A Page post's insights: unique accounts that saw it (`views`), clicks on it, and its reactions by
+ * type, summed. Comments and shares come from the post itself, which counts them without insights.
+ * `post_total_media_view_unique` is Meta's named replacement for `post_impressions_unique`, which it
+ * retired for every API version on 2025-06-15 (asking for it now fails with "invalid metric").
  */
-export const FACEBOOK_POST_METRICS = ['post_impressions_unique', 'post_clicks', 'post_reactions_by_type_total'] as const;
+export const FACEBOOK_POST_METRICS = ['post_total_media_view_unique', 'post_clicks', 'post_reactions_by_type_total'] as const;
 /** The Page's own insights, read for the last day in the daily snapshot */
 export const FACEBOOK_PAGE_METRICS = ['page_follows', 'page_post_engagements'] as const;
 
 /** Each insight's family in the channel's definition */
-const POST_FAMILY: Readonly<Record<string, string>> = { post_impressions_unique: 'views', post_clicks: 'clicks', post_reactions_by_type_total: 'reactions' };
+const POST_FAMILY: Readonly<Record<string, string>> = { post_total_media_view_unique: 'views', post_clicks: 'clicks', post_reactions_by_type_total: 'reactions' };
 const PAGE_EXTRA: Readonly<Record<string, string>> = { page_follows: 'follows1d', page_post_engagements: 'engagements1d' };
 
 /** An insight as the Graph API answers it: one value per period, a number or counts by type */

@@ -67,7 +67,7 @@ test('a Facebook post’s numbers: views, clicks and summed reactions from insig
     [
       [
         `GET ${G}/${POST}/insights`,
-        () => Response.json({ data: [lifetime('post_impressions_unique', 320), lifetime('post_clicks', 14), lifetime('post_reactions_by_type_total', { like: 6, love: 2, wow: 1 })] }),
+        () => Response.json({ data: [lifetime('post_total_media_view_unique', 320), lifetime('post_clicks', 14), lifetime('post_reactions_by_type_total', { like: 6, love: 2, wow: 1 })] }),
       ],
       [`GET ${G}/${POST}?`, () => Response.json({ id: POST, comments: { data: [], summary: { total_count: 4 } }, shares: { count: 3 }, reactions: { data: [], summary: { total_count: 9 } } })],
     ],
@@ -75,6 +75,9 @@ test('a Facebook post’s numbers: views, clicks and summed reactions from insig
   );
   assert.deepEqual(await facebook.metrics(POST), { views: 320, clicks: 14, reactions: 9, comments: 4, shares: 3 });
   assert.equal(metric(calls.find((c) => c.url.includes('/insights'))!.url), FACEBOOK_POST_METRICS.join(','));
+  // Meta retired post_impressions_unique for every API version on 2025-06-15
+  assert.equal((FACEBOOK_POST_METRICS as readonly string[]).includes('post_impressions_unique'), false);
+  assert.equal(FACEBOOK_POST_METRICS[0], 'post_total_media_view_unique');
   const node = new URL(calls.find((c) => !c.url.includes('/insights'))!.url);
   assert.equal(node.searchParams.get('fields'), 'comments.summary(true).limit(0),shares,reactions.summary(true).limit(0)');
 });
@@ -89,7 +92,7 @@ test('a Facebook metric Meta refuses by name is asked once, then left out, and t
           const url = calls.at(-1)!.url;
           if (!url.includes('/insights')) return Response.json({ comments: { summary: { total_count: 1 } }, reactions: { summary: { total_count: 5 } } });
           const asked = metric(url) ?? '';
-          return asked.includes('post_reactions_by_type_total') ? named('post_reactions_by_type_total') : Response.json({ data: [lifetime('post_impressions_unique', 50), lifetime('post_clicks', 2)] });
+          return asked.includes('post_reactions_by_type_total') ? named('post_reactions_by_type_total') : Response.json({ data: [lifetime('post_total_media_view_unique', 50), lifetime('post_clicks', 2)] });
         },
       ],
     ],
@@ -99,7 +102,7 @@ test('a Facebook metric Meta refuses by name is asked once, then left out, and t
   assert.deepEqual(await facebook.metrics('p1'), { views: 50, clicks: 2, reactions: 5, comments: 1, shares: 0 });
   assert.deepEqual(await facebook.metrics('p2'), { views: 50, clicks: 2, reactions: 5, comments: 1, shares: 0 });
   const sets = calls.filter((c) => c.url.includes('/insights')).map((c) => metric(c.url));
-  assert.deepEqual(sets, ['post_impressions_unique,post_clicks,post_reactions_by_type_total', 'post_impressions_unique,post_clicks', 'post_impressions_unique,post_clicks']);
+  assert.deepEqual(sets, ['post_total_media_view_unique,post_clicks,post_reactions_by_type_total', 'post_total_media_view_unique,post_clicks', 'post_total_media_view_unique,post_clicks']);
 });
 
 test('a Facebook set refused without a name is asked metric by metric once, and the refused ones are left out from then on', async () => {
@@ -113,7 +116,7 @@ test('a Facebook set refused without a name is asked metric by metric once, and 
           if (!url.includes('/insights')) return Response.json({ shares: { count: 2 }, reactions: { summary: { total_count: 7 } } });
           const asked = (metric(url) ?? '').split(',');
           if (asked.includes('post_clicks')) return unnamed();
-          return Response.json({ data: asked.map((name) => (name === 'post_impressions_unique' ? lifetime(name, 80) : lifetime(name, { like: 3, haha: 1 }))) });
+          return Response.json({ data: asked.map((name) => (name === 'post_total_media_view_unique' ? lifetime(name, 80) : lifetime(name, { like: 3, haha: 1 }))) });
         },
       ],
     ],
@@ -124,11 +127,11 @@ test('a Facebook set refused without a name is asked metric by metric once, and 
   assert.deepEqual(await facebook.metrics('p2'), { views: 80, reactions: 4, comments: 0, shares: 2 });
   const sets = calls.filter((c) => c.url.includes('/insights')).map((c) => metric(c.url));
   assert.deepEqual(sets, [
-    'post_impressions_unique,post_clicks,post_reactions_by_type_total',
-    'post_impressions_unique',
+    'post_total_media_view_unique,post_clicks,post_reactions_by_type_total',
+    'post_total_media_view_unique',
     'post_clicks',
     'post_reactions_by_type_total',
-    'post_impressions_unique,post_reactions_by_type_total',
+    'post_total_media_view_unique,post_reactions_by_type_total',
   ]);
 });
 
