@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-05T11:03:46.73985748Z
-updated_at: 2026-11-06T07:19:07.084853619Z
+created_at: 2026-11-06T07:39:04.453445752Z
+updated_at: 2026-11-06T07:39:04.453445752Z
 tags:
     - status
     - roadmap
@@ -51,7 +51,7 @@ autonomous run built it by its [implementation plan](plans/meta-logins-implement
   Accounts are now matched on reconnection by their network id.
 - **Deployed**: pushed to `main` in three steps (after Unified Login, after Facebook Login for
   Instagram, after the Facebook channel), each deploy healthy; the final review's fixes and these
-  documents follow. No migration.
+  documents are on `main` too. No migration.
 - **The owner's existing Instagram account** stays on Instagram Login, untouched; tests pin its host,
   calls and refresh.
 - **Pending, the owner's**: a Meta app with Unified Login to connect Instagram; a Facebook Login for

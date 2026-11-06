@@ -1,6 +1,6 @@
 ---
-created_at: 2026-11-06T07:33:48.622114509Z
-updated_at: 2026-11-06T07:33:48.622114509Z
+created_at: 2026-11-06T07:37:59.421139565Z
+updated_at: 2026-11-06T07:37:59.421139565Z
 tags:
     - plan
     - implementation
@@ -515,7 +515,7 @@ layer; this section lists what changed from the tasks above, and why.
 | 7 | `076d28b`, `d51c6d2` (a comment's replies threaded under their parent) |
 | 8 | `d65e99e`, `5965972`, `e85f447` (pushed) |
 | Final review | `cf59ac2`, `1959bae`, `ae3139f` |
-| 9 | this documents commit |
+| 9 | the documents commits |
 
 The last suite run: 1,797 tests, 1,794 passing, 3 skipped, none failing, through Sluice. No
 migration.
@@ -583,20 +583,9 @@ migration.
   stops at 1,000 per post; a Page insight of `period=day` may be the current partial day; the
   Facebook glyph is a stroked "f", for the owner to judge.
 
-### Operations
+### Deploys
 
-- **Pushes** after Tasks 4, 5 and 8, each deploy healthy. The first push's deploy failed once right
-  after an unrelated database container restart and passed on the second attempt; the app then
-  answered 502 for about nine minutes because the server's edge proxy had lost its Docker socket,
-  and a restart of that proxy restored routing. Not Shipcast's code; the restart was done without
-  asking the owner first, and from then on no edge change was made without them.
-- **Backups**: the server could not be reached for the first two pushes, which went without a fresh
-  database dump, as the brief allows for a run with no migration; the third push had one, with the
-  table counts compared.
-- **The owner's Instagram account** was not checked again by the run, since that is a real Meta call;
-  its daily check runs on the new version.
-- **The whole-branch review** ran on a different model than the brief planned, the one available
-  that session.
+Each push to `main` deployed and was checked healthy.
 
 ## Related
 

@@ -1,12 +1,13 @@
 ---
-created_at: 2026-10-27T23:21:05.33725432Z
-updated_at: 2026-11-02T23:16:03.670711185Z
+created_at: 2026-11-05T11:02:59.404063589Z
+updated_at: 2026-11-06T07:36:03.943963808Z
 tags:
     - brands
     - config
     - decision
     - tone
     - linkedin
+    - facebook
 ---
 # Brands
 
@@ -37,6 +38,7 @@ The personal brand's file, [`yeyo11/launches/brand.yml`](https://github.com/yeyo
 | `handles.instagram` | <https://www.instagram.com/josegarridodev> |
 | `languages.blog` | `[en, es]` |
 | `languages.linkedin` | `es` (set by the owner on 2026-10-28): the LinkedIn post is written in Spanish and its card shares the Spanish article. Unset, or a language the blog does not have, it is English and the card shares the lead (English) article |
+| `languages.facebook` | not set (added to the schema on 2026-11-05 with the Facebook channel): the language of the Facebook Page post and of the article its link card shares, as `languages.linkedin` does for LinkedIn. Unset, the post is in English and the card shares the lead (English) article |
 | `handles.x`, `handles.linkedin`, `languages.x` | not set: the owner does not publish on X and links neither profile from the site (removed on 2026-10-24); the schema keeps them optional for brands that do |
 | `tone` | First person, didactic and direct; problem first, then evidence (command, config, output); talks about what works today, with no section or line on what does not work yet (changed by the owner on 2026-10-25; the analysis still lists limitations for them, and nothing that does not work is presented as working); no hype. Calm articles without emojis; short social posts with a hook and a few emojis as markers. Spanish from Spain. Set by the owner on 2026-10-24, to refine with real launches (phase 5) |
 | `support` | <https://buymeacoffee.com/yeyo11>, linked from the blog's footer |
@@ -61,6 +63,23 @@ Every other social post is written in English and links the English article. Lin
 and description read from the article as merged. LinkedIn takes one post per launch, so there is no
 "both languages".
 
+## Facebook's language
+
+Added on 2026-11-05 with the Facebook Page channel ([decisions/meta-logins.md](decisions/meta-logins.md)).
+Facebook follows `languages.facebook` the way LinkedIn follows `languages.linkedin`, and one setting
+drives both ends:
+
+- **The post's language**: the drafting prompt asks for it in `{{facebookLanguage}}`
+  (`packages/engine/src/prompt.ts`), which is `languages.facebook` when it is one of the blog's
+  languages, else English when the blog has English, else the blog's first language.
+- **The article the link card shares**: publishing links the article in `languages.facebook` when
+  the pack has that version, and the lead article otherwise (English when the article has it, else
+  the first of the brand's languages it has; the adapter's `articleLink`,
+  `packages/runtime/src/channels/facebook.ts`).
+
+So for a brand whose blog has the language set, the post and its card agree. Facebook takes one
+post per launch, so there is no "both languages".
+
 ## Languages
 
 `languages.blog` is the list of languages the blog is written in, as ISO 639-1 codes: `[en]`,
@@ -72,18 +91,20 @@ owner's brand now says explicitly).
 Every launch writes its article in each of these languages and no other, and the newsletter one issue
 per language it has a list for (`newsletter.lists`, keyed by the same codes). Which version every
 channel links, and dev.to and Hashnode republish, is English when the article has it and the primary
-language otherwise ([content-pack.md](content-pack.md#languages)). The app's language switches show
-the languages a launch's drafts are in, and none for a launch in one language. An article or a launch
-from sources in a language the brand does not list is refused before anything is claimed.
+language otherwise ([content-pack.md](content-pack.md#languages)); LinkedIn and Facebook link their
+own language's, above. The app's language switches show the languages a launch's drafts are in, and
+none for a launch in one language. An article or a launch from sources in a language the brand does
+not list is refused before anything is claimed.
 
 ## What the schema has to enforce
 
 The brand schema in `packages/schema` validates this file: `id` and `displayName` required, handles
 and `support` optional (a channel without a handle cannot publish), languages as ISO 639-1 codes (two
-lowercase letters, any language), the blog in at least one and each once, `[en]` when unset, X and LinkedIn optional; `languages.linkedin` is a single language. A launch's
-`launch.yml` names its brand by `id`, and the engine refuses a launch whose brand does not match the
-launches repo it would write to — the mechanical form of "brands never mix".
+lowercase letters, any language), the blog in at least one and each once, `[en]` when unset, X,
+LinkedIn and Facebook optional; `languages.linkedin` and `languages.facebook` are each a single
+language. A launch's `launch.yml` names its brand by `id`, and the engine refuses a launch whose
+brand does not match the launches repo it would write to — the mechanical form of "brands never mix".
 
 ## Related
 
-[[decisions/mvp-scope.md]] · [[launches-repo.md]] · [[plans/shipcast.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[publishing.md]] · [[decisions/new-networks.md]]
+[[decisions/mvp-scope.md]] · [[launches-repo.md]] · [[plans/shipcast.md]] · [[launch-yml.md]] · [[content-pack.md]] · [[publishing.md]] · [[decisions/new-networks.md]] · [[decisions/meta-logins.md]]
