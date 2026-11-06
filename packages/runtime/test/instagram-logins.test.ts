@@ -25,11 +25,11 @@ function recording(routes: Array<[string, unknown]>, calls: string[]): typeof fe
 }
 
 test('an account connected before keeps graph.instagram.com and its 30-day refresh', async () => {
-  const settings = { userId: '17841416971174400', refreshedAt: '2026-10-24T00:00:00Z' };
+  const settings = { userId: '17841400000000077', refreshedAt: '2026-10-24T00:00:00Z' };
   assert.equal(instagramLoginOf(settings), 'instagram');
   assert.ok(network.refresh!.refresher(settings, 't'));
   const calls: string[] = [];
-  const http = recording([['https://graph.instagram.com/v25.0/me?', { user_id: '17841416971174400', id: '1', username: 'someone' }]], calls);
+  const http = recording([['https://graph.instagram.com/v25.0/me?', { user_id: '17841400000000077', id: '1', username: 'someone' }]], calls);
   const built = buildConnector('instagram', { settings, secrets: { accessToken: 't' } }, brand, http);
   const check = await built.check();
   assert.equal(check.ok, true, JSON.stringify(check));
@@ -53,11 +53,11 @@ test('a unified account reads graph.facebook.com and is never refreshed', async 
 test('switching the setting leaves existing accounts on their own login', async () => {
   const chosen = oauthSpecOf(network, { instagramLogin: 'unified' } as SettingsValues);
   assert.equal(chosen?.variant, 'unified');
-  const settings = { userId: '17841416971174400', refreshedAt: '2026-10-24T00:00:00Z' };
+  const settings = { userId: '17841400000000077', refreshedAt: '2026-10-24T00:00:00Z' };
   assert.equal(instagramLoginOf(settings), 'instagram');
   assert.ok(network.refresh!.refresher(settings, 't'));
   const calls: string[] = [];
-  const http = recording([['https://graph.instagram.com/v25.0/me?', { user_id: '17841416971174400', id: '1', username: 'someone' }]], calls);
+  const http = recording([['https://graph.instagram.com/v25.0/me?', { user_id: '17841400000000077', id: '1', username: 'someone' }]], calls);
   await buildConnector('instagram', { settings, secrets: { accessToken: 't' } }, brand, http).check();
   assert.ok(calls[0]!.startsWith('https://graph.instagram.com/'), calls[0]);
 });
