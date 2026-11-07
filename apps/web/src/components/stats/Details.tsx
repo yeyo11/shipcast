@@ -13,6 +13,7 @@ export const DETAIL_NAMES: Record<DetailMetric, string> = {
   watchMinutes: 'Minutes watched',
   engagedViews: 'Engaged views',
   visits: 'Visits',
+  repoViews: 'Repo views',
   clones: 'Clones',
   unsubscribes: 'Unsubscribes',
 };

@@ -42,7 +42,8 @@ launch read before its source kept days, or the six-hourly `collectMetrics`, whi
 days) is read as a counter, as before. GitHub's `views` and `clones` are their days or nothing: the
 readings of the same names are a rolling 14-day count that the high-water mark would misread, so they
 were in no family before and are now the second tier's `views` and `clones` only through their days.
-A repo's launches all keep the repo's days, and the stats take each day once per repo. Unique visitors
+A repo's launches all keep the repo's days, and the stats take each day once per repo. (Since 2026-11-07 each day goes to the launch whose era holds it and is counted as the second
+tier's `repoViews`, never a launch's `views`: [stats.md](../stats.md#what-a-reading-is).) Unique visitors
 and cloners per day are kept but in no family: a person on two days is two uniques, so their days do
 not add up. Stars stay a counter for the stats (the repo's total, the network's own number); their
 days are kept for a later chart.

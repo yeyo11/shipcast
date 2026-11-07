@@ -36,7 +36,7 @@ const TOTALS: Array<[keyof Totals, string]> = [
   ['reactions', 'Reactions'],
   ['comments', 'Comments'],
   ['clicks', 'Clicks'],
-  ['stars', 'Stars'],
+  ['stars', 'Repo stars'],
 ];
 
 function ViewsChart({ days }: { days: Day[] }) {

@@ -102,8 +102,9 @@ test('"all" counts every reading, and its chart in weeks adds up to it', async (
   const first = (await firstReadingDay(registry))!;
   const all = await statsOverview(registry, { from: first, to: TODAY });
   const blog = Object.values(blogDays).reduce((n, d) => n + (d.views ?? 0), 0);
-  // Each piece from zero to its highest; the repo's views are its days; the counter-read blog launch its highest
-  assert.equal(all.metrics.views, 600 + 130 + 70 + 260 + blog + 45 + 13);
+  // Each piece from zero to its highest; the counter-read blog launch its highest; the repo's views are no launch's views
+  assert.equal(all.metrics.views, 600 + 130 + 70 + 260 + blog + 45);
+  assert.equal(all.metrics.repoViews, 13, 'the repo’s views are its days, under their own name');
   assert.equal(all.channels.find((c) => c.channel === 'github')?.metrics.reactions, 15, 'the stars Shipcast saw arrive, not those from before it');
   assert.equal(all.channels.find((c) => c.channel === 'instagram')?.metrics.views, 130, 'the dip took nothing away');
 

@@ -29,9 +29,10 @@ export type StatsMetric = (typeof STATS_METRICS)[number];
 /**
  * The second tier: counters only some networks give, added up across them like the six but shown in
  * a table of their own, never charted or scored (docs/stats.md). `navigation` is a story's taps and
- * swipes, as Instagram adds them up; `watchMinutes` is minutes watched.
+ * swipes, as Instagram adds them up; `watchMinutes` is minutes watched. `repoViews` is a repo's
+ * GitHub traffic: the repo's, never a launch's views.
  */
-export const DETAIL_METRICS = ['saves', 'reach', 'interactions', 'follows', 'profileVisits', 'navigation', 'watchMinutes', 'engagedViews', 'visits', 'clones', 'unsubscribes'] as const;
+export const DETAIL_METRICS = ['saves', 'reach', 'interactions', 'follows', 'profileVisits', 'navigation', 'watchMinutes', 'engagedViews', 'visits', 'repoViews', 'clones', 'unsubscribes'] as const;
 export type DetailMetric = (typeof DETAIL_METRICS)[number];
 /** Either tier: what a channel's readings are folded into */
 export type MetricFamily = StatsMetric | DetailMetric;

@@ -170,9 +170,10 @@ test('GitHub counts once per repo and starts at its first reading; old launch-wi
     await registry.metrics.recordMetrics(l.id, 'github', { stars: 130, forks: 9 }, at('21'));
   }
   const overview = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-21' });
-  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 10, shares: 0, views: 0, clones: 0 }, 'the stars it had before are not growth');
+  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 10, shares: 0, repoViews: 0, clones: 0 }, 'the stars it had before are not growth');
   const series = await statsSeries(registry, { metric: 'reactions', groupBy: 'launch', from: '2026-10-20', to: '2026-10-21', bucket: 'day' });
-  assert.deepEqual(series.groups.map((g) => [g.label, g.baseline, g.total]), [['yeyo11/claudio v2.0.0', 120, 10]], 'attributed to the newest launch of the repo');
+  // Both went out at the same moment: the newer one has the repo from then on, and starts from nothing
+  assert.deepEqual(series.groups.map((g) => [g.label, g.baseline, g.total]), [['yeyo11/claudio v2.0.0', 0, 10]], 'attributed to the launch that was the repo’s newest when it happened');
 
   // A newsletter launch from before readings pointed at their piece: the sum of both issues, then each issue
   const issueEn = await piece(registry, v1.id, 'newsletter', null, 'issue:en');

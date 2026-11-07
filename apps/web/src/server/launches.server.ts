@@ -27,7 +27,7 @@ export function stateOf(launch: Pick<Launch, 'status'>, failures: number, posts:
 /** The numbers worth a glance on a launch's card */
 const HEADLINE: Array<[string, string, string]> = [
   ['blog', 'views', 'blog views'],
-  ['github', 'stars', 'stars'],
+  ['github', 'stars', 'repo stars'],
   ['devto', 'views', 'dev.to views'],
   ['newsletter', 'clicks', 'newsletter clicks'],
 ];

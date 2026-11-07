@@ -17,7 +17,7 @@ export const TOTAL_LABELS: ReadonlyArray<[keyof Totals, string]> = [
   ['reactions', 'Reactions'],
   ['comments', 'Comments'],
   ['clicks', 'Clicks'],
-  ['stars', 'Stars'],
+  ['stars', 'Repo stars'],
 ];
 
 /** A counter's latest reading: one piece's number, or a launch-wide source's (the blog, Search Console, GitHub) */

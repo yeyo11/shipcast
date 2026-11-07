@@ -71,13 +71,14 @@ test('a repo’s traffic counts from its days only, each day once whatever numbe
     await registry.metrics.recordDays(l.id, 'github', { '2026-10-19': { views: 30, clones: 2, visitors: 9 }, '2026-10-20': { views: 40, clones: 0, visitors: 12 } }, at('20'));
   }
   const overview = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-20' });
-  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 0, shares: 0, views: 40, clones: 0 });
-  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.lifetime, { reactions: 10, shares: 0, views: 70, clones: 2 });
+  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.metrics, { reactions: 0, shares: 0, repoViews: 40, clones: 0 });
+  // The 19th is from before either launch went out (first read on the 20th): no launch's, so not counted
+  assert.deepEqual(overview.channels.find((c) => c.channel === 'github')?.lifetime, { reactions: 10, shares: 0, repoViews: 40, clones: 0 });
 
   const undated = await memoryRegistry();
   const l = await launch(undated);
   await undated.metrics.recordMetrics(l.id, 'github', { stars: 10, views: 70 }, at('20'));
-  assert.deepEqual((await statsOverview(undated, { from: '2026-10-20', to: '2026-10-20' })).channels[0]?.metrics, { reactions: 0, shares: 0, views: 0, clones: 0 }, 'no days, no views: never the rolling count');
+  assert.deepEqual((await statsOverview(undated, { from: '2026-10-20', to: '2026-10-20' })).channels[0]?.metrics, { reactions: 0, shares: 0, repoViews: 0, clones: 0 }, 'no days, no views: never the rolling count');
 });
 
 test('the lifetime stands beside the period: a post published before it shows only its growth in it, and all of it as lifetime', async () => {

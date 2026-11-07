@@ -39,14 +39,16 @@ const FAMILIES: readonly MetricFamily[] = [...STATS_METRICS, ...DETAIL_METRICS];
  * Which readings of each source make up each family, of either tier; a reading left out (the
  * newsletter's bounces, the blog's per-source split) is not a stat. GitHub's views and clones are
  * read from their days only: the readings of the same names are a rolling 14-day count, not a
- * counter, and the high-water mark would misread them.
+ * counter, and the high-water mark would misread them. A repo's views are its traffic, not anyone's
+ * view of a launch, so they are `repoViews`, never `views` (until 2026-11-07 they were, and a
+ * launch's views on /stats took the repo's on top of its own).
  */
 export const METRIC_FAMILIES: Readonly<Record<string, Partial<Record<MetricFamily, readonly string[]>>>> = {
   // Each channel's, from its definition
   ...CHANNEL_METRIC_FAMILIES,
   search: { clicks: ['clicks'], impressions: ['impressions'] },
   bing: { clicks: ['clicks'], impressions: ['impressions'] },
-  github: { reactions: ['stars'], shares: ['forks'], views: ['views'], clones: ['clones'] },
+  github: { reactions: ['stars'], shares: ['forks'], repoViews: ['views'], clones: ['clones'] },
 };
 
 /** Each source's averages and the reading each one is: the channels' (their definitions') and the search engines' */
@@ -147,8 +149,14 @@ const familyOf = new Map(familyPairs().map((p) => [`${p.source}.${p.name}`, p.fa
  *
  * - `p:<post>`: one piece, the usual case for a channel (a post, a newsletter issue);
  * - `l:<launch>:<source>`: a site-level source of one launch (the blog's visits, Search Console, Bing);
- * - `r:<repo>`: GitHub, whose numbers are the repo's, read again for each launch of the same repo,
- *   so they are one unit per repo, attributed to its newest launch.
+ * - `r:<repo>@<launch>`: GitHub, whose numbers are the repo's, read again for each launch of the
+ *   same repo. The repo is one counter cut in time: each launch owns the part from when it went out
+ *   (its first piece's `published_at`, or its first reading of the repo if earlier) to when the
+ *   repo's next launch went out, its era (`era_from`, `era_to`). Every launch of the repo's readings
+ *   are read in it, so the parts add up to the repo once. Until 2026-11-07 the repo was one unit
+ *   given to its newest launch, which took growth from before it went out.
+ *
+ * `attr` is the launch a counter is credited to; `launch_id` the launch whose readings are read.
  *
  * A channel's reading with no piece is left out: those are the newsletter's readings from before
  * readings pointed at their piece, each the sum of both issues, and every such launch has its issues
@@ -180,14 +188,28 @@ function counterSet(filter: StatsFilter, pairs: ReadonlyArray<{ source: string; 
       pairs.map((p) => sql`(${p.source}::text, ${p.name}::text)`),
       sql`, `,
     )}),
+    went_out AS (
+      SELECT l.id, l.repo, least(
+        (SELECT min(p.published_at) FROM posts p WHERE p.launch_id = l.id),
+        (SELECT min(m.taken_at) FROM metrics m WHERE m.launch_id = l.id AND m.source = 'github')
+      ) AS era_from
+      FROM launches l
+    ),
+    eras AS (
+      SELECT id, repo, era_from, lead(era_from) OVER (PARTITION BY repo ORDER BY era_from, id) AS era_to FROM went_out WHERE era_from IS NOT NULL
+    ),
     c AS (
-      SELECT 'p:' || p.id AS unit, p.launch_id, p.id AS post_id, p.channel AS source, f.name, p.account_id
+      SELECT 'p:' || p.id AS unit, p.launch_id, p.id AS post_id, p.channel AS source, f.name, p.account_id, p.launch_id AS attr, NULL::text AS era_from, NULL::text AS era_to
       FROM posts p JOIN fam f ON f.source = p.channel
       WHERE ${sql.join(pieces, sql` AND `)}
       UNION ALL
-      SELECT CASE WHEN f.source = 'github' THEN 'r:' || l.repo ELSE 'l:' || l.id || ':' || f.source END, l.id, NULL, f.source, f.name, NULL
+      SELECT 'l:' || l.id || ':' || f.source, l.id, NULL, f.source, f.name, NULL, l.id, NULL, NULL
       FROM launches l CROSS JOIN fam f
-      WHERE ${sql.join(launchWide, sql` AND `)}
+      WHERE f.source <> 'github' AND ${sql.join(launchWide, sql` AND `)}
+      UNION ALL
+      SELECT 'r:' || l.repo || '@' || l.id, r.id, NULL, f.source, f.name, NULL, l.id, l.era_from, l.era_to
+      FROM eras l JOIN launches r ON r.repo = l.repo CROSS JOIN fam f
+      WHERE f.source = 'github' AND ${sql.join(launchWide, sql` AND `)}
     )`;
 }
 
@@ -198,6 +220,13 @@ const PREFIXED_MAIN = CHANNEL_DEFINITIONS.flatMap((d) => ('metrics' in d && d.me
 const ofCounter = sql`m.launch_id = c.launch_id AND m.source = c.source AND m.name = c.name AND m.post_id IS NOT DISTINCT FROM c.post_id`;
 
 /**
+ * Where a window starts and ends for a counter: the window itself, narrowed to the counter's era
+ * for a repo's (Postgres' greatest and least pass over a null, so the window stands for the rest)
+ */
+const lowOf = (w: StatsWindow) => sql`greatest(${w.from}::text, c.era_from)`;
+const highOf = (w: StatsWindow) => sql`least(${w.to}::text, c.era_to)`;
+
+/**
  * The `dd` CTE: each dated counter's days, one value a day per unit (a repo's launches all keep the
  * repo's days: the same day once), read through `metric_days_by_launch`
  */
@@ -206,6 +235,8 @@ const datedDays = sql`
       SELECT c.unit, c.name, d.day, max(d.value) AS value
       FROM c JOIN metric_days d ON d.launch_id = c.launch_id AND d.source = c.source AND d.name = c.name AND d.post_id IS NOT DISTINCT FROM c.post_id
       WHERE (c.source || '.' || c.name) IN (${values(datedPairs)})
+        -- A repo's days in its era, by the UTC day: the day a launch went out is that launch's
+        AND (c.era_from IS NULL OR (d.day >= left(c.era_from, 10) AND (c.era_to IS NULL OR d.day < left(c.era_to, 10))))
       GROUP BY c.unit, c.name, d.day
     )`;
 
@@ -221,8 +252,13 @@ interface CounterRow {
   accountId: number | null;
   /** The increase in each window asked, in order */
   increase: number[];
-  /** Where it stood at the end of the first window: its last reading by then, or its days added up */
+  /** Where it stood at the end of the first window: its last reading by then, or its days added up; a repo's era, its growth in it */
   lifetime: number;
+  /**
+   * A repo's first era only: where the repo stood when Shipcast first read it (its stars from
+   * before). No launch's, but part of the repo's own number, which the totals across launches show
+   */
+  before: number;
   /**
    * Readings inside each window: rows taken in it, and a row from before it read again unchanged
    * in it (its `checked_at`), which is a reading of the window that added no row
@@ -251,16 +287,17 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
   );
   const joins = windows.map((w, i) => {
     const [b, h, x, f] = [`b${i}`, `h${i}`, `x${i}`, `f${i}`].map((name) => sql.raw(name)) as [SQL, SQL, SQL, SQL];
+    const [low, high] = [lowOf(w), highOf(w)];
     return sql`
       LEFT JOIN LATERAL (
-        SELECT coalesce(m.checked_at, m.taken_at) >= ${w.from} AS held
-        FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${w.from} ORDER BY m.taken_at DESC LIMIT 1
+        SELECT coalesce(m.checked_at, m.taken_at) >= ${low} AND ${low} < ${high} AS held
+        FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${low} ORDER BY m.taken_at DESC LIMIT 1
       ) ${b} ON true
-      LEFT JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${w.from}) ${h} ON true
-      LEFT JOIN LATERAL (SELECT max(m.value) AS hi, count(*) AS n FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${w.from} AND m.taken_at < ${w.to}) ${x} ON true
+      LEFT JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${low}) ${h} ON true
+      LEFT JOIN LATERAL (SELECT max(m.value) AS hi, count(*) AS n FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${low} AND m.taken_at < ${high}) ${x} ON true
       LEFT JOIN LATERAL (
         SELECT m.taken_at, m.value FROM metrics m
-        WHERE c.source = 'github' AND ${ofCounter} AND m.taken_at >= ${w.from} AND m.taken_at < ${w.to} ORDER BY m.taken_at LIMIT 1
+        WHERE c.source = 'github' AND ${ofCounter} AND m.taken_at >= ${low} AND m.taken_at < ${high} ORDER BY m.taken_at LIMIT 1
       ) ${f} ON true`;
   });
   const columns = windows.map((_, i) =>
@@ -277,12 +314,21 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
   const datedColumns = sql.raw(windows.map((_, i) => `, max(dz.ds${i})::float8 AS ds${i}, max(dz.dn${i})::int AS dn${i}`).join(''));
   const rows = await registry.queries.selectRows<Record<string, unknown>>(sql`
     WITH ${counterSet(filter)}, ${datedDays}
-    SELECT c.unit, c.source, c.name, max(c.launch_id)::int AS launch_id, max(c.post_id)::int AS post_id, max(c.account_id)::int AS account_id
+    SELECT c.unit, c.source, c.name, max(c.attr)::int AS launch_id, max(c.post_id)::int AS post_id, max(c.account_id)::int AS account_id
       ${sql.join(columns, sql``)},
       (array_agg(lt.value ORDER BY lt.taken_at DESC NULLS LAST))[1]::float8 AS life,
+      max(es.value)::float8 AS era_base, (array_agg(ef.value ORDER BY ef.taken_at NULLS LAST))[1]::float8 AS era_first,
       max(dz.dall)::int AS dall, max(dz.dlife)::float8 AS dlife ${datedColumns}
     FROM c ${sql.join(joins, sql``)}
-    LEFT JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${end} ORDER BY m.taken_at DESC LIMIT 1) lt ON true
+    LEFT JOIN LATERAL (
+      SELECT m.taken_at, m.value FROM metrics m
+      WHERE ${ofCounter} AND m.taken_at < least(${end}::text, c.era_to) AND (c.era_from IS NULL OR m.taken_at >= c.era_from) ORDER BY m.taken_at DESC LIMIT 1
+    ) lt ON true
+    -- A repo's era starts where the repo stood before it, or at its first reading for the repo's first
+    LEFT JOIN LATERAL (SELECT max(m.value) AS value FROM metrics m WHERE c.era_from IS NOT NULL AND ${ofCounter} AND m.taken_at < c.era_from) es ON true
+    LEFT JOIN LATERAL (
+      SELECT m.taken_at, m.value FROM metrics m WHERE c.era_from IS NOT NULL AND ${ofCounter} AND m.taken_at >= c.era_from ORDER BY m.taken_at LIMIT 1
+    ) ef ON true
     LEFT JOIN (
       SELECT unit, name, count(*) AS dall, sum(value) FILTER (WHERE day <= ${days[0]!.last}) AS dlife ${dated}
       FROM dd GROUP BY unit, name
@@ -296,17 +342,22 @@ async function counters(registry: Pick<Repositories, 'queries'>, windows: readon
     if (num(row.dall) > 0) {
       const readings = windows.map((_, i) => num(row[`dn${i}`]));
       if (num(row.dlife) === 0 && readings.every((n) => n === 0)) return [];
-      return [{ ...base, increase: windows.map((_, i) => num(row[`ds${i}`])), readings, lifetime: num(row.dlife) }];
+      return [{ ...base, increase: windows.map((_, i) => num(row[`ds${i}`])), readings, lifetime: num(row.dlife), before: 0 }];
     }
     if (DAYS_ONLY.has(`${source}.${name}`)) return [];
     const readings = windows.map((_, i) => num(row[`n${i}`]));
     const started = windows.some((_, i) => numOrNull(row[`base${i}`]) !== null);
     // A counter never read up to the end of the windows is not there at all
     if (!started && readings.every((n) => n === 0)) return [];
+    const life = numOrNull(row.life);
+    // A repo's era: its growth in it; what the repo had before its first launch is no launch's
+    const eraStart = base.unit.startsWith('r:') ? (numOrNull(row.era_base) ?? numOrNull(row.era_first)) : null;
+    const before = base.unit.startsWith('r:') && life !== null && numOrNull(row.era_base) === null ? num(row.era_first) : 0;
     return [
       {
         ...base,
-        lifetime: num(row.life),
+        lifetime: life === null ? 0 : eraStart === null ? life : Math.max(0, life - eraStart),
+        before,
         increase: windows.map((_, i) => {
           const hi = numOrNull(row[`hi${i}`]);
           if (hi === null) return 0;
@@ -417,7 +468,8 @@ export async function statsOverview(registry: Pick<Repositories, 'accounts' | 'q
     for (const acc of targets) {
       acc.sources.add(row.source);
       add(acc.current, family, row.increase[0] ?? 0);
-      add(acc.lifetime, family, row.lifetime);
+      // The repo's own number across launches: its stars from before Shipcast too, never one launch's
+      add(acc.lifetime, family, row.lifetime + (options.launches ? 0 : row.before));
       if (compareTo) add(acc.previous, family, row.increase[1] ?? 0);
     }
   }
@@ -564,14 +616,14 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
     ),
     w AS (
       SELECT c.unit, c.name, m.taken_at, m.value FROM cc c
-      JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${window.from} AND m.taken_at < ${window.to}) m ON true
+      JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${lowOf(window)} AND m.taken_at < ${highOf(window)}) m ON true
     ),
     base AS (
       SELECT c.unit, c.name, m.hw FROM cc c
-      JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${window.from}) m ON m.hw IS NOT NULL
+      JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${lowOf(window)}) m ON m.hw IS NOT NULL
     ),
     start AS (
-      -- A repo's launches are counters of one unit: it starts at the highest reading among them
+      -- A repo's era reads every launch of the repo: it starts at the highest reading among them
       SELECT unit, name, max(hw) AS value FROM base GROUP BY unit, name
     ),
     repo_first AS (
@@ -593,9 +645,11 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
       -- A dated counter's days go to the bucket of the day they happened; those before the period are its start
       SELECT unit, CASE WHEN day < ${first} THEN NULL ELSE ${bucketOfDay(sql`day`)} END, value FROM dd WHERE day <= ${last}
     ),
-    u AS (SELECT unit, max(source) AS source, max(launch_id) AS launch_id, max(account_id) AS account_id FROM c GROUP BY unit)
+    u AS (SELECT unit, max(source) AS source, max(attr) AS launch_id, max(account_id) AS account_id, max(era_from) AS era_from FROM c GROUP BY unit)
     SELECT ${key} AS key, i.bucket, sum(i.increase)::float8 AS increase
     FROM inc i JOIN u ON u.unit = i.unit
+    -- A repo's era that begins in the period starts from nothing there: where the repo stood is its earlier launches'
+    WHERE NOT (i.bucket IS NULL AND u.era_from IS NOT NULL AND u.era_from >= ${window.from})
     GROUP BY 1, 2`);
 
   const byKey = new Map<string, { baseline: number; increases: Map<string, number> }>();

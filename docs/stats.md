@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-30T13:06:09.095720895Z
-updated_at: 2026-11-02T22:46:18Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - stats
     - metrics
@@ -54,7 +54,12 @@ gathered as `CHANNEL_METRIC_FAMILIES`); the site-level sources are added in `MET
 | Newsletter | opens | | | | clicks | delivered |
 | Blog | views | | | | | |
 | Search Console, Bing | | | | | clicks | impressions |
-| GitHub | views (from its days) | stars | | forks | | |
+| GitHub | | stars | | forks | | |
+
+A repo's GitHub views are not in `views`: they are the repo's traffic, kept on every launch of it,
+and nobody's view of a launch, so they are the second tier's `repoViews` (Repo views) below. Until
+2026-11-07 they were `views`, and a launch's views on /stats were its own plus the repo's (launch 9:
+230 on its card, 484 in the ranking); now a launch's views are the same number everywhere.
 
 Instagram's views and shares include its story's while Meta keeps them (24 hours). Its `reach` is
 unique accounts, not impressions (Meta retired those in 2025), so it is the second tier's `reach`,
@@ -89,6 +94,7 @@ them in a table of their own ([below](#the-page)).
 | watchMinutes | YouTube `watchMinutes` |
 | engagedViews | YouTube `engagedViews` |
 | visits | the blog's `visits` |
+| repoViews | a repo's GitHub views, from their days only (since 2026-11-07) |
 | clones | GitHub's clones, from their days only |
 | unsubscribes | the newsletter's `unsubscribes` |
 
@@ -126,8 +132,15 @@ per-post numbers.
   story), with its account; a story is a row of its own in the ranking by post. Until 2026-10-29 the
   stats listed only `post` and `issue:*`, so YouTube's videos and Reddit's posts were never counted;
 - `l:<launch>:<source>`: a launch's site-level source (blog visits, Search Console, Bing), with no account;
-- `r:<repo>`: GitHub. Every launch of a repo reads the same repo, so its launches are one counter,
-  attributed to the repo's newest launch.
+- `r:<repo>@<launch>`: GitHub. Every launch of a repo reads the same repo, so the repo is one
+  counter, cut in time: each launch owns the part from when it went out (its first piece's
+  `published_at`, or its first reading of the repo if that is earlier) until the repo's next launch
+  went out, its **era**. Every launch's readings of the repo are read in each era, so the eras add up
+  to the repo counted once, and a launch is never credited a star or a view from before it went out.
+  The repo's dated traffic goes by UTC day: the day a launch went out is that launch's, and the
+  repo's days from before its first launch went out are no launch's and are not counted. Until
+  2026-11-07 the repo was one counter given to its newest launch, which took growth from before it
+  existed (a star of 10-29 counted for a launch of 11-03).
 
 A channel's reading with no piece is skipped: those are the newsletter readings from before the
 [post model](decisions/post-model.md), each the sum of both issues, and every such launch has its
@@ -142,13 +155,16 @@ holds it (all ≥ 90 days ≥ 30 days ≥ 7 days), and periods side by side add 
 Until 2026-11-02 the start was the last reading before the period, so a period that began after a
 dip counted the climb back as new growth and could count more than a longer period. In a
 series, a counter at a bucket's end stands at its highest reading so far; `cumulative` is the start
-plus the increases. The overview's increase is always the sum of the series' buckets.
+plus the increases. The overview's increase is always the sum of the series' buckets. A repo's era that begins inside
+the period starts its series from nothing: where the repo stood then is its earlier launches'.
 
 **Lifetime.** Beside the increase, every counter says where it stood at the period's end: its last
 reading by then (a dated counter: its days up to then added up), whenever its piece went out. That is
 the number a network's own screen of a post shows, so the owner compares like with like: a post
 published 40 days ago shows only its last 30 days' growth in a 30-day period, and all of it as its
-lifetime. GitHub's lifetime stars are the repo's, stars from before Shipcast included. The overview
+lifetime. GitHub's lifetime stars across launches (the overview with no launch filter, overall and for the
+`github` channel) are the repo's, stars from before Shipcast included; a launch's (a ranking entry,
+or the overview narrowed to launches) is what the repo gained in its era. The overview
 (overall, per channel, per account), each ranking entry and the Search tab carry `lifetime` beside
 `metrics`.
 
@@ -352,7 +368,10 @@ search tab's input and what it lists, the lifetime, the second tier and the aver
 `packages/engine/test/stats-dated.test.ts` covers a day read again, a dated source counted on the
 day it happened with its lifetime, a launch without days read as a counter, a repo's traffic from its
 days once per repo, the lifetime beside the period, the second tier added up and never scored, and
-the averages as a period ends. `packages/engine/test/stats-periods.test.ts` covers where "all" starts
+the averages as a period ends. `packages/engine/test/stats-repo.test.ts` covers a repo's eras: each launch credited the stars and
+the traffic of its own time only, the repo counted once across launches with its lifetime stars still
+the repo's own number, and a launch's views without the repo's traffic.
+`packages/engine/test/stats-periods.test.ts` covers where "all" starts
 (a day kept before the first reading included, a repo's stars per day left out) and that a longer
 period never counts less than a shorter one for every family and filter, with counters first read
 inside a period, a dip, GitHub's stars from before Shipcast and dated sources, the weeks of "all"
