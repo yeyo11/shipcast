@@ -493,6 +493,21 @@ const MINUTE_MS = 60_000;
 const DUE_SLACK_MS = 2 * MINUTE_MS;
 /** When a repo's traffic was last read (or answered 404); a refused read leaves it, so the next run asks again */
 export const trafficReadKey = (repo: string) => `metrics-read:github-traffic:${repo}`;
+/** When each of a channel's pieces was last asked for its numbers, answered or not: `{ postId: iso }` */
+export const askedKey = (channel: string) => `metrics-asked:${channel}`;
+
+function askedOf(value: string | undefined): Record<number, string> {
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<number, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The later of two ISO times, either missing */
+const latest = (a: string | undefined, b: string | undefined) => (a === undefined ? b : b === undefined || a >= b ? a : b);
 /** When a repo's stars by day and releases' downloads were last read */
 export const historyReadKey = (repo: string) => `metrics-read:github-history:${repo}`;
 /** The problems of a source the owner has to fix (a permission), by source and what it was about; the bell lists them */
@@ -633,12 +648,23 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       });
       continue;
     }
+    // Due by when a piece was last asked for, answered or not: a piece the network refuses (a post
+    // gone, a story fewer than five saw, insights Meta will not give) has no new reading, and would
+    // otherwise be due on every run and drag its channel's other pieces with it
+    const asked = askedOf(await registry.cursors.cursor(askedKey(channel)));
+    const lastAsked = (id: number) => latest(checked.get(`p:${id}`), asked[id]);
     const targets: Array<MetricTarget & { launchId: number }> = [];
     for (const launch of launches) {
       const pieces = (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p));
-      if (only || pieces.some((p) => due(checked.get(`p:${p.id}`), minutes))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
+      if (only || pieces.some((p) => due(lastAsked(p.id), minutes))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
     }
     if (targets.length === 0) continue;
+    // Kept before the read, so a read that throws counts as asked; only the pieces still readable stay
+    const live = new Set(launches.flatMap((l) => (piecesOf.get(l.id) ?? []).filter((p) => p.channel === channel && readable(p)).map((p) => p.id)));
+    const next: Record<number, string> = {};
+    for (const [id, at] of Object.entries(asked)) if (only || live.has(Number(id))) next[Number(id)] = at;
+    for (const t of targets) next[t.postId] = now.toISOString();
+    await registry.cursors.setCursor(askedKey(channel), JSON.stringify(next));
     if (reader.read || reader.metricsMany) {
       const read = reader.read ? reader.read.bind(reader) : batchReader(reader.metricsMany!.bind(reader)).read;
       await attempt(channel, async () => {

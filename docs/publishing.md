@@ -421,7 +421,11 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
   older than its cadence, in minutes (two minutes of slack, under the job's five, so a 15-minute
   source is never read at 10): each channel's from its definition (`metrics.cadence`, batched where
   the adapter reads many posts a call; Facebook's says `read: 'single'`, one post a call), the site's
-  from `SITE_CADENCES`. The table below has each one. A value read again unchanged moves its
+  from `SITE_CADENCES`. The table below has each one. A piece is due by when it was last **asked
+  for**, answered or not (`metrics-asked:<channel>`, a cursor of `{ post: time }` written before each
+  read): one the network refuses or answers with nothing (a post gone, a story fewer than five
+  accounts saw, insights Meta will not give) is asked again a cadence later, not on every run, and no
+  value is made up for it. A value read again unchanged moves its
   reading's `checked_at` instead of adding a row, so reading more often adds no rows while nothing
   moves (Postgres keeps an updated row's old version until autovacuum, which is all it costs).
   Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).
