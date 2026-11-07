@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:19:48.402444615Z
-updated_at: 2026-10-25T20:28:15.761346725Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - decision
     - comments
@@ -112,7 +112,13 @@ send, so `auto` there is stored as `approval`. The goal's rule for the run holds
 in approval while it is being tried, so nothing reaches a follower without the owner's click.
 
 `sendReply` builds the replier with the account the post went out with, never today's primary, for
-the reason edits do: another account cannot answer as the one that posted. The comment is claimed
+the reason edits do: another account cannot answer as the one that posted. A post whose account was
+disconnected has no account (`account_id` is set to null when an account is removed), and falls back
+to the `.env` credentials of its network; since 2026-11-07, where `.env` has none (YouTube), to the
+brand's account of that network when it has exactly one, which went out with it or took its place.
+With several, any could be the wrong one: the post is refused, "the account the post went out with
+was disconnected … assign the post an account", and the comment run says so instead of "no
+connected account". The same rule builds the editors that edit and delete a piece. The comment is claimed
 first, in one compare-and-set update (`draft-ready` or `failed` to `approved`), so two clicks or two
 workers send it once; it ends `sent` with the reply's id and URL, or `failed` with the network's
 words (the API answers 502). Mastodon also gets an idempotency key per comment.

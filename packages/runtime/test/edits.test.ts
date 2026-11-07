@@ -55,3 +55,22 @@ test('GitHub Discussions is edited and read with the engine’s GitHub access, w
   const connectors = await commentConnectors({ env: {}, brand, registry, secrets, github })('githubDiscussions', null);
   assert.ok(connectors.reader && connectors.replier);
 });
+
+test('a piece whose account was disconnected uses the brand’s one account of that network, never one of several', async () => {
+  const registry = await memoryRegistry();
+  const secrets = new MemoryStore();
+  // The post's account was removed (account_id set to null); the network has no .env credentials
+  const now = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@now', settings: { clientId: 'client-1' } });
+  await secrets.set(accountSecretKey(now.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'youtube @now');
+  const connectors = await commentConnectors({ env: {}, brand, registry, secrets })('youtube', null);
+  assert.ok(connectors.reader, 'read with the one YouTube account the brand has');
+  assert.ok('youtube' in (await postEditors({ env: {}, brand, registry, secrets })('youtube', null)), 'and edited with it');
+
+  const second = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@other', settings: { clientId: 'client-2' } });
+  await secrets.set(accountSecretKey(second.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'youtube @other');
+  await assert.rejects(
+    commentConnectors({ env: {}, brand, registry, secrets })('youtube', null),
+    (e) => e instanceof PostRefused && e.reason === 'no_credentials' && /disconnected/.test(e.message) && /assign/.test(e.message),
+    'with two, either could be the wrong one: refused, saying the post needs an account',
+  );
+});

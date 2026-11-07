@@ -27,7 +27,8 @@ export interface EditorDeps {
 
 /**
  * A channel's connector built with the account a piece went out with, or the `.env` credentials for
- * a piece with none (undefined when `.env` has none, or speaks for another brand); the engine's own
+ * a piece with none (undefined when `.env` has none, or speaks for another brand), else the brand's
+ * one account of the network when it has exactly one (soleAccount); the engine's own
  * GitHub access for a channel that has no account. An account that is gone, or has lost its
  * secrets, is refused with that reason.
  */
@@ -50,6 +51,7 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
     // A token Shipcast refreshed while it still came from .env lives in the registry, as publishing reads it
     if (credentials) credentials = await withRefreshedEnvToken(spec.id, credentials, deps.registry, deps.adapters);
   }
+  if (!credentials && accountId === null) credentials = await soleAccount(deps, spec.id, name);
   if (!credentials) return undefined;
   try {
     const built = buildConnector(spec.id, credentials, deps.brand, deps.fetch, { ...(deps.adapters && { adapters: deps.adapters }), ...(deps.buckets && { buckets: deps.buckets }), ...(deps.cache && { cache: deps.cache }) });
@@ -58,6 +60,25 @@ export async function postConnector(deps: EditorDeps, channel: Channel, accountI
     if (error instanceof MissingField) throw new PostRefused('no_credentials', `${name}: ${error.message}`);
     throw error;
   }
+}
+
+/**
+ * A piece with no account and no `.env` credentials for its network: its account was disconnected
+ * (the row's `account_id` is set to null when an account is removed). With exactly one account of
+ * that network on the brand, that one went out with it or took its place, so it reads and answers it;
+ * with several, any could be the wrong one and none speaks for the post, which needs an account
+ * assigned. With none, there is nothing to read with (undefined).
+ */
+async function soleAccount(deps: EditorDeps, networkId: string, name: string): Promise<Credentials | undefined> {
+  const accounts = await deps.registry.accounts.accounts({ brand: deps.brand.id, network: networkId });
+  if (accounts.length === 0) return undefined;
+  if (accounts.length > 1) {
+    throw new PostRefused('no_credentials', `the ${name} account the post went out with was disconnected, and the brand has ${accounts.length} ${name} accounts: assign the post an account`);
+  }
+  const account = accounts[0]!;
+  const secrets = await getJson(deps.secrets, accountSecretKey(account.id));
+  if (!secrets) throw new PostRefused('no_credentials', `the ${name} account the post went out with was disconnected, and ${account.label} has lost its secrets: connect it again`);
+  return { settings: account.settings, secrets };
 }
 
 /**

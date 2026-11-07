@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T16:31:21.16585086Z
-updated_at: 2026-10-26T20:52:06.719329823Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - decision
     - publishing
@@ -57,7 +57,10 @@ it and write a new post, knowing what that costs.
 An edit or a delete is made with the account the row records, never the channel's primary account of
 the moment: the primary may have changed since, and another account cannot touch the post. A row with
 no account went out with the `.env` credentials, which speak only for their own brand. An account
-removed since has its pieces' account set to null, so they fall back to `.env`; one connected but
+removed since has its pieces' account set to null, so they fall back to `.env`, and where `.env` has
+nothing for the network (since 2026-11-07) to the brand's account of that network when it has exactly
+one; with several the piece is refused until it is assigned an account
+([comment-assistant.md](comment-assistant.md)). One connected but
 with no secrets left is refused with that reason. `postEditors` in `packages/runtime/src/edits.ts`
 builds the connectors this way.
 
