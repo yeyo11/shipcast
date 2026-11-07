@@ -1,6 +1,6 @@
 import type { MetricStore } from './ports.ts';
 import { ConnectorError, failureText, type AnalyticsMany, type CampaignVisits, type IndexStatus, type Metrics, type MetricsMany, type PageVisits, type RepoHistory, type RepoTraffic, type SearchDay } from '@shipcast/connectors';
-import { campaignOf, channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, type Brand, type Channel, type Language } from '@shipcast/schema';
+import { campaignOf, channelAnalyticsCadence, channelCadence, INSPECTION_MAX_AGE_DAYS, readsMetrics, SITE_CADENCES, taperedMinutes, type Brand, type Channel, type Language } from '@shipcast/schema';
 import type { RepoStats } from './github.ts';
 import type { CursorRepository } from './repositories/cursors.ts';
 import { kindLanguage, type Post } from './repositories/posts.ts';
@@ -656,7 +656,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const targets: Array<MetricTarget & { launchId: number }> = [];
     for (const launch of launches) {
       const pieces = (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p));
-      if (only || pieces.some((p) => due(lastAsked(p.id), minutes))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
+      if (only || pieces.some((p) => due(lastAsked(p.id), taperedMinutes(minutes, p.publishedAt, now)))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
     }
     if (targets.length === 0) continue;
     // Kept before the read, so a read that throws counts as asked; only the pieces still readable stay
@@ -764,7 +764,9 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   const umami = sources.umami;
   if (umami) {
     for (const launch of launches) {
-      if (!siteDue(launch.id, 'umami', 'views', SITE_CADENCES.umami.minutes)) continue;
+      // Slower as the launch ages, from its first piece out (its creation when it has none)
+      const out = (piecesOf.get(launch.id) ?? []).reduce((first, p) => (p.publishedAt < first ? p.publishedAt : first), launch.createdAt);
+      if (!siteDue(launch.id, 'umami', 'views', taperedMinutes(SITE_CADENCES.umami.minutes, out, now))) continue;
       await attempt(`${launch.repo} ${launch.ref} Umami`, async () => {
         const visits = await umami.campaignVisits(campaignOf(launch), launch.createdAt.slice(0, 10), until);
         await record(launch.id, 'umami', campaignValues(visits));

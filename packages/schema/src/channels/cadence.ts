@@ -41,6 +41,20 @@ export function channelCadence(channel: string): MetricCadence | undefined {
   return channelDefinition(channel)?.metrics?.cadence;
 }
 
+/** How old a piece is when its reads slow down, in days: to hourly after a week, to daily after a month */
+export const TAPER_DAYS = { hourly: 7, daily: 30 } as const;
+
+/**
+ * A piece's (or a launch's) cadence by its age: its source's own for the first week after it went
+ * out, when its numbers move; at most hourly to a month; at most daily after. Never faster than the
+ * source's own. So the calls a round makes grow with the recent launches, not with every launch ever.
+ */
+export function taperedMinutes(minutes: number, publishedAt: string, now: Date): number {
+  const days = (now.getTime() - Date.parse(publishedAt)) / 86_400_000;
+  if (!(days >= TAPER_DAYS.hourly)) return minutes;
+  return Math.max(minutes, days >= TAPER_DAYS.daily ? 24 * 60 : 60);
+}
+
 /** The cadence of a channel's analytics, read apart from its counters; undefined for a channel without */
 export function channelAnalyticsCadence(channel: string): MetricCadence | undefined {
   return channelDefinition(channel)?.metrics?.analytics;

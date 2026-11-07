@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { EXPIRING_PIECES, readsMetrics } from '@shipcast/schema';
+import { EXPIRING_PIECES, readsMetrics, taperedMinutes } from '@shipcast/schema';
 import type { Repositories } from '../repositories/index.ts';
 import type { CheckResult, TelemetryStore } from './store.ts';
 
@@ -119,7 +119,8 @@ async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cad
     const age = (now.getTime() - Date.parse(row.newest)) / HOUR;
     c.maxAgeHours = Math.max(c.maxAgeHours ?? 0, Math.round(age * 100) / 100);
     // Some slack over the cadence: a run takes a while, starts on the cron's minute and may fail once
-    if (age * 60 <= c.cadenceMinutes + FRESHNESS_SLACK_MINUTES) {
+    // A piece's cadence slows with its age, as the reads do (taperedMinutes)
+    if (age * 60 <= taperedMinutes(c.cadenceMinutes, row.published_at, now) + FRESHNESS_SLACK_MINUTES) {
       c.withinCadence += 1;
       fresh += 1;
     }

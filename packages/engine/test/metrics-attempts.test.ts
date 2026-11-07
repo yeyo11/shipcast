@@ -30,7 +30,7 @@ test('a piece that never answers is asked once a cadence, not on every run', asy
 test('a piece answered with nothing does not make its channel’s other pieces due', async () => {
   const registry = await memoryRegistry();
   await aPublishedLaunch(registry, [{ channel: 'bluesky', externalId: 'at://good' }]);
-  await aPublishedLaunch(registry, [{ channel: 'bluesky', externalId: 'at://gone' }]);
+  await aPublishedLaunch(registry, [{ channel: 'bluesky', externalId: 'at://gone' }], { ref: 'v2.0.0' });
   const asked: string[][] = [];
   const sources: MetricSources = {
     posts: {

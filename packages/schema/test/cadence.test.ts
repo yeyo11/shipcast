@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { channelAnalyticsCadence, channelCadence, SITE_CADENCES } from '../src/index.ts';
+import { channelAnalyticsCadence, channelCadence, SITE_CADENCES, taperedMinutes } from '../src/index.ts';
 
 /*
  * How often each source is read, in minutes (docs/publishing.md, "Cadences"): every 5 minutes where
@@ -29,4 +29,15 @@ test('the daily and lagged sources keep their cadence', () => {
   assert.equal(SITE_CADENCES.bing.minutes, DAY);
   assert.equal(channelAnalyticsCadence('youtube')?.minutes, DAY);
   assert.equal(channelAnalyticsCadence('devto')?.minutes, DAY);
+});
+
+test('a piece is read at its cadence for a week, hourly to a month, then daily', () => {
+  const now = new Date('2026-11-30T12:00:00Z');
+  const ago = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+  assert.equal(taperedMinutes(15, ago(1), now), 15);
+  assert.equal(taperedMinutes(5, ago(6.9), now), 5);
+  assert.equal(taperedMinutes(15, ago(7), now), 60);
+  assert.equal(taperedMinutes(5, ago(29), now), 60);
+  assert.equal(taperedMinutes(30, ago(30), now), 24 * 60);
+  assert.equal(taperedMinutes(7 * 24 * 60, ago(60), now), 7 * 24 * 60, 'never faster than its own cadence');
 });

@@ -435,18 +435,27 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
   minutes later (it was 15 minutes, behind a cadence of 60).
 
 **Cadences** (2026-11-07, `packages/schema/src/channels/cadence.ts` and each definition; the owner
-asked for 5 minutes where nothing limits it and 15 where a quota does). The calls are those of one
-round of the source, for every published launch at once (each channel reads every live piece of
-every launch together), counted from the connectors; "now" is the production registry of 2026-11-07,
-nine launches with at most one post a launch per channel (two videos for YouTube, two issues for the
-newsletter), and "3x" three times as many pieces.
+asked for 5 minutes where nothing limits it and 15 where a quota does).
+
+**Slower with age** (`taperedMinutes`, `TAPER_DAYS`): a piece is read at its source's cadence for
+its first 7 days after it went out, at most hourly from day 7 to day 30, and at most daily after
+(never faster than its source's own). A launch's Umami campaign tapers the same way, by the launch's
+first piece out. The `freshness` check holds each piece to the same tapered cadence. So a round's
+calls grow with the launches of the last week, not with every launch ever published: a launch older
+than a month costs each per-piece source one read a day.
+
+The calls are those of one round of the source at its fresh cadence, for the pieces of the **last 7
+days** (each channel reads its due pieces together), counted from the connectors; "now" is up to
+nine recent launches with at most one post a launch per channel (two videos for YouTube, two issues
+for the newsletter), and "3x" 27 launches in one week, the ceiling the table holds. Older pieces add,
+per source, one read an hour each (7 to 30 days) or one a day each (after 30 days).
 
 | Source | Before | Now | Calls a round (now / 3x) | Limit | Headroom at 3x |
 | --- | --- | --- | --- | --- | --- |
-| Umami | 1 h | 5 min | 1 per launch, self-hosted | none (our own server) | n/a |
+| Umami | 1 h | 5 min | 1 per launch of the last week (9 / 27), hourly or daily for older ones | none (our own server) | n/a |
 | GitHub counts | 1 h | 5 min | 1 per repo, conditional | 5,000 an hour for the App's installation, a 304 is free ([GitHub](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)) | 4 repos × 12 = 48 an hour at most |
 | Bluesky | 1 h | 5 min | 1 per 25 posts (1 / 2) | 3,000 per 5 minutes per IP ([Bluesky](https://docs.bsky.app/docs/advanced-guides/rate-limits)) | > 99 % |
-| Mastodon | 1 h | 5 min | 1 a post (9 / 27) | 300 per 5 minutes per account ([Mastodon](https://docs.joinmastodon.org/api/rate-limits/)) | 91 % |
+| Mastodon | 1 h | 5 min | 1 per 20 statuses (`/api/v1/statuses?id[]=`) (1 / 2) | 300 per 5 minutes per account ([Mastodon](https://docs.joinmastodon.org/api/rate-limits/)) | > 99 % |
 | Blog (Cloudflare GraphQL) | 1 h | 5 min | 2 (the paths, the days), whatever the launches | 300 queries per 5 minutes ([Cloudflare](https://developers.cloudflare.com/analytics/graphql-api/limits/)) | > 99 % |
 | Telegram | 1 h | 5 min | 1 `getUpdates` (+1 per 100 updates) | none for getUpdates; changes kept 24 h ([Telegram](https://core.telegram.org/bots/api#getupdates)) | n/a |
 | GitHub Discussions | 1 h | 5 min | 1 GraphQL query per 20 discussions (1 / 2) | 5,000 points an hour ([GitHub](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api)) | > 95 % |
