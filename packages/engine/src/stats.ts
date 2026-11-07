@@ -614,13 +614,24 @@ export async function statsSeries(registry: Pick<Repositories, 'accounts' | 'que
       SELECT c.* FROM c
       WHERE NOT EXISTS (SELECT 1 FROM dd WHERE dd.unit = c.unit AND dd.name = c.name) AND (c.source || '.' || c.name) NOT IN (${values([...DAYS_ONLY])})
     ),
+    -- Where a repo's era starts: the repo's highest reading before it went out (none for the repo's
+    -- first era, which keeps the stars from before Shipcast). Its readings are counted from there, so
+    -- the eras of a repo add up to the repo once
+    eb AS (
+      SELECT c.unit, c.name, max(m.hw) AS value FROM cc c
+      JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE c.era_from IS NOT NULL AND ${ofCounter} AND m.taken_at < c.era_from) m ON true
+      GROUP BY c.unit, c.name
+    ),
     w AS (
-      SELECT c.unit, c.name, m.taken_at, m.value FROM cc c
+      SELECT c.unit, c.name, m.taken_at, m.value - coalesce(eb.value, 0) AS value FROM cc c
+      LEFT JOIN eb ON eb.unit = c.unit AND eb.name = c.name
       JOIN LATERAL (SELECT m.taken_at, m.value FROM metrics m WHERE ${ofCounter} AND m.taken_at >= ${lowOf(window)} AND m.taken_at < ${highOf(window)}) m ON true
     ),
     base AS (
-      SELECT c.unit, c.name, m.hw FROM cc c
-      JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < ${lowOf(window)}) m ON m.hw IS NOT NULL
+      -- Before the period, and never past the era's end: an era over is where it ended
+      SELECT c.unit, c.name, m.hw - coalesce(eb.value, 0) AS hw FROM cc c
+      LEFT JOIN eb ON eb.unit = c.unit AND eb.name = c.name
+      JOIN LATERAL (SELECT max(m.value) AS hw FROM metrics m WHERE ${ofCounter} AND m.taken_at < least(${lowOf(window)}, c.era_to)) m ON m.hw IS NOT NULL
     ),
     start AS (
       -- A repo's era reads every launch of the repo: it starts at the highest reading among them

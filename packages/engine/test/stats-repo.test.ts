@@ -83,3 +83,21 @@ test('a launch’s views are its pieces’ and its site’s, never the repo’s 
   const series = await statsSeries(registry, { metric: 'views', groupBy: 'channel', bucket: 'day', ...period });
   assert.deepEqual(series.groups.map((g) => g.key), ['devto']);
 });
+
+test('a period after both launches: each era starts where it stood then, and the eras add up to the repo once', async () => {
+  const registry = await memoryRegistry();
+  const a = await launchOf(registry, 'v1.0.0', '2026-10-01');
+  for (const [day, stars] of [['2026-10-01', 10], ['2026-10-05', 20]] as const) await registry.metrics.recordMetrics(a.launch.id, 'github', { stars }, at(day));
+  const b = await launchOf(registry, 'v2.0.0', '2026-10-10');
+  for (const [day, stars] of [['2026-10-10', 30], ['2026-10-25', 35]] as const) await registry.metrics.recordMetrics(b.launch.id, 'github', { stars }, at(day));
+  const window = { from: '2026-10-20', to: '2026-10-30', bucket: 'day' as const, metric: 'reactions' as const };
+  const channel = await statsSeries(registry, { ...window, groupBy: 'channel' });
+  const github = channel.groups.find((g) => g.key === 'github');
+  assert.deepEqual([github?.baseline, github?.total, github?.points.at(-1)?.cumulative], [30, 5, 35], 'the repo had 30 when the period began and 35 at its end');
+  const byLaunch = await statsSeries(registry, { ...window, groupBy: 'launch' });
+  const of = (id: number) => byLaunch.groups.find((g) => Number(g.key) === id);
+  assert.deepEqual([of(a.launch.id)?.baseline, of(a.launch.id)?.total], [20, 0], 'its era: from the repo’s 10 at its first reading to 20 when the next launch went out');
+  assert.deepEqual([of(b.launch.id)?.baseline, of(b.launch.id)?.total], [10, 5], 'its era: from 20 to 30 before the period, 35 at its end');
+  const overview = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-30' });
+  assert.equal(overview.metrics.reactions, 5);
+});
