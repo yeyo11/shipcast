@@ -425,7 +425,11 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
   for**, answered or not (`metrics-asked:<channel>`, a cursor of `{ post: time }` written before each
   read): one the network refuses or answers with nothing (a post gone, a story fewer than five
   accounts saw, insights Meta will not give) is asked again a cadence later, not on every run, and no
-  value is made up for it. A value read again unchanged moves its
+  value is made up for it. So the job looks up last readings (`lastChecked`) only for the pieces
+  with no such word yet and for the site readings it keys cadences by (the blog's and Umami's
+  views, the engines' clicks, a repo's stars), through the indexes: until then it grouped every
+  reading of 500 launches every run, about 80 ms on PGlite at 96,000 rows and growing with history.
+  A value read again unchanged moves its
   reading's `checked_at` instead of adding a row, so reading more often adds no rows while nothing
   moves (Postgres keeps an updated row's old version until autovacuum, which is all it costs).
   Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).

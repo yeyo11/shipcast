@@ -619,13 +619,18 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const was = checked.get(key);
     if (was === undefined || at > was) checked.set(key, at);
   };
-  for (const c of await registry.metrics.lastChecked(launches.map((l) => l.id))) {
-    if (c.postId !== null) keep(`p:${c.postId}`, c.at);
-    else keep(`l:${c.launchId}:${c.source}:${c.name}`, c.at);
-  }
   const only = options.posts ? new Set(options.posts) : undefined;
   const readable = (post: Post) =>
     readsMetrics(post.channel, post.kind, { publishedAt: post.publishedAt, now }) && post.externalId !== null && post.status !== 'deleted' && (!only || only.has(post.id));
+  // When each piece was last asked for, per channel; only the pieces with no such word yet (new ones,
+  // a push-only network's) need their last reading looked up, so the lookup does not grow with history
+  const askedBy = new Map<string, Record<number, string>>();
+  for (const [channel, reader] of Object.entries(sources.posts ?? {})) if (reader && !reader.pushed) askedBy.set(channel, askedOf(await registry.cursors.cursor(askedKey(channel))));
+  const unasked = launches.flatMap((l) => (piecesOf.get(l.id) ?? []).filter((p) => readable(p) && askedBy.get(p.channel)?.[p.id] === undefined).map((p) => p.id));
+  for (const c of await registry.metrics.lastChecked(launches.map((l) => l.id), unasked)) {
+    if (c.postId !== null) keep(`p:${c.postId}`, c.at);
+    else keep(`l:${c.launchId}:${c.source}:${c.name}`, c.at);
+  }
 
   // Each channel: its due pieces, all at once. A launch's pieces of a channel are read together, so
   // its sum (latestMetrics) always adds up readings of one moment
@@ -651,7 +656,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     // Due by when a piece was last asked for, answered or not: a piece the network refuses (a post
     // gone, a story fewer than five saw, insights Meta will not give) has no new reading, and would
     // otherwise be due on every run and drag its channel's other pieces with it
-    const asked = askedOf(await registry.cursors.cursor(askedKey(channel)));
+    const asked = askedBy.get(channel) ?? {};
     const lastAsked = (id: number) => latest(checked.get(`p:${id}`), asked[id]);
     const targets: Array<MetricTarget & { launchId: number }> = [];
     for (const launch of launches) {

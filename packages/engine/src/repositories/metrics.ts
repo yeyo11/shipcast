@@ -230,9 +230,28 @@ export class MetricRepository {
    * When each piece's and each launch's numbers of a source were last read, newest first per
    * (launch, piece, source): what the hourly job compares with the source's cadence. A site source
    * keeps its names apart (`search.clicks` is read daily, `search.indexed` on its own cadence).
+   * With `postIds`, only the site readings the job keys its cadences by and those pieces, through
+   * the indexes, so the lookup does not grow with every reading ever kept; without, every group.
    */
-  async lastChecked(launchIds: readonly number[]): Promise<Array<{ launchId: number; postId: number | null; source: string; name: string; at: string }>> {
+  async lastChecked(launchIds: readonly number[], postIds?: readonly number[]): Promise<Array<{ launchId: number; postId: number | null; source: string; name: string; at: string }>> {
     if (launchIds.length === 0) return [];
+    if (postIds !== undefined) {
+      // Only what the job decides on: each launch's site readings it keys its cadences by (the blog's
+      // and Umami's views, the engines' clicks, a repo's stars), and the pieces asked for. The newest
+      // row of each holds its last check, since a read again unchanged moves the newest row's
+      const site = await this.#db
+        .selectDistinctOn([metrics.launchId, metrics.source, metrics.name], { launchId: metrics.launchId, postId: metrics.postId, source: metrics.source, name: metrics.name, at: seen })
+        .from(metrics)
+        .where(and(inArray(metrics.launchId, [...launchIds]), isNull(metrics.postId), inArray(metrics.name, ['views', 'clicks', 'stars'])))
+        .orderBy(metrics.launchId, metrics.source, metrics.name, desc(metrics.takenAt));
+      if (postIds.length === 0) return site;
+      const pieces = await this.#db
+        .select({ launchId: sql<number>`max(${metrics.launchId})`.mapWith(Number), postId: metrics.postId, source: sql<string>`max(${metrics.source})`, name: sql<string>`''`, at: sql<string>`max(${seen})` })
+        .from(metrics)
+        .where(inArray(metrics.postId, [...postIds]))
+        .groupBy(metrics.postId);
+      return [...site, ...pieces];
+    }
     return this.#db
       .select({ launchId: metrics.launchId, postId: metrics.postId, source: metrics.source, name: metrics.name, at: sql<string>`max(${seen})` })
       .from(metrics)

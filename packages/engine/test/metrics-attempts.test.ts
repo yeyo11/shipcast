@@ -45,3 +45,25 @@ test('a piece answered with nothing does not make its channel’s other pieces d
   await collectHourly(registry, brand, sources, new Date(t0.getTime() + 2 * MINUTE));
   assert.equal(asked.length, 1, 'the piece with no numbers is not due two minutes later');
 });
+
+test('the job’s lookup of last checks reads only the site readings it keys by and the pieces asked for', async () => {
+  const registry = await memoryRegistry();
+  const { launch, posts } = await aPublishedLaunch(registry, [
+    { channel: 'bluesky', externalId: 'at://a' },
+    { channel: 'mastodon', externalId: 'm-1' },
+  ]);
+  const t = (h: number) => new Date(Date.UTC(2026, 10, 7, h));
+  const moves = { unchangedMovesCheck: true };
+  await registry.metrics.recordMetrics(launch.id, 'github', { stars: 3, 'referrer:x.dev': 2 }, t(1), null, moves);
+  await registry.metrics.recordMetrics(launch.id, 'github', { stars: 3 }, t(2), null, moves);
+  await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 1 }, t(3), posts[0]!.id, moves);
+  await registry.metrics.recordMetrics(launch.id, 'mastodon', { favourites: 1 }, t(4), posts[1]!.id, moves);
+  const rows = await registry.metrics.lastChecked([launch.id], [posts[0]!.id]);
+  assert.deepEqual(
+    rows.map((r) => [r.postId, r.source, r.name, r.at]).sort(),
+    [
+      [null, 'github', 'stars', t(2).toISOString()],
+      [posts[0]!.id, 'bluesky', '', t(3).toISOString()],
+    ].sort(),
+  );
+});
