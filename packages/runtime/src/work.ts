@@ -97,15 +97,16 @@ const lastReadKey = (postId: number) => `last-read:${postId}`;
 
 /**
  * Queues the last read of each of a launch's pieces whose numbers the network keeps only a while
- * (an Instagram story: 24 hours), just before they go: the 15-minute reads land anywhere in its
- * last quarter of an hour. Idempotent: arming twice leaves one job per piece, and a time already past arms nothing.
+ * (an Instagram story: 24 hours), half an hour before they go, on a queue of its own so a metrics
+ * run still going never holds it. Idempotent: arming twice leaves one job per piece, and a time
+ * already past arms nothing.
  */
 export async function armLastReads(queue: JobQueue, registry: Pick<Repositories, 'posts'>, launchId: number, now = new Date()): Promise<number> {
   let armed = 0;
   for (const post of await registry.posts.posts(launchId)) {
     const at = lastMetricsRead(post.channel, post.kind, post.publishedAt);
     if (!at || at <= now || post.externalId === null || (post.status !== 'live' && post.status !== 'edited')) continue;
-    await queue.upsert('metrics', { reason: 'last read', postId: post.id }, { singletonKey: lastReadKey(post.id), startAfter: at, title: `Last read of the ${post.channel} ${post.kind}`, launchId });
+    await queue.upsert('last-read', { reason: 'last read', postId: post.id }, { singletonKey: lastReadKey(post.id), startAfter: at, title: `Last read of the ${post.channel} ${post.kind}`, launchId });
     armed += 1;
   }
   return armed;
@@ -366,6 +367,16 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
       }
       const lines = await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand)));
       for (const line of lines) job.log(line);
+    },
+
+    /** One piece's last read, due or not, and nothing else (armLastReads) */
+    async 'last-read'({ reason, postId }, job) {
+      if (await off(reason)) {
+        job.log('Automation is off: the numbers are read by hand');
+        return;
+      }
+      const brand = await d.brand();
+      for (const line of await readMetricsHourly({ registry, brand }, withRepos(await hourlyServicesFor(brand)), new Date(), { posts: [postId] })) job.log(line);
     },
 
     async 'instagram-tokens'({ reason }, job) {

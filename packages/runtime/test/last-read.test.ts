@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Post } from '@shipcast/engine';
 import { RecordingQueue } from '@shipcast/engine/testing';
-import { armLastReads, type WorkQueue } from '../src/index.ts';
+import { armLastReads, QUEUES, workHandlers, type WorkQueue } from '../src/index.ts';
 
 /*
- * An Instagram story's numbers last 24 hours: after a publish, its last read is queued for 23 h 45
+ * An Instagram story's numbers last 24 hours: after a publish, its last read is queued for 23 h 30
  * min after it went out, one job per story, moved rather than doubled by arming again. Nothing else
  * is armed: a post, a story gone or failed, a story whose moment passed.
  */
@@ -26,7 +26,7 @@ const piece = (over: Partial<Post>): Post => ({
   ...over,
 });
 
-test('a launch’s story gets its last read queued at 23 h 45 min; nothing else does', async () => {
+test('a launch’s story gets its last read queued at 23 h 30 min, on a queue of its own; nothing else does', async () => {
   const recorder = new RecordingQueue();
   const queue = recorder as unknown as WorkQueue;
   const posts = [
@@ -41,8 +41,15 @@ test('a launch’s story gets its last read queued at 23 h 45 min; nothing else 
 
   assert.equal(await armLastReads(queue, registry, 4, now), 1);
   await armLastReads(queue, registry, 4, now);
-  const waiting = recorder.waiting('metrics');
+  assert.equal(recorder.waiting('metrics').length, 0, 'never behind a metrics run that is still going');
+  const waiting = recorder.waiting('last-read');
   assert.equal(waiting.length, 1, 'moved, not doubled');
   assert.deepEqual(waiting[0]?.data, { reason: 'last read', postId: 1 });
-  assert.deepEqual(waiting[0]?.options, { singletonKey: 'last-read:1', startAfter: new Date('2026-10-30T09:45:00.000Z'), title: 'Last read of the instagram story', launchId: 4 });
+  assert.deepEqual(waiting[0]?.options, { singletonKey: 'last-read:1', startAfter: new Date('2026-10-30T09:30:00.000Z'), title: 'Last read of the instagram story', launchId: 4 });
+});
+
+test('a story’s last read has a queue and a handler of its own, so a long metrics run cannot hold it', () => {
+  assert.ok(QUEUES['last-read'], 'its own queue');
+  const handlers = workHandlers({} as never, { env: {}, registry: {}, github: {}, secrets: {}, pipeline: {}, brand: async () => undefined } as never);
+  assert.equal(typeof handlers['last-read'], 'function');
 });

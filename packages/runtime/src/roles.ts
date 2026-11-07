@@ -37,6 +37,7 @@ export const QUEUE_ROLES: Readonly<Record<QueueName, 'worker' | 'heavy'>> = {
   delivery: 'worker',
   round: 'worker',
   metrics: 'worker',
+  'last-read': 'worker',
   'instagram-tokens': 'worker',
   snapshots: 'worker',
   checks: 'worker',

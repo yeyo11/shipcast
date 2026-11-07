@@ -482,9 +482,12 @@ Meta's three networks are shared by the comment runs and the account snapshots, 
 leave out; the snapshots are daily and the comment runs read each post's comments every 30 minutes.
 
 **An Instagram story's last read.** Meta keeps a story's insights for its 24 hours only, and the
-15-minute reads land anywhere in its last quarter of an hour, so each publish queues a `metrics` job
-for the story alone 23 h 45 min after it went out (23 h 30 min while the reads were hourly) (`armLastReads`, keyed `last-read:<post>`), which reads it
-whether due or not and nothing else. A story fewer than five accounts saw answers Meta's `#10` with
+15-minute reads land anywhere in its last quarter of an hour, so each publish queues a job for the
+story alone 23 h 30 min after it went out (`armLastReads`, keyed `last-read:<post>`), which reads it
+whether due or not and nothing else. Since 2026-11-07 the job is on a queue of its own, `last-read`
+(stately per piece, two at a time, retried after 5 minutes), so a metrics run still going never
+holds it past the half hour; before, it was a `metrics` job and waited behind the run in progress.
+A last read already queued on `metrics` is still read there. A story fewer than five accounts saw answers Meta's `#10` with
 "not enough viewers": it has no numbers yet, which is neither a failure nor stale. Meta gives the same
 `#10` to a token without `instagram_business_manage_insights`, so only the message tells them apart,
 and that refusal is a problem of the run. A secondary call that fails (a

@@ -105,7 +105,7 @@ export const instagram = {
     primary: ['views', 'likes'],
     averaged: { avgWatchMs: 'avg_watch_ms', skipRate: 'skip_rate' },
     cadence: QUARTER_HOUR_BATCHED,
-    expiring: { kind: 'story', hours: 24, lastReadHours: 23.75 },
+    expiring: { kind: 'story', hours: 24, lastReadHours: 23.5 },
   },
   chartSlot: 2,
 } as const satisfies ChannelDefinition<'instagram'>;

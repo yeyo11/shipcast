@@ -23,6 +23,8 @@ export interface JobData {
   round: { reason: string };
   /** Every due source, or one piece read a last time before its numbers expire (an Instagram story) */
   metrics: { reason: string; postId?: number };
+  /** One piece's last read before the network forgets its numbers (an Instagram story), apart from the metrics runs */
+  'last-read': { reason: string; postId: number };
   'instagram-tokens': { reason: string };
   /** Every account's numbers, or one account's when it is synced by hand */
   snapshots: { reason: string; accountId?: number };
@@ -77,6 +79,8 @@ export const QUEUES: Record<QueueName, QueueSpec> = {
   round: { title: 'Automation round', policy: 'stately', retryLimit: 0, expireInSeconds: 3600, concurrency: 1 },
   // Retried within the 5-minute cadence, not behind it (a story's last read has only its last minutes)
   metrics: { title: 'Reading the numbers', policy: 'stately', retryLimit: 1, retryDelay: 2 * 60, expireInSeconds: 3600, concurrency: 1 },
+  // Its own queue, one job per piece (its key): a metrics run still going never holds it past the moment its numbers go
+  'last-read': { title: 'A last read before the numbers go', policy: 'stately', retryLimit: 2, retryDelay: 5 * 60, expireInSeconds: 10 * 60, concurrency: 2 },
   'instagram-tokens': { title: 'Refreshing Instagram tokens', policy: 'stately', retryLimit: 2, retryDelay: 3600, expireInSeconds: 15 * 60, concurrency: 1 },
   snapshots: { title: 'Syncing the accounts', policy: 'stately', retryLimit: 1, retryDelay: 30 * 60, expireInSeconds: 30 * 60, concurrency: 1 },
   // One per scheduled piece (its key), moved when the piece is: the post row holds the time, the job only wakes the publishing
