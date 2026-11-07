@@ -83,6 +83,14 @@ every task; claudio only answers model calls, and is itself an agent for the tas
   Shipcast's own token and gives claudio only the short-lived `codeload` URL; claudio downloads and
   unpacks it read-only (`POST /api/workspaces`), names it by id, and Shipcast deletes it at the end of
   the run, whatever the end (`DELETE /api/workspaces/<id>`). A GitHub token never reaches claudio.
+  A download that timed out (`408 workspace-timeout`) or failed (`502 workspace-download-failed`),
+  as a freshly published tag's archive may until codeload has it ready, is tried once more after
+  20 s (claudio leaves nothing on disk after a refusal); each try waits 90 s for the answer. Nothing
+  else retries it: a draft job has no retries.
+- **A workspace from a tarball** (a launch made from sources) is made by `archiveFolder`
+  (`packages/engine/src/workspace.ts`), `tar` without `.git`. It keeps symlinks as they are, and
+  claudio refuses an archive holding one (`workspace-bad-archive`): a folder with links fails the
+  run. Known; claudio is to skip links on its side.
 - **What Claude Code may run** there is `ANALYSIS_RULES` (`packages/schema/src/ai/tasks.ts`): Read,
   Grep, Glob and read-only forms of `ls`, `find`, `cat`, `head`, `tail`, `sed -n`, `grep`, `wc`,
   `cut`, `sort`, `uniq`, `tr` and `rg`. claudio's guard lets a Bash call through only when every
@@ -92,8 +100,9 @@ every task; claudio only answers model calls, and is itself an agent for the tas
 - **Errors** are one table (`errors.ts`), mapped to `AiError`: a usage limit (`rate_limit_exceeded`,
   the subscription's limit or the spend cap) is retryable after `Retry-After`; `max_turns`,
   `max_budget` and `no_structured_output` say the task stopped without an answer; `tool_blocked` and
-  the workspace refusals (host not allowed, too large, bad archive) are refused; a gone or expired
-  workspace is retried with a new one.
+  the workspace refusals (host not allowed, too large, bad archive) are refused; a download that timed
+  out or failed twice says so (`workspace-timeout`, `workspace-download-failed`, unavailable); a gone
+  or expired workspace is retried with a new one.
 - **Readiness**: `/api/ready` (no token) says "not signed in to Claude" or "still starting" before a
   launch fails; onboarding and the AI settings' test use it.
 

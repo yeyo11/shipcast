@@ -27,6 +27,10 @@ export const CLAUDIO_ERRORS: AiErrorTable = {
   'workspace-address-blocked': { code: 'ai_refused', message: 'refused to download from a private address' },
   'workspace-too-large': { code: 'ai_refused', message: 'refused the repository: it is over the workspace’s size caps' },
   'workspace-bad-archive': { code: 'ai_refused', message: 'could not read the repository’s archive' },
+  // The download timed out (408) or its host failed (502): a freshly published tag's archive may not be
+  // ready yet, so the workspace is tried once more after a wait (workspaces.ts), then the run fails
+  'workspace-timeout': { code: 'ai_unavailable', message: 'could not download and extract the repo’s archive in time' },
+  'workspace-download-failed': { code: 'ai_unavailable', message: 'could not download the repo’s archive' },
   // 20 live workspaces: one frees up when another run ends
   'workspace-limit': { code: 'ai_rate_limited', message: 'has as many workspaces as it holds' },
   // Readiness (/api/ready): only the owner signs Claude Code in; a starting Claudio is a moment away

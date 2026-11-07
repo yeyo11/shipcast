@@ -374,6 +374,52 @@ test('ClaudioWorkspaces: created from a URL or a gzip tarball, and a delete of o
   }
 });
 
+test('ClaudioWorkspaces: a download that timed out or failed is tried once more after a wait; a bad archive is not', async () => {
+  let answers: Array<[number, unknown]> = [];
+  const fake = await serve((_, res) => {
+    const [status, body] = answers.shift() ?? [500, { error: { code: 'unexpected' } }];
+    json(res, status, body);
+  });
+  const workspaces = new ClaudioWorkspaces({ baseURL: fake.url, token: CLAUDIO_TOKEN, retryWaitMs: 5 });
+  const posts = () => fake.seen.filter((s) => s.method === 'POST').length;
+  try {
+    // A freshly published tag's archive is not ready yet: the second try takes it
+    answers = [
+      [408, { code: 'workspace-timeout' }],
+      [201, WORKSPACE],
+    ];
+    assert.equal((await workspaces.create({ url: CODELOAD })).id, WORKSPACE.id);
+    assert.equal(posts(), 2);
+
+    answers = [
+      [502, { error: { code: 'workspace-download-failed', message: 'codeload answered 504' } }],
+      [201, WORKSPACE],
+    ];
+    assert.equal((await workspaces.create({ url: CODELOAD })).id, WORKSPACE.id);
+    assert.equal(posts(), 4);
+
+    // Twice: the run fails with what happened, not a bare "unavailable (408)"
+    answers = [
+      [408, { code: 'workspace-timeout' }],
+      [408, { code: 'workspace-timeout' }],
+    ];
+    await assert.rejects(workspaces.create({ url: CODELOAD }), (error: unknown) => {
+      assert.ok(error instanceof AiError, String(error));
+      assert.equal(error.code, 'ai_unavailable');
+      assert.match(error.message, /Claudio could not download and extract the repo’s archive in time \(workspace-timeout, 408\)/);
+      return true;
+    });
+    assert.equal(posts(), 6);
+
+    // A bad archive fails the same way every time: one POST
+    answers = [[400, { error: { code: 'workspace-bad-archive', message: 'not gzip' } }]];
+    await assert.rejects(workspaces.create({ url: CODELOAD }), (error: unknown) => error instanceof AiError && error.code === 'ai_refused');
+    assert.equal(posts(), 7);
+  } finally {
+    await fake.close();
+  }
+});
+
 test('readiness: ready, each reason it is not, and a Claudio that does not answer', async () => {
   let answer: { status: number; body: unknown } = { status: 200, body: { ready: true } };
   const fake = await serve((req, res) => (req.path === '/api/ready' ? json(res, answer.status, answer.body) : json(res, 404, {})));
