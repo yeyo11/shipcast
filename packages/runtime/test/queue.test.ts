@@ -355,3 +355,35 @@ test('the maintenance runs in one process at a time, whichever holds the lock', 
   assert.equal(most, 1);
   assert.equal(runs, 1, 'the other found it held and left it');
 });
+
+test('the metrics cron’s sends collapse: one running and one waiting at most, never two runs at once', async () => {
+  const db = await database();
+  const app = queueOn(db, { instanceName: 'app' });
+  const worker = queueOn(db, { instanceName: 'worker' });
+  let running = 0;
+  let most = 0;
+  let runs = 0;
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  const metrics = async () => {
+    running++;
+    most = Math.max(most, running);
+    runs++;
+    // The first run outlasts the next sends, as a slow run outlasts 5 minutes
+    if (runs === 1) await held;
+    running--;
+  };
+  await app.work({ metrics });
+  await worker.work({ metrics });
+  // What the cron sends every 5 minutes: no key, the same for every send (pg-boss's schedule sends as these do)
+  const send = () => app.send('metrics', { reason: 'every 5 minutes' });
+  assert.ok(await send());
+  await until(async () => running === 1);
+  const later = [await send(), await send(), await send()];
+  assert.equal(later.filter((id) => id !== null).length, 1, 'one more waits; the cron’s other sends are dropped');
+  release();
+  await until(async () => runs === 2 && running === 0);
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(runs, 2);
+  assert.equal(most, 1, 'never two at once, whichever process works them');
+});
