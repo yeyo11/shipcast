@@ -1,6 +1,6 @@
 import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Repositories } from '@shipcast/engine';
 import { FORMAT_SOURCES, formatPiece, UTM_CHANNELS } from '@shipcast/schema';
-import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, launchViewSources, postAccountNames, splitSeries, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
+import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, launchViewSources, postAccountNames, splitSeries, totalAges, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /** Each tagged channel's `utm_source`, which names its visits in Umami's readings */
 export const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(UTM_CHANNELS).map(([channel, tags]) => [channel, tags.source]));
@@ -14,7 +14,7 @@ async function readingsOf(registry: Pick<Repositories, 'posts' | 'metrics'>, lau
   const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
   const pieces = latestByPiece(history).flatMap((r) => {
     const source = channel.get(r.postId);
-    return source ? [{ source, name: r.name, value: r.value }] : [];
+    return source ? [{ source, name: r.name, value: r.value, checkedAt: r.checkedAt }] : [];
   });
   return { counters: [...site.filter((m) => (SITE_SOURCES as readonly string[]).includes(m.source)), ...pieces], umami: site.filter((m) => m.source === 'umami') };
 }
@@ -65,9 +65,12 @@ export async function launchNumbers(registry: Pick<Repositories, 'posts' | 'metr
       const days = series.channels.get(l.id) ?? new Map<string, ReadonlyArray<{ bucket: string; increase: number }>>();
       const names = new Set([...Object.keys(perChannel), ...days.keys(), ...Object.keys(site)]);
       const channels = Object.fromEntries(
-        [...names].map((name) => [name, { totals: perChannel[name] ?? {}, daily: dailyViews(days.get(name) ?? [], l.createdAt), ...(site[name] && { site: site[name] }) }]),
+        [...names].map((name) => [
+          name,
+          { totals: perChannel[name] ?? {}, ages: totalAges(mine.filter((r) => r.source === name), METRIC_FAMILIES), daily: dailyViews(days.get(name) ?? [], l.createdAt), ...(site[name] && { site: site[name] }) },
+        ]),
       );
-      return [l.id, { totals: launchTotals(mine, METRIC_FAMILIES), daily: dailyViews(series.launches.get(l.id) ?? [], l.createdAt), channels }];
+      return [l.id, { totals: launchTotals(mine, METRIC_FAMILIES), ages: totalAges(mine, METRIC_FAMILIES), daily: dailyViews(series.launches.get(l.id) ?? [], l.createdAt), channels }];
     }),
   );
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { METRIC_FAMILIES } from '@shipcast/engine';
-import { cardChannels, channelSiteVisits, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, markCapacity, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, type Mark } from '../src/server/launch-summary.ts';
+import { ageWords, cardChannels, channelSiteVisits, channelTotals, splitSeries, dailyViews, postAccountNames, dayOffset, foldMarks, markCapacity, latestByPiece, launchDateLabel, launchTotals, markOf, shortNumber, totalAges, type Mark } from '../src/server/launch-summary.ts';
 
 test('a launch totals its counters through the stats families, with GitHub stars apart from reactions', () => {
   const totals = launchTotals(
@@ -234,4 +234,28 @@ test('a launch’s views per day count the sources its total counts: the repo’
   assert.deepEqual(numbers.daily, [{ day, views: 79 }]);
   assert.ok(Math.max(...numbers.daily.map((d) => d.views)) <= numbers.totals.views);
   assert.equal(numbers.channels.github, undefined, 'no channel row for the repo’s traffic');
+});
+
+test('each total says when it was last read: its stalest source’s last read, and a source that lags by design says so', () => {
+  const ages = totalAges(
+    [
+      { source: 'blog', name: 'views', value: 40, checkedAt: '2026-11-07T11:55:00.000Z' },
+      { source: 'devto', name: 'views', value: 18, checkedAt: '2026-11-07T11:45:00.000Z' },
+      { source: 'devto', name: 'reactions', value: 2, checkedAt: '2026-11-07T11:45:00.000Z' },
+      { source: 'newsletter', name: 'clicks', value: 3, checkedAt: '2026-11-07T11:50:00.000Z' },
+      { source: 'search', name: 'clicks', value: 4, checkedAt: '2026-11-07T03:00:00.000Z' },
+      { source: 'github', name: 'stars', value: 7, checkedAt: '2026-11-07T11:58:00.000Z' },
+      { source: 'bluesky', name: 'likes', value: 5 },
+    ],
+    METRIC_FAMILIES,
+  );
+  assert.deepEqual(ages, {
+    views: { readAt: '2026-11-07T11:45:00.000Z' },
+    reactions: { readAt: '2026-11-07T11:45:00.000Z' },
+    clicks: { readAt: '2026-11-07T03:00:00.000Z', lag: 'Search Console lags 2–3 days' },
+    stars: { readAt: '2026-11-07T11:58:00.000Z' },
+  });
+  const now = new Date('2026-11-07T12:00:00.000Z');
+  assert.equal(ageWords(ages.views!, now), 'read 15 min ago');
+  assert.equal(ageWords(ages.clicks!, now), 'read 9 h ago · Search Console lags 2–3 days');
 });

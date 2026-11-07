@@ -224,7 +224,7 @@ function LaunchPage() {
                   label: 'Channels',
                   panel: (
                     <>
-                      {shown && <ViewsCard totals={numbers.totals} days={numbers.daily} channels={numbers.channels} waitingComments={data.waitingComments} />}
+                      {shown && <ViewsCard totals={numbers.totals} ages={numbers.ages} days={numbers.daily} channels={numbers.channels} waitingComments={data.waitingComments} />}
                       <ChannelList rows={pieces.rows} failures={launch.failures} scheduling={withScheduled(pieces.scheduling.channels, launch.posts)} replies={pieces.replies} numbers={numbers.channels} timezone={timezone} />
                       {data.fakeNetworks && (
                         <div className="k-px pub-notice">

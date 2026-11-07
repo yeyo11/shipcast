@@ -25,6 +25,72 @@ export interface CounterReading {
   source: string;
   name: string;
   value: number;
+  /** When it was last read, its value then confirmed or changed */
+  checkedAt?: string;
+}
+
+/** When a total was last read: the stalest of its sources' last reads, and why it lags when its source does by design */
+export interface TotalAge {
+  readAt: string;
+  lag?: string;
+}
+
+/**
+ * The numbers whose source lags by design, whatever the cadence they are read at: a read now still
+ * says the past. By source, or by `source.name` where only some of a source's numbers do.
+ */
+export const LAGGED: Readonly<Record<string, string>> = {
+  search: 'Search Console lags 2–3 days',
+  bing: 'Bing counts by day',
+  'github.views': 'GitHub counts traffic by day',
+  'github.clones': 'GitHub counts traffic by day',
+  'youtube.shares': 'YouTube Analytics lags 48–72 h',
+  'youtube.watchMinutes': 'YouTube Analytics lags 48–72 h',
+  'youtube.engagedViews': 'YouTube Analytics lags 48–72 h',
+  'youtube.subscribersGained': 'YouTube Analytics lags 48–72 h',
+  'devto.saves': 'dev.to analytics are read daily',
+};
+
+const lagOf = (r: CounterReading) => LAGGED[`${r.source}.${r.name}`] ?? LAGGED[r.source];
+
+/**
+ * When each total was last read, as launchTotals counts them: per source its newest read, and for
+ * the total the oldest of those, so "read 12 min ago" holds for every part of it. A total whose
+ * readings carry no time is left out.
+ */
+export function totalAges(readings: readonly CounterReading[], families: Families): Partial<Record<keyof Totals, TotalAge>> {
+  const bySource = new Map<keyof Totals, Map<string, string>>();
+  const lags = new Map<keyof Totals, Set<string>>();
+  const note = (total: keyof Totals, r: CounterReading) => {
+    if (r.checkedAt === undefined) return;
+    const sources = bySource.get(total) ?? bySource.set(total, new Map()).get(total)!;
+    const was = sources.get(r.source);
+    if (was === undefined || r.checkedAt > was) sources.set(r.source, r.checkedAt);
+    const lag = lagOf(r);
+    if (lag) (lags.get(total) ?? lags.set(total, new Set()).get(total)!).add(lag);
+  };
+  for (const r of readings) {
+    if (r.source === REPO_SOURCE) {
+      if (r.name === 'stars') note('stars', r);
+      continue;
+    }
+    for (const family of ['views', 'reactions', 'comments', 'clicks'] as const) if (families[r.source]?.[family]?.includes(r.name)) note(family, r);
+  }
+  const out: Partial<Record<keyof Totals, TotalAge>> = {};
+  for (const [total, sources] of bySource) {
+    const readAt = [...sources.values()].sort()[0]!;
+    const lag = [...(lags.get(total) ?? [])].join(' · ');
+    out[total] = lag ? { readAt, lag } : { readAt };
+  }
+  return out;
+}
+
+/** A total's age in the few words under it: "read 12 min ago", and its lag where its source has one */
+export function ageWords(age: TotalAge, now: Date = new Date()): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(age.readAt)) / 60_000));
+  const hours = Math.round(minutes / 60);
+  const when = minutes < 1 ? 'read just now' : minutes < 60 ? `read ${minutes} min ago` : hours < 48 ? `read ${hours} h ago` : `read ${Math.round(hours / 24)} days ago`;
+  return age.lag ? `${when} · ${age.lag}` : when;
 }
 
 type Families = Readonly<Record<string, Partial<Record<string, readonly string[]>>>>;
@@ -95,6 +161,8 @@ export function dailyViews(points: ReadonlyArray<{ bucket: string; increase: num
 /** One channel's share of a launch: only the totals its network counts (a metric it does not count is absent, not 0) */
 export interface ChannelNumbers {
   totals: Partial<Totals>;
+  /** When each of its totals was last read */
+  ages?: Partial<Record<keyof Totals, TotalAge>>;
   daily: Day[];
   /** The site's visits from the channel's tagged links, where Umami has counted any */
   site?: SiteVisits;
@@ -146,6 +214,8 @@ export function channelSiteVisits(
 /** What a launch's card and its page lead with, and each channel's part of it */
 export interface LaunchNumbers {
   totals: Totals;
+  /** When each total was last read, and whether its source lags by design */
+  ages?: Partial<Record<keyof Totals, TotalAge>>;
   daily: Day[];
   channels: Record<string, ChannelNumbers>;
 }

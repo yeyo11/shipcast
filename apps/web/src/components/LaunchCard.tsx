@@ -1,12 +1,13 @@
 import { Link } from '@tanstack/react-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchSource, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
-import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type Totals } from '../server/launch-summary';
+import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type TotalAge, type Totals } from '../server/launch-summary';
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
 import { Icon } from './kit/Icon';
 import { Overlay, OverlayClose } from './kit/Overlay';
 import { readyText, RowMenu } from './LaunchRows';
 import { NetworkGlyph } from './kit/NetworkGlyph';
+import { NumberAge } from './NumberAge';
 import { number } from './ui';
 
 /*
@@ -47,8 +48,8 @@ const STATS: ReadonlyArray<[keyof Totals, string]> = [
   ['clicks', 'Clicks'],
 ];
 
-/** The numbers in a row: those the launch (or the channel) counts; clicks only once there are some */
-function Numbers({ totals }: { totals: Partial<Totals> }) {
+/** The numbers in a row: those the launch (or the channel) counts; clicks only once there are some. Each says, quietly, when it was read */
+function Numbers({ totals, ages }: { totals: Partial<Totals>; ages?: Partial<Record<keyof Totals, TotalAge>> }) {
   const shown = STATS.filter(([key]) => totals[key] !== undefined && (key !== 'clicks' || (totals.clicks ?? 0) > 0));
   if (shown.length === 0) return null;
   return (
@@ -57,6 +58,7 @@ function Numbers({ totals }: { totals: Partial<Totals> }) {
         <div key={key} className="k-stack">
           <dt className="k-xs k-muted">{label}</dt>
           <dd className="k-d k-d30">{number(totals[key] ?? 0)}</dd>
+          {ages?.[key] && <NumberAge age={ages[key]} />}
         </div>
       ))}
     </dl>
@@ -94,6 +96,7 @@ function PeekLine({ post, first, when, timezone }: { post: CardPost; first: bool
 function PeekBody({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch; timezone: string }) {
   const word = MARK_WORD[c.mark];
   const totals = launch.numbers?.channels[c.channel]?.totals ?? {};
+  const ages = launch.numbers?.channels[c.channel]?.ages;
   const at = (id: number) => {
     const post = launch.posts.find((p) => p.id === id);
     return post?.publishedAt ? shortDateTime(post.publishedAt, timezone) : null;
@@ -109,7 +112,7 @@ function PeekBody({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch;
           <span className={`k-dot ${DOT[c.mark]}`} aria-hidden="true" /> {word}
         </span>
       </div>
-      <Numbers totals={totals} />
+      <Numbers totals={totals} ages={ages} />
       <div className="k-stack">
         {lines.map((p, i) => (
           <PeekLine key={p.id} post={p} first={i === 0} when={at(p.id)} timezone={timezone} />
@@ -257,7 +260,7 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
         <>
           {channels.length > 0 ? (
             <div className="k-stack k-g10 home-card-foot">
-              {launch.numbers && <Numbers totals={launch.numbers.totals} />}
+              {launch.numbers && <Numbers totals={launch.numbers.totals} ages={launch.numbers.ages} />}
               <Marks channels={channels} launch={launch} timezone={timezone} />
             </div>
           ) : (

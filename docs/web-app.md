@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T06:53:24.835786476Z
-updated_at: 2026-11-02T23:16:53.039449859Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - web-app
     - dashboard
@@ -481,7 +481,13 @@ not configured and nothing else changes.
 - **A launch at a glance** (`src/server/launch-summary.ts`, tested): a launch's totals from the latest
   reading of each counter through the stats section's metric families ([stats.md](stats.md)), each
   channel's totals with only what its network counts, and views per day for every launch of the list
-  in one query.
+  in one query. A launch's views are its pieces' and its site's, never the repo's GitHub traffic,
+  the same number as the Stats ranking's ([stats.md](stats.md)); the repo's stars are **Repo stars**.
+  Since 2026-11-07 each total also says, quietly under it on the card, a channel's peek and the
+  launch's page, when it was last read ("read 12 min ago", `totalAges` and `ageWords`, the oldest of
+  its sources' last reads so the words hold for all of it), and where a source lags by design it says
+  so (`LAGGED`: Search Console 2–3 days, Bing by day, GitHub's traffic by day, YouTube Analytics 48–72
+  h, dev.to's analytics daily), the full words in its tooltip (`NumberAge`).
 - **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
   `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
   OpenAPI document is built from it. Its dependencies are built per request in
