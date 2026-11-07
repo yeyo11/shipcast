@@ -193,7 +193,8 @@ function counterSet(filter: StatsFilter, pairs: ReadonlyArray<{ source: string; 
         (SELECT min(p.published_at) FROM posts p WHERE p.launch_id = l.id),
         (SELECT min(m.taken_at) FROM metrics m WHERE m.launch_id = l.id AND m.source = 'github')
       ) AS era_from
-      FROM launches l
+      -- A launch the owner deleted is no launch's era: the one before it keeps the repo
+      FROM launches l WHERE l.deleted_at IS NULL
     ),
     eras AS (
       SELECT id, repo, era_from, lead(era_from) OVER (PARTITION BY repo ORDER BY era_from, id) AS era_to FROM went_out WHERE era_from IS NOT NULL

@@ -101,3 +101,14 @@ test('a period after both launches: each era starts where it stood then, and the
   const overview = await statsOverview(registry, { from: '2026-10-20', to: '2026-10-30' });
   assert.equal(overview.metrics.reactions, 5);
 });
+
+test('a launch the owner deleted takes no part of its repo: the launch before keeps it', async () => {
+  const registry = await memoryRegistry();
+  const a = await launchOf(registry, 'v1.0.0', '2026-10-01');
+  const b = await launchOf(registry, 'v2.0.0', '2026-10-10');
+  for (const [day, stars] of [['2026-10-01', 10], ['2026-10-05', 20], ['2026-10-15', 30]] as const) await registry.metrics.recordMetrics(a.launch.id, 'github', { stars }, at(day));
+  await registry.launches.hide(b.launch.id);
+  const ranking = await statsRanking(registry, { by: 'launch', from: '2026-10-01', to: '2026-10-30', limit: 10 });
+  assert.equal(ranking.entries.find((e) => e.launchId === a.launch.id)?.metrics.reactions, 20, 'from its first reading, 10, to 30');
+  assert.equal(ranking.entries.find((e) => e.launchId === b.launch.id)?.metrics.reactions, undefined);
+});

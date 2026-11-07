@@ -140,7 +140,9 @@ per-post numbers.
   The repo's dated traffic goes by UTC day: the day a launch went out is that launch's, and the
   repo's days from before its first launch went out are no launch's and are not counted. Until
   2026-11-07 the repo was one counter given to its newest launch, which took growth from before it
-  existed (a star of 10-29 counted for a launch of 11-03).
+  existed (a star of 10-29 counted for a launch of 11-03). A launch the owner deleted has no era:
+  the launch before it keeps the repo. In a series, an era's start is its own value, never past its
+  end, so the eras of a repo add up to the repo at every moment.
 
 A channel's reading with no piece is skipped: those are the newsletter readings from before the
 [post model](decisions/post-model.md), each the sum of both issues, and every such launch has its
