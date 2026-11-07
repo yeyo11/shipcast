@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { sql } from 'drizzle-orm';
 import { Brand, channelCadence } from '@shipcast/schema';
 import { collectHourly, runChecks, TelemetryStore, type MetricSources } from '../src/index.ts';
-import { aPublishedLaunch, memoryRegistry } from '../src/testing/index.ts';
+import { aPublishedLaunch, memoryRegistry, publishedAgo } from '../src/testing/index.ts';
 
 /*
  * The reads slow down with age (docs/publishing.md, "Cadences"): a piece at its cadence for a week
@@ -64,4 +64,15 @@ test('freshness holds a piece to its cadence by age: a month-old piece read this
   await registry.metrics.recordMetrics(old.launch.id, 'bluesky', { likes: 1 }, new Date(now.getTime() - 6 * 60 * MINUTE), old.posts[0]!.id);
   const [fresh] = (await runChecks(registry, new TelemetryStore(registry.database), { now, cadenceMinutes: 5, cadenceOf: (c) => channelCadence(c)?.minutes })).filter((r) => r.name === 'freshness');
   assert.equal(fresh!.value, 1, 'read 6 hours ago against a daily cadence');
+});
+
+test('freshness leaves out a piece Shipcast no longer reads: a Discord message past its 30 days', async () => {
+  const registry = await memoryRegistry();
+  const now = new Date();
+  const made = await aPublishedLaunch(registry, [{ channel: 'discord', externalId: '1' }], { ref: 'v-discord' });
+  await publishedAgo(registry, made.posts[0]!.id, new Date(now.getTime() - 40 * DAY));
+  await registry.metrics.recordMetrics(made.launch.id, 'discord', { reactions: 2 }, new Date(now.getTime() - 35 * DAY), made.posts[0]!.id);
+  const [fresh] = (await runChecks(registry, new TelemetryStore(registry.database), { now, cadenceMinutes: 5, cadenceOf: (c) => channelCadence(c)?.minutes })).filter((r) => r.name === 'freshness');
+  assert.equal(fresh!.value, 1);
+  assert.equal((fresh!.detail as { posts: number }).posts, 0, 'not counted at all');
 });

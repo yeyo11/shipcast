@@ -276,6 +276,12 @@ export interface ChannelDefinition<Id extends string = string> {
      * `lastReadHours` after it went out, inside the last cadence before they go
      */
     expiring?: { kind: string; hours: number; lastReadHours: number };
+    /**
+     * Days after a piece went out past which Shipcast reads it no more, its numbers having settled
+     * (a Discord message's reactions, one call each, 30 days): its last numbers stand, and it is
+     * neither read nor counted as stale
+     */
+    readDays?: number;
     /** How often its analytics are, where the network has a slower API apart from its counters (YouTube Analytics) */
     analytics?: MetricCadence;
   };

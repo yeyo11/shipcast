@@ -551,7 +551,9 @@ agrees again ([search-indexing.md](search-indexing.md#google)).
   problem with the connection, and the read stops there. A 429 is waited out once (its
   `retry_after`), then the read stops with what it has. A message older than 30 days (its id, a
   snowflake, says when it was sent) is no longer read: its reactions have settled, and its last
-  numbers stand. Discord counts no views; the replies in a thread need a bot.
+  numbers stand. Since 2026-11-07 the definition says so too (`metrics.readDays: 30`), so
+  `readsMetrics` no longer lists such a message, and neither the `freshness` check nor a launch's
+  overdue mark counts it as stale. Discord counts no views; the replies in a thread need a bot.
 - **Telegram** has no way to read a message back, but a bot that is an admin of the channel is told
   when a post's reactions change (a channel's reactions are anonymous): a `message_reaction_count`
   update, which Telegram sends only to a bot that asks for it (`allowed_updates`) and keeps 24 hours.

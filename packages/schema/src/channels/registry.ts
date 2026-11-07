@@ -255,6 +255,9 @@ export function readsMetrics(channel: string, kind: string, age?: PieceAge): boo
   if (channel === 'blog') return false;
   const expiring = expiringOf(channel, kind);
   if (expiring) return age !== undefined && age.now.getTime() - Date.parse(age.publishedAt) < expiring.hours * HOUR_MS;
+  // A network whose numbers settle is read for a while only (readDays); with no age the kind is what counts
+  const days = channelDefinition(channel)?.metrics?.readDays;
+  if (days !== undefined && age !== undefined && age.now.getTime() - Date.parse(age.publishedAt) >= days * 24 * HOUR_MS) return false;
   return kind === 'post' || kind.startsWith('issue:') || (isMainPiece(channel, kind) && channelDefinition(channel)?.metrics !== undefined);
 }
 

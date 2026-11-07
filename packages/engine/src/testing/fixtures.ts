@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import type { Channel } from '@shipcast/schema';
 import type { Launch, LaunchStatus, NewLaunch, Post, PostKind, PostStatus, Repositories } from '../repositories/index.ts';
 
@@ -87,4 +88,9 @@ export async function withMetrics(
   takenAt: Date = new Date('2026-11-03T09:00:00.000Z'),
 ): Promise<void> {
   for (const r of readings) await registry.metrics.recordMetrics(launchId, r.source, r.values, takenAt, r.postId ?? null);
+}
+
+/** Moves when a piece went out, for tests of what its age changes (the reads' taper, a network's read window) */
+export async function publishedAgo(registry: Pick<Repositories, 'queries'>, postId: number, at: Date): Promise<void> {
+  await registry.queries.selectRows(sql`UPDATE posts SET published_at = ${at.toISOString()} WHERE id = ${postId} RETURNING id`);
 }

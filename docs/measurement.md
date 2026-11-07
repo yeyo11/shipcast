@@ -61,6 +61,9 @@ rule the metrics rounds use: a post, each newsletter issue, and a channel's own 
 definition has metrics (each of YouTube's videos). Instagram's story and link comment have no numbers
 of their own and the blog is read per article URL, so none of them counts. Before, they counted as
 never read, and production showed 0.76 while every readable piece had been read within the hour.
+A piece Shipcast deliberately reads no more is left out the same way, by its age: a story past its
+24 hours, a Discord message past its 30 days (`metrics.readDays`, since 2026-11-07). The launch's
+overdue mark on the card and the launch page uses the same rule (`launchUpdated`).
 
 They read the registry only, so they cost no provider call. A full registry-against-network
 comparison needs each network's list of the account's own posts; it comes with the channel modules

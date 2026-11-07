@@ -29,3 +29,11 @@ test('Instagram’s reach is no family’s, and a repost is a share; Threads’ 
   assert.deepEqual(CHANNEL_METRIC_FAMILIES.instagram?.clicks, ['bio_link_clicks']);
   assert.deepEqual(CHANNEL_METRIC_FAMILIES.threads?.clicks, ['clicks']);
 });
+
+test('a Discord message is read for 30 days, then no more: its reactions have settled', () => {
+  const now = new Date('2026-11-30T12:00:00Z');
+  const age = (days: number) => ({ publishedAt: new Date(now.getTime() - days * 86_400_000).toISOString(), now });
+  assert.equal(readsMetrics('discord', 'post', age(29)), true);
+  assert.equal(readsMetrics('discord', 'post', age(31)), false);
+  assert.equal(readsMetrics('bluesky', 'post', age(400)), true, 'other networks keep being read, tapered');
+});
