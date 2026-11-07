@@ -21,9 +21,9 @@
     "pwa:assets": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/pwa-assets.tsx"
   },
   "devDependencies": {
-    "@swc/core": "^1.16.20",
-    "@types/node": "^24.19.2",
-    "dependency-cruiser": "^18.7.0",
+    "@swc/core": "^1.16.21",
+    "@types/node": "^26.6.6",
+    "dependency-cruiser": "^18.7.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
