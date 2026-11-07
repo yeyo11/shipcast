@@ -123,12 +123,12 @@ test("freshness ages a reading from its last check, against each channel's own c
   await registry.metrics.recordMetrics(launch.id, 'mastodon', { favourites: 1 }, at('09:00'), posts[1]!.id, MOVES);
   await registry.metrics.recordMetrics(launch.id, 'bluesky', { likes: 1 }, at('15:00'), posts[0]!.id, MOVES);
 
-  const [fresh] = (await runChecks(registry, store, { now, cadenceHours: 6, cadenceOf: (c) => channelCadence(c)?.hours })).filter((r) => r.name === 'freshness');
-  const channels = (fresh!.detail as { channels: Record<string, { cadenceHours: number; withinCadence: number }> }).channels;
-  assert.deepEqual(channels.bluesky && [channels.bluesky.cadenceHours, channels.bluesky.withinCadence], [1, 1]);
-  assert.deepEqual(channels.mastodon && [channels.mastodon.cadenceHours, channels.mastodon.withinCadence], [1, 0], 'six hours old against an hourly cadence');
+  const [fresh] = (await runChecks(registry, store, { now, cadenceMinutes: 360, cadenceOf: (c) => channelCadence(c)?.minutes })).filter((r) => r.name === 'freshness');
+  const channels = (fresh!.detail as { channels: Record<string, { cadenceMinutes: number; withinCadence: number }> }).channels;
+  assert.deepEqual(channels.bluesky && [channels.bluesky.cadenceMinutes, channels.bluesky.withinCadence], [5, 1]);
+  assert.deepEqual(channels.mastodon && [channels.mastodon.cadenceMinutes, channels.mastodon.withinCadence], [5, 0], 'six hours old against a 5-minute cadence');
   assert.equal(fresh!.value, 0.5);
-  assert.equal((fresh!.detail as { cadenceHours: number }).cadenceHours, 6, 'the shape of the answer is kept');
+  assert.equal((fresh!.detail as { cadenceMinutes: number }).cadenceMinutes, 360, 'the shape of the answer is kept');
 });
 
 test('a referrer or page out of GitHub’s top ten since the last read is no longer among the latest numbers', async () => {

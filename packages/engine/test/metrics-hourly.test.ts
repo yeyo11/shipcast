@@ -14,6 +14,7 @@ import { aLaunch, aPublishedLaunch, memoryRegistry, withPosts } from '../src/tes
 
 const brand = Brand.parse({ id: 'personal', displayName: 'Me', site: 'https://josegarrido.dev', github: 'yeyo11', languages: { blog: ['en', 'es'] } });
 const HOUR = 3_600_000;
+const MINUTE = 60_000;
 const CHANNELS: Channel[] = ['bluesky', 'mastodon', 'devto', 'hashnode', 'githubDiscussions', 'newsletter'];
 
 /** A fake of every network the run reaches, each call counted by host and path; `bump` moves one count */
@@ -148,9 +149,32 @@ test('an hour later unchanged values move checked_at and add no row; a changed o
   assert.equal(await rowCount(registry), rows + 5);
 
   // Freshness after an hourly run: every piece within its channel's cadence
-  const [fresh] = (await runChecks(registry, new TelemetryStore(registry.database), { now: new Date(t0.getTime() + 2 * HOUR + 5 * 60_000), cadenceHours: 1, cadenceOf: (c) => channelCadence(c)?.hours })).filter((r) => r.name === 'freshness');
+  const [fresh] = (await runChecks(registry, new TelemetryStore(registry.database), { now: new Date(t0.getTime() + 2 * HOUR + 5 * 60_000), cadenceMinutes: 60, cadenceOf: (c) => channelCadence(c)?.minutes })).filter((r) => r.name === 'freshness');
   assert.equal(fresh!.value, 1);
-  for (const channel of CHANNELS) assert.equal((fresh!.detail as { channels: Record<string, { cadenceHours: number }> }).channels[channel]?.cadenceHours, 1);
+  const cadences = (fresh!.detail as { channels: Record<string, { cadenceMinutes: number }> }).channels;
+  assert.deepEqual(Object.fromEntries(CHANNELS.map((c) => [c, cadences[c]?.cadenceMinutes])), { bluesky: 5, mastodon: 5, devto: 15, hashnode: 15, githubDiscussions: 5, newsletter: 15 });
+});
+
+test('every 5 minutes the sources with no tight quota are read again, the quota-bound ones every 15; unchanged values add no row', async () => {
+  const net = network();
+  const registry = await fiveLaunches();
+  const s = sources(net.fetch);
+  const t0 = new Date();
+  await collectHourly(registry, brand, s, t0);
+  const rows = await rowCount(registry);
+  const counted = () => ({ bluesky: net.count('getPosts'), mastodon: net.count('m.example'), discussions: net.count('api.github.com/graphql'), cloudflare: net.count('cloudflare'), devto: net.count('articles/me/all'), hashnode: net.count('hashnode'), brevo: net.count('brevo') });
+  assert.deepEqual(counted(), { bluesky: 1, mastodon: 1, discussions: 1, cloudflare: 2, devto: 1, hashnode: 1, brevo: 2 });
+
+  // The job's next run, 5 minutes on (a few seconds early, as a cron fires): the 5-minute sources only
+  await collectHourly(registry, brand, s, new Date(t0.getTime() + 5 * MINUTE - 20_000));
+  assert.deepEqual(counted(), { bluesky: 2, mastodon: 2, discussions: 2, cloudflare: 4, devto: 1, hashnode: 1, brevo: 2 });
+  await collectHourly(registry, brand, s, new Date(t0.getTime() + 10 * MINUTE - 20_000));
+  assert.deepEqual(counted(), { bluesky: 3, mastodon: 3, discussions: 3, cloudflare: 6, devto: 1, hashnode: 1, brevo: 2 }, 'not every 10 minutes either');
+  // 15 minutes on: everything every 5 or 15 minutes
+  await collectHourly(registry, brand, s, new Date(t0.getTime() + 15 * MINUTE - 20_000));
+  assert.deepEqual(counted(), { bluesky: 4, mastodon: 4, discussions: 4, cloudflare: 8, devto: 2, hashnode: 2, brevo: 4 }, 'Brevo’s list and, with no cache here, its clicks per link');
+  assert.equal(await rowCount(registry), rows, 'nothing moved on the networks: every reading only had its checked_at moved');
+  assert.equal(net.count('/traffic/views'), 2, 'the traffic stays daily');
 });
 
 test('the repo counts are conditional: a 304 when no one starred, and the stars recorded on each launch of the repo', async () => {

@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { QUARTER_HOUR_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import type { Language } from '../channels.ts';
 
 /*
@@ -156,9 +156,9 @@ export const youtube = {
     families: { views: ['views'], reactions: ['likes'], comments: ['comments'], shares: ['shares'], watchMinutes: ['watchMinutes'], engagedViews: ['engagedViews'], follows: ['subscribersGained'] },
     primary: ['views', 'likes'],
     averaged: { avgViewSeconds: 'avgViewSeconds', avgViewPercent: 'avgViewPercent' },
-    cadence: HOURLY_BATCHED,
+    cadence: QUARTER_HOUR_BATCHED,
     // YouTube Analytics (watch time, engaged views, shares): Google's numbers lag 48 to 72 hours
-    analytics: { hours: 24, read: 'single', why: 'YouTube Analytics lags 48–72 hours' },
+    analytics: { minutes: 24 * 60, read: 'single', why: 'YouTube Analytics lags 48–72 hours' },
   },
   // No slot of its own: its brand is red, which in Cartel only means failure; it takes the first free one
 } as const satisfies ChannelDefinition<'youtube'>;

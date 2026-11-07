@@ -150,7 +150,7 @@ Two instances, both holding only what can be rebuilt from Postgres
 | Variable | Instance | Holds |
 | --- | --- | --- |
 | `SHIPCAST_REDIS_QUEUE_URL` | `redis-queue`: `noeviction`, AOF | BullMQ, locks, one-time values (OAuth state, console sign-in links), the API failure limiter, per-provider quotas, webhook delivery dedupe |
-| `SHIPCAST_REDIS_CACHE_URL` | `redis-cache`: `allkeys-lru`, no persistence | GitHub ETag and file caches, sessions and identities of the hourly reads, pub/sub events |
+| `SHIPCAST_REDIS_CACHE_URL` | `redis-cache`: `allkeys-lru`, no persistence | GitHub ETag and file caches, sessions and identities of the metrics reads, pub/sub events |
 
 A process uses Redis when `SHIPCAST_REDIS_QUEUE_URL` is set (`buildProcessState`,
 `packages/runtime/src/redis/process.ts`): the shared state on the two instances

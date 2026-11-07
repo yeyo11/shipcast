@@ -485,9 +485,13 @@ export async function collectMetrics(registry: MetricStore, brand: Brand, source
 }
 
 const HOUR_MS = 3_600_000;
-/** A run starts on the cron's minute and takes a while: a check this much short of the cadence is due */
-const DUE_SLACK_MS = 10 * 60_000;
-/** When a repo's traffic was last read (or answered 404); a refused read leaves it, so the next hour asks again */
+const MINUTE_MS = 60_000;
+/**
+ * A run's readings are stamped with its start, and a cron fires a little early or late: a check this
+ * much short of the cadence is due. Under the job's 5 minutes, so a 15-minute source is not read at 10
+ */
+const DUE_SLACK_MS = 2 * MINUTE_MS;
+/** When a repo's traffic was last read (or answered 404); a refused read leaves it, so the next run asks again */
 export const trafficReadKey = (repo: string) => `metrics-read:github-traffic:${repo}`;
 /** When a repo's stars by day and releases' downloads were last read */
 export const historyReadKey = (repo: string) => `metrics-read:github-history:${repo}`;
@@ -551,8 +555,8 @@ function pendingIds(value: string | undefined): Set<string> | undefined {
 export function inspectionDue(status: { indexed: boolean; checkedAt: string } | undefined, launchCreatedAt: string, now: Date): boolean {
   if (now.getTime() - Date.parse(launchCreatedAt) > INSPECTION_MAX_AGE_DAYS * 24 * HOUR_MS) return false;
   if (!status) return true;
-  const hours = status.indexed ? SITE_CADENCES.urlInspectionIndexed.hours : SITE_CADENCES.urlInspection.hours;
-  return now.getTime() - Date.parse(status.checkedAt) >= hours * HOUR_MS - DUE_SLACK_MS;
+  const minutes = status.indexed ? SITE_CADENCES.urlInspectionIndexed.minutes : SITE_CADENCES.urlInspection.minutes;
+  return now.getTime() - Date.parse(status.checkedAt) >= minutes * MINUTE_MS - DUE_SLACK_MS;
 }
 
 export interface HourlyOptions {
@@ -589,7 +593,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       problems.push(`${what}: ${failureText(error)}`);
     }
   };
-  const due = (last: string | undefined, hours: number) => last === undefined || now.getTime() - Date.parse(last) >= hours * HOUR_MS - DUE_SLACK_MS;
+  const due = (last: string | undefined, minutes: number) => last === undefined || now.getTime() - Date.parse(last) >= minutes * MINUTE_MS - DUE_SLACK_MS;
 
   const recent = await registry.launches.recent(500);
   const launches = recent.filter((l) => l.status === 'published');
@@ -612,7 +616,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   // its sum (latestMetrics) always adds up readings of one moment
   for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
     if (!reader) continue;
-    const hours = channelCadence(channel)?.hours ?? 1;
+    const minutes = channelCadence(channel)?.minutes ?? 60;
     if (reader.pushed) {
       // Every piece, due or not: a change read is confirmed, so one not kept now is lost. Silence
       // moves the check of a due piece that has numbers; a piece never told about stays unread
@@ -622,7 +626,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       await attempt(channel, async () => {
         const told = await readPushed(pushed, targets, (launchId, values, postId) => record(launchId, channel, values, postId));
         for (const t of targets) {
-          if (told.has(t.postId) || !due(checked.get(`p:${t.postId}`), hours)) continue;
+          if (told.has(t.postId) || !due(checked.get(`p:${t.postId}`), minutes)) continue;
           const kept = await keptMetrics(registry, t.postId);
           if (kept) await record(t.launchId, channel, kept, t.postId);
         }
@@ -632,7 +636,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const targets: Array<MetricTarget & { launchId: number }> = [];
     for (const launch of launches) {
       const pieces = (piecesOf.get(launch.id) ?? []).filter((p) => p.channel === channel && readable(p));
-      if (only || pieces.some((p) => due(checked.get(`p:${p.id}`), hours))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
+      if (only || pieces.some((p) => due(checked.get(`p:${p.id}`), minutes))) targets.push(...pieces.map((p) => ({ postId: p.id, externalId: p.externalId!, kind: p.kind, launchId: launch.id })));
     }
     if (targets.length === 0) continue;
     if (reader.read || reader.metricsMany) {
@@ -660,7 +664,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   for (const [channel, reader] of Object.entries(sources.posts ?? {})) {
     const cadence = channelAnalyticsCadence(channel);
     if (!reader?.analytics || !cadence) continue;
-    const isDue = due(await registry.cursors.cursor(analyticsReadKey(channel)), cadence.hours);
+    const isDue = due(await registry.cursors.cursor(analyticsReadKey(channel)), cadence.minutes);
     const pending = isDue ? undefined : pendingIds(await registry.cursors.cursor(analyticsPendingKey(channel)));
     if (!isDue && !pending) continue;
     const targets = launches
@@ -697,11 +701,11 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
     const urls = articleUrls(piecesOf.get(launch.id) ?? []);
     return urls.length > 0 ? [{ launch, urls, since: launch.createdAt.slice(0, 10) }] : [];
   });
-  const siteDue = (launchId: number, source: string, name: string, hours: number) => due(checked.get(`l:${launchId}:${source}:${name}`), hours);
+  const siteDue = (launchId: number, source: string, name: string, minutes: number) => due(checked.get(`l:${launchId}:${source}:${name}`), minutes);
 
   // The blog's visits: every due launch's paths in one query where the source can
   const blog = sources.blog;
-  const blogDue = sites.filter((s) => siteDue(s.launch.id, 'blog', 'views', channelCadence('blog')?.hours ?? 1));
+  const blogDue = sites.filter((s) => siteDue(s.launch.id, 'blog', 'views', channelCadence('blog')?.minutes ?? 60));
   if (blog && blogDue.length > 0) {
     const visitsOf = async (site: (typeof blogDue)[number], many: Map<string, PageVisits> | undefined) => {
       const visits = await Promise.all(site.urls.map(async ({ lang, url }) => ({ lang, ...(many?.get(new URL(url).pathname) ?? (await blog.pageVisits(new URL(url).pathname, site.since, until))) })));
@@ -734,7 +738,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   const umami = sources.umami;
   if (umami) {
     for (const launch of launches) {
-      if (!siteDue(launch.id, 'umami', 'views', SITE_CADENCES.umami.hours)) continue;
+      if (!siteDue(launch.id, 'umami', 'views', SITE_CADENCES.umami.minutes)) continue;
       await attempt(`${launch.repo} ${launch.ref} Umami`, async () => {
         const visits = await umami.campaignVisits(campaignOf(launch), launch.createdAt.slice(0, 10), until);
         await record(launch.id, 'umami', campaignValues(visits));
@@ -746,7 +750,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   let unindexed = false;
   for (const { launch, urls, since } of sites) {
     const search = sources.search;
-    if (search && siteDue(launch.id, 'search', 'clicks', SITE_CADENCES.searchAnalytics.hours)) {
+    if (search && siteDue(launch.id, 'search', 'clicks', SITE_CADENCES.searchAnalytics.minutes)) {
       await attempt(`${launch.repo} ${launch.ref} search`, async () => {
         const byDay = search.pageMetricsByDay?.bind(search);
         if (!byDay) {
@@ -775,7 +779,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       });
     }
     const bing = sources.bing;
-    if (bing && siteDue(launch.id, 'bing', 'clicks', SITE_CADENCES.bing.hours)) {
+    if (bing && siteDue(launch.id, 'bing', 'clicks', SITE_CADENCES.bing.minutes)) {
       await attempt(`${launch.repo} ${launch.ref} Bing`, async () => {
         const found = await Promise.all(urls.map(({ url }) => bing.pageMetrics(url)));
         const values = searchValues(found);
@@ -795,13 +799,13 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
   for (const [repo, of] of repos) {
     const ids = of.map((l) => l.id);
     const split = sources.githubRepo;
-    const countsDue = ids.some((id) => siteDue(id, 'github', 'stars', SITE_CADENCES.githubCounts.hours));
+    const countsDue = ids.some((id) => siteDue(id, 'github', 'stars', SITE_CADENCES.githubCounts.minutes));
     if (split) {
       if (countsDue) await attempt(`${repo} GitHub`, async () => {
         const counts = await split.counts(repo);
         for (const id of ids) await record(id, 'github', counts);
       });
-      if (due(await registry.cursors.cursor(trafficReadKey(repo)), SITE_CADENCES.githubTraffic.hours)) {
+      if (due(await registry.cursors.cursor(trafficReadKey(repo)), SITE_CADENCES.githubTraffic.minutes)) {
         // A failure is said as itself. Only a 403 (the App without Administration: read on the repo)
         // is kept for the bell, which words it as that permission, and leaves the cursor, so the next
         // hour asks again once the owner grants it. A 404 (the repo renamed, deleted or out of the
@@ -823,7 +827,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
           }
         });
       }
-      if (due(await registry.cursors.cursor(historyReadKey(repo)), SITE_CADENCES.githubHistory.hours)) {
+      if (due(await registry.cursors.cursor(historyReadKey(repo)), SITE_CADENCES.githubHistory.minutes)) {
         await attempt(`${repo} GitHub stars and downloads`, async () => {
           const history = await split.history(repo);
           await registry.cursors.setCursor(historyReadKey(repo), now.toISOString());
@@ -841,7 +845,7 @@ export async function collectHourly(registry: MetricStore, brand: Brand, sources
       });
     }
   }
-  await readFurtherRepos(launches, sources, attempt, record, (id, source) => siteDue(id, source, 'stars', SITE_CADENCES.githubCounts.hours));
+  await readFurtherRepos(launches, sources, attempt, record, (id, source) => siteDue(id, source, 'stars', SITE_CADENCES.githubCounts.minutes));
   if (unindexed && sources.search) await attempt('sitemap', async () => void (await resubmitSitemap(registry, brand.site, sources.search!, now)));
   return { readings, problems };
 }

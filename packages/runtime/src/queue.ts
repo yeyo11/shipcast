@@ -75,7 +75,8 @@ export const QUEUES: Record<QueueName, QueueSpec> = {
   publish: { title: 'Publishing a launch', policy: 'stately', retryLimit: PUBLISH_RETRIES, retryDelay: PUBLISH_RETRY_SECONDS, expireInSeconds: 30 * 60, concurrency: 2 },
   delivery: { title: 'A GitHub delivery', policy: 'standard', retryLimit: 2, retryDelay: 30, expireInSeconds: 10 * 60, concurrency: 2 },
   round: { title: 'Automation round', policy: 'stately', retryLimit: 0, expireInSeconds: 3600, concurrency: 1 },
-  metrics: { title: 'Reading the numbers', policy: 'stately', retryLimit: 1, retryDelay: 15 * 60, expireInSeconds: 3600, concurrency: 1 },
+  // Retried within the 5-minute cadence, not behind it (a story's last read has only its last minutes)
+  metrics: { title: 'Reading the numbers', policy: 'stately', retryLimit: 1, retryDelay: 2 * 60, expireInSeconds: 3600, concurrency: 1 },
   'instagram-tokens': { title: 'Refreshing Instagram tokens', policy: 'stately', retryLimit: 2, retryDelay: 3600, expireInSeconds: 15 * 60, concurrency: 1 },
   snapshots: { title: 'Syncing the accounts', policy: 'stately', retryLimit: 1, retryDelay: 30 * 60, expireInSeconds: 30 * 60, concurrency: 1 },
   // One per scheduled piece (its key), moved when the piece is: the post row holds the time, the job only wakes the publishing

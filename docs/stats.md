@@ -30,7 +30,7 @@ also keeps each day under the day it happened, and a period of it is the sum of 
 ([below](#dated-values)).
 
 **When it was read.** Since migration `0016` a reading has `taken_at` (when the value was first
-seen) and `checked_at` (when it was last confirmed). With `batched-metrics` an hourly read that
+seen) and `checked_at` (when it was last confirmed). With `batched-metrics` a read (every 5 or 15 minutes) that
 finds the same value moves `checked_at` on the last row instead of adding one, so the table grows
 only when something changes. A row read again unchanged inside a window counts as a reading of that
 window; the increase is unaffected, since the value did not move.

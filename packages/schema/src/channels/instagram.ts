@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { QUARTER_HOUR_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { PLAIN_TEXT } from './format.ts';
 import { parseInstagramDraft, singleDraft } from './text.ts';
 
@@ -104,8 +104,8 @@ export const instagram = {
     },
     primary: ['views', 'likes'],
     averaged: { avgWatchMs: 'avg_watch_ms', skipRate: 'skip_rate' },
-    cadence: HOURLY_BATCHED,
-    expiring: { kind: 'story', hours: 24, lastReadHours: 23.5 },
+    cadence: QUARTER_HOUR_BATCHED,
+    expiring: { kind: 'story', hours: 24, lastReadHours: 23.75 },
   },
   chartSlot: 2,
 } as const satisfies ChannelDefinition<'instagram'>;

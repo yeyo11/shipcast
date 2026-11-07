@@ -5,7 +5,7 @@ import { RecordingQueue } from '@shipcast/engine/testing';
 import { armLastReads, type WorkQueue } from '../src/index.ts';
 
 /*
- * An Instagram story's numbers last 24 hours: after a publish, its last read is queued for 23 h 30
+ * An Instagram story's numbers last 24 hours: after a publish, its last read is queued for 23 h 45
  * min after it went out, one job per story, moved rather than doubled by arming again. Nothing else
  * is armed: a post, a story gone or failed, a story whose moment passed.
  */
@@ -26,7 +26,7 @@ const piece = (over: Partial<Post>): Post => ({
   ...over,
 });
 
-test('a launch’s story gets its last read queued at 23 h 30 min; nothing else does', async () => {
+test('a launch’s story gets its last read queued at 23 h 45 min; nothing else does', async () => {
   const recorder = new RecordingQueue();
   const queue = recorder as unknown as WorkQueue;
   const posts = [
@@ -44,5 +44,5 @@ test('a launch’s story gets its last read queued at 23 h 30 min; nothing else 
   const waiting = recorder.waiting('metrics');
   assert.equal(waiting.length, 1, 'moved, not doubled');
   assert.deepEqual(waiting[0]?.data, { reason: 'last read', postId: 1 });
-  assert.deepEqual(waiting[0]?.options, { singletonKey: 'last-read:1', startAfter: new Date('2026-10-30T09:30:00.000Z'), title: 'Last read of the instagram story', launchId: 4 });
+  assert.deepEqual(waiting[0]?.options, { singletonKey: 'last-read:1', startAfter: new Date('2026-10-30T09:45:00.000Z'), title: 'Last read of the instagram story', launchId: 4 });
 });

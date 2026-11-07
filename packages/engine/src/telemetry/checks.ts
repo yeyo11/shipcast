@@ -9,6 +9,11 @@ export const MISSED_AFTER_MINUTES = 10;
 export const LATE_AFTER_MINUTES = 5;
 
 const HOUR = 3_600_000;
+/**
+ * The slack `freshness` allows over a source's cadence: three of the metrics job's 5-minute runs, so
+ * a run that is late or fails once is not stale, and a source missed for longer is
+ */
+export const FRESHNESS_SLACK_MINUTES = 15;
 
 /**
  * The checks the refactor is held to (docs/plans/performance-refactor.md, "Instrumentation"), read
@@ -18,8 +23,9 @@ const HOUR = 3_600_000;
  * - `duplicate-pieces`: more than one live row of a launch's channel and kind, or two rows with the
  *   same network id: what a double publish leaves behind;
  * - `freshness`: the age of each live piece's newest reading, per channel, against the cadence the
- *   numbers are read at: `cadenceOf` the channel's, where the hourly reads give each source its
- *   own (the channel definitions' `metrics.cadence`), else `cadenceHours` for every channel. A
+ *   numbers are read at, in minutes: `cadenceOf` the channel's, where the 5-minute job gives each
+ *   source its own (the channel definitions' `metrics.cadence`), else `cadenceMinutes` for every
+ *   channel, plus FRESHNESS_SLACK_MINUTES. A
  *   reading's age is from its last check (`coalesce(checked_at, taken_at)`): a value read again
  *   unchanged is as fresh as one that moved. Only the pieces the metrics rounds read count
  *   (`readsMetrics`): a comment is never read, so it is never stale, and an Instagram story only
@@ -28,11 +34,11 @@ const HOUR = 3_600_000;
 export async function runChecks(
   registry: Pick<Repositories, 'queries'>,
   store: TelemetryStore,
-  options: { now?: Date; cadenceHours: number; cadenceOf?: (channel: string) => number | undefined },
+  options: { now?: Date; cadenceMinutes: number; cadenceOf?: (channel: string) => number | undefined },
 ): Promise<CheckResult[]> {
   const now = options.now ?? new Date();
-  const cadenceOf = (channel: string) => options.cadenceOf?.(channel) ?? options.cadenceHours;
-  const results = [await missedSchedules(registry, now), await latePosts(registry, now), await duplicatePieces(registry), await freshness(registry, now, options.cadenceHours, cadenceOf)];
+  const cadenceOf = (channel: string) => options.cadenceOf?.(channel) ?? options.cadenceMinutes;
+  const results = [await missedSchedules(registry, now), await latePosts(registry, now), await duplicatePieces(registry), await freshness(registry, now, options.cadenceMinutes, cadenceOf)];
   for (const result of results) await store.recordCheck(result);
   return results;
 }
@@ -79,7 +85,7 @@ async function duplicatePieces(registry: Pick<Repositories, 'queries'>): Promise
 }
 
 interface ChannelFreshness {
-  cadenceHours: number;
+  cadenceMinutes: number;
   posts: number;
   neverRead: number;
   withinCadence: number;
@@ -88,7 +94,7 @@ interface ChannelFreshness {
   maxAgeHours: number | null;
 }
 
-async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cadenceHours: number, cadenceOf: (channel: string) => number): Promise<CheckResult> {
+async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cadenceMinutes: number, cadenceOf: (channel: string) => number): Promise<CheckResult> {
   // Only the channels that have ever been read: a channel Shipcast reads no numbers for is not stale
   const all = await registry.queries.selectRows<{ channel: string; kind: string; published_at: string; newest: string | null }>(
     sql`SELECT p.channel, p.kind, p.published_at, max(coalesce(m.checked_at, m.taken_at)) AS newest FROM posts p LEFT JOIN metrics m ON m.post_id = p.id
@@ -104,7 +110,7 @@ async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cad
   let fresh = 0;
   let fresh1h = 0;
   for (const row of rows) {
-    const c = (byChannel[row.channel] ??= { cadenceHours: cadenceOf(row.channel), posts: 0, neverRead: 0, withinCadence: 0, within1h: 0, within24h: 0, maxAgeHours: null });
+    const c = (byChannel[row.channel] ??= { cadenceMinutes: cadenceOf(row.channel), posts: 0, neverRead: 0, withinCadence: 0, within1h: 0, within24h: 0, maxAgeHours: null });
     c.posts += 1;
     if (row.newest === null) {
       c.neverRead += 1;
@@ -112,8 +118,8 @@ async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cad
     }
     const age = (now.getTime() - Date.parse(row.newest)) / HOUR;
     c.maxAgeHours = Math.max(c.maxAgeHours ?? 0, Math.round(age * 100) / 100);
-    // An hour of slack over the cadence: a run takes a while and starts on the cron's minute
-    if (age <= c.cadenceHours + 1) {
+    // Some slack over the cadence: a run takes a while, starts on the cron's minute and may fail once
+    if (age * 60 <= c.cadenceMinutes + FRESHNESS_SLACK_MINUTES) {
       c.withinCadence += 1;
       fresh += 1;
     }
@@ -128,6 +134,6 @@ async function freshness(registry: Pick<Repositories, 'queries'>, now: Date, cad
     name: 'freshness',
     ok: share >= 0.99,
     value: share,
-    detail: { cadenceHours, posts: rows.length, within1hShare: rows.length === 0 ? 1 : fresh1h / rows.length, channels: byChannel },
+    detail: { cadenceMinutes, posts: rows.length, within1hShare: rows.length === 0 ? 1 : fresh1h / rows.length, channels: byChannel },
   };
 }

@@ -2,29 +2,31 @@ import type { MetricCadence } from './definition.ts';
 import { channelDefinition } from './registry.ts';
 
 /*
- * How often each source of numbers is read (docs/plans/performance-refactor.md, "5. Metrics every
- * hour, never faster than the source"). A channel's cadence is on its definition; the site-level
- * sources, which are not channels, are here. The hourly metrics job reads a source only when its
- * last check is older than this.
+ * How often each source of numbers is read, in minutes (docs/publishing.md, "Cadences"; until
+ * 2026-11-07 every hour at most, docs/plans/performance-refactor.md, "5. Metrics"). A channel's
+ * cadence is on its definition; the site-level sources, which are not channels, are here. The metrics
+ * job runs every 5 minutes and reads a source only when its last check is older than this.
  */
+const DAY = 24 * 60;
+
 
 export const SITE_CADENCES = {
   /** The repo's stars, forks and watchers: live, and a 304 when nothing moved costs no quota */
-  githubCounts: { hours: 1, read: 'conditional', why: 'live' },
+  githubCounts: { minutes: 5, read: 'conditional', why: 'live; a 304 costs no quota' },
   /** The repo's views, clones, referrers and pages: GitHub buckets them by day */
-  githubTraffic: { hours: 24, read: 'single', why: 'bucketed by day' },
+  githubTraffic: { minutes: DAY, read: 'single', why: 'bucketed by day' },
   /** The repo's stars by day and its releases' downloads */
-  githubHistory: { hours: 24, read: 'single', why: 'stars counted by day' },
+  githubHistory: { minutes: DAY, read: 'single', why: 'stars counted by day' },
   /** Search Console's clicks and impressions: its data lags two to three days */
-  searchAnalytics: { hours: 24, read: 'single', why: '2–3 days of lag' },
+  searchAnalytics: { minutes: DAY, read: 'single', why: '2–3 days of lag' },
   /** Google's URL inspection of an article not indexed yet */
-  urlInspection: { hours: 24, read: 'single', why: '2,000 per day per property' },
+  urlInspection: { minutes: DAY, read: 'single', why: '2,000 per day per property' },
   /** Once Google has an article, a week is soon enough to notice it dropped out */
-  urlInspectionIndexed: { hours: 24 * 7, read: 'single', why: 'indexed: only a drop-out is news' },
+  urlInspectionIndexed: { minutes: 7 * DAY, read: 'single', why: 'indexed: only a drop-out is news' },
   /** Bing Webmaster's clicks, impressions and crawl state */
-  bing: { hours: 24, read: 'single', why: 'daily data' },
+  bing: { minutes: DAY, read: 'single', why: 'daily data' },
   /** The blog's visits by UTM source from Umami (flag `umami`): self-hosted, live and with no quota */
-  umami: { hours: 1, read: 'single', why: 'live, self-hosted' },
+  umami: { minutes: 5, read: 'single', why: 'live, self-hosted' },
 } as const satisfies Record<string, MetricCadence>;
 
 /**

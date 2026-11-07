@@ -97,7 +97,7 @@ export function ViewsCard({ totals, days, channels, waitingComments }: { totals:
           </p>
         )}
         <div className="k-xs k-muted">
-          {days.length > 0 ? 'Views per day since the launch' : 'No views read yet: the first reading comes within six hours of the launch'}
+          {days.length > 0 ? 'Views per day since the launch' : 'No views read yet: the first reading comes within minutes of the launch'}
           {waitingComments > 0 && (
             <>
               {' · '}

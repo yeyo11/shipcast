@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ArticleSummary, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { QUARTER_HOUR_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ArticleSummary, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { FULL_MARKDOWN } from './format.ts';
 import { singleDraft } from './text.ts';
 
@@ -68,9 +68,9 @@ export const devto = {
     families: { views: ['views'], reactions: ['reactions'], comments: ['comments'], saves: ['saves'] },
     primary: ['views', 'reactions'],
     averaged: { avgReadSeconds: 'avgReadSeconds' },
-    cadence: HOURLY_BATCHED,
+    cadence: QUARTER_HOUR_BATCHED,
     // Forem's analytics (saves, read time, referrers): two calls an article under an API key's 40 a minute
-    analytics: { hours: 24, read: 'single', why: 'two calls an article, 40 a minute' },
+    analytics: { minutes: 24 * 60, read: 'single', why: 'two calls an article, 40 a minute' },
   },
   // dev.to's brand is black, which fails on the night page: it takes the text colour
   chartSlot: 'ink',

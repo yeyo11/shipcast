@@ -65,5 +65,5 @@ export const telegram = {
     ],
   },
   // Reactions only: the Bot API gives bots no views or forwards, and pushes reaction changes, kept 24 hours
-  metrics: { families: { reactions: ['reactions'] }, primary: ['reactions'], cadence: { hours: 1, read: 'batched', why: 'pushed changes are kept 24 hours' } },
+  metrics: { families: { reactions: ['reactions'] }, primary: ['reactions'], cadence: { minutes: 5, read: 'batched', why: 'pushed changes, kept 24 hours; getUpdates has no quota' } },
 } as const satisfies ChannelDefinition<'telegram'>;

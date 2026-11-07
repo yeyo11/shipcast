@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { QUARTER_HOUR_BATCHED, MIDWEEK, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { FULL_MARKDOWN } from './format.ts';
 import { singleDraft } from './text.ts';
 
@@ -59,6 +59,6 @@ export const hashnode = {
       { days: WEEKEND, from: 10, to: 13, weight: 0.2 },
     ],
   },
-  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'], cadence: HOURLY_BATCHED },
+  metrics: { families: { views: ['views'], reactions: ['reactions'], comments: ['comments'] }, primary: ['views', 'reactions'], cadence: QUARTER_HOUR_BATCHED },
   chartSlot: 4,
 } as const satisfies ChannelDefinition<'hashnode'>;

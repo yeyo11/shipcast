@@ -273,7 +273,7 @@ export interface ChannelDefinition<Id extends string = string> {
     /**
      * A kind of piece beside the post with numbers of its own that the network keeps only for a
      * while (an Instagram story's, 24 hours): read at the cadence while they last, and once more
-     * `lastReadHours` after it went out, just before they go
+     * `lastReadHours` after it went out, inside the last cadence before they go
      */
     expiring?: { kind: string; hours: number; lastReadHours: number };
     /** How often its analytics are, where the network has a slower API apart from its counters (YouTube Analytics) */
@@ -288,8 +288,8 @@ export interface ChannelDefinition<Id extends string = string> {
  * read that cannot find anything new is a call spent for nothing.
  */
 export interface MetricCadence {
-  /** Hours between two reads of one piece (or one launch, for a site-level source) */
-  hours: number;
+  /** Minutes between two reads of one piece (or one launch, for a site-level source); the metrics job runs every 5 */
+  minutes: number;
   /**
    * `batched`: many pieces per call; `conditional`: a validated GET, whose 304 costs nothing when
    * nothing changed; `single`: one call per item, where the network offers nothing better
@@ -299,8 +299,10 @@ export interface MetricCadence {
   why: string;
 }
 
-/** The cadence of the networks whose counts move within the hour, read many pieces per call */
-export const HOURLY_BATCHED: MetricCadence = { hours: 1, read: 'batched', why: 'changes within the hour' };
+/** The cadence of the networks with no tight quota, read many pieces per call: every run of the metrics job */
+export const FIVE_MINUTES_BATCHED: MetricCadence = { minutes: 5, read: 'batched', why: 'live, no tight quota' };
+/** The cadence of the networks whose quota a 5-minute read would spend too fast, read many pieces per call */
+export const QUARTER_HOUR_BATCHED: MetricCadence = { minutes: 15, read: 'batched', why: 'quota-bound' };
 
 /** Workdays, midweek and the weekend, as the posting windows say them */
 export const WORKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4];

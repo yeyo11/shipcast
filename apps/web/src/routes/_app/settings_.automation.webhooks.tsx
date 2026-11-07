@@ -154,7 +154,7 @@ function Webhooks() {
               <span className="k-lbl">{mode === 'poll' ? 'Seconds between rounds' : 'Seconds between maintenance rounds'}</span>
               <input className="k-input st-input" type="number" min={60} step={30} value={interval} onChange={(e) => setIntervalText(e.target.value)} />
               <span className="k-help">
-                {mode === 'poll' ? 'At least 60, as GitHub asks of anyone polling its events.' : 'These rounds still publish what is ready, refresh tokens and read the numbers every six hours.'}
+                {mode === 'poll' ? 'At least 60, as GitHub asks of anyone polling its events.' : 'These rounds still publish what is ready, refresh tokens and read the numbers, every 5 to 15 minutes as each network allows.'}
               </span>
             </label>
           )}

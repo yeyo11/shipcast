@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { FIVE_MINUTES_BATCHED, WEEKEND, WORKDAYS, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { FULL_MARKDOWN } from './format.ts';
 import { parseDiscussionDraft, singleDraft } from './text.ts';
 
@@ -69,5 +69,5 @@ export const githubDiscussions = {
     ],
   },
   // The discussion counts them itself: its reactions and upvotes, and its comments
-  metrics: { families: { reactions: ['reactions', 'upvotes'], comments: ['comments'] }, primary: ['reactions', 'comments'], cadence: HOURLY_BATCHED },
+  metrics: { families: { reactions: ['reactions', 'upvotes'], comments: ['comments'] }, primary: ['reactions', 'comments'], cadence: FIVE_MINUTES_BATCHED },
 } as const satisfies ChannelDefinition<'githubDiscussions'>;

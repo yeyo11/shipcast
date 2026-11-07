@@ -65,7 +65,7 @@ test('the checks find a missed schedule, a late post and a duplicate, and measur
   const other = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v0.1.0', trigger: 'release', kind: 'major', brand: 'personal' });
   await registry.posts.recordPost({ launchId: other.launch.id, channel: 'bluesky', externalId: 'at://2', url: 'https://bsky.app/2' });
 
-  const results = await runChecks(registry, store, { now, cadenceHours: 6 });
+  const results = await runChecks(registry, store, { now, cadenceMinutes: 360 });
   const byName = Object.fromEntries(results.map((r) => [r.name, r]));
   assert.equal(byName['missed-schedules']?.ok, false);
   assert.equal(byName['missed-schedules']?.value, 1);
@@ -97,7 +97,7 @@ test('characterisation: freshness counts every read piece, and a readable one ne
   // A channel nothing was ever read on is left out, not stale
   await registry.posts.recordPost({ launchId: a.launch.id, channel: 'devto', externalId: '7', url: 'https://dev.to/7' });
 
-  const fresh = (await runChecks(registry, store, { now, cadenceHours: 1 })).find((r) => r.name === 'freshness')!;
+  const fresh = (await runChecks(registry, store, { now, cadenceMinutes: 60 })).find((r) => r.name === 'freshness')!;
   const detail = fresh.detail as unknown as Freshness;
   assert.equal(fresh.value, 0.5);
   assert.equal(fresh.ok, false);
@@ -122,7 +122,7 @@ test('freshness leaves out the pieces their channel reads no numbers for (a stor
   await registry.metrics.recordMetrics(launch.id, 'youtube', { views: 9 }, new Date(now.getTime() - 5 * 60_000), video.id);
   await registry.posts.recordPost({ launchId: launch.id, channel: 'youtube', kind: 'post:long', externalId: 'yt-2', url: 'https://youtube.com/watch?v=2' });
 
-  const fresh = (await runChecks(registry, store, { now, cadenceHours: 1 })).find((r) => r.name === 'freshness')!;
+  const fresh = (await runChecks(registry, store, { now, cadenceMinutes: 60 })).find((r) => r.name === 'freshness')!;
   const detail = fresh.detail as unknown as Freshness;
   assert.equal(detail.channels.instagram?.posts, 1);
   assert.equal(detail.channels.instagram?.neverRead, 0);
@@ -139,7 +139,7 @@ test('two rows with one network id are a duplicate', async () => {
   const b = await registry.launches.claim({ repo: 'yeyo11/shipcast', ref: 'v2', trigger: 'release', kind: 'major', brand: 'personal' });
   await registry.posts.recordPost({ launchId: a.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
   await registry.posts.recordPost({ launchId: b.launch.id, channel: 'devto', externalId: '42', url: 'https://dev.to/x' });
-  const results = await runChecks(registry, store, { cadenceHours: 6 });
+  const results = await runChecks(registry, store, { cadenceMinutes: 360 });
   const duplicate = results.find((r) => r.name === 'duplicate-pieces')!;
   assert.equal(duplicate.ok, false);
   assert.equal(duplicate.value, 1);

@@ -50,6 +50,6 @@ export const facebook = {
   metrics: {
     families: { views: ['views'], reactions: ['reactions'], comments: ['comments'], shares: ['shares'], clicks: ['clicks'] },
     primary: ['views', 'reactions'],
-    cadence: { hours: 1, read: 'single', why: 'changes within the hour; one post a call' },
+    cadence: { minutes: 30, read: 'single', why: 'two calls a post against the Page’s 24-hour limit (4,800 × engaged users)' },
   },
 } as const satisfies ChannelDefinition<'facebook'>;

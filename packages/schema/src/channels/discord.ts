@@ -62,5 +62,5 @@ export const discord = {
     ],
   },
   // Reactions only: Discord counts no views, and the replies need a bot
-  metrics: { families: { reactions: ['reactions'] }, primary: ['reactions'], cadence: { hours: 1, read: 'single', why: 'changes within the hour; one message a call' } },
+  metrics: { families: { reactions: ['reactions'] }, primary: ['reactions'], cadence: { minutes: 15, read: 'single', why: 'one message a call, under Discord’s per-route limits' } },
 } as const satisfies ChannelDefinition<'discord'>;

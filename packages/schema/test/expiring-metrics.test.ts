@@ -13,13 +13,13 @@ test('a post, an issue and a main piece have numbers whatever their age; a comme
   assert.equal(readsMetrics('blog', 'article:en', after(1)), false);
 });
 
-test('an Instagram story has numbers while Meta keeps them, 24 hours, and its last read is at 23 h 30 min', () => {
-  assert.deepEqual(EXPIRING_PIECES, [{ channel: 'instagram', kind: 'story', hours: 24, lastReadHours: 23.5 }]);
+test('an Instagram story has numbers while Meta keeps them, 24 hours, and its last read is at 23 h 45 min, inside the last 15-minute read', () => {
+  assert.deepEqual(EXPIRING_PIECES, [{ channel: 'instagram', kind: 'story', hours: 24, lastReadHours: 23.75 }]);
   assert.equal(readsMetrics('instagram', 'story'), false, 'without its age a story is never read');
   assert.equal(readsMetrics('instagram', 'story', after(1)), true);
   assert.equal(readsMetrics('instagram', 'story', after(23.9)), true);
   assert.equal(readsMetrics('instagram', 'story', after(24)), false);
-  assert.equal(lastMetricsRead('instagram', 'story', published)?.toISOString(), '2026-10-30T09:30:00.000Z');
+  assert.equal(lastMetricsRead('instagram', 'story', published)?.toISOString(), '2026-10-30T09:45:00.000Z');
   assert.equal(lastMetricsRead('instagram', 'post', published), undefined);
 });
 

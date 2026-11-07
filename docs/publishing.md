@@ -1,6 +1,6 @@
 ---
 created_at: 2026-11-02T06:48:03.544350012Z
-updated_at: 2026-11-06T07:16:41.615582881Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - publishing
     - connectors
@@ -221,7 +221,7 @@ Added on 2026-10-26 ([decisions/automatic-channels-only.md](decisions/automatic-
   second time: Reddit waits for the account to be connected again.
 - **After**: a post can be deleted (`/api/del`, which needs `edit`); a title can never change and
   editing the body is not built. Reddit is not schedulable.
-- **Numbers**: each subreddit's post is read through `/api/info` (`read`), up to 100 a call, hourly:
+- **Numbers**: each subreddit's post is read through `/api/info` (`read`), up to 100 a call, every 15 minutes:
   `score`, `comments`, `crossposts` and `upvoteRatio`, the share of votes that are upvotes, from 0
   to 1. The ratio is averaged across a launch's posts, never added up (`metrics.averaged` on the
   definition). Views and shares are not in Reddit's API. No comments yet.
@@ -250,7 +250,7 @@ personal profile is never a target: Meta has no API that publishes to one.
   100 at most, next pages only on `graph.facebook.com`. A reply's `parent` is what threads it and marks
   its comment answered; a comment from the Page itself is the owner's own. A reply is a comment under
   the comment (`POST /{comment}/comments`), sent as the Page.
-- **Numbers**: hourly, one post a call (the definition's cadence is `{ hours: 1, read: 'single' }`):
+- **Numbers**: every 30 minutes, one post a call (the definition's cadence is `{ minutes: 30, read: 'single' }`, [Cadences](#metrics)):
   `views` from `post_total_media_view_unique` (the accounts that saw it; Meta retired
   `post_impressions_unique` on 2025-06-15), `clicks` from `post_clicks`, `reactions` from
   `post_reactions_by_type_total` summed (the post's own reaction count stands in when Meta refuses it),
@@ -396,7 +396,7 @@ longer read.
 | `devto` (analytics, daily) | `saves`, `avgReadSeconds`, and views by referrer (`views_<source>`) per article | Forem's `/api/analytics/totals` and `/referrers`, with the same API key |
 | `instagram` | per type: every post views, reach, likes, comments, saved, shares, reposts, total interactions; a feed post or carousel also follows, profile visits, `profile_activity` and `bio_link_clicks`; a Reel `avg_watch_ms`, `skip_rate` and, when shared to Facebook, `facebook_views`; a story views, reach, shares, reposts, total interactions, follows, profile visits and its navigation (`taps_forward`, `taps_back`, `exits`, `swipes_forward`) | Instagram's media insights; the type from `media_type`, kept a month |
 | `threads` | views, likes, replies, reposts, quotes, shares per post; `clicks` on its links | the post's insights; the account's `clicks` per address, given to the newest post that carries it |
-| `facebook` | `views`, `clicks`, `reactions`, `comments`, `shares` per post | the post's insights (`post_total_media_view_unique`, `post_clicks`, `post_reactions_by_type_total`) and the post's own counts; hourly, one post a call |
+| `facebook` | `views`, `clicks`, `reactions`, `comments`, `shares` per post | the post's insights (`post_total_media_view_unique`, `post_clicks`, `post_reactions_by_type_total`) and the post's own counts; every 30 minutes, one post a call |
 | `discord` | reactions per message, every emoji's added up | Get Webhook Message, with the webhook that sent it; one call a message |
 | `telegram` | reactions per post, every emoji's added up | `message_reaction_count` updates, collected with `getUpdates` |
 | `blog` | each language's article page views and their sum, `visits`, and page views by source (`views_<source>`); the views and visits of each day, kept under the day | Cloudflare Web Analytics' GraphQL API, the paths in one query, grouped by referrer host and path; the days in a second query grouped by date and path |
@@ -416,18 +416,61 @@ and the freshness check ([measurement.md](measurement.md#the-checks)) both use i
 
 - **Off** (production until 2026-10-29): `collectMetrics` reads every source for every published
   launch every 6 hours (`0 */6 * * *`), one call per post.
-- **On** (production since 2026-10-29): `collectHourly` runs every hour (`3 * * * *`) and reads a
-  source only when its last check is older than its cadence: each channel's from its definition
-  (hourly, batched where the adapter reads many posts a call; Facebook's says `read: 'single'`, one
-  post a call), the site's from `SITE_CADENCES` (GitHub counts hourly and conditional; traffic,
-  the stars by day and downloads, Search Console analytics and Bing daily; URL inspection daily until
-  indexed, then weekly, and never past 90 days). A value read again unchanged moves its reading's
-  `checked_at` instead of adding a row. Accounts' sessions and identities are kept between runs (in
-  Redis with `redis-state`).
+- **On** (production since 2026-10-29): `collectHourly` runs every 5 minutes (`1-59/5 * * * *`,
+  since 2026-11-07; every hour, `3 * * * *`, before) and reads a source only when its last check is
+  older than its cadence, in minutes (two minutes of slack, under the job's five, so a 15-minute
+  source is never read at 10): each channel's from its definition (`metrics.cadence`, batched where
+  the adapter reads many posts a call; Facebook's says `read: 'single'`, one post a call), the site's
+  from `SITE_CADENCES`. The table below has each one. A value read again unchanged moves its
+  reading's `checked_at` instead of adding a row, so reading more often adds no rows while nothing
+  moves (Postgres keeps an updated row's old version until autovacuum, which is all it costs).
+  Accounts' sessions and identities are kept between runs (in Redis with `redis-state`).
+- **One run at a time.** The `metrics` queue is stately with a concurrency of one, and every run the
+  cron sends has the same key (none): a run that outlasts five minutes leaves at most one waiting,
+  and the cron's later sends are dropped until it starts. A run that fails is retried once, two
+  minutes later (it was 15 minutes, behind a cadence of 60).
+
+**Cadences** (2026-11-07, `packages/schema/src/channels/cadence.ts` and each definition; the owner
+asked for 5 minutes where nothing limits it and 15 where a quota does). The calls are those of one
+round of the source, for every published launch at once (each channel reads every live piece of
+every launch together), counted from the connectors; "now" is the production registry of 2026-11-07,
+nine launches with at most one post a launch per channel (two videos for YouTube, two issues for the
+newsletter), and "3x" three times as many pieces.
+
+| Source | Before | Now | Calls a round (now / 3x) | Limit | Headroom at 3x |
+| --- | --- | --- | --- | --- | --- |
+| Umami | 1 h | 5 min | 1 per launch, self-hosted | none (our own server) | n/a |
+| GitHub counts | 1 h | 5 min | 1 per repo, conditional | 5,000 an hour for the App's installation, a 304 is free ([GitHub](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)) | 4 repos × 12 = 48 an hour at most |
+| Bluesky | 1 h | 5 min | 1 per 25 posts (1 / 2) | 3,000 per 5 minutes per IP ([Bluesky](https://docs.bsky.app/docs/advanced-guides/rate-limits)) | > 99 % |
+| Mastodon | 1 h | 5 min | 1 a post (9 / 27) | 300 per 5 minutes per account ([Mastodon](https://docs.joinmastodon.org/api/rate-limits/)) | 91 % |
+| Blog (Cloudflare GraphQL) | 1 h | 5 min | 2 (the paths, the days), whatever the launches | 300 queries per 5 minutes ([Cloudflare](https://developers.cloudflare.com/analytics/graphql-api/limits/)) | > 99 % |
+| Telegram | 1 h | 5 min | 1 `getUpdates` (+1 per 100 updates) | none for getUpdates; changes kept 24 h ([Telegram](https://core.telegram.org/bots/api#getupdates)) | n/a |
+| GitHub Discussions | 1 h | 5 min | 1 GraphQL query per 20 discussions (1 / 2) | 5,000 points an hour ([GitHub](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api)) | > 95 % |
+| Instagram | 1 h | 15 min | 1 a post, +1 a live story, the type and secondaries once a day (9 / 27) | 4,800 × impressions a day per account ([Meta](https://developers.facebook.com/docs/graph-api/overview/rate-limiting/#instagram-graph-api)); at one impression a day, 200 an hour | 27 × 4 = 108 an hour: 46 % at the floor |
+| Threads | 1 h | 15 min | 1 a post + the account's posts (1 a 100) + the link clicks (1) (11 / 29) | 4,800 × impressions a day per account, as Instagram ([Meta](https://developers.facebook.com/docs/threads/troubleshooting#rate-limiting)) | 116 an hour: 42 % at the floor |
+| Facebook | 1 h | **30 min** | 2 a post: its insights and its counts (18 / 54) | 4,800 × engaged users a day per Page ([Meta](https://developers.facebook.com/docs/graph-api/overview/rate-limiting/#pages)); a small Page has few | at 15 min, 54 × 96 = 5,184 a day, over the floor of 4,800; at 30 min 2,592 (46 %) |
+| Newsletter (Brevo) | 1 h | 15 min | 1 (the sent campaigns' list, 100 a page, whatever the launches until a hundred campaigns); the clicks per link and campaigns older than six months once a day | about 100 calls an hour per key on the campaign endpoints (Brevo's [rate limits](https://developers.brevo.com/docs/api-limits)) | 4 an hour, + 2 a day: 96 % now and at 3x |
+| dev.to counters | 1 h | 15 min | 1 (the author's articles, 100 a page) | 40 requests a minute per key, as Forem answers 429s | > 99 % |
+| Discord | 1 h | 15 min | 1 a message under 30 days old (9 / 27) | per-route buckets, about 5 per 2 seconds on a webhook's messages; a 429 is waited out once ([Discord](https://discord.com/developers/docs/topics/rate-limits)) | 27 calls take about 11 s of a round |
+| Hashnode | 1 h | 15 min | 1 GraphQL query per 20 posts (1 / 2) | 20,000 queries a minute ([Hashnode](https://apidocs.hashnode.com/#rate-limits)) | > 99 % |
+| Reddit | 1 h | 15 min | 1 `/api/info` per 100 posts (1 / 1) | 100 queries a minute per OAuth client ([Reddit](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki)) | > 99 % |
+| YouTube counters | 1 h | 15 min | 1 `videos.list` per 50 videos, 1 unit (1 / 2) | 10,000 units a day per project ([YouTube](https://developers.google.com/youtube/v3/determine_quota_cost)) | 96 (192 at 3x) units a day: 98 %, beside uploads (1,600 each) |
+| GitHub traffic, stars by day, downloads | 24 h | 24 h | | bucketed by day | |
+| Search Console analytics | 24 h | 24 h | | 2–3 days of lag | |
+| URL inspection | 24 h, 7 days once indexed | unchanged | | 2,000 a day per property | |
+| Bing | 24 h | 24 h | | daily data | |
+| YouTube Analytics, dev.to analytics | 24 h | 24 h | | lag 48–72 h; two calls an article under 40 a minute | |
+
+Facebook is the one source that does not fit 15 minutes safely: Meta counts a Page's calls against
+4,800 times its engaged users a day, and a Page the size of the brand's has few, so at three times
+today's posts a 15-minute read would pass it. It reads every 30 minutes; it can move to 15 once the
+Page's `X-Business-Use-Case-Usage` header, which telemetry keeps, shows the room. The limits of
+Meta's three networks are shared by the comment runs and the account snapshots, which these counts
+leave out; the snapshots are daily and the comment runs read each post's comments every 30 minutes.
 
 **An Instagram story's last read.** Meta keeps a story's insights for its 24 hours only, and the
-hourly reads land anywhere in its last hour, so each publish queues a `metrics` job for the story
-alone 23 h 30 min after it went out (`armLastReads`, keyed `last-read:<post>`), which reads it
+15-minute reads land anywhere in its last quarter of an hour, so each publish queues a `metrics` job
+for the story alone 23 h 45 min after it went out (23 h 30 min while the reads were hourly) (`armLastReads`, keyed `last-read:<post>`), which reads it
 whether due or not and nothing else. A story fewer than five accounts saw answers Meta's `#10` with
 "not enough viewers": it has no numbers yet, which is neither a failure nor stale. Meta gives the same
 `#10` to a token without `instagram_business_manage_insights`, so only the message tells them apart,
@@ -448,18 +491,18 @@ numbers lag 48 to 72 hours) and dev.to (Forem's analytics, two calls an article,
 under Forem's 40 requests a minute for an API key), both daily. Every live piece of the channel is
 read at once, from its launch's day to today, and kept on the piece beside its counters. The
 `metrics-read:analytics:<channel>` cursor records when they were asked for, answered or not, so a
-refusal is said once a day, never hourly: a YouTube connection made before `yt-analytics.readonly`
-was asked for is one problem of the run ("connect YouTube again"), and the hourly counters are read
+refusal is said once a day, never on every run: a YouTube connection made before `yt-analytics.readonly`
+was asked for is one problem of the run ("connect YouTube again"), and the counters are read
 as before. One piece failing is said in the answer's `problems` and the others are kept (one bad
 YouTube video costs only its own report). A read a network stops part way (dev.to waits out a 429's
 `Retry-After` once, and a second ends the read) keeps what it read and names the rest `unread`,
-which `metrics-read:analytics-pending:<channel>` keeps and the next hour asks for alone. Averages
+which `metrics-read:analytics-pending:<channel>` keeps and the next run asks for alone. Averages
 (`avgViewSeconds`, `avgViewPercent`, `avgReadSeconds`, a Reel's `avg_watch_ms` and `skip_rate`, and
 the search `position` and `ctr`) are not counters: they are listed in each definition's
 `metrics.averaged`, and a launch's pieces are averaged, never added up ([stats.md](stats.md)).
 
 **Calls an hour.** What changes slowly is read once a day where the connector has the identity
-cache, so the hourly reads stay well under each network's limit: Instagram's `profile_activity` and a
+cache, so the 5- and 15-minute reads stay well under each network's limit (the table above): Instagram's `profile_activity` and a
 Reel's `facebook_views` (a Reel Meta refuses them for is kept as none for the day), and Brevo's clicks
 per link and the campaigns older than six months, which its list keeps no statistics for and cost two
 calls each on their own (Brevo allows a key about 100 calls an hour). GitHub's releases are paged
@@ -492,7 +535,7 @@ agrees again ([search-indexing.md](search-indexing.md#google)).
 - **Telegram** has no way to read a message back, but a bot that is an admin of the channel is told
   when a post's reactions change (a channel's reactions are anonymous): a `message_reaction_count`
   update, which Telegram sends only to a bot that asks for it (`allowed_updates`) and keeps 24 hours.
-  The hourly read collects them with `getUpdates` and keeps each post's latest total. Asking for the
+  The metrics run collects them with `getUpdates` and keeps each post's latest total. Asking for the
   next page of updates confirms the one before, and a confirmed update is gone: so each page is
   stored before the next is asked for, and a write that fails leaves its page for the next read. The
   changes are matched against every Telegram post Shipcast can read, of any launch whatever its
@@ -502,7 +545,7 @@ agrees again ([search-indexing.md](search-indexing.md#google)).
   (`pushed`): a post Telegram said nothing about kept its reactions, which are read again as they
   were (moving their `checked_at`), and a post never told about has no reading at all, not a made-up
   0: a post published before 2026-10-29 shows nothing until its reactions next change, and then its
-  lifetime total. A gap of more than 24 hours in the hourly reads loses the changes of that gap. Views
+  lifetime total. A gap of more than 24 hours in the reads loses the changes of that gap. Views
   and forwards stay out of reach: only a user session (MTProto) reads them.
 - **The newsletter** keeps Brevo's parts apart rather than guessing Brevo's dashboard. Since 2025
   Brevo's report counts Apple Mail Privacy Protection's automatic opens and bots' in its "Opens" by
@@ -518,7 +561,7 @@ agrees again ([search-indexing.md](search-indexing.md#google)).
   day where GitHub gives days, and a daily history read adds the stars by day and the releases'
   downloads. A traffic read GitHub refuses is no longer swallowed: it is a problem of the run, a
   `403` raises a **permission** line in the bell (its cursor
-  `metrics-problem:github-traffic:<repo>`), and the traffic's cursor stays, so the next hour asks
+  `metrics-problem:github-traffic:<repo>`), and the traffic's cursor stays, so the next run asks
   again; the first answer clears the line ([decisions/github-app.md](decisions/github-app.md)). A
   `404` is said as itself and asked again on the traffic's daily cadence.
 
@@ -532,7 +575,7 @@ the referrer (Mastodon's many hosts count as `other`, and an app that strips the
 them (zone HTTP analytics or the blog's Worker, an owner decision). GitHub's traffic needs the App's
 Administration: read, which `shipcast init` asks for; an App without it (a 403) is said in the bell.
 Any other failure of the traffic read is said as itself in the run's problems, and a 404 waits for
-the traffic's daily cadence rather than being asked again every hour.
+the traffic's daily cadence rather than being asked again on every run.
 
 ## The rounds and the shipcast command
 

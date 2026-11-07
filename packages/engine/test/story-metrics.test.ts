@@ -79,7 +79,7 @@ test('a story’s views count with the post’s on /stats, and it is a row of it
 
 test('freshness counts a story while it lasts, and not one fewer than five accounts saw', async () => {
   const { registry, sources, publishedAt } = await withStory();
-  const freshness = async (now: Date) => (await runChecks(registry, new TelemetryStore(registry.database), { now, cadenceHours: 1 })).find((r) => r.name === 'freshness')!;
+  const freshness = async (now: Date) => (await runChecks(registry, new TelemetryStore(registry.database), { now, cadenceMinutes: 60 })).find((r) => r.name === 'freshness')!;
   // Meta answers #10 for the story: the connector gives no numbers
   const quiet: MetricSources = { posts: { instagram: { metrics: async (id: string, kind?: string) => (kind === 'story' ? {} : sources.posts!.instagram!.metrics(id)) } } };
   await collectHourly(registry, brand, quiet, new Date(publishedAt + HOUR));

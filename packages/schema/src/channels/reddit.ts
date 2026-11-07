@@ -1,4 +1,4 @@
-import { HOURLY_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
+import { QUARTER_HOUR_BATCHED, type ChannelDefinition, type PieceKit } from './definition.ts';
 import { parseDiscussionDraft } from './text.ts';
 
 const limits = { redditTitle: 300 } as const;
@@ -71,6 +71,6 @@ export const reddit = {
     families: { reactions: ['score'], comments: ['comments'], shares: ['crossposts'] },
     primary: ['score', 'comments'],
     averaged: { upvoteRatio: 'upvoteRatio' },
-    cadence: HOURLY_BATCHED,
+    cadence: QUARTER_HOUR_BATCHED,
   },
 } as const satisfies ChannelDefinition<'reddit'>;

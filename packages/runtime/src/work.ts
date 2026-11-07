@@ -97,8 +97,8 @@ const lastReadKey = (postId: number) => `last-read:${postId}`;
 
 /**
  * Queues the last read of each of a launch's pieces whose numbers the network keeps only a while
- * (an Instagram story: 24 hours), just before they go: the hourly reads land anywhere in its last
- * hour. Idempotent: arming twice leaves one job per piece, and a time already past arms nothing.
+ * (an Instagram story: 24 hours), just before they go: the 15-minute reads land anywhere in its
+ * last quarter of an hour. Idempotent: arming twice leaves one job per piece, and a time already past arms nothing.
  */
 export async function armLastReads(queue: JobQueue, registry: Pick<Repositories, 'posts'>, launchId: number, now = new Date()): Promise<number> {
   let armed = 0;
@@ -427,8 +427,8 @@ export function workHandlers(queue: JobQueue, d: WorkDeps): Handlers {
 
     /** The measurement's checks (docs/plans/performance-refactor.md), from the registry only: no provider is called */
     async checks(_data, job) {
-      // With the hourly reads each channel is fresh within its own cadence (its definition's)
-      const cadence = { cadenceHours: METRICS_HOURLY_CADENCE_HOURS, cadenceOf: (channel: string) => channelCadence(channel)?.hours };
+      // Each channel is fresh within its own cadence (its definition's), in minutes
+      const cadence = { cadenceMinutes: METRICS_JOB_MINUTES, cadenceOf: (channel: string) => channelCadence(channel)?.minutes };
       for (const result of await runChecks(registry, new TelemetryStore(registry.database), cadence)) {
         job.log(`${result.name}: ${result.ok ? 'ok' : 'NOT OK'} (${Math.round(result.value * 1000) / 1000})`);
       }
@@ -474,12 +474,16 @@ export async function syncNow(queue: JobQueue, account: Pick<Account, 'id' | 'la
 }
 
 /**
- * When the scheduled jobs are sent, in UTC. The metrics job every hour, off the round's and the
- * checks' minutes; each run reads only the sources whose cadence is due, so most of them read only
- * the hourly ones. The tokens and the accounts once a day
+ * When the scheduled jobs are sent, in UTC. The metrics job every 5 minutes (since 2026-11-07; every
+ * hour before), on minutes ending in 1 or 6, off the round's watchdog and the checks' and the probe's
+ * minutes; each run reads only the sources whose cadence is due, so most runs read only the 5-minute
+ * ones. A run that outlasts 5 minutes is never doubled: the queue is stately and the cron's runs
+ * share one key, so one more waits and the cron's other sends are dropped. The tokens and the
+ * accounts once a day
  */
-export const METRICS_HOURLY_CRON = '3 * * * *';
-export const METRICS_HOURLY_CADENCE_HOURS = 1;
+export const METRICS_CRON = '1-59/5 * * * *';
+/** The cadence `freshness` holds a channel without one of its own to: the metrics job's */
+export const METRICS_JOB_MINUTES = 5;
 export const TOKENS_CRON = '30 3 * * *';
 // After the token refresh, so an Instagram token renewed that night is the one that reads
 export const SNAPSHOTS_CRON = '0 4 * * *';
@@ -519,7 +523,7 @@ export async function startWorking(queue: JobQueue, d: WorkDeps, options: Workin
   await queue.schedule('checks', CHECKS_CRON, { reason: 'hourly' });
   // Only a process that can load the pages (the web app) times them
   if (options.scheduleProbe ?? options.handlers?.probe !== undefined) await queue.schedule('probe', PROBE_CRON, { reason: 'hourly' });
-  await queue.schedule('metrics', METRICS_HOURLY_CRON, { reason: 'hourly' });
+  await queue.schedule('metrics', METRICS_CRON, { reason: 'every 5 minutes' });
   await queue.schedule('instagram-tokens', TOKENS_CRON, { reason: 'daily' });
   await queue.schedule('snapshots', SNAPSHOTS_CRON, { reason: 'daily' });
   await queue.schedule('comments', COMMENTS_CRON, { reason: 'every 30 minutes' }, { singletonKey: COMMENTS_KEY });

@@ -47,7 +47,7 @@ autonomous run built it by its [implementation plan](plans/meta-logins-implement
   configuration ids, several accounts per sign-in, Meta's flows in `packages/connectors/src/meta/`,
   the Instagram connector on `graph.instagram.com` or `graph.facebook.com` by the account's login, and
   the `facebook` channel: a link post on a Page, edited, deleted, its comments answered, its numbers
-  read hourly ([accounts.md](accounts.md#oauth-flows), [publishing.md](publishing.md#facebook)).
+  read every 30 minutes since 2026-11-07, hourly before ([accounts.md](accounts.md#oauth-flows), [publishing.md](publishing.md#facebook)).
   Accounts are now matched on reconnection by their network id.
 - **Deployed**: pushed to `main` in three steps (after Unified Login, after Facebook Login for
   Instagram, after the Facebook channel), each deploy healthy; the final review's fixes and these

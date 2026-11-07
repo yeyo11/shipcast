@@ -57,7 +57,7 @@ test('the card and the instructions name the seven permissions the configuration
 
 test('the numbers are declared as read: one post a call, which is what the adapter offers', () => {
   assert.equal(facebook.metrics.cadence.read, 'single');
-  assert.equal(facebook.metrics.cadence.hours, 1);
+  assert.equal(facebook.metrics.cadence.minutes, 30);
   const connector = buildConnector('facebook', { settings: { pageId: '100000000000001' }, secrets: { accessToken: 'pt1' } }, brand, recording([], [])).connector;
   const reader = facebookAdapter.metrics!(connector as never);
   assert.equal(reader.read, undefined);

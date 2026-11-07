@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-28T12:02:45.424748487Z
-updated_at: 2026-10-29T15:38:21.54308372Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - measurement
     - telemetry
@@ -52,7 +52,7 @@ handles, file paths and Telegram's bot token in the path become placeholders
 | `missed-schedules` | no scheduled piece is still waiting 10 minutes after its time |
 | `late-posts` | no piece that went out in the last day did so more than 5 minutes after its time |
 | `duplicate-pieces` | no launch has two live rows of one channel and kind, and no two rows share a network id |
-| `freshness` | 99 % of the live pieces that have numbers to read have a reading within their cadence plus an hour (with `batched-metrics`, each channel's own cadence; without, the 6-hour rounds); the share within 1 h is in its detail |
+| `freshness` | 99 % of the live pieces that have numbers to read have a reading within their cadence plus 15 minutes (with `batched-metrics`, each channel's own cadence in minutes, `cadenceMinutes` in its detail; without, the 6-hour rounds); the share within 1 h is in its detail. Until 2026-11-07 the slack was an hour over cadences in hours: three missed 5-minute runs are stale now |
 | `idle-tab-requests` | an idle open page asks for less than one request a minute |
 
 **Which pieces `freshness` counts** (since 2026-10-29): only those whose channel reads numbers for
