@@ -37,6 +37,9 @@ a:hover { color: var(--sc-yellow); }
 .k-dot-sched{border-radius:50%;border:2.5px solid var(--sc-yellow)}
 .k-dot-fail{width:9px;height:9px;background:var(--sc-failure);transform:rotate(45deg)}
 .k-dot-quiet{border-radius:50%;border:2px dotted var(--sc-muted)}
+.k-dot-stale{width:7px;height:7px;border-radius:50%;background:var(--sc-yellow);margin-right:6px;vertical-align:1px}
+.k-pre{white-space:pre-line}
+.k-figure{cursor:default;border-radius:4px}
 .k-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 20px;border-radius:160px;font-family:var(--sc-font-text);font-size:16px;font-weight:600;border:2px solid var(--sc-rail);background:transparent;color:var(--sc-text);text-decoration:none;cursor:pointer;white-space:nowrap;flex:none;line-height:1}
 .k-btn:hover{color:var(--sc-text);border-color:var(--sc-text)}
 .k-btn.k-sm{min-height:40px;padding:0 16px;font-size:14px}

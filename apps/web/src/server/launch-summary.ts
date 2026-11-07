@@ -3,6 +3,7 @@
  * totals, its views per day since it went out, and each channel's state as one mark. Only types and
  * plain values here, so the module is safe in the browser bundle (docs/web-app.md).
  */
+import { CHANNEL_NAMES } from './view.ts';
 
 export interface Totals {
   views: number;
@@ -85,12 +86,40 @@ export function totalAges(readings: readonly CounterReading[], families: Familie
   return out;
 }
 
-/** A total's age in the few words under it: "read 12 min ago", and its lag where its source has one */
-export function ageWords(age: TotalAge, now: Date = new Date()): string {
-  const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(age.readAt)) / 60_000));
+/** How long ago, in a few words: "12 min ago", "3 h ago", "2 days ago" */
+function since(iso: string, now: Date): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / 60_000));
   const hours = Math.round(minutes / 60);
-  const when = minutes < 1 ? 'read just now' : minutes < 60 ? `read ${minutes} min ago` : hours < 48 ? `read ${hours} h ago` : `read ${Math.round(hours / 24)} days ago`;
+  return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes} min ago` : hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+}
+
+/** A total's age, as its tooltip says it: "read 12 min ago", and its lag where its source has one */
+export function ageWords(age: TotalAge, now: Date = new Date()): string {
+  const when = `read ${since(age.readAt, now)}`;
   return age.lag ? `${when} · ${age.lag}` : when;
+}
+
+/** When a launch's (or a channel's) numbers were last updated, and the sources overdue for their cadence */
+export interface LaunchUpdated {
+  /** The newest read among the totals' sources */
+  readAt: string;
+  /** Each source not read within its cadence and the freshness check's grace, since its oldest such read */
+  overdue: Array<{ source: string; since: string }>;
+}
+
+/** The one line a card or a page says: "updated 12 min ago" */
+export function updatedWords(readAt: string, now: Date = new Date()): string {
+  return `updated ${since(readAt, now)}`;
+}
+
+/** What the overdue mark's tooltip says: "dev.to not read for 2 days", one source a line */
+export function overdueWords(overdue: LaunchUpdated['overdue'], now: Date = new Date()): string {
+  return overdue.map((o) => `${CHANNEL_NAMES[o.source] ?? o.source} not read for ${since(o.since, now).replace(/ ago$/, '')}`).join('\n');
+}
+
+/** The newest of a channel's totals' reads: its popup's one line */
+export function newestRead(ages: Partial<Record<keyof Totals, TotalAge>> | undefined): string | undefined {
+  return Object.values(ages ?? {}).reduce<string | undefined>((n, a) => (a && (n === undefined || a.readAt > n) ? a.readAt : n), undefined);
 }
 
 type Families = Readonly<Record<string, Partial<Record<string, readonly string[]>>>>;
@@ -216,6 +245,8 @@ export interface LaunchNumbers {
   totals: Totals;
   /** When each total was last read, and whether its source lags by design */
   ages?: Partial<Record<keyof Totals, TotalAge>>;
+  /** When its numbers were last updated, and the sources overdue for their cadence */
+  updated?: LaunchUpdated;
   daily: Day[];
   channels: Record<string, ChannelNumbers>;
 }

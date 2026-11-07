@@ -1,14 +1,13 @@
 import { Link } from '@tanstack/react-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { agoLabel, canRelaunch, HOME_MARKS_MAX, homeMarkFit, launchSource, launchTitle, shortDate, shortDateTime, TRIGGER_BY } from '../server/launch-list';
-import { cardChannels, foldMarks, MARK_WORD, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type TotalAge, type Totals } from '../server/launch-summary';
+import { cardChannels, foldMarks, MARK_WORD, newestRead, type CardChannel, type CardPost, type LaunchNumbers, type Mark, type TotalAge, type Totals } from '../server/launch-summary';
 import { CHANNEL_NAMES, type LaunchView, type Tone } from '../server/view';
+import { Figure, Updated } from './Freshness';
 import { Icon } from './kit/Icon';
 import { Overlay, OverlayClose } from './kit/Overlay';
 import { readyText, RowMenu } from './LaunchRows';
 import { NetworkGlyph } from './kit/NetworkGlyph';
-import { NumberAge } from './NumberAge';
-import { number } from './ui';
 
 /*
  * A launch as a card on the Launches page (boards Main and DesktopHome): its name and state, where it
@@ -48,7 +47,7 @@ const STATS: ReadonlyArray<[keyof Totals, string]> = [
   ['clicks', 'Clicks'],
 ];
 
-/** The numbers in a row: those the launch (or the channel) counts; clicks only once there are some. Each says, quietly, when it was read */
+/** The numbers in a row: those the launch (or the channel) counts; clicks only once there are some. When each was read is its tooltip */
 function Numbers({ totals, ages }: { totals: Partial<Totals>; ages?: Partial<Record<keyof Totals, TotalAge>> }) {
   const shown = STATS.filter(([key]) => totals[key] !== undefined && (key !== 'clicks' || (totals.clicks ?? 0) > 0));
   if (shown.length === 0) return null;
@@ -57,8 +56,9 @@ function Numbers({ totals, ages }: { totals: Partial<Totals>; ages?: Partial<Rec
       {shown.map(([key, label]) => (
         <div key={key} className="k-stack">
           <dt className="k-xs k-muted">{label}</dt>
-          <dd className="k-d k-d30">{number(totals[key] ?? 0)}</dd>
-          {ages?.[key] && <NumberAge age={ages[key]} />}
+          <dd className="k-d k-d30">
+            <Figure label={label} value={totals[key] ?? 0} age={ages?.[key]} />
+          </dd>
         </div>
       ))}
     </dl>
@@ -97,6 +97,7 @@ function PeekBody({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch;
   const word = MARK_WORD[c.mark];
   const totals = launch.numbers?.channels[c.channel]?.totals ?? {};
   const ages = launch.numbers?.channels[c.channel]?.ages;
+  const readAt = newestRead(ages);
   const at = (id: number) => {
     const post = launch.posts.find((p) => p.id === id);
     return post?.publishedAt ? shortDateTime(post.publishedAt, timezone) : null;
@@ -123,6 +124,11 @@ function PeekBody({ c, launch, timezone }: { c: CardChannel; launch: HomeLaunch;
           </div>
         )}
       </div>
+      {readAt && (
+        <p className="k-xs k-muted k-ellipsis home-peek-updated">
+          <Updated updated={{ readAt }} />
+        </p>
+      )}
     </>
   );
 }
@@ -246,7 +252,16 @@ export function LaunchCard({ launch, timezone }: { launch: HomeLaunch; timezone:
         </h3>
         <StatePill tone={tone} label={launch.state.label} />
       </div>
-      <p className="k-xs k-muted home-card-meta">{metaOf(launch, timezone)}</p>
+      {/* One line, cut short with an ellipsis rather than wrapped on a narrow card */}
+      <p className="k-xs k-muted k-ellipsis home-card-meta">
+        {metaOf(launch, timezone)}
+        {!drafting && launch.numbers?.updated && (
+          <>
+            {' · '}
+            <Updated updated={launch.numbers.updated} />
+          </>
+        )}
+      </p>
       {drafting ? (
         <div className="k-hrow k-g8 k-sm">
           <span className="k-grow home-progress" role="progressbar" aria-label="Drafting" aria-valuetext={launch.drafting ?? 'Drafting'}>

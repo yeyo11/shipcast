@@ -483,11 +483,18 @@ not configured and nothing else changes.
   channel's totals with only what its network counts, and views per day for every launch of the list
   in one query. A launch's views are its pieces' and its site's, never the repo's GitHub traffic,
   the same number as the Stats ranking's ([stats.md](stats.md)); the repo's stars are **Repo stars**.
-  Since 2026-11-07 each total also says, quietly under it on the card, a channel's peek and the
-  launch's page, when it was last read ("read 12 min ago", `totalAges` and `ageWords`, the oldest of
-  its sources' last reads so the words hold for all of it), and where a source lags by design it says
-  so (`LAGGED`: Search Console 2–3 days, Bing by day, GitHub's traffic by day, YouTube Analytics 48–72
-  h, dev.to's analytics daily), the full words in its tooltip (`NumberAge`).
+  **How fresh the numbers are** (since 2026-11-07, `src/components/Freshness.tsx`), kept to one
+  line. The card's meta line ends in "· updated 12 min ago" (one line, cut with an ellipsis rather
+  than wrapped on a narrow card or a phone); the launch's page says it beside the views chart's line
+  under the totals; a channel's peek says it on one line at its foot. It is the newest read among the
+  totals' sources (`newestRead`). A small amber dot comes before it only when a source of the launch
+  is overdue by the `freshness` check's own rule (its cadence slowed by the piece's age, plus the
+  check's 15 minutes of grace, `launchUpdated` in `src/server/launch-freshness.ts`; a daily source
+  read on schedule is not overdue), and its tooltip names each ("dev.to not read for 2 days"). Each
+  number's own read and lag are its tooltip only, on hover or keyboard focus, and in its accessible
+  name: "read 11 min ago · Search Console lags 2–3 days" (`totalAges`, the oldest of its sources' last
+  reads, `ageWords`, and `LAGGED`: Search Console 2–3 days, Bing by day, GitHub's traffic by day,
+  YouTube Analytics 48–72 h, dev.to's analytics daily). The numbers row is laid out as before.
 - **The REST API** is one server route, `src/routes/api/v1/$.ts`, handing every request to
   `src/server/api.ts`, where one table holds each route's method, path, scope and handler, and the
   OpenAPI document is built from it. Its dependencies are built per request in

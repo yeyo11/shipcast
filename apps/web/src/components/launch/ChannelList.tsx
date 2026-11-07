@@ -4,8 +4,8 @@ import { placeMarks } from '../charts/data';
 import { Icon } from '../kit/Icon';
 import { channelEntries, type PieceRow } from '../../server/pieces';
 import type { SchedulingChannel } from '../../server/pieces.server';
-import type { ChannelNumbers, Day, TotalAge, Totals } from '../../server/launch-summary';
-import { NumberAge } from '../NumberAge';
+import type { ChannelNumbers, Day, LaunchUpdated, TotalAge, Totals } from '../../server/launch-summary';
+import { Figure, Updated } from '../Freshness';
 import { number } from '../ui';
 import { ChannelGlyph, channelTitle } from './ChannelGlyph';
 import { useLaunchActions } from './LaunchActions';
@@ -77,7 +77,21 @@ function ViewsChart({ days }: { days: Day[] }) {
 }
 
 /** The launch's totals and its views per day, with what waits on the owner under them */
-export function ViewsCard({ totals, ages, days, channels, waitingComments }: { totals: Totals; ages?: Partial<Record<keyof Totals, TotalAge>>; days: Day[]; channels: Readonly<Record<string, ChannelNumbers>>; waitingComments: number }) {
+export function ViewsCard({
+  totals,
+  ages,
+  updated,
+  days,
+  channels,
+  waitingComments,
+}: {
+  totals: Totals;
+  ages?: Partial<Record<keyof Totals, TotalAge>>;
+  updated?: LaunchUpdated;
+  days: Day[];
+  channels: Readonly<Record<string, ChannelNumbers>>;
+  waitingComments: number;
+}) {
   const shown = TOTALS.filter(([key], i) => i < 3 || totals[key] > 0);
   const sources = viewSources(channels, channelTitle);
   return (
@@ -87,8 +101,9 @@ export function ViewsCard({ totals, ages, days, channels, waitingComments }: { t
           {shown.map(([key, label]) => (
             <div key={key} className="k-stack">
               <dt className="k-xs k-muted">{label}</dt>
-              <dd className="k-d k-d30">{number(totals[key])}</dd>
-              {ages?.[key] && <NumberAge age={ages[key]} />}
+              <dd className="k-d k-d30">
+                <Figure label={label} value={totals[key]} age={ages?.[key]} />
+              </dd>
             </div>
           ))}
         </dl>
@@ -100,6 +115,12 @@ export function ViewsCard({ totals, ages, days, channels, waitingComments }: { t
         )}
         <div className="k-xs k-muted">
           {days.length > 0 ? 'Views per day since the launch' : 'No views read yet: the first reading comes within minutes of the launch'}
+          {updated && (
+            <>
+              {' · '}
+              <Updated updated={updated} />
+            </>
+          )}
           {waitingComments > 0 && (
             <>
               {' · '}

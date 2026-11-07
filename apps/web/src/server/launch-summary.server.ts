@@ -1,6 +1,7 @@
 import { METRIC_FAMILIES, readTimezone, SITE_SOURCES, statsSeries, type Launch, type Repositories } from '@shipcast/engine';
-import { FORMAT_SOURCES, formatPiece, UTM_CHANNELS } from '@shipcast/schema';
-import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, launchViewSources, postAccountNames, splitSeries, totalAges, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
+import { FORMAT_SOURCES, formatPiece, readsMetrics, UTM_CHANNELS } from '@shipcast/schema';
+import { launchUpdated, type AgedReading } from './launch-freshness.ts';
+import { channelSiteVisits, channelTotals, dailyViews, latestByPiece, launchTotals, launchViewSources, newestRead, postAccountNames, splitSeries, totalAges, type CounterReading, type LaunchNumbers } from './launch-summary.ts';
 
 /** Each tagged channel's `utm_source`, which names its visits in Umami's readings */
 export const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(UTM_CHANNELS).map(([channel, tags]) => [channel, tags.source]));
@@ -9,14 +10,25 @@ export const UTM_SOURCES: Readonly<Record<string, string>> = Object.fromEntries(
  * A launch's counters at their latest reading: each piece's latest number, read per piece so pieces
  * read at different times all count, plus the latest reading of each launch-wide source.
  */
-async function readingsOf(registry: Pick<Repositories, 'posts' | 'metrics'>, launch: Launch): Promise<{ counters: CounterReading[]; umami: CounterReading[] }> {
+async function readingsOf(registry: Pick<Repositories, 'posts' | 'metrics'>, launch: Launch): Promise<{ counters: CounterReading[]; umami: CounterReading[]; aged: AgedReading[] }> {
   const [site, history, posts] = await Promise.all([registry.metrics.latestMetrics(launch.id), registry.metrics.postMetricHistory(launch.id), registry.posts.posts(launch.id)]);
-  const channel = new Map(posts.map((p) => [p.id, p.channel as string]));
+  const byId = new Map(posts.map((p) => [p.id, p]));
+  const now = new Date();
+  // When the launch went out, for its site sources' age: its first piece out, or its creation
+  const out = posts.reduce((first, p) => (p.publishedAt < first ? p.publishedAt : first), launch.createdAt);
   const pieces = latestByPiece(history).flatMap((r) => {
-    const source = channel.get(r.postId);
-    return source ? [{ source, name: r.name, value: r.value, checkedAt: r.checkedAt }] : [];
+    const post = byId.get(r.postId);
+    return post ? [{ source: post.channel as string, name: r.name, value: r.value, checkedAt: r.checkedAt, post }] : [];
   });
-  return { counters: [...site.filter((m) => (SITE_SOURCES as readonly string[]).includes(m.source)), ...pieces], umami: site.filter((m) => m.source === 'umami') };
+  const siteReadings = site.filter((m) => (SITE_SOURCES as readonly string[]).includes(m.source));
+  // What can be overdue: the site's readings and the pieces still read (not deleted, not a story past its hours)
+  const aged: AgedReading[] = [
+    ...[...siteReadings, ...site.filter((m) => m.source === 'umami')].map((m) => ({ source: m.source, name: m.name, value: m.value, checkedAt: m.checkedAt, publishedAt: out })),
+    ...pieces
+      .filter(({ post }) => post.status !== 'deleted' && readsMetrics(post.channel, post.kind, { publishedAt: post.publishedAt, now }))
+      .map(({ post, ...r }) => ({ ...r, publishedAt: post.publishedAt })),
+  ];
+  return { counters: [...siteReadings, ...pieces.map(({ post: _post, ...r }) => r)], umami: site.filter((m) => m.source === 'umami'), aged };
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -70,7 +82,12 @@ export async function launchNumbers(registry: Pick<Repositories, 'posts' | 'metr
           { totals: perChannel[name] ?? {}, ages: totalAges(mine.filter((r) => r.source === name), METRIC_FAMILIES), daily: dailyViews(days.get(name) ?? [], l.createdAt), ...(site[name] && { site: site[name] }) },
         ]),
       );
-      return [l.id, { totals: launchTotals(mine, METRIC_FAMILIES), ages: totalAges(mine, METRIC_FAMILIES), daily: dailyViews(series.launches.get(l.id) ?? [], l.createdAt), channels }];
+      const ages = totalAges(mine, METRIC_FAMILIES);
+      // The newest read among the totals' sources; overdue from every source the launch is still read from
+      const fresh = launchUpdated(readings[i]?.aged ?? []);
+      const readAt = newestRead(ages);
+      const updated = readAt ? { readAt, overdue: fresh?.overdue ?? [] } : undefined;
+      return [l.id, { totals: launchTotals(mine, METRIC_FAMILIES), ages, ...(updated && { updated }), daily: dailyViews(series.launches.get(l.id) ?? [], l.createdAt), channels }];
     }),
   );
 }

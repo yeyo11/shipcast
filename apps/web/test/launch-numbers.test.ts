@@ -17,4 +17,5 @@ test('a launch’s numbers carry when each total was last read, per launch and p
   assert.deepEqual(numbers.ages?.views, { readAt: '2026-11-07T11:15:00.000Z' });
   assert.deepEqual(numbers.ages?.clicks, { readAt: '2026-11-07T03:00:00.000Z', lag: 'Search Console lags 2–3 days' });
   assert.deepEqual(numbers.channels.devto?.ages?.views, { readAt: '2026-11-07T11:15:00.000Z' });
+  assert.equal(numbers.updated?.readAt, '2026-11-07T11:15:00.000Z', 'the newest read among its totals');
 });
