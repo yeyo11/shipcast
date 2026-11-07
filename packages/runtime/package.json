@@ -19,14 +19,14 @@
     "@shipcast/connectors": "workspace:*",
     "@shipcast/engine": "workspace:*",
     "@shipcast/schema": "workspace:*",
-    "bullmq": "^6.5.0",
+    "bullmq": "^6.7.0",
     "ioredis": "^6.0.0",
     "pg-boss": "^12.38.0",
     "pino": "^10.4.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.11",
+    "@electric-sql/pglite": "^0.5.15",
     "@types/web-push": "^3.6.4"
   }
 }
