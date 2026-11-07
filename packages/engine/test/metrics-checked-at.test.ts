@@ -140,3 +140,44 @@ test('a referrer or page out of GitHub’s top ten since the last read is no lon
   const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [m.name, m.value]));
   assert.deepEqual(latest, { views: 12, 'referrer:a.dev': 4, 'referrer_visitors:a.dev': 2, 'path:/x': 6 });
 });
+
+test('a piece no longer read keeps its last numbers in its launch’s sum and curve: an Instagram story after its 24 hours', async () => {
+  const registry = await memoryRegistry();
+  const { launch, posts } = await aPublishedLaunch(registry, [
+    { channel: 'instagram', kind: 'post', externalId: 'p' },
+    { channel: 'instagram', kind: 'story', externalId: 's' },
+  ]);
+  const [post, story] = posts as [(typeof posts)[0], (typeof posts)[0]];
+  // Both read at 10:00; the story's insights expire, so only the post is read after that
+  await registry.metrics.recordMetrics(launch.id, 'instagram', { views: 20 }, at('10:00'), post.id, MOVES);
+  await registry.metrics.recordMetrics(launch.id, 'instagram', { views: 11 }, at('10:00'), story.id, MOVES);
+  await registry.metrics.recordMetrics(launch.id, 'instagram', { views: 30 }, at('11:00'), post.id, MOVES);
+  await registry.metrics.recordMetrics(launch.id, 'instagram', { views: 30 }, at('12:00'), post.id, MOVES);
+  const latest = await registry.metrics.latestMetrics(launch.id);
+  assert.deepEqual(
+    latest.map((m) => [m.source, m.name, m.value, m.takenAt.slice(11, 16), m.checkedAt.slice(11, 16)]),
+    [['instagram', 'views', 41, '11:00', '12:00']],
+    'the post’s 30 and the story’s 11',
+  );
+  const curve = await registry.metrics.metricHistory(launch.id, 'instagram', 'views');
+  assert.deepEqual(
+    curve.map((p) => [p.takenAt.slice(11, 16), p.value]),
+    [
+      ['10:00', 31],
+      ['11:00', 41],
+      ['12:00', 41],
+    ],
+  );
+});
+
+test('an average over pieces stays the mean of each piece’s last reading, read at different times', async () => {
+  const registry = await memoryRegistry();
+  const { launch, posts } = await aPublishedLaunch(registry, [
+    { channel: 'reddit', kind: 'post:a', externalId: 'a' },
+    { channel: 'reddit', kind: 'post:b', externalId: 'b' },
+  ]);
+  await registry.metrics.recordMetrics(launch.id, 'reddit', { upvoteRatio: 0.5, score: 4 }, at('10:00'), posts[0]!.id, MOVES);
+  await registry.metrics.recordMetrics(launch.id, 'reddit', { upvoteRatio: 1, score: 6 }, at('11:00'), posts[1]!.id, MOVES);
+  const latest = Object.fromEntries((await registry.metrics.latestMetrics(launch.id)).map((m) => [m.name, m.value]));
+  assert.deepEqual(latest, { score: 10, upvoteRatio: 0.75 });
+});

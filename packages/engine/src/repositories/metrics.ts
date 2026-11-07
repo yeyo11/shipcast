@@ -44,18 +44,28 @@ export interface MetricDay {
   readAt: string;
 }
 
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** The moment a row was last seen holding its value */
 const seen = sql<string>`coalesce(${metrics.checkedAt}, ${metrics.takenAt})`;
 
 /**
- * A launch's sum at each moment it was read, from rows that each hold for [taken_at, seen]: at a
- * moment, every piece's row that held then is added up. With no `checked_at` anywhere (a row a
- * reading) this is the sum of the rows taken at that very moment, as it always was. `average` makes
- * it their mean, for a ratio.
+ * A launch's sum at each moment it was read: every piece's newest row taken by then, added up, so a
+ * piece read for the last time earlier (an Instagram story after its 24 hours, a Discord message past
+ * its 30 days) keeps its last number rather than falling out. A piece not read yet adds nothing. A
+ * launch-wide row (no piece) counts only where no piece of the metric has a row by then: a site
+ * source's, or an old newsletter sum from before readings pointed at their piece. `average` makes it
+ * their mean, for a ratio.
  */
-function sumsAt(rows: ReadonlyArray<{ value: number; takenAt: string; checkedAt: string | null }>, moments: Iterable<string>, average = false): Array<{ at: string; value: number }> {
+function sumsAt(rows: ReadonlyArray<{ postId: number | null; value: number; takenAt: string }>, moments: Iterable<string>, average = false): Array<{ at: string; value: number }> {
   return [...new Set(moments)].sort().flatMap((at) => {
-    const held = rows.filter((r) => r.takenAt <= at && (r.checkedAt ?? r.takenAt) >= at);
+    const newest = new Map<number | null, { value: number; takenAt: string }>();
+    for (const r of rows) {
+      if (r.takenAt > at) continue;
+      const was = newest.get(r.postId);
+      if (!was || was.takenAt <= r.takenAt) newest.set(r.postId, r);
+    }
+    const held = [...newest].filter(([postId]) => postId !== null || newest.size === 1).map(([, r]) => r);
     const sum = held.reduce((n, r) => n + r.value, 0);
     return held.length === 0 ? [] : [{ at, value: average ? sum / held.length : sum }];
   });
@@ -131,9 +141,12 @@ export class MetricRepository {
   }
 
   /**
-   * The newest reading of every metric of a launch, its pieces' added up: the rows that held at the
-   * last moment the metric was read (`max(coalesce(checked_at, taken_at))`). A piece left out of
-   * that read (gone, failed) is left out of the sum, as it always was.
+   * The newest reading of every metric of a launch, its pieces' added up: each piece's newest row,
+   * whenever it was read, so a piece no longer read (an Instagram story after its 24 hours) keeps
+   * its last number in the sum, as the launch's card counts it. The launch-wide row (no piece) is
+   * the metric for a site source; for a channel it counts only where no piece has a row (an old
+   * newsletter sum from before readings pointed at their piece), so nothing is counted twice.
+   * `takenAt` is the newest change among them, `checkedAt` the last moment any was read.
    */
   async latestMetrics(launchId: number): Promise<MetricReading[]> {
     const rows = await this.#latestSums(launchId);
@@ -152,33 +165,37 @@ export class MetricRepository {
 
   /** The newest reading of every metric of a launch, its pieces' added up, with how many there were */
   async #latestSums(launchId: number): Promise<Array<MetricReading & { pieces: number }>> {
-    const last = this.#db
-      .select({ source: metrics.source, name: metrics.name, at: sql<string>`max(${seen})`.as('at') })
+    const newest = await this.#db
+      .selectDistinctOn([metrics.source, metrics.name, metrics.postId], { source: metrics.source, name: metrics.name, postId: metrics.postId, value: metrics.value, takenAt: metrics.takenAt, checkedAt: seen })
       .from(metrics)
       .where(eq(metrics.launchId, launchId))
-      .groupBy(metrics.source, metrics.name)
-      .as('last');
-    return this.#db
-      .select({
-        launchId: metrics.launchId,
-        source: metrics.source,
-        name: metrics.name,
-        value: sql<number>`sum(${metrics.value})::float8`.mapWith(Number).as('value'),
-        pieces: sql<number>`count(*)::int`.mapWith(Number).as('pieces'),
-        takenAt: sql<string>`max(${metrics.takenAt})`.as('taken_at'),
-        checkedAt: last.at,
+      .orderBy(asc(metrics.source), asc(metrics.name), asc(metrics.postId), desc(metrics.takenAt));
+    const byMetric = new Map<string, typeof newest>();
+    for (const r of newest) {
+      const key = `${r.source}\u0000${r.name}`;
+      byMetric.set(key, [...(byMetric.get(key) ?? []), r]);
+    }
+    return [...byMetric.values()]
+      .map((all) => {
+        const pieces = all.some((r) => r.postId !== null) ? all.filter((r) => r.postId !== null) : all;
+        const first = pieces[0]!;
+        return {
+          launchId,
+          source: first.source,
+          name: first.name,
+          value: pieces.reduce((n, r) => n + r.value, 0),
+          pieces: pieces.length,
+          takenAt: pieces.reduce((t, r) => (r.takenAt > t ? r.takenAt : t), first.takenAt),
+          checkedAt: pieces.reduce((t, r) => (r.checkedAt > t ? r.checkedAt : t), first.checkedAt),
+        };
       })
-      .from(metrics)
-      .innerJoin(last, and(eq(last.source, metrics.source), eq(last.name, metrics.name), sql`${metrics.takenAt} <= ${last.at}`, sql`${seen} >= ${last.at}`))
-      .where(eq(metrics.launchId, launchId))
-      .groupBy(metrics.launchId, metrics.source, metrics.name, last.at)
-      .orderBy(asc(metrics.source), asc(metrics.name));
+      .sort((a, b) => cmp(a.source, b.source) || cmp(a.name, b.name));
   }
 
   /** Every reading of one metric of a launch, oldest first: its curve, a point at each moment it was read */
   async metricHistory(launchId: number, source: string, name: string): Promise<MetricReading[]> {
     const rows = await this.#db
-      .select({ value: metrics.value, takenAt: metrics.takenAt, checkedAt: metrics.checkedAt })
+      .select({ postId: metrics.postId, value: metrics.value, takenAt: metrics.takenAt, checkedAt: metrics.checkedAt })
       .from(metrics)
       .where(and(eq(metrics.launchId, launchId), eq(metrics.source, source), eq(metrics.name, name)))
       .orderBy(asc(metrics.takenAt));

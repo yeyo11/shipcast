@@ -1,6 +1,6 @@
 ---
 created_at: 2026-10-25T20:20:29.537359897Z
-updated_at: 2026-11-02T07:25:25.69569962Z
+updated_at: 2026-11-07T12:00:00Z
 tags:
     - engine
     - registry
@@ -117,7 +117,12 @@ launch happens once" hold:
 - **Metrics**: `recordMetrics`, `latestMetrics`, `metricHistory`, `postMetrics`. A reading of one
   piece points at it (`post_id`); site-level sources stay the launch's. Since migration `0016` a
   reading has `checked_at`: with `batched-metrics` an unchanged value moves `checked_at` on the last
-  row instead of adding one ([stats.md](stats.md)).
+  row instead of adding one ([stats.md](stats.md)). `latestMetrics` adds up each piece's newest
+  reading, whenever it was read, so a piece no longer read (an Instagram story after its 24 hours)
+  keeps its last number in its launch's sum; until 2026-11-07 it added only the pieces read at the
+  metric's last read, and a launch's Instagram views lost its story's. `metricHistory` draws the same
+  sum at each moment. A launch-wide row of a channel (an old newsletter sum) counts only where no
+  piece has a reading.
 - **Settings** (`key`, `jsonb` value): the automation mode, the AI settings and prompts, the
   launches repo, claudio's URL, the Instagram app id, the time zone, the onboarding, and with
   `launch-triggers` the trigger rules (`triggers`, [launch-triggers.md](launch-triggers.md)). (A stored
