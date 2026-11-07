@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { PushSubscriptionRow, Repositories } from '@shipcast/engine';
 import webpush from 'web-push';
 import type { JobQueue } from '../queue.ts';
@@ -65,6 +66,17 @@ export function pushFailureKind(statusCode: number): 'gone' | 'retry' | 'refused
 
 export type PushDelivery = 'sent' | 'gone' | 'refused' | 'unwanted' | 'missing';
 
+/**
+ * The Topic header a notification is sent with, made from its tag: the push service keeps only the
+ * newest message per topic while the device is away. RFC 8030 §5.4 allows at most 32 characters of
+ * the URL- and filename-safe Base64 alphabet, and Apple's service decodes it, refusing a length that
+ * is no whole Base64 (`400 BadWebPushTopic` for `launch-16`). So the topic is the tag's SHA-256 in
+ * base64url, cut to exactly 32 characters: valid everywhere, and the same tag is the same topic.
+ */
+export function pushTopic(tag: string): string {
+  return createHash('sha256').update(tag).digest('base64url').slice(0, 32);
+}
+
 /** A launch's news keeps a day at the push service; a test is only worth seeing now */
 const ttlOf = (event: PushEvent) => (event.kind === 'test' ? 5 * 60 : 24 * 3600);
 
@@ -81,7 +93,7 @@ export async function deliverPush(registry: Pick<Repositories, 'pushSubscription
     await transport.send({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, JSON.stringify(payload), {
       ttlSeconds: ttlOf(event),
       urgency: event.kind === 'failed' ? 'high' : 'normal',
-      topic: payload.tag,
+      topic: pushTopic(payload.tag),
     });
   } catch (error) {
     const status = error instanceof PushServiceError ? error.statusCode : 0;

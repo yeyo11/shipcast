@@ -12,6 +12,7 @@ import {
   pushFailureKind,
   pushPayload,
   pushRecipients,
+  pushTopic,
   PushRetry,
   PushServiceError,
   pushSetup,
@@ -159,7 +160,7 @@ describe('a delivery', () => {
     const { registry, rows } = await subscribed(1);
     const { transport, sent } = fakeTransport(() => 201);
     assert.equal(await deliverPush(registry, transport, rows[0]!.id, { kind: 'test' }, () => new Date('2026-11-02T10:00:00Z')), 'sent');
-    assert.deepEqual(sent, [{ endpoint: 'https://push.example/1', payload: pushPayload({ kind: 'test' }), topic: 'test', ttl: 300 }]);
+    assert.deepEqual(sent, [{ endpoint: 'https://push.example/1', payload: pushPayload({ kind: 'test' }), topic: pushTopic('test'), ttl: 300 }]);
     assert.equal((await registry.pushSubscriptions.subscription(rows[0]!.id))?.lastSuccessAt, '2026-11-02T10:00:00.000Z');
   });
 
@@ -179,6 +180,36 @@ describe('a delivery', () => {
     assert.match((await registry.pushSubscriptions.subscription(rows[0]!.id))?.lastFailure ?? '', /503/);
     assert.equal(await deliverPush(registry, fakeTransport(() => 403).transport, rows[0]!.id, { kind: 'test' }), 'refused');
     assert.equal((await registry.pushSubscriptions.subscriptions()).length, 1, 'a refusal keeps the device');
+  });
+
+  test('the Topic header is valid for every push service: 32 base64url characters made from the tag (Apple refused `launch-16`)', async () => {
+    const events: PushEvent[] = [
+      { kind: 'comments', waiting: 2 },
+      { kind: 'approval', launchId: 16, launch: launch() },
+      { kind: 'failed', launchId: 16, launch: launch(), stage: 'publish', channels: ['bluesky'] },
+      { kind: 'published', launchId: 16, launch: launch() },
+      { kind: 'published', launchId: 123456789, launch: launch() },
+      { kind: 'test' },
+    ];
+    const { registry, rows } = await subscribed(1);
+    const { transport, sent } = fakeTransport(() => 201);
+    for (const event of events) assert.equal(await deliverPush(registry, transport, rows[0]!.id, event), 'sent');
+    assert.equal(sent.length, events.length);
+    for (const [i, { topic, payload }] of sent.entries()) {
+      // RFC 8030 §5.4: at most 32 characters of the URL- and filename-safe Base64 alphabet; whole quads, as Apple decodes it
+      assert.ok(topic.length <= 32, `${events[i]!.kind}: ${topic}`);
+      assert.match(topic, /^[A-Za-z0-9_-]+$/, events[i]!.kind);
+      assert.equal(topic.length % 4, 0, `${events[i]!.kind}: ${topic}`);
+      assert.equal(topic, pushTopic((payload as { tag: string }).tag), 'the topic is made from the tag');
+    }
+    // The notification's own tag is unchanged: the device still replaces a launch's older notification
+    assert.equal((sent[1]!.payload as { tag: string }).tag, 'launch-16');
+    // The same tag is the same topic (the push service still coalesces), different launches differ
+    assert.equal(pushTopic('launch-16'), pushTopic('launch-16'));
+    assert.equal(sent[1]!.topic, sent[3]!.topic);
+    assert.notEqual(pushTopic('launch-16'), pushTopic('launch-17'));
+    assert.notEqual(sent[3]!.topic, sent[4]!.topic);
+    assert.equal(new Set([pushTopic('comments'), pushTopic('test'), pushTopic('launch-16')]).size, 3);
   });
 
   test('a device that turned the kind off since, or left, is not told', async () => {

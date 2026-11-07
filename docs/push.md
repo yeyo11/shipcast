@@ -52,7 +52,10 @@ signed with the VAPID keys:
 - **Any other refusal**: recorded on the device (`last_failure`), not retried.
 
 A launch's news lives a day at the push service (TTL), a test five minutes; a failure is sent with high
-urgency. Queueing never fails the work it tells of. Without the keys nothing is queued.
+urgency. The `Topic` header, which makes the push service keep only a tag's newest message while the
+device is away, is made from the tag (`pushTopic`): its SHA-256 in base64url cut to 32 characters.
+RFC 8030 allows at most 32 characters of that alphabet, and Apple's service refuses a topic that is not
+whole Base64 (`400 BadWebPushTopic` for a raw `launch-16`), so the tag itself is never sent as it. Queueing never fails the work it tells of. Without the keys nothing is queued.
 
 ## The subscriptions
 
