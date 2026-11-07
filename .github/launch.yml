@@ -3,6 +3,11 @@ enabled: true
 brand: personal
 language: en
 
+# Launched by hand only: a release no longer creates a launch on its own (2026-11-07)
+triggers:
+  release: false
+  manual: true
+
 publishing:
   blog: approval
   devto: approval
