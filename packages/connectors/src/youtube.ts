@@ -105,7 +105,7 @@ const CATEGORY = '28';
 
 interface VideoResource {
   id: string;
-  snippet?: { title?: string; description?: string; tags?: string[]; categoryId?: string; defaultLanguage?: string };
+  snippet?: { title?: string; description?: string; tags?: string[]; categoryId?: string; defaultLanguage?: string; channelId?: string };
   status?: { privacyStatus?: string; uploadStatus?: string; rejectionReason?: string };
   statistics?: { viewCount?: string; likeCount?: string; commentCount?: string; favoriteCount?: string };
 }
@@ -333,6 +333,20 @@ export class YouTube implements Deletable, CommentReader, Replier, ProfileReader
     const video = answer.items?.[0];
     if (!video) throw new PostGone('YouTube', `the video ${id} is not on the channel any more`, 404);
     return video;
+  }
+
+  /**
+   * Whether a video is this account's channel's: false for another channel's, or one the token
+   * cannot see. What lets an account stand in for a disconnected one (one quota unit).
+   */
+  async ownsVideo(id: string): Promise<boolean> {
+    try {
+      const { snippet } = await this.#video(id, 'snippet');
+      return snippet?.channelId !== undefined && snippet.channelId === (await this.#ownChannel());
+    } catch (error) {
+      if (error instanceof PostGone) return false;
+      throw error;
+    }
   }
 
   /**

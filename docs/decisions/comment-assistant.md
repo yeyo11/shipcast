@@ -114,11 +114,17 @@ in approval while it is being tried, so nothing reaches a follower without the o
 `sendReply` builds the replier with the account the post went out with, never today's primary, for
 the reason edits do: another account cannot answer as the one that posted. A post whose account was
 disconnected has no account (`account_id` is set to null when an account is removed), and falls back
-to the `.env` credentials of its network; since 2026-11-07, where `.env` has none (YouTube), to the
-brand's account of that network when it has exactly one, which went out with it or took its place.
-With several, any could be the wrong one: the post is refused, "the account the post went out with
-was disconnected … assign the post an account", and the comment run says so instead of "no
-connected account". The same rule builds the editors that edit and delete a piece. The comment is claimed
+to the `.env` credentials of its network. Since 2026-11-07, where `.env` has none, the brand's one
+account of that network **stands in**, only on a network where it can prove a post is its own
+(`OWNERSHIP` in `packages/runtime/src/edits.ts`): YouTube, where the video's channel must be the
+account's (`ownsVideo`, one quota unit per call). Every read, reply, edit or delete through a
+stand-in checks the post first, and a 404 or a post gone through it is a refusal, never a post
+deleted: it may be another account's post. Elsewhere nothing stands in (Mastodon answers 404 for
+another account's status, Discord for another webhook's message, and a Bluesky or same-instance
+Mastodon reply would go out as the other account). With several accounts of the network, or a post
+the stand-in cannot show is its own, the post is refused ("the account the post went out with was
+disconnected … assign the post an account") and the comment run says so instead of "no connected
+account". The same rule builds the editors that edit and delete a piece. The comment is claimed
 first, in one compare-and-set update (`draft-ready` or `failed` to `approved`), so two clicks or two
 workers send it once; it ends `sent` with the reply's id and URL, or `failed` with the network's
 words (the API answers 502). Mastodon also gets an idempotency key per comment.

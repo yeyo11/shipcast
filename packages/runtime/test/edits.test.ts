@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { PostGone } from '@shipcast/connectors';
 import { PostRefused } from '@shipcast/engine';
 import { memoryRegistry } from '@shipcast/engine/testing';
 import { Brand } from '@shipcast/schema';
@@ -56,21 +57,82 @@ test('GitHub Discussions is edited and read with the engine’s GitHub access, w
   assert.ok(connectors.reader && connectors.replier);
 });
 
-test('a piece whose account was disconnected uses the brand’s one account of that network, never one of several', async () => {
-  const registry = await memoryRegistry();
-  const secrets = new MemoryStore();
-  // The post's account was removed (account_id set to null); the network has no .env credentials
-  const now = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@now', settings: { clientId: 'client-1' } });
-  await secrets.set(accountSecretKey(now.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'youtube @now');
-  const connectors = await commentConnectors({ env: {}, brand, registry, secrets })('youtube', null);
-  assert.ok(connectors.reader, 'read with the one YouTube account the brand has');
-  assert.ok('youtube' in (await postEditors({ env: {}, brand, registry, secrets })('youtube', null)), 'and edited with it');
+/*
+ * A post whose account was disconnected (account_id null) and whose network has nothing in .env: the
+ * brand's one account of that network may stand in, only where the network can prove the post is
+ * that account's (YouTube: the video's channel is the account's channel). A connector that stands in
+ * never takes a 404 for a post gone: it might only be another account's post.
+ */
 
-  const second = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@other', settings: { clientId: 'client-2' } });
-  await secrets.set(accountSecretKey(second.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'youtube @other');
+/** Google for one channel, `UC-me`: v-other is another channel's video, v-hidden one it cannot see, v-404's comments answer 404 */
+function youtube(log: string[] = []): typeof fetch {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    log.push(`${init?.method ?? 'GET'} ${url.replace('https://www.googleapis.com/youtube/v3', '')}`);
+    if (url.startsWith('https://oauth2.googleapis.com/token')) return Response.json({ access_token: 'access' });
+    if (url.includes('/channels?part=id&mine=true')) return Response.json({ items: [{ id: 'UC-me' }] });
+    const video = /\/videos\?part=snippet&id=([^&]+)/.exec(url)?.[1];
+    if (video) return Response.json({ items: video === 'v-hidden' ? [] : [{ id: video, snippet: { channelId: video === 'v-other' ? 'UC-other' : 'UC-me' } }] });
+    if (url.includes('/commentThreads') && url.includes('videoId=v-mine')) return Response.json({ items: [] });
+    if (url.includes('/commentThreads')) return Response.json({ error: { code: 404 } }, { status: 404 });
+    if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+    return Response.json({});
+  }) as typeof fetch;
+}
+
+async function oneYouTubeAccount() {
+  const registry = await memoryRegistry();
+  const store = new MemoryStore();
+  const account = await registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@josegarridodev', settings: { clientId: 'client-1' } });
+  await store.set(accountSecretKey(account.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'youtube @josegarridodev');
+  return { registry, secrets: store };
+}
+
+type Deleter = Record<string, { delete(id: string): Promise<void> }>;
+
+test('a YouTube post whose account was disconnected is read and edited with the brand’s one account, when the video is its channel’s', async () => {
+  const { registry, secrets } = await oneYouTubeAccount();
+  const log: string[] = [];
+  const deps = { env: {}, brand, registry, secrets, fetch: youtube(log) };
+  const { reader } = await commentConnectors(deps)('youtube', null);
+  assert.deepEqual(await reader!.comments('v-mine'), []);
+  const editor = (await postEditors(deps)('youtube', null)) as Deleter;
+  await editor.youtube!.delete('v-mine');
+  assert.ok(log.some((l) => l.startsWith('DELETE /videos?id=v-mine')));
+});
+
+test('a stand-in account never acts on a video it cannot prove is its own, and never takes a 404 for a post gone', async () => {
+  const { registry, secrets } = await oneYouTubeAccount();
+  const log: string[] = [];
+  const deps = { env: {}, brand, registry, secrets, fetch: youtube(log) };
+  const { reader } = await commentConnectors(deps)('youtube', null);
+  const refused = (e: unknown) => e instanceof PostRefused && !(e instanceof PostGone) && /assign/.test((e as Error).message);
+  await assert.rejects(reader!.comments('v-other'), refused, 'another channel’s video');
+  await assert.rejects(reader!.comments('v-hidden'), refused, 'a video the account cannot see: not gone, not its own');
+  const editor = (await postEditors(deps)('youtube', null)) as Deleter;
+  await assert.rejects(editor.youtube!.delete('v-hidden'), refused, 'never deleted as "already gone"');
+  assert.ok(!log.some((l) => l.startsWith('DELETE')), 'nothing deleted');
+});
+
+test('a comment read that answers 404 through a stand-in is a refusal, never a post gone', async () => {
+  const { registry, secrets } = await oneYouTubeAccount();
+  const { reader } = await commentConnectors({ env: {}, brand, registry, secrets, fetch: youtube() })('youtube', null);
+  await assert.rejects(reader!.comments('v-404'), (e) => e instanceof PostRefused && !(e instanceof PostGone));
+});
+
+test('no stand-in where the network cannot prove whose a post is, nor with several accounts', async () => {
+  const registry = await memoryRegistry();
+  const store = new MemoryStore();
+  const mastodon = await registry.accounts.addAccount({ network: 'mastodon', brand: 'personal', label: '@me', settings: { instance: 'https://m.example' } });
+  await store.set(accountSecretKey(mastodon.id), JSON.stringify({ accessToken: 't' }), 'mastodon @me');
+  assert.deepEqual(await commentConnectors({ env: {}, brand, registry, secrets: store })('mastodon', null), {}, 'Mastodon: no stand-in');
+  assert.deepEqual(await postEditors({ env: {}, brand, registry, secrets: store })('mastodon', null), {});
+
+  const two = await oneYouTubeAccount();
+  const other = await two.registry.accounts.addAccount({ network: 'youtube', brand: 'personal', label: '@other', settings: { clientId: 'client-2' } });
+  await two.secrets.set(accountSecretKey(other.id), JSON.stringify({ clientSecret: 's', refreshToken: 'r' }), 'youtube @other');
   await assert.rejects(
-    commentConnectors({ env: {}, brand, registry, secrets })('youtube', null),
+    commentConnectors({ env: {}, brand, registry: two.registry, secrets: two.secrets })('youtube', null),
     (e) => e instanceof PostRefused && e.reason === 'no_credentials' && /disconnected/.test(e.message) && /assign/.test(e.message),
-    'with two, either could be the wrong one: refused, saying the post needs an account',
   );
 });

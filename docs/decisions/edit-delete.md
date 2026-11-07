@@ -58,8 +58,10 @@ An edit or a delete is made with the account the row records, never the channel'
 the moment: the primary may have changed since, and another account cannot touch the post. A row with
 no account went out with the `.env` credentials, which speak only for their own brand. An account
 removed since has its pieces' account set to null, so they fall back to `.env`, and where `.env` has
-nothing for the network (since 2026-11-07) to the brand's account of that network when it has exactly
-one; with several the piece is refused until it is assigned an account
+nothing for the network (since 2026-11-07) to the brand's one account of that network, only where it
+can prove the piece is its own (YouTube, by the video's channel), and a 404 through it is never taken
+for the piece already gone; with several accounts, on another network, or a piece it cannot show is
+its own, the piece is refused until it is assigned an account
 ([comment-assistant.md](comment-assistant.md)). One connected but
 with no secrets left is refused with that reason. `postEditors` in `packages/runtime/src/edits.ts`
 builds the connectors this way.
