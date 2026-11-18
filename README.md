@@ -166,9 +166,9 @@ MVP the code moves fast and straight on `main`, so please open an issue before a
 
 ## Support
 
-If Shipcast is useful to you, a star helps other developers find it.
-
-[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/yeyo11)
+If Shipcast is useful to you, a star helps other developers find it. You can also
+[sponsor me on GitHub](https://github.com/sponsors/yeyo11) or
+[buy me a coffee](https://buymeacoffee.com/yeyo11).
 
 ## License
 
