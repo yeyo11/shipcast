@@ -12,6 +12,10 @@ overrides:
 # acme-client pulls node-forge, whose RSA PKCS#1 v1.5 signature verification has GHSA-86w9-cpqp-85rv
 # and no fixed release. Shipcast never verifies signatures with forge: apps/web/tls.ts uses
 # acme.crypto (Node's own crypto, ECDSA keys), not acme.forge. Drop this when acme-client leaves forge.
+# picomatch <=4.0.7 has a ReDoS (GHSA-fc5q-39xc-vjpf) with no fixed release. It only comes through
+# dependency-cruiser, a dev tool that runs in CI on our own source tree, never on user input and
+# never in the shipped app. Drop this when picomatch publishes a fix.
 auditConfig:
   ignoreGhsas:
     - GHSA-86w9-cpqp-85rv
+    - GHSA-fc5q-39xc-vjpf
