@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { BlockList } from 'node:net';
 import { onStop } from '@shipcast/runtime';
 import { clientAddress } from './src/server/client-address.ts';
+import { clientGone } from './src/server/client-gone.ts';
 import { warm } from './src/server/warm.ts';
 
 /**
@@ -146,7 +147,7 @@ export async function serve(options: ServeOptions): Promise<{ close(): Promise<v
       // The request's signal aborts when the client goes, so a handler that waits on it (an event stream) lets go.
       // A response that already finished closes too: aborting then only throws into nobody (a healthcheck's fetch)
       response.once('close', () => {
-        if (!response.writableFinished) left.abort();
+        if (!response.writableFinished) left.abort(clientGone());
       });
       await send(response, await entry.default.fetch(toRequest(request, options.origin, options.trustedProxies, left.signal)), options.plainHttp === true && !options.tls);
     } catch (error) {

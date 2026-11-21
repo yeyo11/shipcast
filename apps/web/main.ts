@@ -59,7 +59,9 @@ async function main(): Promise<void> {
   if (proxied) {
     await serve({ host: app.host, port: app.port, origin: app.publicUrl, ...(trustedProxies && { trustedProxies }) });
     console.log(`Shipcast on ${app.publicUrl}, behind a proxy (plain HTTP on ${app.host}:${app.port}); secrets in ${secretsKind}`);
-    console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(await consoleLinks().create())}`);
+    // A server's log is read by more than the owner (a log viewer, an agent's transcript): the link is a
+    // way in, so it is printed only when asked for (SHIPCAST_PRINT_SIGNIN_LINK=1), and GitHub is the way in
+    if (process.env.SHIPCAST_PRINT_SIGNIN_LINK === '1') console.log(`Sign in without GitHub, once: ${app.publicUrl}${signInPath(await consoleLinks().create())}`);
     return;
   }
 
