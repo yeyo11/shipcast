@@ -50,7 +50,9 @@ test('one run over several launches: each readable piece is asked once, the rest
       },
       github,
     },
-    new Date('2026-11-10T12:00:00Z'),
+    // The fixtures are published at the real time, so the run is two days past it: the story has lapsed.
+    // A fixed date passed once the story's 24 hours began counting from a later moment than the run
+    new Date(Date.now() + 2 * 24 * 60 * 60_000),
   );
 
   // A subreddit's post (`post:<subreddit>`) is its channel's main piece, read since Reddit has metrics
